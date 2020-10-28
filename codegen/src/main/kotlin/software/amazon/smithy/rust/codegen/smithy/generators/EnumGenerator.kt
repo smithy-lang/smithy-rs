@@ -22,6 +22,9 @@ class EnumGenerator(
     shape: StringShape,
     private val enumTrait: EnumTrait
 ) {
+    companion object {
+        const val Values = "values"
+    }
 
     fun render() {
         if (enumTrait.hasNames()) {
@@ -46,7 +49,7 @@ class EnumGenerator(
                 write("&self.0")
             }
 
-            writer.rustBlock("pub fn valid_values() -> &'static [&'static str]") {
+            writer.rustBlock("pub fn ${Values}() -> &'static [&'static str]") {
                 withBlock("&[", "]") {
                     val memberList = sortedMembers.joinToString(", ") { it.value.doubleQuote() }
                     write(memberList)

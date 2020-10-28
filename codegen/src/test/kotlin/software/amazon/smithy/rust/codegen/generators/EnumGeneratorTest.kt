@@ -95,7 +95,7 @@ class EnumGeneratorTest {
         generator.render()
         writer.shouldCompile("""
             // Values should be sorted
-            assert_eq!(FooEnum::valid_values(), ["0", "1", "Bar", "Baz", "Foo"]);
+            assert_eq!(FooEnum::${EnumGenerator.Values}(), ["0", "1", "Bar", "Baz", "Foo"]);
         """)
     }
 }
