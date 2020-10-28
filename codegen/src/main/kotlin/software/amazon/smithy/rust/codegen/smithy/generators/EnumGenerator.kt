@@ -13,33 +13,59 @@ import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.util.doubleQuote
+import java.lang.IllegalStateException
 
 class EnumGenerator(
     symbolProvider: SymbolProvider,
     private val writer: RustWriter,
     shape: StringShape,
-    enumTrait: EnumTrait
+    private val enumTrait: EnumTrait
 ) {
 
     fun render() {
-        // pub enum Blah { V1, V2, .. }
-        renderEnum()
-        writer.insertTrailingNewline()
-        // impl From<str> for Blah { ... }
-        renderFromStr()
-        writer.insertTrailingNewline()
-        // impl Blah { pub fn as_str(&self) -> &str
-        renderAsStr()
+        if (enumTrait.hasNames()) {
+            // pub enum Blah { V1, V2, .. }
+            renderEnum()
+            writer.insertTrailingNewline()
+            // impl From<str> for Blah { ... }
+            renderFromStr()
+            writer.insertTrailingNewline()
+            // impl Blah { pub fn as_str(&self) -> &str
+            renderAsStr()
+        } else {
+            renderUnamedEnum()
+        }
+    }
+
+    private fun renderUnamedEnum() {
+        writer.write("#[derive(Debug, PartialEq, Eq, Clone)]")
+        writer.write("pub struct $enumName(String);")
+        writer.rustBlock("impl $enumName") {
+            writer.rustBlock("pub fn as_str(&self) -> &str") {
+                write("&self.0")
+            }
+
+            writer.rustBlock("pub fn valid_values() -> &'static [&'static str]") {
+                withBlock("&[", "]") {
+                    val memberList = sortedMembers.map { it.value.doubleQuote() }.joinToString(", ")
+                    write(memberList)
+                }
+            }
+        }
+
+        writer.rustBlock("impl <T> \$T<T> for $enumName where T: \$T<str>", RuntimeType.From, RuntimeType.AsRef) {
+            writer.rustBlock("fn from(s: T) -> Self") {
+                write("$enumName(s.as_ref().to_owned())")
+            }
+        }
     }
 
     private fun EnumDefinition.derivedName(): String {
-        // TODO: For unnamed enums, generate a newtype that wraps the string. We can provide a &[&str] with the valid
-        // values.
-
         // Because enum variants always start with an upper case letter, they will never
         // conflict with reserved words (which are always lower case), therefore, we never need
         // to fall back to raw identifiers
-        return deriveName(name.orElse(null), value)
+        return name.orElse(null)?.toPascalCase() ?: throw IllegalStateException("Enum variants must be named to derive a name. This is a bug.")
     }
 
     private val sortedMembers: List<EnumDefinition> = enumTrait.values.sortedBy { it.value }
@@ -82,12 +108,6 @@ class EnumGenerator(
                     write("other => $enumName::Unknown(other.to_owned())")
                 }
             }
-        }
-    }
-
-    companion object {
-        fun deriveName(name: String?, value: String): String {
-            return name?.toPascalCase() ?: value.replace(" ", "_").toPascalCase().filter { it.isLetterOrDigit() }
         }
     }
 }

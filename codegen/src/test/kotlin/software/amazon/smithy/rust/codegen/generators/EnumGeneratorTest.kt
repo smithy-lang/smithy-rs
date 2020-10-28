@@ -5,10 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.generators
 
-import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.model.traits.EnumDefinition
@@ -16,6 +16,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
+import software.amazon.smithy.rust.testutil.asSmithy
 import software.amazon.smithy.rust.testutil.quickTest
 import software.amazon.smithy.rust.testutil.shouldCompile
 import software.amazon.smithy.rust.testutil.shouldParseAsRust
@@ -64,9 +65,37 @@ class EnumGeneratorTest {
     }
 
     @Test
-    fun `it derives reasonable names`() {
-        EnumGenerator.deriveName(null, "Signal creation is in progress") shouldBe("SignalCreationIsInProgress")
-        EnumGenerator.deriveName("as", "AS") shouldBe("As")
-        EnumGenerator.deriveName(null, "Signal: creation is in progress") shouldBe("SignalCreationIsInProgress")
+    fun `it generates unamed enums`() {
+        val model = """
+            namespace test
+            @enum([
+            {
+                value: "Foo",
+            },
+            {
+                value: "Baz",
+            },
+            {
+                value: "Bar",
+            },
+            {
+                value: "1",
+            },
+            {
+                value: "0",
+            },
+        ])
+        string FooEnum
+        """.asSmithy()
+        val shape = model.expectShape(ShapeId.from("test#FooEnum"), StringShape::class.java)
+        val trait = shape.expectTrait(EnumTrait::class.java)
+        val provider: SymbolProvider = SymbolVisitor(model, "test")
+        val writer = RustWriter("model.rs", "model")
+        val generator = EnumGenerator(provider, writer, shape, trait)
+        generator.render()
+        writer.shouldCompile("""
+            // Values should be sorted
+            assert_eq!(FooEnum::valid_values(), ["0", "1", "Bar", "Baz", "Foo"]);
+        """)
     }
 }
