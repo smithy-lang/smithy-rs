@@ -6,7 +6,7 @@
       "runtimeConfig": {
         "relativePath": "${REPO_ROOT}/rust-runtime"
       },
-      "service": "example.weather#Weather",
+      "service": "com.amazonaws.ebs#Ebs",
       "module": "weather",
       "moduleVersion": "0.0.1",
       "build": {
