@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
+import java.lang.IllegalStateException
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumDefinition
@@ -14,7 +15,6 @@ import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.doubleQuote
-import java.lang.IllegalStateException
 
 class EnumGenerator(
     symbolProvider: SymbolProvider,
@@ -48,7 +48,7 @@ class EnumGenerator(
 
             writer.rustBlock("pub fn valid_values() -> &'static [&'static str]") {
                 withBlock("&[", "]") {
-                    val memberList = sortedMembers.map { it.value.doubleQuote() }.joinToString(", ")
+                    val memberList = sortedMembers.joinToString(", ") { it.value.doubleQuote() }
                     write(memberList)
                 }
             }
