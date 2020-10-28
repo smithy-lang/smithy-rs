@@ -1,17 +1,12 @@
-## My Project
+# Smithy Rust
+Smithy code generators for Rust
 
-TODO: Fill this README out!
+## Setup
+1. `./gradlew` will setup gradle for you
+2. Running tests requires a working Rust installation. See [Rust docs](https://www.rust-lang.org/learn/get-started) for 
+installation instructions on your platform.
 
-Be sure to:
+## Run tests 
+```./tesh.sh```
 
-* Change the title in this README
-* Edit your repository description on GitHub
-
-## Security
-
-See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
-
-## License
-
-This project is licensed under the Apache-2.0 License.
-
+This will run all the unit tests, codegen an example model end-to-end and validates that the generated code compiles.
