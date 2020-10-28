@@ -54,7 +54,6 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
 
     fun execute() {
         logger.info("generating Rust client...")
-        // val modelWithoutTraits = context.modelWithoutTraitShapes
         val service = settings.getService(model)
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }

@@ -55,7 +55,7 @@ fun HttpTrait.uriFormatString(): String = uri.segments.map {
  * TODO: httpPrefixHeaders; 4h
  * TODO: Deserialization of all fields; 1w
  */
-open class HttpTraitBindingGenerator(
+class HttpTraitBindingGenerator(
     val model: Model,
     private val symbolProvider: SymbolProvider,
     private val runtimeConfig: RuntimeConfig,
@@ -63,8 +63,8 @@ open class HttpTraitBindingGenerator(
     private val shape: OperationShape,
     private val inputShape: StructureShape,
     private val httpTrait: HttpTrait
-) { // }: HttpProtocolGenerator(symbolProvider, writer, inputShape) {
-    // TODO: make abstract
+) {
+    // TODO: make defaultTimestampFormat configurable
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
     private val index = HttpBindingIndex(model)
 
@@ -120,8 +120,8 @@ open class HttpTraitBindingGenerator(
                 val memberName = symbolProvider.toMemberName(memberShape)
                 OptionForEach(memberSymbol, "&self.$memberName") { field ->
                     ListForEach(memberType, field) { innerField, targetId ->
-                        val memberType = model.expectShape(targetId)
-                        val formatted = headerFmtFun(memberType, memberShape, innerField)
+                        val innerMemberType = model.expectShape(targetId)
+                        val formatted = headerFmtFun(innerMemberType, memberShape, innerField)
                         write("builder = builder.header(${httpBinding.locationName.dq()}, $formatted);")
                     }
                 }

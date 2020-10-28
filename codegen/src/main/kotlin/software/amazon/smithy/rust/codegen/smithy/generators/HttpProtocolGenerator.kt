@@ -8,22 +8,25 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
-interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
+data class ProtocolConfig(
+    val model: Model,
+    val symbolProvider: SymbolProvider,
+    val runtimeConfig: RuntimeConfig,
+    val writer: RustWriter,
+    val serviceShape: ServiceShape,
+    val operationShape: OperationShape,
+    val inputShape: StructureShape
+)
 
-    fun build(
-        model: Model,
-        symbolProvider: SymbolProvider,
-        runtimeConfig: RuntimeConfig,
-        writer: RustWriter,
-        operationShape: OperationShape,
-        inputShape: StructureShape
-    ): T
+interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
+    fun build(protocolConfig: ProtocolConfig): T
 }
 
 abstract class HttpProtocolGenerator(

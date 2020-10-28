@@ -51,7 +51,8 @@ class ServiceGenerator(
             writers.useShapeWriter(operation) { writer ->
                 // transform ensures that all models have input shapes
                 val input = operation.input.get().let { model.expectShape(it, StructureShape::class.java) }
-                matchingProtocols.first().build(model, symbolProvider, runtimeConfig, writer, operation, input).render()
+                val config = ProtocolConfig(model, symbolProvider, runtimeConfig, writer, serviceShape, operation, input)
+                matchingProtocols.first().build(config).render()
             }
         }
     }

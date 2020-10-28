@@ -16,18 +16,16 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpTraitBindingGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.util.dq
 
 class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
     override fun build(
-        model: Model,
-        symbolProvider: SymbolProvider,
-        runtimeConfig: RuntimeConfig,
-        writer: RustWriter,
-        operationShape: OperationShape,
-        inputShape: StructureShape
-    ): AwsRestJsonGenerator = AwsRestJsonGenerator(model, symbolProvider, runtimeConfig, writer, operationShape, inputShape)
+        protocolConfig: ProtocolConfig
+    ): AwsRestJsonGenerator = with(protocolConfig) {
+        AwsRestJsonGenerator(model, symbolProvider, runtimeConfig, writer, operationShape, inputShape)
+    }
 }
 
 class AwsRestJsonGenerator(
