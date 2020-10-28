@@ -68,6 +68,10 @@ class HttpTraitBindingGenerator(
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
     private val index = HttpBindingIndex(model)
 
+    /**
+     * Generates `update_http_builder` and all necessary dependency functions into the impl block provided by
+     * [implBlockWriter]. The specific behavior is configured by [httpTrait].
+     */
     fun renderUpdateHttpBuilder(implBlockWriter: RustWriter) {
         uriBase(implBlockWriter)
         val hasHeaders = addHeaders(implBlockWriter)
@@ -91,7 +95,7 @@ class HttpTraitBindingGenerator(
      * Default implementation of HttpTraitBindings. A `build_http_request()` method is added that
      * simply calls `update_http_builder()`
      */
-    inner class Default() : HttpProtocolGenerator(symbolProvider, writer, inputShape) {
+    inner class Default : HttpProtocolGenerator(symbolProvider, writer, inputShape) {
         override fun toHttpRequestImpl(implBlockWriter: RustWriter) {
             renderUpdateHttpBuilder(implBlockWriter)
             httpBuilderFun(implBlockWriter) {
@@ -131,6 +135,9 @@ class HttpTraitBindingGenerator(
         return true
     }
 
+    /**
+     * Format [member] in the when used as an HTTP header
+     */
     private fun headerFmtFun(target: Shape, member: MemberShape, targetName: String): String {
         return when {
             target.isStringShape -> {
@@ -160,6 +167,9 @@ class HttpTraitBindingGenerator(
 
     /** URI Generation **/
 
+    /**
+     * Generate a function to build the request URI
+     */
     private fun uriBase(writer: RustWriter) {
         val formatString = httpTrait.uriFormatString()
         val args = httpTrait.uri.labels.map { label ->
@@ -173,6 +183,9 @@ class HttpTraitBindingGenerator(
         }
     }
 
+    /**
+     * When needed, generate a function to build a query string
+     */
     private fun uriQuery(writer: RustWriter): Boolean {
         // Don't bother generating the function if we aren't going to make a query string
         val queryParams = index.getRequestBindings(shape, HttpBinding.Location.QUERY)
@@ -207,6 +220,9 @@ class HttpTraitBindingGenerator(
         return true
     }
 
+    /**
+     * Format [member] when used as a queryParam
+     */
     private fun paramFmtFun(target: Shape, member: MemberShape, targetName: String): String {
         return when {
             target.isStringShape -> {
@@ -230,6 +246,9 @@ class HttpTraitBindingGenerator(
         }
     }
 
+    /**
+     * Format [member] when used as an HTTP Label (`/bucket/{key}`)
+     */
     private fun labelFmtFun(target: Shape, member: MemberShape, label: SmithyPattern.Segment): String {
         val memberName = symbolProvider.toMemberName(member)
         return when {
