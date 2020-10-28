@@ -12,7 +12,6 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RetryableTrait
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
-import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.StdError
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.StdFmt
 import software.amazon.smithy.rust.codegen.util.dq
@@ -38,7 +37,7 @@ class ErrorGenerator(
             error.isServerError -> "ErrorCause::Server"
             else -> "ErrorCause::Unknown(${error.value.dq()})"
         }
-        writer.withBlock("impl ${symbol.name} {", "}") {
+        writer.rustBlock("impl ${symbol.name}") {
             write("// TODO: create shared runtime crate")
             write("// fn at_fault(&self) -> ErrorCause { $errorCause }")
             write("pub fn retryable(&self) -> bool { $retryable }")
@@ -46,12 +45,12 @@ class ErrorGenerator(
         }
 
         writer.rustBlock("impl \$T for ${symbol.name}", StdFmt("Display")) {
-            withBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {", "}") {
+            rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 val message = shape.getMember("message")
                 write("write!(f, ${symbol.name.dq()})?;")
                 if (message.isPresent) {
-                    withBlock("if let Some(msg) = &self.message {", "}") {
-                        write("""write!(f, ": {}", msg)?;""")
+                    OptionForEach(symbolProvider.toSymbol(message.get()), "&self.message") { field ->
+                        write("""write!(f, ": {}", $field)?;""")
                     }
                 }
                 write("Ok(())")

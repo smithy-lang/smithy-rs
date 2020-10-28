@@ -22,29 +22,38 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.lang.RustWriter
-import software.amazon.smithy.rust.codegen.smithy.generators.OperationGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.HttpTraitBindingGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.uriFormatString
+import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.testutil.asSmithy
 import software.amazon.smithy.rust.testutil.shouldCompile
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
-class HttpBindingGeneratorTest {
-    private val model = """
+class HttpTraitBindingGeneratorTest {
+    private val baseModel = """
             namespace smithy.example
 
             @idempotent
             @http(method: "PUT", uri: "/{bucketName}/{key}", code: 200)
             operation PutObject {
-                input: PutObjectInput
+                input: PutObjectRequest
             }
             
             list Extras {
                 member: Integer
             }
+            
+            list Dates {
+                member: Timestamp
+            }
+            
+            @mediaType("video/quicktime")
+            string Video
 
-            structure PutObjectInput {
+            structure PutObjectRequest {
                 // Sent in the URI label named "key".
                 @required
                 @httpLabel
@@ -55,9 +64,15 @@ class HttpBindingGeneratorTest {
                 @httpLabel
                 bucketName: String,
 
-                // Sent in the X-Foo header
-                @httpHeader("X-Foo")
-                foo: String,
+                // Sent in the X-Dates header
+                @httpHeader("X-Dates")
+                dateHeaderList: Dates,
+                
+                @httpHeader("X-Ints")
+                intList: Extras,
+                
+                @httpHeader("X-MediaType")
+                mediaType: Video,
 
                 // Sent in the query string as paramName
                 @httpQuery("paramName")
@@ -73,35 +88,45 @@ class HttpBindingGeneratorTest {
                 additional: String,
             }
         """.asSmithy()
+    private val model = OperationNormalizer(testSymbolProvider(baseModel)).addOperationInputs(baseModel)
 
-    val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
-    val httpTrait = operationShape.expectTrait(HttpTrait::class.java)
-    val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
+    private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
+    private val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
+    private val httpTrait = operationShape.expectTrait(HttpTrait::class.java)
 
+    private val symbolProvider = testSymbolProvider(model)
     private fun renderOperation(writer: RustWriter) {
-        OperationGenerator(model, testSymbolProvider(model), TestRuntimeConfig, writer, operationShape).render()
+        StructureGenerator(model, symbolProvider, writer, inputShape).render()
+        HttpTraitBindingGenerator(model,
+            symbolProvider,
+            TestRuntimeConfig, writer, operationShape, inputShape, httpTrait)
+            .Default().render()
     }
 
     @Test
     fun `produce correct uri format strings`() {
-        httpTrait.uriFormatString() shouldBe("/{bucketName}/{key}".dq())
+        httpTrait.uriFormatString() shouldBe ("/{bucketName}/{key}".dq())
     }
 
+    // TODO: when we generate builders, use them to clean up these tests; 1h
     @Test
     fun `generate uris`() {
         val writer = RustWriter("operation.rs", "operation")
         // currently rendering the operation renders the protocols—I want to separate that at some point.
         renderOperation(writer)
-        println(writer.toString())
-        writer.shouldCompile("""
+        writer.shouldCompile(
+            """
+            let ts = Instant::from_epoch_seconds(10123125);
             let inp = PutObjectInput {
               additional: None,
               bucket_name: "somebucket/ok".to_string(),
               data: None,
-              foo: None,
-              key: Instant::from_epoch_seconds(10123125),
-              extras: Some(vec![0,1,2,44]),
-              some_value: Some("svq!!%&".to_string())
+              date_header_list: None,
+              key: ts.clone(),
+              int_list: None,
+              extras: Some(vec![0, 1,2,44]),
+              some_value: Some("svq!!%&".to_string()),
+              media_type: None
             };
             let mut o = String::new();
             inp.uri_base(&mut o);
@@ -109,26 +134,41 @@ class HttpBindingGeneratorTest {
             o.clear();
             inp.uri_query(&mut o);
             assert_eq!(o.as_str(), "?paramName=svq!!%25%26&hello=0&hello=1&hello=2&hello=44")
-        """.trimIndent())
+        """.trimIndent()
+        )
     }
 
     @Test
     fun `build http requests`() {
         val writer = RustWriter("operation.rs", "operation")
         renderOperation(writer)
-        writer.shouldCompile("""
+        writer.shouldCompile(
+            """
+            let ts = Instant::from_epoch_seconds(10123125);
             let inp = PutObjectInput {
               additional: None,
               bucket_name: "buk".to_string(),
               data: None,
-              foo: None,
+              date_header_list: Some(vec![ts.clone()]),
+              int_list: Some(vec![0,1,44]),
               key: Instant::from_epoch_seconds(10123125),
               extras: Some(vec![0,1]),
-              some_value: Some("qp".to_string())
+              some_value: Some("qp".to_string()),
+              media_type: Some("base64encodethis".to_string()),
             };
-            let http_request = inp.build_http_request(::http::Request::builder()).body(()).unwrap();
+            let http_request = inp.build_http_request().body(()).unwrap();
             assert_eq!(http_request.uri(), "/buk/1970-04-28T03:58:45Z?paramName=qp&hello=0&hello=1");
             assert_eq!(http_request.method(), "PUT");
-        """)
+            let mut date_header = http_request.headers().get_all("X-Dates").iter();
+            assert_eq!(date_header.next().unwrap(), "Tue, 28 Apr 1970 03:58:45 GMT");
+            assert_eq!(date_header.next(), None);
+            
+            let int_header = http_request.headers().get_all("X-Ints").iter().map(|hv|hv.to_str().unwrap()).collect::<Vec<_>>();
+            assert_eq!(int_header, vec!["0", "1", "44"]);
+            
+            let base64_header = http_request.headers().get_all("X-MediaType").iter().map(|hv|hv.to_str().unwrap()).collect::<Vec<_>>();
+            assert_eq!(base64_header, vec!["YmFzZTY0ZW5jb2RldGhpcw=="]);
+        """
+        )
     }
 }

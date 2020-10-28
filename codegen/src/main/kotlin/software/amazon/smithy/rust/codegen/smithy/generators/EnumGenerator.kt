@@ -11,7 +11,6 @@ import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
-import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
 class EnumGenerator(
@@ -74,8 +73,8 @@ class EnumGenerator(
 
     private fun renderFromStr() {
         writer.rustBlock("impl <T> \$T<T> for $enumName where T: \$T<str>", RuntimeType.From, RuntimeType.AsRef) {
-            writer.withBlock("fn from(s: T) -> Self {", "}") {
-                writer.withBlock("match s.as_ref() {", "}") {
+            writer.rustBlock("fn from(s: T) -> Self") {
+                writer.rustBlock("match s.as_ref()") {
                     sortedMembers.forEach { member ->
                         write(""""${member.value}" => $enumName::${member.derivedName()},""")
                     }

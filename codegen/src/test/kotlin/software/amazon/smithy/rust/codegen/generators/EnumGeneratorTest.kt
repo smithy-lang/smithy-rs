@@ -50,7 +50,6 @@ class EnumGeneratorTest {
         val generator = EnumGenerator(provider, writer, shape, trait)
         generator.render()
         val result = writer.toString()
-        println(result)
         result.shouldParseAsRust()
         result.shouldCompile()
         result.quickTest("""

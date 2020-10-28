@@ -10,6 +10,9 @@ import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.writer.CodegenWriter
 import software.amazon.smithy.codegen.core.writer.CodegenWriterFactory
+import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -34,19 +37,38 @@ fun <T : CodeWriter> T.rustBlock(header: String, vararg args: Any, block: T.() -
 
 class RustWriter(filename: String, private val namespace: String, private val commentCharacter: String = "//") : CodegenWriter<RustWriter, UseDeclarations>(null, UseDeclarations(filename, namespace)) {
     private val formatter = RustSymbolFormatter()
+    private var n = 0
     init {
         putFormatter('T', formatter)
     }
 
-    fun OptionIter(member: Symbol, outerField: String, block: CodeWriter.(field: String) -> Unit) {
+    fun safeName(prefix: String = "var"): String {
+        n += 1
+        return "${prefix}_$n"
+    }
+
+    // TODO: refactor both of these methods & add a parent method to for_each across any field type
+    // generically
+    fun OptionForEach(member: Symbol, outerField: String, block: CodeWriter.(field: String) -> Unit) {
         if (member.isOptional()) {
-            val derefName = "inner"
+            val derefName = safeName("inner")
             // TODO: `inner` should be custom codegenned to avoid shadowing
             rustBlock("if let Some($derefName) = $outerField") {
-                block("inner")
+                block(derefName)
             }
         } else {
             this.block(outerField)
+        }
+    }
+
+    fun ListForEach(target: Shape, outerField: String, block: CodeWriter.(field: String, target: ShapeId) -> Unit) {
+        if (target.isListShape) {
+            val derefName = safeName("inner")
+            rustBlock("for $derefName in $outerField") {
+                block(derefName, target.asListShape().get().member.target)
+            }
+        } else {
+            this.block(outerField, target.toShapeId())
         }
     }
 
@@ -61,6 +83,14 @@ class RustWriter(filename: String, private val namespace: String, private val co
 
     fun format(r: Any): String {
         return formatter.apply(r, "")
+    }
+
+    fun useAs(target: Shape, base: String): String {
+        return if (target.hasTrait(EnumTrait::class.java)) {
+            "$base.as_str()"
+        } else {
+            base
+        }
     }
 
     inner class RustSymbolFormatter : BiFunction<Any, String, String> {

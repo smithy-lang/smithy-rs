@@ -14,6 +14,14 @@ buildscript {
     }
 }
 
+subprojects {
+    tasks.withType<Test> {
+        systemProperties["junit.jupiter.execution.parallel.enabled"] = true
+        systemProperties["junit.jupiter.execution.parallel.mode.default"] = "concurrent"
+        maxParallelForks = Runtime.getRuntime().availableProcessors()
+    }
+}
+
 plugins {
     kotlin("jvm") version "1.3.72" apply false
     id("org.jetbrains.dokka") version "0.10.0"

@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.testutil
 
 import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.runCommand
 
 // TODO: unify these test helpers a bit
@@ -19,10 +20,17 @@ fun String.shouldParseAsRust() {
 
 fun RustWriter.shouldCompile(main: String = "") {
     val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }
-    this.toString().shouldCompile(deps.toSet(), main)
+    try {
+        this.toString().shouldCompile(deps.toSet(), main)
+    } catch (e: CommandFailed) {
+        // When the test fails, print the code for convenience
+        println(this.toString())
+        throw e
+    }
 }
 
 fun String.shouldCompile(deps: Set<RustDependency>, main: String = "") {
+    this.shouldParseAsRust()
     val tempDir = createTempDir()
     // TODO: unify this with CargoTomlGenerator
     val cargoToml = """
@@ -56,7 +64,6 @@ fun String.shouldCompile() {
     if (!this.contains("fn main")) {
         tempFile.appendText("\nfn main() {}\n")
     }
-    println(tempFile.absolutePath)
     "rustc ${tempFile.absolutePath} -o ${tempDir.absolutePath}/output".runCommand()
 }
 
