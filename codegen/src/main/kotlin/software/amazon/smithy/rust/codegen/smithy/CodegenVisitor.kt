@@ -65,7 +65,7 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
             )
             cargoToml.render()
         }
-        writers.useFileWriter("src/lib.rs") {
+        writers.useFileWriter("src/lib.rs", "crate::lib") {
             // TODO: a more structured method of signaling what modules should get loaded.
             val modules = PublicModules.filter { writers.writers.containsKey("src/$it.rs") }
             LibRsGenerator(modules, it).render()

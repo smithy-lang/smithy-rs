@@ -23,8 +23,9 @@ fun String.runCommand(workdir: Path? = null): String? {
 
     proc.waitFor(60, TimeUnit.MINUTES)
     if (proc.exitValue() != 0) {
-        val output = proc.errorStream.bufferedReader().readText()
-        throw CommandFailed("Command Failed\n$output")
+        val stdErr = proc.errorStream.bufferedReader().readText()
+        val stdOut = proc.inputStream.bufferedReader().readText()
+        throw CommandFailed("Command Failed\n$stdErr\n$stdOut")
     }
     return proc.inputStream.bufferedReader().readText()
 }

@@ -18,10 +18,19 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.utils.CodeWriter
 
-fun CodeWriter.withBlock(textBeforeNewLine: String, textAfterNewLine: String, block: CodeWriter.() -> Unit): CodeWriter {
-    openBlock(textBeforeNewLine)
+fun CodeWriter.withBlock(
+    textBeforeNewLine: String,
+    textAfterNewLine: String,
+    conditional: Boolean = true,
+    block: CodeWriter.() -> Unit
+): CodeWriter {
+    if (conditional) {
+        openBlock(textBeforeNewLine)
+    }
     block(this)
-    closeBlock(textAfterNewLine)
+    if (conditional) {
+        closeBlock(textAfterNewLine)
+    }
     return this
 }
 
@@ -35,9 +44,30 @@ fun <T : CodeWriter> T.rustBlock(header: String, vararg args: Any, block: T.() -
     return this
 }
 
-class RustWriter(filename: String, private val namespace: String, private val commentCharacter: String = "//") : CodegenWriter<RustWriter, UseDeclarations>(null, UseDeclarations(filename, namespace)) {
+class RustWriter private constructor(private val filename: String, val namespace: String, private val commentCharacter: String = "//") :
+    CodegenWriter<RustWriter, UseDeclarations>(null, UseDeclarations(filename, namespace)) {
+    companion object {
+        fun forModule(module: String): RustWriter {
+            return RustWriter("$module.rs", "crate::$module")
+        }
+
+        val Factory: CodegenWriterFactory<RustWriter> =
+            CodegenWriterFactory<RustWriter> { filename, namespace ->
+                when {
+                    filename.endsWith(".toml") -> RustWriter(filename, namespace, "#")
+                    else -> RustWriter(filename, namespace)
+                }
+            }
+    }
+    init {
+        if (filename.endsWith(".rs")) {
+            require(namespace.startsWith("crate")) { "We can only write into files in the crate (got $namespace)" }
+        }
+    }
+
     private val formatter = RustSymbolFormatter()
     private var n = 0
+
     init {
         putFormatter('T', formatter)
     }
@@ -45,6 +75,23 @@ class RustWriter(filename: String, private val namespace: String, private val co
     fun safeName(prefix: String = "var"): String {
         n += 1
         return "${prefix}_$n"
+    }
+
+    /**
+     * Create an inline module.
+     * [header] should be the declaration of the module, eg. `pub mod Hello`.
+     *
+     * The returned writer will inject any local imports into the module as needed.
+     */
+    fun withModule(moduleName: String, visibility: String = "pub", moduleWriter: RustWriter.() -> Unit) {
+        // In Rust, modules must specify their own imports—they don't have access to the parent scope.
+        // To easily handle this, create a new inner writer to collect imports, then dump it
+        // into an inline module.
+        val innerWriter = RustWriter(this.filename, "${this.namespace}::$moduleName")
+        moduleWriter(innerWriter)
+        rustBlock("$visibility mod $moduleName") {
+            write(innerWriter.toString())
+        }
     }
 
     // TODO: refactor both of these methods & add a parent method to for_each across any field type
@@ -99,7 +146,12 @@ class RustWriter(filename: String, private val namespace: String, private val co
                 is RuntimeType -> {
                     t.dependency?.also { addDependency(it) }
                     // for now, use the fully qualified type name
-                    "::${t.namespace}::${t.name}"
+                    val prefix = if (t.namespace.startsWith("crate")) {
+                        ""
+                    } else {
+                        "::"
+                    }
+                    "$prefix${t.namespace}::${t.name}"
                 }
                 is Symbol -> {
                     if (t.namespace != namespace) {
@@ -110,13 +162,5 @@ class RustWriter(filename: String, private val namespace: String, private val co
                 else -> throw CodegenException("Invalid type provided to RustSymbolFormatter")
             }
         }
-    }
-
-    companion object {
-        val Factory: CodegenWriterFactory<RustWriter> =
-            CodegenWriterFactory<RustWriter> { filename, namespace -> when {
-                filename.endsWith(".toml") -> RustWriter(filename, namespace, "#")
-                else -> RustWriter(filename, namespace)
-            } }
     }
 }

@@ -108,26 +108,20 @@ class HttpTraitBindingGeneratorTest {
         httpTrait.uriFormatString() shouldBe ("/{bucketName}/{key}".dq())
     }
 
-    // TODO: when we generate builders, use them to clean up these tests; 1h
     @Test
     fun `generate uris`() {
-        val writer = RustWriter("operation.rs", "operation")
+        val writer = RustWriter.forModule("operation")
         // currently rendering the operation renders the protocols—I want to separate that at some point.
         renderOperation(writer)
         writer.shouldCompile(
             """
             let ts = Instant::from_epoch_seconds(10123125);
-            let inp = PutObjectInput {
-              additional: None,
-              bucket_name: "somebucket/ok".to_string(),
-              data: None,
-              date_header_list: None,
-              key: ts.clone(),
-              int_list: None,
-              extras: Some(vec![0, 1,2,44]),
-              some_value: Some("svq!!%&".to_string()),
-              media_type: None
-            };
+            let inp = PutObjectInput::builder()
+                .bucket_name("somebucket/ok")
+                .key(ts.clone())
+                .extras(vec![0,1,2,44])
+                .some_value("svq!!%&")
+                .build().expect("build should succeed");
             let mut o = String::new();
             inp.uri_base(&mut o);
             assert_eq!(o.as_str(), "/somebucket%2Fok/1970-04-28T03:58:45Z");
@@ -140,22 +134,20 @@ class HttpTraitBindingGeneratorTest {
 
     @Test
     fun `build http requests`() {
-        val writer = RustWriter("operation.rs", "operation")
+        val writer = RustWriter.forModule("operation")
         renderOperation(writer)
         writer.shouldCompile(
             """
             let ts = Instant::from_epoch_seconds(10123125);
-            let inp = PutObjectInput {
-              additional: None,
-              bucket_name: "buk".to_string(),
-              data: None,
-              date_header_list: Some(vec![ts.clone()]),
-              int_list: Some(vec![0,1,44]),
-              key: Instant::from_epoch_seconds(10123125),
-              extras: Some(vec![0,1]),
-              some_value: Some("qp".to_string()),
-              media_type: Some("base64encodethis".to_string()),
-            };
+            let inp = PutObjectInput::builder()
+                .bucket_name("buk")
+                .date_header_list(vec![ts.clone()])
+                .int_list(vec![0,1,44])
+                .key(ts.clone())
+                .extras(vec![0,1])
+                .some_value("qp")
+                .media_type("base64encodethis")
+                .build().unwrap();
             let http_request = inp.build_http_request().body(()).unwrap();
             assert_eq!(http_request.uri(), "/buk/1970-04-28T03:58:45Z?paramName=qp&hello=0&hello=1");
             assert_eq!(http_request.method(), "PUT");

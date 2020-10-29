@@ -46,7 +46,7 @@ class EnumGeneratorTest {
             .assemble()
             .unwrap()
         val provider: SymbolProvider = SymbolVisitor(model, "test")
-        val writer = RustWriter("model.rs", "model")
+        val writer = RustWriter.forModule("model")
         val generator = EnumGenerator(provider, writer, shape, trait)
         generator.render()
         val result = writer.toString()
