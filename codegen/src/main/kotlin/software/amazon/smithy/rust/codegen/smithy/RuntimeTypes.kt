@@ -59,6 +59,9 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
         fun QueryFormat(runtimeConfig: RuntimeConfig, func: String) =
             RuntimeType(func, RustDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::query")
 
+        fun Base64Encode(runtimeConfig: RuntimeConfig): RuntimeType =
+            RuntimeType("encode", RustDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::base64")
+
         fun TimestampFormat(runtimeConfig: RuntimeConfig, format: TimestampFormatTrait.Format): RuntimeType {
             val timestampFormat = when (format) {
                 TimestampFormatTrait.Format.EPOCH_SECONDS -> "EpochSeconds"
@@ -74,5 +77,6 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
         }
 
         fun Http(path: String): RuntimeType = RuntimeType(name = path, dependency = RustDependency.Http, namespace = "http")
+        val HttpRequestBuilder = Http("request::Builder")
     }
 }

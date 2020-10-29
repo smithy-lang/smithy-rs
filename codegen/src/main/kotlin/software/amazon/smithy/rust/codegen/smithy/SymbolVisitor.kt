@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.smithy
 
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
@@ -40,6 +39,7 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.smithy.generators.toSnakeCase
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInput
 import software.amazon.smithy.utils.StringUtils
 
 // TODO: currently, respecting integer types.
@@ -101,25 +101,29 @@ class SymbolVisitor(
         return RuntimeType.Blob(config.runtimeConfig).toSymbol()
     }
 
-    private fun handleOptionality(symbol: Symbol, shape: Shape): Symbol {
-        return if (nullableIndex.isNullable(shape) && !shape.hasTrait(HttpLabelTrait::class.java)) {
-            val builder = Symbol.builder()
-            val rustType = RustType.Option(symbol.rustType())
-            builder.rustType(rustType)
-            builder.addReference(symbol)
-            builder.name(rustType.name)
-            builder.build()
+    private fun handleOptionality(symbol: Symbol, member: MemberShape, container: Shape): Symbol {
+        val httpLabeledInput = container.hasTrait(SyntheticInput::class.java) && member.hasTrait(HttpLabelTrait::class.java)
+        return if (nullableIndex.isNullable(member) && !httpLabeledInput) {
+            with(Symbol.builder()) {
+                val rustType = RustType.Option(symbol.rustType())
+                rustType(rustType)
+                addReference(symbol)
+                name(rustType.name)
+                putProperty(SHAPE_KEY, member)
+                build()
+            }
         } else symbol
     }
 
     private fun handleRustBoxing(symbol: Symbol, shape: Shape): Symbol {
         return if (shape.hasTrait(RustBox::class.java)) {
-            val builder = Symbol.builder()
             val rustType = RustType.Box(symbol.rustType())
-            builder.rustType(rustType)
-            builder.addReference(symbol)
-            builder.name(rustType.name)
-            builder.build()
+            with(Symbol.builder()) {
+                rustType(rustType)
+                addReference(symbol)
+                name(rustType.name)
+                build()
+            }
         } else symbol
     }
 
@@ -160,7 +164,7 @@ class SymbolVisitor(
     }
 
     override fun mapShape(shape: MapShape): Symbol {
-        assert(shape.key.isStringShape)
+        require(shape.key.isStringShape)
         val key = this.toSymbol(shape.key)
         val value = this.toSymbol(shape.value)
         return symbolBuilder(shape, RustType.HashMap(key.rustType(), value.rustType())).namespace(
@@ -195,6 +199,7 @@ class SymbolVisitor(
 
     override fun structureShape(shape: StructureShape): Symbol {
         val isError = shape.hasTrait(ErrorTrait::class.java)
+        val isInput = shape.hasTrait(SyntheticInput::class.java)
         val name = StringUtils.capitalize(shape.id.name).letIf(isError) {
             // TODO: this is should probably be a configurable mixin
             it.replace("Exception", "Error")
@@ -202,6 +207,8 @@ class SymbolVisitor(
         val builder = symbolBuilder(shape, RustType.Opaque(name))
         return when {
             isError -> builder.locatedIn(Errors)
+            // Input shapes live with their Operations
+            isInput -> builder.locatedIn(Operations)
             else -> builder.locatedIn(Shapes)
         }.build()
     }
@@ -214,10 +221,10 @@ class SymbolVisitor(
     }
 
     override fun memberShape(shape: MemberShape): Symbol {
-        val target = model.getShape(shape.target).orElseThrow { CodegenException("Shape not found. this is a bug.") }
+        val target = model.expectShape(shape.target)
         val targetSymbol = this.toSymbol(target)
         return targetSymbol.letIf(config.handleOptionality) {
-            handleOptionality(it, shape)
+            handleOptionality(it, shape, model.expectShape(shape.container))
         }.letIf(config.handleRustBoxing) {
             handleRustBoxing(it, shape)
         }
@@ -228,7 +235,7 @@ class SymbolVisitor(
     }
 
     private fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder {
-        val builder = Symbol.builder().putProperty("shape", shape)
+        val builder = Symbol.builder().putProperty(SHAPE_KEY, shape)
         return builder.rustType(rustType)
             .name(rustType.name)
             // Every symbol that actually gets defined somewhere should set a definition file
@@ -239,6 +246,7 @@ class SymbolVisitor(
 
 // TODO(chore): Move this to a useful place
 private const val RUST_TYPE_KEY = "rusttype"
+private const val SHAPE_KEY = "shape"
 
 fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder {
     return this.putProperty(RUST_TYPE_KEY, rustType)
@@ -249,8 +257,9 @@ fun Symbol.isOptional(): Boolean = when (this.rustType()) {
     else -> false
 }
 
-// Symbols should _always_ be created with a Rust type attached
+// Symbols should _always_ be created with a Rust type & shape attached
 fun Symbol.rustType(): RustType = this.getProperty(RUST_TYPE_KEY, RustType::class.java).get()
+fun Symbol.shape(): Shape = this.expectProperty(SHAPE_KEY, Shape::class.java)
 
 fun <T> T.letIf(cond: Boolean, f: (T) -> T): T {
     return if (cond) {

@@ -22,8 +22,3 @@ fun String.singleQuote(): String = "\'$this\'"
  * Double quote a string, eg. "abc" -> "\"abc\""
  */
 fun String.dq(): String = this.doubleQuote()
-
-/**
- * Single quote a string
- */
-fun String.sq(): String = this.singleQuote()

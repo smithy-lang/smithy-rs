@@ -12,7 +12,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
-import software.amazon.smithy.rust.codegen.lang.withBlock
+import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.testutil.quickTest
 import software.amazon.smithy.rust.testutil.shouldCompile
@@ -44,7 +44,7 @@ class RustWriterTest {
         val provider: SymbolProvider = SymbolVisitor(model, "test")
         val setSymbol = provider.toSymbol(set)
         val stringSymbol = provider.toSymbol(stringShape)
-        sut.withBlock("struct Test {", "}") {
+        sut.rustBlock("struct Test") {
             write("member: \$T,", setSymbol)
             write("otherMember: \$T,", stringSymbol)
         }

@@ -72,7 +72,6 @@ class RustSettings(
             val desc = config.getStringMemberOrDefault(MODULE_DESCRIPTION, "$moduleName client")
             val build = config.getObjectMember(BUILD_SETTINGS)
             val runtimeConfig = config.getObjectMember(RUNTIME_CONFIG)
-            println("run config: $runtimeConfig -- ${RuntimeConfig.fromNode(runtimeConfig)}")
             return RustSettings(service, moduleName, version, desc, RuntimeConfig.fromNode(runtimeConfig), BuildSettings.fromNode(build))
         }
 

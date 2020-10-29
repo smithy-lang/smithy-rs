@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.testutil.shouldCompile
-import software.amazon.smithy.rust.testutil.shouldParseAsRust
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class StructureGeneratorTest {
@@ -67,9 +66,6 @@ class StructureGeneratorTest {
         val writer = RustWriter("model.rs", "model")
         val generator = StructureGenerator(model, provider, writer, struct)
         generator.render()
-        val result = writer.toString()
-        println(result)
-        result.shouldParseAsRust()
         writer.shouldCompile("""
             let s: Option<MyStruct> = None;
             s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
@@ -82,9 +78,6 @@ class StructureGeneratorTest {
         val writer = RustWriter("errors.rs", "errors")
         val generator = StructureGenerator(model, provider, writer, error)
         generator.render()
-        val result = writer.toString()
-        println(result)
-        result.shouldParseAsRust()
-        result.shouldCompile()
+        writer.shouldCompile()
     }
 }

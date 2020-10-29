@@ -7,9 +7,11 @@ package software.amazon.smithy.rust.codegen.smithy
 
 import java.util.logging.Logger
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
-import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeVisitor
 import software.amazon.smithy.model.shapes.StringShape
@@ -21,33 +23,46 @@ import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.OperationGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.util.runCommand
 
 private val PublicModules = listOf("error", "operation", "model")
 
-class CodegenVisitor(private val context: PluginContext) : ShapeVisitor.Default<Unit>() {
+class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
 
     private val logger = Logger.getLogger(javaClass.name)
     private val settings = RustSettings.from(context.model, context.settings)
-    private val symbolProvider = SymbolVisitor(context.model, config = SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig))
-    private val writers = CodegenWriterDelegator(
-        context.fileManifest,
-        // TODO: load symbol visitor from integrations
-        symbolProvider,
-        RustWriter.Factory
-    )
+
+    private val symbolProvider: SymbolProvider
+    private val writers: CodegenWriterDelegator<RustWriter>
+    private val fileManifest = context.fileManifest
+    val model: Model
+    init {
+        val bootstrapProvider = SymbolVisitor(context.model, config = SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig))
+        model = OperationNormalizer(bootstrapProvider).addOperationInputs(context.model)
+        symbolProvider = SymbolVisitor(model, config = SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig))
+        writers = CodegenWriterDelegator(
+            context.fileManifest,
+            // TODO: load symbol visitor from integrations; 2d
+            symbolProvider,
+            RustWriter.Factory
+        )
+    }
 
     fun execute() {
         logger.info("generating Rust client...")
-        val modelWithoutTraits = context.modelWithoutTraitShapes
-        val service = settings.getService(context.model)
-        val serviceShapes = Walker(modelWithoutTraits).walkShapes(service)
+        val service = settings.getService(model)
+        val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
         writers.useFileWriter("Cargo.toml") {
-            val cargoToml = CargoTomlGenerator(settings, it, writers.dependencies.map { dep -> RustDependency.fromSymbolDependency(dep) }.distinct())
+            val cargoToml = CargoTomlGenerator(
+                settings,
+                it,
+                writers.dependencies.map { dep -> RustDependency.fromSymbolDependency(dep) }.distinct()
+            )
             cargoToml.render()
         }
         writers.useFileWriter("src/lib.rs") {
@@ -56,7 +71,7 @@ class CodegenVisitor(private val context: PluginContext) : ShapeVisitor.Default<
             LibRsGenerator(modules, it).render()
         }
         writers.flushWriters()
-        "cargo fmt".runCommand(context.fileManifest.baseDir)
+        "cargo fmt".runCommand(fileManifest.baseDir)
     }
 
     override fun getDefault(shape: Shape?) {
@@ -66,7 +81,7 @@ class CodegenVisitor(private val context: PluginContext) : ShapeVisitor.Default<
         // super.structureShape(shape)
         logger.info("generating a structure...")
         writers.useShapeWriter(shape) {
-            StructureGenerator(context.model, symbolProvider, it, shape).render()
+            StructureGenerator(model, symbolProvider, it, shape).render()
         }
     }
 
@@ -80,13 +95,11 @@ class CodegenVisitor(private val context: PluginContext) : ShapeVisitor.Default<
 
     override fun unionShape(shape: UnionShape) {
         writers.useShapeWriter(shape) {
-            UnionGenerator(context.model, symbolProvider, it, shape).render()
+            UnionGenerator(model, symbolProvider, it, shape).render()
         }
     }
 
-    override fun operationShape(shape: OperationShape) {
-        writers.useShapeWriter(shape) {
-            OperationGenerator(context.model, symbolProvider, settings.runtimeConfig, it, shape).render()
-        }
+    override fun serviceShape(shape: ServiceShape) {
+        ServiceGenerator(model, symbolProvider, settings.runtimeConfig, shape, writers).render()
     }
 }
