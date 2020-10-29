@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.smithy
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.knowledge.BottomUpIndex
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.BigDecimalShape
 import software.amazon.smithy.model.shapes.BigIntegerShape
@@ -105,24 +104,26 @@ class SymbolVisitor(
     private fun handleOptionality(symbol: Symbol, member: MemberShape, container: Shape): Symbol {
         val httpLabeledInput = container.hasTrait(SyntheticInput::class.java) && member.hasTrait(HttpLabelTrait::class.java)
         return if (nullableIndex.isNullable(member) && !httpLabeledInput) {
-            val builder = Symbol.builder()
-            val rustType = RustType.Option(symbol.rustType())
-            builder.rustType(rustType)
-            builder.addReference(symbol)
-            builder.name(rustType.name)
-            builder.putProperty(SHAPE_KEY, member)
-            builder.build()
+            with(Symbol.builder()) {
+                val rustType = RustType.Option(symbol.rustType())
+                rustType(rustType)
+                addReference(symbol)
+                name(rustType.name)
+                putProperty(SHAPE_KEY, member)
+                build()
+            }
         } else symbol
     }
 
     private fun handleRustBoxing(symbol: Symbol, shape: Shape): Symbol {
         return if (shape.hasTrait(RustBox::class.java)) {
-            val builder = Symbol.builder()
             val rustType = RustType.Box(symbol.rustType())
-            builder.rustType(rustType)
-            builder.addReference(symbol)
-            builder.name(rustType.name)
-            builder.build()
+            with(Symbol.builder()) {
+                rustType(rustType)
+                addReference(symbol)
+                name(rustType.name)
+                build()
+            }
         } else symbol
     }
 
@@ -163,7 +164,7 @@ class SymbolVisitor(
     }
 
     override fun mapShape(shape: MapShape): Symbol {
-        assert(shape.key.isStringShape)
+        require(shape.key.isStringShape)
         val key = this.toSymbol(shape.key)
         val value = this.toSymbol(shape.value)
         return symbolBuilder(shape, RustType.HashMap(key.rustType(), value.rustType())).namespace(
