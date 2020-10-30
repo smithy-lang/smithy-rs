@@ -5,7 +5,6 @@
 
 /// Formatting values into the query string as specified in
 /// [httpQuery](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpquery-trait)
-
 use smithy_types::Instant;
 use std::fmt::Debug;
 
@@ -45,8 +44,7 @@ fn is_valid_query(c: char) -> bool {
         '&' | '=' => false,
         _ => true,
     };
-    let unreserved =
-        |c: char| c.is_alphanumeric() || c == '-' || c == '.' || c == '_' || c == '~';
+    let unreserved = |c: char| c.is_alphanumeric() || c == '-' || c == '.' || c == '_' || c == '~';
     let sub_delims = |c: char| match c {
         '!' | '$' | '\'' | '(' | ')' | '*' | '+' | ',' | ';' => true,
         // TODO: should &/= be url encoded?

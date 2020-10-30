@@ -6,3 +6,7 @@ edition = "2018"
 
 [dependencies]
 smithy-types = { path = "../smithy-types" }
+
+[dev-dependencies]
+proptest = "0.10.1"
+base64 = "0.13.0"
