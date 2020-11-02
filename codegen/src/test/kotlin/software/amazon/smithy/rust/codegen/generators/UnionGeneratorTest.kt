@@ -39,7 +39,7 @@ class UnionGeneratorTest {
             .assemble()
             .unwrap()
         val provider: SymbolProvider = SymbolVisitor(model, "test")
-        val writer = RustWriter("model.rs", "model")
+        val writer = RustWriter.forModule("model")
         val generator = UnionGenerator(model, provider, writer, union)
         generator.render()
         val result = writer.toString()
