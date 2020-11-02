@@ -105,6 +105,5 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - name: runtime tests
-        working-directory: rust-runtime
-        run: ./test.sh
+      - name: execute runtime tests
+        run: ./rust-runtime/test.sh
