@@ -51,6 +51,12 @@ jobs:
           java-version: 8
       - name: test
         run: ./gradlew :codegen:test
+      # TODO: when the multi repo integration tests are merged, update this to glob all of them
+      - uses: actions/upload-artifact@v2
+        name: Upload Codegen Output for inspection
+        with:
+          name: codegen-output
+          path: codegen-test/build/smithyprojections/codegen-test/source/rust-codegen/
   integration-tests:
     name: smithy-rs integration tests
     runs-on: ubuntu-latest
