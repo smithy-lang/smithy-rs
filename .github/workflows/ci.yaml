@@ -51,16 +51,13 @@ jobs:
           java-version: 8
       - name: test
         run: ./gradlew :codegen:test
-      - name: set REPO_ROOT
-        run: echo "REPO_ROOT=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-      - name: integration-tests
-        run: ./gradlew :codegen-test:test
   integration-tests:
     name: smithy-rs integration tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v2
+        name: Gradle Cache
         with:
           path: |
             ~/.gradle/caches
@@ -69,6 +66,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
       - uses: actions/cache@v2
+        name: Cargo Cache
         with:
           path: |
             ~/.cargo/registry
