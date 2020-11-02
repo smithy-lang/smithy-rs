@@ -84,7 +84,6 @@ jobs:
         run: echo "REPO_ROOT=$GITHUB_WORKSPACE" >> $GITHUB_ENV
       - name: integration-tests
         run: ./gradlew :codegen-test:test
-      # TODO: when the multi repo integration tests are merged, update this to glob all of them
       - uses: actions/upload-artifact@v2
         name: Upload Codegen Output for inspection
         # Always upload the output even if the tests failed
@@ -92,7 +91,8 @@ jobs:
         with:
           name: codegen-output
           path: |
-            codegen-test/build/smithyprojections/codegen-test/source/rust-codegen/
+            codegen-test/build/smithyprojections/codegen-test/*/rust-codegen/
+            codegen-test/build/smithyprojections/codegen-test/Cargo.toml
             !**/target
   runtime-tests:
     name: Rust runtime tests

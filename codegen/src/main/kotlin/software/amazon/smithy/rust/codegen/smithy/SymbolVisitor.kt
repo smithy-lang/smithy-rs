@@ -178,7 +178,8 @@ class SymbolVisitor(
     }
 
     override fun mapShape(shape: MapShape): Symbol {
-        require(shape.key.isStringShape)
+        val target = model.expectShape(shape.key.target)
+        require(target.isStringShape) { "unexpected key shape: ${shape.key}: $target [keys must be strings]" }
         val key = this.toSymbol(shape.key)
         val value = this.toSymbol(shape.value)
         return symbolBuilder(shape, RustType.HashMap(key.rustType(), value.rustType())).namespace(
