@@ -92,6 +92,7 @@ class RustWriter private constructor(private val filename: String, val namespace
         rustBlock("$visibility mod $moduleName") {
             write(innerWriter.toString())
         }
+        innerWriter.dependencies.forEach { addDependency(it) }
     }
 
     // TODO: refactor both of these methods & add a parent method to for_each across any field type
