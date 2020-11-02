@@ -34,28 +34,31 @@ mod tests {
     use http::Request;
 
     #[test]
+    fn test_validate_empty_query_string() {
+        let request = Request::builder()
+            .uri("/foo")
+            .body(())
+            .unwrap();
+        validate_query_string(&request, &vec![]).expect("no required params should pass");
+        validate_query_string(&request, &vec!["a"]).err().expect("no params provided");
+    }
+
+    #[test]
     fn test_validate_query_string() {
         let request = Request::builder()
             .uri("/foo?a=b&c&d=efg&hello=a%20b")
             .body(())
             .unwrap();
-        let check_pass = vec![
-            vec!["a=b"],
-            vec!["c", "a=b"],
-            vec!["a=b", "c", "d=efg", "hello=a%20b"],
-            vec![],
-        ];
-        for test in check_pass {
-            validate_query_string(&request, test.as_slice()).expect("test should pass");
-        }
+        validate_query_string(&request, &vec!["a=b"]).expect("a=b is in the query string");
+        validate_query_string(&request, &vec!["c", "a=b"]).expect("both params are in the query string");
+        validate_query_string(&request, &vec!["a=b", "c", "d=efg", "hello=a%20b"])
+            .expect("all params are in the query string");
+        validate_query_string(&request, &vec![]).expect("no required params should pass");
 
-        let check_fail = vec![
-            vec!["a"],
-            vec!["a=bc"],
-            vec!["hell=a%20"],
-        ];
-        for test in check_fail {
-            validate_query_string(&request, test.as_slice()).err().expect("test should fail");
-        }
+        validate_query_string(&request, &vec!["a"]).err().expect("no parameter should match");
+        validate_query_string(&request, &vec!["a=bc"]).err().expect("no parameter should match");
+        validate_query_string(&request, &vec!["a=bc"]).err().expect("no parameter should match");
+        validate_query_string(&request, &vec!["hell=a%20"]).err().expect("no parameter should match");
+
     }
 }
