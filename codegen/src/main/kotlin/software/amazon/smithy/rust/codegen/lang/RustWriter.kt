@@ -18,8 +18,7 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.utils.CodeWriter
 
-
-fun < T : CodeWriter> T.withBlock(
+fun <T : CodeWriter> T.withBlock(
     textBeforeNewLine: String,
     textAfterNewLine: String,
     conditional: Boolean = true,

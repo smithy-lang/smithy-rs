@@ -104,7 +104,6 @@ class StructureGeneratorTest {
             assert_eq!(my_struct.bar, 0);
         """
         )
-
     }
 
     @Test
