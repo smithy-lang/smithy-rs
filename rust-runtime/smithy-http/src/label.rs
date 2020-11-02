@@ -5,7 +5,6 @@
 
 /// Formatting values as Smithy
 /// [httpLabel](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httplabel-trait)
-
 use smithy_types::Instant;
 use std::fmt::Debug;
 
@@ -25,4 +24,3 @@ pub fn fmt_string<T: AsRef<str>>(t: T, greedy: bool) -> String {
 pub fn fmt_timestamp(t: &Instant, format: smithy_types::instant::Format) -> String {
     t.fmt(format)
 }
-
