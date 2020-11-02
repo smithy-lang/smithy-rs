@@ -21,7 +21,7 @@ fun String.shouldParseAsRust() {
 fun RustWriter.shouldCompile(main: String = "") {
     val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }
     try {
-        this.toString().shouldCompile(deps.toSet(), main)
+        this.toString().shouldCompile(deps.toSet(), module = this.namespace.split("::")[1], main = main)
     } catch (e: CommandFailed) {
         // When the test fails, print the code for convenience
         println(this.toString())
@@ -29,7 +29,7 @@ fun RustWriter.shouldCompile(main: String = "") {
     }
 }
 
-fun String.shouldCompile(deps: Set<RustDependency>, main: String = "") {
+fun String.shouldCompile(deps: Set<RustDependency>, module: String? = null, main: String = "") {
     this.shouldParseAsRust()
     val tempDir = createTempDir()
     // TODO: unify this with CargoTomlGenerator
@@ -46,13 +46,23 @@ fun String.shouldCompile(deps: Set<RustDependency>, main: String = "") {
     tempDir.resolve("Cargo.toml").writeText(cargoToml)
     tempDir.resolve("src").mkdirs()
     val mainRs = tempDir.resolve("src/main.rs")
-    mainRs.writeText(this)
-    if (!this.contains("fn main")) {
-        mainRs.appendText("\nfn main() { $main }\n")
-    }
+    val testModule = tempDir.resolve("src/$module.rs")
+    testModule.writeText(this)
+    testModule.appendText("""
+    #[test]
+    fn test() {
+        $main
+    }    
+    """.trimIndent())
+    mainRs.appendText("""
+        pub mod $module;
+        use crate::$module::*;
+        fn main() {
+        }
+    """.trimIndent())
     "cargo check".runCommand(tempDir.toPath())
     if (main != "") {
-        "cargo run".runCommand(tempDir.toPath())
+        "cargo test".runCommand(tempDir.toPath())
     }
 }
 

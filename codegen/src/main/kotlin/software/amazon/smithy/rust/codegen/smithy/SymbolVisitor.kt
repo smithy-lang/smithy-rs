@@ -69,10 +69,15 @@ fun Symbol.referenceClosure(): List<Symbol> {
     return listOf(this) + referencedSymbols.flatMap { it.referenceClosure() }
 }
 
-data class SymbolVisitorConfig(val runtimeConfig: RuntimeConfig, val handleOptionality: Boolean = true, val handleRustBoxing: Boolean = true)
+data class SymbolVisitorConfig(
+    val runtimeConfig: RuntimeConfig,
+    val handleOptionality: Boolean = true,
+    val handleRustBoxing: Boolean = true
+)
 
 // TODO: consider if this is better handled as a wrapper
-val DefaultConfig = SymbolVisitorConfig(runtimeConfig = RuntimeConfig(), handleOptionality = true, handleRustBoxing = true)
+val DefaultConfig =
+    SymbolVisitorConfig(runtimeConfig = RuntimeConfig(), handleOptionality = true, handleRustBoxing = true)
 
 data class SymbolLocation(val filename: String, val namespace: String)
 
@@ -83,6 +88,19 @@ fun Symbol.Builder.locatedIn(symbolLocation: SymbolLocation): Symbol.Builder =
 val Shapes = SymbolLocation("model.rs", "model")
 val Errors = SymbolLocation("error.rs", "error")
 val Operations = SymbolLocation("operation.rs", "operation")
+
+fun Symbol.makeOptional(): Symbol {
+    return if (isOptional()) {
+        this
+    } else {
+        val rustType = RustType.Option(this.rustType())
+        Symbol.builder().rustType(rustType)
+            .rustType(rustType)
+            .addReference(this)
+            .name(rustType.name)
+            .build()
+    }
+}
 
 class SymbolVisitor(
     private val model: Model,
@@ -102,16 +120,12 @@ class SymbolVisitor(
     }
 
     private fun handleOptionality(symbol: Symbol, member: MemberShape, container: Shape): Symbol {
-        val httpLabeledInput = container.hasTrait(SyntheticInput::class.java) && member.hasTrait(HttpLabelTrait::class.java)
+        // If a field has the httpLabel trait and we are generating
+        // an Input shape, then the field is _not optional_.
+        val httpLabeledInput =
+            container.hasTrait(SyntheticInput::class.java) && member.hasTrait(HttpLabelTrait::class.java)
         return if (nullableIndex.isNullable(member) && !httpLabeledInput) {
-            with(Symbol.builder()) {
-                val rustType = RustType.Option(symbol.rustType())
-                rustType(rustType)
-                addReference(symbol)
-                name(rustType.name)
-                putProperty(SHAPE_KEY, member)
-                build()
-            }
+            symbol.makeOptional()
         } else symbol
     }
 
@@ -128,7 +142,7 @@ class SymbolVisitor(
     }
 
     private fun simpleShape(shape: SimpleShape): Symbol {
-        return symbolBuilder(shape, SimpleShapes.getValue(shape::class)).build()
+        return symbolBuilder(shape, SimpleShapes.getValue(shape::class)).canUseDefault().build()
     }
 
     override fun booleanShape(shape: BooleanShape): Symbol = simpleShape(shape)
@@ -239,7 +253,7 @@ class SymbolVisitor(
         return builder.rustType(rustType)
             .name(rustType.name)
             // Every symbol that actually gets defined somewhere should set a definition file
-            // If we ever generate a `thisisabug.rs`, we messed something up
+            // If we ever generate a `thisisabug.rs`, there is a bug in our symbol generation
             .definitionFile("thisisabug.rs")
     }
 }
@@ -247,11 +261,24 @@ class SymbolVisitor(
 // TODO(chore): Move this to a useful place
 private const val RUST_TYPE_KEY = "rusttype"
 private const val SHAPE_KEY = "shape"
+private const val CAN_USE_DEFAULT = "canusedefault"
 
 fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder {
     return this.putProperty(RUST_TYPE_KEY, rustType)
 }
 
+fun Symbol.Builder.canUseDefault(value: Boolean = true): Symbol.Builder {
+    return this.putProperty(CAN_USE_DEFAULT, value)
+}
+
+/**
+ * True when it is valid to use the default/0 value for [this] symbol during construction.
+ */
+fun Symbol.canUseDefault(): Boolean = this.getProperty(CAN_USE_DEFAULT, Boolean::class.javaObjectType).orElse(false)
+
+/**
+ * True when [this] is will be represented by Option<T> in Rust
+ */
 fun Symbol.isOptional(): Boolean = when (this.rustType()) {
     is RustType.Option -> true
     else -> false

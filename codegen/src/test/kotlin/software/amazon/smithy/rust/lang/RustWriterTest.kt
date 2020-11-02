@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.testutil.shouldParseAsRust
 class RustWriterTest {
     @Test
     fun `empty file`() {
-        val sut = RustWriter("empty.rs", "")
+        val sut = RustWriter.forModule("empty")
         sut.toString().shouldParseAsRust()
         sut.toString().shouldCompile()
         sut.toString().shouldMatchResource(javaClass, "empty.rs")
@@ -30,7 +30,7 @@ class RustWriterTest {
 
     @Test
     fun `manually created struct`() {
-        val sut = RustWriter("lib.rs", "")
+        val sut = RustWriter.forModule("lib")
         val stringShape = StringShape.builder().id("test#Hello").build()
         val set = SetShape.builder()
             .id("foo.bar#Records")
