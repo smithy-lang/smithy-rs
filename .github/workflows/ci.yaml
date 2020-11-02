@@ -4,7 +4,7 @@ name: CI
 
 jobs:
   style:
-    name: smithy-rs style checks
+    name: Kotlin style checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
