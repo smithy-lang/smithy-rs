@@ -5,14 +5,17 @@
 
 package software.amazon.smithy.rust.lang
 
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.testutil.quickTest
 import software.amazon.smithy.rust.testutil.shouldCompile
@@ -26,6 +29,18 @@ class RustWriterTest {
         sut.toString().shouldParseAsRust()
         sut.toString().shouldCompile()
         sut.toString().shouldMatchResource(javaClass, "empty.rs")
+    }
+
+    @Test
+    fun `inner modules correctly handle dependencies`() {
+        val sut = RustWriter.forModule("lib")
+        val requestBuilder = RuntimeType.HttpRequestBuilder
+        sut.withModule("inner") {
+            rustBlock("fn build(builer: \$T)", requestBuilder) {
+            }
+        }
+        val httpDep = RustDependency.Http.dependencies[0]
+        sut.dependencies shouldContain httpDep
     }
 
     @Test
