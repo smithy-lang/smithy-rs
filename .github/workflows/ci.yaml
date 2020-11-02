@@ -23,7 +23,7 @@ jobs:
       - name: ktlint
         run: ./gradlew ktlint
   unit-tests:
-    name: smithy-rs unit tests
+    name: Codegen unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -58,7 +58,7 @@ jobs:
           name: codegen-output
           path: codegen-test/build/smithyprojections/codegen-test/source/rust-codegen/
   integration-tests:
-    name: smithy-rs integration tests
+    name: Codegen integration tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -90,3 +90,21 @@ jobs:
         run: echo "REPO_ROOT=$GITHUB_WORKSPACE" >> $GITHUB_ENV
       - name: integration-tests
         run: ./gradlew :codegen-test:test
+  runtime-tests:
+    name: Rust runtime tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: runtime tests
+        working-directory: rust-runtime
+        run: ./test.sh
