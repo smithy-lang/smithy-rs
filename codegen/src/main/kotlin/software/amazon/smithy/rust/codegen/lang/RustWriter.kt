@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.utils.CodeWriter
 
-fun CodeWriter.withBlock(textBeforeNewLine: String, textAfterNewLine: String, block: CodeWriter.() -> Unit): CodeWriter {
+fun <T : CodeWriter> T.withBlock(textBeforeNewLine: String, textAfterNewLine: String, block: T.() -> Unit): T {
     openBlock(textBeforeNewLine)
     block(this)
     closeBlock(textAfterNewLine)
