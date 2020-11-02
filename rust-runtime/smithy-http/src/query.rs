@@ -39,12 +39,9 @@ pub fn fmt_timestamp(t: &Instant, format: smithy_types::instant::Format) -> Stri
 }
 
 fn is_valid_query(c: char) -> bool {
-    // unreserved
-    let explicit_invalid = |c: char| match c {
-        '&' | '=' => false,
-        _ => true,
-    };
-    let unreserved = |c: char| c.is_alphanumeric() || c == '-' || c == '.' || c == '_' || c == '~';
+    // Although & / = are allowed in the query string, we want to escape them
+    let explicit_invalid = |c: char| !matches!(c, '&' | '=');
+    let unreserved = |c: char| c.is_alphanumeric() || matches!(c, '-' | '.' | '_' | '~');
     let sub_delims = |c: char| match c {
         '!' | '$' | '\'' | '(' | ')' | '*' | '+' | ',' | ';' => true,
         // TODO: should &/= be url encoded?
