@@ -49,7 +49,7 @@ class EnumGenerator(
                 write("&self.0")
             }
 
-            writer.rustBlock("pub fn ${Values}() -> &'static [&'static str]") {
+            writer.rustBlock("pub fn $Values() -> &'static [&'static str]") {
                 withBlock("&[", "]") {
                     val memberList = sortedMembers.joinToString(", ") { it.value.doubleQuote() }
                     write(memberList)

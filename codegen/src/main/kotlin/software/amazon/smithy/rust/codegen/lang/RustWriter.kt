@@ -18,15 +18,16 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.utils.CodeWriter
 
-fun CodeWriter.withBlock(
+fun <T : CodeWriter> T.withBlock(
     textBeforeNewLine: String,
     textAfterNewLine: String,
     conditional: Boolean = true,
-    block: CodeWriter.() -> Unit
-): CodeWriter {
+    block: T.() -> Unit
+): T {
     if (conditional) {
         openBlock(textBeforeNewLine)
     }
+
     block(this)
     if (conditional) {
         closeBlock(textAfterNewLine)
