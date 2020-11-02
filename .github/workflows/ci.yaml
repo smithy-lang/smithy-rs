@@ -87,9 +87,13 @@ jobs:
       # TODO: when the multi repo integration tests are merged, update this to glob all of them
       - uses: actions/upload-artifact@v2
         name: Upload Codegen Output for inspection
+        # Always upload the output even if the tests failed
+        if: ${{ always() }}
         with:
           name: codegen-output
-          path: codegen-test/build/smithyprojections/codegen-test/source/rust-codegen/
+          path: |
+            codegen-test/build/smithyprojections/codegen-test/source/rust-codegen/
+            !**/target
   runtime-tests:
     name: Rust runtime tests
     runs-on: ubuntu-latest
