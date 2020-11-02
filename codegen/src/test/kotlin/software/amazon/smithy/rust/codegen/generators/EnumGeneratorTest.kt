@@ -89,7 +89,7 @@ class EnumGeneratorTest {
         val shape = model.expectShape(ShapeId.from("test#FooEnum"), StringShape::class.java)
         val trait = shape.expectTrait(EnumTrait::class.java)
         val provider: SymbolProvider = SymbolVisitor(model, "test")
-        val writer = RustWriter("model.rs", "model")
+        val writer = RustWriter.forModule("model")
         val generator = EnumGenerator(provider, writer, shape, trait)
         generator.render()
         writer.shouldCompile("""
