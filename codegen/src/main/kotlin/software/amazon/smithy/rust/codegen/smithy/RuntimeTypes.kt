@@ -81,6 +81,11 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
             )
         }
 
+        fun ProtocolTestHelper(runtimeConfig: RuntimeConfig, func: String): RuntimeType =
+            RuntimeType(
+                func, RustDependency.ProtocolTestHelpers(runtimeConfig), "protocol_test_helpers"
+            )
+
         fun Http(path: String): RuntimeType = RuntimeType(name = path, dependency = RustDependency.Http, namespace = "http")
         val HttpRequestBuilder = Http("request::Builder")
     }
