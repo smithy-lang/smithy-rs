@@ -80,8 +80,6 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: 8
-      - name: set REPO_ROOT
-        run: echo "REPO_ROOT=$GITHUB_WORKSPACE" >> $GITHUB_ENV
       - name: integration-tests
         run: ./gradlew :codegen-test:test
       - uses: actions/upload-artifact@v2
