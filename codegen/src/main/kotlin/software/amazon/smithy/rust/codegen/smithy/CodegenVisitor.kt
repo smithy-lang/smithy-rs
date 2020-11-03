@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.runCommand
 
 private val PublicModules = listOf("error", "operation", "model")
@@ -71,7 +72,13 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
             LibRsGenerator(modules, it).render()
         }
         writers.flushWriters()
-        "cargo fmt".runCommand(fileManifest.baseDir)
+        try {
+            "cargo fmt".runCommand(fileManifest.baseDir)
+        } catch (_: CommandFailed) {
+            logger.warning("Generated output did not parse")
+
+
+        }
     }
 
     override fun getDefault(shape: Shape?) {
