@@ -34,7 +34,9 @@ class StructureGenerator(
 ) {
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
-    private val builderSymbol = RuntimeType("Builder", null, "${structureSymbol.namespace}::${structureSymbol.name.toSnakeCase()}")
+    private val builderSymbol =
+        RuntimeType("Builder", null, "${structureSymbol.namespace}::${structureSymbol.name.toSnakeCase()}")
+
     fun render() {
         renderStructure()
         val errorTrait = shape.getTrait(ErrorTrait::class.java)
@@ -48,6 +50,16 @@ class StructureGenerator(
                 renderBuilder(this)
             }
         }
+    }
+
+    companion object {
+        fun fallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean = structureShape
+            .allMembers
+            .values.map { symbolProvider.toSymbol(it) }.any {
+                // If any members are not optional && we can't use a default, we need to
+                // generate a fallible builder
+                !it.isOptional() && !it.canUseDefault()
+            }
     }
 
     private fun renderStructure() {
@@ -115,19 +127,15 @@ class StructureGenerator(
                 }
             }
 
-            val fallible = members.map { symbolProvider.toSymbol(it) }.any {
-                // If any members are not optional && we can't use a default, we need to
-                // generate a fallible builder
-                !it.isOptional() && !it.canUseDefault()
-            }
 
-            val returnType = when (fallible) {
+            val fallibleBuilder = fallibleBuilder(shape, symbolProvider)
+            val returnType = when (fallibleBuilder) {
                 true -> "Result<\$T, String>"
                 false -> "\$T"
             }
 
             writer.rustBlock("pub fn build(self) -> $returnType", structureSymbol) {
-                withBlock("Ok(", ")", conditional = fallible) {
+                withBlock("Ok(", ")", conditional = fallibleBuilder) {
                     rustBlock("\$T", structureSymbol) {
                         members.forEach { member ->
                             val memberName = symbolProvider.toMemberName(member)

@@ -61,9 +61,7 @@ fun String.shouldCompile(deps: Set<RustDependency>, module: String? = null, main
         }
     """.trimIndent())
     "cargo check".runCommand(tempDir.toPath())
-    if (main != "") {
-        "cargo test".runCommand(tempDir.toPath())
-    }
+    "cargo test".runCommand(tempDir.toPath())
 }
 
 fun String.shouldCompile() {

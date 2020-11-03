@@ -40,12 +40,14 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
 
     // TODO: refactor to be RuntimeTypeProvider a la Symbol provider that packages the `RuntimeConfig` state.
     companion object {
+
         // val Blob = RuntimeType("Blob", RustDependency.IO_CORE, "blob")
         val From = RuntimeType("From", dependency = null, namespace = "std::convert")
         val AsRef = RuntimeType("AsRef", dependency = null, namespace = "std::convert")
         fun StdFmt(member: String) = RuntimeType("fmt::$member", dependency = null, namespace = "std")
         val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
         val HashSet = RuntimeType("HashSet", dependency = null, namespace = "std::collections")
+        val HashMap = RuntimeType("HashMap", dependency = null, namespace = "std::collections")
 
         fun Instant(runtimeConfig: RuntimeConfig) =
             RuntimeType("Instant", RustDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.cratePrefix}_types")
@@ -61,6 +63,9 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
 
         fun Base64Encode(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType("encode", RustDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::base64")
+
+        fun Base64Decode(runtimeConfig: RuntimeConfig): RuntimeType =
+            RuntimeType("decode", RustDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::base64")
 
         fun TimestampFormat(runtimeConfig: RuntimeConfig, format: TimestampFormatTrait.Format): RuntimeType {
             val timestampFormat = when (format) {
