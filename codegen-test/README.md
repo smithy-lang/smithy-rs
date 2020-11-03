@@ -1,11 +1,8 @@
 # Codegen Integration Test
-This module defines an integration test of the code generation machinery. Models defined in `model` are built and generated into a Rust package. A `cargoCheck` Gradle task ensures that the generated Rust code compiles. This is added as a finalizer of the `test` task. 
+This module defines an integration test of the code generation machinery. `.build.gradle.kts` will generate a `smithy-build.json` file as part of the build. The Smithy build plugin then invokes our codegen machinery and generates Rust crates.
 
+The `test` task will run `cargo check` and `cargo clippy` to validate that the generated Rust compiles and is idiomatic.
 ## Usage
 ```
-# Compile codegen, Regenerate Rust, compile:
-# REPO_ROOT allows the runtime deps to be specified properly:
-REPO_ROOT=../ ../gradlew test
+../gradlew test
 ```
-
-The `smithy-build.json` configures the runtime dependencies to point directly to `../rust-runtime/*` via relative paths.
