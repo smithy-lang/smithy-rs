@@ -10,8 +10,8 @@ import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 
 sealed class DependencyScope
-object Dev: DependencyScope()
-object Compile: DependencyScope()
+object Dev : DependencyScope()
+object Compile : DependencyScope()
 
 sealed class DependencyLocation
 data class CratesIo(val version: String) : DependencyLocation()

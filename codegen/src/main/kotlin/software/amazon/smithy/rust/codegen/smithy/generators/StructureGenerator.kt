@@ -127,7 +127,6 @@ class StructureGenerator(
                 }
             }
 
-
             val fallibleBuilder = fallibleBuilder(shape, symbolProvider)
             val returnType = when (fallibleBuilder) {
                 true -> "Result<\$T, String>"

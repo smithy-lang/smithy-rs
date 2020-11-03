@@ -39,7 +39,6 @@ class ServiceGenerator(
     private val protocols: MutableMap<ShapeId, Trait> = ServiceIndex(model).getProtocols(serviceShape)
     private val matchingProtocols = protocols.keys.mapNotNull { protocolId -> supportedProtocols[protocolId]?.let { protocolId to it } }
 
-
     init {
         if (matchingProtocols.isEmpty()) {
             throw CodegenException("No matching protocol — service offers: ${protocols.keys}. We offer: ${supportedProtocols.keys}")
@@ -56,6 +55,7 @@ class ServiceGenerator(
                 val input = operation.input.get().let { model.expectShape(it, StructureShape::class.java) }
                 val config = ProtocolConfig(model, symbolProvider, runtimeConfig, writer, serviceShape, operation, input, protocol)
                 generator.build(config).render()
+                HttpProtocolTestGenerator(config).render()
             }
         }
     }

@@ -48,7 +48,6 @@ class Instantiator(
             is ListShape -> renderList(writer, shape, arg as ArrayNode)
             is MapShape -> renderMap(writer, shape, arg as ObjectNode)
 
-
             // Wrapped Shapes
             is TimestampShape -> writer.write(
                 "\$T::from_epoch_seconds(${(arg as NumberNode).value})",

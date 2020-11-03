@@ -1,10 +1,7 @@
 package software.amazon.smithy.rust.codegen.smithy.generators
 
 import org.junit.jupiter.api.Test
-
-import org.junit.jupiter.api.Assertions.*
 import software.amazon.smithy.model.node.Node
-import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
