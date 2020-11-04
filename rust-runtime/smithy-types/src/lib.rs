@@ -85,6 +85,12 @@ pub struct Blob {
     inner: Vec<u8>,
 }
 
+impl Blob {
+    pub fn new(inp: Vec<u8>) -> Self {
+        Blob { inner: inp }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::instant::Format;

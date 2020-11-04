@@ -11,7 +11,7 @@ import software.amazon.smithy.rust.codegen.smithy.letIf
 
 class CommandFailed(output: String) : Exception("Command Failed\n$output")
 
-fun String.runCommand(workdir: Path? = null): String? {
+fun String.runCommand(workdir: Path? = null): String {
     val parts = this.split("\\s".toRegex())
     val proc = ProcessBuilder(*parts.toTypedArray())
         .redirectOutput(ProcessBuilder.Redirect.PIPE)
@@ -22,10 +22,11 @@ fun String.runCommand(workdir: Path? = null): String? {
         .start()
 
     proc.waitFor(60, TimeUnit.MINUTES)
-    if (proc.exitValue() != 0) {
-        val stdErr = proc.errorStream.bufferedReader().readText()
-        val stdOut = proc.inputStream.bufferedReader().readText()
-        throw CommandFailed("Command Failed\n$stdErr\n$stdOut")
+    val stdErr = proc.errorStream.bufferedReader().readText()
+    val stdOut = proc.inputStream.bufferedReader().readText()
+    val output = "$stdErr\n$stdOut"
+    return when (proc.exitValue()) {
+        0 -> output
+        else -> throw CommandFailed("Command Failed\n$output")
     }
-    return proc.inputStream.bufferedReader().readText()
 }

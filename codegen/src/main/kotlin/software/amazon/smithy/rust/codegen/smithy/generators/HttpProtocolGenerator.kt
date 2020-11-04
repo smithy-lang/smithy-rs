@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
@@ -22,7 +23,8 @@ data class ProtocolConfig(
     val writer: RustWriter,
     val serviceShape: ServiceShape,
     val operationShape: OperationShape,
-    val inputShape: StructureShape
+    val inputShape: StructureShape,
+    val protocol: ShapeId
 )
 
 interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {

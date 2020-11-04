@@ -21,5 +21,5 @@ fun testSymbolProvider(model: Model): SymbolProvider = SymbolVisitor(model, "tes
 private val SmithyVersion = "1.0"
 fun String.asSmithy(sourceLocation: String? = null): Model {
     val processed = letIf(!this.startsWith("\$version")) { "\$version: ${SmithyVersion.dq()}\n$it" }
-    return Model.assembler().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble().unwrap()
+    return Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble().unwrap()
 }

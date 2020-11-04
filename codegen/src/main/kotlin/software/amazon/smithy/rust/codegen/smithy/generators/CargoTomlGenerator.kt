@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
+import software.amazon.smithy.rust.codegen.lang.Compile
+import software.amazon.smithy.rust.codegen.lang.Dev
 import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.utils.CodeWriter
@@ -20,9 +22,18 @@ class CargoTomlGenerator(private val settings: RustSettings, private val writer:
 
         writer.insertTrailingNewline()
 
-        if (dependencies.isNotEmpty()) {
+        val compileDependencies = dependencies.filter { it.scope == Compile }
+        val devDependencies = dependencies.filter { it.scope == Dev }
+        if (compileDependencies.isNotEmpty()) {
             writer.write("[dependencies]")
-            dependencies.forEach {
+            compileDependencies.forEach {
+                writer.write(it.toString())
+            }
+        }
+
+        if (devDependencies.isNotEmpty()) {
+            writer.write("[dev-dependencies]")
+            devDependencies.forEach {
                 writer.write(it.toString())
             }
         }
