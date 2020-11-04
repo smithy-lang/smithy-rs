@@ -15,5 +15,5 @@ This will run all the unit tests, codegen an example model end-to-end and valida
 For development, pre-commit hooks may be useful. Setup:
 ```
 brew install pre-commit # (or appropriate for your platform: https://pre-commit.com/)
-pre-commit --install
+pre-commit install
 ```
