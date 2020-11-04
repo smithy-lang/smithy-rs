@@ -63,7 +63,7 @@ class Instantiator(
             // Simple Shapes
             is StringShape -> renderString(writer, shape, arg as StringNode)
             is NumberShape -> writer.write(arg.asNumberNode().get())
-            is BooleanShape -> writer.write(arg.asBooleanNode().toString())
+            is BooleanShape -> writer.write(arg.asBooleanNode().get().toString())
             else -> writer.write("todo!() /* $shape $arg */")
         }
     }
@@ -152,7 +152,7 @@ class Instantiator(
         val enumTrait = shape.getTrait(EnumTrait::class.java).orElse(null)
         val data = arg.value.dq()
         if (enumTrait == null) {
-            writer.write(data)
+            writer.write("$data.to_string()")
         } else {
             val enumSymbol = symbolProvider.toSymbol(shape)
             writer.write("\$T::from($data)", enumSymbol)

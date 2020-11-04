@@ -33,7 +33,7 @@ class CargoTomlGenerator(private val settings: RustSettings, private val writer:
 
         if (devDependencies.isNotEmpty()) {
             writer.write("[dev-dependencies]")
-            compileDependencies.forEach {
+            devDependencies.forEach {
                 writer.write(it.toString())
             }
         }

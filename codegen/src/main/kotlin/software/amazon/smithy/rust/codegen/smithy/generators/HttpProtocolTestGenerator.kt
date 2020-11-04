@@ -38,10 +38,8 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig) {
         httpRequestTestCase.documentation.map {
             testModuleWriter.setNewlinePrefix("/// ").write(it).setNewlinePrefix("")
         }
-        testModuleWriter.write("/// Location: ${httpRequestTestCase.toNode().sourceLocation}")
         testModuleWriter.write("#[test]")
         testModuleWriter.rustBlock("fn test_${httpRequestTestCase.id.toSnakeCase()}()") {
-            write("assert_eq!(true, true);")
             writeInline("let input =")
             instantiator.render(httpRequestTestCase.params, protocolConfig.inputShape, this)
             write(";")
@@ -61,7 +59,7 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig) {
                     RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_query_string")
                 )
                 // TODO: assert on the body contents
-                write("/* BODY:\n $body */")
+                write("/* BODY:\n ${body.orElse("[ No Body ]")} */")
             }
         }
     }

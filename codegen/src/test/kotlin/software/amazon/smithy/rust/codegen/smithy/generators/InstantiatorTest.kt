@@ -99,7 +99,7 @@ class InstantiatorTest {
             writer.withBlock("let result = ", ";") {
                 sut.render(data, model.lookup("com.test#MyList"), writer)
             }
-            writer.write("""assert_eq!(result, vec!["bar", "foo"]);""")
+            writer.write("""assert_eq!(result, vec!["bar".to_string(), "foo".to_string()]);""")
         }
         writer.shouldCompile()
     }
@@ -119,7 +119,7 @@ class InstantiatorTest {
             writer.withBlock("let result = ", ";") {
                 sut.render(data, model.lookup("com.test#MySparseList"), writer)
             }
-            writer.write("""assert_eq!(result, vec![Some("bar"), Some("foo"), None]);""")
+            writer.write("""assert_eq!(result, vec![Some("bar".to_string()), Some("foo".to_string()), None]);""")
         }
         writer.shouldCompile()
     }
