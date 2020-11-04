@@ -39,10 +39,22 @@ class InstantiatorTest {
             stringVariant: String,
             numVariant: Integer
         }
+        
+        structure Inner {
+            map: NestedMap
+        }
+        
+        
+        map NestedMap {
+            key: String,
+            value: Inner
+        }
         """.asSmithy()
 
     private val symbolProvider = testSymbolProvider(model)
     private val runtimeConfig = TestRuntimeConfig
+
+    // TODO: test of recursive structures when supported
 
     @Test
     fun `generate unions`() {
@@ -122,5 +134,32 @@ class InstantiatorTest {
             writer.write("""assert_eq!(result, vec![Some("bar".to_string()), Some("foo".to_string()), None]);""")
         }
         writer.shouldCompile()
+    }
+
+    @Test
+    fun `generate maps of maps`() {
+        val data = Node.parse("""{
+            "k1": { "map": {} },
+            "k2": { "map": { "k3": {} } },
+            "k3": { }
+        }
+        """)
+        val writer = RustWriter.forModule("model")
+        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val structureGenerator = StructureGenerator(model, symbolProvider, writer, model.lookup("com.test#Inner"))
+        structureGenerator.render()
+        writer.write("#[test]")
+        writer.rustBlock("fn inst()") {
+            writer.withBlock("let result = ", ";") {
+                sut.render(data, model.lookup("com.test#NestedMap"), writer)
+            }
+            writer.write("""
+                assert_eq!(result.len(), 3);
+                assert_eq!(result.get("k1").unwrap().map.as_ref().unwrap().len(), 0);
+                assert_eq!(result.get("k2").unwrap().map.as_ref().unwrap().len(), 1);
+                assert_eq!(result.get("k3").unwrap().map, None);
+            """)
+        }
+        writer.shouldCompile(strict = true)
     }
 }

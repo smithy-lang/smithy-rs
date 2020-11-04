@@ -83,14 +83,18 @@ class Instantiator(
         data: ObjectNode
     ) {
         writer.rustBlock("") {
-            write("let mut ret = \$T::new();", RuntimeType.HashMap)
-            val valueShape = shape.value.let { model.expectShape(it.target) }
-            data.members.forEach { (k, v) ->
-                withBlock("ret.insert(${k.value.dq()}.to_string(),", ");") {
-                    render(v, valueShape, this)
+            if (data.members.isNotEmpty()) {
+                write("let mut ret = \$T::new();", RuntimeType.HashMap)
+                val valueShape = shape.value.let { model.expectShape(it.target) }
+                data.members.forEach { (k, v) ->
+                    withBlock("ret.insert(${k.value.dq()}.to_string(),", ");") {
+                        render(v, valueShape, this)
+                    }
                 }
+                write("ret")
+            } else {
+                writer.write("\$T::new()", RuntimeType.HashMap)
             }
-            write("ret")
         }
     }
 
