@@ -43,6 +43,10 @@ class HttpProtocolTestGeneratorTest {
                 queryParams: [
                     "Hi=Hello%20there"
                 ],
+                forbidQueryParams: [
+                    "goodbye"
+                ],
+                requireQueryParams: ["required"],
                 headers: {
                     "X-Greeting": "Hi",
                 },
@@ -68,30 +72,15 @@ class HttpProtocolTestGeneratorTest {
     private val symbolProvider = testSymbolProvider(model)
     private val runtimeConfig = TestRuntimeConfig
 
-    private fun fakeInput(writer: RustWriter, body: String) {
-        StructureGenerator(model, symbolProvider, writer, model.lookup("com.example#SayHelloInput")).render()
-        writer.rustBlock("impl SayHelloInput") {
-            rustBlock("pub fn build_http_request(&self) -> \$T", RuntimeType.HttpRequestBuilder) {
-                write("\$T::new()", RuntimeType.HttpRequestBuilder)
-                write(body)
-            }
-        }
-    }
-
-    @Test
-    fun `passing e2e protocol request test`() {
-        val writer = RustWriter.forModule("lib")
-
-        // Hard coded implementation for this 1 test
+    private fun writeHttpImpl(writer: RustWriter, body: String) {
         writer.withModule("operation") {
-            fakeInput(
-                this,
-                """
-                        .uri("/?Hi=Hello%20there")
-                        .header("X-Greeting", "Hi")
-                        .method("POST")
-                    """
-            )
+            StructureGenerator(model, symbolProvider, this, model.lookup("com.example#SayHelloInput")).render()
+            rustBlock("impl SayHelloInput") {
+                rustBlock("pub fn build_http_request(&self) -> \$T", RuntimeType.HttpRequestBuilder) {
+                    write("\$T::new()", RuntimeType.HttpRequestBuilder)
+                    write(body)
+                }
+            }
             val protocolConfig = ProtocolConfig(
                 model,
                 symbolProvider,
@@ -106,6 +95,19 @@ class HttpProtocolTestGeneratorTest {
                 protocolConfig
             ).render()
         }
+    }
+
+    @Test
+    fun `passing e2e protocol request test`() {
+        val writer = RustWriter.forModule("lib")
+        writeHttpImpl(
+            writer,
+            """
+                    .uri("/?Hi=Hello%20there&required")
+                    .header("X-Greeting", "Hi")
+                    .method("POST")
+                """
+        )
 
         val testOutput = writer.shouldCompile()
         // Verify the test actually ran
@@ -113,33 +115,18 @@ class HttpProtocolTestGeneratorTest {
     }
 
     @Test
-    fun `failing e2e protocol test`() {
+    fun `test invalid url parameter`() {
         val writer = RustWriter.forModule("lib")
 
         // Hard coded implementation for this 1 test
-        writer.withModule("operation") {
-            fakeInput(
-                this,
+        writeHttpImpl(
+            writer,
+            """
+                    .uri("/?Hi=INCORRECT&required")
+                    .header("X-Greeting", "Hi")
+                    .method("POST")
                 """
-                        .uri("/?Hi=INCORRECT")
-                        .header("X-Greeting", "Hi")
-                        .method("POST")
-                    """
-            )
-            val protocolConfig = ProtocolConfig(
-                model,
-                symbolProvider,
-                runtimeConfig,
-                this,
-                model.lookup("com.example#HelloService"),
-                model.lookup("com.example#SayHello"),
-                model.lookup("com.example#SayHelloInput"),
-                RestJson1Trait.ID
-            )
-            HttpProtocolTestGenerator(
-                protocolConfig
-            ).render()
-        }
+        )
 
         val err = assertThrows<CommandFailed> {
             writer.shouldCompile(expectFailure = true)
@@ -147,5 +134,69 @@ class HttpProtocolTestGeneratorTest {
         // Verify the test actually ran
         err.message shouldContain "test_say_hello ... FAILED"
         err.message shouldContain "MissingQueryParam"
+    }
+
+    @Test
+    fun `test forbidden url parameter`() {
+        val writer = RustWriter.forModule("lib")
+
+        // Hard coded implementation for this 1 test
+        writeHttpImpl(
+            writer,
+            """
+                    .uri("/?goodbye&Hi=Hello%20there&required")
+                    .header("X-Greeting", "Hi")
+                    .method("POST")
+                """
+        )
+
+        val err = assertThrows<CommandFailed> {
+            writer.shouldCompile(expectFailure = true)
+        }
+        // Verify the test actually ran
+        err.message shouldContain "test_say_hello ... FAILED"
+        err.message shouldContain "ForbiddenQueryParam"
+    }
+
+    @Test
+    fun `test required url parameter`() {
+        val writer = RustWriter.forModule("lib")
+
+        // Hard coded implementation for this 1 test
+        writeHttpImpl(
+            writer,
+            """
+                    .uri("/?Hi=Hello%20there")
+                    .header("X-Greeting", "Hi")
+                    .method("POST")
+                """
+        )
+
+        val err = assertThrows<CommandFailed> {
+            writer.shouldCompile(expectFailure = true)
+        }
+        // Verify the test actually ran
+        err.message shouldContain "test_say_hello ... FAILED"
+        err.message shouldContain "RequiredQueryParam"
+    }
+
+    @Test
+    fun `invalid header`() {
+        val writer = RustWriter.forModule("lib")
+        writeHttpImpl(
+            writer,
+            """
+                    .uri("/?Hi=Hello%20there&required")
+                    // should be "Hi"
+                    .header("X-Greeting", "Hey")
+                    .method("POST")
+                """
+        )
+
+        val err = assertThrows<CommandFailed> {
+            writer.shouldCompile(expectFailure = true)
+        }
+        err.message shouldContain "test_say_hello ... FAILED"
+        err.message shouldContain "InvalidHeader"
     }
 }

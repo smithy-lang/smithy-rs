@@ -44,6 +44,10 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig) {
             instantiator.render(httpRequestTestCase.params, protocolConfig.inputShape, this)
             write(";")
             write("let http_request = input.build_http_request().body(()).unwrap();")
+            checkQueryParams(this, httpRequestTestCase.queryParams)
+            checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
+            checkRequiredQueryParams(this, httpRequestTestCase.requireQueryParams)
+            checkHeaders(this, httpRequestTestCase.headers)
             with(httpRequestTestCase) {
                 write(
                     """
@@ -51,16 +55,66 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig) {
                     assert_eq!(http_request.uri().path(), ${uri.dq()});
                 """
                 )
-                withBlock("let expected_query_params = vec![", "];") {
-                    write(queryParams.joinToString(",") { it.dq() })
-                }
-                write(
-                    "\$T(&http_request, expected_query_params.as_slice()).unwrap();",
-                    RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_query_string")
-                )
                 // TODO: assert on the body contents
                 write("/* BODY:\n ${body.orElse("[ No Body ]")} */")
             }
+        }
+    }
+
+    private fun checkHeaders(rustWriter: RustWriter, headers: Map<String, String>) {
+        if (headers.isEmpty()) {
+            return
+        }
+        val variableName = "expected_headers"
+        rustWriter.withBlock("let $variableName = &[", "];") {
+            write(
+                headers.entries.joinToString(",") {
+                    "(${it.key.dq()}, ${it.value.dq()})"
+                }
+            )
+        }
+        rustWriter.write(
+            "assert_eq!(\$T(&http_request, $variableName), Ok(()));",
+            RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_headers")
+        )
+    }
+
+    private fun checkRequiredQueryParams(
+        rustWriter: RustWriter,
+        requiredParams: List<String>
+    ) = basicCheck(requiredParams, rustWriter, "required_params", "require_query_params")
+
+    private fun checkForbidQueryParams(
+        rustWriter: RustWriter,
+        forbidParams: List<String>
+    ) = basicCheck(forbidParams, rustWriter, "forbid_params", "forbid_query_params")
+
+    private fun checkQueryParams(
+        rustWriter: RustWriter,
+        queryParams: List<String>
+    ) = basicCheck(queryParams, rustWriter, "expected_query_params", "validate_query_string")
+
+    private fun basicCheck(
+        params: List<String>,
+        rustWriter: RustWriter,
+        variableName: String,
+        checkFunction: String
+    ) {
+        if (params.isEmpty()) {
+            return
+        }
+        rustWriter.withBlock("let $variableName = ", ";") {
+            strSlice(this, params)
+        }
+        rustWriter.write(
+            "assert_eq!(\$T(&http_request, $variableName), Ok(()));",
+            RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, checkFunction)
+        )
+    }
+
+    private fun strSlice(writer: RustWriter, args: List<String>) {
+        writer.withBlock("&[", "]") {
+            write(args.joinToString(",") { it.dq() })
         }
     }
 }
