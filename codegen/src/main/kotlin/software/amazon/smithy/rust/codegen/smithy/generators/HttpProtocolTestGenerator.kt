@@ -48,14 +48,14 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig) {
                 write(
                     """
                     assert_eq!(http_request.method(), ${method.dq()});
-                    assert_eq!(http_request.uri(), ${uri.dq()});
+                    assert_eq!(http_request.uri().path(), ${uri.dq()});
                 """
                 )
-                withBlock("let expected_headers = vec![", "];") {
-                    queryParams.joinToString(",") { it.dq() }
+                withBlock("let expected_query_params = vec![", "];") {
+                    write(queryParams.joinToString(",") { it.dq() })
                 }
                 write(
-                    "\$T(&http_request, expected_headers.as_slice()).unwrap();",
+                    "\$T(&http_request, expected_query_params.as_slice()).unwrap();",
                     RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_query_string")
                 )
                 // TODO: assert on the body contents

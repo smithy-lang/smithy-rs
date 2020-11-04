@@ -18,14 +18,20 @@ fun String.shouldParseAsRust() {
     "rustfmt ${tempFile.absolutePath}".runCommand()
 }
 
-fun RustWriter.shouldCompile(main: String = "", strict: Boolean = false) {
+fun RustWriter.shouldCompile(main: String = "", strict: Boolean = false, expectFailure: Boolean = false): String {
     val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }
     try {
-        this.toString()
+        val output = this.toString()
             .shouldCompile(deps.toSet(), module = this.namespace.split("::")[1], main = main, strict = strict)
+        if (expectFailure) {
+            println(this.toString())
+        }
+        return output
     } catch (e: CommandFailed) {
         // When the test fails, print the code for convenience
-        println(this.toString())
+        if (!expectFailure) {
+            println(this.toString())
+        }
         throw e
     }
 }
@@ -35,7 +41,7 @@ fun String.shouldCompile(
     module: String? = null,
     main: String = "",
     strict: Boolean = false
-) {
+): String {
     this.shouldParseAsRust()
     val tempDir = createTempDir()
     // TODO: unify this with CargoTomlGenerator
@@ -45,7 +51,7 @@ fun String.shouldCompile(
     version = "0.0.1"
     authors = ["rcoh@amazon.com"]
     edition = "2018"
-    
+
     [dependencies]
     ${deps.joinToString("\n") { it.toString() }}
     """.trimIndent()
@@ -59,8 +65,8 @@ fun String.shouldCompile(
     #[test]
     fn test() {
         $main
-    }    
-    """.trimIndent()
+    }
+        """.trimIndent()
     )
     mainRs.appendText(
         """
@@ -68,13 +74,14 @@ fun String.shouldCompile(
         use crate::$module::*;
         fn main() {
         }
-    """.trimIndent()
+        """.trimIndent()
     )
     "cargo check".runCommand(tempDir.toPath())
-    "cargo test".runCommand(tempDir.toPath())
+    val testOutput = "cargo test".runCommand(tempDir.toPath())
     if (strict) {
         "cargo clippy -- -D warnings".runCommand(tempDir.toPath())
     }
+    return testOutput
 }
 
 fun String.shouldCompile() {
