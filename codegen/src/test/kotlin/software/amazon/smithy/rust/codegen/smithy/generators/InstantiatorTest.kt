@@ -25,26 +25,26 @@ class InstantiatorTest {
            ts: Timestamp,
            byteValue: Byte
         }
-        
+
         list MyList {
             member: String
         }
-        
+
         @sparse
         list MySparseList {
             member: String
         }
-        
+
         union MyUnion {
             stringVariant: String,
             numVariant: Integer
         }
-        
+
         structure Inner {
             map: NestedMap
         }
-        
-        
+
+
         map NestedMap {
             key: String,
             value: Inner
@@ -60,9 +60,11 @@ class InstantiatorTest {
     fun `generate unions`() {
         val union = model.lookup<UnionShape>("com.test#MyUnion")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
-        val data = Node.parse("""{
+        val data = Node.parse(
+            """{
             "stringVariant": "ok!"
-        }""")
+        }"""
+        )
         val writer = RustWriter.forModule("model")
         UnionGenerator(model, symbolProvider, writer, union).render()
         writer.write("#[test]")
@@ -78,11 +80,13 @@ class InstantiatorTest {
     fun `generate struct builders`() {
         val structure = model.lookup<StructureShape>("com.test#MyStruct")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
-        val data = Node.parse(""" {
+        val data = Node.parse(
+            """ {
             "bar": 10,
             "foo": "hello"
         }
-        """.trimIndent())
+            """.trimIndent()
+        )
         val writer = RustWriter.forModule("model")
         val structureGenerator = StructureGenerator(model, symbolProvider, writer, structure)
         structureGenerator.render()
@@ -99,11 +103,13 @@ class InstantiatorTest {
 
     @Test
     fun `generate lists`() {
-        val data = Node.parse(""" [
+        val data = Node.parse(
+            """ [
             "bar",
             "foo"
         ]
-        """)
+        """
+        )
         val writer = RustWriter.forModule("lib")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
         writer.write("#[test]")
@@ -118,12 +124,14 @@ class InstantiatorTest {
 
     @Test
     fun `generate sparse lists`() {
-        val data = Node.parse(""" [
+        val data = Node.parse(
+            """ [
             "bar",
             "foo",
             null
         ]
-        """)
+        """
+        )
         val writer = RustWriter.forModule("lib")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
         writer.write("#[test]")
@@ -138,12 +146,14 @@ class InstantiatorTest {
 
     @Test
     fun `generate maps of maps`() {
-        val data = Node.parse("""{
+        val data = Node.parse(
+            """{
             "k1": { "map": {} },
             "k2": { "map": { "k3": {} } },
             "k3": { }
         }
-        """)
+        """
+        )
         val writer = RustWriter.forModule("model")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
         val structureGenerator = StructureGenerator(model, symbolProvider, writer, model.lookup("com.test#Inner"))
@@ -153,12 +163,14 @@ class InstantiatorTest {
             writer.withBlock("let result = ", ";") {
                 sut.render(data, model.lookup("com.test#NestedMap"), writer)
             }
-            writer.write("""
+            writer.write(
+                """
                 assert_eq!(result.len(), 3);
                 assert_eq!(result.get("k1").unwrap().map.as_ref().unwrap().len(), 0);
                 assert_eq!(result.get("k2").unwrap().map.as_ref().unwrap().len(), 1);
                 assert_eq!(result.get("k3").unwrap().map, None);
-            """)
+            """
+            )
         }
         writer.shouldCompile(strict = true)
     }

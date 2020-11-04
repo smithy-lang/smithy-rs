@@ -28,10 +28,10 @@ class EnumGeneratorTest {
             .addEnum(EnumDefinition.builder().value("t2.nano").name("T2_NANO").build())
             .addEnum(
                 EnumDefinition.builder().value("t2.micro").name("T2_MICRO").documentation(
-                            "T2 instances are Burstable Performance\n" +
-                            "Instances that provide a baseline level of CPU\n" +
-                            "performance with the ability to burst above the\n" +
-                            "baseline."
+                    "T2 instances are Burstable Performance\n" +
+                        "Instances that provide a baseline level of CPU\n" +
+                        "performance with the ability to burst above the\n" +
+                        "baseline."
                 ).build()
             )
             .build()
@@ -53,14 +53,16 @@ class EnumGeneratorTest {
         val result = writer.toString()
         result.shouldParseAsRust()
         result.shouldCompile()
-        result.quickTest("""
+        result.quickTest(
+            """
             let instance = InstanceType::T2Micro;
             assert_eq!(instance.as_str(), "t2.micro");
             assert_eq!(InstanceType::from("t2.nano"), InstanceType::T2Nano);
             assert_eq!(InstanceType::from("other"), InstanceType::Unknown("other".to_owned()));
             // round trip unknown variants:
             assert_eq!(InstanceType::from("other").as_str(), "other");
-        """.trimIndent())
+            """.trimIndent()
+        )
     }
 
     @Test
@@ -92,9 +94,11 @@ class EnumGeneratorTest {
         val writer = RustWriter.forModule("model")
         val generator = EnumGenerator(provider, writer, shape, trait)
         generator.render()
-        writer.shouldCompile("""
+        writer.shouldCompile(
+            """
             // Values should be sorted
             assert_eq!(FooEnum::${EnumGenerator.Values}(), ["0", "1", "Bar", "Baz", "Foo"]);
-        """)
+        """
+        )
     }
 }

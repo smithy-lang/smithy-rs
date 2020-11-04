@@ -5,13 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.smithy
 
-import java.io.File
-import java.util.Optional
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustType
+import java.io.File
+import java.util.Optional
 
 data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: String = "../") {
     companion object {

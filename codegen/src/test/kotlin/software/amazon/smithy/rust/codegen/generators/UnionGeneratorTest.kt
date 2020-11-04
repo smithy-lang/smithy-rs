@@ -25,8 +25,8 @@ class UnionGeneratorTest {
             .target("smithy.api#String").build()
         val member2 = MemberShape.builder().id("com.test#MyUnion\$intConfig")
             .target("smithy.api#PrimitiveInteger").addTrait(
-            DocumentationTrait("This *is* documentation about the member.")
-        ).build()
+                DocumentationTrait("This *is* documentation about the member.")
+            ).build()
 
         val union = UnionShape.builder()
             .id("com.test#MyUnion")

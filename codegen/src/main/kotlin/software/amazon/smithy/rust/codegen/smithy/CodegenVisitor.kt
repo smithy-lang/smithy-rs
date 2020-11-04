@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.smithy
 
-import java.util.logging.Logger
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
@@ -29,6 +28,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.runCommand
+import java.util.logging.Logger
 
 private val PublicModules = listOf("error", "operation", "model")
 

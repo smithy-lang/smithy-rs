@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.testutil
 
-import java.io.File
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
@@ -13,6 +12,7 @@ import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.util.dq
+import java.io.File
 
 val TestRuntimeConfig = RuntimeConfig(relativePath = File("../rust-runtime/").absolutePath)
 val TestSymbolVisitorConfig = SymbolVisitorConfig(runtimeConfig = TestRuntimeConfig, handleOptionality = true, handleRustBoxing = true)

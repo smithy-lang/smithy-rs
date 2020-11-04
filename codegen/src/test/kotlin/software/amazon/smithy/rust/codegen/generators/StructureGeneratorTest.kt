@@ -33,11 +33,11 @@ class StructureGeneratorTest {
            inner: Inner,
            byteValue: Byte
         }
-        
+
         // Intentionally empty
         structure Inner {
         }
-        
+
         @error("server")
         structure MyError {
             message: String
@@ -55,10 +55,11 @@ class StructureGeneratorTest {
         val generator = StructureGenerator(model, provider, writer, struct)
         generator.render()
         innerGenerator.render()
-        writer.shouldCompile("""
+        writer.shouldCompile(
+            """
             let s: Option<MyStruct> = None;
             s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
-        """.trimIndent()
+            """.trimIndent()
         )
     }
 
