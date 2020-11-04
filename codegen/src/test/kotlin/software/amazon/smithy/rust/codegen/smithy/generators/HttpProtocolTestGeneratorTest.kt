@@ -87,7 +87,7 @@ class HttpProtocolTestGeneratorTest {
             fakeInput(
                 this,
                 """
-                        .uri("/?Hi=Hello%20There")
+                        .uri("/?Hi=Hello%20there")
                         .header("X-Greeting", "Hi")
                         .method("POST")
                     """
