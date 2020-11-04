@@ -5,9 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.util
 
-import software.amazon.smithy.rust.codegen.smithy.letIf
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import software.amazon.smithy.rust.codegen.smithy.letIf
 
 class CommandFailed(output: String) : Exception("Command Failed\n$output")
 
