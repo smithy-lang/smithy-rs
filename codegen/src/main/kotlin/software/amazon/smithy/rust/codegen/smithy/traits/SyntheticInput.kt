@@ -21,7 +21,8 @@ class SyntheticInput @JvmOverloads constructor(node: ObjectNode? = Node.objectNo
             SyntheticInput(
                 node
             )
-        })
+        }
+    )
 
     companion object {
         val ID = ShapeId.from("smithy.api.internal#synthetic")

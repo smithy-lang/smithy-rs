@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.lang
 
-import java.util.function.BiFunction
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.writer.CodegenWriter
@@ -17,6 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.utils.CodeWriter
+import java.util.function.BiFunction
 
 fun <T : CodeWriter> T.withBlock(
     textBeforeNewLine: String,

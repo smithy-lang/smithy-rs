@@ -5,8 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.smithy.transformers
 
-import java.util.Optional
-import kotlin.streams.toList
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
@@ -15,6 +13,8 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInput
+import java.util.Optional
+import kotlin.streams.toList
 
 /**
  * Generate synthetic Input and Output structures for operations.

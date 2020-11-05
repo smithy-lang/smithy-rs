@@ -79,7 +79,7 @@ class SymbolBuilderTest {
     fun `creates enums`() {
         val model = """
             namespace test
-            
+
             @enum([
                 {
                     value: "Count",

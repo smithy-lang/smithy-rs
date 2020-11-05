@@ -27,10 +27,10 @@ class UseDeclarations(private val filename: String, private val namespace: Strin
 
 private data class UseStatement(val moduleName: String, val symbolName: String, val alias: String) {
     val rendered: String
-    get() {
-        val alias = alias.let { if (it == symbolName) "" else " as $it" }
-        return "use $moduleName::$symbolName$alias;"
-    }
+        get() {
+            val alias = alias.let { if (it == symbolName) "" else " as $it" }
+            return "use $moduleName::$symbolName$alias;"
+        }
 
     override fun toString(): String = rendered
 }

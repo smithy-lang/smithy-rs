@@ -76,9 +76,11 @@ class HttpTraitBindingGenerator(
         uriBase(implBlockWriter)
         val hasHeaders = addHeaders(implBlockWriter)
         val hasQuery = uriQuery(implBlockWriter)
-        implBlockWriter.rustBlock("fn update_http_builder(&self, builder: \$T) -> \$T",
+        implBlockWriter.rustBlock(
+            "fn update_http_builder(&self, builder: \$T) -> \$T",
             RuntimeType.HttpRequestBuilder,
-            RuntimeType.HttpRequestBuilder) {
+            RuntimeType.HttpRequestBuilder
+        ) {
             write("let mut uri = String::new();")
             write("self.uri_base(&mut uri);")
             if (hasQuery) {
@@ -205,11 +207,11 @@ class HttpTraitBindingGenerator(
                         val target = model.expectShape(targetId)
                         write(
                             "params.push((${param.locationName.dq()}, ${
-                                paramFmtFun(
-                                    target,
-                                    memberShape,
-                                    innerField
-                                )
+                            paramFmtFun(
+                                target,
+                                memberShape,
+                                innerField
+                            )
                             }))"
                         )
                     }

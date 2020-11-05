@@ -28,7 +28,8 @@ class UnionGenerator(
         writer.write("#[derive(Debug, PartialEq, Clone)]")
         val blockWriter = writer.openBlock("pub enum ${symbol.name} {")
         sortedMembers.forEach { member ->
-            blockWriter.write("${member.memberName.toPascalCase()}(\$T),", symbolProvider.toSymbol(member)) }
+            blockWriter.write("${member.memberName.toPascalCase()}(\$T),", symbolProvider.toSymbol(member))
+        }
         blockWriter.closeBlock("}")
     }
 }

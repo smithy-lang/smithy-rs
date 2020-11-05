@@ -33,8 +33,8 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
     val projections = tests.joinToString(",\n") {
         """
             "${it.module}": {
-                "plugins": { 
-                    "rust-codegen": { 
+                "plugins": {
+                    "rust-codegen": {
                       "runtimeConfig": {
                         "relativePath": "${rootProject.projectDir.absolutePath}/rust-runtime"
                       },
@@ -44,7 +44,7 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
                       "build": {
                         "rootProject": true
                       }
-                 } 
+                 }
                }
             }
         """.trimIndent()

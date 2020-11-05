@@ -61,15 +61,15 @@ sealed class RustType {
 }
 
 fun RustType.render(): String = when (this) {
-        is RustType.Bool -> this.name
-        is RustType.Float -> this.name
-        is RustType.Integer -> this.name
-        is RustType.String -> this.name
-        is RustType.Vec -> "${this.name}<${this.member.render()}>"
-        is RustType.HashMap -> "${this.name}<${this.key.render()}, ${this.value.render()}>"
-        is RustType.HashSet -> "${this.name}<${this.member.render()}>"
-        is RustType.Reference -> "&${this.lifetime?.let { "'$it" } ?: ""} ${this.value.render()}"
-        is RustType.Option -> "${this.name}<${this.value.render()}>"
-        is RustType.Box -> "${this.name}<${this.value.render()}>"
-        is RustType.Opaque -> this.name
+    is RustType.Bool -> this.name
+    is RustType.Float -> this.name
+    is RustType.Integer -> this.name
+    is RustType.String -> this.name
+    is RustType.Vec -> "${this.name}<${this.member.render()}>"
+    is RustType.HashMap -> "${this.name}<${this.key.render()}, ${this.value.render()}>"
+    is RustType.HashSet -> "${this.name}<${this.member.render()}>"
+    is RustType.Reference -> "&${this.lifetime?.let { "'$it" } ?: ""} ${this.value.render()}"
+    is RustType.Option -> "${this.name}<${this.value.render()}>"
+    is RustType.Box -> "${this.name}<${this.value.render()}>"
+    is RustType.Opaque -> this.name
 }

@@ -41,15 +41,15 @@ class HttpTraitBindingGeneratorTest {
             operation PutObject {
                 input: PutObjectRequest
             }
-            
+
             list Extras {
                 member: Integer
             }
-            
+
             list Dates {
                 member: Timestamp
             }
-            
+
             @mediaType("video/quicktime")
             string Video
 
@@ -67,17 +67,17 @@ class HttpTraitBindingGeneratorTest {
                 // Sent in the X-Dates header
                 @httpHeader("X-Dates")
                 dateHeaderList: Dates,
-                
+
                 @httpHeader("X-Ints")
                 intList: Extras,
-                
+
                 @httpHeader("X-MediaType")
                 mediaType: Video,
 
                 // Sent in the query string as paramName
                 @httpQuery("paramName")
                 someValue: String,
-                
+
                 @httpQuery("hello")
                 extras: Extras,
 
@@ -97,9 +97,11 @@ class HttpTraitBindingGeneratorTest {
     private val symbolProvider = testSymbolProvider(model)
     private fun renderOperation(writer: RustWriter) {
         StructureGenerator(model, symbolProvider, writer, inputShape).render()
-        HttpTraitBindingGenerator(model,
+        HttpTraitBindingGenerator(
+            model,
             symbolProvider,
-            TestRuntimeConfig, writer, operationShape, inputShape, httpTrait)
+            TestRuntimeConfig, writer, operationShape, inputShape, httpTrait
+        )
             .Default().render()
     }
 
@@ -128,7 +130,7 @@ class HttpTraitBindingGeneratorTest {
             o.clear();
             inp.uri_query(&mut o);
             assert_eq!(o.as_str(), "?paramName=svq!!%25%26&hello=0&hello=1&hello=2&hello=44")
-        """.trimIndent()
+            """.trimIndent()
         )
     }
 
@@ -154,10 +156,10 @@ class HttpTraitBindingGeneratorTest {
             let mut date_header = http_request.headers().get_all("X-Dates").iter();
             assert_eq!(date_header.next().unwrap(), "Tue, 28 Apr 1970 03:58:45 GMT");
             assert_eq!(date_header.next(), None);
-            
+
             let int_header = http_request.headers().get_all("X-Ints").iter().map(|hv|hv.to_str().unwrap()).collect::<Vec<_>>();
             assert_eq!(int_header, vec!["0", "1", "44"]);
-            
+
             let base64_header = http_request.headers().get_all("X-MediaType").iter().map(|hv|hv.to_str().unwrap()).collect::<Vec<_>>();
             assert_eq!(base64_header, vec!["YmFzZTY0ZW5jb2RldGhpcw=="]);
         """

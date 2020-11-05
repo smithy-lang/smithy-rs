@@ -5,9 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.smithy
 
-import java.util.Optional
-import java.util.logging.Logger
-import kotlin.streams.toList
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.ServiceIndex
@@ -16,6 +13,9 @@ import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import java.util.Optional
+import java.util.logging.Logger
+import kotlin.streams.toList
 
 private const val SERVICE = "service"
 private const val MODULE_NAME = "module"
@@ -86,13 +86,13 @@ class RustSettings(
                 services.isEmpty() -> {
                     throw CodegenException(
                         "Cannot infer a service to generate because the model does not " +
-                                "contain any service shapes"
+                            "contain any service shapes"
                     )
                 }
                 services.size > 1 -> {
                     throw CodegenException(
                         "Cannot infer service to generate because the model contains " +
-                                "multiple service shapes: " + services
+                            "multiple service shapes: " + services
                     )
                 }
                 else -> {
@@ -123,7 +123,8 @@ class RustSettings(
         val protocol = resolvedProtocols.firstOrNull(supportedProtocolTraits::contains)
         return protocol ?: throw UnresolvableProtocolException(
             "The ${service.id} service supports the following unsupported protocols $resolvedProtocols. " +
-                    "The following protocol generators were found on the class path: $supportedProtocolTraits")
+                "The following protocol generators were found on the class path: $supportedProtocolTraits"
+        )
     }
 }
 
