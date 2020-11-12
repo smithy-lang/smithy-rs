@@ -1,25 +1,52 @@
+use assert_json_diff::assert_json_eq_no_panic;
 use http::{Request, Uri};
 use std::collections::HashSet;
+use thiserror::Error;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Error)]
 pub enum ProtocolTestFailure {
+    #[error("missing query param: expected `{expected}`, found {found:?}")]
     MissingQueryParam {
         expected: String,
         found: Vec<String>,
     },
-    ForbiddenQueryParam {
-        expected: String,
-    },
-    RequiredQueryParam {
-        expected: String,
-    },
+    #[error("forbidden query param present: `{expected}`")]
+    ForbiddenQueryParam { expected: String },
+    #[error("required query param missing: `{expected}`")]
+    RequiredQueryParam { expected: String },
+
+    #[error("invalid header value for key `{key}`: expected `{expected}`, found `{found}`")]
     InvalidHeader {
+        key: String,
         expected: String,
         found: String,
     },
-    MissingHeader {
+    #[error("missing required header: `{expected}`")]
+    MissingHeader { expected: String },
+    #[error("body did not match. Hint:\n{hint}")]
+    BodyDidNotMatch {
         expected: String,
+        found: String,
+        hint: String,
     },
+    #[error("Expected body to be valid {expected} but instead: {found}")]
+    InvalidBodyFormat { expected: String, found: String },
+}
+
+/// Check that the protocol test succeeded & print the pretty error
+/// if it did not
+///
+/// The primary motivation is making multiline debug output
+/// readable & using the cleaner Display implementation
+#[track_caller]
+pub fn assert_ok(inp: Result<(), ProtocolTestFailure>) {
+    match inp {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("{}", e);
+            panic!("Protocol test failed");
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, Hash)]
@@ -114,6 +141,7 @@ pub fn validate_headers<B>(
             .join(", ");
         if *expected_value != actual_value {
             return Err(ProtocolTestFailure::InvalidHeader {
+                key: key.to_string(),
                 expected: expected_value.to_string(),
                 found: actual_value,
             });
@@ -122,11 +150,77 @@ pub fn validate_headers<B>(
     Ok(())
 }
 
+pub enum MediaType {
+    /// Json media types are deserialized and compared
+    Json,
+    /// Other media types are compared literally
+    // TODO: XML, etc.
+    Other(String),
+}
+
+impl<T: AsRef<str>> From<T> for MediaType {
+    fn from(inp: T) -> Self {
+        match inp.as_ref() {
+            "application/json" => MediaType::Json,
+            other => MediaType::Other(other.to_string()),
+        }
+    }
+}
+
+pub fn validate_body<T: AsRef<[u8]>>(
+    actual_body: T,
+    expected_body: &str,
+    media_type: MediaType,
+) -> Result<(), ProtocolTestFailure> {
+    let body_str = std::str::from_utf8(actual_body.as_ref());
+    match (media_type, body_str) {
+        (MediaType::Json, Ok(actual_body)) => validate_json_body(actual_body, expected_body),
+        (MediaType::Json, Err(_)) => Err(ProtocolTestFailure::InvalidBodyFormat {
+            expected: "json".to_owned(),
+            found: "input was not valid UTF-8".to_owned(),
+        }),
+        (MediaType::Other(media_type), Ok(actual_body)) => {
+            if actual_body != expected_body {
+                Err(ProtocolTestFailure::BodyDidNotMatch {
+                    expected: expected_body.to_string(),
+                    found: actual_body.to_string(),
+                    hint: format!("media type: {}", media_type),
+                })
+            } else {
+                Ok(())
+            }
+        }
+        // It's not clear from the Smithy spec exactly how a binary / base64 encoded body is supposed
+        // to work. Defer implementation for now until an actual test exists.
+        (MediaType::Other(_), Err(_)) => {
+            unimplemented!("binary/non-utf8 formats not yet supported")
+        }
+    }
+}
+
+fn validate_json_body(actual: &str, expected: &str) -> Result<(), ProtocolTestFailure> {
+    let actual_json: serde_json::Value =
+        serde_json::from_str(actual).map_err(|e| ProtocolTestFailure::InvalidBodyFormat {
+            expected: "json".to_owned(),
+            found: e.to_string(),
+        })?;
+    let expected_json: serde_json::Value =
+        serde_json::from_str(expected).expect("expected value must be valid JSON");
+    match assert_json_eq_no_panic(&actual_json, &expected_json) {
+        Ok(()) => Ok(()),
+        Err(message) => Err(ProtocolTestFailure::BodyDidNotMatch {
+            expected: expected.to_string(),
+            found: actual.to_string(),
+            hint: message,
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
-        forbid_query_params, require_query_params, validate_headers, validate_query_string,
-        ProtocolTestFailure,
+        forbid_query_params, require_query_params, validate_body, validate_headers,
+        validate_query_string, MediaType, ProtocolTestFailure,
     };
     use http::Request;
 
@@ -206,5 +300,37 @@ mod tests {
                 expected: "missing".to_owned()
             })
         );
+    }
+
+    #[test]
+    fn test_validate_json_body() {
+        let expected = r#"{"abc": 5 }"#;
+        let actual = r#"   {"abc":   5 }"#;
+        validate_body(actual.as_bytes(), expected, MediaType::Json)
+            .expect("inputs matched as JSON");
+
+        let expected = r#"{"abc": 5 }"#;
+        let actual = r#"   {"abc":   6 }"#;
+        validate_body(actual.as_bytes(), expected, MediaType::Json)
+            .expect_err("bodies do not match");
+    }
+
+    #[test]
+    fn test_validate_non_json_body() {
+        let expected = r#"asdf"#;
+        let actual = r#"asdf "#;
+        validate_body(
+            actual.as_bytes(),
+            expected,
+            MediaType::from("something/else"),
+        )
+        .expect_err("bodies do not match");
+
+        validate_body(
+            expected.as_bytes(),
+            expected,
+            MediaType::from("something/else"),
+        )
+        .expect("inputs matched exactly")
     }
 }

@@ -8,6 +8,9 @@ import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
 
+/**
+ * Generate protocol tests for an operation
+ */
 class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig) {
     fun render() {
         with(protocolConfig) {
@@ -73,10 +76,12 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig) {
                 }
             )
         }
-        rustWriter.write(
-            "assert_eq!(\$T(&http_request, $variableName), Ok(()));",
-            RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_headers")
-        )
+        assertOk(rustWriter) {
+            write(
+                "\$T(&http_request, $variableName)",
+                RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_headers")
+            )
+        }
     }
 
     private fun checkRequiredQueryParams(
@@ -106,10 +111,22 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig) {
         rustWriter.withBlock("let $variableName = ", ";") {
             strSlice(this, params)
         }
-        rustWriter.write(
-            "assert_eq!(\$T(&http_request, $variableName), Ok(()));",
-            RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, checkFunction)
-        )
+        assertOk(rustWriter) {
+            write(
+                "\$T(&http_request, $variableName)",
+                RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, checkFunction)
+            )
+        }
+    }
+
+    /**
+     * wraps `inner` in a call to `protocol_test_helpers::assert_ok`, a convenience wrapper
+     * for pretty prettying protocol test helper results
+     */
+    private fun assertOk(rustWriter: RustWriter, inner: RustWriter.() -> Unit) {
+        rustWriter.write("\$T(", RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "assert_ok"))
+        inner(rustWriter)
+        rustWriter.write(");")
     }
 
     private fun strSlice(writer: RustWriter, args: List<String>) {
