@@ -15,8 +15,8 @@
 
 package software.amazon.smithy.rust.codegen.util
 
-fun String.doubleQuote(): String = "\"$this\""
-fun String.singleQuote(): String = "\'$this\'"
+fun String.doubleQuote(): String = "\"${this.slashEscape('"')}\""
+fun String.slashEscape(char: Char) = this.replace(char.toString(), """\$char""")
 
 /**
  * Double quote a string, eg. "abc" -> "\"abc\""
