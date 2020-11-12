@@ -86,8 +86,14 @@ pub struct Blob {
 }
 
 impl Blob {
-    pub fn new(inp: Vec<u8>) -> Self {
-        Blob { inner: inp }
+    pub fn new<T: Into<Vec<u8>>>(inp: T) -> Self {
+        Blob { inner: inp.into() }
+    }
+}
+
+impl AsRef<[u8]> for Blob {
+    fn as_ref(&self) -> &[u8] {
+        &self.inner
     }
 }
 

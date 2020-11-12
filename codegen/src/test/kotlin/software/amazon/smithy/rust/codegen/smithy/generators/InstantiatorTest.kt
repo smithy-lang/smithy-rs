@@ -2,11 +2,15 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.node.StringNode
+import software.amazon.smithy.model.shapes.BlobShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
+import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.testutil.asSmithy
@@ -43,7 +47,6 @@ class InstantiatorTest {
         structure Inner {
             map: NestedMap
         }
-
 
         map NestedMap {
             key: String,
@@ -173,5 +176,21 @@ class InstantiatorTest {
             )
         }
         writer.shouldCompile(strict = true)
+    }
+
+    @Test
+    fun `blob inputs are binary data`() {
+        // "Parameter values that contain binary data MUST be defined using values
+        // that can be represented in plain text (for example, use "foo" and not "Zm9vCg==")."
+        val writer = RustWriter.forModule("lib")
+        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        writer.write("#[test]")
+        writer.rustBlock("fn test_blob()") {
+            withBlock("let blob = ", ";") {
+                sut.render(StringNode.parse("foo".dq()), BlobShape.builder().id(ShapeId.from("com.example#Blob")).build(), this)
+            }
+            write("assert_eq!(std::str::from_utf8(blob.as_ref()).unwrap(), \"foo\");")
+        }
+        writer.shouldCompile()
     }
 }
