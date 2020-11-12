@@ -72,6 +72,9 @@ class HttpProtocolTestGeneratorTest {
     private val symbolProvider = testSymbolProvider(model)
     private val runtimeConfig = TestRuntimeConfig
 
+    /**
+     * Creates an fake HTTP implementation for SayHello & generates the protocol test
+     */
     private fun writeHttpImpl(writer: RustWriter, body: String) {
         writer.withModule("operation") {
             StructureGenerator(model, symbolProvider, this, model.lookup("com.example#SayHelloInput")).render()
@@ -85,14 +88,13 @@ class HttpProtocolTestGeneratorTest {
                 model,
                 symbolProvider,
                 runtimeConfig,
-                this,
                 model.lookup("com.example#HelloService"),
-                model.lookup("com.example#SayHello"),
-                model.lookup("com.example#SayHelloInput"),
                 RestJson1Trait.ID
             )
             HttpProtocolTestGenerator(
-                protocolConfig
+                protocolConfig,
+                model.lookup("com.example#SayHello"),
+                this
             ).render()
         }
     }
