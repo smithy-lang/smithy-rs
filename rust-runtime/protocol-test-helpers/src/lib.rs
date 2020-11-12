@@ -44,7 +44,7 @@ pub fn assert_ok(inp: Result<(), ProtocolTestFailure>) {
         Ok(_) => (),
         Err(e) => {
             eprintln!("{}", e);
-            assert!(false, "Protocol test failed");
+            panic!("Protocol test failed");
         }
     }
 }
@@ -206,14 +206,14 @@ fn validate_json_body(actual: &str, expected: &str) -> Result<(), ProtocolTestFa
         })?;
     let expected_json: serde_json::Value =
         serde_json::from_str(expected).expect("expected value must be valid JSON");
-    return match assert_json_eq_no_panic(&actual_json, &expected_json) {
+    match assert_json_eq_no_panic(&actual_json, &expected_json) {
         Ok(()) => Ok(()),
         Err(message) => Err(ProtocolTestFailure::BodyDidNotMatch {
             expected: expected.to_string(),
             found: actual.to_string(),
             hint: message,
         }),
-    };
+    }
 }
 
 #[cfg(test)]
