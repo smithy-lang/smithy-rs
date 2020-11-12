@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.testutil.shouldCompile
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class HttpProtocolTestGeneratorTest {
-    val baseModel = """
+    private val baseModel = """
         namespace com.example
 
         use aws.protocols#restJson1
@@ -133,7 +133,7 @@ class HttpProtocolTestGeneratorTest {
         }
         // Verify the test actually ran
         err.message shouldContain "test_say_hello ... FAILED"
-        err.message shouldContain "MissingQueryParam"
+        err.message shouldContain "missing query param"
     }
 
     @Test
@@ -155,7 +155,7 @@ class HttpProtocolTestGeneratorTest {
         }
         // Verify the test actually ran
         err.message shouldContain "test_say_hello ... FAILED"
-        err.message shouldContain "ForbiddenQueryParam"
+        err.message shouldContain "forbidden query param"
     }
 
     @Test
@@ -177,7 +177,7 @@ class HttpProtocolTestGeneratorTest {
         }
         // Verify the test actually ran
         err.message shouldContain "test_say_hello ... FAILED"
-        err.message shouldContain "RequiredQueryParam"
+        err.message shouldContain "required query param missing"
     }
 
     @Test
@@ -197,6 +197,6 @@ class HttpProtocolTestGeneratorTest {
             writer.shouldCompile(expectFailure = true)
         }
         err.message shouldContain "test_say_hello ... FAILED"
-        err.message shouldContain "InvalidHeader"
+        err.message shouldContain "invalid header value"
     }
 }

@@ -1,25 +1,49 @@
 use http::{Request, Uri};
 use std::collections::HashSet;
+use thiserror::Error;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Error)]
 pub enum ProtocolTestFailure {
+    #[error("missing query param: expected `{expected}`, found {found:?}")]
     MissingQueryParam {
         expected: String,
         found: Vec<String>,
     },
+    #[error("forbidden query param present: `{expected}`")]
     ForbiddenQueryParam {
         expected: String,
     },
+    #[error("required query param missing: `{expected}`")]
     RequiredQueryParam {
         expected: String,
     },
+
+    #[error("invalid header value for key `{key}`: expected `{expected}`, found `{found}`")]
     InvalidHeader {
+        key: String,
         expected: String,
         found: String,
     },
+    #[error("missing required header: `{expected}`")]
     MissingHeader {
         expected: String,
     },
+}
+
+/// Check that the protocol test succeeded & print the pretty error
+/// if it did not
+///
+/// The primary motivation is making multiline debug output
+/// readable & using the cleaner Display implementation
+#[track_caller]
+pub fn assert_ok(inp: Result<(), ProtocolTestFailure>) {
+    match inp {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("{}", e);
+            assert!(false, "Protocol test failed");
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, Hash)]
@@ -114,6 +138,7 @@ pub fn validate_headers<B>(
             .join(", ");
         if *expected_value != actual_value {
             return Err(ProtocolTestFailure::InvalidHeader {
+                key: key.to_string(),
                 expected: expected_value.to_string(),
                 found: actual_value,
             });
