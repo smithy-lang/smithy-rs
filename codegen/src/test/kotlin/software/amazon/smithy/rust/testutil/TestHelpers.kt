@@ -18,7 +18,7 @@ val TestRuntimeConfig = RuntimeConfig(relativePath = File("../rust-runtime/").ab
 val TestSymbolVisitorConfig = SymbolVisitorConfig(runtimeConfig = TestRuntimeConfig, handleOptionality = true, handleRustBoxing = true)
 fun testSymbolProvider(model: Model): SymbolProvider = RustCodegenPlugin.BaseSymbolProvider(model, TestSymbolVisitorConfig)
 
-private val SmithyVersion = "1.0"
+private const val SmithyVersion = "1.0"
 fun String.asSmithy(sourceLocation: String? = null): Model {
     val processed = letIf(!this.startsWith("\$version")) { "\$version: ${SmithyVersion.dq()}\n$it" }
     return Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble().unwrap()

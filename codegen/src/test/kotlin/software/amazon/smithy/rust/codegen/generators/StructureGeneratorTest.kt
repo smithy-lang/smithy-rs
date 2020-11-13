@@ -86,7 +86,6 @@ class StructureGeneratorTest {
                 )
             }
         }
-        println(writer)
         writer.shouldCompile()
     }
 
