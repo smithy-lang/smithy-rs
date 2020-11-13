@@ -44,7 +44,7 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
     init {
         val bootstrapProvider = SymbolVisitor(context.model, config = SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig))
         model = OperationNormalizer(bootstrapProvider).addOperationInputs(context.model)
-        symbolProvider = SymbolVisitor(model, config = SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig))
+        symbolProvider = RustCodegenPlugin.BaseSymbolProvider(model, SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig))
         writers = CodegenWriterDelegator(
             context.fileManifest,
             // TODO: load symbol visitor from integrations; 2d

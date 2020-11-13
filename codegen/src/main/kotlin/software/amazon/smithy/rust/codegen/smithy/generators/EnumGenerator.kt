@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.meta
 import software.amazon.smithy.rust.codegen.util.doubleQuote
 import java.lang.IllegalStateException
 
@@ -22,6 +23,10 @@ class EnumGenerator(
     shape: StringShape,
     private val enumTrait: EnumTrait
 ) {
+    private val sortedMembers: List<EnumDefinition> = enumTrait.values.sortedBy { it.value }
+    private val symbol = symbolProvider.toSymbol(shape)
+    private val enumName = symbol.name
+    private val meta = symbol.meta()!!
     companion object {
         const val Values = "values"
     }
@@ -42,8 +47,8 @@ class EnumGenerator(
     }
 
     private fun renderUnamedEnum() {
-        writer.write("#[derive(Debug, PartialEq, Eq, Clone)]")
-        writer.write("pub struct $enumName(String);")
+        meta.render(writer)
+        writer.write("struct $enumName(String);")
         writer.rustBlock("impl $enumName") {
             writer.rustBlock("pub fn as_str(&self) -> &str") {
                 write("&self.0")
@@ -71,13 +76,9 @@ class EnumGenerator(
         return name.orElse(null)?.toPascalCase() ?: throw IllegalStateException("Enum variants must be named to derive a name. This is a bug.")
     }
 
-    private val sortedMembers: List<EnumDefinition> = enumTrait.values.sortedBy { it.value }
-    private val enumName = symbolProvider.toSymbol(shape).name
     private fun renderEnum() {
-        writer.write("#[non_exhaustive]")
-        // Enums can only be strings, so we can derive Eq
-        writer.write("#[derive(Debug, PartialEq, Eq, Clone)]")
-        writer.rustBlock("pub enum $enumName") {
+        meta.render(writer)
+        writer.rustBlock("enum $enumName") {
             sortedMembers.forEach { member ->
                 member.documentation.map { setNewlinePrefix("/// ").write(it).setNewlinePrefix("") }
                 // use the name, or escape the value

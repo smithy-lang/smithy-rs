@@ -45,6 +45,7 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
         val From = RuntimeType("From", dependency = null, namespace = "std::convert")
         val AsRef = RuntimeType("AsRef", dependency = null, namespace = "std::convert")
         fun StdFmt(member: String) = RuntimeType("fmt::$member", dependency = null, namespace = "std")
+        fun Std(member: String) = RuntimeType(member, dependency = null, namespace = "std")
         val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
         val HashSet = RuntimeType("HashSet", dependency = null, namespace = "std::collections")
         val HashMap = RuntimeType("HashMap", dependency = null, namespace = "std::collections")

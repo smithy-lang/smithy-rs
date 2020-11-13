@@ -13,7 +13,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
-import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
+import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.testutil.asSmithy
@@ -64,6 +64,33 @@ class StructureGeneratorTest {
     }
 
     @Test
+    fun `generate structures with public fields`() {
+        val provider: SymbolProvider = testSymbolProvider(model)
+        val writer = RustWriter.forModule("model")
+        val innerGenerator = StructureGenerator(model, provider, writer, inner, renderBuilder = false)
+        innerGenerator.render()
+        writer.withModule("structs") {
+            val generator = StructureGenerator(model, provider, this, struct, renderBuilder = false)
+            generator.render()
+        }
+        // By putting the test in another module, it can't access the struct
+        // fields if they are private
+        writer.withModule("inline") {
+            write("#[test]")
+            rustBlock("fn test_public_fields()") {
+                write(
+                    """
+                    let s: Option<crate::structs::MyStruct> = None;
+                    s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
+                """
+                )
+            }
+        }
+        println(writer)
+        writer.shouldCompile()
+    }
+
+    @Test
     fun `generate builders`() {
         val provider: SymbolProvider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")
@@ -109,7 +136,7 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate error structures`() {
-        val provider: SymbolProvider = SymbolVisitor(model, "test")
+        val provider: SymbolProvider = testSymbolProvider(model)
         val writer = RustWriter.forModule("error")
         val generator = StructureGenerator(model, provider, writer, error)
         generator.render()
