@@ -19,7 +19,7 @@ data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: S
         fun fromNode(node: Optional<ObjectNode>): RuntimeConfig {
             return if (node.isPresent) {
                 RuntimeConfig(
-                    node.get().getStringMemberOrDefault("createPrefix", "smithy"),
+                    node.get().getStringMemberOrDefault("cratePrefix", "smithy"),
                     File(node.get().getStringMemberOrDefault("relativePath", "../")).absolutePath
                 )
             } else {
