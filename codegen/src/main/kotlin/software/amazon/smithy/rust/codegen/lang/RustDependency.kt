@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.lang
 import software.amazon.smithy.codegen.core.SymbolDependency
 import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.util.dq
 
 sealed class DependencyScope
 object Dev : DependencyScope()
@@ -15,16 +16,21 @@ object Compile : DependencyScope()
 
 sealed class DependencyLocation
 data class CratesIo(val version: String) : DependencyLocation()
-data class Local(val path: String? = null) : DependencyLocation()
+data class Local(val basePath: String) : DependencyLocation()
 
 data class RustDependency(
     val name: String,
     val location: DependencyLocation,
-    val scope: DependencyScope = Compile
+    val scope: DependencyScope = Compile,
+    val features: List<String> = listOf()
 ) : SymbolDependencyContainer {
     override fun getDependencies(): List<SymbolDependency> {
         return listOf(
-            SymbolDependency.builder().packageName(name).version(this.version()).putProperty(PropKey, this).build()
+            SymbolDependency
+                .builder()
+                .packageName(name).version(version())
+                // We rely on retrieving the structured dependency from the symbol later
+                .putProperty(PropertyKey, this).build()
         )
     }
 
@@ -34,10 +40,24 @@ data class RustDependency(
     }
 
     override fun toString(): String {
-        return when (location) {
-            is CratesIo -> """$name = "${location.version}""""
-            is Local -> """$name = { path = "${location.path}/$name" }"""
+        val attribs = mutableListOf<String>()
+        with(location) {
+            attribs.add(
+                when (this) {
+                    is CratesIo -> """version = ${version.dq()}"""
+                    is Local -> {
+                        val fullPath = "$basePath/$name"
+                        """path = ${fullPath.dq()}"""
+                    }
+                }
+            )
         }
+        with(features) {
+            if (!isEmpty()) {
+                attribs.add("features = [${joinToString(",") { it.dq() }}]")
+            }
+        }
+        return "$name = { ${attribs.joinToString(",")} }"
     }
 
     companion object {
@@ -53,9 +73,9 @@ data class RustDependency(
             "protocol-test-helpers", Local(runtimeConfig.relativePath), scope = Dev
         )
 
-        private val PropKey = "rustdep"
+        private val PropertyKey = "rustdep"
 
         fun fromSymbolDependency(symbolDependency: SymbolDependency) =
-            symbolDependency.getProperty(PropKey, RustDependency::class.java).get()
+            symbolDependency.getProperty(PropertyKey, RustDependency::class.java).get()
     }
 }
