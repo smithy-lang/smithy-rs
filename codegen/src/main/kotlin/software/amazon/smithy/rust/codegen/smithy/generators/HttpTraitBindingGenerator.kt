@@ -93,20 +93,6 @@ class HttpTraitBindingGenerator(
         }
     }
 
-    /**
-     * Default implementation of HttpTraitBindings. A `build_http_request()` method is added that
-     * simply calls `update_http_builder()`
-     */
-    inner class Default : HttpProtocolGenerator(symbolProvider, writer, inputShape) {
-        override fun toHttpRequestImpl(implBlockWriter: RustWriter) {
-            renderUpdateHttpBuilder(implBlockWriter)
-            httpBuilderFun(implBlockWriter) {
-                write("let builder = \$T::new();", RuntimeType.HttpRequestBuilder)
-                write("self.update_http_builder(builder)")
-            }
-        }
-    }
-
     /** Header Generation **/
 
     /**
