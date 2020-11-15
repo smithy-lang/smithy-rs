@@ -16,29 +16,30 @@ import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
+/**
+ * Configuration needed to generate the client for a given Service<->Protocol pair
+ */
 data class ProtocolConfig(
     val model: Model,
     val symbolProvider: SymbolProvider,
     val runtimeConfig: RuntimeConfig,
-    val writer: RustWriter,
     val serviceShape: ServiceShape,
-    val operationShape: OperationShape,
-    val inputShape: StructureShape,
     val protocol: ShapeId
 )
 
 interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
-    fun build(protocolConfig: ProtocolConfig): T
+    fun buildProtocolGenerator(protocolConfig: ProtocolConfig): T
 }
 
 abstract class HttpProtocolGenerator(
-    private val symbolProvider: SymbolProvider,
-    private val writer: RustWriter,
-    private val inputShape: StructureShape
+    protocolConfig: ProtocolConfig
 ) {
-    fun render() {
+    private val symbolProvider = protocolConfig.symbolProvider
+    private val model = protocolConfig.model
+    fun renderOperation(writer: RustWriter, operationShape: OperationShape) {
+        val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
         writer.rustBlock("impl ${symbolProvider.toSymbol(inputShape).name}") {
-            toHttpRequestImpl(this)
+            toHttpRequestImpl(this, operationShape, inputShape)
         }
     }
 
@@ -56,5 +57,5 @@ abstract class HttpProtocolGenerator(
      *
      * Your implementation MUST call `httpBuilderFun` to create the public method.
      */
-    abstract fun toHttpRequestImpl(implBlockWriter: RustWriter)
+    abstract fun toHttpRequestImpl(implBlockWriter: RustWriter, operationShape: OperationShape, inputShape: StructureShape)
 }

@@ -1,5 +1,6 @@
 package software.amazon.smithy.rust.codegen.smithy.generators
 
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.rust.codegen.lang.RustWriter
@@ -7,16 +8,16 @@ import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.inputShape
 
 /**
  * Generate protocol tests for an operation
  */
-class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig) {
+class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig, private val operationShape: OperationShape, private val writer: RustWriter) {
+    private val inputShape = operationShape.inputShape(protocolConfig.model)
     fun render() {
-        with(protocolConfig) {
-            operationShape.getTrait(HttpRequestTestsTrait::class.java).map {
-                renderHttpRequestTests(it)
-            }
+        operationShape.getTrait(HttpRequestTestsTrait::class.java).map {
+            renderHttpRequestTests(it)
         }
     }
 
@@ -44,7 +45,7 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig) {
         testModuleWriter.write("#[test]")
         testModuleWriter.rustBlock("fn test_${httpRequestTestCase.id.toSnakeCase()}()") {
             writeInline("let input =")
-            instantiator.render(httpRequestTestCase.params, protocolConfig.inputShape, this)
+            instantiator.render(httpRequestTestCase.params, inputShape, this)
             write(";")
             write("let http_request = input.build_http_request().body(()).unwrap();")
             checkQueryParams(this, httpRequestTestCase.queryParams)

@@ -22,6 +22,8 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.rustBlock
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpTraitBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.uriFormatString
@@ -97,12 +99,18 @@ class HttpTraitBindingGeneratorTest {
     private val symbolProvider = testSymbolProvider(model)
     private fun renderOperation(writer: RustWriter) {
         StructureGenerator(model, symbolProvider, writer, inputShape).render()
-        HttpTraitBindingGenerator(
-            model,
-            symbolProvider,
-            TestRuntimeConfig, writer, operationShape, inputShape, httpTrait
-        )
-            .Default().render()
+        val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
+        writer.rustBlock("impl PutObjectInput") {
+            HttpTraitBindingGenerator(
+                model,
+                symbolProvider,
+                TestRuntimeConfig, writer, operationShape, inputShape, httpTrait
+            ).renderUpdateHttpBuilder(this)
+            rustBlock("pub fn build_http_request(&self) -> \$T", RuntimeType.HttpRequestBuilder) {
+                write("let builder = \$T::new();", RuntimeType.HttpRequestBuilder)
+                write("self.update_http_builder(builder)")
+            }
+        }
     }
 
     @Test
