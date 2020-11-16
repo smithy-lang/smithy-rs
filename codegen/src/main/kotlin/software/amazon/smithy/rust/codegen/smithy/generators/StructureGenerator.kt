@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
+import software.amazon.smithy.rust.codegen.smithy.meta
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.utils.CaseUtils
@@ -65,12 +66,13 @@ class StructureGenerator(
     private fun renderStructure() {
         val symbol = symbolProvider.toSymbol(shape)
         // TODO(maybe): Pull derive info from the symbol so that the symbol provider can alter things as necessary; 4h
-        writer.write("#[non_exhaustive]")
-        writer.write("#[derive(Debug, PartialEq, Clone)]")
-        writer.rustBlock("pub struct ${symbol.name}") {
+        val containerMeta = symbol.meta()!!
+        containerMeta.render(writer)
+        writer.rustBlock("struct ${symbol.name}") {
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
-                write("pub $memberName: \$T,", symbolProvider.toSymbol(member))
+                symbolProvider.toSymbol(member).meta()!!.render(this)
+                write("$memberName: \$T,", symbolProvider.toSymbol(member))
             }
         }
 

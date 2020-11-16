@@ -29,7 +29,6 @@ import software.amazon.smithy.rust.codegen.lang.render
 import software.amazon.smithy.rust.codegen.smithy.Errors
 import software.amazon.smithy.rust.codegen.smithy.Operations
 import software.amazon.smithy.rust.codegen.smithy.Shapes
-import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.referenceClosure
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -49,7 +48,7 @@ class SymbolBuilderTest {
             .addShapes(struct, member)
             .assemble()
             .unwrap()
-        val provider: SymbolProvider = SymbolVisitor(model, "test")
+        val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(struct)
         sym.rustType().render() shouldBe "MyStruct"
         sym.definitionFile shouldContain Shapes.filename
@@ -69,7 +68,7 @@ class SymbolBuilderTest {
             .addShapes(struct, member)
             .assemble()
             .unwrap()
-        val provider: SymbolProvider = SymbolVisitor(model, "test")
+        val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(struct)
         sym.rustType().render() shouldBe "TerribleError"
         sym.definitionFile shouldContain Errors.filename
@@ -93,7 +92,7 @@ class SymbolBuilderTest {
             string StandardUnit
         """.asSmithy()
         val shape = model.expectShape(ShapeId.from("test#StandardUnit"))
-        val provider: SymbolProvider = SymbolVisitor(model, "test")
+        val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(shape)
         sym.rustType().render() shouldBe "StandardUnit"
         sym.definitionFile shouldContain Shapes.filename
@@ -131,7 +130,7 @@ class SymbolBuilderTest {
             .assemble()
             .unwrap()
 
-        val provider: SymbolProvider = SymbolVisitor(model, "test") // KotlinCodegenPlugin.createSymbolProvider(model, "test")
+        val provider: SymbolProvider = testSymbolProvider(model)
         val memberSymbol = provider.toSymbol(member)
         // builtins should not have a namespace set
         Assertions.assertEquals("", memberSymbol.namespace)
@@ -156,7 +155,7 @@ class SymbolBuilderTest {
             .assemble()
             .unwrap()
 
-        val provider: SymbolProvider = SymbolVisitor(model, "test")
+        val provider: SymbolProvider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
         setSymbol.rustType().render() shouldBe "HashSet<String>"
         setSymbol.referenceClosure().map { it.name } shouldBe listOf("HashSet", "String")
@@ -175,7 +174,7 @@ class SymbolBuilderTest {
             .assemble()
             .unwrap()
 
-        val provider: SymbolProvider = SymbolVisitor(model, "test")
+        val provider: SymbolProvider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
         setSymbol.rustType().render() shouldBe "Vec<Record>"
         setSymbol.referenceClosure().map { it.name } shouldBe listOf("Vec", "Record")
@@ -196,7 +195,7 @@ class SymbolBuilderTest {
             .assemble()
             .unwrap()
 
-        val provider: SymbolProvider = SymbolVisitor(model, "test")
+        val provider: SymbolProvider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
         setSymbol.rustType().render() shouldBe "Vec<Option<Record>>"
         setSymbol.referenceClosure().map { it.name } shouldBe listOf("Vec", "Option", "Record")
@@ -214,7 +213,7 @@ class SymbolBuilderTest {
             .addShapes(struct, member)
             .assemble()
             .unwrap()
-        val provider: SymbolProvider = SymbolVisitor(model, "test")
+        val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(member)
         sym.rustType().render() shouldBe "Option<Instant>"
         sym.referenceClosure().map { it.name } shouldContain "Instant"

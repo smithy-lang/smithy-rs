@@ -16,11 +16,11 @@ import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.testutil.compileAndRun
 import software.amazon.smithy.rust.testutil.shouldCompile
 import software.amazon.smithy.rust.testutil.shouldMatchResource
 import software.amazon.smithy.rust.testutil.shouldParseAsRust
+import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class RustWriterTest {
     @Test
@@ -56,7 +56,7 @@ class RustWriterTest {
             .assemble()
             .unwrap()
 
-        val provider: SymbolProvider = SymbolVisitor(model, "test")
+        val provider: SymbolProvider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
         val stringSymbol = provider.toSymbol(stringShape)
         sut.rustBlock("struct Test") {

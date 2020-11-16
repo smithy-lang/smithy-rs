@@ -14,13 +14,14 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.lang.RustWriter
-import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
+import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.testutil.asSmithy
 import software.amazon.smithy.rust.testutil.compileAndRun
 import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.shouldCompile
 import software.amazon.smithy.rust.testutil.shouldParseAsRust
+import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class EnumGeneratorTest {
     @Test
@@ -47,7 +48,7 @@ class EnumGeneratorTest {
             .addShapes(shape)
             .assemble()
             .unwrap()
-        val provider: SymbolProvider = SymbolVisitor(model, "test")
+        val provider: SymbolProvider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")
         val generator = EnumGenerator(provider, writer, shape, trait)
         generator.render()
@@ -62,6 +63,64 @@ class EnumGeneratorTest {
             assert_eq!(InstanceType::from("other"), InstanceType::Unknown("other".to_owned()));
             // round trip unknown variants:
             assert_eq!(InstanceType::from("other").as_str(), "other");
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `named enums are implement eq and hash`() {
+        val model = """
+            namespace test
+            @enum([
+            {
+                value: "Foo",
+                name: "Foo",
+            },
+            {
+                value: "Bar",
+                name: "Bar"
+            }])
+            string FooEnum
+            """.asSmithy()
+        val shape: StringShape = model.lookup("test#FooEnum")
+        val trait = shape.expectTrait(EnumTrait::class.java)
+        val writer = RustWriter.forModule("model")
+        val generator = EnumGenerator(testSymbolProvider(model), writer, shape, trait)
+        generator.render()
+        writer.compileAndTest(
+            """
+                assert_eq!(FooEnum::Foo, FooEnum::Foo);
+                assert_ne!(FooEnum::Bar, FooEnum::Foo);
+                let mut hash_of_enums = std::collections::HashSet::new();
+                hash_of_enums.insert(FooEnum::Foo);
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `unnamed enums are implement eq and hash`() {
+        val model = """
+            namespace test
+            @enum([
+            {
+                value: "Foo",
+            },
+            {
+                value: "Bar",
+            }])
+            string FooEnum
+            """.asSmithy()
+        val shape: StringShape = model.lookup("test#FooEnum")
+        val trait = shape.expectTrait(EnumTrait::class.java)
+        val writer = RustWriter.forModule("model")
+        val generator = EnumGenerator(testSymbolProvider(model), writer, shape, trait)
+        generator.render()
+        writer.compileAndTest(
+            """
+                assert_eq!(FooEnum::from("Foo"), FooEnum::from("Foo"));
+                assert_ne!(FooEnum::from("Bar"), FooEnum::from("Foo"));
+                let mut hash_of_enums = std::collections::HashSet::new();
+                hash_of_enums.insert(FooEnum::from("Foo"));
             """.trimIndent()
         )
     }
@@ -91,7 +150,7 @@ class EnumGeneratorTest {
         """.asSmithy()
         val shape = model.expectShape(ShapeId.from("test#FooEnum"), StringShape::class.java)
         val trait = shape.expectTrait(EnumTrait::class.java)
-        val provider: SymbolProvider = SymbolVisitor(model, "test")
+        val provider: SymbolProvider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")
         val generator = EnumGenerator(provider, writer, shape, trait)
         generator.render()

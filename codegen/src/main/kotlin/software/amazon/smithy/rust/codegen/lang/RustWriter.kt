@@ -80,17 +80,17 @@ class RustWriter private constructor(private val filename: String, val namespace
 
     /**
      * Create an inline module.
-     * [header] should be the declaration of the module, eg. `pub mod Hello`.
      *
      * The returned writer will inject any local imports into the module as needed.
      */
-    fun withModule(moduleName: String, visibility: String = "pub", moduleWriter: RustWriter.() -> Unit) {
+    fun withModule(moduleName: String, meta: Meta = Meta(public = true), moduleWriter: RustWriter.() -> Unit) {
         // In Rust, modules must specify their own imports—they don't have access to the parent scope.
         // To easily handle this, create a new inner writer to collect imports, then dump it
         // into an inline module.
         val innerWriter = RustWriter(this.filename, "${this.namespace}::$moduleName")
         moduleWriter(innerWriter)
-        rustBlock("$visibility mod $moduleName") {
+        meta.render(this)
+        rustBlock("mod $moduleName") {
             write(innerWriter.toString())
         }
         innerWriter.dependencies.forEach { addDependency(it) }

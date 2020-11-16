@@ -48,16 +48,17 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
     private val protocolConfig: ProtocolConfig
     private val protocolGenerator: ProtocolGeneratorFactory<HttpProtocolGenerator>
     private val httpGenerator: HttpProtocolGenerator
+
     init {
+        val symbolVisitorConfig = SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig)
+        val bootstrapProvider = RustCodegenPlugin.BaseSymbolProvider(context.model, symbolVisitorConfig)
+        model = OperationNormalizer(bootstrapProvider).addOperationInputs(context.model)
+        symbolProvider =
+            RustCodegenPlugin.BaseSymbolProvider(model, SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig))
         val service = settings.getService(context.model)
         val (protocol, generator) = ProtocolLoader.Default.protocolFor(context.model, service)
         protocolGenerator = generator
 
-        val baseVisitor = SymbolVisitor(context.model, config = SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig))
-        val normalizer = OperationNormalizer(baseVisitor)
-
-        model = normalizer.addOperationInputs(context.model)
-        symbolProvider = SymbolVisitor(model, config = SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig))
         protocolConfig = ProtocolConfig(model, symbolProvider, settings.runtimeConfig, service, protocol)
         writers = CodegenWriterDelegator(
             context.fileManifest,

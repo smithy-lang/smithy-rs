@@ -59,6 +59,7 @@ fun String.shouldParseAsRust() {
  * Compiles the contents of the given writer (including dependencies) and runs the tests
  */
 fun RustWriter.compileAndTest(main: String = "", clippy: Boolean = false, expectFailure: Boolean = false): String {
+    // TODO: if there are no dependencies, we can be a bit quicker
     val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }
     try {
         val output = this.toString()

@@ -81,10 +81,6 @@ val DefaultConfig =
 
 data class SymbolLocation(val filename: String, val namespace: String)
 
-fun Symbol.Builder.locatedIn(symbolLocation: SymbolLocation): Symbol.Builder =
-    this.definitionFile("src/${symbolLocation.filename}")
-        .namespace("crate::${symbolLocation.namespace}", "::")
-
 val Shapes = SymbolLocation("model.rs", "model")
 val Errors = SymbolLocation("error.rs", "error")
 val Operations = SymbolLocation("operation.rs", "operation")
@@ -118,6 +114,10 @@ class SymbolVisitor(
     override fun blobShape(shape: BlobShape?): Symbol {
         return RuntimeType.Blob(config.runtimeConfig).toSymbol()
     }
+
+    private fun Symbol.Builder.locatedIn(symbolLocation: SymbolLocation): Symbol.Builder =
+        this.definitionFile("src/${symbolLocation.filename}")
+            .namespace("$rootNamespace::${symbolLocation.namespace}", "::")
 
     private fun handleOptionality(symbol: Symbol, member: MemberShape, container: Shape): Symbol {
         // If a field has the httpLabel trait and we are generating
