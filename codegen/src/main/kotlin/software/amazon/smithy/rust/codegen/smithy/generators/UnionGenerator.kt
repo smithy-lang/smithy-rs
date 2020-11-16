@@ -10,6 +10,8 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.rustBlock
+import software.amazon.smithy.rust.codegen.smithy.meta
 
 class UnionGenerator(
     val model: Model,
@@ -25,11 +27,14 @@ class UnionGenerator(
     private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
     private fun renderUnion() {
         val symbol = symbolProvider.toSymbol(shape)
-        writer.write("#[derive(Debug, PartialEq, Clone)]")
-        val blockWriter = writer.openBlock("pub enum ${symbol.name} {")
-        sortedMembers.forEach { member ->
-            blockWriter.write("${member.memberName.toPascalCase()}(\$T),", symbolProvider.toSymbol(member))
+        val containerMeta = symbol.meta()!!
+        containerMeta.render(writer)
+        writer.rustBlock("enum ${symbol.name}") {
+            sortedMembers.forEach { member ->
+                val memberSymbol = symbolProvider.toSymbol(member)
+                memberSymbol.meta()!!.renderAttributes(this)
+                write("${member.memberName.toPascalCase()}(\$T),", symbolProvider.toSymbol(member))
+            }
         }
-        blockWriter.closeBlock("}")
     }
 }
