@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 
 /**
  * Configuration needed to generate the client for a given Service<->Protocol pair
@@ -29,8 +30,14 @@ data class ProtocolConfig(
 
 interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
     fun buildProtocolGenerator(protocolConfig: ProtocolConfig): T
+    fun transformModel(model: Model): Model
+    fun symbolProvider(model: Model, base: SymbolProvider): SymbolProvider = base
 }
 
+/**
+ * Abstract class providing scaffolding for HTTP based protocols that must config and HTTP request (headers / URL) and
+ * a body.
+ */
 abstract class HttpProtocolGenerator(
     protocolConfig: ProtocolConfig
 ) {
@@ -40,6 +47,9 @@ abstract class HttpProtocolGenerator(
         val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
         writer.rustBlock("impl ${symbolProvider.toSymbol(inputShape).name}") {
             toHttpRequestImpl(this, operationShape, inputShape)
+            val shapeId = inputShape.expectTrait(SyntheticInputTrait::class.java).body
+            val body = shapeId?.let { model.expectShape(it, StructureShape::class.java) }
+            toBodyImpl(this, inputShape, body)
         }
     }
 
@@ -49,6 +59,27 @@ abstract class HttpProtocolGenerator(
             RuntimeType.HttpRequestBuilder
         ) {
             f(this)
+        }
+    }
+
+    open fun toBodyImpl(implBlockWriter: RustWriter, inputShape: StructureShape, inputBody: StructureShape?) {
+        if (inputBody != null) {
+            val bodySymbol = symbolProvider.toSymbol(inputBody)
+            implBlockWriter.rustBlock("fn body(&self) -> \$T", bodySymbol) {
+                rustBlock("\$T", bodySymbol) {
+                    for (member in inputBody.members()) {
+                        val name = symbolProvider.toMemberName(member)
+                        write("$name: &self.$name,")
+                    }
+                }
+            }
+        }
+        implBlockWriter.rustBlock("pub fn build_body(&self) -> String") {
+            // TODO: use serde to serialize the body
+            if (inputBody != null) {
+                write("let _ = self.body();")
+            }
+            write("String::new()")
         }
     }
 

@@ -63,12 +63,31 @@ class StructureGenerator(
             }
     }
 
+    /**
+     * Search for lifetimes used by the members of the struct and generate a declaration.
+     * eg. `<'a, 'b>`
+     */
+    private fun lifetimeDeclaration(): String {
+        val lifetimes = members
+            .map { symbolProvider.toSymbol(it).rustType() }
+            .mapNotNull {
+                when (it) {
+                    is RustType.Reference -> it.lifetime
+                    else -> null
+                }
+            }.toSet().sorted()
+        return if (lifetimes.isNotEmpty()) {
+            "<${lifetimes.joinToString { "'$it" }}>"
+        } else ""
+    }
+
     private fun renderStructure() {
         val symbol = symbolProvider.toSymbol(shape)
         // TODO(maybe): Pull derive info from the symbol so that the symbol provider can alter things as necessary; 4h
         val containerMeta = symbol.meta()!!
         containerMeta.render(writer)
-        writer.rustBlock("struct ${symbol.name}") {
+
+        writer.rustBlock("struct ${symbol.name} ${lifetimeDeclaration()}") {
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
                 symbolProvider.toSymbol(member).meta()!!.render(this)

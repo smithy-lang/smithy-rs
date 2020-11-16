@@ -31,7 +31,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
-import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
@@ -58,13 +57,12 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
 
     init {
         val symbolVisitorConfig = SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig)
-        val bootstrapProvider = RustCodegenPlugin.BaseSymbolProvider(context.model, symbolVisitorConfig)
-        model = OperationNormalizer(bootstrapProvider).addOperationInputs(context.model)
-        symbolProvider =
-            RustCodegenPlugin.BaseSymbolProvider(model, SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig))
         val service = settings.getService(context.model)
         val (protocol, generator) = ProtocolLoader.Default.protocolFor(context.model, service)
         protocolGenerator = generator
+        model = generator.transformModel(context.model)
+        val baseProvider = RustCodegenPlugin.BaseSymbolProvider(model, symbolVisitorConfig)
+        symbolProvider = generator.symbolProvider(model, baseProvider)
 
         protocolConfig = ProtocolConfig(model, symbolProvider, settings.runtimeConfig, service, protocol)
         writers = CodegenWriterDelegator(
