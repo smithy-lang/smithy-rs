@@ -35,7 +35,7 @@ interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
 }
 
 /**
- * Abstract class providing scaffolding for HTTP based protocols that must config and HTTP request (headers / URL) and
+ * Abstract class providing scaffolding for HTTP based protocols that must build an HTTP request (headers / URL) and
  * a body.
  */
 abstract class HttpProtocolGenerator(
