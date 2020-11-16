@@ -8,7 +8,35 @@ package software.amazon.smithy.rust.testutil
 import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.util.CommandFailed
+import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.runCommand
+import java.io.File
+
+object TestWorkspace {
+    private val baseDir = createTempDir()
+    private val subprojects = mutableListOf<String>()
+
+    private fun generate() {
+        val cargoToml = baseDir.resolve("Cargo.toml")
+        cargoToml.writeText(
+            """
+            [workspace]
+            members = [
+                ${subprojects.joinToString { it.dq() }}
+            ]
+            """.trimIndent()
+        )
+    }
+
+    fun subproject(): File {
+        synchronized(subprojects) {
+            val newProject = createTempDir(directory = baseDir)
+            subprojects.add(newProject.name)
+            generate()
+            return newProject
+        }
+    }
+}
 
 // TODO: unify these test helpers a bit
 fun String.shouldParseAsRust() {
@@ -43,11 +71,11 @@ fun String.shouldCompile(
     strict: Boolean = false
 ): String {
     this.shouldParseAsRust()
-    val tempDir = createTempDir()
+    val tempDir = TestWorkspace.subproject() // createTempDir()
     // TODO: unify this with CargoTomlGenerator
     val cargoToml = """
     [package]
-    name = "test-compile"
+    name = ${tempDir.nameWithoutExtension.dq()}
     version = "0.0.1"
     authors = ["rcoh@amazon.com"]
     edition = "2018"
@@ -60,24 +88,28 @@ fun String.shouldCompile(
     val mainRs = tempDir.resolve("src/main.rs")
     val testModule = tempDir.resolve("src/$module.rs")
     testModule.writeText(this)
-    testModule.appendText(
-        """
+    if (main.isNotBlank()) {
+        testModule.appendText(
+            """
     #[test]
     fn test() {
         $main
     }
-        """.trimIndent()
-    )
+            """.trimIndent()
+        )
+    }
     mainRs.appendText(
         """
         pub mod $module;
-        use crate::$module::*;
-        fn main() {
-        }
+        pub use crate::$module::*;
+        pub fn main() {}
         """.trimIndent()
     )
-    "cargo check".runCommand(tempDir.toPath())
-    val testOutput = "cargo test".runCommand(tempDir.toPath())
+    val testOutput = if ((mainRs.readText() + testModule.readText()).contains("#[test]")) {
+        "cargo test".runCommand(tempDir.toPath())
+    } else {
+        "cargo check".runCommand(tempDir.toPath())
+    }
     if (strict) {
         "cargo clippy -- -D warnings".runCommand(tempDir.toPath())
     }
