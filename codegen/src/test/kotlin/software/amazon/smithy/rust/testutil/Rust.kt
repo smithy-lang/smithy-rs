@@ -12,9 +12,18 @@ import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.io.File
 
+/**
+ * Creates a Cargo workspace shared among all tests
+ *
+ * This workspace significantly improves test performance by sharing dependencies between different tests.
+ */
 object TestWorkspace {
-    private val baseDir = createTempDir()
+    private val baseDir = System.getenv("SMITHY_TEST_WORKSPACE")?.let { File(it) } ?: createTempDir()
     private val subprojects = mutableListOf<String>()
+
+    init {
+        baseDir.mkdirs()
+    }
 
     private fun generate() {
         val cargoToml = baseDir.resolve("Cargo.toml")
@@ -46,11 +55,14 @@ fun String.shouldParseAsRust() {
     "rustfmt ${tempFile.absolutePath}".runCommand()
 }
 
-fun RustWriter.shouldCompile(main: String = "", strict: Boolean = false, expectFailure: Boolean = false): String {
+/**
+ * Compiles the contents of the given writer (including dependencies) and runs the tests
+ */
+fun RustWriter.compileAndTest(main: String = "", clippy: Boolean = false, expectFailure: Boolean = false): String {
     val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }
     try {
         val output = this.toString()
-            .shouldCompile(deps.toSet(), module = this.namespace.split("::")[1], main = main, strict = strict)
+            .compileAndTest(deps.toSet(), module = this.namespace.split("::")[1], main = main, strict = clippy)
         if (expectFailure) {
             println(this.toString())
         }
@@ -64,14 +76,14 @@ fun RustWriter.shouldCompile(main: String = "", strict: Boolean = false, expectF
     }
 }
 
-fun String.shouldCompile(
+fun String.compileAndTest(
     deps: Set<RustDependency>,
     module: String? = null,
     main: String = "",
     strict: Boolean = false
 ): String {
     this.shouldParseAsRust()
-    val tempDir = TestWorkspace.subproject() // createTempDir()
+    val tempDir = TestWorkspace.subproject()
     // TODO: unify this with CargoTomlGenerator
     val cargoToml = """
     [package]
@@ -91,10 +103,10 @@ fun String.shouldCompile(
     if (main.isNotBlank()) {
         testModule.appendText(
             """
-    #[test]
-    fn test() {
-        $main
-    }
+            #[test]
+            fn test() {
+                $main
+            }
             """.trimIndent()
         )
     }
@@ -116,7 +128,7 @@ fun String.shouldCompile(
     return testOutput
 }
 
-fun String.shouldCompile() {
+fun String.shouldCompile(): File {
     this.shouldParseAsRust()
     val tempFile = createTempFile(suffix = ".rs")
     val tempDir = createTempDir()
@@ -125,6 +137,7 @@ fun String.shouldCompile() {
         tempFile.appendText("\nfn main() {}\n")
     }
     "rustc ${tempFile.absolutePath} -o ${tempDir.absolutePath}/output".runCommand()
+    return tempDir.resolve("output")
 }
 
 /**
@@ -136,11 +149,8 @@ fun String.shouldCompile() {
  * "struct A { a: u32 }".quickTest("let a = A { a: 5 }; assert_eq!(a.a, 5);")
  * ```
  */
-fun String.quickTest(vararg strings: String) {
-    val tempFile = createTempFile(suffix = ".rs")
-    val tempDir = createTempDir()
-    tempFile.writeText(this)
-    tempFile.appendText("\nfn main() { \n ${strings.joinToString("\n")} }")
-    "rustc ${tempFile.absolutePath} -o ${tempDir.absolutePath}/output".runCommand()
-    "${tempDir.absolutePath}/output".runCommand()
+fun String.compileAndRun(vararg strings: String) {
+    val contents = this + "\nfn main() { \n ${strings.joinToString("\n")} }"
+    val binary = contents.shouldCompile()
+    binary.absolutePath.runCommand()
 }

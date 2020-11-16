@@ -31,7 +31,7 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormaliz
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.testutil.asSmithy
-import software.amazon.smithy.rust.testutil.shouldCompile
+import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class HttpTraitBindingGeneratorTest {
@@ -123,7 +123,7 @@ class HttpTraitBindingGeneratorTest {
         val writer = RustWriter.forModule("operation")
         // currently rendering the operation renders the protocols—I want to separate that at some point.
         renderOperation(writer)
-        writer.shouldCompile(
+        writer.compileAndTest(
             """
             let ts = Instant::from_epoch_seconds(10123125);
             let inp = PutObjectInput::builder()
@@ -146,7 +146,7 @@ class HttpTraitBindingGeneratorTest {
     fun `build http requests`() {
         val writer = RustWriter.forModule("operation")
         renderOperation(writer)
-        writer.shouldCompile(
+        writer.compileAndTest(
             """
             let ts = Instant::from_epoch_seconds(10123125);
             let inp = PutObjectInput::builder()

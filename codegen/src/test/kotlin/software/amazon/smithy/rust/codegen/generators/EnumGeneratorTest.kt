@@ -17,7 +17,8 @@ import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.testutil.asSmithy
-import software.amazon.smithy.rust.testutil.quickTest
+import software.amazon.smithy.rust.testutil.compileAndRun
+import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.shouldCompile
 import software.amazon.smithy.rust.testutil.shouldParseAsRust
 
@@ -53,7 +54,7 @@ class EnumGeneratorTest {
         val result = writer.toString()
         result.shouldParseAsRust()
         result.shouldCompile()
-        result.quickTest(
+        result.compileAndRun(
             """
             let instance = InstanceType::T2Micro;
             assert_eq!(instance.as_str(), "t2.micro");
@@ -94,7 +95,7 @@ class EnumGeneratorTest {
         val writer = RustWriter.forModule("model")
         val generator = EnumGenerator(provider, writer, shape, trait)
         generator.render()
-        writer.shouldCompile(
+        writer.compileAndTest(
             """
             // Values should be sorted
             assert_eq!(FooEnum::${EnumGenerator.Values}(), ["0", "1", "Bar", "Baz", "Foo"]);
