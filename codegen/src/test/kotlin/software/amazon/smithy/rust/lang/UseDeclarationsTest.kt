@@ -11,7 +11,7 @@ import software.amazon.smithy.rust.codegen.lang.UseDeclarations
 import software.amazon.smithy.rust.testutil.shouldCompile
 
 class UseDeclarationsTest {
-    private fun useDecl() = UseDeclarations("lib.rs", "test")
+    private fun useDecl() = UseDeclarations("test")
 
     @Test
     fun `it produces valid use decls`() {

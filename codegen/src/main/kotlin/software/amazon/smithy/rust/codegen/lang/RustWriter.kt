@@ -46,7 +46,7 @@ fun <T : CodeWriter> T.rustBlock(header: String, vararg args: Any, block: T.() -
 }
 
 class RustWriter private constructor(private val filename: String, val namespace: String, private val commentCharacter: String = "//") :
-    CodegenWriter<RustWriter, UseDeclarations>(null, UseDeclarations(filename, namespace)) {
+    CodegenWriter<RustWriter, UseDeclarations>(null, UseDeclarations(namespace)) {
     companion object {
         fun forModule(module: String): RustWriter {
             return RustWriter("$module.rs", "crate::$module")
@@ -73,7 +73,11 @@ class RustWriter private constructor(private val filename: String, val namespace
         putFormatter('T', formatter)
     }
 
-    fun safeName(prefix: String = "var"): String {
+    fun module(): String? = if (filename.endsWith(".rs")) {
+        filename.removeSuffix(".rs").split('/').last()
+    } else null
+
+    private fun safeName(prefix: String = "var"): String {
         n += 1
         return "${prefix}_$n"
     }
