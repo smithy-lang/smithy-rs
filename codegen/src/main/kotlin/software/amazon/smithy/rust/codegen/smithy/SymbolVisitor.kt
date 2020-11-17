@@ -132,7 +132,7 @@ class SymbolVisitor(
     }
 
     private fun handleRustBoxing(symbol: Symbol, shape: Shape): Symbol {
-        return if (shape.hasTrait(RustBox::class.java)) {
+        return if (shape.hasTrait(RustBoxTrait::class.java)) {
             val rustType = RustType.Box(symbol.rustType())
             with(Symbol.builder()) {
                 rustType(rustType)
