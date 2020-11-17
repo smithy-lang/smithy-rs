@@ -8,8 +8,10 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.testutil.TestRuntimeConfig
@@ -52,7 +54,12 @@ class InstantiatorTest {
             key: String,
             value: Inner
         }
-        """.asSmithy()
+
+        structure WithBox {
+            member: WithBox,
+            value: Integer
+        }
+        """.asSmithy().let { RecursiveShapeBoxer.transform(it) }
 
     private val symbolProvider = testSymbolProvider(model)
     private val runtimeConfig = TestRuntimeConfig
@@ -100,6 +107,41 @@ class InstantiatorTest {
             }
             writer.write("assert_eq!(result.bar, 10);")
             writer.write("assert_eq!(result.foo.unwrap(), \"hello\");")
+        }
+        writer.compileAndTest()
+    }
+
+    @Test
+    fun `generate builders for boxed structs`() {
+        val structure = model.lookup<StructureShape>("com.test#WithBox")
+        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val data = Node.parse(
+            """ {
+                "member": {
+                    "member": { }
+                }, "value": 10
+            }
+            """.trimIndent()
+        )
+        val writer = RustWriter.forModule("model")
+        val structureGenerator = StructureGenerator(model, symbolProvider, writer, structure)
+        structureGenerator.render()
+        writer.write("#[test]")
+        writer.rustBlock("fn inst()") {
+            withBlock("let result = ", ";") {
+                sut.render(data, structure, this)
+            }
+            rust(
+                """
+                assert_eq!(result, WithBox {
+                    value: Some(10),
+                    member: Some(Box::new(WithBox {
+                        value: None,
+                        member: Some(Box::new(WithBox { value: None, member: None })),
+                    }))
+                });
+            """
+            )
         }
         writer.compileAndTest()
     }

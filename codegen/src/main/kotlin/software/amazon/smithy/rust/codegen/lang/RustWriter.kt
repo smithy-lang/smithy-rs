@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.lang
 
+import org.intellij.lang.annotations.Language
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.writer.CodegenWriter
@@ -33,6 +34,13 @@ fun <T : CodeWriter> T.withBlock(
         closeBlock(textAfterNewLine)
     }
     return this
+}
+
+/**
+ * Convenience wrapper that tells Intellij that the contents of this block are Rust
+ */
+fun <T : CodeWriter> T.rust(@Language("Rust", prefix = "fn foo() {", suffix = "}") contents: String, vararg args: Any) {
+    this.write(contents, *args)
 }
 
 /*
