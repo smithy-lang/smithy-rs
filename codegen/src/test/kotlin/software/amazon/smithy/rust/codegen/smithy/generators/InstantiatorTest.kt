@@ -14,7 +14,7 @@ import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.testutil.asSmithy
-import software.amazon.smithy.rust.testutil.shouldCompile
+import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class InstantiatorTest {
@@ -101,7 +101,7 @@ class InstantiatorTest {
             writer.write("assert_eq!(result.bar, 10);")
             writer.write("assert_eq!(result.foo.unwrap(), \"hello\");")
         }
-        writer.shouldCompile()
+        writer.compileAndTest()
     }
 
     @Test
@@ -122,7 +122,7 @@ class InstantiatorTest {
             }
             writer.write("""assert_eq!(result, vec!["bar".to_string(), "foo".to_string()]);""")
         }
-        writer.shouldCompile()
+        writer.compileAndTest()
     }
 
     @Test
@@ -144,7 +144,7 @@ class InstantiatorTest {
             }
             writer.write("""assert_eq!(result, vec![Some("bar".to_string()), Some("foo".to_string()), None]);""")
         }
-        writer.shouldCompile()
+        writer.compileAndTest()
     }
 
     @Test
@@ -175,7 +175,7 @@ class InstantiatorTest {
             """
             )
         }
-        writer.shouldCompile(strict = true)
+        writer.compileAndTest(clippy = true)
     }
 
     @Test
@@ -191,6 +191,6 @@ class InstantiatorTest {
             }
             write("assert_eq!(std::str::from_utf8(blob.as_ref()).unwrap(), \"foo\");")
         }
-        writer.shouldCompile()
+        writer.compileAndTest()
     }
 }

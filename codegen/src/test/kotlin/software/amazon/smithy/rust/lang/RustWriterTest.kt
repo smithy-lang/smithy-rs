@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.testutil.quickTest
+import software.amazon.smithy.rust.testutil.compileAndRun
 import software.amazon.smithy.rust.testutil.shouldCompile
 import software.amazon.smithy.rust.testutil.shouldMatchResource
 import software.amazon.smithy.rust.testutil.shouldParseAsRust
@@ -67,7 +67,7 @@ class RustWriterTest {
         output.shouldCompile()
         output shouldContain "HashSet"
         output shouldContain "struct Test"
-        output.quickTest(
+        output.compileAndRun(
             """
         let test = Test { member: HashSet::default(), otherMember: "hello".to_string() };
         assert_eq!(test.otherMember, "hello");

@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.testutil.asSmithy
-import software.amazon.smithy.rust.testutil.shouldCompile
+import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class StructureGeneratorTest {
@@ -55,7 +55,7 @@ class StructureGeneratorTest {
         val generator = StructureGenerator(model, provider, writer, struct)
         generator.render()
         innerGenerator.render()
-        writer.shouldCompile(
+        writer.compileAndTest(
             """
             let s: Option<MyStruct> = None;
             s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
@@ -86,7 +86,7 @@ class StructureGeneratorTest {
                 )
             }
         }
-        writer.shouldCompile()
+        writer.compileAndTest()
     }
 
     @Test
@@ -97,7 +97,7 @@ class StructureGeneratorTest {
         val generator = StructureGenerator(model, provider, writer, struct)
         generator.render()
         innerGenerator.render()
-        writer.shouldCompile(
+        writer.compileAndTest(
             """
             let my_struct = MyStruct::builder().byte_value(4).foo("hello!").build();
             assert_eq!(my_struct.foo.unwrap(), "hello!");
@@ -124,7 +124,7 @@ class StructureGeneratorTest {
         val generator = StructureGenerator(model, provider, writer, struct)
         generator.render()
         innerGenerator.render()
-        writer.shouldCompile(
+        writer.compileAndTest(
             """
             let my_struct = MyStruct::builder().byte_value(4).foo("hello!").bar(0).build().expect("required field was not provided");
             assert_eq!(my_struct.foo.unwrap(), "hello!");
@@ -139,6 +139,6 @@ class StructureGeneratorTest {
         val writer = RustWriter.forModule("error")
         val generator = StructureGenerator(model, provider, writer, error)
         generator.render()
-        writer.shouldCompile()
+        writer.compileAndTest()
     }
 }

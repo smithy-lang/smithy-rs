@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.testutil.asSmithy
-import software.amazon.smithy.rust.testutil.shouldCompile
+import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class HttpProtocolTestGeneratorTest {
@@ -111,7 +111,7 @@ class HttpProtocolTestGeneratorTest {
                 """
         )
 
-        val testOutput = writer.shouldCompile()
+        val testOutput = writer.compileAndTest()
         // Verify the test actually ran
         testOutput shouldContain "test_say_hello ... ok"
     }
@@ -131,7 +131,7 @@ class HttpProtocolTestGeneratorTest {
         )
 
         val err = assertThrows<CommandFailed> {
-            writer.shouldCompile(expectFailure = true)
+            writer.compileAndTest(expectFailure = true)
         }
         // Verify the test actually ran
         err.message shouldContain "test_say_hello ... FAILED"
@@ -153,7 +153,7 @@ class HttpProtocolTestGeneratorTest {
         )
 
         val err = assertThrows<CommandFailed> {
-            writer.shouldCompile(expectFailure = true)
+            writer.compileAndTest(expectFailure = true)
         }
         // Verify the test actually ran
         err.message shouldContain "test_say_hello ... FAILED"
@@ -175,7 +175,7 @@ class HttpProtocolTestGeneratorTest {
         )
 
         val err = assertThrows<CommandFailed> {
-            writer.shouldCompile(expectFailure = true)
+            writer.compileAndTest(expectFailure = true)
         }
         // Verify the test actually ran
         err.message shouldContain "test_say_hello ... FAILED"
@@ -196,7 +196,7 @@ class HttpProtocolTestGeneratorTest {
         )
 
         val err = assertThrows<CommandFailed> {
-            writer.shouldCompile(expectFailure = true)
+            writer.compileAndTest(expectFailure = true)
         }
         err.message shouldContain "test_say_hello ... FAILED"
         err.message shouldContain "invalid header value"

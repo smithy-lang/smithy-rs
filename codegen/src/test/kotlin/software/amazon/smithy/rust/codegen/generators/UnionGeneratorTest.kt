@@ -13,7 +13,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.testutil.shouldCompile
+import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class UnionGeneratorTest {
@@ -41,7 +41,7 @@ class UnionGeneratorTest {
         val writer = RustWriter.forModule("model")
         val generator = UnionGenerator(model, provider, writer, union)
         generator.render()
-        writer.shouldCompile(
+        writer.compileAndTest(
             """
         let var_a = MyUnion::StringConfig("abc".to_string());
         let var_b = MyUnion::IntConfig(10);
