@@ -17,7 +17,7 @@ object RecursiveShapeBoxer {
      * When recursive shapes do not go through a List, Map, or Set, they must be boxed in Rust. The function will
      * iteratively find loops & add the `RustBox` trait in a deterministic way until it reaches a fixed point.
      *
-     * This function is MUST to be deterministic. If it is not, that is a bug.
+     * This function MUST to be deterministic. If it is not, that is a bug.
      */
     fun transform(model: Model): Model {
         val next = transformInner(model)
