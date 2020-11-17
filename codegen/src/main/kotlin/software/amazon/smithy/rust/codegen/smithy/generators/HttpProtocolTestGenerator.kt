@@ -67,7 +67,7 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig, priv
     private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {
         if (body == "") {
             rustWriter.write("// No body")
-            rustWriter.write("assert_eq!(input.build_body(), \"\");")
+            rustWriter.write("assert!(input.build_body().is_empty());")
         } else {
             check(mediaType != null)
             // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion

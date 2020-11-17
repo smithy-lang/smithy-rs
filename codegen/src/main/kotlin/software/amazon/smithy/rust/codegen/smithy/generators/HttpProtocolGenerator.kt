@@ -74,12 +74,12 @@ abstract class HttpProtocolGenerator(
                 }
             }
         }
-        implBlockWriter.rustBlock("pub fn build_body(&self) -> String") {
+        implBlockWriter.rustBlock("pub fn build_body(&self) -> Vec<u8>") {
             // TODO: use serde to serialize the body
             if (inputBody != null) {
                 write("let _ = self.body();")
             }
-            write("String::new()")
+            write("vec![]")
         }
     }
 

@@ -33,14 +33,16 @@ class ServiceGenerator(
         val operations = index.getContainedOperations(config.serviceShape)
         val bodies = operations.map { config.model.expectShape(it.input.get()) }.map {
             it.expectTrait(SyntheticInputTrait::class.java)
-        }.mapNotNull {
+        }.mapNotNull { // mapNotNull is flatMap but for null `map { it }.filter { it != null }`
             it.body
-        }.map {
+        }.map { // Lookup the Body structure by its id
             config.model.expectShape(it, StructureShape::class.java)
         }
         bodies.map { body ->
+            // The body symbol controls its location, usually in the serializer module
             writers.useShapeWriter(body) { writer ->
                 with(config) {
+                    // Generate a body via the structure generator
                     StructureGenerator(model, symbolProvider, writer, body, renderBuilder = false).render()
                 }
             }
