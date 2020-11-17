@@ -134,11 +134,11 @@ class HttpTraitBindingGeneratorTest {
                 .build().expect("build should succeed");
             let mut o = String::new();
             inp.uri_base(&mut o);
-            assert_eq!(o.as_str(), "/somebucket%2Fok/1970-04-28T03:58:45Z");
+            assert_eq!(o.as_str(), "/somebucket%2Fok/1970-04-28T03%3A58%3A45Z");
             o.clear();
             inp.uri_query(&mut o);
             assert_eq!(o.as_str(), "?paramName=svq!!%25%26&hello=0&hello=1&hello=2&hello=44")
-            """.trimIndent()
+            """
         )
     }
 
@@ -159,7 +159,7 @@ class HttpTraitBindingGeneratorTest {
                 .media_type("base64encodethis")
                 .build().unwrap();
             let http_request = inp.build_http_request().body(()).unwrap();
-            assert_eq!(http_request.uri(), "/buk/1970-04-28T03:58:45Z?paramName=qp&hello=0&hello=1");
+            assert_eq!(http_request.uri(), "/buk/1970-04-28T03%3A58%3A45Z?paramName=qp&hello=0&hello=1");
             assert_eq!(http_request.method(), "PUT");
             let mut date_header = http_request.headers().get_all("X-Dates").iter();
             assert_eq!(date_header.next().unwrap(), "Tue, 28 Apr 1970 03:58:45 GMT");
