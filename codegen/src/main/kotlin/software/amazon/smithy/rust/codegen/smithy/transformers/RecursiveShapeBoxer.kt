@@ -14,10 +14,12 @@ object RecursiveShapeBoxer {
     /**
      * Transform a model which may contain recursive shapes into a model annotated with [RustBoxTrait]
      *
-     * When recursive shapes do not go through a List, Map, or Set, they must be boxed in Rust. The function will
+     * When recursive shapes do NOT go through a List, Map, or Set, they must be boxed in Rust. This function will
      * iteratively find loops & add the `RustBox` trait in a deterministic way until it reaches a fixed point.
      *
-     * This function MUST to be deterministic. If it is not, that is a bug.
+     * This function MUST be deterministic (always choose the same shapes to `Box`). If it is not, that is a bug. Even so
+     * this function may cause backward compatibility issues in certain pathological cases where a changes to recursive
+     * structures cause different members to be boxed. We may need to address these via customizations.
      */
     fun transform(model: Model): Model {
         val next = transformInner(model)
