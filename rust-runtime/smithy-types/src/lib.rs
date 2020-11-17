@@ -4,8 +4,8 @@
  */
 
 use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
-use std::time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH};
 use std::collections::HashMap;
+use std::time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH};
 
 // TODO: fork HTTP date to expose internals, consider replacing Chrono depending on parse difficulty...
 
@@ -105,7 +105,7 @@ pub enum Document {
     Number(Number),
     String(String),
     Bool(bool),
-    Null
+    Null,
 }
 
 /// A number type that implements Javascript / JSON semantics, modeled on serde_json:
@@ -114,7 +114,7 @@ pub enum Document {
 pub enum Number {
     PosInt(u64),
     NegInt(i64),
-    Float(f64)
+    Float(f64),
 }
 
 #[cfg(test)]
