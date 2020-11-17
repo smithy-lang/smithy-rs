@@ -240,10 +240,11 @@ class SymbolVisitor(
     override fun memberShape(shape: MemberShape): Symbol {
         val target = model.expectShape(shape.target)
         val targetSymbol = this.toSymbol(target)
-        return targetSymbol.letIf(config.handleOptionality) {
-            handleOptionality(it, shape, model.expectShape(shape.container))
-        }.letIf(config.handleRustBoxing) {
+        // Handle boxing first so we end up with Option<Box<_>>, not Box<Option<_>>
+        return targetSymbol.letIf(config.handleRustBoxing) {
             handleRustBoxing(it, shape)
+        }.letIf(config.handleOptionality) {
+            handleOptionality(it, shape, model.expectShape(shape.container))
         }
     }
 

@@ -122,8 +122,9 @@ class StructureGenerator(
             }
         }
 
-        fun builderConverter(rustType: RustType) = when (rustType) {
-            is RustType.String -> "inp.into()"
+        fun builderConverter(coreType: RustType, outerType: RustType) = when (coreType) {
+            is RustType.String,
+            is RustType.Box -> "inp.into()"
             else -> "inp"
         }
 
@@ -132,18 +133,20 @@ class StructureGenerator(
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional
                 val memberSymbol = symbolProvider.toSymbol(member)
-                val coreType = memberSymbol.rustType().let {
+                val outerType = memberSymbol.rustType()
+                val coreType = outerType.let {
                     when (it) {
                         is RustType.Option -> it.value
                         else -> it
                     }
                 }
                 val signature = when (coreType) {
-                    is RustType.String -> "<T: Into<String>>(mut self, inp: T) -> Self"
+                    is RustType.String -> "<Str: Into<String>>(mut self, inp: Str) -> Self"
+                    is RustType.Box -> "<T>(mut self, inp: T) -> Self where T: Into<${coreType.render()}>"
                     else -> "(mut self, inp: ${coreType.render()}) -> Self"
                 }
                 writer.rustBlock("pub fn $memberName$signature") {
-                    write("self.$memberName = Some(${builderConverter(coreType)});")
+                    write("self.$memberName = Some(${builderConverter(coreType, outerType)});")
                     write("self")
                 }
             }
@@ -154,7 +157,7 @@ class StructureGenerator(
                 false -> "\$T"
             }
 
-            writer.rustBlock("pub fn build(self) -> $returnType", structureSymbol) {
+            rustBlock("pub fn build(self) -> $returnType", structureSymbol) {
                 withBlock("Ok(", ")", conditional = fallibleBuilder) {
                     rustBlock("\$T", structureSymbol) {
                         members.forEach { member ->
