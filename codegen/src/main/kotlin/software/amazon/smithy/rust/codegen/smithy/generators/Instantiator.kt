@@ -9,22 +9,26 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
+import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
+import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 
 /**
@@ -47,6 +51,7 @@ class Instantiator(
             // Collections
             is ListShape -> renderList(writer, shape, arg as ArrayNode)
             is MapShape -> renderMap(writer, shape, arg as ObjectNode)
+            is SetShape -> renderSet(writer, shape, arg as ArrayNode)
 
             // Wrapped Shapes
             is TimestampShape -> writer.write(
@@ -69,6 +74,27 @@ class Instantiator(
             is NumberShape -> writer.write(arg.asNumberNode().get())
             is BooleanShape -> writer.write(arg.asBooleanNode().get().toString())
             else -> writer.write("todo!() /* $shape $arg */")
+        }
+    }
+
+    private fun renderSet(writer: RustWriter, shape: SetShape, data: ArrayNode) {
+        if (symbolProvider.toSymbol(shape).rustType() is RustType.HashSet) {
+            if (!data.isEmpty) {
+                writer.rustBlock("") {
+                    write("let mut ret = \$T::new();", RuntimeType.HashSet)
+                    val valueShape = shape.member.let { model.expectShape(it.target) }
+                    data.forEach { v ->
+                        withBlock("ret.insert(", ");") {
+                            render(v, valueShape, this)
+                        }
+                    }
+                    write("ret")
+                }
+            } else {
+                writer.write("\$T::new()", RuntimeType.HashSet)
+            }
+        } else {
+            renderList(writer, shape, data)
         }
     }
 
@@ -133,7 +159,7 @@ class Instantiator(
      */
     private fun renderList(
         writer: RustWriter,
-        shape: ListShape,
+        shape: CollectionShape,
         data: ArrayNode
     ) {
         val member = model.expectShape(shape.member.target)

@@ -29,8 +29,8 @@ class ProtocolLoader(private val supportedProtocols: Map<ShapeId, ProtocolGenera
 
     companion object {
         private val Protocols = mapOf(
-            AwsJson1_0Trait.ID to AwsJson10Factory(),
-            AwsJson1_1Trait.ID to AwsJson10Factory(),
+            AwsJson1_0Trait.ID to BasicAwsJsonFactory(AwsJsonVersion.Json10),
+            AwsJson1_1Trait.ID to BasicAwsJsonFactory(AwsJsonVersion.Json11),
             RestJson1Trait.ID to AwsRestJsonFactory()
         )
         val Default = ProtocolLoader(Protocols)

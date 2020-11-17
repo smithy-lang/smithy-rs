@@ -35,7 +35,7 @@ pub fn fmt_string<T: AsRef<str>>(t: T) -> String {
 }
 
 pub fn fmt_timestamp(t: &Instant, format: smithy_types::instant::Format) -> String {
-    t.fmt(format)
+    fmt_string(t.fmt(format))
 }
 
 fn is_valid_query(c: char) -> bool {
@@ -43,12 +43,12 @@ fn is_valid_query(c: char) -> bool {
     let explicit_invalid = |c: char| !matches!(c, '&' | '=');
     let unreserved = |c: char| c.is_alphanumeric() || matches!(c, '-' | '.' | '_' | '~');
     let sub_delims = |c: char| match c {
-        '!' | '$' | '\'' | '(' | ')' | '*' | '+' | ',' | ';' => true,
+        '!' | '$' | '\'' | '(' | ')' | '*' | '+' | /*',' |*/ ';' => true,
         // TODO: should &/= be url encoded?
         '&' | '=' => false,
         _ => false,
     };
-    let p_char = |c: char| unreserved(c) || sub_delims(c) || c == ':' || c == '@';
+    let p_char = |c: char| unreserved(c) || sub_delims(c) || /* c == ':' || */ c == '@';
     explicit_invalid(c) && (p_char(c) || c == '/' || c == '?')
 }
 

@@ -31,15 +31,18 @@ import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.util.doubleQuote
 import software.amazon.smithy.rust.codegen.util.dq
 
-fun HttpTrait.uriFormatString(): String = uri.segments.map {
-    when {
-        it.isLabel -> "{${it.content}}"
-        else -> it.content
+fun HttpTrait.uriFormatString(): String {
+    val base = uri.segments.joinToString("/", prefix = "/") {
+        when {
+            it.isLabel -> "{${it.content}}"
+            else -> it.content
+        }
     }
-}.joinToString("/", prefix = "/").doubleQuote()
+    // TODO: support query literals
+    return base.dq()
+}
 
 /**
  * HttpTraitBindingGenerator
@@ -104,7 +107,11 @@ class HttpTraitBindingGenerator(
         if (headers.isEmpty()) {
             return false
         }
-        writer.rustBlock("fn add_headers(&self, mut builder: \$T) -> \$T", RuntimeType.HttpRequestBuilder, RuntimeType.HttpRequestBuilder) {
+        writer.rustBlock(
+            "fn add_headers(&self, mut builder: \$T) -> \$T",
+            RuntimeType.HttpRequestBuilder,
+            RuntimeType.HttpRequestBuilder
+        ) {
             headers.forEach { httpBinding ->
                 val memberShape = httpBinding.member
                 val memberType = model.expectShape(memberShape.target)
@@ -141,7 +148,7 @@ class HttpTraitBindingGenerator(
                     index.determineTimestampFormat(member, HttpBinding.Location.HEADER, defaultTimestampFormat)
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
                 val func = writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_timestamp"))
-                "$func($targetName, ${writer.format(timestampFormatType)})"
+                "$targetName.fmt(${writer.format(timestampFormatType)})"
             }
             target.isListShape || target.isMemberShape -> {
                 throw IllegalArgumentException("lists should be handled at a higher level")

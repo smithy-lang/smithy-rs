@@ -31,6 +31,10 @@ val CodgenTests = listOf(
     CodegenTest(
         "aws.protocoltests.json#JsonProtocol",
         "json_rpc11"
+    ),
+    CodegenTest(
+        "aws.protocoltests.restjson#RestJson",
+        "rest_json"
     )
 )
 

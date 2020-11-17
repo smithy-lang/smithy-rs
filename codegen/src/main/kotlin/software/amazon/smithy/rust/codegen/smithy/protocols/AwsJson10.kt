@@ -27,10 +27,22 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 
-class AwsJson10Factory : ProtocolGeneratorFactory<AwsJson10Generator> {
+sealed class AwsJsonVersion {
+    abstract val value: String
+
+    object Json10 : AwsJsonVersion() {
+        override val value = "1.0"
+    }
+
+    object Json11 : AwsJsonVersion() {
+        override val value = "1.1"
+    }
+}
+
+class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFactory<BasicAwsJsonGenerator> {
     override fun buildProtocolGenerator(
         protocolConfig: ProtocolConfig
-    ): AwsJson10Generator = AwsJson10Generator(protocolConfig)
+    ): BasicAwsJsonGenerator = BasicAwsJsonGenerator(protocolConfig, version)
 
     override fun transformModel(model: Model): Model {
         // For AwsJson10, the body matches 1:1 with the input
@@ -74,8 +86,9 @@ class SyntheticBodySymbolProvider(private val model: Model, private val base: Sy
     }
 }
 
-class AwsJson10Generator(
-    private val protocolConfig: ProtocolConfig
+class BasicAwsJsonGenerator(
+    private val protocolConfig: ProtocolConfig,
+    private val awsJsonVersion: AwsJsonVersion
 ) : HttpProtocolGenerator(protocolConfig) {
     override fun toHttpRequestImpl(
         implBlockWriter: RustWriter,
@@ -88,7 +101,7 @@ class AwsJson10Generator(
                 """
                 builder
                    .method("POST")
-                   .header("Content-Type", "application/x-amz-json-1.0")
+                   .header("Content-Type", "application/x-amz-json-${awsJsonVersion.value}")
                    .header("X-Amz-Target", "${protocolConfig.serviceShape.id.name}.${operationShape.id.name}")
                """.trimMargin()
             )
