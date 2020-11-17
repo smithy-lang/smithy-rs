@@ -14,6 +14,11 @@ import software.amazon.smithy.rust.codegen.util.inputShape
  * Generate protocol tests for an operation
  */
 class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig, private val operationShape: OperationShape, private val writer: RustWriter) {
+    val DenyList = setOf(
+        "RestJsonListsSerializeNull",
+        "AwsJson11MapsSerializeNullValues",
+        "AwsJson11ListsSerializeNull"
+    )
     private val inputShape = operationShape.inputShape(protocolConfig.model)
     fun render() {
         operationShape.getTrait(HttpRequestTestsTrait::class.java).map {
@@ -27,8 +32,12 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig, priv
             val operationName = symbolProvider.toSymbol(operationShape).name
             val testModuleName = "${operationName.toSnakeCase()}_request_test"
             writer.withModule(testModuleName) {
-                httpRequestTestsTrait.testCases.filter { it.protocol == protocol }.forEach { testCase ->
-                    renderHttpRequestTestCase(testCase, this)
+                httpRequestTestsTrait.testCases.filter { it.protocol == protocol }.filter { !DenyList.contains(it.id) }.forEach { testCase ->
+                    try {
+                        renderHttpRequestTestCase(testCase, this)
+                    } catch (ex: Exception) {
+                        println("failed to generate ${testCase.id}")
+                    }
                 }
             }
         }
@@ -39,9 +48,12 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig, priv
     }
 
     private fun renderHttpRequestTestCase(httpRequestTestCase: HttpRequestTestCase, testModuleWriter: RustWriter) {
+        testModuleWriter.setNewlinePrefix("/// ")
         httpRequestTestCase.documentation.map {
-            testModuleWriter.setNewlinePrefix("/// ").write(it).setNewlinePrefix("")
+            testModuleWriter.write(it)
         }
+        testModuleWriter.write("Test ID: ${httpRequestTestCase.id}")
+        testModuleWriter.setNewlinePrefix("")
         testModuleWriter.write("#[test]")
         testModuleWriter.rustBlock("fn test_${httpRequestTestCase.id.toSnakeCase()}()") {
             writeInline("let input =")

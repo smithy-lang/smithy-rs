@@ -9,5 +9,6 @@ internal class StringsTest {
     fun doubleQuote() {
         "abc".doubleQuote() shouldBe "\"abc\""
         """{"some": "json"}""".doubleQuote() shouldBe """"{\"some\": \"json\"}""""
+        """{"nested": "{\"nested\": 5}"}"}""".doubleQuote() shouldBe "\"{\"nested\": \"{\\\"nested\\\": 5}\"}\""
     }
 }

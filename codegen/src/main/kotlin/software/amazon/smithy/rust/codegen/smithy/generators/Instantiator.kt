@@ -86,8 +86,8 @@ class Instantiator(
         shape: MapShape,
         data: ObjectNode
     ) {
-        writer.rustBlock("") {
-            if (data.members.isNotEmpty()) {
+        if (data.members.isNotEmpty()) {
+            writer.rustBlock("") {
                 write("let mut ret = \$T::new();", RuntimeType.HashMap)
                 val valueShape = shape.value.let { model.expectShape(it.target) }
                 data.members.forEach { (k, v) ->
@@ -96,9 +96,9 @@ class Instantiator(
                     }
                 }
                 write("ret")
-            } else {
-                writer.write("\$T::new()", RuntimeType.HashMap)
             }
+        } else {
+            writer.write("\$T::new()", RuntimeType.HashMap)
         }
     }
 

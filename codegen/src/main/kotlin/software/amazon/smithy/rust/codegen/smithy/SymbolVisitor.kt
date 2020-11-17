@@ -191,7 +191,7 @@ class SymbolVisitor(
     }
 
     override fun documentShape(shape: DocumentShape?): Symbol {
-        TODO("Not yet implemented")
+        return RuntimeType.Document(config.runtimeConfig).toSymbol()
     }
 
     override fun bigIntegerShape(shape: BigIntegerShape?): Symbol {

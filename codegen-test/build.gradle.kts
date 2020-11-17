@@ -14,6 +14,7 @@ plugins {
 
 val smithyVersion: String by project
 
+
 dependencies {
     implementation(project(":codegen"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
@@ -26,7 +27,11 @@ data class CodegenTest(val service: String, val module: String)
 val CodgenTests = listOf(
     CodegenTest("com.amazonaws.dynamodb#DynamoDB_20120810", "dynamo"),
     CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
-    CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10")
+    CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
+    CodegenTest(
+        "aws.protocoltests.json#JsonProtocol",
+        "json_rpc11"
+    )
 )
 
 fun generateSmithyBuild(tests: List<CodegenTest>): String {

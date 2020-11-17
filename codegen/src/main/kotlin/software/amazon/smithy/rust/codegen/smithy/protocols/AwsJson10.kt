@@ -15,6 +15,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
+import software.amazon.smithy.rust.codegen.lang.stripOuter
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.Serializers
 import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
@@ -46,7 +47,8 @@ class AwsJson10Factory : ProtocolGeneratorFactory<AwsJson10Generator> {
  * 1. Body shapes are moved to `serializer.rs`
  * 2. Body shapes take a reference to all of their members.
  */
-class SyntheticBodySymbolProvider(private val model: Model, private val base: SymbolProvider) : WrappingSymbolProvider(base) {
+class SyntheticBodySymbolProvider(private val model: Model, private val base: SymbolProvider) :
+    WrappingSymbolProvider(base) {
     override fun toSymbol(shape: Shape): Symbol {
         val initialSymbol = base.toSymbol(shape)
         val override = when (shape) {
@@ -56,7 +58,12 @@ class SyntheticBodySymbolProvider(private val model: Model, private val base: Sy
             is MemberShape -> {
                 val container = model.expectShape(shape.container)
                 if (container.hasTrait(InputBodyTrait::class.java)) {
-                    initialSymbol.toBuilder().rustType(RustType.Reference(lifetime = "a", value = initialSymbol.rustType())).build()
+                    initialSymbol.toBuilder().rustType(
+                        RustType.Reference(
+                            lifetime = "a",
+                            value = initialSymbol.rustType().stripOuter<RustType.Box>()
+                        )
+                    ).build()
                 } else {
                     null
                 }

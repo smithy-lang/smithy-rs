@@ -5,6 +5,7 @@
 
 use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
 use std::time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH};
+use std::collections::HashMap;
 
 // TODO: fork HTTP date to expose internals, consider replacing Chrono depending on parse difficulty...
 
@@ -95,6 +96,25 @@ impl AsRef<[u8]> for Blob {
     fn as_ref(&self) -> &[u8] {
         &self.inner
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Document {
+    Object(HashMap<String, Document>),
+    Array(Vec<Document>),
+    Number(Number),
+    String(String),
+    Bool(bool),
+    Null
+}
+
+/// A number type that implements Javascript / JSON semantics, modeled on serde_json:
+/// https://docs.serde.rs/src/serde_json/number.rs.html#20-22
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Number {
+    PosInt(u64),
+    NegInt(i64),
+    Float(f64)
 }
 
 #[cfg(test)]
