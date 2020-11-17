@@ -39,7 +39,7 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.smithy.generators.toSnakeCase
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInput
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.utils.StringUtils
 
 // TODO: currently, respecting integer types.
@@ -79,11 +79,14 @@ data class SymbolVisitorConfig(
 val DefaultConfig =
     SymbolVisitorConfig(runtimeConfig = RuntimeConfig(), handleOptionality = true, handleRustBoxing = true)
 
-data class SymbolLocation(val filename: String, val namespace: String)
+data class SymbolLocation(val namespace: String) {
+    val filename = "$namespace.rs"
+}
 
-val Shapes = SymbolLocation("model.rs", "model")
-val Errors = SymbolLocation("error.rs", "error")
-val Operations = SymbolLocation("operation.rs", "operation")
+val Shapes = SymbolLocation("model")
+val Errors = SymbolLocation("error")
+val Operations = SymbolLocation("operation")
+val Serializers = SymbolLocation("serializer")
 
 fun Symbol.makeOptional(): Symbol {
     return if (isOptional()) {
@@ -98,9 +101,12 @@ fun Symbol.makeOptional(): Symbol {
     }
 }
 
+fun Symbol.Builder.locatedIn(symbolLocation: SymbolLocation): Symbol.Builder =
+    this.definitionFile("src/${symbolLocation.filename}")
+        .namespace("crate::${symbolLocation.namespace}", "::")
+
 class SymbolVisitor(
     private val model: Model,
-    private val rootNamespace: String = "crate",
     private val config: SymbolVisitorConfig = DefaultConfig
 ) : SymbolProvider,
     ShapeVisitor<Symbol> {
@@ -115,15 +121,11 @@ class SymbolVisitor(
         return RuntimeType.Blob(config.runtimeConfig).toSymbol()
     }
 
-    private fun Symbol.Builder.locatedIn(symbolLocation: SymbolLocation): Symbol.Builder =
-        this.definitionFile("src/${symbolLocation.filename}")
-            .namespace("$rootNamespace::${symbolLocation.namespace}", "::")
-
     private fun handleOptionality(symbol: Symbol, member: MemberShape, container: Shape): Symbol {
         // If a field has the httpLabel trait and we are generating
         // an Input shape, then the field is _not optional_.
         val httpLabeledInput =
-            container.hasTrait(SyntheticInput::class.java) && member.hasTrait(HttpLabelTrait::class.java)
+            container.hasTrait(SyntheticInputTrait::class.java) && member.hasTrait(HttpLabelTrait::class.java)
         return if (nullableIndex.isNullable(member) && !httpLabeledInput) {
             symbol.makeOptional()
         } else symbol
@@ -214,7 +216,7 @@ class SymbolVisitor(
 
     override fun structureShape(shape: StructureShape): Symbol {
         val isError = shape.hasTrait(ErrorTrait::class.java)
-        val isInput = shape.hasTrait(SyntheticInput::class.java)
+        val isInput = shape.hasTrait(SyntheticInputTrait::class.java)
         val name = StringUtils.capitalize(shape.id.name).letIf(isError) {
             // TODO: this is should probably be a configurable mixin
             it.replace("Exception", "Error")

@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -15,12 +16,18 @@ import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerat
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpTraitBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.util.dq
 
 class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
     override fun buildProtocolGenerator(
         protocolConfig: ProtocolConfig
     ): AwsRestJsonGenerator = AwsRestJsonGenerator(protocolConfig)
+
+    override fun transformModel(model: Model): Model {
+        // TODO: AWSRestJson determines the body from HTTP traits
+        return OperationNormalizer().transformModel(model, OperationNormalizer.noBody)
+    }
 }
 
 class AwsRestJsonGenerator(

@@ -5,6 +5,7 @@
 #
 
 set -e
+export SMITHY_TEST_WORKSPACE=~/.smithy-test-workspace
 ./gradlew test
 ./gradlew ktlintFormat
 ./gradlew ktlint

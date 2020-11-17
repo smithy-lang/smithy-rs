@@ -17,7 +17,9 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.rust.codegen.lang.Meta
 import software.amazon.smithy.rust.codegen.lang.RustDependency
+import software.amazon.smithy.rust.codegen.lang.RustModule
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
@@ -29,12 +31,16 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
-import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
 
-private val PublicModules = listOf("error", "operation", "model")
+private val Modules = listOf(
+    RustModule("error", Meta(public = true)),
+    RustModule("operation", Meta(public = true)),
+    RustModule("model", Meta(public = true)),
+    RustModule("serializer", Meta(public = false))
+)
 
 class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
 
@@ -51,13 +57,12 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
 
     init {
         val symbolVisitorConfig = SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig)
-        val bootstrapProvider = RustCodegenPlugin.BaseSymbolProvider(context.model, symbolVisitorConfig)
-        model = OperationNormalizer(bootstrapProvider).addOperationInputs(context.model)
-        symbolProvider =
-            RustCodegenPlugin.BaseSymbolProvider(model, SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig))
         val service = settings.getService(context.model)
         val (protocol, generator) = ProtocolLoader.Default.protocolFor(context.model, service)
         protocolGenerator = generator
+        model = generator.transformModel(context.model)
+        val baseProvider = RustCodegenPlugin.BaseSymbolProvider(model, symbolVisitorConfig)
+        symbolProvider = generator.symbolProvider(model, baseProvider)
 
         protocolConfig = ProtocolConfig(model, symbolProvider, settings.runtimeConfig, service, protocol)
         writers = CodegenWriterDelegator(
@@ -68,6 +73,8 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
         )
         httpGenerator = protocolGenerator.buildProtocolGenerator(protocolConfig)
     }
+
+    private fun CodegenWriterDelegator<RustWriter>.includedModules(): List<String> = this.writers.values.mapNotNull { it.module() }
 
     fun execute() {
         logger.info("generating Rust client...")
@@ -82,10 +89,10 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
             )
             cargoToml.render()
         }
-        writers.useFileWriter("src/lib.rs", "crate::lib") {
-            // TODO: a more structured method of signaling what modules should get loaded.
-            val modules = PublicModules.filter { writers.writers.containsKey("src/$it.rs") }
-            LibRsGenerator(modules, it).render()
+        writers.useFileWriter("src/lib.rs", "crate::lib") { writer ->
+            val includedModules = writers.includedModules().toSet()
+            val modules = Modules.filter { module -> includedModules.contains(module.name) }
+            LibRsGenerator(modules).render(writer)
         }
         writers.flushWriters()
         try {
@@ -99,7 +106,6 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
     }
 
     override fun structureShape(shape: StructureShape) {
-        // super.structureShape(shape)
         logger.info("generating a structure...")
         writers.useShapeWriter(shape) {
             StructureGenerator(model, symbolProvider, it, shape).render()

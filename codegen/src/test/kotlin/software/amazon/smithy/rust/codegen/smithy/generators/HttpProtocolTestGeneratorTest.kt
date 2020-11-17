@@ -68,20 +68,23 @@ class HttpProtocolTestGeneratorTest {
             name: String
         }
     """.asSmithy()
-    private val model = OperationNormalizer(testSymbolProvider(baseModel)).addOperationInputs(baseModel)
+    private val model = OperationNormalizer().transformModel(baseModel)
     private val symbolProvider = testSymbolProvider(model)
     private val runtimeConfig = TestRuntimeConfig
 
     /**
      * Creates an fake HTTP implementation for SayHello & generates the protocol test
      */
-    private fun writeHttpImpl(writer: RustWriter, body: String) {
+    private fun writeHttpImpl(writer: RustWriter, httpRequestBuilder: String) {
         writer.withModule("operation") {
             StructureGenerator(model, symbolProvider, this, model.lookup("com.example#SayHelloInput")).render()
             rustBlock("impl SayHelloInput") {
                 rustBlock("pub fn build_http_request(&self) -> \$T", RuntimeType.HttpRequestBuilder) {
                     write("\$T::new()", RuntimeType.HttpRequestBuilder)
-                    write(body)
+                    write(httpRequestBuilder)
+                }
+                rustBlock("pub fn build_body(&self) -> String") {
+                    write("String::new()")
                 }
             }
             val protocolConfig = ProtocolConfig(

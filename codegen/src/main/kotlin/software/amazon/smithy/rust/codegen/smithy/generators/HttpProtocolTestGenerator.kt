@@ -48,10 +48,6 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig, priv
             instantiator.render(httpRequestTestCase.params, inputShape, this)
             write(";")
             write("let http_request = input.build_http_request().body(()).unwrap();")
-            checkQueryParams(this, httpRequestTestCase.queryParams)
-            checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
-            checkRequiredQueryParams(this, httpRequestTestCase.requireQueryParams)
-            checkHeaders(this, httpRequestTestCase.headers)
             with(httpRequestTestCase) {
                 write(
                     """
@@ -59,9 +55,29 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig, priv
                     assert_eq!(http_request.uri().path(), ${uri.dq()});
                 """
                 )
-                // TODO: assert on the body contents
-                write("/* BODY:\n ${body.orElse("[ No Body ]")} */")
             }
+            checkQueryParams(this, httpRequestTestCase.queryParams)
+            checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
+            checkRequiredQueryParams(this, httpRequestTestCase.requireQueryParams)
+            checkHeaders(this, httpRequestTestCase.headers)
+            checkBody(this, httpRequestTestCase.body.orElse(""), httpRequestTestCase.bodyMediaType.orElse(null))
+        }
+    }
+
+    private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {
+        if (body == "") {
+            rustWriter.write("// No body")
+            rustWriter.write("assert!(input.build_body().is_empty());")
+        } else {
+            check(mediaType != null)
+            // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
+            // assertOk(rustWriter) {
+            rustWriter.write(
+                "let _ = \$T(input.build_body(), ${body.dq()}, \$T::from(${mediaType.dq()}));",
+                RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_body"),
+                RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "MediaType")
+            )
+            // }
         }
     }
 
