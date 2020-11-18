@@ -69,7 +69,7 @@ class HttpTraitBindingGenerator(
 ) {
     // TODO: make defaultTimestampFormat configurable
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
-    private val index = HttpBindingIndex(model)
+    private val index = HttpBindingIndex.of(model)
 
     /**
      * Generates `update_http_builder` and all necessary dependency functions into the impl block provided by

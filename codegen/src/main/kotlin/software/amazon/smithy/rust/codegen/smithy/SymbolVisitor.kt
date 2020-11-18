@@ -110,7 +110,7 @@ class SymbolVisitor(
     private val config: SymbolVisitorConfig = DefaultConfig
 ) : SymbolProvider,
     ShapeVisitor<Symbol> {
-    private val nullableIndex = NullableIndex(model)
+    private val nullableIndex = NullableIndex.of(model)
     override fun toSymbol(shape: Shape): Symbol {
         return shape.accept(this)
     }
