@@ -38,7 +38,7 @@ class AwsRestJsonGenerator(
     private val model = protocolConfig.model
     private val symbolProvider = protocolConfig.symbolProvider
     private val runtimeConfig = protocolConfig.runtimeConfig
-    private val httpIndex = HttpBindingIndex(model)
+    private val httpIndex = HttpBindingIndex.of(model)
     private val requestBuilder = RuntimeType.Http("request::Builder")
 
     override fun toHttpRequestImpl(

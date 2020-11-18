@@ -43,7 +43,7 @@ object RecursiveShapeBoxer {
         // 4. Select the member shape in that loop with the earliest shape id
         // 5. Box it.
         // (External to this function) Go back to 1.
-        val index = TopologicalIndex(model)
+        val index = TopologicalIndex.of(model)
         val recursiveShapes = index.recursiveShapes
         val loops = recursiveShapes.map {
             // Get all the shapes in the closure (represented as Paths
