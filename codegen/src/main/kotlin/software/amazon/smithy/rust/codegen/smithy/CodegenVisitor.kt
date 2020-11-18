@@ -36,12 +36,10 @@ import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
 
-private val Modules = listOf(
-    RustModule("error", Meta(public = true)),
-    RustModule("operation", Meta(public = true)),
-    RustModule("model", Meta(public = true)),
-    RustModule("serializer", Meta(public = false))
-)
+/**
+ * Whitelist of modules that will be exposed publicly in generated crates
+ */
+private val PublicModules = setOf("error", "operation", "model")
 
 class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
 
@@ -94,8 +92,10 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
             cargoToml.render()
         }
         writers.useFileWriter("src/lib.rs", "crate::lib") { writer ->
-            val includedModules = writers.includedModules().toSet()
-            val modules = Modules.filter { module -> includedModules.contains(module.name) }
+            val includedModules = writers.includedModules().toSet().filter { it != "lib" }
+            val modules = includedModules.map {
+                RustModule(it, Meta(public = PublicModules.contains(it)))
+            }
             LibRsGenerator(modules).render(writer)
         }
         writers.flushWriters()
