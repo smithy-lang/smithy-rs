@@ -1,5 +1,6 @@
 package software.amazon.smithy.rust.codegen.smithy
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.MemberShape
@@ -10,7 +11,6 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.lang.Derives
 import software.amazon.smithy.rust.codegen.lang.Meta
-import software.amazon.smithy.rust.codegen.util.orNull
 
 /**
  * Default delegator to enable easily decorating another symbol provider.
@@ -87,4 +87,8 @@ private const val MetaKey = "meta"
 fun Symbol.Builder.meta(meta: Meta?): Symbol.Builder {
     return this.putProperty(MetaKey, meta)
 }
-fun Symbol.meta(): Meta? = this.getProperty(MetaKey, Meta::class.java).orNull()
+fun Symbol.expectMeta(): Meta = this.getProperty(MetaKey, Meta::class.java).orElseThrow {
+    CodegenException(
+        "Expected $this to have metadata attached but it did not. "
+    )
+}
