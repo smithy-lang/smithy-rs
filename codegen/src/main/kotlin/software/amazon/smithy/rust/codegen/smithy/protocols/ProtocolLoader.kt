@@ -18,7 +18,7 @@ class ProtocolLoader(private val supportedProtocols: Map<ShapeId, ProtocolGenera
         model: Model,
         serviceShape: ServiceShape
     ): Pair<ShapeId, ProtocolGeneratorFactory<HttpProtocolGenerator>> {
-        val protocols: MutableMap<ShapeId, Trait> = ServiceIndex(model).getProtocols(serviceShape)
+        val protocols: MutableMap<ShapeId, Trait> = ServiceIndex.of(model).getProtocols(serviceShape)
         val matchingProtocols =
             protocols.keys.mapNotNull { protocolId -> supportedProtocols[protocolId]?.let { protocolId to it } }
         if (matchingProtocols.isEmpty()) {

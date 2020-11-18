@@ -16,7 +16,7 @@ class ServiceGenerator(
     private val protocolGenerator: HttpProtocolGenerator,
     private val config: ProtocolConfig
 ) {
-    private val index = TopDownIndex(config.model)
+    private val index = TopDownIndex.of(config.model)
 
     fun render() {
         val operations = index.getContainedOperations(config.serviceShape)
