@@ -76,10 +76,27 @@ fun RustType.render(): String = when (this) {
     is RustType.Opaque -> this.name
 }
 
+fun <T : RustType> RustType.contains(t: T): Boolean {
+    if (t == this) {
+        return true
+    }
+
+    return when (this) {
+        is RustType.Vec -> this.member.contains(t)
+        is RustType.HashSet -> this.member.contains(t)
+        is RustType.HashMap -> this.value.contains(t) || this.key.contains(t)
+        is RustType.Reference -> this.value.contains(t)
+        is RustType.Option -> this.value.contains(t)
+        is RustType.Box -> this.value.contains(t)
+        else -> false
+    }
+}
+
 /**
  * Meta information about a Rust construction (field, struct, or enum)
  */
 data class Meta(val derives: Derives = Derives.Empty, val additionalAttributes: List<Attribute> = listOf(), val public: Boolean) {
+    fun withDerive(newDerive: RuntimeType): Meta = this.copy(derives = derives.copy(derives.derives + newDerive))
     fun attributes(): List<Attribute> = additionalAttributes + derives
     fun renderAttributes(writer: RustWriter): Meta {
         attributes().forEach {

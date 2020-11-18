@@ -38,6 +38,15 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
         return builder.build()
     }
 
+    fun fullyQualifiedName(): String {
+        val prefix = if (namespace.startsWith("crate")) {
+            ""
+        } else {
+            "::"
+        }
+        return "$prefix$namespace::$name"
+    }
+
     // TODO: refactor to be RuntimeTypeProvider a la Symbol provider that packages the `RuntimeConfig` state.
     companion object {
 

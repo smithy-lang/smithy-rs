@@ -160,12 +160,7 @@ class RustWriter private constructor(private val filename: String, val namespace
                 is RuntimeType -> {
                     t.dependency?.also { addDependency(it) }
                     // for now, use the fully qualified type name
-                    val prefix = if (t.namespace.startsWith("crate")) {
-                        ""
-                    } else {
-                        "::"
-                    }
-                    "$prefix${t.namespace}::${t.name}"
+                    t.fullyQualifiedName()
                 }
                 is Symbol -> {
                     if (t.namespace != namespace) {
