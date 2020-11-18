@@ -147,7 +147,6 @@ class HttpTraitBindingGenerator(
                 val timestampFormat =
                     index.determineTimestampFormat(member, HttpBinding.Location.HEADER, defaultTimestampFormat)
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                val func = writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_timestamp"))
                 "$targetName.fmt(${writer.format(timestampFormatType)})"
             }
             target.isListShape || target.isMemberShape -> {

@@ -13,10 +13,11 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.util.orNull
 import java.util.Optional
 import kotlin.streams.toList
 
-typealias structureModifier = (StructureShape) -> StructureShape?
+typealias structureModifier = (StructureShape?) -> StructureShape?
 
 /**
  * Generate synthetic Input and Output structures for operations.
@@ -41,8 +42,8 @@ class OperationNormalizer() {
                 shape.toBuilder().id(inputId).members(renamedMembers)
             }.orElse(StructureShape.builder().id(inputId))
             val bodyShape = inputBody(
-                inputShapeBuilder.build().rename(operation.bodyId()).toBuilder().addTrait(InputBodyTrait()).build()
-            )
+                operation.input.map { model.expectShape(it, StructureShape::class.java) }.orNull()
+            )?.let { it.toBuilder().addTrait(InputBodyTrait()).build().rename(operation.bodyId()) }
             val inputShape = inputShapeBuilder.addTrait(SyntheticInputTrait(bodyShape?.id)).build()
             listOf(bodyShape, inputShape).mapNotNull { it }
         }
@@ -61,7 +62,7 @@ class OperationNormalizer() {
         private fun OperationShape.inputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Input")
         private fun OperationShape.bodyId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}InputBody")
 
-        val noBody: (StructureShape) -> StructureShape? = { _ -> null }
+        val noBody: (StructureShape?) -> StructureShape? = { _ -> null }
     }
 }
 

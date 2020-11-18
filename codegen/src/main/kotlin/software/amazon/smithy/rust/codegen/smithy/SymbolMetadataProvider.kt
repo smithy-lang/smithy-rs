@@ -2,7 +2,6 @@ package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
@@ -15,7 +14,11 @@ import software.amazon.smithy.rust.codegen.lang.Meta
 /**
  * Default delegator to enable easily decorating another symbol provider.
  */
-open class WrappingSymbolProvider(private val base: SymbolProvider) : SymbolProvider {
+open class WrappingSymbolProvider(private val base: RustSymbolProvider) : RustSymbolProvider {
+    override fun config(): SymbolVisitorConfig {
+        return base.config()
+    }
+
     override fun toSymbol(shape: Shape): Symbol {
         return base.toSymbol(shape)
     }
@@ -30,7 +33,7 @@ open class WrappingSymbolProvider(private val base: SymbolProvider) : SymbolProv
  *
  * Protocols may inherit from this class and override the `xyzMeta` methods to modify structure generation.
  */
-abstract class SymbolMetadataProvider(private val base: SymbolProvider) : WrappingSymbolProvider(base) {
+abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : WrappingSymbolProvider(base) {
     override fun toSymbol(shape: Shape): Symbol {
         val baseSymbol = base.toSymbol(shape)
         val meta = when (shape) {
@@ -51,7 +54,7 @@ abstract class SymbolMetadataProvider(private val base: SymbolProvider) : Wrappi
     abstract fun enumMeta(stringShape: StringShape): Meta
 }
 
-class BaseSymbolMetadataProvider(base: SymbolProvider) : SymbolMetadataProvider(base) {
+class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvider(base) {
     override fun memberMeta(memberShape: MemberShape): Meta {
         return Meta(public = true)
     }

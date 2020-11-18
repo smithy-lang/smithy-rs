@@ -141,6 +141,6 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
     }
 
     override fun serviceShape(shape: ServiceShape) {
-        ServiceGenerator(writers, httpGenerator, protocolConfig).render()
+        ServiceGenerator(writers, httpGenerator, protocolGenerator.support(), protocolConfig).render()
     }
 }

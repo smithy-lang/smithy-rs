@@ -1,6 +1,7 @@
 package software.amazon.smithy.rust.codegen.smithy.generators
 
 import io.kotest.matchers.string.shouldContain
+import org.intellij.lang.annotations.Language
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
@@ -9,6 +10,7 @@ import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.util.CommandFailed
+import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.testutil.asSmithy
@@ -71,11 +73,20 @@ class HttpProtocolTestGeneratorTest {
     private val model = OperationNormalizer().transformModel(baseModel)
     private val symbolProvider = testSymbolProvider(model)
     private val runtimeConfig = TestRuntimeConfig
+    private val correctBody = """{"name": "Teddy"}"""
 
     /**
      * Creates an fake HTTP implementation for SayHello & generates the protocol test
      */
-    private fun writeHttpImpl(writer: RustWriter, httpRequestBuilder: String) {
+    private fun writeHttpImpl(
+        writer: RustWriter,
+        httpRequestBuilder: String,
+        @Language(
+            "Rust",
+            prefix = "fn foo() -> String {",
+            suffix = "}"
+        ) body: String = "${correctBody.dq()}.to_string()"
+    ) {
         writer.withModule("operation") {
             StructureGenerator(model, symbolProvider, this, model.lookup("com.example#SayHelloInput")).render()
             rustBlock("impl SayHelloInput") {
@@ -84,7 +95,7 @@ class HttpProtocolTestGeneratorTest {
                     write(httpRequestBuilder)
                 }
                 rustBlock("pub fn build_body(&self) -> String") {
-                    write("String::new()")
+                    write(body)
                 }
             }
             val protocolConfig = ProtocolConfig(
@@ -96,6 +107,7 @@ class HttpProtocolTestGeneratorTest {
             )
             HttpProtocolTestGenerator(
                 protocolConfig,
+                ProtocolSupport(requestBodySerialization = true),
                 model.lookup("com.example#SayHello"),
                 this
             ).render()
@@ -117,6 +129,29 @@ class HttpProtocolTestGeneratorTest {
         val testOutput = writer.compileAndTest()
         // Verify the test actually ran
         testOutput shouldContain "test_say_hello ... ok"
+    }
+
+    @Test
+    fun `test invalid body`() {
+        val writer = RustWriter.forModule("lib")
+        writeHttpImpl(
+            writer,
+            """
+                    .uri("/?Hi=Hello%20there&required")
+                    .header("X-Greeting", "Hi")
+                    .method("POST")
+                """,
+            """
+                    "{}".to_string()
+"""
+        )
+
+        val err = assertThrows<CommandFailed> {
+            writer.compileAndTest(expectFailure = true)
+        }
+
+        err.message shouldContain "test_say_hello ... FAILED"
+        err.message shouldContain "body did not match"
     }
 
     @Test

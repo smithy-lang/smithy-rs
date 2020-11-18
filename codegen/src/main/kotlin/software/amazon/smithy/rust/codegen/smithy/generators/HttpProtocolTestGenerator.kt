@@ -12,10 +12,18 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.inputShape
 
+data class ProtocolSupport(
+    val requestBodySerialization: Boolean
+)
 /**
  * Generate protocol tests for an operation
  */
-class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig, private val operationShape: OperationShape, private val writer: RustWriter) {
+class HttpProtocolTestGenerator(
+    private val protocolConfig: ProtocolConfig,
+    private val protocolSupport: ProtocolSupport,
+    private val operationShape: OperationShape,
+    private val writer: RustWriter
+) {
     // TODO: remove these once Smithy publishes fixes.
     // These tests are not even attempted to be compiled
     val DisableTests = setOf(
@@ -23,9 +31,10 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig, priv
         "AwsJson11MapsSerializeNullValues",
         "AwsJson11ListsSerializeNull",
         "RestJsonSerializesNullMapValues",
-        // This test is fully disabled because it's flaky (it depends on the hash set iteration order)
+        // These tests are fully disabled because they're flaky (they depend on the hash set iteration order)
         // https://github.com/awslabs/smithy-rs/issues/37
-        "RestJsonInputAndOutputWithStringHeaders"
+        "RestJsonInputAndOutputWithStringHeaders",
+        "AwsJson11Enums"
     )
 
     // These tests fail due to shortcomings in our implementation.
@@ -46,6 +55,7 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig, priv
         // Misc:
         "RestJsonQueryIdempotencyTokenAutoFill", // https://github.com/awslabs/smithy-rs/issues/34
         "RestJsonHttpPrefixHeadersArePresent" // https://github.com/awslabs/smithy-rs/issues/35
+
     )
     private val inputShape = operationShape.inputShape(protocolConfig.model)
     fun render() {
@@ -66,14 +76,15 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig, priv
                 )
             )
             writer.withModule(testModuleName, moduleMeta) {
-                httpRequestTestsTrait.testCases.filter { it.protocol == protocol }.filter { !DisableTests.contains(it.id) }.forEach { testCase ->
-                    try {
-                        renderHttpRequestTestCase(testCase, this)
-                    } catch (ex: Exception) {
-                        println("failed to generate ${testCase.id}")
-                        ex.printStackTrace()
+                httpRequestTestsTrait.testCases.filter { it.protocol == protocol }
+                    .filter { !DisableTests.contains(it.id) }.forEach { testCase ->
+                        try {
+                            renderHttpRequestTestCase(testCase, this)
+                        } catch (ex: Exception) {
+                            println("failed to generate ${testCase.id}")
+                            ex.printStackTrace()
+                        }
                     }
-                }
             }
         }
     }
@@ -110,7 +121,9 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig, priv
             checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
             checkRequiredQueryParams(this, httpRequestTestCase.requireQueryParams)
             checkHeaders(this, httpRequestTestCase.headers)
-            checkBody(this, httpRequestTestCase.body.orElse(""), httpRequestTestCase.bodyMediaType.orElse(null))
+            if (protocolSupport.requestBodySerialization) {
+                checkBody(this, httpRequestTestCase.body.orElse(""), httpRequestTestCase.bodyMediaType.orElse(null))
+            }
         }
     }
 
@@ -120,13 +133,13 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig, priv
             rustWriter.write("assert!(input.build_body().is_empty());")
         } else {
             // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
-            // assertOk(rustWriter) {
-            rustWriter.write(
-                "let _ = \$T(input.build_body(), ${body.dq()}, \$T::from(${(mediaType ?: "unknown").dq()}));",
-                RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_body"),
-                RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "MediaType")
-            )
-            // }
+            assertOk(rustWriter) {
+                rustWriter.write(
+                    "\$T(input.build_body(), ${body.dq()}, \$T::from(${(mediaType ?: "unknown").dq()}))",
+                    RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_body"),
+                    RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "MediaType")
+                )
+            }
         }
     }
 

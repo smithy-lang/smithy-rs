@@ -102,9 +102,12 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
                 func, CargoDependency.ProtocolTestHelpers(runtimeConfig), "protocol_test_helpers"
             )
 
-
         fun Http(path: String): RuntimeType = RuntimeType(name = path, dependency = CargoDependency.Http, namespace = "http")
         val HttpRequestBuilder = Http("request::Builder")
+
+        val Serialize = RuntimeType("Serialize", CargoDependency.Serde, namespace = "serde")
+        val Serializer = RuntimeType("Serializer", CargoDependency.Serde, namespace = "serde")
+        fun SerdeJson(path: String) = RuntimeType(path, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
 
         fun forInlineFun(name: String, module: String, func: (RustWriter) -> Unit) = RuntimeType(
             name = name,

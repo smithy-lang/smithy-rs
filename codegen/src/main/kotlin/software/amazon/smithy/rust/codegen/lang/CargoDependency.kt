@@ -104,5 +104,8 @@ data class CargoDependency(
         fun ProtocolTestHelpers(runtimeConfig: RuntimeConfig) = CargoDependency(
             "protocol-test-helpers", Local(runtimeConfig.relativePath), scope = Dev
         )
+
+        val SerdeJson: CargoDependency = CargoDependency("serde_json", CratesIo("1"))
+        val Serde = CargoDependency("serde", CratesIo("1"), features = listOf("derive"))
     }
 }
