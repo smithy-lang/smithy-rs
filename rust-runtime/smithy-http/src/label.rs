@@ -13,14 +13,14 @@ pub fn fmt_default<T: Debug>(t: T) -> String {
 }
 
 pub fn fmt_string<T: AsRef<str>>(t: T, greedy: bool) -> String {
-    let s = t.as_ref();
+    let s = t.as_ref().replace(":", "%3A");
     if greedy {
-        s.to_owned()
+        s
     } else {
         s.replace("/", "%2F")
     }
 }
 
 pub fn fmt_timestamp(t: &Instant, format: smithy_types::instant::Format) -> String {
-    t.fmt(format)
+    crate::query::fmt_string(t.fmt(format))
 }

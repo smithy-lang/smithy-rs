@@ -15,6 +15,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
+import software.amazon.smithy.rust.codegen.lang.stripOuter
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.Serializers
 import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
@@ -26,10 +27,22 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 
-class AwsJson10Factory : ProtocolGeneratorFactory<AwsJson10Generator> {
+sealed class AwsJsonVersion {
+    abstract val value: String
+
+    object Json10 : AwsJsonVersion() {
+        override val value = "1.0"
+    }
+
+    object Json11 : AwsJsonVersion() {
+        override val value = "1.1"
+    }
+}
+
+class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFactory<BasicAwsJsonGenerator> {
     override fun buildProtocolGenerator(
         protocolConfig: ProtocolConfig
-    ): AwsJson10Generator = AwsJson10Generator(protocolConfig)
+    ): BasicAwsJsonGenerator = BasicAwsJsonGenerator(protocolConfig, version)
 
     override fun transformModel(model: Model): Model {
         // For AwsJson10, the body matches 1:1 with the input
@@ -46,7 +59,8 @@ class AwsJson10Factory : ProtocolGeneratorFactory<AwsJson10Generator> {
  * 1. Body shapes are moved to `serializer.rs`
  * 2. Body shapes take a reference to all of their members.
  */
-class SyntheticBodySymbolProvider(private val model: Model, private val base: SymbolProvider) : WrappingSymbolProvider(base) {
+class SyntheticBodySymbolProvider(private val model: Model, private val base: SymbolProvider) :
+    WrappingSymbolProvider(base) {
     override fun toSymbol(shape: Shape): Symbol {
         val initialSymbol = base.toSymbol(shape)
         val override = when (shape) {
@@ -56,7 +70,12 @@ class SyntheticBodySymbolProvider(private val model: Model, private val base: Sy
             is MemberShape -> {
                 val container = model.expectShape(shape.container)
                 if (container.hasTrait(InputBodyTrait::class.java)) {
-                    initialSymbol.toBuilder().rustType(RustType.Reference(lifetime = "a", value = initialSymbol.rustType())).build()
+                    initialSymbol.toBuilder().rustType(
+                        RustType.Reference(
+                            lifetime = "a",
+                            value = initialSymbol.rustType().stripOuter<RustType.Box>()
+                        )
+                    ).build()
                 } else {
                     null
                 }
@@ -67,8 +86,9 @@ class SyntheticBodySymbolProvider(private val model: Model, private val base: Sy
     }
 }
 
-class AwsJson10Generator(
-    private val protocolConfig: ProtocolConfig
+class BasicAwsJsonGenerator(
+    private val protocolConfig: ProtocolConfig,
+    private val awsJsonVersion: AwsJsonVersion
 ) : HttpProtocolGenerator(protocolConfig) {
     override fun toHttpRequestImpl(
         implBlockWriter: RustWriter,
@@ -81,7 +101,7 @@ class AwsJson10Generator(
                 """
                 builder
                    .method("POST")
-                   .header("Content-Type", "application/x-amz-json-1.0")
+                   .header("Content-Type", "application/x-amz-json-${awsJsonVersion.value}")
                    .header("X-Amz-Target", "${protocolConfig.serviceShape.id.name}.${operationShape.id.name}")
                """.trimMargin()
             )

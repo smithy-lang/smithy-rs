@@ -35,20 +35,29 @@ pub fn fmt_string<T: AsRef<str>>(t: T) -> String {
 }
 
 pub fn fmt_timestamp(t: &Instant, format: smithy_types::instant::Format) -> String {
-    t.fmt(format)
+    fmt_string(t.fmt(format))
 }
 
 fn is_valid_query(c: char) -> bool {
     // Although & / = are allowed in the query string, we want to escape them
     let explicit_invalid = |c: char| !matches!(c, '&' | '=');
     let unreserved = |c: char| c.is_alphanumeric() || matches!(c, '-' | '.' | '_' | '~');
+
+    // RFC-3986 §3.3 allows sub-delims (defined in section2.2) to be in the path component.
+    // This includes both colon ':' and comma ',' characters.
+    // Smithy protocol tests percent encode these expected values though whereas `encodeUrlPath()`
+    // does not and follows the RFC. Fixing the tests was discussed but would adversely affect
+    // other SDK's and we were asked to work around it.
+    // Replace any left over sub-delims with the percent encoded value so that tests can proceed
+    // https://tools.ietf.org/html/rfc3986#section-3.3
+
     let sub_delims = |c: char| match c {
-        '!' | '$' | '\'' | '(' | ')' | '*' | '+' | ',' | ';' => true,
+        '!' | '$' | '\'' | '(' | ')' | '*' | '+' | /*',' |*/ ';' => true,
         // TODO: should &/= be url encoded?
         '&' | '=' => false,
         _ => false,
     };
-    let p_char = |c: char| unreserved(c) || sub_delims(c) || c == ':' || c == '@';
+    let p_char = |c: char| unreserved(c) || sub_delims(c) || /* c == ':' || */ c == '@';
     explicit_invalid(c) && (p_char(c) || c == '/' || c == '?')
 }
 

@@ -122,7 +122,7 @@ class StructureGenerator(
             }
         }
 
-        fun builderConverter(coreType: RustType, outerType: RustType) = when (coreType) {
+        fun builderConverter(coreType: RustType) = when (coreType) {
             is RustType.String,
             is RustType.Box -> "inp.into()"
             else -> "inp"
@@ -146,7 +146,7 @@ class StructureGenerator(
                     else -> "(mut self, inp: ${coreType.render()}) -> Self"
                 }
                 writer.rustBlock("pub fn $memberName$signature") {
-                    write("self.$memberName = Some(${builderConverter(coreType, outerType)});")
+                    write("self.$memberName = Some(${builderConverter(coreType)});")
                     write("self")
                 }
             }

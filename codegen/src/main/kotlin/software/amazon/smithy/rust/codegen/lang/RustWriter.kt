@@ -10,6 +10,7 @@ import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.writer.CodegenWriter
 import software.amazon.smithy.codegen.core.writer.CodegenWriterFactory
+import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.EnumTrait
@@ -123,10 +124,10 @@ class RustWriter private constructor(private val filename: String, val namespace
     }
 
     fun ListForEach(target: Shape, outerField: String, block: CodeWriter.(field: String, target: ShapeId) -> Unit) {
-        if (target.isListShape) {
+        if (target is CollectionShape) {
             val derefName = safeName("inner")
             rustBlock("for $derefName in $outerField") {
-                block(derefName, target.asListShape().get().member.target)
+                block(derefName, target.member.target)
             }
         } else {
             this.block(outerField, target.toShapeId())

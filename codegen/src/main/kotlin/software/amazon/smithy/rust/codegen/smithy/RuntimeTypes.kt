@@ -56,6 +56,9 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
         fun Blob(runtimeConfig: RuntimeConfig) =
             RuntimeType("Blob", RustDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.cratePrefix}_types")
 
+        fun Document(runtimeConfig: RuntimeConfig): RuntimeType =
+            RuntimeType("Document", RustDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.cratePrefix}_types")
+
         fun LabelFormat(runtimeConfig: RuntimeConfig, func: String) =
             RuntimeType(func, RustDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::label")
 
@@ -88,6 +91,7 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
             )
 
         fun Http(path: String): RuntimeType = RuntimeType(name = path, dependency = RustDependency.Http, namespace = "http")
+
         val HttpRequestBuilder = Http("request::Builder")
     }
 }

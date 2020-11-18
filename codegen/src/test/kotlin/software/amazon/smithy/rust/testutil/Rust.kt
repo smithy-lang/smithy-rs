@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.testutil
 
+import org.intellij.lang.annotations.Language
 import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.util.CommandFailed
@@ -58,7 +59,12 @@ fun String.shouldParseAsRust() {
 /**
  * Compiles the contents of the given writer (including dependencies) and runs the tests
  */
-fun RustWriter.compileAndTest(main: String = "", clippy: Boolean = false, expectFailure: Boolean = false): String {
+fun RustWriter.compileAndTest(
+    @Language("Rust", prefix = "fn test() {", suffix = "}")
+    main: String = "",
+    clippy: Boolean = false,
+    expectFailure: Boolean = false
+): String {
     // TODO: if there are no dependencies, we can be a bit quicker
     val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }
     try {

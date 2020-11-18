@@ -7,6 +7,10 @@ package software.amazon.smithy.rust.codegen.lang
 
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
+interface Container {
+    val value: RustType
+}
+
 /**
  * A hierarchy of types handled by Smithy codegen
  */
@@ -47,15 +51,15 @@ sealed class RustType {
         override val name: kotlin.String = "HashSet"
     }
 
-    data class Reference(val lifetime: kotlin.String?, val value: RustType) : RustType() {
+    data class Reference(val lifetime: kotlin.String?, override val value: RustType) : RustType(), Container {
         override val name: kotlin.String = value.name
     }
 
-    data class Option(val value: RustType) : RustType() {
+    data class Option(override val value: RustType) : RustType(), Container {
         override val name: kotlin.String = "Option"
     }
 
-    data class Box(val value: RustType) : RustType() {
+    data class Box(override val value: RustType) : RustType(), Container {
         override val name: kotlin.String = "Box"
     }
 
@@ -74,6 +78,13 @@ fun RustType.render(): String = when (this) {
     is RustType.Option -> "${this.name}<${this.value.render()}>"
     is RustType.Box -> "${this.name}<${this.value.render()}>"
     is RustType.Opaque -> this.name
+}
+
+inline fun <reified T : Container> RustType.stripOuter(): RustType {
+    return when (this) {
+        is T -> this.value
+        else -> this
+    }
 }
 
 /**
