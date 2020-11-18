@@ -17,6 +17,8 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.rust.codegen.lang.CargoDependency
+import software.amazon.smithy.rust.codegen.lang.InlineDependency
 import software.amazon.smithy.rust.codegen.lang.Meta
 import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustModule
@@ -83,11 +85,19 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
         val service = settings.getService(model)
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
+        val loadDependencies = { writers.dependencies.map { dep -> RustDependency.fromSymbolDependency(dep) } }
+        val inlineDependencies = loadDependencies().filterIsInstance<InlineDependency>().distinctBy { it.key() }
+        inlineDependencies.forEach { dep ->
+            writers.useFileWriter("src/${dep.module}.rs", "crate::${dep.module}") {
+                dep.renderer(it)
+            }
+        }
+        val cargoDependencies = loadDependencies().filterIsInstance<CargoDependency>().distinct()
         writers.useFileWriter("Cargo.toml") {
             val cargoToml = CargoTomlGenerator(
                 settings,
                 it,
-                writers.dependencies.map { dep -> RustDependency.fromSymbolDependency(dep) }.distinct()
+                cargoDependencies
             )
             cargoToml.render()
         }
