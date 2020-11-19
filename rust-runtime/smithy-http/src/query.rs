@@ -82,7 +82,7 @@ pub fn write(inp: Vec<(&str, String)>, out: &mut String) {
     for (k, v) in inp {
         out.push(prefix);
         out.push_str(k);
-        out.push_str("=");
+        out.push('=');
         out.push_str(&v);
         prefix = '&';
     }
