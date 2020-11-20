@@ -50,6 +50,18 @@ impl Instant {
         DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(self.seconds, self.nanos), Utc)
     }
 
+    pub fn has_nanos(&self) -> bool {
+        self.nanos != 0
+    }
+
+    pub fn epoch_fractional_seconds(&self) -> f64 {
+        self.seconds as f64 + self.nanos as f64 / 1_000_000_000_f64
+    }
+
+    pub fn epoch_seconds(&self) -> i64 {
+        self.seconds
+    }
+
     pub fn fmt(&self, format: instant::Format) -> String {
         match format {
             instant::Format::DateTime => {

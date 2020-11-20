@@ -12,7 +12,7 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.rust.codegen.lang.RustDependency
+import software.amazon.smithy.rust.codegen.lang.CargoDependency
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
@@ -40,7 +40,7 @@ class RustWriterTest {
             rustBlock("fn build(builer: \$T)", requestBuilder) {
             }
         }
-        val httpDep = RustDependency.Http.dependencies[0]
+        val httpDep = CargoDependency.Http.dependencies[0]
         sut.dependencies shouldContain httpDep
     }
 

@@ -31,6 +31,11 @@ internal class OperationNormalizerTest {
         val operation = modified.expectShape(operationId, OperationShape::class.java)
         operation.input.isPresent shouldBe true
         operation.input.get().name shouldBe "EmptyInput"
+
+        val inputShape = modified.expectShape(operation.input.get(), StructureShape::class.java)
+        val inputTrait = inputShape.expectTrait(SyntheticInputTrait::class.java)
+        // When there isn't an input, we shouldn't attach a body
+        inputTrait.body shouldBe null
     }
 
     @Test
@@ -56,6 +61,7 @@ internal class OperationNormalizerTest {
         testSymbolProvider(modified).toSymbol(inputShape).name shouldBe "MyOpInput"
         inputShape.memberNames shouldBe listOf("v")
     }
+
     @Test
     fun `create bodies for operations`() {
         val model = """
@@ -70,7 +76,7 @@ internal class OperationNormalizerTest {
 
         val sut = OperationNormalizer()
         val modified = sut.transformModel(model) { input ->
-            input.toBuilder().members(input.members().filter { it.memberName != "drop" }).build()
+            input?.toBuilder()?.members(input.members().filter { it.memberName != "drop" })?.build()
         }
         val operation = modified.lookup<OperationShape>("smithy.test#MyOp")
         operation.input.isPresent shouldBe true

@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerat
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpTraitBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.util.dq
 
@@ -28,6 +29,11 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
         // TODO: AWSRestJson determines the body from HTTP traits
         return OperationNormalizer().transformModel(model, OperationNormalizer.noBody)
     }
+
+    override fun support(): ProtocolSupport {
+        // TODO: Support body for RestJson
+        return ProtocolSupport(requestBodySerialization = false)
+    }
 }
 
 class AwsRestJsonGenerator(
@@ -36,6 +42,12 @@ class AwsRestJsonGenerator(
     // restJson1 requires all operations to use the HTTP trait
 
     private val model = protocolConfig.model
+    override fun toBodyImpl(implBlockWriter: RustWriter, inputShape: StructureShape, inputBody: StructureShape?) {
+        bodyBuilderFun(implBlockWriter) {
+            write("todo!()")
+        }
+    }
+
     private val symbolProvider = protocolConfig.symbolProvider
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val httpIndex = HttpBindingIndex.of(model)

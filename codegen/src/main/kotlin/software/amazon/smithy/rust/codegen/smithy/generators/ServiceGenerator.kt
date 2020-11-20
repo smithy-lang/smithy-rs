@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 class ServiceGenerator(
     private val writers: CodegenWriterDelegator<RustWriter>,
     private val protocolGenerator: HttpProtocolGenerator,
+    private val protocolSupport: ProtocolSupport,
     private val config: ProtocolConfig
 ) {
     private val index = TopDownIndex.of(config.model)
@@ -23,13 +24,13 @@ class ServiceGenerator(
         operations.map { operation ->
             writers.useShapeWriter(operation) { writer ->
                 protocolGenerator.renderOperation(writer, operation)
-                HttpProtocolTestGenerator(config, operation, writer).render()
+                HttpProtocolTestGenerator(config, protocolSupport, operation, writer).render()
             }
         }
         renderBodies()
     }
 
-    fun renderBodies() {
+    private fun renderBodies() {
         val operations = index.getContainedOperations(config.serviceShape)
         val bodies = operations.map { config.model.expectShape(it.input.get()) }.map {
             it.expectTrait(SyntheticInputTrait::class.java)
