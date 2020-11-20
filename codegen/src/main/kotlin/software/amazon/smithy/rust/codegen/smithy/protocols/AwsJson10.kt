@@ -6,12 +6,12 @@
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
@@ -20,6 +20,8 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.symbol.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.symbol.Serializers
 import software.amazon.smithy.rust.codegen.smithy.symbol.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.symbol.locatedIn
@@ -46,12 +48,22 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
 
     override fun transformModel(model: Model): Model {
         // For AwsJson10, the body matches 1:1 with the input
-        return OperationNormalizer().transformModel(model) { inputShape -> inputShape }
+        return OperationNormalizer().transformModel(model) { inputShape ->
+            if (inputShape != null && inputShape.members().isEmpty()) {
+                null
+            } else inputShape
+        }
     }
 
-    override fun symbolProvider(model: Model, base: SymbolProvider): SymbolProvider {
-        return SyntheticBodySymbolProvider(model, base)
+    override fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider {
+        return JsonSerializerSymbolProvider(
+            model,
+            SyntheticBodySymbolProvider(model, base),
+            TimestampFormatTrait.Format.EPOCH_SECONDS
+        )
     }
+
+    override fun support(): ProtocolSupport = ProtocolSupport(requestBodySerialization = true)
 }
 
 /**
@@ -59,7 +71,7 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
  * 1. Body shapes are moved to `serializer.rs`
  * 2. Body shapes take a reference to all of their members.
  */
-class SyntheticBodySymbolProvider(private val model: Model, private val base: SymbolProvider) :
+class SyntheticBodySymbolProvider(private val model: Model, private val base: RustSymbolProvider) :
     WrappingSymbolProvider(base) {
     override fun toSymbol(shape: Shape): Symbol {
         val initialSymbol = base.toSymbol(shape)
@@ -105,6 +117,27 @@ class BasicAwsJsonGenerator(
                    .header("X-Amz-Target", "${protocolConfig.serviceShape.id.name}.${operationShape.id.name}")
                """.trimMargin()
             )
+        }
+    }
+
+    override fun toBodyImpl(implBlockWriter: RustWriter, inputShape: StructureShape, inputBody: StructureShape?) {
+        if (inputBody == null) {
+            bodyBuilderFun(implBlockWriter) {
+                write("vec![]")
+            }
+            return
+        }
+        val bodySymbol = protocolConfig.symbolProvider.toSymbol(inputBody)
+        implBlockWriter.rustBlock("fn body(&self) -> \$T", bodySymbol) {
+            rustBlock("\$T", bodySymbol) {
+                for (member in inputBody.members()) {
+                    val name = protocolConfig.symbolProvider.toMemberName(member)
+                    write("$name: &self.$name,")
+                }
+            }
+        }
+        bodyBuilderFun(implBlockWriter) {
+            write("\$T(&self.body()).expect(\"serialization should succeed\")", RuntimeType.SerdeJson("to_vec"))
         }
     }
 }

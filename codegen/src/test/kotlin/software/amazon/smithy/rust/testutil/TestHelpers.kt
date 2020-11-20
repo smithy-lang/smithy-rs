@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.testutil
 
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCodegenPlugin
@@ -16,7 +15,7 @@ import java.io.File
 
 val TestRuntimeConfig = RuntimeConfig(relativePath = File("../rust-runtime/").absolutePath)
 val TestSymbolVisitorConfig = SymbolVisitorConfig(runtimeConfig = TestRuntimeConfig, handleOptionality = true, handleRustBoxing = true)
-fun testSymbolProvider(model: Model): SymbolProvider = RustCodegenPlugin.BaseSymbolProvider(model, TestSymbolVisitorConfig)
+fun testSymbolProvider(model: Model) = RustCodegenPlugin.BaseSymbolProvider(model, TestSymbolVisitorConfig)
 
 private const val SmithyVersion = "1.0"
 fun String.asSmithy(sourceLocation: String? = null): Model {

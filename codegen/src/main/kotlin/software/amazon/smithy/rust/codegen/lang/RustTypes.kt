@@ -84,6 +84,26 @@ fun RustType.render(): String = when (this) {
     is RustType.Opaque -> this.name
 }
 
+/**
+ * Returns true if [this] contains [t] anywhere within it's tree. For example,
+ * Option<Instant>.contains(Instant) would return true.
+ * Option<Instant>.contains(Blob) would return false.
+ */
+fun <T : RustType> RustType.contains(t: T): Boolean {
+    if (t == this) {
+        return true
+    }
+
+    return when (this) {
+        is RustType.Vec -> this.member.contains(t)
+        is RustType.HashSet -> this.member.contains(t)
+        is RustType.Reference -> this.value.contains(t)
+        is RustType.Option -> this.value.contains(t)
+        is RustType.Box -> this.value.contains(t)
+        else -> false
+    }
+}
+
 inline fun <reified T : Container> RustType.stripOuter(): RustType {
     return when (this) {
         is T -> this.value
@@ -94,16 +114,23 @@ inline fun <reified T : Container> RustType.stripOuter(): RustType {
 /**
  * Meta information about a Rust construction (field, struct, or enum)
  */
-data class Meta(val derives: Derives = Derives.Empty, val additionalAttributes: List<Attribute> = listOf(), val public: Boolean) {
+data class RustMetadata(
+    val derives: Derives = Derives.Empty,
+    val additionalAttributes: List<Attribute> = listOf(),
+    val public: Boolean
+) {
+    fun withDerive(newDerive: RuntimeType): RustMetadata =
+        this.copy(derives = derives.copy(derives = derives.derives + newDerive))
+
     fun attributes(): List<Attribute> = additionalAttributes + derives
-    fun renderAttributes(writer: RustWriter): Meta {
+    fun renderAttributes(writer: RustWriter): RustMetadata {
         attributes().forEach {
             it.render(writer)
         }
         return this
     }
 
-    fun renderVisibility(writer: RustWriter): Meta {
+    fun renderVisibility(writer: RustWriter): RustMetadata {
         if (public) {
             writer.writeInline("pub ")
         }

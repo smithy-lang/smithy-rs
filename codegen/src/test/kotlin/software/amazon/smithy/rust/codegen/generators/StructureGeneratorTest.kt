@@ -147,7 +147,7 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate builders with defaults`() {
-        val baseProvider: SymbolProvider = testSymbolProvider(model)
+        val baseProvider = testSymbolProvider(model)
         val customDefault = "this_is_custom"
         val provider =
             object : WrappingSymbolProvider(baseProvider) {

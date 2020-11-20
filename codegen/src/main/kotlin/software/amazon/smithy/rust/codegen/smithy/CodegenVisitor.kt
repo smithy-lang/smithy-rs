@@ -17,8 +17,10 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.rust.codegen.lang.Meta
+import software.amazon.smithy.rust.codegen.lang.CargoDependency
+import software.amazon.smithy.rust.codegen.lang.InlineDependency
 import software.amazon.smithy.rust.codegen.lang.RustDependency
+import software.amazon.smithy.rust.codegen.lang.RustMetadata
 import software.amazon.smithy.rust.codegen.lang.RustModule
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
@@ -37,12 +39,10 @@ import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
 
-private val Modules = listOf(
-    RustModule("error", Meta(public = true)),
-    RustModule("operation", Meta(public = true)),
-    RustModule("model", Meta(public = true)),
-    RustModule("serializer", Meta(public = false))
-)
+/**
+ * Allowlist of modules that will be exposed publicly in generated crates
+ */
+private val PublicModules = setOf("error", "operation", "model")
 
 class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
 
@@ -86,17 +86,27 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
         val service = settings.getService(model)
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
+        val loadDependencies = { writers.dependencies.map { dep -> RustDependency.fromSymbolDependency(dep) } }
+        val inlineDependencies = loadDependencies().filterIsInstance<InlineDependency>().distinctBy { it.key() }
+        inlineDependencies.forEach { dep ->
+            writers.useFileWriter("src/${dep.module}.rs", "crate::${dep.module}") {
+                dep.renderer(it)
+            }
+        }
+        val cargoDependencies = loadDependencies().filterIsInstance<CargoDependency>().distinct()
         writers.useFileWriter("Cargo.toml") {
             val cargoToml = CargoTomlGenerator(
                 settings,
                 it,
-                writers.dependencies.map { dep -> RustDependency.fromSymbolDependency(dep) }.distinct()
+                cargoDependencies
             )
             cargoToml.render()
         }
         writers.useFileWriter("src/lib.rs", "crate::lib") { writer ->
-            val includedModules = writers.includedModules().toSet()
-            val modules = Modules.filter { module -> includedModules.contains(module.name) }
+            val includedModules = writers.includedModules().toSet().filter { it != "lib" }
+            val modules = includedModules.map {
+                RustModule(it, RustMetadata(public = PublicModules.contains(it)))
+            }
             LibRsGenerator(modules).render(writer)
         }
         writers.flushWriters()
@@ -132,6 +142,6 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
     }
 
     override fun serviceShape(shape: ServiceShape) {
-        ServiceGenerator(writers, httpGenerator, protocolConfig).render()
+        ServiceGenerator(writers, httpGenerator, protocolGenerator.support(), protocolConfig).render()
     }
 }

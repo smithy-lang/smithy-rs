@@ -13,9 +13,8 @@ import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.symbol.meta
+import software.amazon.smithy.rust.codegen.smithy.symbol.expectRustMetadata
 import software.amazon.smithy.rust.codegen.util.doubleQuote
-import java.lang.IllegalStateException
 
 class EnumGenerator(
     symbolProvider: SymbolProvider,
@@ -26,7 +25,7 @@ class EnumGenerator(
     private val sortedMembers: List<EnumDefinition> = enumTrait.values.sortedBy { it.value }
     private val symbol = symbolProvider.toSymbol(shape)
     private val enumName = symbol.name
-    private val meta = symbol.meta()!!
+    private val meta = symbol.expectRustMetadata()
     companion object {
         const val Values = "values"
     }

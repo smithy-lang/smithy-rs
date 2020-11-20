@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.testutil
 
 import org.intellij.lang.annotations.Language
+import software.amazon.smithy.rust.codegen.lang.CargoDependency
 import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.util.CommandFailed
@@ -66,7 +67,7 @@ fun RustWriter.compileAndTest(
     expectFailure: Boolean = false
 ): String {
     // TODO: if there are no dependencies, we can be a bit quicker
-    val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }
+    val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<CargoDependency>()
     try {
         val output = this.toString()
             .compileAndTest(deps.toSet(), module = this.namespace.split("::")[1], main = main, strict = clippy)
@@ -84,7 +85,7 @@ fun RustWriter.compileAndTest(
 }
 
 fun String.compileAndTest(
-    deps: Set<RustDependency>,
+    deps: Set<CargoDependency>,
     module: String? = null,
     main: String = "",
     strict: Boolean = false

@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.symbol.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 
 /**
@@ -31,7 +32,8 @@ data class ProtocolConfig(
 interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
     fun buildProtocolGenerator(protocolConfig: ProtocolConfig): T
     fun transformModel(model: Model): Model
-    fun symbolProvider(model: Model, base: SymbolProvider): SymbolProvider = base
+    fun symbolProvider(model: Model, base: RustSymbolProvider): SymbolProvider = base
+    fun support(): ProtocolSupport
 }
 
 /**
@@ -62,31 +64,25 @@ abstract class HttpProtocolGenerator(
         }
     }
 
-    open fun toBodyImpl(implBlockWriter: RustWriter, inputShape: StructureShape, inputBody: StructureShape?) {
-        if (inputBody != null) {
-            val bodySymbol = symbolProvider.toSymbol(inputBody)
-            implBlockWriter.rustBlock("fn body(&self) -> \$T", bodySymbol) {
-                rustBlock("\$T", bodySymbol) {
-                    for (member in inputBody.members()) {
-                        val name = symbolProvider.toMemberName(member)
-                        write("$name: &self.$name,")
-                    }
-                }
-            }
-        }
-        implBlockWriter.rustBlock("pub fn build_body(&self) -> Vec<u8>") {
-            // TODO: use serde to serialize the body
-            if (inputBody != null) {
-                write("let _ = self.body();")
-            }
-            write("vec![]")
+    protected fun bodyBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
+        implBlockWriter.rustBlock(
+            "pub fn build_body(&self) -> Vec<u8>"
+        ) {
+            f(this)
         }
     }
 
     /**
+     * Add necessary methods to the impl block to generate the request body
+     *
+     * Your implementation MUST call [bodyBuilderFun] to create the public method.
+     */
+    abstract fun toBodyImpl(implBlockWriter: RustWriter, inputShape: StructureShape, inputBody: StructureShape?)
+
+    /**
      * Add necessary methods to the impl block for the input shape.
      *
-     * Your implementation MUST call `httpBuilderFun` to create the public method.
+     * Your implementation MUST call [httpBuilderFun] to create the public method.
      */
     abstract fun toHttpRequestImpl(implBlockWriter: RustWriter, operationShape: OperationShape, inputShape: StructureShape)
 }
