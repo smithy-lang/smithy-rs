@@ -2,6 +2,9 @@ on: [push]
 
 name: CI
 
+env:
+  rust_version: 1.47.0
+
 jobs:
   style:
     name: Kotlin style checks
@@ -44,7 +47,7 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - uses: actions-rs/toolchain@v1
       with:
-        toolchain: stable
+        toolchain: ${{ env.rust_version }}
     - name: Set up JDK
       uses: actions/setup-java@v1
       with:
@@ -75,7 +78,7 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - uses: actions-rs/toolchain@v1
       with:
-        toolchain: stable
+        toolchain: ${{ env.rust_version }}
     - name: Set up JDK
       uses: actions/setup-java@v1
       with:
@@ -106,6 +109,6 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - uses: actions-rs/toolchain@v1
       with:
-        toolchain: stable
+        toolchain: ${{ env.rust_version }}
     - name: execute runtime tests
       run: ./rust-runtime/test.sh
