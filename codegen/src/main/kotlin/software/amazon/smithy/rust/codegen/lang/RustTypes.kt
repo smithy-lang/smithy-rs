@@ -48,7 +48,7 @@ sealed class RustType {
 
     data class HashSet(val member: RustType) : RustType() {
         // TODO: assert that underneath, the member is a String
-        override val name: kotlin.String = "HashSet"
+        override val name: kotlin.String = SetType
     }
 
     data class Reference(val lifetime: kotlin.String?, override val value: RustType) : RustType(), Container {
@@ -64,6 +64,10 @@ sealed class RustType {
     }
 
     data class Opaque(override val name: kotlin.String) : RustType()
+
+    companion object {
+        val SetType = "BTreeSet"
+    }
 }
 
 fun RustType.render(): String = when (this) {

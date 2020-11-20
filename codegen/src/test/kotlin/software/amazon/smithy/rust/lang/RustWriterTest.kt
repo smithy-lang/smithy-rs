@@ -13,6 +13,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.lang.CargoDependency
+import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -65,11 +66,11 @@ class RustWriterTest {
         }
         val output = sut.toString()
         output.shouldCompile()
-        output shouldContain "HashSet"
+        output shouldContain RustType.SetType
         output shouldContain "struct Test"
         output.compileAndRun(
             """
-        let test = Test { member: HashSet::default(), otherMember: "hello".to_string() };
+        let test = Test { member: ${RustType.SetType}::default(), otherMember: "hello".to_string() };
         assert_eq!(test.otherMember, "hello");
         assert_eq!(test.member.is_empty(), true);
          """

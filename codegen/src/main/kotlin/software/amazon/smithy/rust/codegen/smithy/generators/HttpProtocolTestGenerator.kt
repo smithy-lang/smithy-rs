@@ -31,9 +31,7 @@ class HttpProtocolTestGenerator(
         "AwsJson11MapsSerializeNullValues",
         "AwsJson11ListsSerializeNull",
         "RestJsonSerializesNullMapValues",
-        // These tests are fully disabled because they're flaky (they depend on the hash set iteration order)
-        // https://github.com/awslabs/smithy-rs/issues/37
-        "RestJsonInputAndOutputWithStringHeaders",
+        // This test is flake because of set ordering serialization https://github.com/awslabs/smithy-rs/issues/37
         "AwsJson11Enums"
     )
 

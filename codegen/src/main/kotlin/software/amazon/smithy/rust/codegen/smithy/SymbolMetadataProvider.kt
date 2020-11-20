@@ -74,7 +74,10 @@ class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvi
                     // enums must be hashable because string sets are hashable
                     RuntimeType.Std("hash::Hash") +
                     // enums can be eq because they can only contain strings
-                    RuntimeType.Std("cmp::Eq")
+                    RuntimeType.Std("cmp::Eq") +
+                    // enums can be Ord because they can only contain strings
+                    RuntimeType.Std("cmp::PartialOrd") +
+                    RuntimeType.Std("cmp::Ord")
             ),
             public = true
         )
