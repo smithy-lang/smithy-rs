@@ -8,6 +8,11 @@ package software.amazon.smithy.rust.codegen.smithy
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.rust.codegen.smithy.symbol.DefaultConfig
+import software.amazon.smithy.rust.codegen.smithy.symbol.IdempotencyTokenSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.symbol.SymbolMetadataProvider
+import software.amazon.smithy.rust.codegen.smithy.symbol.SymbolVisitor
+import software.amazon.smithy.rust.codegen.smithy.symbol.SymbolVisitorConfig
 
 class RustCodegenPlugin : SmithyBuildPlugin {
     override fun getName(): String = "rust-codegen"
@@ -17,6 +22,11 @@ class RustCodegenPlugin : SmithyBuildPlugin {
     }
 
     companion object {
-        fun BaseSymbolProvider(model: Model, symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig) = SymbolVisitor(model, config = symbolVisitorConfig).let { SymbolMetadataProvider(it) }
+        fun BaseSymbolProvider(model: Model, symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig) =
+            SymbolVisitor(model, config = symbolVisitorConfig).let {
+                SymbolMetadataProvider(it)
+            }.let {
+                IdempotencyTokenSymbolProvider(it, symbolVisitorConfig.runtimeConfig)
+            }
     }
 }

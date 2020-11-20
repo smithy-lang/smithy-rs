@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy
+package software.amazon.smithy.rust.codegen.smithy.symbol
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
@@ -38,7 +38,12 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
+import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.Writable
+import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.toSnakeCase
+import software.amazon.smithy.rust.codegen.smithy.traits.RustBoxTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.utils.StringUtils
 
@@ -144,7 +149,7 @@ class SymbolVisitor(
     }
 
     private fun simpleShape(shape: SimpleShape): Symbol {
-        return symbolBuilder(shape, SimpleShapes.getValue(shape::class)).canUseDefault().build()
+        return symbolBuilder(shape, SimpleShapes.getValue(shape::class)).setDefault(Default.RustDefault).build()
     }
 
     override fun booleanShape(shape: BooleanShape): Symbol = simpleShape(shape)
@@ -154,12 +159,11 @@ class SymbolVisitor(
     override fun longShape(shape: LongShape): Symbol = simpleShape(shape)
     override fun floatShape(shape: FloatShape): Symbol = simpleShape(shape)
     override fun doubleShape(shape: DoubleShape): Symbol = simpleShape(shape)
-    override fun stringShape(shape: StringShape): Symbol {
-        return if (shape.hasTrait(EnumTrait::class.java)) {
-            symbolBuilder(shape, RustType.Opaque(shape.id.name)).locatedIn(Shapes).build()
-        } else {
-            simpleShape(shape)
-        }
+    override fun stringShape(shape: StringShape): Symbol = when {
+        shape.hasTrait(EnumTrait::class.java) -> symbolBuilder(shape, RustType.Opaque(shape.id.name)).locatedIn(
+            Shapes
+        ).build()
+        else -> simpleShape(shape)
     }
 
     override fun listShape(shape: ListShape): Symbol {
@@ -265,20 +269,41 @@ class SymbolVisitor(
 // TODO(chore): Move this to a useful place
 private const val RUST_TYPE_KEY = "rusttype"
 private const val SHAPE_KEY = "shape"
-private const val CAN_USE_DEFAULT = "canusedefault"
+private const val SYMBOL_DEFAULT = "symboldefault"
 
 fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder {
     return this.putProperty(RUST_TYPE_KEY, rustType)
 }
 
-fun Symbol.Builder.canUseDefault(value: Boolean = true): Symbol.Builder {
-    return this.putProperty(CAN_USE_DEFAULT, value)
+fun Symbol.Builder.setDefault(default: Default): Symbol.Builder {
+    return this.putProperty(SYMBOL_DEFAULT, default)
 }
 
 /**
  * True when it is valid to use the default/0 value for [this] symbol during construction.
  */
-fun Symbol.canUseDefault(): Boolean = this.getProperty(CAN_USE_DEFAULT, Boolean::class.javaObjectType).orElse(false)
+fun Symbol.defaultValue(): Default = this.getProperty(SYMBOL_DEFAULT, Default::class.java).orElse(Default.NoDefault)
+
+sealed class Default {
+    /**
+     * This symbol has no default value. If the symbol is not optional, this will be an error during builder construction
+     */
+    object NoDefault : Default()
+
+    /**
+     * This symbol should use the Rust `std::default::Default` when unset
+     */
+    object RustDefault : Default()
+
+    /**
+     * This symbol has a custom default implementation. This will be written into the block of `or_default(|| <block>)`
+     */
+    class Custom(val default: Writable) : Default() {
+        fun render(writer: RustWriter) {
+            default(writer)
+        }
+    }
+}
 
 /**
  * True when [this] is will be represented by Option<T> in Rust

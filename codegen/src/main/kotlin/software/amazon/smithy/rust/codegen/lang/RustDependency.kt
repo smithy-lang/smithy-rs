@@ -61,6 +61,7 @@ data class RustDependency(
     }
 
     companion object {
+        val Random: RustDependency = RustDependency("rand", CratesIo("0.7.3"))
         val Http: RustDependency = RustDependency("http", CratesIo("0.2"))
         fun SmithyTypes(runtimeConfig: RuntimeConfig) =
             RustDependency("${runtimeConfig.cratePrefix}-types", Local(runtimeConfig.relativePath))
@@ -71,6 +72,11 @@ data class RustDependency(
 
         fun ProtocolTestHelpers(runtimeConfig: RuntimeConfig) = RustDependency(
             "protocol-test-helpers", Local(runtimeConfig.relativePath), scope = Dev
+        )
+
+        // TODO: replace this with `InlineDependency`
+        fun Inlineable(runtimeConfig: RuntimeConfig) = RustDependency(
+            "inlineable", Local(runtimeConfig.relativePath)
         )
 
         private val PropertyKey = "rustdep"

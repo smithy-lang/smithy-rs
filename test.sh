@@ -9,3 +9,5 @@ export SMITHY_TEST_WORKSPACE=~/.smithy-test-workspace
 ./gradlew test
 ./gradlew ktlintFormat
 ./gradlew ktlint
+
+rust-runtime/test.sh

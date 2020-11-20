@@ -9,8 +9,8 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCodegenPlugin
-import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.smithy.letIf
+import software.amazon.smithy.rust.codegen.smithy.symbol.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.smithy.symbol.letIf
 import software.amazon.smithy.rust.codegen.util.dq
 import java.io.File
 

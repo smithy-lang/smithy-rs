@@ -8,7 +8,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
+import software.amazon.smithy.rust.codegen.smithy.traits.RustBoxTrait
 
 object RecursiveShapeBoxer {
     /**

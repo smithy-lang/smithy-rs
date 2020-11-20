@@ -26,12 +26,12 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.rust.codegen.lang.render
-import software.amazon.smithy.rust.codegen.smithy.Errors
-import software.amazon.smithy.rust.codegen.smithy.Operations
-import software.amazon.smithy.rust.codegen.smithy.Shapes
-import software.amazon.smithy.rust.codegen.smithy.isOptional
-import software.amazon.smithy.rust.codegen.smithy.referenceClosure
-import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.symbol.Errors
+import software.amazon.smithy.rust.codegen.smithy.symbol.Operations
+import software.amazon.smithy.rust.codegen.smithy.symbol.Shapes
+import software.amazon.smithy.rust.codegen.smithy.symbol.isOptional
+import software.amazon.smithy.rust.codegen.smithy.symbol.referenceClosure
+import software.amazon.smithy.rust.codegen.smithy.symbol.rustType
 import software.amazon.smithy.rust.testutil.asSmithy
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
@@ -258,7 +258,7 @@ class SymbolBuilderTest {
             }
         """.asSmithy()
         val symbol = testSymbolProvider(model).toSymbol(model.expectShape(ShapeId.from("smithy.example#PutObject")))
-        symbol.definitionFile shouldBe("src/${Operations.filename}")
+        symbol.definitionFile shouldBe ("src/${Operations.filename}")
         symbol.name shouldBe "PutObject"
     }
 }

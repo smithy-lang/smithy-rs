@@ -11,7 +11,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.meta
+import software.amazon.smithy.rust.codegen.smithy.symbol.meta
 
 class UnionGenerator(
     val model: Model,

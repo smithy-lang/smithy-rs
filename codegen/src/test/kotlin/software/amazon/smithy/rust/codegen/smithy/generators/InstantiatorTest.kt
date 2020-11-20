@@ -59,6 +59,12 @@ class InstantiatorTest {
             member: WithBox,
             value: Integer
         }
+
+        structure HasIdempotentMember {
+            @idempotencyToken
+            tok: String,
+            otherMember: Integer
+        }
         """.asSmithy().let { RecursiveShapeBoxer.transform(it) }
 
     private val symbolProvider = testSymbolProvider(model)
@@ -229,9 +235,37 @@ class InstantiatorTest {
         writer.write("#[test]")
         writer.rustBlock("fn test_blob()") {
             withBlock("let blob = ", ";") {
-                sut.render(StringNode.parse("foo".dq()), BlobShape.builder().id(ShapeId.from("com.example#Blob")).build(), this)
+                sut.render(
+                    StringNode.parse("foo".dq()),
+                    BlobShape.builder().id(ShapeId.from("com.example#Blob")).build(),
+                    this
+                )
             }
             write("assert_eq!(std::str::from_utf8(blob.as_ref()).unwrap(), \"foo\");")
+        }
+        writer.compileAndTest()
+    }
+
+    @Test
+    fun `set idempotency tokens when unset`() {
+        val structure = model.lookup<StructureShape>("com.test#HasIdempotentMember")
+        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val data = Node.objectNode()
+        val writer = RustWriter.forModule("model")
+        val structureGenerator = StructureGenerator(model, symbolProvider, writer, structure)
+        structureGenerator.render()
+        writer.write("#[test]")
+        writer.rustBlock("fn inst()") {
+            withBlock("let result = ", ";") {
+                sut.render(data, structure, this)
+            }
+            rust(
+                """
+                assert_eq!(result, HasIdempotentMember {
+                    tok: Some("00000000-0000-4000-8000-000000000000".to_string()),
+                    other_member: None
+                });"""
+            )
         }
         writer.compileAndTest()
     }

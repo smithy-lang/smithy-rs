@@ -10,6 +10,7 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustType
+import software.amazon.smithy.rust.codegen.smithy.symbol.rustType
 import java.io.File
 import java.util.Optional
 
@@ -70,6 +71,11 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
 
         fun Base64Decode(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType("decode", RustDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::base64")
+
+        fun UuidV4(runtimeConfig: RuntimeConfig): RuntimeType =
+            RuntimeType("v4", RustDependency.Inlineable(runtimeConfig), "inlineable::uuid")
+
+        val Random = RuntimeType("random", RustDependency.Random, RustDependency.Random.name)
 
         fun TimestampFormat(runtimeConfig: RuntimeConfig, format: TimestampFormatTrait.Format): RuntimeType {
             val timestampFormat = when (format) {

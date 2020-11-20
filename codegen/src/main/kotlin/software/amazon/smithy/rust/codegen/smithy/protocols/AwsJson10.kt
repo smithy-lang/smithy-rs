@@ -17,13 +17,13 @@ import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.stripOuter
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.Serializers
-import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.smithy.locatedIn
-import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.symbol.Serializers
+import software.amazon.smithy.rust.codegen.smithy.symbol.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.symbol.locatedIn
+import software.amazon.smithy.rust.codegen.smithy.symbol.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 

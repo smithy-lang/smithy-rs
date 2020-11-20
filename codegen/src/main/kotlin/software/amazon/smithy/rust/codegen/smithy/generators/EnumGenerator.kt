@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.meta
+import software.amazon.smithy.rust.codegen.smithy.symbol.meta
 import software.amazon.smithy.rust.codegen.util.doubleQuote
 import java.lang.IllegalStateException
 

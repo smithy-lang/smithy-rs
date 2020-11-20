@@ -5,7 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.util
 
-import software.amazon.smithy.rust.codegen.smithy.letIf
+import software.amazon.smithy.rust.codegen.smithy.symbol.letIf
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 

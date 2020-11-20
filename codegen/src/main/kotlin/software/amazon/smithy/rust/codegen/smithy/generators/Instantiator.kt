@@ -21,14 +21,15 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.isOptional
-import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.symbol.isOptional
+import software.amazon.smithy.rust.codegen.smithy.symbol.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 
 /**
@@ -213,6 +214,13 @@ class Instantiator(
                 }
             }
         }
+        val idempotencyTokenMembers = shape.members().filter { it.hasTrait(IdempotencyTokenTrait::class.java) }
+        val defaultIdempotencyToken = "00000000-0000-4000-8000-000000000000"
+        idempotencyTokenMembers.forEach { memberShape ->
+            val func = symbolProvider.toMemberName(memberShape)
+            writer.write(".$func(${defaultIdempotencyToken.dq()})")
+        }
+
         writer.write(".build()")
         if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
             writer.write(".unwrap()")

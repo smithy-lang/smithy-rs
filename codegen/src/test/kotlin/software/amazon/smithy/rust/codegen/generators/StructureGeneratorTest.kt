@@ -14,8 +14,11 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.smithy.symbol.Default
+import software.amazon.smithy.rust.codegen.smithy.symbol.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.symbol.setDefault
+import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.testutil.asSmithy
 import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.testSymbolProvider
@@ -112,7 +115,7 @@ class StructureGeneratorTest {
         val provider =
             object : SymbolProvider {
                 override fun toSymbol(shape: Shape?): Symbol {
-                    return baseProvider.toSymbol(shape).toBuilder().canUseDefault(false).build()
+                    return baseProvider.toSymbol(shape).toBuilder().setDefault(Default.NoDefault).build()
                 }
 
                 override fun toMemberName(shape: MemberShape?): String {
@@ -140,5 +143,41 @@ class StructureGeneratorTest {
         val generator = StructureGenerator(model, provider, writer, error)
         generator.render()
         writer.compileAndTest()
+    }
+
+    @Test
+    fun `generate builders with defaults`() {
+        val baseProvider: SymbolProvider = testSymbolProvider(model)
+        val customDefault = "this_is_custom"
+        val provider =
+            object : WrappingSymbolProvider(baseProvider) {
+                override fun toSymbol(shape: Shape): Symbol {
+                    return if (shape is MemberShape && shape.memberName == "foo") {
+                        baseProvider.toSymbol(shape).toBuilder().setDefault(
+                            Default.Custom {
+                                write("${customDefault.dq()}.to_string()")
+                            }
+                        ).build()
+                    } else {
+                        baseProvider.toSymbol(shape)
+                    }
+                }
+            }
+        val writer = RustWriter.forModule("model")
+        val innerGenerator = StructureGenerator(model, provider, writer, inner)
+        val generator = StructureGenerator(model, provider, writer, struct)
+        generator.render()
+        innerGenerator.render()
+        writer.compileAndTest(
+            """
+            let my_struct = MyStruct::builder().build();
+            assert_eq!(my_struct.foo.unwrap(), ${customDefault.dq()});
+            assert_eq!(my_struct.bar, 0);
+
+            // If the value is set, don't invoke the default
+            let struct_with_value_set = MyStruct::builder().foo("some_value").build();
+            assert_eq!(struct_with_value_set.foo.unwrap(), "some_value");
+        """
+        )
     }
 }

@@ -15,8 +15,8 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.isOptional
-import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.symbol.isOptional
+import software.amazon.smithy.rust.codegen.smithy.symbol.rustType
 import software.amazon.smithy.utils.CodeWriter
 import java.util.function.BiFunction
 
@@ -53,6 +53,8 @@ fun <T : CodeWriter> T.rustBlock(header: String, vararg args: Any, block: T.() -
     closeBlock("}")
     return this
 }
+
+typealias Writable = RustWriter.() -> Unit
 
 class RustWriter private constructor(private val filename: String, val namespace: String, private val commentCharacter: String = "//") :
     CodegenWriter<RustWriter, UseDeclarations>(null, UseDeclarations(namespace)) {

@@ -3,7 +3,7 @@ package software.amazon.smithy.rust.codegen.smithy.transformers
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
+import software.amazon.smithy.rust.codegen.smithy.traits.RustBoxTrait
 import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.testutil.asSmithy
 import kotlin.streams.toList

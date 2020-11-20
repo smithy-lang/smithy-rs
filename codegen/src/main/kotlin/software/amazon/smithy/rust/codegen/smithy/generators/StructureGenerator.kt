@@ -10,17 +10,19 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.lang.Custom
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.render
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.canUseDefault
-import software.amazon.smithy.rust.codegen.smithy.isOptional
-import software.amazon.smithy.rust.codegen.smithy.makeOptional
-import software.amazon.smithy.rust.codegen.smithy.meta
-import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.symbol.Default
+import software.amazon.smithy.rust.codegen.smithy.symbol.defaultValue
+import software.amazon.smithy.rust.codegen.smithy.symbol.isOptional
+import software.amazon.smithy.rust.codegen.smithy.symbol.makeOptional
+import software.amazon.smithy.rust.codegen.smithy.symbol.meta
+import software.amazon.smithy.rust.codegen.smithy.symbol.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.utils.CaseUtils
 
@@ -59,7 +61,7 @@ class StructureGenerator(
             .values.map { symbolProvider.toSymbol(it) }.any {
                 // If any members are not optional && we can't use a default, we need to
                 // generate a fallible builder
-                !it.isOptional() && !it.canUseDefault()
+                !it.isOptional() && it.defaultValue() == Default.NoDefault
             }
     }
 
@@ -164,12 +166,17 @@ class StructureGenerator(
                             val memberName = symbolProvider.toMemberName(member)
                             val memberSymbol = symbolProvider.toSymbol(member)
                             val errorWhenMissing = "$memberName is required when building ${structureSymbol.name}"
-                            val modifier = when {
-                                !memberSymbol.isOptional() && memberSymbol.canUseDefault() -> ".unwrap_or_default()"
-                                !memberSymbol.isOptional() -> ".ok_or(${errorWhenMissing.dq()})?"
-                                else -> ""
+                            val default = memberSymbol.defaultValue()
+                            withBlock("$memberName: self.$memberName", ",") {
+                                // Write the modifier
+                                when {
+                                    !memberSymbol.isOptional() && default == Default.RustDefault -> write(".unwrap_or_default()")
+                                    !memberSymbol.isOptional() -> write(".ok_or(${errorWhenMissing.dq()})?")
+                                    memberSymbol.isOptional() && default is Default.Custom -> {
+                                        withBlock(".or_else(||Some(", "))") { default.render(this) }
+                                    }
+                                }
                             }
-                            write("$memberName: self.$memberName$modifier,")
                         }
                     }
                 }
