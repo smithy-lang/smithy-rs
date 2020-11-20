@@ -110,23 +110,23 @@ inline fun <reified T : Container> RustType.stripOuter(): RustType {
 /**
  * Meta information about a Rust construction (field, struct, or enum)
  */
-data class Meta(
+data class RustMetadata(
     val derives: Derives = Derives.Empty,
     val additionalAttributes: List<Attribute> = listOf(),
     val public: Boolean
 ) {
-    fun withDerive(newDerive: RuntimeType): Meta =
+    fun withDerive(newDerive: RuntimeType): RustMetadata =
         this.copy(derives = derives.copy(derives = derives.derives + newDerive))
 
     fun attributes(): List<Attribute> = additionalAttributes + derives
-    fun renderAttributes(writer: RustWriter): Meta {
+    fun renderAttributes(writer: RustWriter): RustMetadata {
         attributes().forEach {
             it.render(writer)
         }
         return this
     }
 
-    fun renderVisibility(writer: RustWriter): Meta {
+    fun renderVisibility(writer: RustWriter): RustMetadata {
         if (public) {
             writer.writeInline("pub ")
         }

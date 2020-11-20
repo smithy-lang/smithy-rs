@@ -19,8 +19,8 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.lang.CargoDependency
 import software.amazon.smithy.rust.codegen.lang.InlineDependency
-import software.amazon.smithy.rust.codegen.lang.Meta
 import software.amazon.smithy.rust.codegen.lang.RustDependency
+import software.amazon.smithy.rust.codegen.lang.RustMetadata
 import software.amazon.smithy.rust.codegen.lang.RustModule
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
@@ -39,7 +39,7 @@ import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
 
 /**
- * Whitelist of modules that will be exposed publicly in generated crates
+ * Allowlist of modules that will be exposed publicly in generated crates
  */
 private val PublicModules = setOf("error", "operation", "model")
 
@@ -104,7 +104,7 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
         writers.useFileWriter("src/lib.rs", "crate::lib") { writer ->
             val includedModules = writers.includedModules().toSet().filter { it != "lib" }
             val modules = includedModules.map {
-                RustModule(it, Meta(public = PublicModules.contains(it)))
+                RustModule(it, RustMetadata(public = PublicModules.contains(it)))
             }
             LibRsGenerator(modules).render(writer)
         }

@@ -15,19 +15,18 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.lang.Custom
-import software.amazon.smithy.rust.codegen.lang.Meta
+import software.amazon.smithy.rust.codegen.lang.RustMetadata
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.contains
 import software.amazon.smithy.rust.codegen.lang.render
-import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.stripOuter
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolMetadataProvider
-import software.amazon.smithy.rust.codegen.smithy.expectMeta
+import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 
@@ -47,8 +46,8 @@ class JsonSerializerSymbolProvider(
 
     val httpIndex = HttpBindingIndex.of(model)
     val serializerBuilder = SerializerBuilder(base.config().runtimeConfig)
-    override fun memberMeta(memberShape: MemberShape): Meta {
-        val currentMeta = base.toSymbol(memberShape).expectMeta()
+    override fun memberMeta(memberShape: MemberShape): RustMetadata {
+        val currentMeta = base.toSymbol(memberShape).expectRustMetadata()
         val skipIfNone =
             if (base.toSymbol(memberShape).rustType().stripOuter<RustType.Reference>() is RustType.Option) {
                 listOf(Custom("serde(skip_serializing_if = \"Option::is_none\")"))
@@ -63,18 +62,18 @@ class JsonSerializerSymbolProvider(
         return currentMeta.copy(additionalAttributes = currentMeta.additionalAttributes + renameAttribute + serdeAttribute + skipIfNone)
     }
 
-    override fun structureMeta(structureShape: StructureShape): Meta {
-        val currentMeta = base.toSymbol(structureShape).expectMeta()
+    override fun structureMeta(structureShape: StructureShape): RustMetadata {
+        val currentMeta = base.toSymbol(structureShape).expectRustMetadata()
         return currentMeta.withDerive(RuntimeType.Serialize)
     }
 
-    override fun unionMeta(unionShape: UnionShape): Meta {
-        val currentMeta = base.toSymbol(unionShape).expectMeta()
+    override fun unionMeta(unionShape: UnionShape): RustMetadata {
+        val currentMeta = base.toSymbol(unionShape).expectRustMetadata()
         return currentMeta.withDerive(RuntimeType.Serialize)
     }
 
-    override fun enumMeta(stringShape: StringShape): Meta {
-        val currentMeta = base.toSymbol(stringShape).expectMeta()
+    override fun enumMeta(stringShape: StringShape): RustMetadata {
+        val currentMeta = base.toSymbol(stringShape).expectRustMetadata()
         return currentMeta.withDerive(RuntimeType.Serialize)
     }
 

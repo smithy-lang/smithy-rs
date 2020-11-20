@@ -9,7 +9,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.lang.Derives
-import software.amazon.smithy.rust.codegen.lang.Meta
+import software.amazon.smithy.rust.codegen.lang.RustMetadata
 
 /**
  * Default delegator to enable easily decorating another symbol provider.
@@ -48,27 +48,27 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
         return baseSymbol.toBuilder().meta(meta).build()
     }
 
-    abstract fun memberMeta(memberShape: MemberShape): Meta
-    abstract fun structureMeta(structureShape: StructureShape): Meta
-    abstract fun unionMeta(unionShape: UnionShape): Meta
-    abstract fun enumMeta(stringShape: StringShape): Meta
+    abstract fun memberMeta(memberShape: MemberShape): RustMetadata
+    abstract fun structureMeta(structureShape: StructureShape): RustMetadata
+    abstract fun unionMeta(unionShape: UnionShape): RustMetadata
+    abstract fun enumMeta(stringShape: StringShape): RustMetadata
 }
 
 class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvider(base) {
-    override fun memberMeta(memberShape: MemberShape): Meta {
-        return Meta(public = true)
+    override fun memberMeta(memberShape: MemberShape): RustMetadata {
+        return RustMetadata(public = true)
     }
 
-    override fun structureMeta(structureShape: StructureShape): Meta {
-        return Meta(Derives(defaultDerives.toSet()), public = true)
+    override fun structureMeta(structureShape: StructureShape): RustMetadata {
+        return RustMetadata(Derives(defaultDerives.toSet()), public = true)
     }
 
-    override fun unionMeta(unionShape: UnionShape): Meta {
-        return Meta(Derives(defaultDerives.toSet()), public = true)
+    override fun unionMeta(unionShape: UnionShape): RustMetadata {
+        return RustMetadata(Derives(defaultDerives.toSet()), public = true)
     }
 
-    override fun enumMeta(stringShape: StringShape): Meta {
-        return Meta(
+    override fun enumMeta(stringShape: StringShape): RustMetadata {
+        return RustMetadata(
             Derives(
                 defaultDerives.toSet() +
                     // enums must be hashable because string sets are hashable
@@ -87,10 +87,10 @@ class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvi
 }
 
 private const val MetaKey = "meta"
-fun Symbol.Builder.meta(meta: Meta?): Symbol.Builder {
-    return this.putProperty(MetaKey, meta)
+fun Symbol.Builder.meta(rustMetadata: RustMetadata?): Symbol.Builder {
+    return this.putProperty(MetaKey, rustMetadata)
 }
-fun Symbol.expectMeta(): Meta = this.getProperty(MetaKey, Meta::class.java).orElseThrow {
+fun Symbol.expectRustMetadata(): RustMetadata = this.getProperty(MetaKey, RustMetadata::class.java).orElseThrow {
     CodegenException(
         "Expected $this to have metadata attached but it did not. "
     )

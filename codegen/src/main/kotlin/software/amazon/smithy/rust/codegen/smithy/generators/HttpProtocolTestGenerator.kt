@@ -4,7 +4,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.rust.codegen.lang.Custom
-import software.amazon.smithy.rust.codegen.lang.Meta
+import software.amazon.smithy.rust.codegen.lang.RustMetadata
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
@@ -68,7 +68,7 @@ class HttpProtocolTestGenerator(
         with(protocolConfig) {
             val operationName = symbolProvider.toSymbol(operationShape).name
             val testModuleName = "${operationName.toSnakeCase()}_request_test"
-            val moduleMeta = Meta(
+            val moduleMeta = RustMetadata(
                 public = false,
                 additionalAttributes = listOf(
                     Custom("cfg(test)"),
