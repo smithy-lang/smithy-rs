@@ -1,7 +1,7 @@
 package software.amazon.smithy.rust.codegen.smithy
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
@@ -9,13 +9,16 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.lang.Derives
-import software.amazon.smithy.rust.codegen.lang.Meta
-import software.amazon.smithy.rust.codegen.util.orNull
+import software.amazon.smithy.rust.codegen.lang.RustMetadata
 
 /**
  * Default delegator to enable easily decorating another symbol provider.
  */
-open class WrappingSymbolProvider(private val base: SymbolProvider) : SymbolProvider {
+open class WrappingSymbolProvider(private val base: RustSymbolProvider) : RustSymbolProvider {
+    override fun config(): SymbolVisitorConfig {
+        return base.config()
+    }
+
     override fun toSymbol(shape: Shape): Symbol {
         return base.toSymbol(shape)
     }
@@ -30,7 +33,7 @@ open class WrappingSymbolProvider(private val base: SymbolProvider) : SymbolProv
  *
  * Protocols may inherit from this class and override the `xyzMeta` methods to modify structure generation.
  */
-open class SymbolMetadataProvider(private val base: SymbolProvider) : WrappingSymbolProvider(base) {
+abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : WrappingSymbolProvider(base) {
     override fun toSymbol(shape: Shape): Symbol {
         val baseSymbol = base.toSymbol(shape)
         val meta = when (shape) {
@@ -45,20 +48,27 @@ open class SymbolMetadataProvider(private val base: SymbolProvider) : WrappingSy
         return baseSymbol.toBuilder().meta(meta).build()
     }
 
-    open fun memberMeta(memberShape: MemberShape): Meta {
-        return Meta(public = true)
+    abstract fun memberMeta(memberShape: MemberShape): RustMetadata
+    abstract fun structureMeta(structureShape: StructureShape): RustMetadata
+    abstract fun unionMeta(unionShape: UnionShape): RustMetadata
+    abstract fun enumMeta(stringShape: StringShape): RustMetadata
+}
+
+class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvider(base) {
+    override fun memberMeta(memberShape: MemberShape): RustMetadata {
+        return RustMetadata(public = true)
     }
 
-    open fun structureMeta(structureShape: StructureShape): Meta {
-        return Meta(Derives(defaultDerives.toSet()), public = true)
+    override fun structureMeta(structureShape: StructureShape): RustMetadata {
+        return RustMetadata(Derives(defaultDerives.toSet()), public = true)
     }
 
-    open fun unionMeta(unionShape: UnionShape): Meta {
-        return Meta(Derives(defaultDerives.toSet()), public = true)
+    override fun unionMeta(unionShape: UnionShape): RustMetadata {
+        return RustMetadata(Derives(defaultDerives.toSet()), public = true)
     }
 
-    open fun enumMeta(stringShape: StringShape): Meta {
-        return Meta(
+    override fun enumMeta(stringShape: StringShape): RustMetadata {
+        return RustMetadata(
             Derives(
                 defaultDerives.toSet() +
                     // enums must be hashable because string sets are hashable
@@ -80,7 +90,11 @@ open class SymbolMetadataProvider(private val base: SymbolProvider) : WrappingSy
 }
 
 private const val MetaKey = "meta"
-fun Symbol.Builder.meta(meta: Meta?): Symbol.Builder {
-    return this.putProperty(MetaKey, meta)
+fun Symbol.Builder.meta(rustMetadata: RustMetadata?): Symbol.Builder {
+    return this.putProperty(MetaKey, rustMetadata)
 }
-fun Symbol.meta(): Meta? = this.getProperty(MetaKey, Meta::class.java).orNull()
+fun Symbol.expectRustMetadata(): RustMetadata = this.getProperty(MetaKey, RustMetadata::class.java).orElseThrow {
+    CodegenException(
+        "Expected $this to have metadata attached but it did not. "
+    )
+}

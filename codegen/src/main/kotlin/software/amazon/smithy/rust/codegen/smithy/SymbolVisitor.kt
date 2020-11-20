@@ -105,12 +105,18 @@ fun Symbol.Builder.locatedIn(symbolLocation: SymbolLocation): Symbol.Builder =
     this.definitionFile("src/${symbolLocation.filename}")
         .namespace("crate::${symbolLocation.namespace}", "::")
 
+interface RustSymbolProvider : SymbolProvider {
+    fun config(): SymbolVisitorConfig
+}
+
 class SymbolVisitor(
     private val model: Model,
     private val config: SymbolVisitorConfig = DefaultConfig
-) : SymbolProvider,
+) : RustSymbolProvider,
     ShapeVisitor<Symbol> {
     private val nullableIndex = NullableIndex.of(model)
+    override fun config(): SymbolVisitorConfig = config
+
     override fun toSymbol(shape: Shape): Symbol {
         return shape.accept(this)
     }

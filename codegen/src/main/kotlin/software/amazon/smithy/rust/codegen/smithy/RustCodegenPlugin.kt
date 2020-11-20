@@ -17,6 +17,7 @@ class RustCodegenPlugin : SmithyBuildPlugin {
     }
 
     companion object {
-        fun BaseSymbolProvider(model: Model, symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig) = SymbolVisitor(model, config = symbolVisitorConfig).let { SymbolMetadataProvider(it) }
+        fun BaseSymbolProvider(model: Model, symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig) =
+            SymbolVisitor(model, config = symbolVisitorConfig).let { BaseSymbolMetadataProvider(it) }
     }
 }

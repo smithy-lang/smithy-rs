@@ -17,9 +17,9 @@ import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
+import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
-import software.amazon.smithy.rust.codegen.smithy.meta
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.utils.CaseUtils
@@ -84,13 +84,13 @@ class StructureGenerator(
     private fun renderStructure() {
         val symbol = symbolProvider.toSymbol(shape)
         // TODO(maybe): Pull derive info from the symbol so that the symbol provider can alter things as necessary; 4h
-        val containerMeta = symbol.meta()!!
+        val containerMeta = symbol.expectRustMetadata()
         containerMeta.render(writer)
 
         writer.rustBlock("struct ${symbol.name} ${lifetimeDeclaration()}") {
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
-                symbolProvider.toSymbol(member).meta()!!.render(this)
+                symbolProvider.toSymbol(member).expectRustMetadata().render(this)
                 write("$memberName: \$T,", symbolProvider.toSymbol(member))
             }
         }

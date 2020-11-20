@@ -8,8 +8,11 @@ package software.amazon.smithy.rust.codegen.smithy
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.rust.codegen.lang.CargoDependency
+import software.amazon.smithy.rust.codegen.lang.InlineDependency
 import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustType
+import software.amazon.smithy.rust.codegen.lang.RustWriter
 import java.io.File
 import java.util.Optional
 
@@ -38,6 +41,15 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
         return builder.build()
     }
 
+    fun fullyQualifiedName(): String {
+        val prefix = if (namespace.startsWith("crate")) {
+            ""
+        } else {
+            "::"
+        }
+        return "$prefix$namespace::$name"
+    }
+
     // TODO: refactor to be RuntimeTypeProvider a la Symbol provider that packages the `RuntimeConfig` state.
     companion object {
 
@@ -51,25 +63,25 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
         val HashMap = RuntimeType("HashMap", dependency = null, namespace = "std::collections")
 
         fun Instant(runtimeConfig: RuntimeConfig) =
-            RuntimeType("Instant", RustDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.cratePrefix}_types")
+            RuntimeType("Instant", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.cratePrefix}_types")
 
         fun Blob(runtimeConfig: RuntimeConfig) =
-            RuntimeType("Blob", RustDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.cratePrefix}_types")
+            RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.cratePrefix}_types")
 
         fun Document(runtimeConfig: RuntimeConfig): RuntimeType =
-            RuntimeType("Document", RustDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.cratePrefix}_types")
+            RuntimeType("Document", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.cratePrefix}_types")
 
         fun LabelFormat(runtimeConfig: RuntimeConfig, func: String) =
-            RuntimeType(func, RustDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::label")
+            RuntimeType(func, CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::label")
 
         fun QueryFormat(runtimeConfig: RuntimeConfig, func: String) =
-            RuntimeType(func, RustDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::query")
+            RuntimeType(func, CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::query")
 
         fun Base64Encode(runtimeConfig: RuntimeConfig): RuntimeType =
-            RuntimeType("encode", RustDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::base64")
+            RuntimeType("encode", CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::base64")
 
         fun Base64Decode(runtimeConfig: RuntimeConfig): RuntimeType =
-            RuntimeType("decode", RustDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::base64")
+            RuntimeType("decode", CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::base64")
 
         fun TimestampFormat(runtimeConfig: RuntimeConfig, format: TimestampFormatTrait.Format): RuntimeType {
             val timestampFormat = when (format) {
@@ -80,18 +92,27 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
             }
             return RuntimeType(
                 timestampFormat,
-                RustDependency.SmithyTypes(runtimeConfig),
+                CargoDependency.SmithyTypes(runtimeConfig),
                 "${runtimeConfig.cratePrefix}_types::instant::Format"
             )
         }
 
         fun ProtocolTestHelper(runtimeConfig: RuntimeConfig, func: String): RuntimeType =
             RuntimeType(
-                func, RustDependency.ProtocolTestHelpers(runtimeConfig), "protocol_test_helpers"
+                func, CargoDependency.ProtocolTestHelpers(runtimeConfig), "protocol_test_helpers"
             )
 
-        fun Http(path: String): RuntimeType = RuntimeType(name = path, dependency = RustDependency.Http, namespace = "http")
-
+        fun Http(path: String): RuntimeType = RuntimeType(name = path, dependency = CargoDependency.Http, namespace = "http")
         val HttpRequestBuilder = Http("request::Builder")
+
+        val Serialize = RuntimeType("Serialize", CargoDependency.Serde, namespace = "serde")
+        val Serializer = RuntimeType("Serializer", CargoDependency.Serde, namespace = "serde")
+        fun SerdeJson(path: String) = RuntimeType(path, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
+
+        fun forInlineFun(name: String, module: String, func: (RustWriter) -> Unit) = RuntimeType(
+            name = name,
+            dependency = InlineDependency(name, module, func),
+            namespace = "crate::$module"
+        )
     }
 }

@@ -5,13 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
+import software.amazon.smithy.rust.codegen.lang.CargoDependency
 import software.amazon.smithy.rust.codegen.lang.Compile
 import software.amazon.smithy.rust.codegen.lang.Dev
-import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.utils.CodeWriter
 
-class CargoTomlGenerator(private val settings: RustSettings, private val writer: CodeWriter, private val dependencies: List<RustDependency>) {
+class CargoTomlGenerator(private val settings: RustSettings, private val writer: CodeWriter, private val dependencies: List<CargoDependency>) {
     fun render() {
         writer.write("[package]")
         writer.write("""name = "${settings.moduleName}"""")
