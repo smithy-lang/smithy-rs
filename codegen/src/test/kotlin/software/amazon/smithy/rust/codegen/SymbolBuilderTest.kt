@@ -25,6 +25,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SparseTrait
+import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.render
 import software.amazon.smithy.rust.codegen.smithy.symbol.Errors
 import software.amazon.smithy.rust.codegen.smithy.symbol.Operations
@@ -157,8 +158,8 @@ class SymbolBuilderTest {
 
         val provider: SymbolProvider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
-        setSymbol.rustType().render() shouldBe "HashSet<String>"
-        setSymbol.referenceClosure().map { it.name } shouldBe listOf("HashSet", "String")
+        setSymbol.rustType().render() shouldBe "${RustType.SetType}<String>"
+        setSymbol.referenceClosure().map { it.name } shouldBe listOf(RustType.SetType, "String")
     }
 
     @Test

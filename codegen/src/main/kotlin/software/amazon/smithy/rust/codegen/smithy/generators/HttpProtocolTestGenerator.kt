@@ -22,10 +22,7 @@ class HttpProtocolTestGenerator(private val protocolConfig: ProtocolConfig, priv
         "RestJsonListsSerializeNull",
         "AwsJson11MapsSerializeNullValues",
         "AwsJson11ListsSerializeNull",
-        "RestJsonSerializesNullMapValues",
-        // This test is fully disabled because it's flaky (it depends on the hash set iteration order)
-        // https://github.com/awslabs/smithy-rs/issues/37
-        "RestJsonInputAndOutputWithStringHeaders"
+        "RestJsonSerializesNullMapValues"
     )
 
     // These tests fail due to shortcomings in our implementation.
