@@ -84,8 +84,8 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
         fun Base64Decode(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType("decode", CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::base64")
 
-        fun UuidV4(runtimeConfig: RuntimeConfig): RuntimeType =
-            RuntimeType("v4", CargoDependency.Inlineable(runtimeConfig), "inlineable::uuid")
+        fun UuidV4(): RuntimeType =
+            RuntimeType("v4", InlineDependency.forRustFile("v4", "uuid", "uuid.rs"), "crate::uuid")
 
         val Random = RuntimeType("random", CargoDependency.Random, CargoDependency.Random.name)
 

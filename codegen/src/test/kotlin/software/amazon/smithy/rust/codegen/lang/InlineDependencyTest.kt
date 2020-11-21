@@ -13,4 +13,9 @@ internal class InlineDependencyTest {
         val depb = makeDep()
         depa.renderer shouldBe depb.renderer
     }
+
+    @Test
+    fun `locate rust runtime`() {
+        InlineDependency.forRustFile("v4", "uuid", "uuid.rs")
+    }
 }

@@ -15,7 +15,7 @@ class IdempotencyTokenSymbolProvider(private val base: RustSymbolProvider) : Wra
         check(shape is MemberShape)
         return initial.toBuilder().setDefault(
             Default.Custom {
-                write("\$T(\$T())", RuntimeType.UuidV4(base.config().runtimeConfig), RuntimeType.Random)
+                write("\$T(\$T())", RuntimeType.UuidV4(), RuntimeType.Random)
             }
         ).build()
     }

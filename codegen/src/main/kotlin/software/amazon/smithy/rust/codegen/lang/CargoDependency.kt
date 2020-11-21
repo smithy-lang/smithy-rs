@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.SymbolDependency
 import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.util.dq
+import java.nio.file.Path
 
 sealed class DependencyScope
 object Dev : DependencyScope()
@@ -54,6 +55,18 @@ class InlineDependency(name: String, val module: String, val renderer: (RustWrit
     }
 
     fun key() = "$module::$name"
+
+    companion object {
+        fun forRustFile(name: String, module: String, filename: String): InlineDependency {
+            val inlineCrate = Path.of("../rust-runtime/inlineable/src").resolve(filename)
+            println("searching at ${inlineCrate.toAbsolutePath()}")
+            val rustFile = inlineCrate.toFile()
+            check(rustFile.exists())
+            return InlineDependency(name, module) { writer ->
+                writer.write(rustFile.readText())
+            }
+        }
+    }
 }
 
 /**
@@ -115,6 +128,7 @@ data class CargoDependency(
 
         fun fromSymbolDependency(symbolDependency: SymbolDependency) =
             symbolDependency.getProperty(PropertyKey, RustDependency::class.java).get()
+
         val SerdeJson: CargoDependency = CargoDependency("serde_json", CratesIo("1"))
         val Serde = CargoDependency("serde", CratesIo("1"), features = listOf("derive"))
     }

@@ -7,7 +7,9 @@ package software.amazon.smithy.rust.testutil
 
 import org.intellij.lang.annotations.Language
 import software.amazon.smithy.rust.codegen.lang.CargoDependency
+import software.amazon.smithy.rust.codegen.lang.InlineDependency
 import software.amazon.smithy.rust.codegen.lang.RustDependency
+import software.amazon.smithy.rust.codegen.lang.RustMetadata
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.dq
@@ -57,6 +59,17 @@ fun String.shouldParseAsRust() {
     "rustfmt ${tempFile.absolutePath}".runCommand()
 }
 
+private fun RustWriter.inlineDependencies(target: RustWriter) {
+    val inlineDeps =
+        this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<InlineDependency>()
+            .distinctBy { it.key() }
+    inlineDeps.forEach {
+        target.withModule(it.module, RustMetadata(public = false)) {
+            it.renderer(this)
+        }
+    }
+}
+
 /**
  * Compiles the contents of the given writer (including dependencies) and runs the tests
  */
@@ -67,10 +80,9 @@ fun RustWriter.compileAndTest(
     expectFailure: Boolean = false
 ): String {
     // TODO: if there are no dependencies, we can be a bit quicker
-    val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<CargoDependency>()
     try {
-        val output = this.toString()
-            .compileAndTest(deps.toSet(), module = this.namespace.split("::")[1], main = main, strict = clippy)
+        val output = this
+            .compileAndTestInner(module = this.namespace.split("::")[1], main = main, strict = clippy)
         if (expectFailure) {
             println(this.toString())
         }
@@ -84,14 +96,15 @@ fun RustWriter.compileAndTest(
     }
 }
 
-fun String.compileAndTest(
-    deps: Set<CargoDependency>,
-    module: String? = null,
+private fun RustWriter.compileAndTestInner(
+    module: String,
     main: String = "",
     strict: Boolean = false
 ): String {
-    this.shouldParseAsRust()
+    this.toString().shouldParseAsRust()
     val tempDir = TestWorkspace.subproject()
+    val libWriter = RustWriter.forModule("lib")
+    this.inlineDependencies(libWriter)
     // TODO: unify this with CargoTomlGenerator
     val cargoToml = """
     [package]
@@ -101,27 +114,31 @@ fun String.compileAndTest(
     edition = "2018"
 
     [dependencies]
-    ${deps.joinToString("\n") { it.toString() }}
+    ${
+    (this.dependencies + libWriter.dependencies).map { CargoDependency.fromSymbolDependency(it) }
+        .filterIsInstance<CargoDependency>()
+        .distinct().joinToString("\n") { it.toString() }
+    }
     """.trimIndent()
     tempDir.resolve("Cargo.toml").writeText(cargoToml)
     tempDir.resolve("src").mkdirs()
     val mainRs = tempDir.resolve("src/main.rs")
-    val testModule = tempDir.resolve("src/$module.rs")
-    testModule.writeText(this)
-    if (main.isNotBlank()) {
-        testModule.appendText(
+    val testModule = tempDir.resolve("src/lib.rs")
+    val testWriter = this
+    libWriter.withModule(module) {
+        write(testWriter.toString())
+        write(
             """
             #[test]
             fn test() {
                 $main
             }
-            """.trimIndent()
+        """
         )
     }
+    testModule.appendText(libWriter.toString())
     mainRs.appendText(
         """
-        pub mod $module;
-        pub use crate::$module::*;
         pub fn main() {}
         """.trimIndent()
     )

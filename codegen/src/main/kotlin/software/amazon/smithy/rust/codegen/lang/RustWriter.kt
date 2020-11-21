@@ -102,13 +102,17 @@ class RustWriter private constructor(private val filename: String, val namespace
         // In Rust, modules must specify their own imports—they don't have access to the parent scope.
         // To easily handle this, create a new inner writer to collect imports, then dump it
         // into an inline module.
-        val innerWriter = RustWriter(this.filename, "${this.namespace}::$moduleName")
-        moduleWriter(innerWriter)
-        rustMetadata.render(this)
-        rustBlock("mod $moduleName") {
-            write(innerWriter.toString())
+        if (moduleName == this.namespace.split("::").last()) {
+            moduleWriter(this)
+        } else {
+            val innerWriter = RustWriter(this.filename, "${this.namespace}::$moduleName")
+            moduleWriter(innerWriter)
+            rustMetadata.render(this)
+            rustBlock("mod $moduleName") {
+                write(innerWriter.toString())
+            }
+            innerWriter.dependencies.forEach { addDependency(it) }
         }
-        innerWriter.dependencies.forEach { addDependency(it) }
     }
 
     // TODO: refactor both of these methods & add a parent method to for_each across any field type

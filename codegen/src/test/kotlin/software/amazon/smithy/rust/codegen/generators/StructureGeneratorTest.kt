@@ -83,7 +83,7 @@ class StructureGeneratorTest {
             rustBlock("fn test_public_fields()") {
                 write(
                     """
-                    let s: Option<crate::structs::MyStruct> = None;
+                    let s: Option<crate::model::structs::MyStruct> = None;
                     s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
                 """
                 )

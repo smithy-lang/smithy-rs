@@ -52,9 +52,13 @@ internal class IdempotencyTokenSymbolProviderTest {
             """
             let input = Input::builder().build();
             assert_ne!(input.member, None);
-            let generated_uuid = input.member.unwrap();
+            let generated_uuid = input.member.as_ref().unwrap();
             assert_eq!(generated_uuid.len(), 36);
             assert_eq!(generated_uuid.as_bytes()[8] as char, '-');
+
+            let second_input = Input::builder().build();
+            // Assert we're generating random tokens
+            assert_ne!(&input.member, &second_input.member);
         """
         )
     }
