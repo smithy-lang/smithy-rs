@@ -9,7 +9,6 @@ import software.amazon.smithy.codegen.core.SymbolDependency
 import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.util.dq
-import java.nio.file.Path
 
 sealed class DependencyScope
 object Dev : DependencyScope()
@@ -58,12 +57,10 @@ class InlineDependency(name: String, val module: String, val renderer: (RustWrit
 
     companion object {
         fun forRustFile(name: String, module: String, filename: String): InlineDependency {
-            val inlineCrate = Path.of("../rust-runtime/inlineable/src").resolve(filename)
-            println("searching at ${inlineCrate.toAbsolutePath()}")
-            val rustFile = inlineCrate.toFile()
-            check(rustFile.exists())
+            val inlineCrate = this::class.java.getResource("/inlineable/src/$filename")
+            check(inlineCrate != null)
             return InlineDependency(name, module) { writer ->
-                writer.write(rustFile.readText())
+                writer.write(inlineCrate.readText())
             }
         }
     }

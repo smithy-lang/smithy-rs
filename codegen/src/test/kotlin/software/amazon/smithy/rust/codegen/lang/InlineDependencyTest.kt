@@ -16,6 +16,6 @@ internal class InlineDependencyTest {
 
     @Test
     fun `locate rust runtime`() {
-        InlineDependency.forRustFile("v4", "uuid", "uuid.rs")
+        val dep = InlineDependency.forRustFile("v4", "uuid", "uuid.rs")
     }
 }

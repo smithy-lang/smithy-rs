@@ -25,6 +25,7 @@ dependencies {
     api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
+    runtimeOnly(project(":rust-runtime"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
@@ -52,6 +53,7 @@ tasks.jar {
         attributes["Automatic-Module-Name"] = project.name
     }
 }
+
 
 val sourcesJar by tasks.creating(Jar::class) {
     group = "publishing"
