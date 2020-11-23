@@ -90,12 +90,17 @@ class HttpProtocolTestGeneratorTest {
         writer.withModule("operation") {
             StructureGenerator(model, symbolProvider, this, model.lookup("com.example#SayHelloInput")).render()
             rustBlock("impl SayHelloInput") {
-                rustBlock("pub fn build_http_request(&self) -> \$T", RuntimeType.HttpRequestBuilder) {
+                rustBlock("pub fn request_builder_base(&self) -> \$T", RuntimeType.HttpRequestBuilder) {
                     write("\$T::new()", RuntimeType.HttpRequestBuilder)
                     write(httpRequestBuilder)
                 }
                 rustBlock("pub fn build_body(&self) -> String") {
                     write(body)
+                }
+                rustBlock("pub fn assemble<T: Into<Vec<u8>>>(builder: \$T, body: T) -> \$T<Vec<u8>>", RuntimeType.HttpRequestBuilder, RuntimeType.Http("request::Request")) {
+                    write("let body = body.into();")
+                    write("builder.header(\$T, body.len()).body(body)", RuntimeType.Http("header::CONTENT_LENGTH"))
+                    write(""".expect("http request should be valid")""")
                 }
             }
             val protocolConfig = ProtocolConfig(

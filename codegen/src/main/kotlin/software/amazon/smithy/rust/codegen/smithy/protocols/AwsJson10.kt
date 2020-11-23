@@ -108,7 +108,7 @@ class BasicAwsJsonGenerator(
         operationShape: OperationShape,
         inputShape: StructureShape
     ) {
-        implBlockWriter.rustBlock("pub fn build_http_request(&self) -> \$T", RuntimeType.HttpRequestBuilder) {
+        httpBuilderFun(implBlockWriter) {
             write("let builder = \$T::new();", RuntimeType.HttpRequestBuilder)
             write(
                 """
