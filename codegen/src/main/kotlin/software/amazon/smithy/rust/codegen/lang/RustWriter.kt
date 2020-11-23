@@ -106,7 +106,7 @@ class RustWriter private constructor(private val filename: String, val namespace
         filename.removeSuffix(".rs").split('/').last()
     } else null
 
-    private fun safeName(prefix: String = "var"): String {
+    fun safeName(prefix: String = "var"): String {
         n += 1
         return "${prefix}_$n"
     }

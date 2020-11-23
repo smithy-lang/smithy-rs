@@ -121,7 +121,11 @@ class HttpTraitBindingGenerator(
                     ListForEach(memberType, field) { innerField, targetId ->
                         val innerMemberType = model.expectShape(targetId)
                         val formatted = headerFmtFun(innerMemberType, memberShape, innerField)
-                        write("builder = builder.header(${httpBinding.locationName.dq()}, $formatted);")
+                        val safeName = safeName("formatted")
+                        write("let $safeName = $formatted;")
+                        rustBlock("if !$safeName.is_empty()") {
+                            write("builder = builder.header(${httpBinding.locationName.dq()}, $formatted);")
+                        }
                     }
                 }
             }
