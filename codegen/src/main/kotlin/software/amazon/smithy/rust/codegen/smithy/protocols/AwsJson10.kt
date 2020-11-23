@@ -28,7 +28,9 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
+import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.smithy.transformers.StructureModifier
 
 sealed class AwsJsonVersion {
     abstract val value: String
@@ -47,13 +49,21 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
         protocolConfig: ProtocolConfig
     ): BasicAwsJsonGenerator = BasicAwsJsonGenerator(protocolConfig, version)
 
+    private val nonEmptyShape: StructureModifier = { shape: StructureShape? ->
+        if (shape?.members().isNullOrEmpty()) {
+            null
+        } else {
+            shape
+        }
+    }
+
     override fun transformModel(model: Model): Model {
         // For AwsJson10, the body matches 1:1 with the input
-        return OperationNormalizer().transformModel(model) { inputShape ->
-            if (inputShape != null && inputShape.members().isEmpty()) {
-                null
-            } else inputShape
-        }
+        return OperationNormalizer().transformModel(
+            model,
+            inputBody = nonEmptyShape,
+            outputBody = nonEmptyShape
+        )
     }
 
     override fun symbolProvider(model: Model, base: RustSymbolProvider): SymbolProvider {
@@ -77,7 +87,7 @@ class SyntheticBodySymbolProvider(private val model: Model, private val base: Ru
     override fun toSymbol(shape: Shape): Symbol {
         val initialSymbol = base.toSymbol(shape)
         val override = when (shape) {
-            is StructureShape -> if (shape.hasTrait(InputBodyTrait::class.java)) {
+            is StructureShape -> if (shape.hasTrait(InputBodyTrait::class.java) || shape.hasTrait(OutputBodyTrait::class.java)) {
                 initialSymbol.toBuilder().locatedIn(Serializers).build()
             } else null
             is MemberShape -> {

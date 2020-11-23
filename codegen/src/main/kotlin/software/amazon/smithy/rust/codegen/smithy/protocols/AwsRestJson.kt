@@ -27,7 +27,11 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
 
     override fun transformModel(model: Model): Model {
         // TODO: AWSRestJson determines the body from HTTP traits
-        return OperationNormalizer().transformModel(model, OperationNormalizer.noBody)
+        return OperationNormalizer().transformModel(
+            model,
+            inputBody = OperationNormalizer.noBody,
+            outputBody = OperationNormalizer.noBody
+        )
     }
 
     override fun support(): ProtocolSupport {
@@ -69,7 +73,8 @@ class AwsRestJsonGenerator(
             inputShape,
             httpTrait
         )
-        val contentType = httpIndex.determineRequestContentType(operationShape, "application/json").orElse("application/json")
+        val contentType =
+            httpIndex.determineRequestContentType(operationShape, "application/json").orElse("application/json")
         httpBindingGenerator.renderUpdateHttpBuilder(implBlockWriter)
         httpBuilderFun(implBlockWriter) {
             write("let builder = \$T::new();", requestBuilder)
