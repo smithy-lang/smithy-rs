@@ -27,11 +27,7 @@ class HttpProtocolTestGenerator(
     // TODO: remove these once Smithy publishes fixes.
     // These tests are not even attempted to be compiled
     val DisableTests = setOf(
-        "RestJsonListsSerializeNull",
-        "AwsJson11MapsSerializeNullValues",
-        "AwsJson11ListsSerializeNull",
-        "RestJsonSerializesNullMapValues",
-        // This test is flake because of set ordering serialization https://github.com/awslabs/smithy-rs/issues/37
+        // This test is flaky because of set ordering serialization https://github.com/awslabs/smithy-rs/issues/37
         "AwsJson11Enums"
     )
 
@@ -104,7 +100,7 @@ class HttpProtocolTestGenerator(
         }
         testModuleWriter.rustBlock("fn test_${httpRequestTestCase.id.toSnakeCase()}()") {
             writeInline("let input =")
-            instantiator.render(httpRequestTestCase.params, inputShape, this)
+            instantiator.render(this, inputShape, httpRequestTestCase.params)
             write(";")
             write("let http_request = input.build_http_request().body(()).unwrap();")
             with(httpRequestTestCase) {
