@@ -12,7 +12,6 @@ import software.amazon.smithy.codegen.core.writer.CodegenWriter
 import software.amazon.smithy.codegen.core.writer.CodegenWriterFactory
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DocumentationTrait
@@ -22,7 +21,6 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.utils.CodeWriter
-import java.util.Optional
 import java.util.function.BiFunction
 
 fun <T : CodeWriter> T.withBlock(
@@ -64,13 +62,7 @@ fun <T : CodeWriter> T.rustBlock(header: String, vararg args: Any, block: T.() -
  */
 fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model): T {
     // TODO: support additional Smithy documentation traits like @example
-    val docTrait = shape.getTrait(DocumentationTrait::class.java).or {
-        if (shape is MemberShape) {
-            model.expectShape(shape.target).getTrait(DocumentationTrait::class.java)
-        } else {
-            Optional.empty()
-        }
-    }.orNull()
+    val docTrait = shape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
 
     docTrait?.value?.also {
         this.docs(it)
@@ -94,9 +86,10 @@ fun <T : CodeWriter> T.docs(text: String, vararg args: Any) {
         // We need to filter out blank lines—an empty line causes the markdown parser to interpret the subsequent
         // docs as a code block because they are indented.
         .filter { !it.isBlank() }
-        // Rustdoc warns on tabs in documentation
-        .map { it.trimStart().replace("\t", "  ") }
-        .joinToString("\n")
+        .joinToString("\n") {
+            // Rustdoc warns on tabs in documentation
+            it.trimStart().replace("\t", "  ")
+        }
     write(cleaned, *args)
     popState()
 }
