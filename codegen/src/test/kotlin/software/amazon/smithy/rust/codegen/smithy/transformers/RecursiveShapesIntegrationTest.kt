@@ -10,7 +10,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.lookup
-import software.amazon.smithy.rust.testutil.asSmithy
+import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
@@ -36,7 +36,7 @@ class RecursiveShapesIntegrationTest {
             otherMember: Atom,
             third: SecondTree
        }
-       """.asSmithy()
+       """.asSmithyModel()
         val check = { input: Model ->
             val structures = listOf("Expr", "SecondTree").map { input.lookup<StructureShape>("com.example#$it") }
             val writer = RustWriter.forModule("model")

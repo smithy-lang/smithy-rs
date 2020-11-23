@@ -20,7 +20,6 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.lang.CargoDependency
 import software.amazon.smithy.rust.codegen.lang.InlineDependency
 import software.amazon.smithy.rust.codegen.lang.RustDependency
-import software.amazon.smithy.rust.codegen.lang.RustMetadata
 import software.amazon.smithy.rust.codegen.lang.RustModule
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
@@ -103,8 +102,8 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
         }
         writers.useFileWriter("src/lib.rs", "crate::lib") { writer ->
             val includedModules = writers.includedModules().toSet().filter { it != "lib" }
-            val modules = includedModules.map {
-                RustModule(it, RustMetadata(public = PublicModules.contains(it)))
+            val modules = includedModules.map { moduleName ->
+                RustModule.default(moduleName, PublicModules.contains(moduleName))
             }
             LibRsGenerator(modules).render(writer)
         }

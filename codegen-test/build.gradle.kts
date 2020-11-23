@@ -110,6 +110,14 @@ tasks.register<Exec>("cargoTest") {
     dependsOn("build")
 }
 
+tasks.register<Exec>("cargoDocs") {
+    workingDir("build/smithyprojections/codegen-test/")
+    // disallow warnings
+    environment("RUSTFLAGS", "-D warnings")
+    commandLine("cargo", "doc")
+    dependsOn("build")
+}
+
 tasks.register<Exec>("cargoClippy") {
     workingDir("build/smithyprojections/codegen-test/")
     // disallow warnings
@@ -118,7 +126,7 @@ tasks.register<Exec>("cargoClippy") {
     dependsOn("build")
 }
 
-tasks["test"].finalizedBy("cargoCheck", "cargoClippy", "cargoTest")
+tasks["test"].finalizedBy("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs")
 
 tasks["clean"].doFirst {
     delete("smithy-build.json")

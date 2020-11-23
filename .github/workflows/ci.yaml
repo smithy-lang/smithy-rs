@@ -94,7 +94,8 @@ jobs:
         path: |
           codegen-test/build/smithyprojections/codegen-test/*/rust-codegen/
           codegen-test/build/smithyprojections/codegen-test/Cargo.toml
-          !**/target
+          codegen-test/build/smithyprojections/codegen-test/target/doc
+          !**/target/
   runtime-tests:
     name: Rust runtime tests
     runs-on: ubuntu-latest
