@@ -80,7 +80,7 @@ class InstantiatorTest {
         writer.write("#[test]")
         writer.rustBlock("fn inst()") {
             writer.withBlock("let result = ", ";") {
-                sut.render(data, union, this)
+                sut.render(this, union, data)
             }
             writer.write("assert_eq!(result, MyUnion::StringVariant(\"ok!\".to_string()));")
         }
@@ -103,7 +103,7 @@ class InstantiatorTest {
         writer.write("#[test]")
         writer.rustBlock("fn inst()") {
             writer.withBlock("let result = ", ";") {
-                sut.render(data, structure, this)
+                sut.render(this, structure, data)
             }
             writer.write("assert_eq!(result.bar, 10);")
             writer.write("assert_eq!(result.foo.unwrap(), \"hello\");")
@@ -129,7 +129,7 @@ class InstantiatorTest {
         writer.write("#[test]")
         writer.rustBlock("fn inst()") {
             withBlock("let result = ", ";") {
-                sut.render(data, structure, this)
+                sut.render(this, structure, data)
             }
             rust(
                 """
@@ -160,7 +160,7 @@ class InstantiatorTest {
         writer.write("#[test]")
         writer.rustBlock("fn inst()") {
             writer.withBlock("let result = ", ";") {
-                sut.render(data, model.lookup("com.test#MyList"), writer)
+                sut.render(writer, model.lookup("com.test#MyList"), data)
             }
             writer.write("""assert_eq!(result, vec!["bar".to_string(), "foo".to_string()]);""")
         }
@@ -182,7 +182,7 @@ class InstantiatorTest {
         writer.write("#[test]")
         writer.rustBlock("fn inst()") {
             writer.withBlock("let result = ", ";") {
-                sut.render(data, model.lookup("com.test#MySparseList"), writer)
+                sut.render(writer, model.lookup("com.test#MySparseList"), data)
             }
             writer.write("""assert_eq!(result, vec![Some("bar".to_string()), Some("foo".to_string()), None]);""")
         }
@@ -206,7 +206,7 @@ class InstantiatorTest {
         writer.write("#[test]")
         writer.rustBlock("fn inst()") {
             writer.withBlock("let result = ", ";") {
-                sut.render(data, model.lookup("com.test#NestedMap"), writer)
+                sut.render(writer, model.lookup("com.test#NestedMap"), data)
             }
             writer.write(
                 """
@@ -229,7 +229,11 @@ class InstantiatorTest {
         writer.write("#[test]")
         writer.rustBlock("fn test_blob()") {
             withBlock("let blob = ", ";") {
-                sut.render(StringNode.parse("foo".dq()), BlobShape.builder().id(ShapeId.from("com.example#Blob")).build(), this)
+                sut.render(
+                    this,
+                    BlobShape.builder().id(ShapeId.from("com.example#Blob")).build(),
+                    StringNode.parse("foo".dq())
+                )
             }
             write("assert_eq!(std::str::from_utf8(blob.as_ref()).unwrap(), \"foo\");")
         }
