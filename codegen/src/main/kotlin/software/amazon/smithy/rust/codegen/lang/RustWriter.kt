@@ -23,6 +23,26 @@ import java.util.function.BiFunction
 fun <T : CodeWriter> T.withBlock(
     textBeforeNewLine: String,
     textAfterNewLine: String,
+    block: T.() -> Unit
+): T {
+    return conditionalBlock(textBeforeNewLine, textAfterNewLine, conditional = true, block = block)
+}
+
+/**
+ * Write a block to the writer.
+ * If [conditional] is true, the [textBeforeNewLine], followed by [block], followed by [textAfterNewLine]
+ * If [conditional] is false, only [block] is written.
+ * This enables conditionally wrapping a block in a prefix/suffix, eg.
+ *
+ * ```
+ * writer.withBlock("Some(", ")", conditional = symbol.isOptional()) {
+ *      write("symbolValue")
+ * }
+ * ```
+ */
+fun <T : CodeWriter> T.conditionalBlock(
+    textBeforeNewLine: String,
+    textAfterNewLine: String,
     conditional: Boolean = true,
     block: T.() -> Unit
 ): T {

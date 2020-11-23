@@ -4,6 +4,7 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.node.NullNode
 import software.amazon.smithy.model.node.NumberNode
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.node.StringNode
@@ -23,6 +24,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.conditionalBlock
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
@@ -42,7 +44,7 @@ class Instantiator(
     private val runtimeConfig: RuntimeConfig
 ) {
 
-    fun render(arg: Node, shape: Shape, writer: RustWriter) {
+    fun render(writer: RustWriter, shape: Shape, arg: Node) {
         when (shape) {
             // Compound Shapes
             is StructureShape -> renderStructure(writer, shape, arg as ObjectNode)
@@ -52,6 +54,9 @@ class Instantiator(
             is ListShape -> renderList(writer, shape, arg as ArrayNode)
             is MapShape -> renderMap(writer, shape, arg as ObjectNode)
             is SetShape -> renderSet(writer, shape, arg as ArrayNode)
+
+            // Members, supporting potentially optional members
+            is MemberShape -> renderMember(writer, shape, arg)
 
             // Wrapped Shapes
             is TimestampShape -> writer.write(
@@ -77,15 +82,37 @@ class Instantiator(
         }
     }
 
+    /**
+     * If the shape is optional: `Some(inner)` or `None`
+     * otherwise: `inner`
+     */
+    private fun renderMember(
+        writer: RustWriter,
+        shape: MemberShape,
+        arg: Node
+    ) {
+        val target = model.expectShape(shape.target)
+        val symbol = symbolProvider.toSymbol(shape)
+        if (arg is NullNode) {
+            check(
+                symbol.isOptional()
+            ) { "A null node was provided for $shape but the symbol was not optional. This is invalid input data." }
+            writer.write("None")
+        } else {
+            writer.conditionalBlock("Some(", ")", conditional = symbol.isOptional()) {
+                render(this, target, arg)
+            }
+        }
+    }
+
     private fun renderSet(writer: RustWriter, shape: SetShape, data: ArrayNode) {
         if (symbolProvider.toSymbol(shape).rustType() is RustType.HashSet) {
             if (!data.isEmpty) {
                 writer.rustBlock("") {
                     write("let mut ret = \$T::new();", RuntimeType.HashSet)
-                    val valueShape = shape.member.let { model.expectShape(it.target) }
                     data.forEach { v ->
                         withBlock("ret.insert(", ");") {
-                            render(v, valueShape, this)
+                            renderMember(this, shape.member, v)
                         }
                     }
                     write("ret")
@@ -115,10 +142,9 @@ class Instantiator(
         if (data.members.isNotEmpty()) {
             writer.rustBlock("") {
                 write("let mut ret = \$T::new();", RuntimeType.HashMap)
-                val valueShape = shape.value.let { model.expectShape(it.target) }
                 data.members.forEach { (k, v) ->
                     withBlock("ret.insert(${k.value.dq()}.to_string(),", ");") {
-                        render(v, valueShape, this)
+                        renderMember(this, shape.value, v)
                     }
                 }
                 write("ret")
@@ -148,7 +174,7 @@ class Instantiator(
         writer.write("\$T::${memberName.toPascalCase()}", unionSymbol)
         // unions should specify exactly one member
         writer.withBlock("(", ")") {
-            render(variant.value, member, this)
+            render(this, member, variant.value)
         }
     }
 
@@ -162,17 +188,9 @@ class Instantiator(
         shape: CollectionShape,
         data: ArrayNode
     ) {
-        val member = model.expectShape(shape.member.target)
-        val memberSymbol = symbolProvider.toSymbol(shape.member)
         writer.withBlock("vec![", "]") {
-            data.elements.forEach {
-                if (it.isNullNode) {
-                    write("None")
-                } else {
-                    withBlock("Some(", ")", conditional = memberSymbol.isOptional()) {
-                        render(it, member, this)
-                    }
-                }
+            data.elements.forEach { v ->
+                renderMember(this, shape.member, v)
                 write(",")
             }
         }
@@ -209,7 +227,7 @@ class Instantiator(
             val func = symbolProvider.toMemberName(memberShape)
             if (!value.isNullNode) {
                 writer.withBlock(".$func(", ")") {
-                    render(value, targetShape, this)
+                    render(this, targetShape, value)
                 }
             }
         }
