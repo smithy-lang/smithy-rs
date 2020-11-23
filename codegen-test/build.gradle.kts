@@ -114,7 +114,7 @@ tasks.register<Exec>("cargoDocs") {
     workingDir("build/smithyprojections/codegen-test/")
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
-    commandLine("cargo", "doc")
+    commandLine("cargo", "doc", "--no-deps")
     dependsOn("build")
 }
 
