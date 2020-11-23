@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.inputShape
+import java.util.logging.Logger
 
 data class ProtocolSupport(
     val requestBodySerialization: Boolean
@@ -24,14 +25,11 @@ class HttpProtocolTestGenerator(
     private val operationShape: OperationShape,
     private val writer: RustWriter
 ) {
+    private val logger = Logger.getLogger(javaClass.name)
     // TODO: remove these once Smithy publishes fixes.
     // These tests are not even attempted to be compiled
     val DisableTests = setOf(
-        "RestJsonListsSerializeNull",
-        "AwsJson11MapsSerializeNullValues",
-        "AwsJson11ListsSerializeNull",
-        "RestJsonSerializesNullMapValues",
-        // This test is flake because of set ordering serialization https://github.com/awslabs/smithy-rs/issues/37
+        // This test is flaky because of set ordering serialization https://github.com/awslabs/smithy-rs/issues/37
         "AwsJson11Enums"
     )
 
@@ -103,9 +101,13 @@ class HttpProtocolTestGenerator(
         }
         testModuleWriter.rustBlock("fn test_${httpRequestTestCase.id.toSnakeCase()}()") {
             writeInline("let input =")
-            instantiator.render(httpRequestTestCase.params, inputShape, this)
+            instantiator.render(this, inputShape, httpRequestTestCase.params)
             write(";")
-            write("let http_request = input.build_http_request().body(()).unwrap();")
+            if (protocolSupport.requestBodySerialization) {
+                write("let http_request = ${protocolConfig.symbolProvider.toSymbol(inputShape).name}::assemble(input.request_builder_base(), input.build_body());")
+            } else {
+                write("let http_request = ${protocolConfig.symbolProvider.toSymbol(inputShape).name}::assemble(input.request_builder_base(), vec![]);")
+            }
             with(httpRequestTestCase) {
                 write(
                     """
@@ -118,10 +120,30 @@ class HttpProtocolTestGenerator(
             checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
             checkRequiredQueryParams(this, httpRequestTestCase.requireQueryParams)
             checkHeaders(this, httpRequestTestCase.headers)
+            checkForbidHeaders(this, httpRequestTestCase.forbidHeaders)
+            checkRequiredHeaders(this, httpRequestTestCase.requireHeaders)
             if (protocolSupport.requestBodySerialization) {
                 checkBody(this, httpRequestTestCase.body.orElse(""), httpRequestTestCase.bodyMediaType.orElse(null))
             }
+
+            // Explicitly warn if the test case defined parameters that we aren't doing anything with
+            with(httpRequestTestCase) {
+                if (authScheme.isPresent) {
+                    logger.warning("Test case provided authScheme but this was ignored")
+                }
+                if (!httpRequestTestCase.vendorParams.isEmpty) {
+                    logger.warning("Test case provided vendorParams but these were ignored")
+                }
+            }
         }
+    }
+
+    private fun checkRequiredHeaders(rustWriter: RustWriter, requireHeaders: List<String>) {
+        basicCheck(requireHeaders, rustWriter, "required_headers", "require_headers")
+    }
+
+    private fun checkForbidHeaders(rustWriter: RustWriter, forbidHeaders: List<String>) {
+        basicCheck(forbidHeaders, rustWriter, "forbidden_headers", "forbid_headers")
     }
 
     private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {

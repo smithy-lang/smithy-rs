@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.conditionalBlock
 import software.amazon.smithy.rust.codegen.lang.render
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
@@ -159,7 +160,7 @@ class StructureGenerator(
             }
 
             rustBlock("pub fn build(self) -> $returnType", structureSymbol) {
-                withBlock("Ok(", ")", conditional = fallibleBuilder) {
+                conditionalBlock("Ok(", ")", conditional = fallibleBuilder) {
                     rustBlock("\$T", structureSymbol) {
                         members.forEach { member ->
                             val memberName = symbolProvider.toMemberName(member)
