@@ -28,7 +28,9 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
+import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.smithy.transformers.StructureModifier
 
 sealed class AwsJsonVersion {
     abstract val value: String
@@ -47,13 +49,20 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
         protocolConfig: ProtocolConfig
     ): BasicAwsJsonGenerator = BasicAwsJsonGenerator(protocolConfig, version)
 
+    private val shapeIfHasMembers: StructureModifier = { shape: StructureShape? ->
+        if (shape?.members().isNullOrEmpty()) {
+            null
+        } else {
+            shape
+        }
+    }
+
     override fun transformModel(model: Model): Model {
         // For AwsJson10, the body matches 1:1 with the input
-        return OperationNormalizer().transformModel(model) { inputShape ->
-            if (inputShape != null && inputShape.members().isEmpty()) {
-                null
-            } else inputShape
-        }
+        return OperationNormalizer(model).transformModel(
+            inputBodyFactory = shapeIfHasMembers,
+            outputBodyFactory = shapeIfHasMembers
+        )
     }
 
     override fun symbolProvider(model: Model, base: RustSymbolProvider): SymbolProvider {
@@ -70,14 +79,27 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
 /**
  * SyntheticBodySymbolProvider makes two modifications:
  * 1. Body shapes are moved to `serializer.rs`
- * 2. Body shapes take a reference to all of their members.
+ * 2. Body shapes take a reference to all of their members:
+ * If the base structure was:
+ * ```rust
+ * struct {
+ *   field: Option<u64>
+ * }
+ * ```
+ * The body will generate:
+ * ```rust
+ * struct<'a> {
+ *   field: &'a Option<u64>
+ * }
+ *
+ * This enables the creation of a body from a reference to an input without cloning.
  */
 class SyntheticBodySymbolProvider(private val model: Model, private val base: RustSymbolProvider) :
     WrappingSymbolProvider(base) {
     override fun toSymbol(shape: Shape): Symbol {
         val initialSymbol = base.toSymbol(shape)
         val override = when (shape) {
-            is StructureShape -> if (shape.hasTrait(InputBodyTrait::class.java)) {
+            is StructureShape -> if (shape.hasTrait(InputBodyTrait::class.java) || shape.hasTrait(OutputBodyTrait::class.java)) {
                 initialSymbol.toBuilder().locatedIn(Serializers).build()
             } else null
             is MemberShape -> {

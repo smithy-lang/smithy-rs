@@ -70,7 +70,10 @@ class HttpProtocolTestGeneratorTest {
             name: String
         }
     """.asSmithyModel()
-    private val model = OperationNormalizer().transformModel(baseModel)
+    private val model = OperationNormalizer(baseModel).transformModel(
+        inputBodyFactory = OperationNormalizer.NoBody,
+        outputBodyFactory = OperationNormalizer.NoBody
+    )
     private val symbolProvider = testSymbolProvider(model)
     private val runtimeConfig = TestRuntimeConfig
     private val correctBody = """{"name": "Teddy"}"""
