@@ -98,7 +98,6 @@ class StructureGenerator(
                 write("$memberName: \$T,", symbolProvider.toSymbol(member))
             }
         }
-
         if (renderBuilder) {
             writer.rustBlock("impl ${symbol.name}") {
                 docs("Creates a new builder-style object to manufacture \$D", symbol)
@@ -140,8 +139,8 @@ class StructureGenerator(
                 val outerType = memberSymbol.rustType()
                 val coreType = outerType.stripOuter<RustType.Option>()
                 val signature = when (coreType) {
-                    is RustType.String -> "<Str: Into<String>>(mut self, inp: Str) -> Self"
-                    is RustType.Box -> "<T>(mut self, inp: T) -> Self where T: Into<${coreType.render()}>"
+                    is RustType.String -> "(mut self, inp: impl Into<String>) -> Self"
+                    is RustType.Box -> "(mut self, inp: impl Into<${coreType.render()}>) -> Self"
                     else -> "(mut self, inp: ${coreType.render()}) -> Self"
                 }
                 writer.documentShape(member, model)
