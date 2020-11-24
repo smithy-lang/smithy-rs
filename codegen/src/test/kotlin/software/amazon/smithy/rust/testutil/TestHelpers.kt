@@ -19,7 +19,7 @@ val TestSymbolVisitorConfig = SymbolVisitorConfig(runtimeConfig = TestRuntimeCon
 fun testSymbolProvider(model: Model): SymbolProvider = RustCodegenPlugin.BaseSymbolProvider(model, TestSymbolVisitorConfig)
 
 private const val SmithyVersion = "1.0"
-fun String.asSmithy(sourceLocation: String? = null): Model {
+fun String.asSmithyModel(sourceLocation: String? = null): Model {
     val processed = letIf(!this.startsWith("\$version")) { "\$version: ${SmithyVersion.dq()}\n$it" }
     return Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble().unwrap()
 }

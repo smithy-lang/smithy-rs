@@ -5,4 +5,16 @@ data class RustModule(val name: String, val rustMetadata: RustMetadata) {
         rustMetadata.render(writer)
         writer.write("mod $name;")
     }
+
+    companion object {
+        fun default(name: String, public: Boolean): RustModule {
+            // TODO: figure out how to enable this, but only for real services (protocol tests don't have documentation)
+            /*val attributes = if (public) {
+                listOf(Custom("deny(missing_docs)"))
+            } else {
+                listOf()
+            }*/
+            return RustModule(name, RustMetadata(public = public))
+        }
+    }
 }

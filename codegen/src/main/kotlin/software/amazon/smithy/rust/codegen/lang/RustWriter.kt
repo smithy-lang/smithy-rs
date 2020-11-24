@@ -10,13 +10,16 @@ import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.writer.CodegenWriter
 import software.amazon.smithy.codegen.core.writer.CodegenWriterFactory
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.utils.CodeWriter
 import java.util.function.BiFunction
 
@@ -74,11 +77,55 @@ fun <T : CodeWriter> T.rustBlock(header: String, vararg args: Any, block: T.() -
     return this
 }
 
-class RustWriter private constructor(private val filename: String, val namespace: String, private val commentCharacter: String = "//", private val printWarning: Boolean = true) :
+/**
+ * Generate a RustDoc comment for [shape]
+ */
+fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model): T {
+    // TODO: support additional Smithy documentation traits like @example
+    val docTrait = shape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
+
+    docTrait?.value?.also {
+        this.docs(it)
+    }
+
+    return this
+}
+
+/**
+ * Write RustDoc-style docs into the writer
+ *
+ * Several modifications are made to provide consistent RustDoc formatting:
+ *    - All lines will be prefixed by `///`
+ *    - Tabs are replaced with spaces
+ *    - Empty newlines are removed
+ */
+fun <T : CodeWriter> T.docs(text: String, vararg args: Any) {
+    pushState("docs")
+    setNewlinePrefix("/// ")
+    val cleaned = text.lines()
+        // We need to filter out blank lines—an empty line causes the markdown parser to interpret the subsequent
+        // docs as a code block because they are indented.
+        .filter { !it.isBlank() }
+        .joinToString("\n") {
+            // Rustdoc warns on tabs in documentation
+            it.trimStart().replace("\t", "  ")
+        }
+    write(cleaned, *args)
+    popState()
+}
+
+class RustWriter private constructor(
+    private val filename: String,
+    val namespace: String,
+    private val commentCharacter: String = "//",
+    private val printWarning: Boolean = true
+) :
     CodegenWriter<RustWriter, UseDeclarations>(null, UseDeclarations(namespace)) {
     companion object {
-        fun forModule(module: String): RustWriter {
-            return RustWriter("$module.rs", "crate::$module")
+        fun forModule(module: String?): RustWriter = if (module == null) {
+            RustWriter("lib.rs", "crate")
+        } else {
+            RustWriter("$module.rs", "crate::$module")
         }
 
         val Factory: CodegenWriterFactory<RustWriter> =
@@ -89,17 +136,16 @@ class RustWriter private constructor(private val filename: String, val namespace
                 }
             }
     }
-    init {
-        if (filename.endsWith(".rs")) {
-            require(namespace.startsWith("crate")) { "We can only write into files in the crate (got $namespace)" }
-        }
-    }
 
     private val formatter = RustSymbolFormatter()
     private var n = 0
 
     init {
+        if (filename.endsWith(".rs")) {
+            require(namespace.startsWith("crate")) { "We can only write into files in the crate (got $namespace)" }
+        }
         putFormatter('T', formatter)
+        putFormatter('D', RustDocLinker())
     }
 
     fun module(): String? = if (filename.endsWith(".rs")) {
@@ -125,7 +171,11 @@ class RustWriter private constructor(private val filename: String, val namespace
      *
      * The returned writer will inject any local imports into the module as needed.
      */
-    fun withModule(moduleName: String, rustMetadata: RustMetadata = RustMetadata(public = true), moduleWriter: RustWriter.() -> Unit) {
+    fun withModule(
+        moduleName: String,
+        rustMetadata: RustMetadata = RustMetadata(public = true),
+        moduleWriter: RustWriter.() -> Unit
+    ): RustWriter {
         // In Rust, modules must specify their own imports—they don't have access to the parent scope.
         // To easily handle this, create a new inner writer to collect imports, then dump it
         // into an inline module.
@@ -136,6 +186,7 @@ class RustWriter private constructor(private val filename: String, val namespace
             write(innerWriter.toString())
         }
         innerWriter.dependencies.forEach { addDependency(it) }
+        return this
     }
 
     // TODO: refactor both of these methods & add a parent method to for_each across any field type
@@ -183,6 +234,18 @@ class RustWriter private constructor(private val filename: String, val namespace
             "$base.as_str()"
         } else {
             base
+        }
+    }
+
+    /**
+     * Generate RustDoc links, eg. [`Abc`](crate::module::Abc)
+     */
+    inner class RustDocLinker : BiFunction<Any, String, String> {
+        override fun apply(t: Any, u: String): String {
+            return when (t) {
+                is Symbol -> "[`${t.name}`](${t.fullName})"
+                else -> throw CodegenException("Invalid type provided to RustDocLinker ($t) expected Symbol")
+            }
         }
     }
 
