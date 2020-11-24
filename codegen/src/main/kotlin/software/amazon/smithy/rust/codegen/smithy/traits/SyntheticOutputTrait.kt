@@ -10,7 +10,7 @@ import software.amazon.smithy.model.traits.AnnotationTrait
 class SyntheticOutputTrait constructor(val body: ShapeId?) :
     AnnotationTrait(ID, ObjectNode.fromStringMap(mapOf("body" to body.toString()))) {
     companion object {
-        val ID = ShapeId.from("smithy.api.internal#syntheticInput")
+        val ID = ShapeId.from("smithy.api.internal#syntheticOutput")
     }
 }
 
@@ -19,6 +19,6 @@ class SyntheticOutputTrait constructor(val body: ShapeId?) :
  */
 class OutputBodyTrait(objectNode: ObjectNode = ObjectNode.objectNode()) : AnnotationTrait(ID, objectNode) {
     companion object {
-        val ID = ShapeId.from("smithy.api.internal#syntheticInputBody")
+        val ID = ShapeId.from("smithy.api.internal#syntheticOutputBody")
     }
 }

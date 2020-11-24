@@ -90,10 +90,9 @@ class HttpTraitBindingGeneratorTest {
                 additional: String,
             }
         """.asSmithy()
-    private val model = OperationNormalizer().transformModel(
-        baseModel,
-        inputBody = OperationNormalizer.noBody,
-        outputBody = OperationNormalizer.noBody
+    private val model = OperationNormalizer(baseModel).transformModel(
+        inputBodyFactory = OperationNormalizer.NoBody,
+        outputBodyFactory = OperationNormalizer.NoBody
     )
 
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)

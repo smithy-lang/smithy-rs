@@ -29,8 +29,8 @@ internal class OperationNormalizerTest {
         """.asSmithy()
         val operationId = ShapeId.from("smithy.test#Empty")
         model.expectShape(operationId, OperationShape::class.java).input.isPresent shouldBe false
-        val sut = OperationNormalizer()
-        val modified = sut.transformModel(model, OperationNormalizer.noBody, OperationNormalizer.noBody)
+        val sut = OperationNormalizer(model)
+        val modified = sut.transformModel(OperationNormalizer.NoBody, OperationNormalizer.NoBody)
         val operation = modified.expectShape(operationId, OperationShape::class.java)
         operation.input.isPresent shouldBe true
         operation.input.get().name shouldBe "EmptyInput"
@@ -62,8 +62,8 @@ internal class OperationNormalizerTest {
         """.asSmithy()
         val operationId = ShapeId.from("smithy.test#MyOp")
         model.expectShape(operationId, OperationShape::class.java).input.isPresent shouldBe true
-        val sut = OperationNormalizer()
-        val modified = sut.transformModel(model, OperationNormalizer.noBody, OperationNormalizer.noBody)
+        val sut = OperationNormalizer(model)
+        val modified = sut.transformModel(OperationNormalizer.NoBody, OperationNormalizer.NoBody)
         val operation = modified.expectShape(operationId, OperationShape::class.java)
         operation.input.isPresent shouldBe true
         val inputId = operation.input.get()
@@ -71,6 +71,30 @@ internal class OperationNormalizerTest {
         val inputShape = modified.expectShape(inputId, StructureShape::class.java)
         testSymbolProvider(modified).toSymbol(inputShape).name shouldBe "MyOpInput"
         inputShape.memberNames shouldBe listOf("v")
+    }
+
+    @Test
+    fun `create cloned outputs for operations`() {
+        val model = """
+            namespace smithy.test
+            structure RenameMe {
+                v: String
+            }
+            operation MyOp {
+                output: RenameMe
+            }
+        """.asSmithy()
+        val operationId = ShapeId.from("smithy.test#MyOp")
+        model.expectShape(operationId, OperationShape::class.java).output.isPresent shouldBe true
+        val sut = OperationNormalizer(model)
+        val modified = sut.transformModel(OperationNormalizer.NoBody, OperationNormalizer.NoBody)
+        val operation = modified.expectShape(operationId, OperationShape::class.java)
+        operation.output.isPresent shouldBe true
+        val outputId = operation.output.get()
+        outputId.name shouldBe "MyOpOutput"
+        val outputShape = modified.expectShape(outputId, StructureShape::class.java)
+        testSymbolProvider(modified).toSymbol(outputShape).name shouldBe "MyOpOutput"
+        outputShape.memberNames shouldBe listOf("v")
     }
 
     @Test
@@ -82,16 +106,16 @@ internal class OperationNormalizerTest {
                 drop: String
             }
             operation MyOp {
-                input: RenameMe
+                input: RenameMe,
+                output: RenameMe
             }""".asSmithy()
 
-        val sut = OperationNormalizer()
+        val sut = OperationNormalizer(model)
         val modified = sut.transformModel(
-            model,
-            inputBody = { input ->
+            inputBodyFactory = { input ->
                 input?.toBuilder()?.members(input.members().filter { it.memberName != "drop" })?.build()
             },
-            outputBody = OperationNormalizer.noBody
+            outputBodyFactory = { it?.toBuilder()?.members(emptyList())?.build() }
         )
         val operation = modified.lookup<OperationShape>("smithy.test#MyOp")
         operation.input.isPresent shouldBe true
@@ -100,8 +124,12 @@ internal class OperationNormalizerTest {
         val inputShape = modified.expectShape(inputId, StructureShape::class.java)
         val input = inputShape.expectTrait(SyntheticInputTrait::class.java)
         input.body shouldBe ShapeId.from("smithy.test#MyOpInputBody")
-        val body = modified.expectShape(input.body, StructureShape::class.java)
-        body.expectTrait(InputBodyTrait::class.java)
-        body.members().size shouldBe 1
+        val inputBody = modified.expectShape(input.body, StructureShape::class.java)
+        inputBody.expectTrait(InputBodyTrait::class.java)
+        inputBody.members().size shouldBe 1
+
+        val outputBodyTrait = modified.expectShape(operation.output.get()).expectTrait(SyntheticOutputTrait::class.java)
+        val outputBody = modified.expectShape(outputBodyTrait.body, StructureShape::class.java)
+        outputBody.members() shouldBe emptyList()
     }
 }

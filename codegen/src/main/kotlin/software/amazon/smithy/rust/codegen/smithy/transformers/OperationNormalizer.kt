@@ -24,18 +24,25 @@ typealias StructureModifier = (StructureShape?) -> StructureShape?
 /**
  * Generate synthetic Input and Output structures for operations.
  */
-// TODO: generate operation outputs as well; 2h
-
-class OperationNormalizer() {
+class OperationNormalizer(private val model: Model) {
     /**
-     * Add synthetic input shapes to every Operation in model
+     * Add synthetic input & output shapes to every Operation in model. The generated shapes will be marked with
+     * [SyntheticInputTrait] and [SyntheticOutputTrait] respectively. Shapes will be added _even_ if the operation does
+     * not specify an input or an output. The body shapes (if created) will be marked with [InputBodyTrait] and
+     * [OutputBodyTrait]
+     *
+     * To build input bodies, [inputBodyFactory] is called on the input shape of every operation. It MUST return a structure representing the
+     * shape of the request body, or null if there is no request body.
+     *
+     * To build output bodies, [outputBodyFactory] is called on the output shape of every operation. It MUST return a structure representing the
+     * shape of the response body, or null if there is no response body.
      */
-    fun transformModel(model: Model, inputBody: StructureModifier, outputBody: StructureModifier): Model {
+    fun transformModel(inputBodyFactory: StructureModifier, outputBodyFactory: StructureModifier): Model {
         val transformer = ModelTransformer.create()
         val operations = model.shapes(OperationShape::class.java).toList()
         val newShapes = operations.flatMap { operation ->
             // Generate or modify the input of input `Operation` to be a unique shape
-            syntheticInputShapes(operation, inputBody, model) + syntheticOutputShapes(operation, outputBody, model)
+            syntheticInputShapes(operation, inputBodyFactory) + syntheticOutputShapes(operation, outputBodyFactory)
         }
         val modelWithOperationInputs = model.toBuilder().addShapes(newShapes).build()
         return transformer.mapShapes(modelWithOperationInputs) {
@@ -51,9 +58,12 @@ class OperationNormalizer() {
         }
     }
 
-    private fun syntheticOutputShapes(operation: OperationShape, outputBody: StructureModifier, model: Model): List<StructureShape> {
+    private fun syntheticOutputShapes(
+        operation: OperationShape,
+        outputBodyFactory: StructureModifier
+    ): List<StructureShape> {
         val outputId = operation.outputId()
-        val outputBodyShape = outputBody(
+        val outputBodyShape = outputBodyFactory(
             operation.output.map { model.expectShape(it, StructureShape::class.java) }.orNull()
         )?.let { it.toBuilder().addTrait(OutputBodyTrait()).rename(operation.outputBodyId()).build() }
         val outputShapeBuilder = operation.output.map { shapeId ->
@@ -65,13 +75,15 @@ class OperationNormalizer() {
 
     private fun syntheticInputShapes(
         operation: OperationShape,
-        inputBody: StructureModifier,
-        model: Model
+        inputBodyFactory: StructureModifier
     ): List<StructureShape> {
         val inputId = operation.inputId()
-        val inputBodyShape = inputBody(
-            operation.input.map { model.expectShape(it, StructureShape::class.java) }.orNull()
-        )?.let { it.toBuilder().addTrait(InputBodyTrait()).rename(operation.inputBodyId()).build() }
+        val inputBodyShape = inputBodyFactory(
+            operation.input.map {
+                val inputShape = model.expectShape(it, StructureShape::class.java)
+                inputShape.toBuilder().addTrait(InputBodyTrait()).rename(operation.inputBodyId()).build()
+            }.orNull()
+        )
         val inputShapeBuilder = operation.input.map { shapeId ->
             model.expectShape(shapeId, StructureShape::class.java).toBuilder().rename(inputId)
         }.orElse(empty(inputId))
@@ -82,12 +94,14 @@ class OperationNormalizer() {
     private fun empty(id: ShapeId) = StructureShape.builder().id(id)
 
     companion object {
+        // Functions to construct synthetic shape IDs—Don't rely on these in external code: The attached traits
+        // provide shape ids via `.body` on [SyntheticInputTrait] and [SyntheticOutputTrait]
         private fun OperationShape.inputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Input")
         private fun OperationShape.outputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Output")
         private fun OperationShape.inputBodyId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}InputBody")
         private fun OperationShape.outputBodyId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}OutputBody")
 
-        val noBody: (StructureShape?) -> StructureShape? = { _ -> null }
+        val NoBody: (StructureShape?) -> StructureShape? = { _ -> null }
     }
 }
 

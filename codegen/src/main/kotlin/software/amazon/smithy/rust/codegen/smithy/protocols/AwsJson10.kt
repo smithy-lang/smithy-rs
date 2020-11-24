@@ -49,7 +49,7 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
         protocolConfig: ProtocolConfig
     ): BasicAwsJsonGenerator = BasicAwsJsonGenerator(protocolConfig, version)
 
-    private val nonEmptyShape: StructureModifier = { shape: StructureShape? ->
+    private val shapeIfHasMembers: StructureModifier = { shape: StructureShape? ->
         if (shape?.members().isNullOrEmpty()) {
             null
         } else {
@@ -59,10 +59,9 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
 
     override fun transformModel(model: Model): Model {
         // For AwsJson10, the body matches 1:1 with the input
-        return OperationNormalizer().transformModel(
-            model,
-            inputBody = nonEmptyShape,
-            outputBody = nonEmptyShape
+        return OperationNormalizer(model).transformModel(
+            inputBodyFactory = shapeIfHasMembers,
+            outputBodyFactory = shapeIfHasMembers
         )
     }
 
@@ -80,7 +79,20 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
 /**
  * SyntheticBodySymbolProvider makes two modifications:
  * 1. Body shapes are moved to `serializer.rs`
- * 2. Body shapes take a reference to all of their members.
+ * 2. Body shapes take a reference to all of their members:
+ * If the base structure was:
+ * ```rust
+ * struct {
+ *   field: Option<u64>
+ * }
+ * ```
+ * The body will generate:
+ * ```rust
+ * struct<'a> {
+ *   field: &'a Option<u64>
+ * }
+ *
+ * This enables the creation of a body from a reference to an input without cloning.
  */
 class SyntheticBodySymbolProvider(private val model: Model, private val base: RustSymbolProvider) :
     WrappingSymbolProvider(base) {

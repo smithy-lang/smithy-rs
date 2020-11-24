@@ -27,10 +27,9 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
 
     override fun transformModel(model: Model): Model {
         // TODO: AWSRestJson determines the body from HTTP traits
-        return OperationNormalizer().transformModel(
-            model,
-            inputBody = OperationNormalizer.noBody,
-            outputBody = OperationNormalizer.noBody
+        return OperationNormalizer(model).transformModel(
+            inputBodyFactory = OperationNormalizer.NoBody,
+            outputBodyFactory = OperationNormalizer.NoBody
         )
     }
 
