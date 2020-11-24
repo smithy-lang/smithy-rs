@@ -8,6 +8,7 @@ import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
@@ -27,19 +28,24 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.symbol.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.symbol.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.symbol.expectRustMetadata
+import software.amazon.smithy.rust.codegen.smithy.symbol.letIf
 import software.amazon.smithy.rust.codegen.smithy.symbol.rustType
+import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
+import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
 import software.amazon.smithy.rust.codegen.util.dq
 
 /**
  * JsonSerializerSymbolProvider annotates shapes and members with `serde` attributes
  */
 class JsonSerializerSymbolProvider(
-    model: Model,
+    private val model: Model,
     private val base: RustSymbolProvider,
     private val defaultTimestampFormat: TimestampFormatTrait.Format
 
 ) :
     SymbolMetadataProvider(base) {
+
+    data class SerdeConfig(val serialize: Boolean, val deserialize: Boolean)
 
     private fun MemberShape.serializedName() =
         this.getTrait(JsonNameTrait::class.java).map { it.value }.orElse(this.memberName)
@@ -48,23 +54,40 @@ class JsonSerializerSymbolProvider(
     private val serializerBuilder = SerializerBuilder(base.config().runtimeConfig)
     override fun memberMeta(memberShape: MemberShape): RustMetadata {
         val currentMeta = base.toSymbol(memberShape).expectRustMetadata()
-        val skipIfNone =
-            if (base.toSymbol(memberShape).rustType().stripOuter<RustType.Reference>() is RustType.Option) {
-                listOf(Custom("serde(skip_serializing_if = \"Option::is_none\")"))
-            } else {
-                listOf()
-            }
-        val renameAttribute = Custom("serde(rename = ${memberShape.serializedName().dq()})")
-        val serializer = serializerFor(memberShape)
-        val serdeAttribute = serializer?.let {
-            listOf(Custom("serde(serialize_with = ${serializer.fullyQualifiedName().dq()})", listOf(it)))
-        } ?: listOf()
-        return currentMeta.copy(additionalAttributes = currentMeta.additionalAttributes + renameAttribute + serdeAttribute + skipIfNone)
+        val serdeConfig = serdeRequired(model.expectShape(memberShape.container))
+        if (serdeConfig.serialize) {
+            val skipIfNone =
+                if (base.toSymbol(memberShape).rustType().stripOuter<RustType.Reference>() is RustType.Option) {
+                    listOf(Custom("serde(skip_serializing_if = \"Option::is_none\")"))
+                } else {
+                    listOf()
+                }
+            val renameAttribute = Custom("serde(rename = ${memberShape.serializedName().dq()})")
+            val serializer = serializerFor(memberShape)
+            val serdeAttribute = serializer?.let {
+                listOf(Custom("serde(serialize_with = ${serializer.fullyQualifiedName().dq()})", listOf(it)))
+            } ?: listOf()
+            return currentMeta.copy(additionalAttributes = currentMeta.additionalAttributes + renameAttribute + serdeAttribute + skipIfNone)
+        } else {
+            return currentMeta
+        }
     }
 
     override fun structureMeta(structureShape: StructureShape): RustMetadata {
         val currentMeta = base.toSymbol(structureShape).expectRustMetadata()
-        return currentMeta.withDerive(RuntimeType.Serialize)
+        val requiredSerde = serdeRequired(structureShape)
+        return currentMeta
+            .letIf(requiredSerde.serialize) { it.withDerive(RuntimeType.Serialize) }
+        // TODO: generate deserializers
+        // .letIf(requiredSerde.deserialize) { it.withDerive(RuntimeType.Deserialize) }
+    }
+
+    private fun serdeRequired(shape: Shape): SerdeConfig {
+        return when {
+            shape.hasTrait(InputBodyTrait::class.java) -> SerdeConfig(serialize = true, deserialize = false)
+            shape.hasTrait(OutputBodyTrait::class.java) -> SerdeConfig(serialize = false, deserialize = true)
+            else -> SerdeConfig(serialize = true, deserialize = true)
+        }
     }
 
     override fun unionMeta(unionShape: UnionShape): RustMetadata {

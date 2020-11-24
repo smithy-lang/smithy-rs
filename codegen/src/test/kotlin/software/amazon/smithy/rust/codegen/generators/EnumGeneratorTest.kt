@@ -16,7 +16,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.util.lookup
-import software.amazon.smithy.rust.testutil.asSmithy
+import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.compileAndRun
 import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.shouldCompile
@@ -81,7 +81,7 @@ class EnumGeneratorTest {
                 name: "Bar"
             }])
             string FooEnum
-            """.asSmithy()
+            """.asSmithyModel()
         val shape: StringShape = model.lookup("test#FooEnum")
         val trait = shape.expectTrait(EnumTrait::class.java)
         val writer = RustWriter.forModule("model")
@@ -109,7 +109,7 @@ class EnumGeneratorTest {
                 value: "Bar",
             }])
             string FooEnum
-            """.asSmithy()
+            """.asSmithyModel()
         val shape: StringShape = model.lookup("test#FooEnum")
         val trait = shape.expectTrait(EnumTrait::class.java)
         val writer = RustWriter.forModule("model")
@@ -147,7 +147,7 @@ class EnumGeneratorTest {
             },
         ])
         string FooEnum
-        """.asSmithy()
+        """.asSmithyModel()
         val shape = model.expectShape(ShapeId.from("test#FooEnum"), StringShape::class.java)
         val trait = shape.expectTrait(EnumTrait::class.java)
         val provider: SymbolProvider = testSymbolProvider(model)

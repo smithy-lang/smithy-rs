@@ -112,6 +112,7 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
         val HttpRequestBuilder = Http("request::Builder")
 
         val Serialize = RuntimeType("Serialize", CargoDependency.Serde, namespace = "serde")
+        val Deserialize: RuntimeType = RuntimeType("Deserialize", CargoDependency.Serde, namespace = "serde")
         val Serializer = RuntimeType("Serializer", CargoDependency.Serde, namespace = "serde")
         fun SerdeJson(path: String) = RuntimeType(path, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
 

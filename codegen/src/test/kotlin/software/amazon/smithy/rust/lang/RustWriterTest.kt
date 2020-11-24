@@ -13,12 +13,17 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.CargoDependency
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.docs
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.util.lookup
+import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.compileAndRun
+import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.shouldCompile
 import software.amazon.smithy.rust.testutil.shouldMatchResource
 import software.amazon.smithy.rust.testutil.shouldParseAsRust
@@ -77,5 +82,34 @@ class RustWriterTest {
         assert_eq!(test.member.is_empty(), true);
          """
         )
+    }
+
+    @Test
+    fun `generate docs`() {
+        val sut = RustWriter.forModule("lib")
+        sut.docs(
+            """Top level module documentation
+            |More docs
+            |/* handle weird characters */
+            |`a backtick`
+            |[a link](asdf)
+        """.trimMargin()
+        )
+        sut.rustBlock("fn main()") { }
+        sut.compileAndTest()
+        sut.toString() shouldContain "Top level module"
+    }
+
+    @Test
+    fun `generate doc links`() {
+        val model = """
+        namespace test
+        structure Foo {}
+        """.asSmithyModel()
+        val shape = model.lookup<StructureShape>("test#Foo")
+        val symbol = testSymbolProvider(model).toSymbol(shape)
+        val sut = RustWriter.forModule("lib")
+        sut.docs("A link! \$D", symbol)
+        sut.toString() shouldContain "/// A link! [`Foo`](crate::model::Foo)"
     }
 }

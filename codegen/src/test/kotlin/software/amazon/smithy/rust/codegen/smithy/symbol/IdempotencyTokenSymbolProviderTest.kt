@@ -6,7 +6,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.util.lookup
-import software.amazon.smithy.rust.testutil.asSmithy
+import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
@@ -25,7 +25,7 @@ internal class IdempotencyTokenSymbolProviderTest {
         }
 
         string NotIdempotent
-        """.asSmithy()
+        """.asSmithyModel()
         val provider = testSymbolProvider(model)
         val struct = model.lookup<MemberShape>("smithy.example#Input\$member")
         val keySymbol = provider.toSymbol(struct)
@@ -45,7 +45,7 @@ internal class IdempotencyTokenSymbolProviderTest {
 
             anotherMember: String
         }
-        """.asSmithy()
+        """.asSmithyModel()
         val writer = RustWriter.forModule("model")
         StructureGenerator(model, testSymbolProvider(model), writer, model.lookup("smithy.example#Input")).render()
         writer.compileAndTest(

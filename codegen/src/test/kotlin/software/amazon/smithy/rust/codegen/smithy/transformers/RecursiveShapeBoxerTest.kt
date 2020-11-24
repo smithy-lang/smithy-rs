@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.rust.codegen.smithy.traits.RustBoxTrait
 import software.amazon.smithy.rust.codegen.util.lookup
-import software.amazon.smithy.rust.testutil.asSmithy
+import software.amazon.smithy.rust.testutil.asSmithyModel
 import kotlin.streams.toList
 
 internal class RecursiveShapeBoxerTest {
@@ -23,7 +23,7 @@ internal class RecursiveShapeBoxerTest {
             structure Bar {
                 hello: Hello
             }
-        """.asSmithy()
+        """.asSmithyModel()
         RecursiveShapeBoxer.transform(model) shouldBe model
     }
 
@@ -35,7 +35,7 @@ internal class RecursiveShapeBoxerTest {
             RecursiveStruct: Recursive,
             anotherField: Boolean
         }
-        """.asSmithy()
+        """.asSmithyModel()
         val transformed = RecursiveShapeBoxer.transform(model)
         val member: MemberShape = transformed.lookup("com.example#Recursive\$RecursiveStruct")
         member.expectTrait(RustBoxTrait::class.java)
@@ -62,7 +62,7 @@ internal class RecursiveShapeBoxerTest {
             otherMember: Atom,
             third: SecondTree
        }
-       """.asSmithy()
+       """.asSmithyModel()
         val transformed = RecursiveShapeBoxer.transform(model)
         val boxed = transformed.shapes().filter { it.hasTrait(RustBoxTrait::class.java) }.toList()
         boxed.map { it.id.toString().removePrefix("com.example#") }.toSet() shouldBe setOf(

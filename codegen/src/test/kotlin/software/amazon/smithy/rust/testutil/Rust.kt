@@ -81,8 +81,13 @@ fun RustWriter.compileAndTest(
 ): String {
     // TODO: if there are no dependencies, we can be a bit quicker
     try {
+        val module = if (this.namespace.contains("::")) {
+            this.namespace.split("::")[1]
+        } else {
+            "lib"
+        }
         val output = this
-            .compileAndTestInner(module = this.namespace.split("::")[1], main = main, strict = clippy)
+            .compileAndTestInner(module = module, main = main, strict = clippy)
         if (expectFailure) {
             println(this.toString())
         }

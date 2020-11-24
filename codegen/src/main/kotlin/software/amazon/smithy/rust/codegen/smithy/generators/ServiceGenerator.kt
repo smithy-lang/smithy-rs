@@ -10,6 +10,7 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 
 class ServiceGenerator(
     private val writers: CodegenWriterDelegator<RustWriter>,
@@ -32,14 +33,21 @@ class ServiceGenerator(
 
     private fun renderBodies() {
         val operations = index.getContainedOperations(config.serviceShape)
-        val bodies = operations.map { config.model.expectShape(it.input.get()) }.map {
+        val inputBodies = operations.map { config.model.expectShape(it.input.get()) }.map {
             it.expectTrait(SyntheticInputTrait::class.java)
         }.mapNotNull { // mapNotNull is flatMap but for null `map { it }.filter { it != null }`
             it.body
         }.map { // Lookup the Body structure by its id
             config.model.expectShape(it, StructureShape::class.java)
         }
-        bodies.map { body ->
+        val outputBodies = operations.map { config.model.expectShape(it.output.get()) }.map {
+            it.expectTrait(SyntheticOutputTrait::class.java)
+        }.mapNotNull { // mapNotNull is flatMap but for null `map { it }.filter { it != null }`
+            it.body
+        }.map { // Lookup the Body structure by its id
+            config.model.expectShape(it, StructureShape::class.java)
+        }
+        (inputBodies + outputBodies).map { body ->
             // The body symbol controls its location, usually in the serializer module
             writers.useShapeWriter(body) { writer ->
                 with(config) {

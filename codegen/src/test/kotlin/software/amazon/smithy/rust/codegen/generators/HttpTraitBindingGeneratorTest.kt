@@ -30,7 +30,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.uriFormatString
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.testutil.asSmithy
+import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
@@ -89,8 +89,11 @@ class HttpTraitBindingGeneratorTest {
                 // Sent in the body
                 additional: String,
             }
-        """.asSmithy()
-    private val model = OperationNormalizer().transformModel(baseModel)
+        """.asSmithyModel()
+    private val model = OperationNormalizer(baseModel).transformModel(
+        inputBodyFactory = OperationNormalizer.NoBody,
+        outputBodyFactory = OperationNormalizer.NoBody
+    )
 
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
     private val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
