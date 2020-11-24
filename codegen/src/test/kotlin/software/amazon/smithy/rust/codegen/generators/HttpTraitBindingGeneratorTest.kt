@@ -106,7 +106,7 @@ class HttpTraitBindingGeneratorTest {
                 symbolProvider,
                 TestRuntimeConfig, writer, operationShape, inputShape, httpTrait
             ).renderUpdateHttpBuilder(this)
-            rustBlock("pub fn build_http_request(&self) -> \$T", RuntimeType.HttpRequestBuilder) {
+            rustBlock("pub fn request_builder_base(&self) -> \$T", RuntimeType.HttpRequestBuilder) {
                 write("let builder = \$T::new();", RuntimeType.HttpRequestBuilder)
                 write("self.update_http_builder(builder)")
             }
@@ -158,7 +158,7 @@ class HttpTraitBindingGeneratorTest {
                 .some_value("qp")
                 .media_type("base64encodethis")
                 .build().unwrap();
-            let http_request = inp.build_http_request().body(()).unwrap();
+            let http_request = inp.request_builder_base().body(()).unwrap();
             assert_eq!(http_request.uri(), "/buk/1970-04-28T03%3A58%3A45Z?paramName=qp&hello=0&hello=1");
             assert_eq!(http_request.method(), "PUT");
             let mut date_header = http_request.headers().get_all("X-Dates").iter();

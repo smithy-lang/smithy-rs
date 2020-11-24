@@ -23,6 +23,8 @@ pub enum ProtocolTestFailure {
     },
     #[error("missing required header: `{expected}`")]
     MissingHeader { expected: String },
+    #[error("Header `{forbidden}` was forbidden but found: `{found}`")]
+    ForbiddenHeader { forbidden: String, found: String },
     #[error("body did not match. Hint:\n{hint}")]
     BodyDidNotMatch {
         expected: String,
@@ -126,24 +128,66 @@ pub fn validate_headers<B>(
     expected_headers: &[(&str, &str)],
 ) -> Result<(), ProtocolTestFailure> {
     for (key, expected_value) in expected_headers {
+        match normalized_header(request, key) {
+            None => {
+                return Err(ProtocolTestFailure::MissingHeader {
+                    expected: key.to_string(),
+                })
+            }
+            Some(actual_value) if actual_value != *expected_value => {
+                return Err(ProtocolTestFailure::InvalidHeader {
+                    key: key.to_string(),
+                    expected: expected_value.to_string(),
+                    found: actual_value,
+                })
+            }
+            _ => (),
+        }
+    }
+    Ok(())
+}
+
+fn normalized_header<B>(request: &Request<B>, key: &str) -> Option<String> {
+    if !request.headers().contains_key(key) {
+        None
+    } else {
+        Some(
+            request
+                .headers()
+                .get_all(key)
+                .iter()
+                .map(|hv| hv.to_str().unwrap())
+                .collect::<Vec<_>>()
+                .join(", "),
+        )
+    }
+}
+
+pub fn forbid_headers<B>(
+    request: &Request<B>,
+    forbidden_headers: &[&str],
+) -> Result<(), ProtocolTestFailure> {
+    for key in forbidden_headers {
         // Protocol tests store header lists as comma-delimited
-        if !request.headers().contains_key(*key) {
-            return Err(ProtocolTestFailure::MissingHeader {
-                expected: key.to_string(),
+        if let Some(value) = normalized_header(request, *key) {
+            return Err(ProtocolTestFailure::ForbiddenHeader {
+                forbidden: key.to_string(),
+                found: format!("{}: {}", key, value),
             });
         }
-        let actual_value: String = request
-            .headers()
-            .get_all(*key)
-            .iter()
-            .map(|hv| hv.to_str().unwrap())
-            .collect::<Vec<_>>()
-            .join(", ");
-        if *expected_value != actual_value {
-            return Err(ProtocolTestFailure::InvalidHeader {
-                key: key.to_string(),
-                expected: expected_value.to_string(),
-                found: actual_value,
+    }
+    Ok(())
+}
+
+pub fn require_headers<B>(
+    request: &Request<B>,
+    required_headers: &[&str],
+) -> Result<(), ProtocolTestFailure> {
+    for key in required_headers {
+        // Protocol tests store header lists as comma-delimited
+        if normalized_header(request, *key).is_none() {
+            return Err(ProtocolTestFailure::MissingHeader {
+                expected: key.to_string(),
             });
         }
     }
@@ -219,8 +263,8 @@ fn validate_json_body(actual: &str, expected: &str) -> Result<(), ProtocolTestFa
 #[cfg(test)]
 mod tests {
     use crate::{
-        forbid_query_params, require_query_params, validate_body, validate_headers,
-        validate_query_string, MediaType, ProtocolTestFailure,
+        forbid_headers, forbid_query_params, require_headers, require_query_params, validate_body,
+        validate_headers, validate_query_string, MediaType, ProtocolTestFailure,
     };
     use http::Request;
 
@@ -303,34 +347,52 @@ mod tests {
     }
 
     #[test]
+    fn test_forbidden_headers() {
+        let request = Request::builder()
+            .uri("/")
+            .header("X-Foo", "foo")
+            .body(())
+            .unwrap();
+        assert_eq!(
+            forbid_headers(&request, &["X-Foo"]).expect_err("should be error"),
+            ProtocolTestFailure::ForbiddenHeader {
+                forbidden: "X-Foo".to_string(),
+                found: "X-Foo: foo".to_string()
+            }
+        );
+        forbid_headers(&request, &["X-Bar"]).expect("header not present");
+    }
+
+    #[test]
+    fn test_required_headers() {
+        let request = Request::builder()
+            .uri("/")
+            .header("X-Foo", "foo")
+            .body(())
+            .unwrap();
+        require_headers(&request, &["X-Foo"]).expect("header present");
+        require_headers(&request, &["X-Bar"]).expect_err("header not present");
+    }
+
+    #[test]
     fn test_validate_json_body() {
         let expected = r#"{"abc": 5 }"#;
         let actual = r#"   {"abc":   5 }"#;
-        validate_body(actual.as_bytes(), expected, MediaType::Json)
-            .expect("inputs matched as JSON");
+        validate_body(&actual, expected, MediaType::Json).expect("inputs matched as JSON");
 
         let expected = r#"{"abc": 5 }"#;
         let actual = r#"   {"abc":   6 }"#;
-        validate_body(actual.as_bytes(), expected, MediaType::Json)
-            .expect_err("bodies do not match");
+        validate_body(&actual, expected, MediaType::Json).expect_err("bodies do not match");
     }
 
     #[test]
     fn test_validate_non_json_body() {
         let expected = r#"asdf"#;
         let actual = r#"asdf "#;
-        validate_body(
-            actual.as_bytes(),
-            expected,
-            MediaType::from("something/else"),
-        )
-        .expect_err("bodies do not match");
+        validate_body(&actual, expected, MediaType::from("something/else"))
+            .expect_err("bodies do not match");
 
-        validate_body(
-            expected.as_bytes(),
-            expected,
-            MediaType::from("something/else"),
-        )
-        .expect("inputs matched exactly")
+        validate_body(&expected, expected, MediaType::from("something/else"))
+            .expect("inputs matched exactly")
     }
 }

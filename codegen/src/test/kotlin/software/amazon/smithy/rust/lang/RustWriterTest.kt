@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.lang
 
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldContainOnlyOnce
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
@@ -39,7 +40,7 @@ class RustWriterTest {
 
     @Test
     fun `inner modules correctly handle dependencies`() {
-        val sut = RustWriter.forModule("lib")
+        val sut = RustWriter.forModule("parent")
         val requestBuilder = RuntimeType.HttpRequestBuilder
         sut.withModule("inner") {
             rustBlock("fn build(builer: \$T)", requestBuilder) {
@@ -47,6 +48,7 @@ class RustWriterTest {
         }
         val httpDep = CargoDependency.Http.dependencies[0]
         sut.dependencies shouldContain httpDep
+        sut.toString() shouldContainOnlyOnce "DO NOT EDIT"
     }
 
     @Test
