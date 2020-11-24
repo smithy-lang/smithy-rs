@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBox
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.testutil.asSmithy
+import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
@@ -59,7 +59,7 @@ class InstantiatorTest {
             member: WithBox,
             value: Integer
         }
-        """.asSmithy().let { RecursiveShapeBoxer.transform(it) }
+        """.asSmithyModel().let { RecursiveShapeBoxer.transform(it) }
 
     private val symbolProvider = testSymbolProvider(model)
     private val runtimeConfig = TestRuntimeConfig

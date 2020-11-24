@@ -33,7 +33,7 @@ import software.amazon.smithy.rust.codegen.smithy.Shapes
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.referenceClosure
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.testutil.asSmithy
+import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class SymbolBuilderTest {
@@ -91,7 +91,7 @@ class SymbolBuilderTest {
                 }
             ])
             string StandardUnit
-        """.asSmithy()
+        """.asSmithyModel()
         val shape = model.expectShape(ShapeId.from("test#StandardUnit"))
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(shape)
@@ -257,7 +257,7 @@ class SymbolBuilderTest {
                 // Sent in the body
                 additional: String,
             }
-        """.asSmithy()
+        """.asSmithyModel()
         val symbol = testSymbolProvider(model).toSymbol(model.expectShape(ShapeId.from("smithy.example#PutObject")))
         symbol.definitionFile shouldBe("src/${Operations.filename}")
         symbol.name shouldBe "PutObject"

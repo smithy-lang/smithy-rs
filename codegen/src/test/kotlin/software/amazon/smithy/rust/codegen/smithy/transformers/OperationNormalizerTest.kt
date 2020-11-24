@@ -13,7 +13,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.lookup
-import software.amazon.smithy.rust.testutil.asSmithy
+import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 internal class OperationNormalizerTest {
@@ -23,7 +23,7 @@ internal class OperationNormalizerTest {
         val model = """
             namespace smithy.test
             operation Empty {}
-        """.asSmithy()
+        """.asSmithyModel()
         val operationId = ShapeId.from("smithy.test#Empty")
         model.expectShape(operationId, OperationShape::class.java).input.isPresent shouldBe false
         val sut = OperationNormalizer()
@@ -48,7 +48,7 @@ internal class OperationNormalizerTest {
             operation MyOp {
                 input: RenameMe
             }
-        """.asSmithy()
+        """.asSmithyModel()
         val operationId = ShapeId.from("smithy.test#MyOp")
         model.expectShape(operationId, OperationShape::class.java).input.isPresent shouldBe true
         val sut = OperationNormalizer()
@@ -72,7 +72,7 @@ internal class OperationNormalizerTest {
             }
             operation MyOp {
                 input: RenameMe
-            }""".asSmithy()
+            }""".asSmithyModel()
 
         val sut = OperationNormalizer()
         val modified = sut.transformModel(model) { input ->

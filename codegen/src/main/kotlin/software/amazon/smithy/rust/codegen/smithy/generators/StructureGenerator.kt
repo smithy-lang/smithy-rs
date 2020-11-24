@@ -13,8 +13,11 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.conditionalBlock
+import software.amazon.smithy.rust.codegen.lang.docs
+import software.amazon.smithy.rust.codegen.lang.documentShape
 import software.amazon.smithy.rust.codegen.lang.render
 import software.amazon.smithy.rust.codegen.lang.rustBlock
+import software.amazon.smithy.rust.codegen.lang.stripOuter
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
@@ -24,8 +27,6 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.utils.CaseUtils
 
-// TODO(maybe): extract struct generation from Smithy shapes to support generating body objects
-// TODO: generate documentation
 class StructureGenerator(
     val model: Model,
     private val symbolProvider: SymbolProvider,
@@ -47,6 +48,8 @@ class StructureGenerator(
         }
         if (renderBuilder) {
             val symbol = symbolProvider.toSymbol(shape)
+            // TODO: figure out exactly what docs we want on a the builder module
+            writer.docs("See \$D", symbol)
             writer.withModule(symbol.name.toSnakeCase()) {
                 renderBuilder(this)
             }
@@ -83,13 +86,14 @@ class StructureGenerator(
 
     private fun renderStructure() {
         val symbol = symbolProvider.toSymbol(shape)
-        // TODO(maybe): Pull derive info from the symbol so that the symbol provider can alter things as necessary; 4h
         val containerMeta = symbol.expectRustMetadata()
+        writer.documentShape(shape, model)
         containerMeta.render(writer)
 
         writer.rustBlock("struct ${symbol.name} ${lifetimeDeclaration()}") {
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
+                writer.documentShape(member, model)
                 symbolProvider.toSymbol(member).expectRustMetadata().render(this)
                 write("$memberName: \$T,", symbolProvider.toSymbol(member))
             }
@@ -97,6 +101,7 @@ class StructureGenerator(
 
         if (renderBuilder) {
             writer.rustBlock("impl ${symbol.name}") {
+                docs("Creates a new builder-style object to manufacture \$D", symbol)
                 rustBlock("pub fn builder() -> \$T", builderSymbol) {
                     write("\$T::default()", builderSymbol)
                 }
@@ -105,11 +110,10 @@ class StructureGenerator(
     }
 
     private fun renderBuilder(writer: RustWriter) {
-        // Eventually, I want to do a fancier module layout:
-        // model/some_model.rs [contains builder and impl for a single model] struct SomeModel, struct Builder
-        // model/mod.rs [contains pub use for each model to bring it into top level scope]
-        // users will do models::SomeModel, models::SomeModel::builder()
         val builderName = "Builder"
+
+        val symbol = symbolProvider.toSymbol(shape)
+        writer.docs("A builder for \$D", symbol)
         writer.write("#[non_exhaustive]")
         writer.write("#[derive(Debug, Clone, Default)]")
         writer.rustBlock("pub struct $builderName") {
@@ -134,17 +138,13 @@ class StructureGenerator(
                 // All fields in the builder are optional
                 val memberSymbol = symbolProvider.toSymbol(member)
                 val outerType = memberSymbol.rustType()
-                val coreType = outerType.let {
-                    when (it) {
-                        is RustType.Option -> it.value
-                        else -> it
-                    }
-                }
+                val coreType = outerType.stripOuter<RustType.Option>()
                 val signature = when (coreType) {
                     is RustType.String -> "<Str: Into<String>>(mut self, inp: Str) -> Self"
                     is RustType.Box -> "<T>(mut self, inp: T) -> Self where T: Into<${coreType.render()}>"
                     else -> "(mut self, inp: ${coreType.render()}) -> Self"
                 }
+                writer.documentShape(member, model)
                 writer.rustBlock("pub fn $memberName$signature") {
                     write("self.$memberName = Some(${builderConverter(coreType)});")
                     write("self")
@@ -157,6 +157,7 @@ class StructureGenerator(
                 false -> "\$T"
             }
 
+            writer.docs("Consumes the builder and constructs a \$D", symbol)
             rustBlock("pub fn build(self) -> $returnType", structureSymbol) {
                 conditionalBlock("Ok(", ")", conditional = fallibleBuilder) {
                     rustBlock("\$T", structureSymbol) {

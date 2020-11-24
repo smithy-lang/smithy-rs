@@ -69,8 +69,13 @@ fun RustWriter.compileAndTest(
     // TODO: if there are no dependencies, we can be a bit quicker
     val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<CargoDependency>()
     try {
+        val module = if (this.namespace.contains("::")) {
+            this.namespace.split("::")[1]
+        } else {
+            "lib"
+        }
         val output = this.toString()
-            .compileAndTest(deps.toSet(), module = this.namespace.split("::")[1], main = main, strict = clippy)
+            .compileAndTest(deps.toSet(), module = module, main = main, strict = clippy)
         if (expectFailure) {
             println(this.toString())
         }

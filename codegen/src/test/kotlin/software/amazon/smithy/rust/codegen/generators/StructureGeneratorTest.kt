@@ -12,11 +12,15 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.lang.Custom
+import software.amazon.smithy.rust.codegen.lang.RustMetadata
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.docs
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.testutil.asSmithy
+import software.amazon.smithy.rust.codegen.util.lookup
+import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
@@ -42,7 +46,7 @@ class StructureGeneratorTest {
         structure MyError {
             message: String
         }
-        """.asSmithy()
+        """.asSmithyModel()
     private val struct = model.expectShape(ShapeId.from("com.test#MyStruct"), StructureShape::class.java)
     private val inner = model.expectShape(ShapeId.from("com.test#Inner"), StructureShape::class.java)
     private val error = model.expectShape(ShapeId.from("com.test#MyError"), StructureShape::class.java)
@@ -139,6 +143,39 @@ class StructureGeneratorTest {
         val writer = RustWriter.forModule("error")
         val generator = StructureGenerator(model, provider, writer, error)
         generator.render()
+        writer.compileAndTest()
+    }
+
+    @Test
+    fun `attach docs to everything`() {
+        val model = """
+        namespace com.test
+        @documentation("inner doc")
+        structure Inner { }
+
+        @documentation("shape doc")
+        structure MyStruct {
+           @documentation("member doc")
+           member: String,
+
+           @documentation("specific docs")
+           nested: Inner,
+
+           nested2: Inner
+        }""".asSmithyModel()
+        val provider: SymbolProvider = testSymbolProvider(model)
+        val writer = RustWriter.forModule(null)
+        writer.docs("module docs")
+        writer
+            .withModule(
+                "model",
+                // By attaching this lint, any missing documentation becomes a compiler erorr
+                RustMetadata(additionalAttributes = listOf(Custom("deny(missing_docs)")), public = true)
+            ) {
+                StructureGenerator(model, provider, this, model.lookup("com.test#Inner")).render()
+                StructureGenerator(model, provider, this, model.lookup("com.test#MyStruct")).render()
+            }
+
         writer.compileAndTest()
     }
 }
