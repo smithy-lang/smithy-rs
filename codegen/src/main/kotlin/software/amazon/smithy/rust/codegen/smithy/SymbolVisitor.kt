@@ -73,6 +73,8 @@ data class SymbolLocation(val namespace: String) {
 val Shapes = SymbolLocation("model")
 val Errors = SymbolLocation("error")
 val Operations = SymbolLocation("operation")
+val Inputs = SymbolLocation("input")
+val Outputs = SymbolLocation("output")
 val Serializers = SymbolLocation("serializer")
 
 fun Symbol.makeOptional(): Symbol {
@@ -209,7 +211,8 @@ class SymbolVisitor(
 
     override fun structureShape(shape: StructureShape): Symbol {
         val isError = shape.hasTrait(ErrorTrait::class.java)
-        val isIoShape = shape.hasTrait(SyntheticInputTrait::class.java) || shape.hasTrait(SyntheticOutputTrait::class.java)
+        val isInput = shape.hasTrait(SyntheticInputTrait::class.java)
+        val isOutput = shape.hasTrait(SyntheticOutputTrait::class.java)
         val name = StringUtils.capitalize(shape.id.name).letIf(isError) {
             // TODO: this is should probably be a configurable mixin
             it.replace("Exception", "Error")
@@ -218,7 +221,8 @@ class SymbolVisitor(
         return when {
             isError -> builder.locatedIn(Errors)
             // Input shapes live with their Operations
-            isIoShape -> builder.locatedIn(Operations)
+            isInput -> builder.locatedIn(Inputs)
+            isOutput -> builder.locatedIn(Outputs)
             else -> builder.locatedIn(Shapes)
         }.build()
     }

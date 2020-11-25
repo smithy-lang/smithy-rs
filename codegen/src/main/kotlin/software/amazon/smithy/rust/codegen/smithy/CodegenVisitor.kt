@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.build.PluginContext
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
@@ -22,6 +21,8 @@ import software.amazon.smithy.rust.codegen.lang.InlineDependency
 import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustModule
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.rustBlock
+import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
@@ -47,7 +48,7 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
     private val logger = Logger.getLogger(javaClass.name)
     private val settings = RustSettings.from(context.model, context.settings)
 
-    private val symbolProvider: SymbolProvider
+    private val symbolProvider: RustSymbolProvider
     private val writers: CodegenWriterDelegator<RustWriter>
     private val fileManifest = context.fileManifest
     private val model: Model
@@ -122,6 +123,11 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
         logger.info("generating a structure...")
         writers.useShapeWriter(shape) {
             StructureGenerator(model, symbolProvider, it, shape).render()
+            val builderGenerator = BuilderGenerator(model, symbolProvider, it, shape)
+            builderGenerator.render()
+            it.rustBlock("impl ${symbolProvider.toSymbol(shape).name}") {
+                builderGenerator.convenienceMethod(this)
+            }
         }
     }
 

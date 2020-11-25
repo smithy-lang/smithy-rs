@@ -5,13 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.documentShape
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
  */
 data class ProtocolConfig(
     val model: Model,
-    val symbolProvider: SymbolProvider,
+    val symbolProvider: RustSymbolProvider,
     val runtimeConfig: RuntimeConfig,
     val serviceShape: ServiceShape,
     val protocol: ShapeId
@@ -32,7 +32,7 @@ data class ProtocolConfig(
 interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
     fun buildProtocolGenerator(protocolConfig: ProtocolConfig): T
     fun transformModel(model: Model): Model
-    fun symbolProvider(model: Model, base: RustSymbolProvider): SymbolProvider = base
+    fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider = base
     fun support(): ProtocolSupport
 }
 
@@ -47,15 +47,45 @@ abstract class HttpProtocolGenerator(
     private val model = protocolConfig.model
     fun renderOperation(writer: RustWriter, operationShape: OperationShape) {
         val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
+        val outputShape = model.expectShape(operationShape.output.get(), StructureShape::class.java)
+        val inputSymbol = symbolProvider.toSymbol(inputShape)
+        val builderGenerator = BuilderGenerator(model, symbolProvider, writer, inputShape)
         writer.rustBlock("impl ${symbolProvider.toSymbol(inputShape).name}") {
             toHttpRequestImpl(this, operationShape, inputShape)
             val shapeId = inputShape.expectTrait(SyntheticInputTrait::class.java).body
             val body = shapeId?.let { model.expectShape(it, StructureShape::class.java) }
             toBodyImpl(this, inputShape, body)
             // TODO: streaming shapes need special support
-            rustBlock("pub fn assemble(builder: \$T, body: Vec<u8>) -> \$T<Vec<u8>>", RuntimeType.HttpRequestBuilder, RuntimeType.Http("request::Request")) {
+            rustBlock(
+                "pub fn assemble(builder: \$T, body: Vec<u8>) -> \$T<Vec<u8>>",
+                RuntimeType.HttpRequestBuilder,
+                RuntimeType.Http("request::Request")
+            ) {
                 write("builder.header(\$T, body.len()).body(body)", RuntimeType.Http("header::CONTENT_LENGTH"))
                 write(""".expect("http request should be valid")""")
+            }
+            // builderGenerator.convenienceMethod(this)
+        }
+
+        val operationName = symbolProvider.toSymbol(operationShape).name
+        writer.documentShape(operationShape, model)
+        writer.rustBlock("pub struct $operationName") {
+            write("_input: \$T", inputSymbol)
+        }
+
+        writer.rustBlock("impl $operationName") {
+            rustBlock(
+                "pub fn from_response(&self, _response: \$T<impl AsRef<[u8]>>) -> Result<\$T, ()>",
+                RuntimeType.Http("response::Response"),
+                symbolProvider.toSymbol(outputShape)
+            ) {
+                // TODO: stub.
+                write("Err(())")
+            }
+
+            val builderSymbol = inputShape.builderSymbol(symbolProvider)
+            rustBlock("pub fn builder() -> \$T", inputShape.builderSymbol(symbolProvider)) {
+                write("\$T::default()", builderSymbol)
             }
         }
     }
@@ -89,5 +119,9 @@ abstract class HttpProtocolGenerator(
      *
      * Your implementation MUST call [httpBuilderFun] to create the public method.
      */
-    abstract fun toHttpRequestImpl(implBlockWriter: RustWriter, operationShape: OperationShape, inputShape: StructureShape)
+    abstract fun toHttpRequestImpl(
+        implBlockWriter: RustWriter,
+        operationShape: OperationShape,
+        inputShape: StructureShape
+    )
 }
