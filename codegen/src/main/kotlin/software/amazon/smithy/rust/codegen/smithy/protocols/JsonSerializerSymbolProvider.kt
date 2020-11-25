@@ -195,11 +195,9 @@ class SerializerBuilder(
         body: RustWriter.() -> Unit
     ) {
         rustWriter.rustBlock(
-            "pub fn $functionName<S>(_inp: \$T, _serializer: S) -> " +
-                "Result<<S as \$T>::Ok, <S as \$T>::Error> where S: \$T",
+            "pub fn $functionName<S>(_inp: \$1T, _serializer: S) -> " +
+                "Result<<S as \$2T>::Ok, <S as \$2T>::Error> where S: \$2T",
             serializerType(symbol),
-            RuntimeType.Serializer,
-            RuntimeType.Serializer,
             RuntimeType.Serializer
         ) {
             body(this)
