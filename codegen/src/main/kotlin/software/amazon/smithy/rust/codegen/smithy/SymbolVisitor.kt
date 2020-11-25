@@ -40,6 +40,7 @@ import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.smithy.generators.toSnakeCase
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.utils.StringUtils
 
 // TODO: currently, respecting integer types.
@@ -222,7 +223,7 @@ class SymbolVisitor(
 
     override fun structureShape(shape: StructureShape): Symbol {
         val isError = shape.hasTrait(ErrorTrait::class.java)
-        val isInput = shape.hasTrait(SyntheticInputTrait::class.java)
+        val isIoShape = shape.hasTrait(SyntheticInputTrait::class.java) || shape.hasTrait(SyntheticOutputTrait::class.java)
         val name = StringUtils.capitalize(shape.id.name).letIf(isError) {
             // TODO: this is should probably be a configurable mixin
             it.replace("Exception", "Error")
@@ -231,7 +232,7 @@ class SymbolVisitor(
         return when {
             isError -> builder.locatedIn(Errors)
             // Input shapes live with their Operations
-            isInput -> builder.locatedIn(Operations)
+            isIoShape -> builder.locatedIn(Operations)
             else -> builder.locatedIn(Shapes)
         }.build()
     }
