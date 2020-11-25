@@ -139,7 +139,13 @@ class JsonSerializerSymbolProvider(
         targetType: RustType,
         body: RustWriter.() -> Unit
     ) {
-        val ref = RustType.Reference(lifetime = null, value = targetType)
+        // Convert Vec<T> to `[T]` when present. This is needed to avoid
+        // Clippy complaining (and is also better in general).
+        val sliceToVec = when (targetType) {
+            is RustType.Vec -> RustType.Slice(targetType.member)
+            else -> targetType
+        }
+        val ref = RustType.Reference(lifetime = null, value = sliceToVec)
         val newSymbol = symbol.toBuilder().rustType(ref).build()
         rustWriter.rustBlock(
             "pub fn $functionName<S>(_inp: \$T, _serializer: S) -> " +
