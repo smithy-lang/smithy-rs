@@ -78,10 +78,18 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
             RuntimeType(func, CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::query")
 
         fun Base64Encode(runtimeConfig: RuntimeConfig): RuntimeType =
-            RuntimeType("encode", CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::base64")
+            RuntimeType(
+                "encode",
+                CargoDependency.SmithyHttp(runtimeConfig),
+                "${runtimeConfig.cratePrefix}_http::base64"
+            )
 
         fun Base64Decode(runtimeConfig: RuntimeConfig): RuntimeType =
-            RuntimeType("decode", CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.cratePrefix}_http::base64")
+            RuntimeType(
+                "decode",
+                CargoDependency.SmithyHttp(runtimeConfig),
+                "${runtimeConfig.cratePrefix}_http::base64"
+            )
 
         fun TimestampFormat(runtimeConfig: RuntimeConfig, format: TimestampFormatTrait.Format): RuntimeType {
             val timestampFormat = when (format) {
@@ -102,13 +110,17 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
                 func, CargoDependency.ProtocolTestHelpers(runtimeConfig), "protocol_test_helpers"
             )
 
-        fun Http(path: String): RuntimeType = RuntimeType(name = path, dependency = CargoDependency.Http, namespace = "http")
+        fun Http(path: String): RuntimeType =
+            RuntimeType(name = path, dependency = CargoDependency.Http, namespace = "http")
+
         val HttpRequestBuilder = Http("request::Builder")
 
         val Serialize = RuntimeType("Serialize", CargoDependency.Serde, namespace = "serde")
         val Deserialize: RuntimeType = RuntimeType("Deserialize", CargoDependency.Serde, namespace = "serde")
         val Serializer = RuntimeType("Serializer", CargoDependency.Serde, namespace = "serde")
-        fun SerdeJson(path: String) = RuntimeType(path, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
+        val Deserializer = RuntimeType("Deserializer", CargoDependency.Serde, namespace = "serde")
+        fun SerdeJson(path: String) =
+            RuntimeType(path, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
 
         fun forInlineFun(name: String, module: String, func: (RustWriter) -> Unit) = RuntimeType(
             name = name,
