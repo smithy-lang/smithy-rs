@@ -41,6 +41,11 @@ sealed class RustType {
         override val name: kotlin.String = "Vec"
     }
 
+    data class Slice(val member: RustType) : RustType() {
+        override val name: kotlin.String
+            get() = ""
+    }
+
     data class HashMap(val key: RustType, val value: RustType) : RustType() {
         // TODO: assert that underneath, the member is a String
         override val name: kotlin.String = "HashMap"
@@ -76,6 +81,7 @@ fun RustType.render(): String = when (this) {
     is RustType.Integer -> this.name
     is RustType.String -> this.name
     is RustType.Vec -> "${this.name}<${this.member.render()}>"
+    is RustType.Slice -> "[${this.member.render()}]"
     is RustType.HashMap -> "${this.name}<${this.key.render()}, ${this.value.render()}>"
     is RustType.HashSet -> "${this.name}<${this.member.render()}>"
     is RustType.Reference -> "&${this.lifetime?.let { "'$it" } ?: ""} ${this.value.render()}"
