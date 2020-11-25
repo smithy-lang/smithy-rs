@@ -56,20 +56,6 @@ val SimpleShapes = mapOf(
     StringShape::class to RustType.String
 )
 
-// TODO:
-// Unions
-// Recursive shapes
-// Synthetics (blobs, timestamps)
-// Operation
-// Resources (do we do anything for resources?)
-// Services
-// Higher-level: Set, List, Map
-
-fun Symbol.referenceClosure(): List<Symbol> {
-    val referencedSymbols = this.references.map { it.symbol }
-    return listOf(this) + referencedSymbols.flatMap { it.referenceClosure() }
-}
-
 data class SymbolVisitorConfig(
     val runtimeConfig: RuntimeConfig,
     val handleOptionality: Boolean = true,
