@@ -51,7 +51,6 @@ class HttpProtocolTestGenerator(
         // Misc:
         "RestJsonQueryIdempotencyTokenAutoFill", // https://github.com/awslabs/smithy-rs/issues/34
         "RestJsonHttpPrefixHeadersArePresent" // https://github.com/awslabs/smithy-rs/issues/35
-
     )
     private val inputShape = operationShape.inputShape(protocolConfig.model)
     fun render() {
