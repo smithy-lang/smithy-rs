@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.loader.ModelAssembler
@@ -31,12 +32,16 @@ import software.amazon.smithy.rust.codegen.smithy.Errors
 import software.amazon.smithy.rust.codegen.smithy.Operations
 import software.amazon.smithy.rust.codegen.smithy.Shapes
 import software.amazon.smithy.rust.codegen.smithy.isOptional
-import software.amazon.smithy.rust.codegen.smithy.referenceClosure
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class SymbolBuilderTest {
+    private fun Symbol.referenceClosure(): List<Symbol> {
+        val referencedSymbols = this.references.map { it.symbol }
+        return listOf(this) + referencedSymbols.flatMap { it.referenceClosure() }
+    }
+
     @Test
     fun `creates structures`() {
         val memberBuilder = MemberShape.builder().id("foo.bar#MyStruct\$someField").target("smithy.api#String")
