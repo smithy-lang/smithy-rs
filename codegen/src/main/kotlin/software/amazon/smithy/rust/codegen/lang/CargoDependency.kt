@@ -54,6 +54,19 @@ class InlineDependency(name: String, val module: String, val renderer: (RustWrit
     }
 
     fun key() = "$module::$name"
+
+    companion object {
+        fun forRustFile(name: String, module: String, filename: String): InlineDependency {
+            // The inline crate is loaded as a dependency on the runtime classpath
+            val rustFile = this::class.java.getResource("/inlineable/src/$filename")
+            check(rustFile != null)
+            return InlineDependency(name, module) { writer ->
+                writer.write(rustFile.readText())
+            }
+        }
+
+        fun uuid() = forRustFile("v4", "uuid", "uuid.rs")
+    }
 }
 
 /**

@@ -52,7 +52,7 @@ class ServiceGenerator(
             writers.useShapeWriter(body) { writer ->
                 with(config) {
                     // Generate a body via the structure generator
-                    StructureGenerator(model, symbolProvider, writer, body, renderBuilder = false).render()
+                    StructureGenerator(model, symbolProvider, writer, body).render()
                 }
             }
         }

@@ -71,10 +71,10 @@ class StructureGeneratorTest {
     fun `generate structures with public fields`() {
         val provider: SymbolProvider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")
-        val innerGenerator = StructureGenerator(model, provider, writer, inner, renderBuilder = false)
+        val innerGenerator = StructureGenerator(model, provider, writer, inner)
         innerGenerator.render()
         writer.withModule("structs") {
-            val generator = StructureGenerator(model, provider, this, struct, renderBuilder = false)
+            val generator = StructureGenerator(model, provider, this, struct)
             generator.render()
         }
         // By putting the test in another module, it can't access the struct

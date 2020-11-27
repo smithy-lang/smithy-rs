@@ -80,8 +80,7 @@ class HttpTraitBindingGenerator(
         val hasHeaders = addHeaders(implBlockWriter)
         val hasQuery = uriQuery(implBlockWriter)
         implBlockWriter.rustBlock(
-            "fn update_http_builder(&self, builder: \$T) -> \$T",
-            RuntimeType.HttpRequestBuilder,
+            "fn update_http_builder(&self, builder: \$1T) -> \$1T",
             RuntimeType.HttpRequestBuilder
         ) {
             write("let mut uri = String::new();")
@@ -108,8 +107,7 @@ class HttpTraitBindingGenerator(
             return false
         }
         writer.rustBlock(
-            "fn add_headers(&self, mut builder: \$T) -> \$T",
-            RuntimeType.HttpRequestBuilder,
+            "fn add_headers(&self, mut builder: \$1T) -> \$1T",
             RuntimeType.HttpRequestBuilder
         ) {
             headers.forEach { httpBinding ->
