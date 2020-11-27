@@ -125,7 +125,7 @@ data class RustMetadata(
     val additionalAttributes: List<Attribute> = listOf(),
     val public: Boolean
 ) {
-    fun withDerive(newDerive: RuntimeType): RustMetadata =
+    fun withDerives(vararg newDerive: RuntimeType): RustMetadata =
         this.copy(derives = derives.copy(derives = derives.derives + newDerive))
 
     fun attributes(): List<Attribute> = additionalAttributes + derives

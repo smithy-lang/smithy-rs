@@ -82,8 +82,8 @@ class JsonSerializerSymbolProvider(
         val currentMeta = base.toSymbol(container).expectRustMetadata()
         val requiredSerde = serdeRequired(container)
         return currentMeta
-            .letIf(requiredSerde.serialize) { it.withDerive(RuntimeType.Serialize) }
-            .letIf(requiredSerde.deserialize) { it.withDerive(RuntimeType.Deserialize) }
+            .letIf(requiredSerde.serialize) { it.withDerives(RuntimeType.Serialize) }
+            .letIf(requiredSerde.deserialize) { it.withDerives(RuntimeType.Deserialize) }
     }
 
     private fun serdeRequired(shape: Shape): SerdeConfig {

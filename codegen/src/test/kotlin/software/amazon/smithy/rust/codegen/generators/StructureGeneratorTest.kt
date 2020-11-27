@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.generators
 
+import io.kotest.matchers.string.shouldContainInOrder
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
@@ -65,6 +66,8 @@ class StructureGeneratorTest {
             s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
             """.trimIndent()
         )
+        println(writer.toString())
+        writer.toString().shouldContainInOrder("this documents the shape", "#[non_exhaustive]", "pub", "struct MyStruct")
     }
 
     @Test
@@ -91,6 +94,10 @@ class StructureGeneratorTest {
             }
         }
         writer.compileAndTest()
+    }
+
+    @Test
+    fun `generate non_exhaustive structures`() {
     }
 
     @Test
