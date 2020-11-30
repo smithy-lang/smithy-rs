@@ -78,7 +78,7 @@ abstract class HttpProtocolGenerator(
 
         writer.rustBlock("impl $operationName") {
             rustBlock(
-                "pub fn from_response(&self, response: \$T<impl AsRef<[u8]>>) -> Result<\$T, \$T>",
+                "pub fn from_response(response: \$T<impl AsRef<[u8]>>) -> Result<\$T, \$T>",
                 RuntimeType.Http("response::Response"),
                 outputSymbol,
                 errorSymbol

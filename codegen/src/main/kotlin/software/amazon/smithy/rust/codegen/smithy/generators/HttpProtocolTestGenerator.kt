@@ -1,5 +1,6 @@
 package software.amazon.smithy.rust.codegen.smithy.generators
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.protocoltests.traits.HttpMessageTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
@@ -9,11 +10,14 @@ import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.lang.Custom
 import software.amazon.smithy.rust.codegen.lang.RustMetadata
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.orNull
+import software.amazon.smithy.rust.codegen.util.outputShape
 import java.util.logging.Logger
 
 data class ProtocolSupport(
@@ -56,6 +60,8 @@ class HttpProtocolTestGenerator(
         "RestJsonHttpPrefixHeadersArePresent" // https://github.com/awslabs/smithy-rs/issues/35
     )
     private val inputShape = operationShape.inputShape(protocolConfig.model)
+    private val outputShape = operationShape.outputShape(protocolConfig.model)
+    private val operationSymbol = protocolConfig.symbolProvider.toSymbol(operationShape)
 
     private val instantiator = with(protocolConfig) {
         Instantiator(symbolProvider, model, runtimeConfig)
@@ -67,20 +73,18 @@ class HttpProtocolTestGenerator(
         val responseTests = operationShape.getTrait(HttpResponseTestsTrait::class.java)
             .map { it.testCases }.orElse(listOf()).filter { applies(it) }
         if (requestTests.isNotEmpty() || responseTests.isNotEmpty()) {
-            with(protocolConfig) {
-                val operationName = symbolProvider.toSymbol(operationShape).name
-                val testModuleName = "${operationName.toSnakeCase()}_request_test"
-                val moduleMeta = RustMetadata(
-                    public = false,
-                    additionalAttributes = listOf(
-                        Custom("cfg(test)"),
-                        Custom("allow(unreachable_code, unused_variables)")
-                    )
+            val operationName = operationSymbol.name
+            val testModuleName = "${operationName.toSnakeCase()}_request_test"
+            val moduleMeta = RustMetadata(
+                public = false,
+                additionalAttributes = listOf(
+                    Custom("cfg(test)"),
+                    Custom("allow(unreachable_code, unused_variables)")
                 )
-                writer.withModule(testModuleName, moduleMeta) {
-                    renderHttpRequestTests(requestTests, this)
-                    renderHttpResponseTests(responseTests, this)
-                }
+            )
+            writer.withModule(testModuleName, moduleMeta) {
+                renderHttpRequestTests(requestTests, this)
+                renderHttpResponseTests(responseTests, this)
             }
         }
     }
@@ -120,15 +124,33 @@ class HttpProtocolTestGenerator(
         if (ExpectFail.contains(testCase.id)) {
             testModuleWriter.write("#[should_panic]")
         }
-        testModuleWriter.rustBlock("fn test_${testCase.id.toSnakeCase()}()") {
+        val fnName = when (testCase) {
+            is HttpResponseTestCase -> "_response"
+            is HttpRequestTestCase -> "_request"
+            else -> throw CodegenException("unknown test case type")
+        }
+        testModuleWriter.rustBlock("fn test_${testCase.id.toSnakeCase()}$fnName()") {
             block(this)
         }
     }
     private fun renderHttpResponseTestCase(httpResponseTestCase: HttpResponseTestCase, testModuleWriter: RustWriter) {
         renderTestCase(httpResponseTestCase, testModuleWriter) {
             writeInline("let expected_output =")
-            instantiator.render(this, inputShape, httpResponseTestCase.params)
+            instantiator.render(this, outputShape, httpResponseTestCase.params)
             write(";")
+            write("let http_response = \$T::new()", RuntimeType.HttpResponseBuilder)
+            httpResponseTestCase.headers.forEach { (key, value) ->
+                write(".header(${key.dq()}, ${value.dq()})")
+            }
+            rust(
+                """
+                .status(${httpResponseTestCase.code})
+                .body(${httpResponseTestCase.body.orNull()?.dq() ?: "vec![]"})
+                .unwrap();
+            """
+            )
+            write("let parsed = \$T::from_response(http_response);", operationSymbol)
+            write("assert_eq!(parsed, Ok(expected_output));")
         }
     }
 

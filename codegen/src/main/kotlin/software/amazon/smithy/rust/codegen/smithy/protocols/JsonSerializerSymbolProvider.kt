@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.lang.render
 import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.stripOuter
+import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolMetadataProvider
@@ -167,11 +168,35 @@ class SerializerBuilder(
             writer.write("use \$T;", RuntimeType.Deserialize)
             writer.rust(
                 """
-                let ts_opt = Option ::<f64>::deserialize(_deser)?;
+                let ts_opt = Option::<f64>::deserialize(_deser)?;
                 Ok(ts_opt.map(| ts | Instant ::from_fractional_seconds(ts.floor() as i64, ts - ts.floor())))
             """
             )
+        },
+        "blob_deser" to { writer ->
+            writer.write("use \$T;", RuntimeType.Deserialize)
+            writer.write("use \$T;", RuntimeType.Serde("de::Error"))
+
+            writer.write("let data = <&str>::deserialize(_deser)?;")
+            writer.withBlock("Ok(", ")") {
+                withBlock("Blob::new(", ")") {
+                    write("\$T(data)", RuntimeType.Base64Decode(runtimeConfig))
+                    withBlock(".map_err(|_|", ")?") {
+                        write("D::Error::invalid_value(\$T(data), &\"valid base64\")", RuntimeType.Serde("de::Unexpected::Str"))
+                    }
+                }
+            }
+        },
+        "instant_epoch_seconds_deser" to { writer ->
+            writer.write("use \$T;", RuntimeType.Deserialize)
+            writer.rust(
+                """
+                let ts = f64::deserialize(_deser)?;
+                Ok(Instant::from_fractional_seconds(ts.floor() as i64, ts - ts.floor()))
+            """
+            )
         }
+
     )
 
     /** correct argument type for the serde custom serializer */
