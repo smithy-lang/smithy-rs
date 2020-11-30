@@ -127,6 +127,9 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
             path, dependency = CargoDependency.Serde, namespace = "serde"
         )
 
+        val ErrorCode =
+            RuntimeType("error_code", dependency = InlineDependency.errorCode(), namespace = "crate")
+
         fun forInlineFun(name: String, module: String, func: (RustWriter) -> Unit) = RuntimeType(
             name = name,
             dependency = InlineDependency(name, module, func),

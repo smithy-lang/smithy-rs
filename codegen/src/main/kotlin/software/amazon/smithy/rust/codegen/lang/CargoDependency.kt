@@ -66,6 +66,7 @@ class InlineDependency(name: String, val module: String, val renderer: (RustWrit
         }
 
         fun uuid() = forRustFile("v4", "uuid", "uuid.rs")
+        fun errorCode() = forRustFile("error_code", "error_code", "error_code.rs")
     }
 }
 

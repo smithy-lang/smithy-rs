@@ -15,6 +15,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.stripOuter
 import software.amazon.smithy.rust.codegen.lang.withBlock
@@ -34,6 +35,7 @@ import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.StructureModifier
+import software.amazon.smithy.rust.codegen.util.dq
 
 sealed class AwsJsonVersion {
     abstract val value: String
@@ -76,7 +78,8 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
         )
     }
 
-    override fun support(): ProtocolSupport = ProtocolSupport(requestBodySerialization = true, requestDeserialization = true)
+    override fun support(): ProtocolSupport =
+        ProtocolSupport(requestBodySerialization = true, requestDeserialization = true)
 }
 
 /**
@@ -159,8 +162,35 @@ class BasicAwsJsonGenerator(
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         val bodyId = outputShape.expectTrait(SyntheticOutputTrait::class.java).body
         val bodyShape = bodyId?.let { model.expectShape(bodyId, StructureShape::class.java) }
-        writer.rustBlock("if !response.status().is_success()") {
-            write("return Err(\$T::Unknown(\"Invalid status code (todo)\".to_string()))", errorSymbol)
+        writer.rustBlock("if \$T::is_error(&response)", RuntimeType.ErrorCode) {
+            writer.write(
+                "let body: \$T = \$T(response.body().as_ref()).unwrap();",
+                RuntimeType.SerdeJson("Value"),
+                RuntimeType.SerdeJson("from_slice")
+            )
+            rust(
+                "let error_code = \$T::error_type_from_header(&response).map_err(|e|\$T::Unmodeled(Box::new(e)))?;",
+                RuntimeType.ErrorCode,
+                errorSymbol
+            )
+            rust("let error_code = error_code.or_else(||\$T::error_type_from_body(&body));", RuntimeType.ErrorCode)
+            write("let error_code = error_code.ok_or(\$T::Unknown(\"no error code\".to_string()))?;", errorSymbol)
+
+            rust("let error_code = \$T::sanitize_error_code(error_code);", RuntimeType.ErrorCode)
+            withBlock("return Err(match error_code {", "})") {
+                operationShape.errors.forEach { error ->
+                    rustBlock("${error.name.dq()} => match \$T(body)", RuntimeType.SerdeJson("from_value")) {
+                        val variantName = symbolProvider.toSymbol(model.expectShape(error)).name
+                        write(
+                            "Ok(body) => \$T::$variantName(body),",
+                            errorSymbol
+                        )
+                        write("Err(e) => \$T::Unmodeled(Box::new(e))", errorSymbol)
+                    }
+                }
+                write("unknown => \$T::Unknown(unknown.to_string())", errorSymbol)
+            }
+            // write("return Err(\$T::Unknown(\"Invalid status code (todo)\".to_string()))", errorSymbol)
         }
         bodyShape?.also {
             val symbol = symbolProvider.toSymbol(it)

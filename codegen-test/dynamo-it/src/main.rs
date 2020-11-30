@@ -1,7 +1,6 @@
 use aws_sigv4::{sign, Credentials, Region, RequestExt, SignedService};
 use dynamo::model::{
-    AttributeDefinition, KeySchemaElement,
-    KeyType, ProvisionedThroughput, ScalarAttributeType,
+    AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType,
 };
 use dynamo::operation;
 use http_body;
@@ -9,7 +8,7 @@ use http_body::Body;
 use hyper::body::Buf;
 use hyper::client::HttpConnector;
 use hyper::http::request;
-use hyper::{Client, Request, Uri, Response};
+use hyper::{Client, Request, Response, Uri};
 use std::error::Error;
 
 /// macro to execute an AWS request, currently required because no traits exist
@@ -26,9 +25,7 @@ macro_rules! make_request {
         let inp = $input;
         let request = inp.to_http_request();
         let request = prepare_request(request);
-        let response = $client
-            .request(request)
-            .await?;
+        let response = $client.request(request).await?;
         let response = prepare_response(response).await?;
         inp.parse_response(response)
     }};
@@ -70,12 +67,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let tables = make_request!(
         hyper_client,
         operation::ListTables::builder().limit(5).build()
-    ).unwrap();
+    )
+    .unwrap();
     println!("tables : {:?}", &tables);
     Ok(())
 }
 
-async fn prepare_response(response: Response<hyper::Body>) -> Result<Response<Vec<u8>>, <hyper::Body as http_body::Body>::Error> {
+async fn prepare_response(
+    response: Response<hyper::Body>,
+) -> Result<Response<Vec<u8>>, <hyper::Body as http_body::Body>::Error> {
     let (parts, body) = response.into_parts();
     let data = read_body(body).await?;
     Ok(Response::from_parts(parts, data))
@@ -85,13 +85,7 @@ fn prepare_request(mut request: request::Request<Vec<u8>>) -> Request<hyper::Bod
     let uri = Uri::builder()
         .authority("localhost:8000")
         .scheme("http")
-        .path_and_query(
-            request
-                .uri()
-                .path_and_query()
-                .unwrap()
-                .clone(),
-        )
+        .path_and_query(request.uri().path_and_query().unwrap().clone())
         .build()
         .expect("valid uri");
 
