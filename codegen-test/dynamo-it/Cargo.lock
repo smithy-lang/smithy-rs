@@ -95,8 +95,6 @@ dependencies = [
  "http-body",
  "hyper",
  "pin-utils",
- "serde",
- "serde_json",
  "smithy-types",
  "tokio",
 ]

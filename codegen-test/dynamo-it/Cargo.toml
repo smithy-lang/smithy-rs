@@ -13,7 +13,4 @@ tokio = { version = "0.2", features = ["full"] }
 dynamo = { path = "../build/smithyprojections/codegen-test/dynamo/rust-codegen/"}
 pin-utils = "0.1.0"
 aws-sigv4 = "0.0.1"
-# TODO: remove when deserializers are fully baked
-serde_json = "1"
-serde = "1"
 smithy-types = { path = "../../rust-runtime/smithy-types" }
