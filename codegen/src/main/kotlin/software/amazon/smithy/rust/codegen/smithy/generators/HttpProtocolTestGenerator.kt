@@ -1,8 +1,11 @@
 package software.amazon.smithy.rust.codegen.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.protocoltests.traits.HttpMessageTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
+import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
+import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.lang.Custom
 import software.amazon.smithy.rust.codegen.lang.RustMetadata
 import software.amazon.smithy.rust.codegen.lang.RustWriter
@@ -53,53 +56,84 @@ class HttpProtocolTestGenerator(
         "RestJsonHttpPrefixHeadersArePresent" // https://github.com/awslabs/smithy-rs/issues/35
     )
     private val inputShape = operationShape.inputShape(protocolConfig.model)
-    fun render() {
-        operationShape.getTrait(HttpRequestTestsTrait::class.java).map {
-            renderHttpRequestTests(it)
-        }
-    }
-
-    private fun renderHttpRequestTests(httpRequestTestsTrait: HttpRequestTestsTrait) {
-        with(protocolConfig) {
-            val operationName = symbolProvider.toSymbol(operationShape).name
-            val testModuleName = "${operationName.toSnakeCase()}_request_test"
-            val moduleMeta = RustMetadata(
-                public = false,
-                additionalAttributes = listOf(
-                    Custom("cfg(test)"),
-                    Custom("allow(unreachable_code, unused_variables)")
-                )
-            )
-            writer.withModule(testModuleName, moduleMeta) {
-                httpRequestTestsTrait.testCases.filter { it.protocol == protocol }
-                    .filter { !DisableTests.contains(it.id) }.forEach { testCase ->
-                        try {
-                            renderHttpRequestTestCase(testCase, this)
-                        } catch (ex: Exception) {
-                            println("failed to generate ${testCase.id}")
-                            ex.printStackTrace()
-                        }
-                    }
-            }
-        }
-    }
 
     private val instantiator = with(protocolConfig) {
         Instantiator(symbolProvider, model, runtimeConfig)
     }
 
-    private fun renderHttpRequestTestCase(httpRequestTestCase: HttpRequestTestCase, testModuleWriter: RustWriter) {
+    fun render() {
+        val requestTests = operationShape.getTrait(HttpRequestTestsTrait::class.java)
+            .map { it.testCases }.orElse(listOf()).filter { applies(it) }
+        val responseTests = operationShape.getTrait(HttpResponseTestsTrait::class.java)
+            .map { it.testCases }.orElse(listOf()).filter { applies(it) }
+        if (requestTests.isNotEmpty() || responseTests.isNotEmpty()) {
+            with(protocolConfig) {
+                val operationName = symbolProvider.toSymbol(operationShape).name
+                val testModuleName = "${operationName.toSnakeCase()}_request_test"
+                val moduleMeta = RustMetadata(
+                    public = false,
+                    additionalAttributes = listOf(
+                        Custom("cfg(test)"),
+                        Custom("allow(unreachable_code, unused_variables)")
+                    )
+                )
+                writer.withModule(testModuleName, moduleMeta) {
+                    renderHttpRequestTests(requestTests, this)
+                    renderHttpResponseTests(responseTests, this)
+                }
+            }
+        }
+    }
+
+    private fun applies(testCase: HttpMessageTestCase): Boolean = testCase.protocol == protocolConfig.protocol
+
+    private fun renderHttpResponseTests(testCases: List<HttpResponseTestCase>, writer: RustWriter) {
+        testCases.forEach { testCase ->
+            try {
+                renderHttpResponseTestCase(testCase, writer)
+            } catch (ex: Exception) {
+                println("failed to generate ${testCase.id}")
+                ex.printStackTrace()
+            }
+        }
+    }
+
+    private fun renderHttpRequestTests(testCases: List<HttpRequestTestCase>, writer: RustWriter) {
+        testCases.forEach { testCase ->
+            try {
+                renderHttpRequestTestCase(testCase, writer)
+            } catch (ex: Exception) {
+                println("failed to generate ${testCase.id}")
+                ex.printStackTrace()
+            }
+        }
+    }
+
+    private fun renderTestCase(testCase: HttpMessageTestCase, testModuleWriter: RustWriter, block: RustWriter.() -> Unit) {
         testModuleWriter.setNewlinePrefix("/// ")
-        httpRequestTestCase.documentation.map {
+        testCase.documentation.map {
             testModuleWriter.write(it)
         }
-        testModuleWriter.write("Test ID: ${httpRequestTestCase.id}")
+        testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.setNewlinePrefix("")
         testModuleWriter.write("#[test]")
-        if (ExpectFail.contains(httpRequestTestCase.id)) {
+        if (ExpectFail.contains(testCase.id)) {
             testModuleWriter.write("#[should_panic]")
         }
-        testModuleWriter.rustBlock("fn test_${httpRequestTestCase.id.toSnakeCase()}()") {
+        testModuleWriter.rustBlock("fn test_${testCase.id.toSnakeCase()}()") {
+            block(this)
+        }
+    }
+    private fun renderHttpResponseTestCase(httpResponseTestCase: HttpResponseTestCase, testModuleWriter: RustWriter) {
+        renderTestCase(httpResponseTestCase, testModuleWriter) {
+            writeInline("let expected_output =")
+            instantiator.render(this, inputShape, httpResponseTestCase.params)
+            write(";")
+        }
+    }
+
+    private fun renderHttpRequestTestCase(httpRequestTestCase: HttpRequestTestCase, testModuleWriter: RustWriter) {
+        renderTestCase(httpRequestTestCase, testModuleWriter) {
             writeInline("let input =")
             instantiator.render(this, inputShape, httpRequestTestCase.params)
             write(";")
