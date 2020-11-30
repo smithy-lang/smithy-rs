@@ -1,4 +1,6 @@
 #[allow(dead_code)]
+mod error_code;
+#[allow(dead_code)]
 mod uuid;
 
 // This test is outside of uuid.rs to enable copying the entirety of uuid.rs into the SDK.
