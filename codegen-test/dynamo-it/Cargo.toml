@@ -10,7 +10,7 @@ edition = "2018"
 hyper = "0.13"
 http-body = "0.3.1"
 tokio = { version = "0.2", features = ["full"] }
-dynamo = { path = "../build/smithyprojections/codegen-test/dynamo/rust-codegen/"}
+dynamo = { version = "0.0.1", path = "../build/smithyprojections/codegen-test/dynamo/rust-codegen/"}
 pin-utils = "0.1.0"
 aws-sigv4 = "0.0.1"
 smithy-types = { path = "../../rust-runtime/smithy-types" }
