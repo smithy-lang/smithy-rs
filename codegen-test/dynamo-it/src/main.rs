@@ -30,7 +30,7 @@ macro_rules! make_request {
             .request(request)
             .await?;
         let response = prepare_response(response).await?;
-        inp.from_response(response)
+        inp.parse_response(response)
     }};
 }
 

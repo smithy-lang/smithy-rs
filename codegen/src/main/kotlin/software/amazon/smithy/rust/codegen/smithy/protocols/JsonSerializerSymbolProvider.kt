@@ -29,6 +29,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
@@ -71,6 +72,11 @@ class JsonSerializerSymbolProvider(
         if (serdeConfig.deserialize) {
             serializerBuilder.deserializerFor(memberShape)?.also {
                 attribs.add(Custom("serde(deserialize_with = ${it.fullyQualifiedName().dq()})", listOf(it)))
+                if (model.expectShape(memberShape.container) is StructureShape && base.toSymbol(memberShape)
+                    .isOptional()
+                ) {
+                    attribs.add(Custom("serde(default)"))
+                }
             }
         }
         return currentMeta.copy(additionalAttributes = currentMeta.additionalAttributes + attribs)
@@ -182,7 +188,29 @@ class SerializerBuilder(
                 withBlock("Blob::new(", ")") {
                     write("\$T(data)", RuntimeType.Base64Decode(runtimeConfig))
                     withBlock(".map_err(|_|", ")?") {
-                        write("D::Error::invalid_value(\$T(data), &\"valid base64\")", RuntimeType.Serde("de::Unexpected::Str"))
+                        write(
+                            "D::Error::invalid_value(\$T(data), &\"valid base64\")",
+                            RuntimeType.Serde("de::Unexpected::Str")
+                        )
+                    }
+                }
+            }
+        },
+        "optionblob_deser" to { writer ->
+            writer.write("use \$T;", RuntimeType.Deserialize)
+            writer.write("use \$T;", RuntimeType.Serde("de::Error"))
+
+            writer.write("let data = Option::<&str>::deserialize(_deser)?;")
+            writer.withBlock("data.map(|data| {", "}).transpose()") {
+                writer.withBlock("Ok(", ")") {
+                    withBlock("Blob::new(", ")") {
+                        write("\$T(data)", RuntimeType.Base64Decode(runtimeConfig))
+                        withBlock(".map_err(|_|", ")?") {
+                            write(
+                                "D::Error::invalid_value(\$T(data), &\"valid base64\")",
+                                RuntimeType.Serde("de::Unexpected::Str")
+                            )
+                        }
                     }
                 }
             }

@@ -21,7 +21,8 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import java.util.logging.Logger
 
 data class ProtocolSupport(
-    val requestBodySerialization: Boolean
+    val requestBodySerialization: Boolean,
+    val requestDeserialization: Boolean
 )
 /**
  * Generate protocol tests for an operation
@@ -55,6 +56,10 @@ class HttpProtocolTestGenerator(
         "RestJsonConstantAndVariableQueryStringMissingOneValue",
         "RestJsonConstantAndVariableQueryStringAllValues",
 
+        // Timestamp parsing
+        "parses_httpdate_timestamps",
+        "parses_iso8601_timestamps",
+
         // Misc:
         "RestJsonQueryIdempotencyTokenAutoFill", // https://github.com/awslabs/smithy-rs/issues/34
         "RestJsonHttpPrefixHeadersArePresent" // https://github.com/awslabs/smithy-rs/issues/35
@@ -84,12 +89,14 @@ class HttpProtocolTestGenerator(
             )
             writer.withModule(testModuleName, moduleMeta) {
                 renderHttpRequestTests(requestTests, this)
-                renderHttpResponseTests(responseTests, this)
+                if (protocolSupport.requestDeserialization) {
+                    renderHttpResponseTests(responseTests, this)
+                }
             }
         }
     }
 
-    private fun applies(testCase: HttpMessageTestCase): Boolean = testCase.protocol == protocolConfig.protocol
+    private fun applies(testCase: HttpMessageTestCase): Boolean = testCase.protocol == protocolConfig.protocol && !DisableTests.contains(testCase.id)
 
     private fun renderHttpResponseTests(testCases: List<HttpResponseTestCase>, writer: RustWriter) {
         testCases.forEach { testCase ->
@@ -162,7 +169,7 @@ class HttpProtocolTestGenerator(
             if (protocolSupport.requestBodySerialization) {
                 write("let http_request = input.to_http_request();")
             } else {
-                write("let http_request = ${protocolConfig.symbolProvider.toSymbol(inputShape).name}::assemble(input.request_builder_base(), vec![]);")
+                write("let http_request = ${protocolConfig.symbolProvider.toSymbol(inputShape).name}::assemble(input.input.request_builder_base(), vec![]);")
             }
             with(httpRequestTestCase) {
                 write(

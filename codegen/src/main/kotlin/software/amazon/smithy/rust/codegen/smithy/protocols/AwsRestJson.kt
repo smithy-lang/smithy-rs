@@ -35,7 +35,7 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
 
     override fun support(): ProtocolSupport {
         // TODO: Support body for RestJson
-        return ProtocolSupport(requestBodySerialization = false)
+        return ProtocolSupport(requestBodySerialization = false, requestDeserialization = false)
     }
 }
 
@@ -46,6 +46,7 @@ class AwsRestJsonGenerator(
 
     private val model = protocolConfig.model
     override fun fromResponse(writer: RustWriter, operationShape: OperationShape) {
+        writer.write("let _ = response;")
         writer.write("todo!()")
     }
 

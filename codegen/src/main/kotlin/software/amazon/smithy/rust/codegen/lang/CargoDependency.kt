@@ -118,7 +118,12 @@ data class CargoDependency(
             "protocol-test-helpers", Local(runtimeConfig.relativePath), scope = Dev
         )
 
-        val SerdeJson: CargoDependency = CargoDependency("serde_json", CratesIo("1"))
+        val SerdeJson: CargoDependency =
+            CargoDependency(
+                "serde_json", CratesIo("1"),
+                // needed to pass AwsRestJson1.1 Protocol tests around double parsing
+                features = listOf("float_roundtrip")
+            )
         val Serde = CargoDependency("serde", CratesIo("1"), features = listOf("derive"))
     }
 }
