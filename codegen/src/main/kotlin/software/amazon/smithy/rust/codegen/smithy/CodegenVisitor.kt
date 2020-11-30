@@ -113,7 +113,7 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
         }
         writers.flushWriters()
         try {
-            "cargo fmt".runCommand(fileManifest.baseDir)
+            "cargo fmt".runCommand(fileManifest.baseDir, timeoutSecs = 10)
         } catch (_: CommandFailed) {
             logger.warning("Generated output did not parse")
         }
