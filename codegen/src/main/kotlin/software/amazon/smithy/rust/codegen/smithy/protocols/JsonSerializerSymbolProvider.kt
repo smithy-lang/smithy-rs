@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.contains
 import software.amazon.smithy.rust.codegen.lang.render
+import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.stripOuter
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -160,6 +161,18 @@ class SerializerBuilder(
             writer.write("$ser.serialize_i64($inp.epoch_seconds())")
         }
     )
+    private val handWrittenDeserializers: Map<String, (RustWriter) -> Unit> = mapOf(
+        "optioninstant_epoch_seconds_deser" to { writer ->
+            // Needed to pull the Option deserializer into scope
+            writer.write("use \$T;", RuntimeType.Deserialize)
+            writer.rust(
+                """
+                let ts_opt = Option ::<f64>::deserialize(_deser)?;
+                Ok(ts_opt.map(| ts | Instant ::from_fractional_seconds(ts.floor() as i64, ts - ts.floor())))
+            """
+            )
+        }
+    )
 
     /** correct argument type for the serde custom serializer */
     private fun serializerType(symbol: Symbol): Symbol {
@@ -243,7 +256,7 @@ class SerializerBuilder(
         return RuntimeType.forInlineFun(fnName, "serde_util") { writer ->
             deserializeFn(writer, fnName, symbol) {
                 // TODO: implement deserializers
-                write("todo!()")
+                handWrittenDeserializers[fnName]?.also { it(this) } ?: write("todo!()")
             }
         }
     }

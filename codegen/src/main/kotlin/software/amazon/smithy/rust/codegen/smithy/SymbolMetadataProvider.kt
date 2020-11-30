@@ -60,17 +60,17 @@ class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvi
     }
 
     override fun structureMeta(structureShape: StructureShape): RustMetadata {
-        return RustMetadata(Derives(defaultDerives.toSet()), public = true)
+        return RustMetadata(defaultDerives, public = true)
     }
 
     override fun unionMeta(unionShape: UnionShape): RustMetadata {
-        return RustMetadata(Derives(defaultDerives.toSet()), public = true)
+        return RustMetadata(defaultDerives, public = true)
     }
 
     override fun enumMeta(stringShape: StringShape): RustMetadata {
         return RustMetadata(
             Derives(
-                defaultDerives.toSet() +
+                defaultDerives.derives +
                     // enums must be hashable because string sets are hashable
                     RuntimeType.Std("hash::Hash") +
                     // enums can be eq because they can only contain strings
@@ -84,8 +84,8 @@ class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvi
     }
 
     companion object {
-        private val defaultDerives =
-            listOf(RuntimeType.StdFmt("Debug"), RuntimeType.Std("cmp::PartialEq"), RuntimeType.Std("clone::Clone"))
+        val defaultDerives =
+            Derives(setOf(RuntimeType.StdFmt("Debug"), RuntimeType.Std("cmp::PartialEq"), RuntimeType.Std("clone::Clone")))
     }
 }
 

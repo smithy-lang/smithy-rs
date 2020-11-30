@@ -9,6 +9,7 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeVisitor
@@ -33,6 +34,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.runCommand
@@ -78,7 +80,8 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
 
     private fun baselineTransform(model: Model) = RecursiveShapeBoxer.transform(model)
 
-    private fun CodegenWriterDelegator<RustWriter>.includedModules(): List<String> = this.writers.values.mapNotNull { it.module() }
+    private fun CodegenWriterDelegator<RustWriter>.includedModules(): List<String> =
+        this.writers.values.mapNotNull { it.module() }
 
     fun execute() {
         logger.info("generating Rust client...")
@@ -123,7 +126,13 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
         logger.info("generating a structure...")
         writers.useShapeWriter(shape) {
             StructureGenerator(model, symbolProvider, it, shape).render()
-            val builderGenerator = BuilderGenerator(model, symbolProvider, it, shape)
+            val operation = if (shape.hasTrait(SyntheticInputTrait::class.java)) {
+                model.shapes(OperationShape::class.java).filter { operation -> operation.input.get() == shape.id }
+                    .findFirst().get()
+            } else {
+                null
+            }
+            val builderGenerator = BuilderGenerator(model, symbolProvider, it, shape, operation)
             builderGenerator.render()
             it.rustBlock("impl ${symbolProvider.toSymbol(shape).name}") {
                 builderGenerator.convenienceMethod(this)

@@ -47,10 +47,11 @@ fun <T : CodeWriter> T.conditionalBlock(
     textBeforeNewLine: String,
     textAfterNewLine: String,
     conditional: Boolean = true,
+    vararg args: Any,
     block: T.() -> Unit
 ): T {
     if (conditional) {
-        openBlock(textBeforeNewLine)
+        openBlock(textBeforeNewLine, *args)
     }
 
     block(this)

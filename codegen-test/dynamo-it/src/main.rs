@@ -1,15 +1,15 @@
 use aws_sigv4::{sign, Credentials, Region, RequestExt, SignedService};
-use dynamo::model::{AttributeDefinition, AttributeValue, CreateTableOutput, DeleteTableOutput, GetItemOutput, KeySchemaElement, KeyType, ProvisionedThroughput, PutItemOutput, ScalarAttributeType, QueryOutput, ListTablesOutput};
+use dynamo::model::{
+    AttributeDefinition, KeySchemaElement,
+    KeyType, ProvisionedThroughput, ScalarAttributeType,
+};
 use dynamo::operation;
 use http_body;
 use http_body::Body;
 use hyper::body::Buf;
 use hyper::client::HttpConnector;
 use hyper::http::request;
-use hyper::{Client, Request, Uri};
-use serde::de::DeserializeOwned;
-use smithy_types::Blob;
-use std::collections::HashMap;
+use hyper::{Client, Request, Uri, Response};
 use std::error::Error;
 
 /// macro to execute an AWS request, currently required because no traits exist
@@ -18,41 +18,35 @@ use std::error::Error;
 /// # Example
 /// ```rust
 /// let hyper_client: Client<HttpConnector, hyper::Body> = hyper::Client::builder().build_http();
-/// let clear_tables = operation::DeleteTableInput::builder().table_name("my_table").build();
-/// let cleared = make_request!(hyper_client, clear_tables, DeleteTableOutput);
+/// let clear_tables = operation::DeleteTable::builder().table_name("my_table").build();
+/// let cleared = make_request!(hyper_client, clear_tables);
 /// ```
 macro_rules! make_request {
-    ($client:expr, $input:expr, $out:ty) => {{
+    ($client:expr, $input:expr) => {{
         let inp = $input;
+        let request = inp.to_http_request();
+        let request = prepare_request(request);
         let response = $client
-            .request(prepare_request(
-                inp.request_builder_base(),
-                inp.build_body(),
-            ))
+            .request(request)
             .await?;
-        let body = read_body(response.into_body()).await?;
-        //println!("{}", std::str::from_utf8(&body).unwrap());
-        from_response::<$out>(body)
+        let response = prepare_response(response).await?;
+        inp.from_response(response)
     }};
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let hyper_client: Client<HttpConnector, hyper::Body> = hyper::Client::builder().build_http();
-    let create_table_input = operation::CreateTableInput::builder()
+    let create_table_input = operation::CreateTable::builder()
         .table_name("my_table")
-        .key_schema(vec![
-            KeySchemaElement::builder()
-                .attribute_name("str")
-                .key_type(KeyType::from("HASH"))
-                .build(),
-        ])
-        .attribute_definitions(vec![
-            AttributeDefinition::builder()
-                .attribute_name("str")
-                .attribute_type(ScalarAttributeType::from("S"))
-                .build(),
-        ])
+        .key_schema(vec![KeySchemaElement::builder()
+            .attribute_name("str")
+            .key_type(KeyType::from("HASH"))
+            .build()])
+        .attribute_definitions(vec![AttributeDefinition::builder()
+            .attribute_name("str")
+            .attribute_type(ScalarAttributeType::from("S"))
+            .build()])
         .provisioned_throughput(
             ProvisionedThroughput::builder()
                 .read_capacity_units(100)
@@ -61,29 +55,39 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .build();
 
-    let clear_tables = operation::DeleteTableInput::builder()
+    let clear_tables = operation::DeleteTable::builder()
         .table_name("my_table")
         .build();
-    let _ = make_request!(hyper_client, clear_tables, DeleteTableOutput);
-    let create_table = make_request!(hyper_client, create_table_input, CreateTableOutput);
-    println!("table created: {:?}", create_table.table_description.unwrap().table_name.unwrap());
-    let tables = make_request!(hyper_client, operation::ListTablesInput::builder().build(), ListTablesOutput);
+    let resp = make_request!(hyper_client, &clear_tables);
+    let resp = make_request!(hyper_client, clear_tables);
+    println!("table cleared: {:?}", resp);
+
+    let create_table = make_request!(hyper_client, create_table_input).unwrap();
+    println!(
+        "table created: {:?}",
+        create_table.table_description.unwrap().table_name.unwrap()
+    );
+    let tables = make_request!(
+        hyper_client,
+        operation::ListTables::builder().limit(5).build()
+    ).unwrap();
     println!("tables : {:?}", &tables);
     Ok(())
 }
 
-fn from_response<T: DeserializeOwned>(response: Vec<u8>) -> T {
-    serde_json::from_slice(response.as_slice()).expect("deserialization failed")
+async fn prepare_response(response: Response<hyper::Body>) -> Result<Response<Vec<u8>>, <hyper::Body as http_body::Body>::Error> {
+    let (parts, body) = response.into_parts();
+    let data = read_body(body).await?;
+    Ok(Response::from_parts(parts, data))
 }
 
-fn prepare_request(request_builder: request::Builder, body: Vec<u8>) -> Request<hyper::Body> {
+fn prepare_request(mut request: request::Request<Vec<u8>>) -> Request<hyper::Body> {
     let uri = Uri::builder()
         .authority("localhost:8000")
         .scheme("http")
         .path_and_query(
-            request_builder
-                .uri_ref()
-                .unwrap()
+            request
+                .uri()
                 .path_and_query()
                 .unwrap()
                 .clone(),
@@ -91,7 +95,8 @@ fn prepare_request(request_builder: request::Builder, body: Vec<u8>) -> Request<
         .build()
         .expect("valid uri");
 
-    let mut request: Request<Vec<u8>> = request_builder.uri(uri).body(body).unwrap();
+    (*request.uri_mut()) = uri;
+
     request.set_region(Region::new("us-east-1"));
     request.set_service(SignedService::new("dynamodb"));
     sign(&mut request, &Credentials::new("asdf", "asdf", None)).unwrap();

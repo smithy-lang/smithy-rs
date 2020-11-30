@@ -45,6 +45,10 @@ class AwsRestJsonGenerator(
     // restJson1 requires all operations to use the HTTP trait
 
     private val model = protocolConfig.model
+    override fun fromResponse(writer: RustWriter, operationShape: OperationShape) {
+        writer.write("todo!()")
+    }
+
     override fun toBodyImpl(implBlockWriter: RustWriter, inputShape: StructureShape, inputBody: StructureShape?) {
         bodyBuilderFun(implBlockWriter) {
             write("todo!()")

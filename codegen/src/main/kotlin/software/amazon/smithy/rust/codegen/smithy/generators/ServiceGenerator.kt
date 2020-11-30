@@ -27,6 +27,10 @@ class ServiceGenerator(
                 protocolGenerator.renderOperation(writer, operation)
                 HttpProtocolTestGenerator(config, protocolSupport, operation, writer).render()
             }
+            val sym = operation.errorSymbol(config.symbolProvider)
+            writers.useFileWriter("src/error.rs", sym.namespace) { writer ->
+                CombinedErrorGenerator(config, operation).render(writer)
+            }
         }
         renderBodies()
     }

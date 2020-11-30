@@ -49,7 +49,7 @@ abstract class HttpProtocolGenerator(
         val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
         val outputShape = model.expectShape(operationShape.output.get(), StructureShape::class.java)
         val inputSymbol = symbolProvider.toSymbol(inputShape)
-        val builderGenerator = BuilderGenerator(model, symbolProvider, writer, inputShape)
+        // val builderGenerator = BuilderGenerator(model, symbolProvider, writer, inputShape, operationShape)
         writer.rustBlock("impl ${symbolProvider.toSymbol(inputShape).name}") {
             toHttpRequestImpl(this, operationShape, inputShape)
             val shapeId = inputShape.expectTrait(SyntheticInputTrait::class.java).body
@@ -70,17 +70,30 @@ abstract class HttpProtocolGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         writer.documentShape(operationShape, model)
         writer.rustBlock("pub struct $operationName") {
-            write("_input: \$T", inputSymbol)
+            write("input: \$T", inputSymbol)
         }
+
+        val outputSymbol = symbolProvider.toSymbol(outputShape)
+        val errorSymbol = operationShape.errorSymbol(symbolProvider)
 
         writer.rustBlock("impl $operationName") {
             rustBlock(
-                "pub fn from_response(&self, _response: \$T<impl AsRef<[u8]>>) -> Result<\$T, ()>",
+                "pub fn from_response(&self, response: \$T<impl AsRef<[u8]>>) -> Result<\$T, \$T>",
                 RuntimeType.Http("response::Response"),
-                symbolProvider.toSymbol(outputShape)
+                outputSymbol,
+                errorSymbol
             ) {
-                // TODO: stub.
-                write("Err(())")
+                fromResponse(this, operationShape)
+            }
+
+            rustBlock(
+                "pub fn to_http_request(&self) -> \$T<Vec<u8>>", RuntimeType.Http("request::Request")
+            ) {
+                write("\$T::assemble(self.input.request_builder_base(), self.input.build_body())", inputSymbol)
+            }
+
+            rustBlock("pub fn new(input: \$T) -> Self", inputSymbol) {
+                write("Self { input }")
             }
 
             val builderSymbol = inputShape.builderSymbol(symbolProvider)
@@ -89,6 +102,10 @@ abstract class HttpProtocolGenerator(
             }
         }
     }
+    abstract fun fromResponse(
+        writer: RustWriter,
+        operationShape: OperationShape
+    )
 
     protected fun httpBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
         implBlockWriter.rustBlock(

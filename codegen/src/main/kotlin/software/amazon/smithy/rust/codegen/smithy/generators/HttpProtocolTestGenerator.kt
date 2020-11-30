@@ -104,7 +104,7 @@ class HttpProtocolTestGenerator(
             instantiator.render(this, inputShape, httpRequestTestCase.params)
             write(";")
             if (protocolSupport.requestBodySerialization) {
-                write("let http_request = ${protocolConfig.symbolProvider.toSymbol(inputShape).name}::assemble(input.request_builder_base(), input.build_body());")
+                write("let http_request = input.to_http_request();")
             } else {
                 write("let http_request = ${protocolConfig.symbolProvider.toSymbol(inputShape).name}::assemble(input.request_builder_base(), vec![]);")
             }
@@ -149,12 +149,13 @@ class HttpProtocolTestGenerator(
     private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {
         if (body == "") {
             rustWriter.write("// No body")
-            rustWriter.write("assert!(input.build_body().is_empty());")
+            rustWriter.write("assert!(input.input.build_body().is_empty());")
         } else {
             // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
             assertOk(rustWriter) {
+                // TODO: test the HTTP request not the private input object
                 rustWriter.write(
-                    "\$T(input.build_body(), ${body.dq()}, \$T::from(${(mediaType ?: "unknown").dq()}))",
+                    "\$T(input.input.build_body(), ${body.dq()}, \$T::from(${(mediaType ?: "unknown").dq()}))",
                     RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_body"),
                     RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "MediaType")
                 )

@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy.protocols
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
@@ -16,6 +17,7 @@ import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.stripOuter
+import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.Serializers
@@ -24,10 +26,12 @@ import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerat
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.generators.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.StructureModifier
 
@@ -124,6 +128,10 @@ class BasicAwsJsonGenerator(
     private val protocolConfig: ProtocolConfig,
     private val awsJsonVersion: AwsJsonVersion
 ) : HttpProtocolGenerator(protocolConfig) {
+    private val model = protocolConfig.model
+    private val symbolProvider = protocolConfig.symbolProvider
+    private val operationIndex = OperationIndex.of(model)
+
     override fun toHttpRequestImpl(
         implBlockWriter: RustWriter,
         operationShape: OperationShape,
@@ -139,6 +147,36 @@ class BasicAwsJsonGenerator(
                    .header("X-Amz-Target", "${protocolConfig.serviceShape.id.name}.${operationShape.id.name}")
                """.trimMargin()
             )
+        }
+    }
+
+    override fun fromResponse(
+        writer: RustWriter,
+        operationShape: OperationShape
+    ) {
+        val outputShape = operationIndex.getOutput(operationShape).get()
+        val outputSymbol = symbolProvider.toSymbol(outputShape)
+        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val bodyId = outputShape.expectTrait(SyntheticOutputTrait::class.java).body
+        val bodyShape = bodyId?.let { model.expectShape(bodyId, StructureShape::class.java) }
+        writer.rustBlock("if !response.status().is_success()") {
+            write("return Err(\$T::Unknown(\"Invalid status code (todo)\".to_string()))", errorSymbol)
+        }
+        bodyShape?.also {
+            val symbol = symbolProvider.toSymbol(it)
+            writer.write(
+                "let body: \$T = \$T(response.body().as_ref()).unwrap();",
+                symbol,
+                RuntimeType.SerdeJson("from_slice")
+            )
+        }
+        writer.withBlock("Ok(", ")") {
+            rustBlock("\$T", outputSymbol) {
+                bodyShape?.members().orEmpty().forEach { member ->
+                    val name = symbolProvider.toMemberName(member)
+                    write("$name: body.$name,")
+                }
+            }
         }
     }
 

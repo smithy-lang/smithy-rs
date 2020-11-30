@@ -2,6 +2,7 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
@@ -28,7 +29,8 @@ class BuilderGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
-    private val shape: StructureShape
+    private val shape: StructureShape,
+    private val operation: OperationShape? = null
 ) {
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
@@ -53,7 +55,7 @@ class BuilderGenerator(
     private fun renderBuilder(writer: RustWriter) {
         val builderName = "Builder"
 
-        val symbol = symbolProvider.toSymbol(shape)
+        val symbol = structureSymbol
         writer.docs("A builder for \$D", symbol)
         writer.write("#[non_exhaustive]")
         writer.write("#[derive(Debug, Clone, Default)]")
@@ -92,15 +94,25 @@ class BuilderGenerator(
                 }
             }
 
-            val fallibleBuilder = StructureGenerator.fallibleBuilder(shape, symbolProvider)
-            val returnType = when (fallibleBuilder) {
-                true -> "Result<\$T, String>"
-                false -> "\$T"
-            }
+            buildFn(this)
+        }
+    }
 
-            writer.docs("Consumes the builder and constructs a \$D", symbol)
-            rustBlock("pub fn build(self) -> $returnType", structureSymbol) {
-                conditionalBlock("Ok(", ")", conditional = fallibleBuilder) {
+    private fun buildFn(
+        writer: RustWriter
+    ) {
+        val fallibleBuilder = StructureGenerator.fallibleBuilder(shape, symbolProvider)
+        val returnType = when (fallibleBuilder) {
+            true -> "Result<\$T, String>"
+            false -> "\$T"
+        }
+
+        val outputSymbol = operation?.let { symbolProvider.toSymbol(it) } ?: structureSymbol
+
+        writer.docs("Consumes the builder and constructs a \$D", outputSymbol)
+        writer.rustBlock("pub fn build(self) -> $returnType", outputSymbol) {
+            conditionalBlock("Ok(", ")", conditional = fallibleBuilder) {
+                conditionalBlock("\$T::new(", ")", operation != null, outputSymbol) {
                     rustBlock("\$T", structureSymbol) {
                         members.forEach { member ->
                             val memberName = symbolProvider.toMemberName(member)
