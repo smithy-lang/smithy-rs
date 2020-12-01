@@ -115,7 +115,7 @@ class HttpProtocolTestGeneratorTest {
             )
             HttpProtocolTestGenerator(
                 protocolConfig,
-                ProtocolSupport(requestBodySerialization = true),
+                ProtocolSupport(requestBodySerialization = true, responseDeserialization = false, errorDeserialization = false),
                 model.lookup("com.example#SayHello"),
                 this
             ).render()

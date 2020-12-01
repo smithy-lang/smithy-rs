@@ -99,7 +99,12 @@ class InstantiatorTest {
         )
         val writer = RustWriter.forModule("model")
         val structureGenerator = StructureGenerator(model, symbolProvider, writer, structure)
+        val builderGenerator = BuilderGenerator(model, symbolProvider, writer, structure)
+        writer.rustBlock("impl ${symbolProvider.toSymbol(structure).name}") {
+            builderGenerator.convenienceMethod(this)
+        }
         structureGenerator.render()
+        builderGenerator.render()
         writer.write("#[test]")
         writer.rustBlock("fn inst()") {
             writer.withBlock("let result = ", ";") {
@@ -124,6 +129,11 @@ class InstantiatorTest {
             """.trimIndent()
         )
         val writer = RustWriter.forModule("model")
+        val builderGenerator = BuilderGenerator(model, symbolProvider, writer, structure)
+        writer.rustBlock("impl ${symbolProvider.toSymbol(structure).name}") {
+            builderGenerator.convenienceMethod(this)
+        }
+        builderGenerator.render()
         val structureGenerator = StructureGenerator(model, symbolProvider, writer, structure)
         structureGenerator.render()
         writer.write("#[test]")
@@ -201,8 +211,14 @@ class InstantiatorTest {
         )
         val writer = RustWriter.forModule("model")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
-        val structureGenerator = StructureGenerator(model, symbolProvider, writer, model.lookup("com.test#Inner"))
+        val structure = model.lookup<StructureShape>("com.test#Inner")
+        val structureGenerator = StructureGenerator(model, symbolProvider, writer, structure)
         structureGenerator.render()
+        val builderGenerator = BuilderGenerator(model, symbolProvider, writer, structure)
+        writer.rustBlock("impl ${symbolProvider.toSymbol(structure).name}") {
+            builderGenerator.convenienceMethod(this)
+        }
+        builderGenerator.render()
         writer.write("#[test]")
         writer.rustBlock("fn inst()") {
             writer.withBlock("let result = ", ";") {

@@ -1,7 +1,10 @@
 package software.amazon.smithy.rust.codegen.smithy.generators
 
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.protocoltests.traits.HttpMessageTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
@@ -22,8 +25,10 @@ import java.util.logging.Logger
 
 data class ProtocolSupport(
     val requestBodySerialization: Boolean,
-    val requestDeserialization: Boolean
+    val responseDeserialization: Boolean,
+    val errorDeserialization: Boolean
 )
+
 /**
  * Generate protocol tests for an operation
  */
@@ -34,6 +39,7 @@ class HttpProtocolTestGenerator(
     private val writer: RustWriter
 ) {
     private val logger = Logger.getLogger(javaClass.name)
+
     // TODO: remove these once Smithy publishes fixes.
     // These tests are not even attempted to be compiled
     val DisableTests = setOf(
@@ -67,6 +73,7 @@ class HttpProtocolTestGenerator(
     private val inputShape = operationShape.inputShape(protocolConfig.model)
     private val outputShape = operationShape.outputShape(protocolConfig.model)
     private val operationSymbol = protocolConfig.symbolProvider.toSymbol(operationShape)
+    private val operationIndex = OperationIndex.of(protocolConfig.model)
 
     private val instantiator = with(protocolConfig) {
         Instantiator(symbolProvider, model, runtimeConfig)
@@ -77,7 +84,12 @@ class HttpProtocolTestGenerator(
             .map { it.testCases }.orElse(listOf()).filter { applies(it) }
         val responseTests = operationShape.getTrait(HttpResponseTestsTrait::class.java)
             .map { it.testCases }.orElse(listOf()).filter { applies(it) }
-        if (requestTests.isNotEmpty() || responseTests.isNotEmpty()) {
+
+        val errorTests = operationIndex.getErrors(operationShape).map { error ->
+            val testCases = error.getTrait(HttpResponseTestsTrait::class.java).orNull()?.testCases.orEmpty()
+            error to testCases
+        }
+        if (requestTests.isNotEmpty() || responseTests.isNotEmpty() || errorTests.isNotEmpty()) {
             val operationName = operationSymbol.name
             val testModuleName = "${operationName.toSnakeCase()}_request_test"
             val moduleMeta = RustMetadata(
@@ -89,19 +101,29 @@ class HttpProtocolTestGenerator(
             )
             writer.withModule(testModuleName, moduleMeta) {
                 renderHttpRequestTests(requestTests, this)
-                if (protocolSupport.requestDeserialization) {
-                    renderHttpResponseTests(responseTests, this)
+                if (protocolSupport.responseDeserialization) {
+                    renderHttpResponseTests(responseTests, outputShape, this)
+                }
+                if (protocolSupport.errorDeserialization) {
+                    errorTests.forEach { (errorShape, tests) ->
+                        renderHttpResponseTests(tests, errorShape, this)
+                    }
                 }
             }
         }
     }
 
-    private fun applies(testCase: HttpMessageTestCase): Boolean = testCase.protocol == protocolConfig.protocol && !DisableTests.contains(testCase.id)
+    private fun applies(testCase: HttpMessageTestCase): Boolean =
+        testCase.protocol == protocolConfig.protocol && !DisableTests.contains(testCase.id)
 
-    private fun renderHttpResponseTests(testCases: List<HttpResponseTestCase>, writer: RustWriter) {
+    private fun renderHttpResponseTests(
+        testCases: List<HttpResponseTestCase>,
+        expectedShape: StructureShape,
+        writer: RustWriter
+    ) {
         testCases.forEach { testCase ->
             try {
-                renderHttpResponseTestCase(testCase, writer)
+                renderHttpResponseTestCase(testCase, expectedShape, writer)
             } catch (ex: Exception) {
                 println("failed to generate ${testCase.id}")
                 ex.printStackTrace()
@@ -120,7 +142,11 @@ class HttpProtocolTestGenerator(
         }
     }
 
-    private fun renderTestCase(testCase: HttpMessageTestCase, testModuleWriter: RustWriter, block: RustWriter.() -> Unit) {
+    private fun renderTestCase(
+        testCase: HttpMessageTestCase,
+        testModuleWriter: RustWriter,
+        block: RustWriter.() -> Unit
+    ) {
         testModuleWriter.setNewlinePrefix("/// ")
         testCase.documentation.map {
             testModuleWriter.write(it)
@@ -140,10 +166,15 @@ class HttpProtocolTestGenerator(
             block(this)
         }
     }
-    private fun renderHttpResponseTestCase(httpResponseTestCase: HttpResponseTestCase, testModuleWriter: RustWriter) {
+
+    private fun renderHttpResponseTestCase(
+        httpResponseTestCase: HttpResponseTestCase,
+        expectedShape: StructureShape,
+        testModuleWriter: RustWriter
+    ) {
         renderTestCase(httpResponseTestCase, testModuleWriter) {
             writeInline("let expected_output =")
-            instantiator.render(this, outputShape, httpResponseTestCase.params)
+            instantiator.render(this, expectedShape, httpResponseTestCase.params)
             write(";")
             write("let http_response = \$T::new()", RuntimeType.HttpResponseBuilder)
             httpResponseTestCase.headers.forEach { (key, value) ->
@@ -157,7 +188,18 @@ class HttpProtocolTestGenerator(
             """
             )
             write("let parsed = \$T::from_response(http_response);", operationSymbol)
-            write("assert_eq!(parsed, Ok(expected_output));")
+            if (expectedShape.hasTrait(ErrorTrait::class.java)) {
+                val errorSymbol = operationShape.errorSymbol(protocolConfig.symbolProvider)
+                val errorVariant = protocolConfig.symbolProvider.toSymbol(expectedShape).name
+                rustBlock("if let Err(\$T::$errorVariant(actual_error)) = parsed", errorSymbol) {
+                    write("assert_eq!(expected_output, actual_error);")
+                }
+                rustBlock("else") {
+                    write("panic!(\"wrong variant: {:?}\", parsed);")
+                }
+            } else {
+                write("assert_eq!(parsed.unwrap(), expected_output);")
+            }
         }
     }
 

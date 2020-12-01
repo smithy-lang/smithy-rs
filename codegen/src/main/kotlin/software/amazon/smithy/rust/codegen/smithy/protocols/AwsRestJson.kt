@@ -35,7 +35,7 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
 
     override fun support(): ProtocolSupport {
         // TODO: Support body for RestJson
-        return ProtocolSupport(requestBodySerialization = false, requestDeserialization = false)
+        return ProtocolSupport(requestBodySerialization = false, responseDeserialization = false, errorDeserialization = false)
     }
 }
 
