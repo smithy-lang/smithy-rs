@@ -162,7 +162,7 @@ class RustWriter private constructor(
      *
      * Callers must take care to use [this] when writing to ensure code is written to the right place:
      * ```kotlin
-     * val writer = RustWriter.forModule("models")
+     * val writer = RustWriter.forModule("model")
      * writer.withModule("nested") {
      *   Generator(...).render(this) // GOOD
      *   Generator(...).render(writer) // WRONG!
