@@ -16,7 +16,7 @@ object Compile : DependencyScope()
 
 sealed class DependencyLocation
 data class CratesIo(val version: String) : DependencyLocation()
-data class Local(val basePath: String) : DependencyLocation()
+data class Local(val basePath: String, val version: String? = null) : DependencyLocation()
 
 sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
     abstract fun version(): String
@@ -88,15 +88,14 @@ data class CargoDependency(
     override fun toString(): String {
         val attribs = mutableListOf<String>()
         with(location) {
-            attribs.add(
-                when (this) {
-                    is CratesIo -> """version = ${version.dq()}"""
-                    is Local -> {
-                        val fullPath = "$basePath/$name"
-                        """path = ${fullPath.dq()}"""
-                    }
+            when (this) {
+                is CratesIo -> attribs.add("version = ${version.dq()}")
+                is Local -> {
+                    version?.also { attribs.add("version = ${version.dq()}") }
+                    val fullPath = "$basePath/$name"
+                    attribs.add("path = ${fullPath.dq()}")
                 }
-            )
+            }
         }
         with(features) {
             if (!isEmpty()) {
@@ -109,10 +108,10 @@ data class CargoDependency(
     companion object {
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2"))
         fun SmithyTypes(runtimeConfig: RuntimeConfig) =
-            CargoDependency("${runtimeConfig.cratePrefix}-types", Local(runtimeConfig.relativePath))
+            CargoDependency("${runtimeConfig.cratePrefix}-types", Local(runtimeConfig.relativePath, runtimeConfig.sharedCrateVersion))
 
         fun SmithyHttp(runtimeConfig: RuntimeConfig) = CargoDependency(
-            "${runtimeConfig.cratePrefix}-http", Local(runtimeConfig.relativePath)
+            "${runtimeConfig.cratePrefix}-http", Local(runtimeConfig.relativePath, runtimeConfig.sharedCrateVersion)
         )
 
         fun ProtocolTestHelpers(runtimeConfig: RuntimeConfig) = CargoDependency(

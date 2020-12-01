@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.lang.RustWriter
 import java.io.File
 import java.util.Optional
 
-data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: String = "../") {
+data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: String = "../", val sharedCrateVersion: String = "0.0.1") {
     companion object {
 
         fun fromNode(node: Optional<ObjectNode>): RuntimeConfig {
