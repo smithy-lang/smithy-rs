@@ -66,7 +66,6 @@ class StructureGeneratorTest {
             s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
             """.trimIndent()
         )
-        println(writer.toString())
         writer.toString().shouldContainInOrder("this documents the shape", "#[non_exhaustive]", "pub", "struct MyStruct")
     }
 
