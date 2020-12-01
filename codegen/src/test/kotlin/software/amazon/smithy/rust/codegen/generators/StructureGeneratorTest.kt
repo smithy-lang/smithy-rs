@@ -96,10 +96,6 @@ class StructureGeneratorTest {
     }
 
     @Test
-    fun `generate non_exhaustive structures`() {
-    }
-
-    @Test
     fun `generate builders`() {
         val provider: SymbolProvider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")
