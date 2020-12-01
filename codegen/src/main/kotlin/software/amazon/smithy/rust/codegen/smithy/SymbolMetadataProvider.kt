@@ -8,6 +8,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.rust.codegen.lang.Attribute.Companion.NonExhaustive
 import software.amazon.smithy.rust.codegen.lang.Derives
 import software.amazon.smithy.rust.codegen.lang.RustMetadata
 
@@ -55,31 +56,32 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
 }
 
 class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvider(base) {
+    private val containerDefault = RustMetadata(
+        Derives(defaultDerives.toSet()),
+        additionalAttributes = listOf(NonExhaustive),
+        public = true
+    )
+
     override fun memberMeta(memberShape: MemberShape): RustMetadata {
         return RustMetadata(public = true)
     }
 
     override fun structureMeta(structureShape: StructureShape): RustMetadata {
-        return RustMetadata(Derives(defaultDerives.toSet()), public = true)
+        return containerDefault
     }
 
     override fun unionMeta(unionShape: UnionShape): RustMetadata {
-        return RustMetadata(Derives(defaultDerives.toSet()), public = true)
+        return containerDefault
     }
 
     override fun enumMeta(stringShape: StringShape): RustMetadata {
-        return RustMetadata(
-            Derives(
-                defaultDerives.toSet() +
-                    // enums must be hashable because string sets are hashable
-                    RuntimeType.Std("hash::Hash") +
-                    // enums can be eq because they can only contain strings
-                    RuntimeType.Std("cmp::Eq") +
-                    // enums can be Ord because they can only contain strings
-                    RuntimeType.Std("cmp::PartialOrd") +
-                    RuntimeType.Std("cmp::Ord")
-            ),
-            public = true
+        return containerDefault.withDerives(
+            RuntimeType.Std("hash::Hash")
+        ).withDerives( // enums can be eq because they can only contain strings
+            RuntimeType.Std("cmp::Eq"),
+            // enums can be Ord because they can only contain strings
+            RuntimeType.Std("cmp::PartialOrd"),
+            RuntimeType.Std("cmp::Ord")
         )
     }
 
@@ -93,6 +95,7 @@ private const val MetaKey = "meta"
 fun Symbol.Builder.meta(rustMetadata: RustMetadata?): Symbol.Builder {
     return this.putProperty(MetaKey, rustMetadata)
 }
+
 fun Symbol.expectRustMetadata(): RustMetadata = this.getProperty(MetaKey, RustMetadata::class.java).orElseThrow {
     CodegenException(
         "Expected $this to have metadata attached but it did not. "
