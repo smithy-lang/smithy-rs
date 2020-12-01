@@ -1,4 +1,4 @@
-# Smithy Rust
+# Smithy Rust ![status](https://github.com/awslabs/smithy-rs/workflows/CI/badge.svg)
 Smithy code generators for Rust
 
 ## Setup
