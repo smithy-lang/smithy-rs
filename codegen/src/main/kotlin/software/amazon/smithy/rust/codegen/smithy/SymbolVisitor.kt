@@ -38,9 +38,9 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
-import software.amazon.smithy.rust.codegen.smithy.generators.toSnakeCase
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import software.amazon.smithy.utils.StringUtils
 
 // TODO: currently, respecting integer types.

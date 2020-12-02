@@ -5,6 +5,7 @@ import org.intellij.lang.annotations.Language
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -91,8 +92,12 @@ class HttpProtocolTestGeneratorTest {
         ) body: String = "${correctBody.dq()}.to_string()"
     ) {
         writer.withModule("operation") {
-            StructureGenerator(model, symbolProvider, this, model.lookup("com.example#SayHelloInput")).render()
+            val shape: StructureShape = model.lookup("com.example#SayHelloInput")
+            StructureGenerator(model, symbolProvider, this, shape).render()
+            val builderGenerator = ModelBuilderGenerator(model, symbolProvider, this, shape)
+            builderGenerator.render()
             rustBlock("impl SayHelloInput") {
+                builderGenerator.renderConvenienceMethod(this)
                 rustBlock("pub fn request_builder_base(&self) -> #T", RuntimeType.HttpRequestBuilder) {
                     write("#T::new()", RuntimeType.HttpRequestBuilder)
                     write(httpRequestBuilder)

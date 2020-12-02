@@ -106,7 +106,12 @@ class InstantiatorTest {
         )
         val writer = RustWriter.forModule("model")
         val structureGenerator = StructureGenerator(model, symbolProvider, writer, structure)
+        val builder = ModelBuilderGenerator(model, symbolProvider, writer, structure)
+        builder.render()
         structureGenerator.render()
+        writer.implBlock(structure, symbolProvider) {
+            builder.renderConvenienceMethod(this)
+        }
         writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(this, structure, data)
@@ -131,7 +136,12 @@ class InstantiatorTest {
         )
         val writer = RustWriter.forModule("model")
         val structureGenerator = StructureGenerator(model, symbolProvider, writer, structure)
+        val builder = ModelBuilderGenerator(model, symbolProvider, writer, structure)
+        builder.render()
         structureGenerator.render()
+        writer.implBlock(structure, symbolProvider) {
+            builder.renderConvenienceMethod(this)
+        }
         writer.test {
             withBlock("let result = ", ";") {
                 sut.render(this, structure, data)
@@ -204,8 +214,14 @@ class InstantiatorTest {
         )
         val writer = RustWriter.forModule("model")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
-        val structureGenerator = StructureGenerator(model, symbolProvider, writer, model.lookup("com.test#Inner"))
+        val inner: StructureShape = model.lookup("com.test#Inner")
+        val structureGenerator = StructureGenerator(model, symbolProvider, writer, inner)
+        val builder = ModelBuilderGenerator(model, symbolProvider, writer, inner)
+        builder.render()
         structureGenerator.render()
+        writer.implBlock(inner, symbolProvider) {
+            builder.renderConvenienceMethod(this)
+        }
         writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(writer, model.lookup("com.test#NestedMap"), data)

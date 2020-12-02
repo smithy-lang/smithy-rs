@@ -26,9 +26,10 @@ import java.util.function.BiFunction
 fun <T : CodeWriter> T.withBlock(
     textBeforeNewLine: String,
     textAfterNewLine: String,
+    vararg args: Any,
     block: T.() -> Unit
 ): T {
-    return conditionalBlock(textBeforeNewLine, textAfterNewLine, conditional = true, block = block)
+    return conditionalBlock(textBeforeNewLine, textAfterNewLine, conditional = true, block = block, args = *args)
 }
 
 /**
@@ -47,10 +48,11 @@ fun <T : CodeWriter> T.conditionalBlock(
     textBeforeNewLine: String,
     textAfterNewLine: String,
     conditional: Boolean = true,
+    vararg args: Any,
     block: T.() -> Unit
 ): T {
     if (conditional) {
-        openBlock(textBeforeNewLine)
+        openBlock(textBeforeNewLine, *args)
     }
 
     block(this)

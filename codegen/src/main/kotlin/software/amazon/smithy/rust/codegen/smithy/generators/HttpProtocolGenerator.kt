@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -23,7 +22,7 @@ import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
  */
 data class ProtocolConfig(
     val model: Model,
-    val symbolProvider: SymbolProvider,
+    val symbolProvider: RustSymbolProvider,
     val runtimeConfig: RuntimeConfig,
     val serviceShape: ServiceShape,
     val protocol: ShapeId
@@ -32,7 +31,7 @@ data class ProtocolConfig(
 interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
     fun buildProtocolGenerator(protocolConfig: ProtocolConfig): T
     fun transformModel(model: Model): Model
-    fun symbolProvider(model: Model, base: RustSymbolProvider): SymbolProvider = base
+    fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider = base
     fun support(): ProtocolSupport
 }
 

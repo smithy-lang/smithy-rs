@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
@@ -65,7 +64,7 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
         )
     }
 
-    override fun symbolProvider(model: Model, base: RustSymbolProvider): SymbolProvider {
+    override fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider {
         return JsonSerializerSymbolProvider(
             model,
             SyntheticBodySymbolProvider(model, base),

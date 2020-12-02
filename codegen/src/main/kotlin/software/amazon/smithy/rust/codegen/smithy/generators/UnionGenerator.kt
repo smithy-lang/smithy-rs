@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 class UnionGenerator(
     val model: Model,
