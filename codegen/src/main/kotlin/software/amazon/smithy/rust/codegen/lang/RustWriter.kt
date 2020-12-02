@@ -26,9 +26,10 @@ import java.util.function.BiFunction
 fun <T : CodeWriter> T.withBlock(
     textBeforeNewLine: String,
     textAfterNewLine: String,
+    vararg args: Any,
     block: T.() -> Unit
 ): T {
-    return conditionalBlock(textBeforeNewLine, textAfterNewLine, conditional = true, block = block)
+    return conditionalBlock(textBeforeNewLine, textAfterNewLine, conditional = true, block = block, args = *args)
 }
 
 /**
@@ -86,7 +87,10 @@ fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model): T {
     val docTrait = shape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
 
     docTrait?.value?.also {
-        this.docs(it)
+        this.docs(
+            // escape any accidental formatting that may be present in the docs
+            it.replace("$expressionStart", "$expressionStart$expressionStart")
+        )
     }
 
     return this
@@ -101,8 +105,9 @@ fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model): T {
  *    - Empty newlines are removed
  */
 fun <T : CodeWriter> T.docs(text: String, vararg args: Any) {
-    pushState("docs")
+    pushState()
     setNewlinePrefix("/// ")
+    setExpressionStart('#')
     val cleaned = text.lines()
         // We need to filter out blank lines—an empty line causes the markdown parser to interpret the subsequent
         // docs as a code block because they are indented.
@@ -142,6 +147,8 @@ class RustWriter private constructor(
     private var n = 0
 
     init {
+        // Invoke the codewriter formatter with # instead of $ to avoid conflicting with Kotlin string interpolation
+        expressionStart = '#'
         if (filename.endsWith(".rs")) {
             require(namespace.startsWith("crate")) { "We can only write into files in the crate (got $namespace)" }
         }
@@ -184,7 +191,7 @@ class RustWriter private constructor(
         moduleWriter(innerWriter)
         rustMetadata.render(this)
         rustBlock("mod $moduleName") {
-            write(innerWriter.toString())
+            writeWithNoFormatting(innerWriter.toString())
         }
         innerWriter.dependencies.forEach { addDependency(it) }
         return this

@@ -127,7 +127,7 @@ class SerializerBuilder(
         "optionblob_ser" to { writer ->
             writer.rustBlock("match $inp") {
                 write(
-                    "Some(blob) => $ser.serialize_str(&\$T(blob.as_ref())),",
+                    "Some(blob) => $ser.serialize_str(&#T(blob.as_ref())),",
                     RuntimeType.Base64Encode(runtimeConfig)
                 )
                 write("None => $ser.serialize_none()")
@@ -135,7 +135,7 @@ class SerializerBuilder(
         },
         "blob_ser" to { writer ->
             writer.write(
-                "$ser.serialize_str(&\$T($inp.as_ref()))",
+                "$ser.serialize_str(&#T($inp.as_ref()))",
                 RuntimeType.Base64Encode(runtimeConfig)
             )
         },
@@ -144,7 +144,7 @@ class SerializerBuilder(
             val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, TimestampFormatTrait.Format.HTTP_DATE)
             writer.rustBlock("match $inp") {
                 write(
-                    "Some(ts) => $ser.serialize_some(&ts.fmt(\$T)),", timestampFormatType
+                    "Some(ts) => $ser.serialize_some(&ts.fmt(#T)),", timestampFormatType
                 )
                 write("None => _serializer.serialize_none()")
             }
@@ -153,7 +153,7 @@ class SerializerBuilder(
             val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, TimestampFormatTrait.Format.DATE_TIME)
             writer.rustBlock("match $inp") {
                 write(
-                    "Some(ts) => $ser.serialize_some(&ts.fmt(\$T)),", timestampFormatType
+                    "Some(ts) => $ser.serialize_some(&ts.fmt(#T)),", timestampFormatType
                 )
                 write("None => _serializer.serialize_none()")
             }
@@ -171,7 +171,7 @@ class SerializerBuilder(
     private val handWrittenDeserializers: Map<String, (RustWriter) -> Unit> = mapOf(
         "optioninstant_epoch_seconds_deser" to { writer ->
             // Needed to pull the Option deserializer into scope
-            writer.write("use \$T;", RuntimeType.Deserialize)
+            writer.write("use #T;", RuntimeType.Deserialize)
             writer.rust(
                 """
                 let ts_opt = Option::<f64>::deserialize(_deser)?;
@@ -180,16 +180,16 @@ class SerializerBuilder(
             )
         },
         "blob_deser" to { writer ->
-            writer.write("use \$T;", RuntimeType.Deserialize)
-            writer.write("use \$T;", RuntimeType.Serde("de::Error"))
+            writer.write("use #T;", RuntimeType.Deserialize)
+            writer.write("use #T;", RuntimeType.Serde("de::Error"))
 
             writer.write("let data = <&str>::deserialize(_deser)?;")
             writer.withBlock("Ok(", ")") {
                 withBlock("Blob::new(", ")") {
-                    write("\$T(data)", RuntimeType.Base64Decode(runtimeConfig))
+                    write("#T(data)", RuntimeType.Base64Decode(runtimeConfig))
                     withBlock(".map_err(|_|", ")?") {
                         write(
-                            "D::Error::invalid_value(\$T(data), &\"valid base64\")",
+                            "D::Error::invalid_value(#T(data), &\"valid base64\")",
                             RuntimeType.Serde("de::Unexpected::Str")
                         )
                     }
@@ -197,17 +197,17 @@ class SerializerBuilder(
             }
         },
         "optionblob_deser" to { writer ->
-            writer.write("use \$T;", RuntimeType.Deserialize)
-            writer.write("use \$T;", RuntimeType.Serde("de::Error"))
+            writer.write("use #T;", RuntimeType.Deserialize)
+            writer.write("use #T;", RuntimeType.Serde("de::Error"))
 
             writer.write("let data = Option::<&str>::deserialize(_deser)?;")
             writer.withBlock("data.map(|data| {", "}).transpose()") {
                 writer.withBlock("Ok(", ")") {
                     withBlock("Blob::new(", ")") {
-                        write("\$T(data)", RuntimeType.Base64Decode(runtimeConfig))
+                        write("#T(data)", RuntimeType.Base64Decode(runtimeConfig))
                         withBlock(".map_err(|_|", ")?") {
                             write(
-                                "D::Error::invalid_value(\$T(data), &\"valid base64\")",
+                                "D::Error::invalid_value(#T(data), &\"valid base64\")",
                                 RuntimeType.Serde("de::Unexpected::Str")
                             )
                         }
@@ -216,7 +216,7 @@ class SerializerBuilder(
             }
         },
         "instant_epoch_seconds_deser" to { writer ->
-            writer.write("use \$T;", RuntimeType.Deserialize)
+            writer.write("use #T;", RuntimeType.Deserialize)
             writer.rust(
                 """
                 let ts = f64::deserialize(_deser)?;
@@ -261,8 +261,8 @@ class SerializerBuilder(
         body: RustWriter.() -> Unit
     ) {
         rustWriter.rustBlock(
-            "pub fn $functionName<S>(_inp: \$1T, _serializer: S) -> " +
-                "Result<<S as \$2T>::Ok, <S as \$2T>::Error> where S: \$2T",
+            "pub fn $functionName<S>(_inp: #1T, _serializer: S) -> " +
+                "Result<<S as #2T>::Ok, <S as #2T>::Error> where S: #2T",
             serializerType(symbol),
             RuntimeType.Serializer
         ) {
@@ -277,7 +277,7 @@ class SerializerBuilder(
         body: RustWriter.() -> Unit
     ) {
         rustWriter.rustBlock(
-            "pub fn $functionName<'de, D>(_deser: D) -> Result<\$T, D::Error> where D: \$T<'de>",
+            "pub fn $functionName<'de, D>(_deser: D) -> Result<#T, D::Error> where D: #T<'de>",
             symbol,
             RuntimeType.Deserializer
         ) {

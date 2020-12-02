@@ -80,7 +80,7 @@ class StructureGeneratorTest {
         // By putting the test in another module, it can't access the struct
         // fields if they are private
         writer.withModule("inline") {
-            write("#[test]")
+            write("##[test]")
             rustBlock("fn test_public_fields()") {
                 write(
                     """

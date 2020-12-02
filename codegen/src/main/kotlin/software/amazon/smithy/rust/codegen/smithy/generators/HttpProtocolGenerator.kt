@@ -57,11 +57,11 @@ abstract class HttpProtocolGenerator(
             toBodyImpl(this, inputShape, body)
             // TODO: streaming shapes need special support
             rustBlock(
-                "pub fn assemble(builder: \$T, body: Vec<u8>) -> \$T<Vec<u8>>",
+                "pub fn assemble(builder: #T, body: Vec<u8>) -> #T<Vec<u8>>",
                 RuntimeType.HttpRequestBuilder,
                 RuntimeType.Http("request::Request")
             ) {
-                write("builder.header(\$T, body.len()).body(body)", RuntimeType.Http("header::CONTENT_LENGTH"))
+                write("builder.header(#T, body.len()).body(body)", RuntimeType.Http("header::CONTENT_LENGTH"))
                 write(""".expect("http request should be valid")""")
             }
             // builderGenerator.convenienceMethod(this)
@@ -70,7 +70,7 @@ abstract class HttpProtocolGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         writer.documentShape(operationShape, model)
         writer.rustBlock("pub struct $operationName") {
-            write("input: \$T", inputSymbol)
+            write("input: #T", inputSymbol)
         }
 
         val outputSymbol = symbolProvider.toSymbol(outputShape)
@@ -78,7 +78,7 @@ abstract class HttpProtocolGenerator(
 
         writer.rustBlock("impl $operationName") {
             rustBlock(
-                "fn from_response(response: \$T<impl AsRef<[u8]>>) -> Result<\$T, \$T>",
+                "fn from_response(response: #T<impl AsRef<[u8]>>) -> Result<#T, #T>",
                 RuntimeType.Http("response::Response"),
                 outputSymbol,
                 errorSymbol
@@ -86,7 +86,7 @@ abstract class HttpProtocolGenerator(
                 fromResponse(this, operationShape)
             }
             rustBlock(
-                "pub fn parse_response(&self, response: \$T<impl AsRef<[u8]>>) -> Result<\$T, \$T>",
+                "pub fn parse_response(&self, response: #T<impl AsRef<[u8]>>) -> Result<#T, #T>",
                 RuntimeType.Http("response::Response"),
                 outputSymbol,
                 errorSymbol
@@ -95,18 +95,18 @@ abstract class HttpProtocolGenerator(
             }
 
             rustBlock(
-                "pub fn to_http_request(&self) -> \$T<Vec<u8>>", RuntimeType.Http("request::Request")
+                "pub fn to_http_request(&self) -> #T<Vec<u8>>", RuntimeType.Http("request::Request")
             ) {
-                write("\$T::assemble(self.input.request_builder_base(), self.input.build_body())", inputSymbol)
+                write("#T::assemble(self.input.request_builder_base(), self.input.build_body())", inputSymbol)
             }
 
-            rustBlock("pub fn new(input: \$T) -> Self", inputSymbol) {
+            rustBlock("pub fn new(input: #T) -> Self", inputSymbol) {
                 write("Self { input }")
             }
 
             val builderSymbol = inputShape.builderSymbol(symbolProvider)
-            rustBlock("pub fn builder() -> \$T", inputShape.builderSymbol(symbolProvider)) {
-                write("\$T::default()", builderSymbol)
+            rustBlock("pub fn builder() -> #T", inputShape.builderSymbol(symbolProvider)) {
+                write("#T::default()", builderSymbol)
             }
         }
     }
@@ -117,7 +117,7 @@ abstract class HttpProtocolGenerator(
 
     protected fun httpBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
         implBlockWriter.rustBlock(
-            "pub fn request_builder_base(&self) -> \$T",
+            "pub fn request_builder_base(&self) -> #T",
             RuntimeType.HttpRequestBuilder
         ) {
             f(this)

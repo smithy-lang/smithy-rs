@@ -44,7 +44,7 @@ class ErrorGenerator(
             write("pub fn throttling(&self) -> bool { $throttling }")
         }
 
-        writer.rustBlock("impl \$T for ${symbol.name}", StdFmt("Display")) {
+        writer.rustBlock("impl #T for ${symbol.name}", StdFmt("Display")) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 val message = shape.getMember("message")
                 write("write!(f, ${symbol.name.dq()})?;")
@@ -57,6 +57,6 @@ class ErrorGenerator(
             }
         }
 
-        writer.write("impl \$T for ${symbol.name} {}", StdError)
+        writer.write("impl #T for ${symbol.name} {}", StdError)
     }
 }

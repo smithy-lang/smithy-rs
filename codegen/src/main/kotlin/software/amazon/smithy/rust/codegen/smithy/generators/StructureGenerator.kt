@@ -76,7 +76,7 @@ class StructureGenerator(
                 val memberName = symbolProvider.toMemberName(member)
                 writer.documentShape(member, model)
                 symbolProvider.toSymbol(member).expectRustMetadata().render(this)
-                write("$memberName: \$T,", symbolProvider.toSymbol(member))
+                write("$memberName: #T,", symbolProvider.toSymbol(member))
             }
         }
     }

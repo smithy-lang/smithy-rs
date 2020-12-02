@@ -26,9 +26,9 @@ class CombinedErrorGenerator(private val protocolConfig: ProtocolConfig, private
         writer.rustBlock("enum ${symbol.name}") {
             errors.forEach { errorVariant ->
                 val errorSymbol = symbolProvider.toSymbol(errorVariant)
-                write("${errorSymbol.name}(\$T),", errorSymbol)
+                write("${errorSymbol.name}(#T),", errorSymbol)
             }
-            write("Unmodeled(Box<dyn \$T>),", RuntimeType.StdError)
+            write("Unmodeled(Box<dyn #T>),", RuntimeType.StdError)
             write("Unknown(String)")
         }
     }

@@ -61,7 +61,7 @@ class InlineDependency(name: String, val module: String, val renderer: (RustWrit
             val rustFile = this::class.java.getResource("/inlineable/src/$filename")
             check(rustFile != null)
             return InlineDependency(name, module) { writer ->
-                writer.write(rustFile.readText())
+                writer.writeWithNoFormatting(rustFile.readText())
             }
         }
 

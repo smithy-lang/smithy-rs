@@ -141,7 +141,7 @@ class BasicAwsJsonGenerator(
         inputShape: StructureShape
     ) {
         httpBuilderFun(implBlockWriter) {
-            write("let builder = \$T::new();", RuntimeType.HttpRequestBuilder)
+            write("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
             write(
                 """
                 builder
@@ -162,53 +162,53 @@ class BasicAwsJsonGenerator(
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         val bodyId = outputShape.expectTrait(SyntheticOutputTrait::class.java).body
         val bodyShape = bodyId?.let { model.expectShape(bodyId, StructureShape::class.java) }
-        writer.rustBlock("if \$T::is_error(&response)", RuntimeType.ErrorCode) {
+        writer.rustBlock("if #T::is_error(&response)", RuntimeType.ErrorCode) {
             writer.write(
-                "let body: \$T = \$T(response.body().as_ref()).unwrap_or_else(|_|\$T(\$T::new()));",
+                "let body: #T = #T(response.body().as_ref()).unwrap_or_else(|_|#T(#T::new()));",
                 RuntimeType.SerdeJson("Value"),
                 RuntimeType.SerdeJson("from_slice"),
                 RuntimeType.SerdeJson("Value::Object"),
                 RuntimeType.SerdeJson("map::Map")
             )
             rust(
-                "let error_code = \$T::error_type_from_header(&response).map_err(|e|\$T::Unmodeled(Box::new(e)))?;",
+                "let error_code = #T::error_type_from_header(&response).map_err(|e|#T::Unmodeled(Box::new(e)))?;",
                 RuntimeType.ErrorCode,
                 errorSymbol
             )
-            rust("let error_code = error_code.or_else(||\$T::error_type_from_body(&body));", RuntimeType.ErrorCode)
-            write("let error_code = error_code.ok_or_else(||\$T::Unknown(\"no error code\".to_string()))?;", errorSymbol)
+            rust("let error_code = error_code.or_else(||#T::error_type_from_body(&body));", RuntimeType.ErrorCode)
+            write("let error_code = error_code.ok_or_else(||#T::Unknown(\"no error code\".to_string()))?;", errorSymbol)
 
-            rust("let error_code = \$T::sanitize_error_code(error_code);", RuntimeType.ErrorCode)
+            rust("let error_code = #T::sanitize_error_code(error_code);", RuntimeType.ErrorCode)
             if (operationShape.errors.isNotEmpty()) {
                 withBlock("return Err(match error_code {", "})") {
                     operationShape.errors.forEach { error ->
-                        rustBlock("${error.name.dq()} => match \$T(body)", RuntimeType.SerdeJson("from_value")) {
+                        rustBlock("${error.name.dq()} => match #T(body)", RuntimeType.SerdeJson("from_value")) {
                             val variantName = symbolProvider.toSymbol(model.expectShape(error)).name
                             write(
-                                "Ok(body) => \$T::$variantName(body),",
+                                "Ok(body) => #T::$variantName(body),",
                                 errorSymbol
                             )
-                            write("Err(e) => \$T::Unmodeled(Box::new(e))", errorSymbol)
+                            write("Err(e) => #T::Unmodeled(Box::new(e))", errorSymbol)
                         }
                     }
-                    write("unknown => \$T::Unknown(unknown.to_string())", errorSymbol)
+                    write("unknown => #T::Unknown(unknown.to_string())", errorSymbol)
                 }
             } else {
                 // TODO: this should actually be a generic error that tries to parse a message
-                write("return Err(\$T::Unknown(error_code.to_string()))", errorSymbol)
+                write("return Err(#T::Unknown(error_code.to_string()))", errorSymbol)
             }
             // write("return Err(\$T::Unknown(\"Invalid status code (todo)\".to_string()))", errorSymbol)
         }
         bodyShape?.also {
             val symbol = symbolProvider.toSymbol(it)
             writer.write(
-                "let body: \$T = \$T(response.body().as_ref()).unwrap();",
+                "let body: #T = #T(response.body().as_ref()).unwrap();",
                 symbol,
                 RuntimeType.SerdeJson("from_slice")
             )
         }
         writer.withBlock("Ok(", ")") {
-            rustBlock("\$T", outputSymbol) {
+            rustBlock("#T", outputSymbol) {
                 bodyShape?.members().orEmpty().forEach { member ->
                     val name = symbolProvider.toMemberName(member)
                     write("$name: body.$name,")
@@ -225,8 +225,8 @@ class BasicAwsJsonGenerator(
             return
         }
         val bodySymbol = protocolConfig.symbolProvider.toSymbol(inputBody)
-        implBlockWriter.rustBlock("fn body(&self) -> \$T", bodySymbol) {
-            rustBlock("\$T", bodySymbol) {
+        implBlockWriter.rustBlock("fn body(&self) -> #T", bodySymbol) {
+            rustBlock("#T", bodySymbol) {
                 for (member in inputBody.members()) {
                     val name = protocolConfig.symbolProvider.toMemberName(member)
                     write("$name: &self.$name,")
@@ -234,7 +234,7 @@ class BasicAwsJsonGenerator(
             }
         }
         bodyBuilderFun(implBlockWriter) {
-            write("\$T(&self.body()).expect(\"serialization should succeed\")", RuntimeType.SerdeJson("to_vec"))
+            write("#T(&self.body()).expect(\"serialization should succeed\")", RuntimeType.SerdeJson("to_vec"))
         }
     }
 }

@@ -81,7 +81,7 @@ class AwsRestJsonGenerator(
             httpIndex.determineRequestContentType(operationShape, "application/json").orElse("application/json")
         httpBindingGenerator.renderUpdateHttpBuilder(implBlockWriter)
         httpBuilderFun(implBlockWriter) {
-            write("let builder = \$T::new();", requestBuilder)
+            write("let builder = #T::new();", requestBuilder)
             write("let builder = builder.header(\"Content-Type\", ${contentType.dq()});")
             write("self.update_http_builder(builder)")
         }

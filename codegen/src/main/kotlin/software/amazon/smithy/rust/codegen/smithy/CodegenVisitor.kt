@@ -23,11 +23,12 @@ import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustModule
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.ModelBuilderGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.OperationInputBuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ServiceGenerator
@@ -126,13 +127,13 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
         logger.info("generating a structure...")
         writers.useShapeWriter(shape) {
             StructureGenerator(model, symbolProvider, it, shape).render()
-            val operation = if (shape.hasTrait(SyntheticInputTrait::class.java)) {
-                model.shapes(OperationShape::class.java).filter { operation -> operation.input.get() == shape.id }
+            val builderGenerator = if (shape.hasTrait(SyntheticInputTrait::class.java)) {
+                val operation = model.shapes(OperationShape::class.java).filter { operation -> operation.input.get() == shape.id }
                     .findFirst().get()
+                OperationInputBuilderGenerator(protocolConfig, it, operation)
             } else {
-                null
+                ModelBuilderGenerator(protocolConfig, it, shape)
             }
-            val builderGenerator = BuilderGenerator(model, symbolProvider, it, shape, operation)
             builderGenerator.render()
             it.rustBlock("impl ${symbolProvider.toSymbol(shape).name}") {
                 builderGenerator.convenienceMethod(this)

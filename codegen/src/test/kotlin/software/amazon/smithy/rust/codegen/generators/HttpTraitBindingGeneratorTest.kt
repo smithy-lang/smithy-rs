@@ -109,8 +109,8 @@ class HttpTraitBindingGeneratorTest {
                 symbolProvider,
                 TestRuntimeConfig, writer, operationShape, inputShape, httpTrait
             ).renderUpdateHttpBuilder(this)
-            rustBlock("pub fn request_builder_base(&self) -> \$T", RuntimeType.HttpRequestBuilder) {
-                write("let builder = \$T::new();", RuntimeType.HttpRequestBuilder)
+            rustBlock("pub fn request_builder_base(&self) -> #T", RuntimeType.HttpRequestBuilder) {
+                write("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
                 write("self.update_http_builder(builder)")
             }
         }

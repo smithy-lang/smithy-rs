@@ -62,7 +62,7 @@ class EnumGenerator(
             }
         }
 
-        writer.rustBlock("impl <T> \$T<T> for $enumName where T: \$T<str>", RuntimeType.From, RuntimeType.AsRef) {
+        writer.rustBlock("impl <T> #T<T> for $enumName where T: #T<str>", RuntimeType.From, RuntimeType.AsRef) {
             writer.rustBlock("fn from(s: T) -> Self") {
                 write("$enumName(s.as_ref().to_owned())")
             }
@@ -103,7 +103,7 @@ class EnumGenerator(
     }
 
     private fun renderFromStr() {
-        writer.rustBlock("impl <T> \$T<T> for $enumName where T: \$T<str>", RuntimeType.From, RuntimeType.AsRef) {
+        writer.rustBlock("impl <T> #T<T> for $enumName where T: #T<str>", RuntimeType.From, RuntimeType.AsRef) {
             writer.rustBlock("fn from(s: T) -> Self") {
                 writer.rustBlock("match s.as_ref()") {
                     sortedMembers.forEach { member ->

@@ -179,9 +179,9 @@ data class Derives(val derives: Set<RuntimeType>) : Attribute() {
         if (derives.isEmpty()) {
             return
         }
-        writer.writeInline("#[derive(")
+        writer.writeInline("##[derive(")
         derives.sortedBy { it.name }.forEach { derive ->
-            writer.writeInline("\$T, ", derive)
+            writer.writeInline("#T, ", derive)
         }
         writer.write(")]")
     }
@@ -193,7 +193,7 @@ data class Derives(val derives: Set<RuntimeType>) : Attribute() {
 
 data class Custom(val annot: String, val symbols: List<RuntimeType> = listOf()) : Attribute() {
     override fun render(writer: RustWriter) {
-        writer.writeInline("#[")
+        writer.writeInline("##[")
         writer.writeInline(annot)
         writer.write("]")
 

@@ -149,13 +149,13 @@ class HttpProtocolTestGenerator(
     ) {
         testModuleWriter.setNewlinePrefix("/// ")
         testCase.documentation.map {
-            testModuleWriter.write(it)
+            testModuleWriter.writeWithNoFormatting(it)
         }
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.setNewlinePrefix("")
-        testModuleWriter.write("#[test]")
+        testModuleWriter.write("##[test]")
         if (ExpectFail.contains(testCase.id)) {
-            testModuleWriter.write("#[should_panic]")
+            testModuleWriter.write("##[should_panic]")
         }
         val fnName = when (testCase) {
             is HttpResponseTestCase -> "_response"
@@ -176,22 +176,22 @@ class HttpProtocolTestGenerator(
             writeInline("let expected_output =")
             instantiator.render(this, expectedShape, httpResponseTestCase.params)
             write(";")
-            write("let http_response = \$T::new()", RuntimeType.HttpResponseBuilder)
+            write("let http_response = #T::new()", RuntimeType.HttpResponseBuilder)
             httpResponseTestCase.headers.forEach { (key, value) ->
-                write(".header(${key.dq()}, ${value.dq()})")
+                writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
             }
             rust(
                 """
                 .status(${httpResponseTestCase.code})
-                .body(${httpResponseTestCase.body.orNull()?.dq() ?: "vec![]"})
+                .body(${httpResponseTestCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"})
                 .unwrap();
             """
             )
-            write("let parsed = \$T::from_response(http_response);", operationSymbol)
+            write("let parsed = #T::from_response(http_response);", operationSymbol)
             if (expectedShape.hasTrait(ErrorTrait::class.java)) {
                 val errorSymbol = operationShape.errorSymbol(protocolConfig.symbolProvider)
                 val errorVariant = protocolConfig.symbolProvider.toSymbol(expectedShape).name
-                rustBlock("if let Err(\$T::$errorVariant(actual_error)) = parsed", errorSymbol) {
+                rustBlock("if let Err(#T::$errorVariant(actual_error)) = parsed", errorSymbol) {
                     write("assert_eq!(expected_output, actual_error);")
                 }
                 rustBlock("else") {
@@ -260,7 +260,7 @@ class HttpProtocolTestGenerator(
             assertOk(rustWriter) {
                 // TODO: test the HTTP request not the private input object
                 rustWriter.write(
-                    "\$T(input.input.build_body(), ${body.dq()}, \$T::from(${(mediaType ?: "unknown").dq()}))",
+                    "#T(input.input.build_body(), ${body.dq()}, #T::from(${(mediaType ?: "unknown").dq()}))",
                     RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_body"),
                     RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "MediaType")
                 )
@@ -282,7 +282,7 @@ class HttpProtocolTestGenerator(
         }
         assertOk(rustWriter) {
             write(
-                "\$T(&http_request, $variableName)",
+                "#T(&http_request, $variableName)",
                 RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_headers")
             )
         }
@@ -317,7 +317,7 @@ class HttpProtocolTestGenerator(
         }
         assertOk(rustWriter) {
             write(
-                "\$T(&http_request, $variableName)",
+                "#T(&http_request, $variableName)",
                 RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, checkFunction)
             )
         }
@@ -328,7 +328,7 @@ class HttpProtocolTestGenerator(
      * for pretty prettying protocol test helper results
      */
     private fun assertOk(rustWriter: RustWriter, inner: RustWriter.() -> Unit) {
-        rustWriter.write("\$T(", RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "assert_ok"))
+        rustWriter.write("#T(", RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "assert_ok"))
         inner(rustWriter)
         rustWriter.write(");")
     }

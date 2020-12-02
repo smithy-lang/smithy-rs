@@ -77,7 +77,7 @@ class InstantiatorTest {
         )
         val writer = RustWriter.forModule("model")
         UnionGenerator(model, symbolProvider, writer, union).render()
-        writer.write("#[test]")
+        writer.write("##[test]")
         writer.rustBlock("fn inst()") {
             writer.withBlock("let result = ", ";") {
                 sut.render(this, union, data)
@@ -105,7 +105,7 @@ class InstantiatorTest {
         }
         structureGenerator.render()
         builderGenerator.render()
-        writer.write("#[test]")
+        writer.write("##[test]")
         writer.rustBlock("fn inst()") {
             writer.withBlock("let result = ", ";") {
                 sut.render(this, structure, data)
@@ -136,7 +136,7 @@ class InstantiatorTest {
         builderGenerator.render()
         val structureGenerator = StructureGenerator(model, symbolProvider, writer, structure)
         structureGenerator.render()
-        writer.write("#[test]")
+        writer.write("##[test]")
         writer.rustBlock("fn inst()") {
             withBlock("let result = ", ";") {
                 sut.render(this, structure, data)
@@ -167,7 +167,7 @@ class InstantiatorTest {
         )
         val writer = RustWriter.forModule("lib")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
-        writer.write("#[test]")
+        writer.write("##[test]")
         writer.rustBlock("fn inst()") {
             writer.withBlock("let result = ", ";") {
                 sut.render(writer, model.lookup("com.test#MyList"), data)
@@ -189,7 +189,7 @@ class InstantiatorTest {
         )
         val writer = RustWriter.forModule("lib")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
-        writer.write("#[test]")
+        writer.write("##[test]")
         writer.rustBlock("fn inst()") {
             writer.withBlock("let result = ", ";") {
                 sut.render(writer, model.lookup("com.test#MySparseList"), data)
@@ -219,7 +219,7 @@ class InstantiatorTest {
             builderGenerator.convenienceMethod(this)
         }
         builderGenerator.render()
-        writer.write("#[test]")
+        writer.write("##[test]")
         writer.rustBlock("fn inst()") {
             writer.withBlock("let result = ", ";") {
                 sut.render(writer, model.lookup("com.test#NestedMap"), data)
@@ -242,7 +242,7 @@ class InstantiatorTest {
         // that can be represented in plain text (for example, use "foo" and not "Zm9vCg==")."
         val writer = RustWriter.forModule("lib")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
-        writer.write("#[test]")
+        writer.write("##[test]")
         writer.rustBlock("fn test_blob()") {
             withBlock("let blob = ", ";") {
                 sut.render(
