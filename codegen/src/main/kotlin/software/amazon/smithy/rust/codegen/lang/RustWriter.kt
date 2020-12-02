@@ -63,7 +63,7 @@ fun <T : CodeWriter> T.conditionalBlock(
 /**
  * Convenience wrapper that tells Intellij that the contents of this block are Rust
  */
-fun <T : CodeWriter> T.rust(@Language("Rust", prefix = "fn foo() {", suffix = "}") contents: String, vararg args: Any) {
+fun <T : CodeWriter> T.rust(@Language("Rust", prefix = "fn foo(&self) {", suffix = "}") contents: String, vararg args: Any) {
     this.write(contents, *args)
 }
 
@@ -85,7 +85,7 @@ fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model): T {
     val docTrait = shape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
 
     docTrait?.value?.also {
-        this.docs(it)
+        this.docs(escape(it))
     }
 
     return this
@@ -100,12 +100,13 @@ fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model): T {
  *    - Empty newlines are removed
  */
 fun <T : CodeWriter> T.docs(text: String, vararg args: Any) {
-    pushState("docs")
+    pushState()
     setNewlinePrefix("/// ")
+    // TODO: Smithy updates should remove the need for a number of these changes
     val cleaned = text.lines()
         // We need to filter out blank lines—an empty line causes the markdown parser to interpret the subsequent
         // docs as a code block because they are indented.
-        .filter { !it.isBlank() }
+        .filter { it.isNotBlank() }
         .joinToString("\n") {
             // Rustdoc warns on tabs in documentation
             it.trimStart().replace("\t", "  ")
@@ -113,6 +114,14 @@ fun <T : CodeWriter> T.docs(text: String, vararg args: Any) {
     write(cleaned, *args)
     popState()
 }
+
+/** Escape the [expressionStart] character to avoid problems during formatting */
+fun CodeWriter.escape(text: String): String = text.replace("$expressionStart", "$expressionStart$expressionStart")
+
+/**
+ * Write _exactly_ the text as written into the code writer without newlines or formatting
+ */
+fun CodeWriter.raw(text: String) = writeInline(escape(text))
 
 class RustWriter private constructor(
     private val filename: String,
@@ -141,6 +150,7 @@ class RustWriter private constructor(
     private var n = 0
 
     init {
+        expressionStart = '#'
         if (filename.endsWith(".rs")) {
             require(namespace.startsWith("crate")) { "We can only write into files in the crate (got $namespace)" }
         }
@@ -183,7 +193,7 @@ class RustWriter private constructor(
         moduleWriter(innerWriter)
         rustMetadata.render(this)
         rustBlock("mod $moduleName") {
-            write(innerWriter.toString())
+            writeWithNoFormatting(innerWriter.toString())
         }
         innerWriter.dependencies.forEach { addDependency(it) }
         return this

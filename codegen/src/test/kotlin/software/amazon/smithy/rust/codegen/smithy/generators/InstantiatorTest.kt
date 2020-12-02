@@ -8,6 +8,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.raw
 import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
@@ -66,6 +67,13 @@ class InstantiatorTest {
 
     // TODO: test of recursive structures when supported
 
+    fun RustWriter.test(block: RustWriter.() -> Unit) {
+        raw("#[test]")
+        rustBlock("fn inst()") {
+            block(this)
+        }
+    }
+
     @Test
     fun `generate unions`() {
         val union = model.lookup<UnionShape>("com.test#MyUnion")
@@ -77,8 +85,7 @@ class InstantiatorTest {
         )
         val writer = RustWriter.forModule("model")
         UnionGenerator(model, symbolProvider, writer, union).render()
-        writer.write("#[test]")
-        writer.rustBlock("fn inst()") {
+        writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(this, union, data)
             }
@@ -100,8 +107,7 @@ class InstantiatorTest {
         val writer = RustWriter.forModule("model")
         val structureGenerator = StructureGenerator(model, symbolProvider, writer, structure)
         structureGenerator.render()
-        writer.write("#[test]")
-        writer.rustBlock("fn inst()") {
+        writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(this, structure, data)
             }
@@ -126,8 +132,7 @@ class InstantiatorTest {
         val writer = RustWriter.forModule("model")
         val structureGenerator = StructureGenerator(model, symbolProvider, writer, structure)
         structureGenerator.render()
-        writer.write("#[test]")
-        writer.rustBlock("fn inst()") {
+        writer.test {
             withBlock("let result = ", ";") {
                 sut.render(this, structure, data)
             }
@@ -157,8 +162,7 @@ class InstantiatorTest {
         )
         val writer = RustWriter.forModule("lib")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
-        writer.write("#[test]")
-        writer.rustBlock("fn inst()") {
+        writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(writer, model.lookup("com.test#MyList"), data)
             }
@@ -179,8 +183,7 @@ class InstantiatorTest {
         )
         val writer = RustWriter.forModule("lib")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
-        writer.write("#[test]")
-        writer.rustBlock("fn inst()") {
+        writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(writer, model.lookup("com.test#MySparseList"), data)
             }
@@ -203,8 +206,7 @@ class InstantiatorTest {
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
         val structureGenerator = StructureGenerator(model, symbolProvider, writer, model.lookup("com.test#Inner"))
         structureGenerator.render()
-        writer.write("#[test]")
-        writer.rustBlock("fn inst()") {
+        writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(writer, model.lookup("com.test#NestedMap"), data)
             }
@@ -226,8 +228,7 @@ class InstantiatorTest {
         // that can be represented in plain text (for example, use "foo" and not "Zm9vCg==")."
         val writer = RustWriter.forModule("lib")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
-        writer.write("#[test]")
-        writer.rustBlock("fn test_blob()") {
+        writer.test {
             withBlock("let blob = ", ";") {
                 sut.render(
                     this,

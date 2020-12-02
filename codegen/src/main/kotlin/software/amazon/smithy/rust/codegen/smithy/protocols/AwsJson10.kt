@@ -131,7 +131,7 @@ class BasicAwsJsonGenerator(
         inputShape: StructureShape
     ) {
         httpBuilderFun(implBlockWriter) {
-            write("let builder = \$T::new();", RuntimeType.HttpRequestBuilder)
+            write("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
             write(
                 """
                 builder
@@ -151,8 +151,8 @@ class BasicAwsJsonGenerator(
             return
         }
         val bodySymbol = protocolConfig.symbolProvider.toSymbol(inputBody)
-        implBlockWriter.rustBlock("fn body(&self) -> \$T", bodySymbol) {
-            rustBlock("\$T", bodySymbol) {
+        implBlockWriter.rustBlock("fn body(&self) -> #T", bodySymbol) {
+            rustBlock("#T", bodySymbol) {
                 for (member in inputBody.members()) {
                     val name = protocolConfig.symbolProvider.toMemberName(member)
                     write("$name: &self.$name,")
@@ -160,7 +160,7 @@ class BasicAwsJsonGenerator(
             }
         }
         bodyBuilderFun(implBlockWriter) {
-            write("\$T(&self.body()).expect(\"serialization should succeed\")", RuntimeType.SerdeJson("to_vec"))
+            write("""#T(&self.body()).expect("serialization should succeed")""", RuntimeType.SerdeJson("to_vec"))
         }
     }
 }
