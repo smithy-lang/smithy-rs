@@ -89,12 +89,13 @@ fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model): T {
     docTrait?.value?.also {
         this.docs(
             // escape any accidental formatting that may be present in the docs
-            it.replace("$expressionStart", "$expressionStart$expressionStart")
+            escape(it)
         )
     }
-
     return this
 }
+
+fun CodeWriter.escape(text: String): String = text.replace("$expressionStart", "$expressionStart$expressionStart")
 
 /**
  * Write RustDoc-style docs into the writer
@@ -111,7 +112,7 @@ fun <T : CodeWriter> T.docs(text: String, vararg args: Any) {
     val cleaned = text.lines()
         // We need to filter out blank lines—an empty line causes the markdown parser to interpret the subsequent
         // docs as a code block because they are indented.
-        .filter { !it.isBlank() }
+        .filter { it.isNotBlank() }
         .joinToString("\n") {
             // Rustdoc warns on tabs in documentation
             it.trimStart().replace("\t", "  ")
