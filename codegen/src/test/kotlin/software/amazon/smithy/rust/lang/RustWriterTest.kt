@@ -43,7 +43,7 @@ class RustWriterTest {
         val sut = RustWriter.forModule("parent")
         val requestBuilder = RuntimeType.HttpRequestBuilder
         sut.withModule("inner") {
-            rustBlock("fn build(builer: \$T)", requestBuilder) {
+            rustBlock("fn build(builer: #T)", requestBuilder) {
             }
         }
         val httpDep = CargoDependency.Http.dependencies[0]
@@ -68,8 +68,8 @@ class RustWriterTest {
         val setSymbol = provider.toSymbol(set)
         val stringSymbol = provider.toSymbol(stringShape)
         sut.rustBlock("struct Test") {
-            write("member: \$T,", setSymbol)
-            write("otherMember: \$T,", stringSymbol)
+            write("member: #T,", setSymbol)
+            write("otherMember: #T,", stringSymbol)
         }
         val output = sut.toString()
         output.shouldCompile()
@@ -109,7 +109,7 @@ class RustWriterTest {
         val shape = model.lookup<StructureShape>("test#Foo")
         val symbol = testSymbolProvider(model).toSymbol(shape)
         val sut = RustWriter.forModule("lib")
-        sut.docs("A link! \$D", symbol)
+        sut.docs("A link! #D", symbol)
         sut.toString() shouldContain "/// A link! [`Foo`](crate::model::Foo)"
     }
 }

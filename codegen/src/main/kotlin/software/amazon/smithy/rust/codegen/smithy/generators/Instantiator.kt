@@ -60,17 +60,17 @@ class Instantiator(
 
             // Wrapped Shapes
             is TimestampShape -> writer.write(
-                "\$T::from_epoch_seconds(${(arg as NumberNode).value})",
+                "#T::from_epoch_seconds(${(arg as NumberNode).value})",
                 RuntimeType.Instant(runtimeConfig)
             )
 
             /**
              * ```rust
-             * Blob::new(\"arg\")
+             * Blob::new("arg")
              * ```
              */
             is BlobShape -> writer.write(
-                "\$T::new(${(arg as StringNode).value.dq()})",
+                "#T::new(${(arg as StringNode).value.dq()})",
                 RuntimeType.Blob(runtimeConfig)
             )
 
@@ -78,7 +78,7 @@ class Instantiator(
             is StringShape -> renderString(writer, shape, arg as StringNode)
             is NumberShape -> writer.write(arg.asNumberNode().get())
             is BooleanShape -> writer.write(arg.asBooleanNode().get().toString())
-            else -> writer.write("todo!() /* $shape $arg */")
+            else -> writer.writeWithNoFormatting("todo!() /* $shape $arg */")
         }
     }
 
@@ -109,7 +109,7 @@ class Instantiator(
         if (symbolProvider.toSymbol(shape).rustType() is RustType.HashSet) {
             if (!data.isEmpty) {
                 writer.rustBlock("") {
-                    write("let mut ret = \$T::new();", RuntimeType.HashSet)
+                    write("let mut ret = #T::new();", RuntimeType.HashSet)
                     data.forEach { v ->
                         withBlock("ret.insert(", ");") {
                             renderMember(this, shape.member, v)
@@ -118,7 +118,7 @@ class Instantiator(
                     write("ret")
                 }
             } else {
-                writer.write("\$T::new()", RuntimeType.HashSet)
+                writer.write("#T::new()", RuntimeType.HashSet)
             }
         } else {
             renderList(writer, shape, data)
@@ -141,7 +141,7 @@ class Instantiator(
     ) {
         if (data.members.isNotEmpty()) {
             writer.rustBlock("") {
-                write("let mut ret = \$T::new();", RuntimeType.HashMap)
+                write("let mut ret = #T::new();", RuntimeType.HashMap)
                 data.members.forEach { (k, v) ->
                     withBlock("ret.insert(${k.value.dq()}.to_string(),", ");") {
                         renderMember(this, shape.value, v)
@@ -150,7 +150,7 @@ class Instantiator(
                 write("ret")
             }
         } else {
-            writer.write("\$T::new()", RuntimeType.HashMap)
+            writer.write("#T::new()", RuntimeType.HashMap)
         }
     }
 
@@ -171,7 +171,7 @@ class Instantiator(
         val member = shape.getMember(memberName).get()
             .let { model.expectShape(it.target) }
         // TODO: refactor this detail into UnionGenerator
-        writer.write("\$T::${memberName.toPascalCase()}", unionSymbol)
+        writer.write("#T::${memberName.toPascalCase()}", unionSymbol)
         // unions should specify exactly one member
         writer.withBlock("(", ")") {
             render(this, member, variant.value)
@@ -207,7 +207,7 @@ class Instantiator(
             writer.write("$data.to_string()")
         } else {
             val enumSymbol = symbolProvider.toSymbol(shape)
-            writer.write("\$T::from($data)", enumSymbol)
+            writer.write("#T::from($data)", enumSymbol)
         }
     }
 
@@ -221,7 +221,7 @@ class Instantiator(
         shape: StructureShape,
         data: ObjectNode
     ) {
-        writer.write("\$T::builder()", symbolProvider.toSymbol(shape))
+        writer.write("#T::builder()", symbolProvider.toSymbol(shape))
         data.members.forEach { (key, value) ->
             val (memberShape, targetShape) = getMember(shape, key)
             val func = symbolProvider.toMemberName(memberShape)

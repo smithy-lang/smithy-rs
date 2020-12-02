@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.lang.Custom
 import software.amazon.smithy.rust.codegen.lang.RustMetadata
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.docs
+import software.amazon.smithy.rust.codegen.lang.raw
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
@@ -82,7 +83,7 @@ class StructureGeneratorTest {
         // By putting the test in another module, it can't access the struct
         // fields if they are private
         writer.withModule("inline") {
-            write("#[test]")
+            raw("#[test]")
             rustBlock("fn test_public_fields()") {
                 write(
                     """

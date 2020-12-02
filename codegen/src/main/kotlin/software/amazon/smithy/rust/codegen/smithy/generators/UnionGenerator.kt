@@ -33,7 +33,7 @@ class UnionGenerator(
             sortedMembers.forEach { member ->
                 val memberSymbol = symbolProvider.toSymbol(member)
                 memberSymbol.expectRustMetadata().renderAttributes(this)
-                write("${member.memberName.toPascalCase()}(\$T),", symbolProvider.toSymbol(member))
+                write("${member.memberName.toPascalCase()}(#T),", symbolProvider.toSymbol(member))
             }
         }
     }

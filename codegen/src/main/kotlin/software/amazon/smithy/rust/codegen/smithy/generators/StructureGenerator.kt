@@ -49,7 +49,7 @@ class StructureGenerator(
         if (renderBuilder) {
             val symbol = symbolProvider.toSymbol(shape)
             // TODO: figure out exactly what docs we want on a the builder module
-            writer.docs("See \$D", symbol)
+            writer.docs("See #D", symbol)
             writer.withModule(symbol.name.toSnakeCase()) {
                 renderBuilder(this)
             }
@@ -95,14 +95,14 @@ class StructureGenerator(
                 val memberName = symbolProvider.toMemberName(member)
                 writer.documentShape(member, model)
                 symbolProvider.toSymbol(member).expectRustMetadata().render(this)
-                write("$memberName: \$T,", symbolProvider.toSymbol(member))
+                write("$memberName: #T,", symbolProvider.toSymbol(member))
             }
         }
         if (renderBuilder) {
             writer.rustBlock("impl ${symbol.name}") {
-                docs("Creates a new builder-style object to manufacture \$D", symbol)
-                rustBlock("pub fn builder() -> \$T", builderSymbol) {
-                    write("\$T::default()", builderSymbol)
+                docs("Creates a new builder-style object to manufacture #D", symbol)
+                rustBlock("pub fn builder() -> #T", builderSymbol) {
+                    write("#T::default()", builderSymbol)
                 }
             }
         }
@@ -112,16 +112,16 @@ class StructureGenerator(
         val builderName = "Builder"
 
         val symbol = symbolProvider.toSymbol(shape)
-        writer.docs("A builder for \$D", symbol)
-        writer.write("#[non_exhaustive]")
-        writer.write("#[derive(Debug, Clone, Default)]")
+        writer.docs("A builder for #D", symbol)
+        writer.writeWithNoFormatting("#[non_exhaustive]")
+        writer.writeWithNoFormatting("#[derive(Debug, Clone, Default)]")
         writer.rustBlock("pub struct $builderName") {
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional
                 val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
                 // TODO: should the builder members be public?
-                write("$memberName: \$T,", memberSymbol)
+                write("$memberName: #T,", memberSymbol)
             }
         }
 
@@ -152,14 +152,14 @@ class StructureGenerator(
 
             val fallibleBuilder = fallibleBuilder(shape, symbolProvider)
             val returnType = when (fallibleBuilder) {
-                true -> "Result<\$T, String>"
-                false -> "\$T"
+                true -> "Result<#T, String>"
+                false -> "#T"
             }
 
-            writer.docs("Consumes the builder and constructs a \$D", symbol)
+            writer.docs("Consumes the builder and constructs a #D", symbol)
             rustBlock("pub fn build(self) -> $returnType", structureSymbol) {
                 conditionalBlock("Ok(", ")", conditional = fallibleBuilder) {
-                    rustBlock("\$T", structureSymbol) {
+                    rustBlock("#T", structureSymbol) {
                         members.forEach { member ->
                             val memberName = symbolProvider.toMemberName(member)
                             val memberSymbol = symbolProvider.toSymbol(member)

@@ -6,6 +6,8 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.rust.codegen.lang.Custom
 import software.amazon.smithy.rust.codegen.lang.RustMetadata
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.docs
+import software.amazon.smithy.rust.codegen.lang.escape
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -89,15 +91,13 @@ class HttpProtocolTestGenerator(
     }
 
     private fun renderHttpRequestTestCase(httpRequestTestCase: HttpRequestTestCase, testModuleWriter: RustWriter) {
-        testModuleWriter.setNewlinePrefix("/// ")
         httpRequestTestCase.documentation.map {
-            testModuleWriter.write(it)
+            testModuleWriter.docs(testModuleWriter.escape(it))
         }
-        testModuleWriter.write("Test ID: ${httpRequestTestCase.id}")
-        testModuleWriter.setNewlinePrefix("")
-        testModuleWriter.write("#[test]")
+        testModuleWriter.docs("Test ID: ${httpRequestTestCase.id}")
+        testModuleWriter.writeWithNoFormatting("#[test]")
         if (ExpectFail.contains(httpRequestTestCase.id)) {
-            testModuleWriter.write("#[should_panic]")
+            testModuleWriter.writeWithNoFormatting("#[should_panic]")
         }
         testModuleWriter.rustBlock("fn test_${httpRequestTestCase.id.toSnakeCase()}()") {
             writeInline("let input =")
@@ -154,7 +154,7 @@ class HttpProtocolTestGenerator(
             // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
             assertOk(rustWriter) {
                 rustWriter.write(
-                    "\$T(input.build_body(), ${body.dq()}, \$T::from(${(mediaType ?: "unknown").dq()}))",
+                    "#T(input.build_body(), ${rustWriter.escape(body).dq()}, #T::from(${(mediaType ?: "unknown").dq()}))",
                     RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_body"),
                     RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "MediaType")
                 )
@@ -176,7 +176,7 @@ class HttpProtocolTestGenerator(
         }
         assertOk(rustWriter) {
             write(
-                "\$T(&http_request, $variableName)",
+                "#T(&http_request, $variableName)",
                 RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_headers")
             )
         }
@@ -211,7 +211,7 @@ class HttpProtocolTestGenerator(
         }
         assertOk(rustWriter) {
             write(
-                "\$T(&http_request, $variableName)",
+                "#T(&http_request, $variableName)",
                 RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, checkFunction)
             )
         }
@@ -222,7 +222,7 @@ class HttpProtocolTestGenerator(
      * for pretty prettying protocol test helper results
      */
     private fun assertOk(rustWriter: RustWriter, inner: RustWriter.() -> Unit) {
-        rustWriter.write("\$T(", RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "assert_ok"))
+        rustWriter.write("#T(", RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "assert_ok"))
         inner(rustWriter)
         rustWriter.write(");")
     }

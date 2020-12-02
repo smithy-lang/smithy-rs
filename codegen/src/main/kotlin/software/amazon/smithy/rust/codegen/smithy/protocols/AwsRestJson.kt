@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpTraitBindingGenerator
@@ -76,9 +77,14 @@ class AwsRestJsonGenerator(
             httpIndex.determineRequestContentType(operationShape, "application/json").orElse("application/json")
         httpBindingGenerator.renderUpdateHttpBuilder(implBlockWriter)
         httpBuilderFun(implBlockWriter) {
-            write("let builder = \$T::new();", requestBuilder)
-            write("let builder = builder.header(\"Content-Type\", ${contentType.dq()});")
-            write("self.update_http_builder(builder)")
+            rust(
+                """
+            let builder = #T::new();
+            let builder = builder.header("Content-Type", ${contentType.dq()});
+            self.update_http_builder(builder)
+            """,
+                requestBuilder
+            )
         }
     }
 }
