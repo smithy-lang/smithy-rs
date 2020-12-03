@@ -5,6 +5,7 @@ import org.intellij.lang.annotations.Language
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
@@ -91,11 +92,31 @@ class HttpProtocolTestGeneratorTest {
             suffix = "}"
         ) body: String = "${correctBody.dq()}.to_string()"
     ) {
+        val shape: StructureShape = model.lookup("com.example#SayHelloInput")
+        val inputSymbol = symbolProvider.toSymbol(shape)
+        val operationShape: OperationShape = model.lookup("com.example#SayHello")
+        val builderGenerator = OperationInputBuilderGenerator(model, symbolProvider, model.lookup("com.example#SayHello"))
         writer.withModule("operation") {
-            val shape: StructureShape = model.lookup("com.example#SayHelloInput")
+            rustBlock("pub struct SayHello") {
+                write("input: #T", inputSymbol)
+            }
+            implBlock(operationShape, symbolProvider) {
+                builderGenerator.renderConvenienceMethod(this)
+
+                rustBlock(
+                    "pub fn build_http_request(&self) -> #T<Vec<u8>>", RuntimeType.Http("request::Request")
+                ) {
+                    write("#T::assemble(self.input.request_builder_base(), self.input.build_body())", inputSymbol)
+                }
+
+                rustBlock("pub fn new(input: #T) -> Self", inputSymbol) {
+                    write("Self { input }")
+                }
+            }
+        }
+        writer.withModule("input") {
             StructureGenerator(model, symbolProvider, this, shape).render()
-            val builderGenerator = ModelBuilderGenerator(model, symbolProvider, this, shape)
-            builderGenerator.render()
+            builderGenerator.render(this)
             rustBlock("impl SayHelloInput") {
                 builderGenerator.renderConvenienceMethod(this)
                 rustBlock("pub fn request_builder_base(&self) -> #T", RuntimeType.HttpRequestBuilder) {

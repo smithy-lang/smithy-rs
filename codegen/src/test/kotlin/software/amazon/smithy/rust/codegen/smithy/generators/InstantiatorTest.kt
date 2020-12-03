@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.compileAndTest
+import software.amazon.smithy.rust.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class InstantiatorTest {
@@ -105,13 +106,7 @@ class InstantiatorTest {
             """.trimIndent()
         )
         val writer = RustWriter.forModule("model")
-        val structureGenerator = StructureGenerator(model, symbolProvider, writer, structure)
-        val builder = ModelBuilderGenerator(model, symbolProvider, writer, structure)
-        builder.render()
-        structureGenerator.render()
-        writer.implBlock(structure, symbolProvider) {
-            builder.renderConvenienceMethod(this)
-        }
+        structure.renderWithModelBuilder(model, symbolProvider, writer)
         writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(this, structure, data)
@@ -135,13 +130,7 @@ class InstantiatorTest {
             """.trimIndent()
         )
         val writer = RustWriter.forModule("model")
-        val structureGenerator = StructureGenerator(model, symbolProvider, writer, structure)
-        val builder = ModelBuilderGenerator(model, symbolProvider, writer, structure)
-        builder.render()
-        structureGenerator.render()
-        writer.implBlock(structure, symbolProvider) {
-            builder.renderConvenienceMethod(this)
-        }
+        structure.renderWithModelBuilder(model, symbolProvider, writer)
         writer.test {
             withBlock("let result = ", ";") {
                 sut.render(this, structure, data)
@@ -215,13 +204,7 @@ class InstantiatorTest {
         val writer = RustWriter.forModule("model")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
         val inner: StructureShape = model.lookup("com.test#Inner")
-        val structureGenerator = StructureGenerator(model, symbolProvider, writer, inner)
-        val builder = ModelBuilderGenerator(model, symbolProvider, writer, inner)
-        builder.render()
-        structureGenerator.render()
-        writer.implBlock(inner, symbolProvider) {
-            builder.renderConvenienceMethod(this)
-        }
+        inner.renderWithModelBuilder(model, symbolProvider, writer)
         writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(writer, model.lookup("com.test#NestedMap"), data)

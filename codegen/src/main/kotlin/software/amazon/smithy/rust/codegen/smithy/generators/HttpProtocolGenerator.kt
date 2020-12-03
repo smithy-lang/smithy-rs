@@ -11,11 +11,13 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.documentShape
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.util.inputShape
 
 /**
  * Configuration needed to generate the client for a given Service<->Protocol pair
@@ -44,9 +46,13 @@ abstract class HttpProtocolGenerator(
 ) {
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
-    fun renderOperation(writer: RustWriter, operationShape: OperationShape) {
-        val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
-        writer.rustBlock("impl ${symbolProvider.toSymbol(inputShape).name}") {
+    fun renderOperation(operationWriter: RustWriter, inputWriter: RustWriter, operationShape: OperationShape) {
+        val inputShape = operationShape.inputShape(model)
+        val inputSymbol = symbolProvider.toSymbol(inputShape)
+        val builderGenerator = OperationInputBuilderGenerator(model, symbolProvider, operationShape)
+        builderGenerator.render(inputWriter)
+        // impl OperationInputShape { ... }
+        inputWriter.implBlock(inputShape, symbolProvider) {
             toHttpRequestImpl(this, operationShape, inputShape)
             val shapeId = inputShape.expectTrait(SyntheticInputTrait::class.java).body
             val body = shapeId?.let { model.expectShape(it, StructureShape::class.java) }
@@ -55,6 +61,27 @@ abstract class HttpProtocolGenerator(
             rustBlock("pub fn assemble(builder: #T, body: Vec<u8>) -> #T<Vec<u8>>", RuntimeType.HttpRequestBuilder, RuntimeType.Http("request::Request")) {
                 write("builder.header(#T, body.len()).body(body)", RuntimeType.Http("header::CONTENT_LENGTH"))
                 write(""".expect("http request should be valid")""")
+            }
+
+            // pub fn builder() -> ... { }
+            builderGenerator.renderConvenienceMethod(this)
+        }
+        val operationName = symbolProvider.toSymbol(operationShape).name
+        operationWriter.documentShape(operationShape, model)
+        operationWriter.rustBlock("pub struct $operationName") {
+            write("input: #T", inputSymbol)
+        }
+        operationWriter.implBlock(operationShape, symbolProvider) {
+            builderGenerator.renderConvenienceMethod(this)
+
+            rustBlock(
+                "pub fn build_http_request(&self) -> #T<Vec<u8>>", RuntimeType.Http("request::Request")
+            ) {
+                write("#T::assemble(self.input.request_builder_base(), self.input.build_body())", inputSymbol)
+            }
+
+            rustBlock("pub fn new(input: #T) -> Self", inputSymbol) {
+                write("Self { input }")
             }
         }
     }

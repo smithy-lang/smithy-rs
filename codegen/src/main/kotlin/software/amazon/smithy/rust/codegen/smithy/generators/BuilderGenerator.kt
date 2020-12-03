@@ -31,10 +31,9 @@ fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): RuntimeTyp
 class ModelBuilderGenerator(
     model: Model,
     private val symbolProvider: RustSymbolProvider,
-    writer: RustWriter,
     private val shape: StructureShape
 ) :
-    BuilderGenerator(model, symbolProvider, writer, shape) {
+    BuilderGenerator(model, symbolProvider, shape) {
     override fun buildFn(implBlockWriter: RustWriter) {
         val fallibleBuilder = StructureGenerator.fallibleBuilder(shape, symbolProvider)
         val returnType = when (fallibleBuilder) {
@@ -55,9 +54,8 @@ class ModelBuilderGenerator(
 class OperationInputBuilderGenerator(
     model: Model,
     private val symbolProvider: RustSymbolProvider,
-    writer: RustWriter,
     private val shape: OperationShape
-) : BuilderGenerator(model, symbolProvider, writer, shape.inputShape(model)) {
+) : BuilderGenerator(model, symbolProvider, shape.inputShape(model)) {
     override fun buildFn(implBlockWriter: RustWriter) {
         val fallibleBuilder = StructureGenerator.fallibleBuilder(shape.inputShape(model), symbolProvider)
         val returnType = when (fallibleBuilder) {
@@ -81,12 +79,11 @@ class OperationInputBuilderGenerator(
 abstract class BuilderGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,
-    private val writer: RustWriter,
     private val shape: StructureShape
 ) {
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
-    fun render() {
+    fun render(writer: RustWriter) {
         val symbol = symbolProvider.toSymbol(shape)
         // TODO: figure out exactly what docs we want on a the builder module
         writer.docs("See #D", symbol)

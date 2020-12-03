@@ -24,10 +24,10 @@ internal class ModelBuilderGeneratorTest {
         val writer = RustWriter.forModule("model")
         val innerGenerator = StructureGenerator(model, provider, writer, inner)
         val generator = StructureGenerator(model, provider, writer, struct)
-        val builderGenerator = ModelBuilderGenerator(model, provider, writer, struct)
+        val builderGenerator = ModelBuilderGenerator(model, provider, struct)
         generator.render()
         innerGenerator.render()
-        builderGenerator.render()
+        builderGenerator.render(writer)
         writer.implBlock(struct, provider) {
             builderGenerator.renderConvenienceMethod(this)
         }
@@ -68,8 +68,8 @@ internal class ModelBuilderGeneratorTest {
         )
         generator.render()
         innerGenerator.render()
-        val builderGenerator = ModelBuilderGenerator(model, provider, writer, struct)
-        builderGenerator.render()
+        val builderGenerator = ModelBuilderGenerator(model, provider, struct)
+        builderGenerator.render(writer)
         writer.implBlock(struct, provider) {
             builderGenerator.renderConvenienceMethod(this)
         }
