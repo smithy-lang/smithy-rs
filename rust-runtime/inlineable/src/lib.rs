@@ -1,6 +1,6 @@
+mod generic_error;
 #[allow(dead_code)]
 mod uuid;
-mod generic_error;
 
 // This test is outside of uuid.rs to enable copying the entirety of uuid.rs into the SDK.
 #[cfg(test)]

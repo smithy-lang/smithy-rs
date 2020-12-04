@@ -131,6 +131,7 @@ class RustWriter private constructor(
 ) :
     CodegenWriter<RustWriter, UseDeclarations>(null, UseDeclarations(namespace)) {
     companion object {
+        fun root() = forModule(null)
         fun forModule(module: String?): RustWriter = if (module == null) {
             RustWriter("lib.rs", "crate")
         } else {

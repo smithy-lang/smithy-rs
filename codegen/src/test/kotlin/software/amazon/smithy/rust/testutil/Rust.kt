@@ -108,7 +108,7 @@ private fun RustWriter.compileAndTestInner(
 ): String {
     this.toString().shouldParseAsRust()
     val tempDir = TestWorkspace.subproject()
-    val libWriter = RustWriter.forModule("lib")
+    val libWriter = RustWriter.root()
     this.inlineDependencies(libWriter)
     // TODO: unify this with CargoTomlGenerator
     val cargoToml = """
@@ -129,9 +129,21 @@ private fun RustWriter.compileAndTestInner(
     val mainRs = tempDir.resolve("src/main.rs")
     val testModule = tempDir.resolve("src/lib.rs")
     val testWriter = this
-    libWriter.withModule(module) {
-        writeWithNoFormatting(testWriter.toString())
-        writeWithNoFormatting(
+    if (module != "lib") {
+        libWriter.withModule(module) {
+            writeWithNoFormatting(testWriter.toString())
+            writeWithNoFormatting(
+                """
+            #[test]
+            fn test() {
+                $main
+            }
+        """
+            )
+        }
+    } else {
+        libWriter.writeWithNoFormatting(testWriter.toString())
+        libWriter.writeWithNoFormatting(
             """
             #[test]
             fn test() {
