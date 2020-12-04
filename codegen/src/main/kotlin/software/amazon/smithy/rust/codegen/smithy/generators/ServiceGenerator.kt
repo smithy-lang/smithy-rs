@@ -21,7 +21,7 @@ class ServiceGenerator(
     private val index = TopDownIndex.of(config.model)
 
     fun render() {
-        val operations = index.getContainedOperations(config.serviceShape)
+        val operations = index.getContainedOperations(config.serviceShape).sortedBy { it.id }
         operations.map { operation ->
             writers.useShapeWriter(operation) { writer ->
                 protocolGenerator.renderOperation(writer, operation)
