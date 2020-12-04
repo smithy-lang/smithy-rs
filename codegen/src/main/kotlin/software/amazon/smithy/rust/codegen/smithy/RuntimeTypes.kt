@@ -122,9 +122,11 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
         fun SerdeJson(path: String) =
             RuntimeType(path, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
 
+        val GenericError = RuntimeType("GenericError", InlineDependency.genericError(), "crate::types")
+
         fun forInlineFun(name: String, module: String, func: (RustWriter) -> Unit) = RuntimeType(
             name = name,
-            dependency = InlineDependency(name, module, func),
+            dependency = InlineDependency(name, module, listOf(), func),
             namespace = "crate::$module"
         )
     }
