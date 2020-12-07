@@ -12,11 +12,25 @@ import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
+/**
+ * For a given Operation ([this]), return the symbol referring to the unified error? This can be used
+ * if you, eg. want to return a unfied error from a function:
+ *
+ * ```kotlin
+ * rustWriter.rustBlock("fn get_error() -> #T", operation.errorSymbol(symbolProvider)) {
+ *   write("todo!() // function body")
+ * }
+ * ```
+ */
 fun OperationShape.errorSymbol(symbolProvider: SymbolProvider): RuntimeType {
     val symbol = symbolProvider.toSymbol(this)
     return RuntimeType("${symbol.name}Error", null, "crate::error")
 }
 
+/**
+ * Generates a unified error enum for [operation]. [ErrorGenerator] handles generating the individual variants,
+ * but we must still combine those variants into an enum covering all possible errors for a given operation.
+ */
 class CombinedErrorGenerator(
     model: Model,
     private val symbolProvider: SymbolProvider,
