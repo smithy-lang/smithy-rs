@@ -32,6 +32,7 @@ class RustSettings(
     val moduleName: String,
     val moduleVersion: String,
     val moduleDescription: String = "",
+    val moduleAuthors: List<String> = listOf("TODO@todo.com"),
     val runtimeConfig: RuntimeConfig,
     val build: BuildSettings
 ) {
@@ -72,7 +73,7 @@ class RustSettings(
             val desc = config.getStringMemberOrDefault(MODULE_DESCRIPTION, "$moduleName client")
             val build = config.getObjectMember(BUILD_SETTINGS)
             val runtimeConfig = config.getObjectMember(RUNTIME_CONFIG)
-            return RustSettings(service, moduleName, version, desc, RuntimeConfig.fromNode(runtimeConfig), BuildSettings.fromNode(build))
+            return RustSettings(service, moduleName, version, desc, runtimeConfig = RuntimeConfig.fromNode(runtimeConfig), build = BuildSettings.fromNode(build))
         }
 
         // infer the service to generate from a model
