@@ -7,9 +7,7 @@ package software.amazon.smithy.rust.testutil
 
 import org.intellij.lang.annotations.Language
 import software.amazon.smithy.rust.codegen.lang.CargoDependency
-import software.amazon.smithy.rust.codegen.lang.InlineDependency
 import software.amazon.smithy.rust.codegen.lang.RustDependency
-import software.amazon.smithy.rust.codegen.lang.RustMetadata
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.dq
@@ -59,17 +57,6 @@ fun String.shouldParseAsRust() {
     "rustfmt ${tempFile.absolutePath}".runCommand()
 }
 
-private fun RustWriter.inlineDependencies(target: RustWriter) {
-    val inlineDeps =
-        this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<InlineDependency>()
-            .distinctBy { it.key() }
-    inlineDeps.forEach {
-        target.withModule(it.module, RustMetadata(public = false)) {
-            it.renderer(this)
-        }
-    }
-}
-
 /**
  * Compiles the contents of the given writer (including dependencies) and runs the tests
  */
@@ -80,36 +67,36 @@ fun RustWriter.compileAndTest(
     expectFailure: Boolean = false
 ): String {
     // TODO: if there are no dependencies, we can be a bit quicker
+    val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<CargoDependency>()
     try {
         val module = if (this.namespace.contains("::")) {
             this.namespace.split("::")[1]
         } else {
             "lib"
         }
-        val output = this
-            .compileAndTestInner(module = module, main = main, strict = clippy)
+        val output = this.toString()
+            .compileAndTest(deps.toSet(), module = module, main = main, strict = clippy)
         if (expectFailure) {
-            // println(this.toString())
+            println(this.toString())
         }
         return output
     } catch (e: CommandFailed) {
         // When the test fails, print the code for convenience
         if (!expectFailure) {
-            // println(this.toString())
+            println(this.toString())
         }
         throw e
     }
 }
 
-private fun RustWriter.compileAndTestInner(
-    module: String,
+fun String.compileAndTest(
+    deps: Set<CargoDependency>,
+    module: String? = null,
     main: String = "",
     strict: Boolean = false
 ): String {
-    this.toString().shouldParseAsRust()
+    this.shouldParseAsRust()
     val tempDir = TestWorkspace.subproject()
-    val libWriter = RustWriter.root()
-    this.inlineDependencies(libWriter)
     // TODO: unify this with CargoTomlGenerator
     val cargoToml = """
     [package]
@@ -117,44 +104,29 @@ private fun RustWriter.compileAndTestInner(
     version = "0.0.1"
     authors = ["rcoh@amazon.com"]
     edition = "2018"
+
     [dependencies]
-    ${
-    (this.dependencies + libWriter.dependencies).map { RustDependency.fromSymbolDependency(it) }
-        .filterIsInstance<CargoDependency>()
-        .distinct().joinToString("\n") { it.toString() }
-    }
+    ${deps.joinToString("\n") { it.toString() }}
     """.trimIndent()
     tempDir.resolve("Cargo.toml").writeText(cargoToml)
     tempDir.resolve("src").mkdirs()
     val mainRs = tempDir.resolve("src/main.rs")
-    val testModule = tempDir.resolve("src/lib.rs")
-    val testWriter = this
-    if (module != "lib") {
-        libWriter.withModule(module) {
-            writeWithNoFormatting(testWriter.toString())
-            writeWithNoFormatting(
-                """
-            #[test]
-            fn test() {
-                $main
-            }
-        """
-            )
-        }
-    } else {
-        libWriter.writeWithNoFormatting(testWriter.toString())
-        libWriter.writeWithNoFormatting(
+    val testModule = tempDir.resolve("src/$module.rs")
+    testModule.writeText(this)
+    if (main.isNotBlank()) {
+        testModule.appendText(
             """
             #[test]
             fn test() {
                 $main
             }
-        """
+            """.trimIndent()
         )
     }
-    testModule.appendText(libWriter.toString())
     mainRs.appendText(
         """
+        pub mod $module;
+        pub use crate::$module::*;
         pub fn main() {}
         """.trimIndent()
     )

@@ -4,6 +4,7 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.rust.codegen.lang.Attribute
 import software.amazon.smithy.rust.codegen.lang.Derives
 import software.amazon.smithy.rust.codegen.lang.RustMetadata
 import software.amazon.smithy.rust.codegen.lang.RustWriter
@@ -26,7 +27,11 @@ class CombinedErrorGenerator(
     fun render(writer: RustWriter) {
         val errors = operationIndex.getErrors(operation)
         val symbol = operation.errorSymbol(symbolProvider)
-        val meta = RustMetadata(derives = Derives(setOf(RuntimeType.StdFmt("Debug"))), public = true)
+        val meta = RustMetadata(
+            derives = Derives(setOf(RuntimeType.StdFmt("Debug"))),
+            additionalAttributes = listOf(Attribute.NonExhaustive),
+            public = true
+        )
         meta.render(writer)
         writer.rustBlock("enum ${symbol.name}") {
             errors.forEach { errorVariant ->
@@ -37,10 +42,8 @@ class CombinedErrorGenerator(
                 """
                 /// An unexpected error, eg. invalid JSON returned by the service
                 Unhandled(Box<dyn #T>),
-                /// An unmodeled error, eg. a new error that was added since this SDK was generated
-                Generic(#T)
             """,
-                RuntimeType.StdError, RuntimeType.GenericError
+                RuntimeType.StdError
             )
         }
         writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.StdFmt("Display")) {
@@ -50,12 +53,7 @@ class CombinedErrorGenerator(
                         val errorSymbol = symbolProvider.toSymbol(it)
                         rust("""${symbol.name}::${errorSymbol.name}(inner) => inner.fmt(f),""")
                     }
-                    rust(
-                        """
-                    ${symbol.name}::Generic(inner) => inner.fmt(f),
-                    ${symbol.name}::Unhandled(inner) => inner.fmt(f)
-                    """
-                    )
+                    rust("${symbol.name}::Unhandled(inner) => inner.fmt(f)")
                 }
             }
         }
@@ -67,12 +65,7 @@ class CombinedErrorGenerator(
                         val errorSymbol = symbolProvider.toSymbol(it)
                         rust("""${symbol.name}::${errorSymbol.name}(inner) => Some(inner),""")
                     }
-                    rust(
-                        """
-                    ${symbol.name}::Generic(inner) => Some(inner),
-                    ${symbol.name}::Unhandled(inner) => Some(inner.as_ref())
-                    """
-                    )
+                    rust("${symbol.name}::Unhandled(inner) => Some(inner.as_ref())")
                 }
             }
         }
