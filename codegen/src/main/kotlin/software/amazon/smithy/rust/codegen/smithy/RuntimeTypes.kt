@@ -114,6 +114,7 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
             RuntimeType(name = path, dependency = CargoDependency.Http, namespace = "http")
 
         val HttpRequestBuilder = Http("request::Builder")
+        val HttpResponseBuilder = Http("response::Builder")
 
         val Serialize = RuntimeType("Serialize", CargoDependency.Serde, namespace = "serde")
         val Deserialize: RuntimeType = RuntimeType("Deserialize", CargoDependency.Serde, namespace = "serde")
