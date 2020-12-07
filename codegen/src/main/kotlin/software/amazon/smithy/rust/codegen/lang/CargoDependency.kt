@@ -20,6 +20,7 @@ data class Local(val basePath: String) : DependencyLocation()
 
 sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
     abstract fun version(): String
+    open fun dependencies(): List<RustDependency> = listOf()
     override fun getDependencies(): List<SymbolDependency> {
         return listOf(
             SymbolDependency
@@ -27,7 +28,7 @@ sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
                 .packageName(name).version(version())
                 // We rely on retrieving the structured dependency from the symbol later
                 .putProperty(PropertyKey, this).build()
-        )
+        ) + dependencies().flatMap { it.dependencies }
     }
 
     companion object {
@@ -48,24 +49,41 @@ sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
  *
  * CodegenVisitor deduplicates inline dependencies by (module, name) during code generation.
  */
-class InlineDependency(name: String, val module: String, val renderer: (RustWriter) -> Unit) : RustDependency(name) {
+class InlineDependency(
+    name: String,
+    val module: String,
+    val extraDependencies: List<RustDependency> = listOf(),
+    val renderer: (RustWriter) -> Unit
+) : RustDependency(name) {
     override fun version(): String {
         return renderer(RustWriter.forModule("_")).hashCode().toString()
+    }
+
+    override fun dependencies(): List<RustDependency> {
+        return extraDependencies
     }
 
     fun key() = "$module::$name"
 
     companion object {
-        fun forRustFile(name: String, module: String, filename: String): InlineDependency {
+        fun forRustFile(
+            name: String,
+            module: String,
+            filename: String,
+            vararg additionalDepencies: RustDependency
+        ): InlineDependency {
             // The inline crate is loaded as a dependency on the runtime classpath
             val rustFile = this::class.java.getResource("/inlineable/src/$filename")
             check(rustFile != null)
-            return InlineDependency(name, module) { writer ->
+            return InlineDependency(name, module, additionalDepencies.toList()) { writer ->
                 writer.raw(rustFile.readText())
             }
         }
 
         fun uuid() = forRustFile("v4", "uuid", "uuid.rs")
+
+        // TODO: putting this in the "error" module risks conflicting with a modeled error named "GenericError"
+        fun genericError() = forRustFile("GenericError", "types", "generic_error.rs", CargoDependency.Serde)
     }
 }
 

@@ -124,7 +124,7 @@ class HttpProtocolTestGeneratorTest {
 
     @Test
     fun `passing e2e protocol request test`() {
-        val writer = RustWriter.forModule("lib")
+        val writer = RustWriter.root()
         writeHttpImpl(
             writer,
             """
@@ -141,7 +141,7 @@ class HttpProtocolTestGeneratorTest {
 
     @Test
     fun `test invalid body`() {
-        val writer = RustWriter.forModule("lib")
+        val writer = RustWriter.root()
         writeHttpImpl(
             writer,
             """
@@ -164,7 +164,7 @@ class HttpProtocolTestGeneratorTest {
 
     @Test
     fun `test invalid url parameter`() {
-        val writer = RustWriter.forModule("lib")
+        val writer = RustWriter.root()
 
         // Hard coded implementation for this 1 test
         writeHttpImpl(
@@ -186,7 +186,7 @@ class HttpProtocolTestGeneratorTest {
 
     @Test
     fun `test forbidden url parameter`() {
-        val writer = RustWriter.forModule("lib")
+        val writer = RustWriter.root()
 
         // Hard coded implementation for this 1 test
         writeHttpImpl(
@@ -208,7 +208,7 @@ class HttpProtocolTestGeneratorTest {
 
     @Test
     fun `test required url parameter`() {
-        val writer = RustWriter.forModule("lib")
+        val writer = RustWriter.root()
 
         // Hard coded implementation for this 1 test
         writeHttpImpl(
@@ -230,7 +230,7 @@ class HttpProtocolTestGeneratorTest {
 
     @Test
     fun `invalid header`() {
-        val writer = RustWriter.forModule("lib")
+        val writer = RustWriter.root()
         writeHttpImpl(
             writer,
             """
