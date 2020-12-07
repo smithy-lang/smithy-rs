@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.lang
 import software.amazon.smithy.codegen.core.SymbolDependency
 import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.util.dq
 
 sealed class DependencyScope
 object Dev : DependencyScope()
@@ -100,6 +101,27 @@ data class CargoDependency(
             }
         }
         return attribs
+    }
+
+    override fun toString(): String {
+        val attribs = mutableListOf<String>()
+        with(location) {
+            attribs.add(
+                when (this) {
+                    is CratesIo -> """version = ${version.dq()}"""
+                    is Local -> {
+                        val fullPath = "$basePath/$name"
+                        """path = ${fullPath.dq()}"""
+                    }
+                }
+            )
+        }
+        with(features) {
+            if (!isEmpty()) {
+                attribs.add("features = [${joinToString(",") { it.dq() }}]")
+            }
+        }
+        return "$name = { ${attribs.joinToString(",")} }"
     }
 
     companion object {
