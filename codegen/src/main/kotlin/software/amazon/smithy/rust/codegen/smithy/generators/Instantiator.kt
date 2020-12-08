@@ -11,6 +11,7 @@ import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -25,6 +26,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.conditionalBlock
+import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
@@ -78,6 +80,15 @@ class Instantiator(
             is StringShape -> renderString(writer, shape, arg as StringNode)
             is NumberShape -> writer.write(arg.asNumberNode().get())
             is BooleanShape -> writer.write(arg.asBooleanNode().get().toString())
+            is DocumentShape -> {
+                writer.rust(
+                    """{
+                    let as_json = #T! { ${Node.prettyPrintJson(arg)} };
+                    #T::json_to_doc(as_json)
+                }""",
+                    RuntimeType.SerdeJson("json"), RuntimeType.DocJson
+                )
+            }
             else -> writer.writeWithNoFormatting("todo!() /* $shape $arg */")
         }
     }

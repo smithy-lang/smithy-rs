@@ -41,32 +41,6 @@ class HttpProtocolTestGenerator(
 ) {
     private val logger = Logger.getLogger(javaClass.name)
 
-    // TODO: remove these once Smithy publishes fixes.
-    // These tests are not even attempted to be compiled
-    val DisableTests = setOf(
-        // This test is flaky because of set ordering serialization https://github.com/awslabs/smithy-rs/issues/37
-        "AwsJson11Enums"
-    )
-
-    // These tests fail due to shortcomings in our implementation.
-    // These could be configured via runtime configuration, but since this won't be long-lasting,
-    // it makes sense to do the simplest thing for now.
-    // The test will _fail_ if these pass, so we will discover & remove if we fix them by accident
-    val ExpectFail = setOf(
-        // Document support: https://github.com/awslabs/smithy-rs/issues/31
-        "PutAndGetInlineDocumentsInput",
-        "InlineDocumentInput",
-        "InlineDocumentAsPayloadInput",
-
-        // Query literals: https://github.com/awslabs/smithy-rs/issues/36
-        "RestJsonConstantQueryString",
-        "RestJsonConstantAndVariableQueryStringMissingOneValue",
-        "RestJsonConstantAndVariableQueryStringAllValues",
-
-        // Misc:
-        "RestJsonQueryIdempotencyTokenAutoFill", // https://github.com/awslabs/smithy-rs/issues/34
-        "RestJsonHttpPrefixHeadersArePresent" // https://github.com/awslabs/smithy-rs/issues/35
-    )
     private val inputShape = operationShape.inputShape(protocolConfig.model)
     private val outputShape = operationShape.outputShape(protocolConfig.model)
     private val operationSymbol = protocolConfig.symbolProvider.toSymbol(operationShape)
@@ -125,9 +99,15 @@ class HttpProtocolTestGenerator(
     /**
      * Filter out test cases that are disabled or don't match the service protocol
      */
-    private fun List<TestCase>.filterMatching(): List<TestCase> = this.filter { testCase ->
-        testCase.testCase.protocol == protocolConfig.protocol &&
-            !DisableTests.contains(testCase.testCase.id)
+    private fun List<TestCase>.filterMatching(): List<TestCase> {
+        return if (RunOnly.isNullOrEmpty()) {
+            this.filter { testCase ->
+                testCase.testCase.protocol == protocolConfig.protocol &&
+                    !DisableTests.contains(testCase.testCase.id)
+            }
+        } else {
+            this.filter { RunOnly.contains(it.testCase.id) }
+        }
     }
 
     private fun renderTestCaseBlock(
@@ -336,5 +316,30 @@ class HttpProtocolTestGenerator(
         writer.withBlock("&[", "]") {
             write(args.joinToString(",") { it.dq() })
         }
+    }
+
+    companion object {
+        // These tests fail due to shortcomings in our implementation.
+        // These could be configured via runtime configuration, but since this won't be long-lasting,
+        // it makes sense to do the simplest thing for now.
+        // The test will _fail_ if these pass, so we will discover & remove if we fix them by accident
+        private val ExpectFail = setOf(
+            // Query literals: https://github.com/awslabs/smithy-rs/issues/36
+            "RestJsonConstantQueryString",
+            "RestJsonConstantAndVariableQueryStringMissingOneValue",
+            "RestJsonConstantAndVariableQueryStringAllValues",
+
+            // Misc:
+            "RestJsonQueryIdempotencyTokenAutoFill", // https://github.com/awslabs/smithy-rs/issues/34
+            "RestJsonHttpPrefixHeadersArePresent" // https://github.com/awslabs/smithy-rs/issues/35
+        )
+        private val RunOnly: Set<String>? = null
+
+        // These tests are not even attempted to be compiled, either because they will not compile
+        // or because they are flaky
+        private val DisableTests = setOf(
+            // This test is flaky because of set ordering serialization https://github.com/awslabs/smithy-rs/issues/37
+            "AwsJson11Enums"
+        )
     }
 }

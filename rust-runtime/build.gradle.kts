@@ -5,7 +5,7 @@ plugins {
 
 group = "software.amazon.rustruntime"
 
-version = "1.0"
+version = "0.0.3"
 
 tasks.jar {
     from("./") {

@@ -1,3 +1,5 @@
+#[allow(dead_code)]
+mod doc_json;
 mod generic_error;
 #[allow(dead_code)]
 mod uuid;

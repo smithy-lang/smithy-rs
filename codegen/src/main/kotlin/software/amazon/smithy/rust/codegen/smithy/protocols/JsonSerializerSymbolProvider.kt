@@ -158,6 +158,10 @@ class SerializerBuilder(
         },
         "instant_epoch_seconds_ser" to { writer ->
             writer.write("$ser.serialize_i64($inp.epoch_seconds())")
+        },
+        "document_ser" to { writer ->
+            writer.write("use #T;", RuntimeType.Serialize)
+            writer.write("#T::SerDoc($inp).serialize($ser)", RuntimeType.DocJson)
         }
     )
 
