@@ -1,34 +1,6 @@
 use serde::{Serialize, Serializer};
-use serde_json::{Map, Value};
+use serde_json::Value;
 use smithy_types::{Document, Number};
-
-#[allow(unused)]
-pub enum SerializationError {
-    // NaN/Infinity is not valid JSON
-    InvalidF64,
-}
-
-#[allow(unused)]
-pub fn doc_to_json(doc: &Document) -> Result<Value, SerializationError> {
-    Ok(match doc {
-        Document::Object(obj) => {
-            let serde_map: Result<Map<String, Value>, SerializationError> = obj
-                .iter()
-                .map(|(k, v)| doc_to_json(v).map(|value| (k.clone(), value)))
-                .collect();
-            Value::Object(serde_map?)
-        }
-        Document::Array(docs) => {
-            let result: Result<Vec<Value>, SerializationError> =
-                docs.iter().map(doc_to_json).collect();
-            Value::Array(result?)
-        }
-        Document::Number(number) => Value::Number(num_to_serde_num(number)?),
-        Document::String(string) => Value::String(string.to_string()),
-        Document::Bool(b) => Value::Bool(*b),
-        Document::Null => Value::Null,
-    })
-}
 
 #[allow(unused)]
 pub fn json_to_doc(json: Value) -> Document {
@@ -76,17 +48,5 @@ fn serde_num_to_num(number: &serde_json::Number) -> smithy_types::Number {
         smithy_types::Number::PosInt(number.as_u64().unwrap())
     } else {
         panic!("Serde nums should be either f64, i64 or u64")
-    }
-}
-
-fn num_to_serde_num(
-    number: &smithy_types::Number,
-) -> Result<serde_json::Number, SerializationError> {
-    match number {
-        smithy_types::Number::Float(num) => {
-            serde_json::Number::from_f64(*num).ok_or(SerializationError::InvalidF64)
-        }
-        smithy_types::Number::NegInt(num) => Ok(serde_json::Number::from(*num)),
-        smithy_types::Number::PosInt(num) => Ok(serde_json::Number::from(*num)),
     }
 }
