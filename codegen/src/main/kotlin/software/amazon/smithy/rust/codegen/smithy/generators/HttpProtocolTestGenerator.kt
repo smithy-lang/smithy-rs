@@ -86,9 +86,9 @@ class HttpProtocolTestGenerator(
 
     fun render() {
         val requestTests = operationShape.getTrait(HttpRequestTestsTrait::class.java)
-            .map { it.testCases }.orElse(listOf()).map { TestCase.RequestTest(it) }
+            .orNull()?.testCases.orEmpty().map { TestCase.RequestTest(it) }
         val responseTests = operationShape.getTrait(HttpResponseTestsTrait::class.java)
-            .map { it.testCases }.orElse(listOf()).map { TestCase.ResponseTest(it, outputShape) }
+            .orNull()?.testCases.orEmpty().map { TestCase.ResponseTest(it, outputShape) }
 
         val errorTests = operationIndex.getErrors(operationShape).flatMap { error ->
             val testCases = error.getTrait(HttpResponseTestsTrait::class.java).orNull()?.testCases.orEmpty()
@@ -199,7 +199,12 @@ class HttpProtocolTestGenerator(
         httpResponseTestCase: HttpResponseTestCase,
         expectedShape: StructureShape
     ) {
-        if (!protocolSupport.responseDeserialization || (!protocolSupport.errorDeserialization && expectedShape.hasTrait(ErrorTrait::class.java))) {
+        if (!protocolSupport.responseDeserialization || (
+            !protocolSupport.errorDeserialization && expectedShape.hasTrait(
+                    ErrorTrait::class.java
+                )
+            )
+        ) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             if (ExpectFail.contains(httpResponseTestCase.id)) {
                 // this test needs to fail, minor hack. Caused by overlap between ids of request & response tests
