@@ -139,9 +139,9 @@ class StructureGenerator(
                 val outerType = memberSymbol.rustType()
                 val coreType = outerType.stripOuter<RustType.Option>()
                 val signature = when (coreType) {
-                    is RustType.String -> "(mut self, inp: impl Into<String>) -> Self"
-                    is RustType.Box -> "(mut self, inp: impl Into<${coreType.render()}>) -> Self"
-                    else -> "(mut self, inp: ${coreType.render()}) -> Self"
+                    is RustType.String,
+                    is RustType.Box -> "(mut self, inp: impl Into<${coreType.render(true)}>) -> Self"
+                    else -> "(mut self, inp: ${coreType.render(true)}) -> Self"
                 }
                 writer.documentShape(member, model)
                 writer.rustBlock("pub fn $memberName$signature") {

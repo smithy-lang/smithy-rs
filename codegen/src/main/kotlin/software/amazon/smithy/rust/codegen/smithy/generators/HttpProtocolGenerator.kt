@@ -53,7 +53,12 @@ abstract class HttpProtocolGenerator(
             val body = shapeId?.let { model.expectShape(it, StructureShape::class.java) }
             toBodyImpl(this, inputShape, body)
             // TODO: streaming shapes need special support
-            rustBlock("pub fn assemble(builder: #T, body: Vec<u8>) -> #T<Vec<u8>>", RuntimeType.HttpRequestBuilder, RuntimeType.Http("request::Request")) {
+            rustBlock(
+                "pub fn assemble(builder: #1T, body: #3T) -> #2T<#3T>",
+                RuntimeType.HttpRequestBuilder,
+                RuntimeType.Http("request::Request"),
+                RuntimeType.ByteSlab
+            ) {
                 write("builder.header(#T, body.len()).body(body)", RuntimeType.Http("header::CONTENT_LENGTH"))
                 write(""".expect("http request should be valid")""")
             }
@@ -71,7 +76,7 @@ abstract class HttpProtocolGenerator(
 
     protected fun bodyBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
         implBlockWriter.rustBlock(
-            "pub fn build_body(&self) -> Vec<u8>"
+            "pub fn build_body(&self) -> #T", RuntimeType.ByteSlab
         ) {
             f(this)
         }

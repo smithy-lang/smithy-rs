@@ -35,6 +35,10 @@ val CodgenTests = listOf(
     CodegenTest(
         "aws.protocoltests.restjson#RestJson",
         "rest_json"
+    ),
+    CodegenTest(
+        "crate#Config",
+        "naming_test"
     )
 )
 

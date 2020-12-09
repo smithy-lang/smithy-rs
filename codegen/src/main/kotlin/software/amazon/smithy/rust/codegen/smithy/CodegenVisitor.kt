@@ -111,7 +111,7 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
         try {
             "cargo fmt".runCommand(fileManifest.baseDir)
         } catch (_: CommandFailed) {
-            logger.warning("Generated output did not parse")
+            logger.warning("Generated output did not parse [${service.id}]")
         }
     }
 

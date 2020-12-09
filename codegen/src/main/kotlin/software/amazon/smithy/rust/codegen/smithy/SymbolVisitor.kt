@@ -164,7 +164,7 @@ class SymbolVisitor(
         val inner = this.toSymbol(shape.member)
         val builder = if (model.expectShape(shape.member.target).isStringShape) {
             // TODO: refactor / figure out how we want to handle prebaked symbols
-            symbolBuilder(shape, RustType.HashSet(inner.rustType())).namespace(RuntimeType.HashSet.namespace, "::")
+            symbolBuilder(shape, RustType.HashSet(inner.rustType()))
         } else {
             // only strings get put into actual sets because floats are unhashable
             symbolBuilder(shape, RustType.Vec(inner.rustType()))
@@ -177,10 +177,7 @@ class SymbolVisitor(
         require(target.isStringShape) { "unexpected key shape: ${shape.key}: $target [keys must be strings]" }
         val key = this.toSymbol(shape.key)
         val value = this.toSymbol(shape.value)
-        return symbolBuilder(shape, RustType.HashMap(key.rustType(), value.rustType())).namespace(
-            "std::collections",
-            "::"
-        ).addReference(key).addReference(value).build()
+        return symbolBuilder(shape, RustType.HashMap(key.rustType(), value.rustType())).addReference(key).addReference(value).build()
     }
 
     override fun documentShape(shape: DocumentShape?): Symbol {
@@ -211,8 +208,9 @@ class SymbolVisitor(
         val isError = shape.hasTrait(ErrorTrait::class.java)
         val isIoShape = shape.hasTrait(SyntheticInputTrait::class.java) || shape.hasTrait(SyntheticOutputTrait::class.java)
         val name = StringUtils.capitalize(shape.id.name).letIf(isError) {
-            // TODO: this is should probably be a configurable mixin
-            it.replace("Exception", "Error")
+            // TODO: Do we want to do this?
+            // https://github.com/awslabs/smithy-rs/issues/77
+            it.replace("Error", "Error2").replace("Exception", "Error")
         }
         val builder = symbolBuilder(shape, RustType.Opaque(name))
         return when {
