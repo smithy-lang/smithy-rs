@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.raw
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.BuildSettings
+import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
@@ -103,6 +104,7 @@ fun TestWriterDelegator.compileAndTest() {
             "test_${baseDir.toFile().nameWithoutExtension}",
             "0.0.1",
             runtimeConfig = TestRuntimeConfig,
+            codegenConfig = CodegenConfig(),
             build = BuildSettings.Default()
         )
     )
