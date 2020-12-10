@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.rust.codegen.lang.RustReservedWordSymbolProvider
 
 class RustCodegenPlugin : SmithyBuildPlugin {
     override fun getName(): String = "rust-codegen"
@@ -18,6 +19,8 @@ class RustCodegenPlugin : SmithyBuildPlugin {
 
     companion object {
         fun BaseSymbolProvider(model: Model, symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig) =
-            SymbolVisitor(model, config = symbolVisitorConfig).let { BaseSymbolMetadataProvider(it) }
+            SymbolVisitor(model, config = symbolVisitorConfig)
+                .let { BaseSymbolMetadataProvider(it) }
+                .let { RustReservedWordSymbolProvider(it) }
     }
 }

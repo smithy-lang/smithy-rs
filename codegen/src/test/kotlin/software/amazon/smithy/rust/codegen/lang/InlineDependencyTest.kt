@@ -23,7 +23,7 @@ internal class InlineDependencyTest {
     @Test
     fun `locate dependencies from the inlineable module`() {
         val dep = InlineDependency.uuid()
-        val testWriter = RustWriter.forModule(null)
+        val testWriter = RustWriter.root()
         testWriter.withModule("uuid") {
             dep.renderer(this)
         }

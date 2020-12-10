@@ -23,6 +23,21 @@ private const val MODULE_DESCRIPTION = "moduleDescription"
 private const val MODULE_VERSION = "moduleVersion"
 private const val BUILD_SETTINGS = "build"
 private const val RUNTIME_CONFIG = "runtimeConfig"
+private const val CODEGEN_SETTINGS = "codegen"
+
+data class CodegenConfig(val renameExceptions: Boolean = true) {
+    companion object {
+        fun fromNode(node: Optional<ObjectNode>): CodegenConfig {
+            return if (node.isPresent) {
+                CodegenConfig(
+                    node.get().getBooleanMemberOrDefault("renameErrors", true)
+                )
+            } else {
+                CodegenConfig()
+            }
+        }
+    }
+}
 
 /**
  * Settings used by [RustCodegenPlugin]
@@ -33,6 +48,7 @@ class RustSettings(
     val moduleVersion: String,
     val moduleDescription: String = "",
     val runtimeConfig: RuntimeConfig,
+    val codegenConfig: CodegenConfig,
     val build: BuildSettings
 ) {
 
@@ -61,7 +77,16 @@ class RustSettings(
          * @return Returns the extracted settings
          */
         fun from(model: Model, config: ObjectNode): RustSettings {
-            config.warnIfAdditionalProperties(arrayListOf(SERVICE, MODULE_NAME, MODULE_DESCRIPTION, MODULE_VERSION, BUILD_SETTINGS, RUNTIME_CONFIG))
+            config.warnIfAdditionalProperties(
+                arrayListOf(
+                    SERVICE,
+                    MODULE_NAME,
+                    MODULE_DESCRIPTION,
+                    MODULE_VERSION,
+                    BUILD_SETTINGS,
+                    RUNTIME_CONFIG
+                )
+            )
 
             val service = config.getStringMember(SERVICE)
                 .map(StringNode::expectShapeId)
@@ -72,7 +97,16 @@ class RustSettings(
             val desc = config.getStringMemberOrDefault(MODULE_DESCRIPTION, "$moduleName client")
             val build = config.getObjectMember(BUILD_SETTINGS)
             val runtimeConfig = config.getObjectMember(RUNTIME_CONFIG)
-            return RustSettings(service, moduleName, version, desc, RuntimeConfig.fromNode(runtimeConfig), BuildSettings.fromNode(build))
+            val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
+            return RustSettings(
+                service,
+                moduleName,
+                version,
+                desc,
+                RuntimeConfig.fromNode(runtimeConfig),
+                CodegenConfig.fromNode(codegenSettings),
+                BuildSettings.fromNode(build)
+            )
         }
 
         // infer the service to generate from a model
@@ -138,6 +172,7 @@ data class BuildSettings(val rootProject: Boolean = false) {
                 Default()
             }
         }
+
         fun Default(): BuildSettings = BuildSettings(false)
     }
 }

@@ -71,9 +71,11 @@ class StructureGeneratorTest {
     @Test
     fun `generate structures with public fields`() {
         val provider: SymbolProvider = testSymbolProvider(model)
-        val writer = RustWriter.forModule("model")
-        val innerGenerator = StructureGenerator(model, provider, writer, inner)
-        innerGenerator.render()
+        val writer = RustWriter.root()
+        writer.withModule("model") {
+            val innerGenerator = StructureGenerator(model, provider, this, inner)
+            innerGenerator.render()
+        }
         writer.withModule("structs") {
             val generator = StructureGenerator(model, provider, this, struct)
             generator.render()
@@ -121,7 +123,7 @@ class StructureGeneratorTest {
            nested2: Inner
         }""".asSmithyModel()
         val provider: SymbolProvider = testSymbolProvider(model)
-        val writer = RustWriter.forModule(null)
+        val writer = RustWriter.root()
         writer.docs("module docs")
         writer
             .withModule(

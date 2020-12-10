@@ -72,7 +72,7 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
         )
     }
 
-    override fun support(): ProtocolSupport = ProtocolSupport(requestBodySerialization = true)
+    override fun support(): ProtocolSupport = ProtocolSupport(requestBodySerialization = true, responseDeserialization = false, errorDeserialization = false)
 }
 
 /**

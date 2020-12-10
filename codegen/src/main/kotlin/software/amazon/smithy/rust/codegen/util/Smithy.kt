@@ -14,3 +14,8 @@ fun OperationShape.inputShape(model: Model): StructureShape {
     // The Rust Smithy generator adds an input to all shapes automatically
     return model.expectShape(this.input.get(), StructureShape::class.java)
 }
+
+fun OperationShape.outputShape(model: Model): StructureShape {
+    // The Rust Smithy generator adds an output to all shapes automatically
+    return model.expectShape(this.output.get(), StructureShape::class.java)
+}

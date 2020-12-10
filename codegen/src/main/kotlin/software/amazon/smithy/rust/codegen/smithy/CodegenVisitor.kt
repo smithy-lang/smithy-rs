@@ -58,7 +58,7 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
     private val httpGenerator: HttpProtocolGenerator
 
     init {
-        val symbolVisitorConfig = SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig)
+        val symbolVisitorConfig = SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig, codegenConfig = settings.codegenConfig)
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
         val (protocol, generator) = ProtocolLoader.Default.protocolFor(context.model, service)
@@ -114,7 +114,7 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
         try {
             "cargo fmt".runCommand(fileManifest.baseDir)
         } catch (_: CommandFailed) {
-            logger.warning("Generated output did not parse")
+            logger.warning("Generated output did not parse [${service.id}]")
         }
     }
 

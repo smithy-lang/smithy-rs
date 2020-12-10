@@ -58,13 +58,14 @@ val SimpleShapes = mapOf(
 
 data class SymbolVisitorConfig(
     val runtimeConfig: RuntimeConfig,
+    val codegenConfig: CodegenConfig,
     val handleOptionality: Boolean = true,
     val handleRustBoxing: Boolean = true
 )
 
 // TODO: consider if this is better handled as a wrapper
 val DefaultConfig =
-    SymbolVisitorConfig(runtimeConfig = RuntimeConfig(), handleOptionality = true, handleRustBoxing = true)
+    SymbolVisitorConfig(runtimeConfig = RuntimeConfig(), handleOptionality = true, handleRustBoxing = true, codegenConfig = CodegenConfig())
 
 data class SymbolLocation(val namespace: String) {
     val filename = "$namespace.rs"
@@ -166,7 +167,7 @@ class SymbolVisitor(
         val inner = this.toSymbol(shape.member)
         val builder = if (model.expectShape(shape.member.target).isStringShape) {
             // TODO: refactor / figure out how we want to handle prebaked symbols
-            symbolBuilder(shape, RustType.HashSet(inner.rustType())).namespace(RuntimeType.HashSet.namespace, "::")
+            symbolBuilder(shape, RustType.HashSet(inner.rustType()))
         } else {
             // only strings get put into actual sets because floats are unhashable
             symbolBuilder(shape, RustType.Vec(inner.rustType()))
@@ -179,10 +180,8 @@ class SymbolVisitor(
         require(target.isStringShape) { "unexpected key shape: ${shape.key}: $target [keys must be strings]" }
         val key = this.toSymbol(shape.key)
         val value = this.toSymbol(shape.value)
-        return symbolBuilder(shape, RustType.HashMap(key.rustType(), value.rustType())).namespace(
-            "std::collections",
-            "::"
-        ).addReference(key).addReference(value).build()
+        return symbolBuilder(shape, RustType.HashMap(key.rustType(), value.rustType())).addReference(key)
+            .addReference(value).build()
     }
 
     override fun documentShape(shape: DocumentShape?): Symbol {
@@ -213,8 +212,9 @@ class SymbolVisitor(
         val isError = shape.hasTrait(ErrorTrait::class.java)
         val isInput = shape.hasTrait(SyntheticInputTrait::class.java)
         val isOutput = shape.hasTrait(SyntheticOutputTrait::class.java)
-        val name = StringUtils.capitalize(shape.id.name).letIf(isError) {
-            // TODO: this is should probably be a configurable mixin
+        val name = StringUtils.capitalize(shape.id.name).letIf(isError && config.codegenConfig.renameExceptions) {
+            // TODO: Do we want to do this?
+            // https://github.com/awslabs/smithy-rs/issues/77
             it.replace("Exception", "Error")
         }
         val builder = symbolBuilder(shape, RustType.Opaque(name))

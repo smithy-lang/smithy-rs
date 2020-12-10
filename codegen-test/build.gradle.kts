@@ -22,7 +22,7 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
 
-data class CodegenTest(val service: String, val module: String)
+data class CodegenTest(val service: String, val module: String, val extraConfig: String? = null)
 
 val CodgenTests = listOf(
     CodegenTest("com.amazonaws.dynamodb#DynamoDB_20120810", "dynamo"),
@@ -35,6 +35,12 @@ val CodgenTests = listOf(
     CodegenTest(
         "aws.protocoltests.restjson#RestJson",
         "rest_json"
+    ),
+    CodegenTest(
+        "crate#Config",
+        "naming_test", """
+            , "codegen": { "renameErrors": false }
+        """.trimIndent()
     )
 )
 
@@ -53,6 +59,7 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
                       "build": {
                         "rootProject": true
                       }
+                      ${it.extraConfig ?: ""}
                  }
                }
             }
