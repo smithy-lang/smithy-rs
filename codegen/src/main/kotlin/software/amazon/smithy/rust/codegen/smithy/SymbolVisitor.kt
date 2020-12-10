@@ -58,13 +58,14 @@ val SimpleShapes = mapOf(
 
 data class SymbolVisitorConfig(
     val runtimeConfig: RuntimeConfig,
+    val codegenConfig: CodegenConfig,
     val handleOptionality: Boolean = true,
     val handleRustBoxing: Boolean = true
 )
 
 // TODO: consider if this is better handled as a wrapper
 val DefaultConfig =
-    SymbolVisitorConfig(runtimeConfig = RuntimeConfig(), handleOptionality = true, handleRustBoxing = true)
+    SymbolVisitorConfig(runtimeConfig = RuntimeConfig(), handleOptionality = true, handleRustBoxing = true, codegenConfig = CodegenConfig())
 
 data class SymbolLocation(val namespace: String) {
     val filename = "$namespace.rs"
@@ -177,7 +178,8 @@ class SymbolVisitor(
         require(target.isStringShape) { "unexpected key shape: ${shape.key}: $target [keys must be strings]" }
         val key = this.toSymbol(shape.key)
         val value = this.toSymbol(shape.value)
-        return symbolBuilder(shape, RustType.HashMap(key.rustType(), value.rustType())).addReference(key).addReference(value).build()
+        return symbolBuilder(shape, RustType.HashMap(key.rustType(), value.rustType())).addReference(key)
+            .addReference(value).build()
     }
 
     override fun documentShape(shape: DocumentShape?): Symbol {
@@ -206,11 +208,12 @@ class SymbolVisitor(
 
     override fun structureShape(shape: StructureShape): Symbol {
         val isError = shape.hasTrait(ErrorTrait::class.java)
-        val isIoShape = shape.hasTrait(SyntheticInputTrait::class.java) || shape.hasTrait(SyntheticOutputTrait::class.java)
-        val name = StringUtils.capitalize(shape.id.name).letIf(isError) {
+        val isIoShape =
+            shape.hasTrait(SyntheticInputTrait::class.java) || shape.hasTrait(SyntheticOutputTrait::class.java)
+        val name = StringUtils.capitalize(shape.id.name).letIf(isError && config.codegenConfig.renameExceptions) {
             // TODO: Do we want to do this?
             // https://github.com/awslabs/smithy-rs/issues/77
-            it.replace("Error", "Error2").replace("Exception", "Error")
+            it.replace("Exception", "Error")
         }
         val builder = symbolBuilder(shape, RustType.Opaque(name))
         return when {
