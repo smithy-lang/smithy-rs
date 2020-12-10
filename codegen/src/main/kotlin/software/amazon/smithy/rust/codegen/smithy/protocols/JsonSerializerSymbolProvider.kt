@@ -116,7 +116,7 @@ class SerializerBuilder(
     private val customShapes = setOf(instant, blob, document)
 
     private val handWrittenSerializers: Map<String, (RustWriter) -> Unit> = mapOf(
-        "optionblob_ser" to { writer ->
+        "stdoptionoptionblob_ser" to { writer ->
             writer.rustBlock("match $inp") {
                 write(
                     "Some(blob) => $ser.serialize_str(&#T(blob.as_ref())),",
@@ -132,7 +132,7 @@ class SerializerBuilder(
             )
         },
 
-        "optioninstant_http_date_ser" to { writer ->
+        "stdoptionoptioninstant_http_date_ser" to { writer ->
             val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, TimestampFormatTrait.Format.HTTP_DATE)
             writer.rustBlock("match $inp") {
                 write(
@@ -141,7 +141,7 @@ class SerializerBuilder(
                 write("None => _serializer.serialize_none()")
             }
         },
-        "optioninstant_date_time_ser" to { writer ->
+        "stdoptionoptioninstant_date_time_ser" to { writer ->
             val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, TimestampFormatTrait.Format.DATE_TIME)
             writer.rustBlock("match $inp") {
                 write(
@@ -150,7 +150,7 @@ class SerializerBuilder(
                 write("None => _serializer.serialize_none()")
             }
         },
-        "optioninstant_epoch_seconds_ser" to { writer ->
+        "stdoptionoptioninstant_epoch_seconds_ser" to { writer ->
             writer.rustBlock("match $inp") {
                 write("Some(ts) => $ser.serialize_some(&ts.epoch_seconds()),")
                 write("None => _serializer.serialize_none()")
@@ -188,7 +188,7 @@ class SerializerBuilder(
             else -> null
         }
         val typeToFnName =
-            rustType.stripOuter<RustType.Reference>().render().filter { it.isLetterOrDigit() }.toLowerCase()
+            rustType.stripOuter<RustType.Reference>().render(fullyQualified = true).filter { it.isLetterOrDigit() }.toLowerCase()
         return listOfNotNull(typeToFnName, context, suffix).joinToString("_")
     }
 

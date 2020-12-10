@@ -77,7 +77,7 @@ class RustWriterTest {
         output shouldContain "struct Test"
         output.compileAndRun(
             """
-        let test = Test { member: ${RustType.SetType}::default(), otherMember: "hello".to_string() };
+        let test = Test { member: ${RustType.SetNamespace}::${RustType.SetType}::default(), otherMember: "hello".to_string() };
         assert_eq!(test.otherMember, "hello");
         assert_eq!(test.member.is_empty(), true);
          """
