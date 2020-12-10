@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RetryableTrait
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.StdError
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.StdFmt
@@ -37,19 +38,24 @@ class ErrorGenerator(
             error.isServerError -> "ErrorCause::Server"
             else -> "ErrorCause::Unknown(${error.value.dq()})"
         }
+        val messageShape = shape.getMember("message")
+        val message = messageShape.map { "self.message.as_deref()" }.orElse("None")
         writer.rustBlock("impl ${symbol.name}") {
-            write("// TODO: create shared runtime crate")
-            write("// fn at_fault(&self) -> ErrorCause { $errorCause }")
-            write("pub fn retryable(&self) -> bool { $retryable }")
-            write("pub fn throttling(&self) -> bool { $throttling }")
+            rust(
+                """
+            pub fn retryable(&self) -> bool { $retryable }
+            pub fn throttling(&self) -> bool { $throttling }
+            pub fn code(&self) -> &str { ${shape.id.name.dq()} }
+            pub fn message(&self) -> Option<&str> { $message }
+                """
+            )
         }
 
         writer.rustBlock("impl #T for ${symbol.name}", StdFmt("Display")) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
-                val message = shape.getMember("message")
                 write("write!(f, ${symbol.name.dq()})?;")
-                if (message.isPresent) {
-                    OptionForEach(symbolProvider.toSymbol(message.get()), "&self.message") { field ->
+                messageShape.map {
+                    OptionForEach(symbolProvider.toSymbol(it), "&self.message") { field ->
                         write("""write!(f, ": {}", $field)?;""")
                     }
                 }

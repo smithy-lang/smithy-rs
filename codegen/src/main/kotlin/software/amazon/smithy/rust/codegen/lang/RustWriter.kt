@@ -132,6 +132,7 @@ RustWriter private constructor(
 ) :
     CodegenWriter<RustWriter, UseDeclarations>(null, UseDeclarations(namespace)) {
     companion object {
+        fun root() = forModule(null)
         fun forModule(module: String?): RustWriter = if (module == null) {
             RustWriter("lib.rs", "crate")
         } else {
@@ -269,10 +270,8 @@ RustWriter private constructor(
                     t.fullyQualifiedName()
                 }
                 is Symbol -> {
-                    if (t.namespace != namespace) {
-                        addImport(t, null)
-                    }
-                    t.rustType().render()
+                    addImport(t, null)
+                    t.rustType().render(fullyQualified = true)
                 }
                 else -> throw CodegenException("Invalid type provided to RustSymbolFormatter")
             }

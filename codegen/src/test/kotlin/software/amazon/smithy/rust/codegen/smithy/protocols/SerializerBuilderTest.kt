@@ -21,9 +21,9 @@ internal class SerializerBuilderTest {
     @Test
     fun `generate correct function names`() {
         val serializerBuilder = SerializerBuilder(provider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
-        serializerBuilder.serializerFor(model.lookup("test#S\$ts"))!!.name shouldBe "optioninstant_epoch_seconds_ser"
-        serializerBuilder.serializerFor(model.lookup("test#S\$b"))!!.name shouldBe "optionblob_ser"
-        serializerBuilder.deserializerFor(model.lookup("test#S\$b"))!!.name shouldBe "optionblob_deser"
+        serializerBuilder.serializerFor(model.lookup("test#S\$ts"))!!.name shouldBe "stdoptionoptioninstant_epoch_seconds_ser"
+        serializerBuilder.serializerFor(model.lookup("test#S\$b"))!!.name shouldBe "stdoptionoptionblob_ser"
+        serializerBuilder.deserializerFor(model.lookup("test#S\$b"))!!.name shouldBe "stdoptionoptionblob_deser"
         serializerBuilder.deserializerFor(model.lookup("test#S\$s")) shouldBe null
     }
 }

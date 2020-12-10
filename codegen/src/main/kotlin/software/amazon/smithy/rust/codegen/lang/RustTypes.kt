@@ -21,12 +21,15 @@ sealed class RustType {
      */
     abstract val name: kotlin.String
 
+    open val namespace: kotlin.String? = null
+
     object Bool : RustType() {
         override val name: kotlin.String = "bool"
     }
 
     object String : RustType() {
         override val name: kotlin.String = "String"
+        override val namespace = "::std::string"
     }
 
     data class Float(val precision: Int) : RustType() {
@@ -39,21 +42,23 @@ sealed class RustType {
 
     data class Vec(val member: RustType) : RustType() {
         override val name: kotlin.String = "Vec"
+        override val namespace = "::std::vec"
     }
 
     data class Slice(val member: RustType) : RustType() {
-        override val name: kotlin.String
-            get() = ""
+        override val name: kotlin.String = ""
     }
 
     data class HashMap(val key: RustType, val value: RustType) : RustType() {
         // TODO: assert that underneath, the member is a String
         override val name: kotlin.String = "HashMap"
+        override val namespace = "::std::collections"
     }
 
     data class HashSet(val member: RustType) : RustType() {
         // TODO: assert that underneath, the member is a String
         override val name: kotlin.String = SetType
+        override val namespace = SetNamespace
     }
 
     data class Reference(val lifetime: kotlin.String?, override val value: RustType) : RustType(), Container {
@@ -62,32 +67,41 @@ sealed class RustType {
 
     data class Option(override val value: RustType) : RustType(), Container {
         override val name: kotlin.String = "Option"
+        override val namespace = "::std::option"
     }
 
     data class Box(override val value: RustType) : RustType(), Container {
         override val name: kotlin.String = "Box"
+        override val namespace = "::std::boxed"
     }
 
-    data class Opaque(override val name: kotlin.String) : RustType()
+    data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
 
     companion object {
-        val SetType = "BTreeSet"
+        const val SetType = "BTreeSet"
+        const val SetNamespace = "::std::collections"
     }
 }
 
-fun RustType.render(): String = when (this) {
-    is RustType.Bool -> this.name
-    is RustType.Float -> this.name
-    is RustType.Integer -> this.name
-    is RustType.String -> this.name
-    is RustType.Vec -> "${this.name}<${this.member.render()}>"
-    is RustType.Slice -> "[${this.member.render()}]"
-    is RustType.HashMap -> "${this.name}<${this.key.render()}, ${this.value.render()}>"
-    is RustType.HashSet -> "${this.name}<${this.member.render()}>"
-    is RustType.Reference -> "&${this.lifetime?.let { "'$it" } ?: ""} ${this.value.render()}"
-    is RustType.Option -> "${this.name}<${this.value.render()}>"
-    is RustType.Box -> "${this.name}<${this.value.render()}>"
-    is RustType.Opaque -> this.name
+fun RustType.render(fullyQualified: Boolean): String {
+    val namespace = if (fullyQualified) {
+        this.namespace?.let { "$it::" } ?: ""
+    } else ""
+    val base = when (this) {
+        is RustType.Bool -> this.name
+        is RustType.Float -> this.name
+        is RustType.Integer -> this.name
+        is RustType.String -> this.name
+        is RustType.Vec -> "${this.name}<${this.member.render(fullyQualified)}>"
+        is RustType.Slice -> "[${this.member.render(fullyQualified)}]"
+        is RustType.HashMap -> "${this.name}<${this.key.render(fullyQualified)}, ${this.value.render(fullyQualified)}>"
+        is RustType.HashSet -> "${this.name}<${this.member.render(fullyQualified)}>"
+        is RustType.Reference -> "&${this.lifetime?.let { "'$it" } ?: ""} ${this.value.render(fullyQualified)}"
+        is RustType.Option -> "${this.name}<${this.value.render(fullyQualified)}>"
+        is RustType.Box -> "${this.name}<${this.value.render(fullyQualified)}>"
+        is RustType.Opaque -> this.name
+    }
+    return "$namespace$base"
 }
 
 /**
