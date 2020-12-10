@@ -142,9 +142,10 @@ class HttpProtocolTestGeneratorTest {
                     write(body)
                 }
                 rustBlock(
-                    "pub fn assemble<T: Into<Vec<u8>>>(builder: #T, body: T) -> #T<Vec<u8>>",
+                    "pub fn assemble<T: Into<#3T>>(builder: #1T, body: T) -> #2T<#3T>",
                     RuntimeType.HttpRequestBuilder,
-                    RuntimeType.Http("request::Request")
+                    RuntimeType.Http("request::Request"),
+                    RuntimeType.ByteSlab
                 ) {
                     write("let body = body.into();")
                     write("builder.header(#T, body.len()).body(body)", RuntimeType.Http("header::CONTENT_LENGTH"))

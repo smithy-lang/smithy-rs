@@ -56,7 +56,7 @@ class SymbolBuilderTest {
             .unwrap()
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(struct)
-        sym.rustType().render() shouldBe "MyStruct"
+        sym.rustType().render(false) shouldBe "MyStruct"
         sym.definitionFile shouldContain Shapes.filename
         sym.namespace shouldBe "crate::model"
     }
@@ -76,7 +76,7 @@ class SymbolBuilderTest {
             .unwrap()
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(struct)
-        sym.rustType().render() shouldBe "TerribleError"
+        sym.rustType().render(false) shouldBe "TerribleError"
         sym.definitionFile shouldContain Errors.filename
     }
 
@@ -100,7 +100,7 @@ class SymbolBuilderTest {
         val shape = model.expectShape(ShapeId.from("test#StandardUnit"))
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(shape)
-        sym.rustType().render() shouldBe "StandardUnit"
+        sym.rustType().render(false) shouldBe "StandardUnit"
         sym.definitionFile shouldContain Shapes.filename
         sym.namespace shouldBe "crate::model"
     }
@@ -143,9 +143,9 @@ class SymbolBuilderTest {
         Assertions.assertEquals(optional, memberSymbol.isOptional())
 
         if (!memberSymbol.isOptional()) {
-            Assertions.assertEquals(rustName, memberSymbol.rustType().render())
+            Assertions.assertEquals(rustName, memberSymbol.rustType().render(false))
         } else {
-            Assertions.assertEquals("Option<$rustName>", memberSymbol.rustType().render())
+            Assertions.assertEquals("Option<$rustName>", memberSymbol.rustType().render(false))
         }
     }
 
@@ -163,7 +163,7 @@ class SymbolBuilderTest {
 
         val provider: SymbolProvider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
-        setSymbol.rustType().render() shouldBe "${RustType.SetType}<String>"
+        setSymbol.rustType().render(false) shouldBe "${RustType.SetType}<String>"
         setSymbol.referenceClosure().map { it.name } shouldBe listOf(RustType.SetType, "String")
     }
 
@@ -182,7 +182,7 @@ class SymbolBuilderTest {
 
         val provider: SymbolProvider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
-        setSymbol.rustType().render() shouldBe "Vec<Record>"
+        setSymbol.rustType().render(false) shouldBe "Vec<Record>"
         setSymbol.referenceClosure().map { it.name } shouldBe listOf("Vec", "Record")
     }
 
@@ -203,7 +203,7 @@ class SymbolBuilderTest {
 
         val provider: SymbolProvider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
-        setSymbol.rustType().render() shouldBe "Vec<Option<Record>>"
+        setSymbol.rustType().render(false) shouldBe "Vec<Option<Record>>"
         setSymbol.referenceClosure().map { it.name } shouldBe listOf("Vec", "Option", "Record")
     }
 
@@ -221,7 +221,7 @@ class SymbolBuilderTest {
             .unwrap()
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(member)
-        sym.rustType().render() shouldBe "Option<Instant>"
+        sym.rustType().render(false) shouldBe "Option<Instant>"
         sym.referenceClosure().map { it.name } shouldContain "Instant"
         sym.references[0].dependencies.shouldNotBeEmpty()
     }
