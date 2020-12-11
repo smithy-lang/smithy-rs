@@ -153,7 +153,8 @@ fun CodeWriter.escape(text: String): String = text.replace("$expressionStart", "
  */
 fun CodeWriter.raw(text: String) = writeInline(escape(text))
 
-class RustWriter private constructor(
+class
+RustWriter private constructor(
     private val filename: String,
     val namespace: String,
     private val commentCharacter: String = "//",

@@ -5,14 +5,29 @@
 
 package software.amazon.smithy.rust.testutil
 
+import com.moandjiezana.toml.TomlWriter
 import org.intellij.lang.annotations.Language
+import software.amazon.smithy.build.FileManifest
+import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
+import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.lang.CargoDependency
 import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.raw
+import software.amazon.smithy.rust.codegen.lang.rustBlock
+import software.amazon.smithy.rust.codegen.smithy.BuildSettings
+import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
+import software.amazon.smithy.rust.codegen.smithy.RustSettings
+import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.smithy.finalize
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.io.File
+import java.nio.file.Path
 
 /**
  * Creates a Cargo workspace shared among all tests
@@ -29,14 +44,14 @@ object TestWorkspace {
 
     private fun generate() {
         val cargoToml = baseDir.resolve("Cargo.toml")
-        cargoToml.writeText(
-            """
-            [workspace]
-            members = [
-                ${subprojects.joinToString { it.dq() }}
-            ]
-            """.trimIndent()
+        val workspaceToml = TomlWriter().write(
+            mapOf(
+                "workspace" to mapOf(
+                    "members" to subprojects
+                )
+            )
         )
+        cargoToml.writeText(workspaceToml)
     }
 
     fun subproject(): File {
@@ -47,6 +62,53 @@ object TestWorkspace {
             return newProject
         }
     }
+
+    fun testProject(symbolProvider: RustSymbolProvider?): TestWriterDelegator {
+        val subprojectDir = subproject()
+        val symbolProvider = symbolProvider ?: object : RustSymbolProvider {
+            override fun config(): SymbolVisitorConfig {
+                TODO("Not yet implemented")
+            }
+
+            override fun toSymbol(shape: Shape?): Symbol {
+                TODO("Not yet implemented")
+            }
+        }
+        return TestWriterDelegator(
+            FileManifest.create(subprojectDir.toPath()),
+            symbolProvider
+        )
+    }
+}
+
+fun RustWriter.unitTest(
+    @Language("Rust", prefix = "fn test() {", suffix = "}") test: String,
+    name: String? = null
+) {
+    val testName = name ?: safeName("test_")
+    raw("#[test]")
+    rustBlock("fn $testName()") {
+        writeWithNoFormatting(test)
+    }
+}
+
+class TestWriterDelegator(fileManifest: FileManifest, symbolProvider: RustSymbolProvider) :
+    CodegenWriterDelegator<RustWriter>(fileManifest, symbolProvider, RustWriter.Factory) {
+    val baseDir: Path = fileManifest.baseDir
+}
+
+fun TestWriterDelegator.compileAndTest() {
+    this.finalize(
+        RustSettings(
+            ShapeId.from("fake#Fake"),
+            "test_${baseDir.toFile().nameWithoutExtension}",
+            "0.0.1",
+            runtimeConfig = TestRuntimeConfig,
+            codegenConfig = CodegenConfig(),
+            build = BuildSettings.Default()
+        )
+    )
+    "cargo test".runCommand(baseDir)
 }
 
 // TODO: unify these test helpers a bit

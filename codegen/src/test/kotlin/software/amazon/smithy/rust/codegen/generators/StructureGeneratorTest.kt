@@ -18,9 +18,11 @@ import software.amazon.smithy.rust.codegen.lang.raw
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.util.lookup
+import software.amazon.smithy.rust.testutil.TestWorkspace
 import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.testSymbolProvider
+import software.amazon.smithy.rust.testutil.unitTest
 
 class StructureGeneratorTest {
     companion object {
@@ -53,19 +55,22 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate basic structures`() {
-        val provider: SymbolProvider = testSymbolProvider(model)
-        val writer = RustWriter.forModule("model")
-        val innerGenerator = StructureGenerator(model, provider, writer, inner)
-        val generator = StructureGenerator(model, provider, writer, struct)
-        generator.render()
-        innerGenerator.render()
-        writer.compileAndTest(
-            """
-            let s: Option<MyStruct> = None;
-            s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
-            """.trimIndent()
-        )
-        writer.toString().shouldContainInOrder("this documents the shape", "#[non_exhaustive]", "pub", "struct MyStruct")
+        val provider = testSymbolProvider(model)
+        val project = TestWorkspace.testProject(provider)
+        project.useShapeWriter(inner) { writer ->
+            StructureGenerator(model, provider, writer, inner).render()
+            StructureGenerator(model, provider, writer, struct).render()
+            writer.unitTest(
+                """
+                let s: Option<MyStruct> = None;
+                s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
+                """
+            )
+            writer.toString().shouldContainInOrder(
+                "this documents the shape", "#[non_exhaustive]", "pub", "struct MyStruct"
+            )
+        }
+        project.compileAndTest()
     }
 
     @Test
