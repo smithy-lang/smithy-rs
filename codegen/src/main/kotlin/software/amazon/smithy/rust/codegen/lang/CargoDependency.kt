@@ -82,8 +82,9 @@ class InlineDependency(
 
         fun uuid() = forRustFile("v4", "uuid", "uuid.rs")
 
-        // TODO: putting this in the "error" module risks conflicting with a modeled error named "GenericError"
         fun genericError() = forRustFile("GenericError", "types", "generic_error.rs", CargoDependency.Serde)
+
+        fun docJson() = forRustFile("doc_json", "doc_json", "doc_json.rs", CargoDependency.Serde)
     }
 }
 

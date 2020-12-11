@@ -126,6 +126,8 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
 
         val GenericError = RuntimeType("GenericError", InlineDependency.genericError(), "crate::types")
 
+        val DocJson = RuntimeType("doc_json", InlineDependency.docJson(), "crate")
+
         fun forInlineFun(name: String, module: String, func: (RustWriter) -> Unit) = RuntimeType(
             name = name,
             dependency = InlineDependency(name, module, listOf(), func),
