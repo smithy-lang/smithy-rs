@@ -22,8 +22,8 @@ mod test {
         map.insert("nan".to_string(), Document::Number(Number::Float(f64::NAN)));
         let doc = Document::Object(map);
         assert_eq!(
-            serde_json::to_string(&SerDoc(&doc)).unwrap(),
-            r#"{"num":45,"nan":null}"#
+            serde_json::to_value(&SerDoc(&doc)).unwrap(),
+            serde_json::json!({"num":45,"nan":null})
         );
     }
 
