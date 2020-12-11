@@ -102,6 +102,25 @@ data class CargoDependency(
         is Local -> "local"
     }
 
+    fun toMap(): Map<String, Any> {
+        val attribs = mutableMapOf<String, Any>()
+        with(location) {
+            when (this) {
+                is CratesIo -> attribs["version"] = version
+                is Local -> {
+                    val fullPath = "$basePath/$name"
+                    attribs["path"] = fullPath
+                }
+            }
+        }
+        with(features) {
+            if (!isEmpty()) {
+                attribs["features"] = this
+            }
+        }
+        return attribs
+    }
+
     override fun toString(): String {
         val attribs = mutableListOf<String>()
         with(location) {
