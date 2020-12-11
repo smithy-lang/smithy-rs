@@ -1,14 +1,32 @@
 #[allow(dead_code)]
 mod error_code;
+mod doc_json;
 mod generic_error;
 #[allow(dead_code)]
 mod uuid;
 
-// This test is outside of uuid.rs to enable copying the entirety of uuid.rs into the SDK.
+// This test is outside of uuid.rs to enable copying the entirety of uuid.rs into the SDK without
+// requiring a proptest dependency
 #[cfg(test)]
 mod test {
+    use crate::doc_json::SerDoc;
     use crate::uuid::v4;
     use proptest::prelude::*;
+    use proptest::std_facade::HashMap;
+    use smithy_types::Document;
+    use smithy_types::Number;
+
+    #[test]
+    fn nan_floats_serialize_null() {
+        let mut map = HashMap::new();
+        map.insert("num".to_string(), Document::Number(Number::PosInt(45)));
+        map.insert("nan".to_string(), Document::Number(Number::Float(f64::NAN)));
+        let doc = Document::Object(map);
+        assert_eq!(
+            serde_json::to_value(&SerDoc(&doc)).unwrap(),
+            serde_json::json!({"num":45,"nan":null})
+        );
+    }
 
     #[test]
     fn test_uuid() {

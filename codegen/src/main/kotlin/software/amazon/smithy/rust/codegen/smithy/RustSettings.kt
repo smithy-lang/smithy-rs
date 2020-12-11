@@ -47,6 +47,7 @@ class RustSettings(
     val moduleName: String,
     val moduleVersion: String,
     val moduleDescription: String = "",
+    val moduleAuthors: List<String> = listOf("TODO@todo.com"),
     val runtimeConfig: RuntimeConfig,
     val codegenConfig: CodegenConfig,
     val build: BuildSettings
@@ -103,9 +104,9 @@ class RustSettings(
                 moduleName,
                 version,
                 desc,
-                RuntimeConfig.fromNode(runtimeConfig),
-                CodegenConfig.fromNode(codegenSettings),
-                BuildSettings.fromNode(build)
+                runtimeConfig = RuntimeConfig.fromNode(runtimeConfig),
+                codegenConfig = CodegenConfig.fromNode(codegenSettings),
+                build = BuildSettings.fromNode(build)
             )
         }
 

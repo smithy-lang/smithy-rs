@@ -16,15 +16,9 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.rust.codegen.lang.CargoDependency
-import software.amazon.smithy.rust.codegen.lang.InlineDependency
-import software.amazon.smithy.rust.codegen.lang.RustDependency
-import software.amazon.smithy.rust.codegen.lang.RustModule
 import software.amazon.smithy.rust.codegen.lang.RustWriter
-import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ModelBuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
@@ -38,11 +32,6 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBox
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
-
-/**
- * Allowlist of modules that will be exposed publicly in generated crates
- */
-private val PublicModules = setOf("error", "operation", "model", "output", "input")
 
 class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
 
@@ -58,7 +47,8 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
     private val httpGenerator: HttpProtocolGenerator
 
     init {
-        val symbolVisitorConfig = SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig, codegenConfig = settings.codegenConfig)
+        val symbolVisitorConfig =
+            SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig, codegenConfig = settings.codegenConfig)
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
         val (protocol, generator) = ProtocolLoader.Default.protocolFor(context.model, service)
@@ -87,29 +77,7 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
         val service = settings.getService(model)
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
-        val loadDependencies = { writers.dependencies.map { dep -> RustDependency.fromSymbolDependency(dep) } }
-        val inlineDependencies = loadDependencies().filterIsInstance<InlineDependency>().distinctBy { it.key() }
-        inlineDependencies.forEach { dep ->
-            writers.useFileWriter("src/${dep.module}.rs", "crate::${dep.module}") {
-                dep.renderer(it)
-            }
-        }
-        val cargoDependencies = loadDependencies().filterIsInstance<CargoDependency>().distinct()
-        writers.useFileWriter("Cargo.toml") {
-            val cargoToml = CargoTomlGenerator(
-                settings,
-                it,
-                cargoDependencies
-            )
-            cargoToml.render()
-        }
-        writers.useFileWriter("src/lib.rs", "crate::lib") { writer ->
-            val includedModules = writers.includedModules().toSet().filter { it != "lib" }
-            val modules = includedModules.map { moduleName ->
-                RustModule.default(moduleName, PublicModules.contains(moduleName))
-            }
-            LibRsGenerator(modules).render(writer)
-        }
+        writers.finalize(settings)
         writers.flushWriters()
         try {
             "cargo fmt".runCommand(fileManifest.baseDir)

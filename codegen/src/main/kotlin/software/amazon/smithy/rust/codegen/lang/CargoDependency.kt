@@ -81,10 +81,9 @@ class InlineDependency(
         }
 
         fun uuid() = forRustFile("v4", "uuid", "uuid.rs")
-
         fun genericError() = forRustFile("GenericError", "types", "generic_error.rs", CargoDependency.Serde)
-
         fun errorCode() = forRustFile("error_code", "error_code", "error_code.rs", CargoDependency.Http)
+        fun docJson() = forRustFile("doc_json", "doc_json", "doc_json.rs", CargoDependency.Serde)
     }
 }
 
@@ -101,6 +100,25 @@ data class CargoDependency(
     override fun version(): String = when (location) {
         is CratesIo -> location.version
         is Local -> "local"
+    }
+
+    fun toMap(): Map<String, Any> {
+        val attribs = mutableMapOf<String, Any>()
+        with(location) {
+            when (this) {
+                is CratesIo -> attribs["version"] = version
+                is Local -> {
+                    val fullPath = "$basePath/$name"
+                    attribs["path"] = fullPath
+                }
+            }
+        }
+        with(features) {
+            if (!isEmpty()) {
+                attribs["features"] = this
+            }
+        }
+        return attribs
     }
 
     override fun toString(): String {
