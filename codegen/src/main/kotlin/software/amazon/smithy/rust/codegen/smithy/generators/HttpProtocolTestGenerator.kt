@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
+import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import java.util.logging.Logger
 
 data class ProtocolSupport(
@@ -142,9 +143,9 @@ class HttpProtocolTestGenerator(
         instantiator.render(this, inputShape, httpRequestTestCase.params)
         write(";")
         if (protocolSupport.requestBodySerialization) {
-            write("let http_request = ${protocolConfig.symbolProvider.toSymbol(inputShape).name}::assemble(input.request_builder_base(), input.build_body());")
+            write("let http_request = input.build_http_request();")
         } else {
-            write("let http_request = ${protocolConfig.symbolProvider.toSymbol(inputShape).name}::assemble(input.request_builder_base(), vec![]);")
+            write("let http_request = ${protocolConfig.symbolProvider.toSymbol(inputShape).name}::assemble(input.input.request_builder_base(), vec![]);")
         }
         with(httpRequestTestCase) {
             write(
@@ -232,14 +233,12 @@ class HttpProtocolTestGenerator(
     private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {
         if (body == "") {
             rustWriter.write("// No body")
-            rustWriter.write("assert!(input.build_body().is_empty());")
+            rustWriter.write("assert!(&http_request.body().is_empty());")
         } else {
             // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
             assertOk(rustWriter) {
                 rustWriter.write(
-                    "#T(input.build_body(), ${
-                    rustWriter.escape(body).dq()
-                    }, #T::from(${(mediaType ?: "unknown").dq()}))",
+                    "#T(&http_request.body(), ${rustWriter.escape(body).dq()}, #T::from(${(mediaType ?: "unknown").dq()}))",
                     RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_body"),
                     RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "MediaType")
                 )

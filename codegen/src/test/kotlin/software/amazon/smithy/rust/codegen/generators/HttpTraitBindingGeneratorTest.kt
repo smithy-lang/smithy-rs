@@ -25,13 +25,13 @@ import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpTraitBindingGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.uriFormatString
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.compileAndTest
+import software.amazon.smithy.rust.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class HttpTraitBindingGeneratorTest {
@@ -101,7 +101,7 @@ class HttpTraitBindingGeneratorTest {
 
     private val symbolProvider = testSymbolProvider(model)
     private fun renderOperation(writer: RustWriter) {
-        StructureGenerator(model, symbolProvider, writer, inputShape).render()
+        inputShape.renderWithModelBuilder(model, symbolProvider, writer)
         val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
         writer.rustBlock("impl PutObjectInput") {
             HttpTraitBindingGenerator(
@@ -123,7 +123,7 @@ class HttpTraitBindingGeneratorTest {
 
     @Test
     fun `generate uris`() {
-        val writer = RustWriter.forModule("operation")
+        val writer = RustWriter.forModule("input")
         // currently rendering the operation renders the protocols—I want to separate that at some point.
         renderOperation(writer)
         writer.compileAndTest(
@@ -147,7 +147,7 @@ class HttpTraitBindingGeneratorTest {
 
     @Test
     fun `build http requests`() {
-        val writer = RustWriter.forModule("operation")
+        val writer = RustWriter.forModule("input")
         renderOperation(writer)
         writer.compileAndTest(
             """
