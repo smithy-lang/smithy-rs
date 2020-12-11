@@ -1,9 +1,9 @@
 /// GenericError represents an error from a service that is not modeled
 #[derive(Debug, PartialEq, Eq)]
 pub struct GenericError {
-    message: Option<String>,
-    code: Option<String>,
-    request_id: Option<String>,
+    pub message: Option<String>,
+    pub code: Option<String>,
+    pub request_id: Option<String>,
 }
 
 impl ::std::fmt::Display for GenericError {

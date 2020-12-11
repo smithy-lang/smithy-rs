@@ -53,6 +53,7 @@ class HttpProtocolTestGenerator(
     // These could be configured via runtime configuration, but since this won't be long-lasting,
     // it makes sense to do the simplest thing for now.
     // The test will _fail_ if these pass, so we will discover & remove if we fix them by accident
+    // All failing tests must have a matching issue on GitHub
     val ExpectFail = setOf(
         // Document support: https://github.com/awslabs/smithy-rs/issues/31
         "PutAndGetInlineDocumentsInput",
@@ -63,6 +64,10 @@ class HttpProtocolTestGenerator(
         "RestJsonConstantQueryString",
         "RestJsonConstantAndVariableQueryStringMissingOneValue",
         "RestJsonConstantAndVariableQueryStringAllValues",
+
+        // Timestamp parsing: https://github.com/awslabs/smithy-rs/issues/80
+        "parses_httpdate_timestamps",
+        "parses_iso8601_timestamps",
 
         // Misc:
         "RestJsonQueryIdempotencyTokenAutoFill", // https://github.com/awslabs/smithy-rs/issues/34

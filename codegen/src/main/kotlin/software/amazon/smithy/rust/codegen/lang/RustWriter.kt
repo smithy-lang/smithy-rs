@@ -65,8 +65,36 @@ fun <T : CodeWriter> T.conditionalBlock(
 /**
  * Convenience wrapper that tells Intellij that the contents of this block are Rust
  */
-fun <T : CodeWriter> T.rust(@Language("Rust", prefix = "fn foo(&self) {", suffix = "}") contents: String, vararg args: Any) {
+fun <T : CodeWriter> T.rust(
+    @Language("Rust", prefix = "fn foo(&self) {", suffix = "}") contents: String,
+    vararg args: Any
+) {
     this.write(contents, *args)
+}
+
+/**
+ * Experimental API for templating long blocks of Rust
+ *
+ * This enables writing code like:
+ *
+ * ```kotlin
+ * writer.rustCtx("""
+ * let some_val = #{operation}::from_response(response);
+ * let serialized = #{serde_json}::to_json(some_val);
+ * """, "operation" to operationSymbol, "serde_json" to RuntimeType.SerdeJson)
+ * ```
+ *
+ * Before being passed to the underlying code writer, this syntax is rewritten to match the slightly more verbose
+ * `CodeWriter` formatting: `#{name:T}`
+ */
+fun <T : CodeWriter> T.rustTemplate(
+    @Language("Rust", prefix = "fn foo(&self) {", suffix = "}") contents: String,
+    vararg ctx: Pair<String, Any>
+) {
+    this.pushState()
+    this.putContext(ctx.toMap())
+    this.write(contents.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult -> "#{${matchResult.groupValues[1]}:T}" })
+    this.popState()
 }
 
 /*
