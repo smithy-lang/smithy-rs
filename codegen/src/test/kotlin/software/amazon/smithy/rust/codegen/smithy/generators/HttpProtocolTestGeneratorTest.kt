@@ -7,7 +7,6 @@ import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
-import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
@@ -210,7 +209,7 @@ class HttpProtocolTestGeneratorTest {
 
         val testOutput = writer.compileAndTest()
         // Verify the test actually ran
-        testOutput shouldContain "test_say_hello_request ... ok"
+        testOutput shouldContain "say_hello_request ... ok"
     }
 
     @Test
@@ -229,7 +228,7 @@ class HttpProtocolTestGeneratorTest {
             writer.compileAndTest(expectFailure = true)
         }
 
-        err.message shouldContain "test_basic_response_test_response ... FAILED"
+        err.message shouldContain "basic_response_test_response ... FAILED"
     }
 
     @Test
@@ -251,7 +250,7 @@ class HttpProtocolTestGeneratorTest {
             writer.compileAndTest(expectFailure = true)
         }
 
-        err.message shouldContain "test_say_hello_request ... FAILED"
+        err.message shouldContain "say_hello_request ... FAILED"
         err.message shouldContain "body did not match"
     }
 
@@ -273,7 +272,7 @@ class HttpProtocolTestGeneratorTest {
             writer.compileAndTest(expectFailure = true)
         }
         // Verify the test actually ran
-        err.message shouldContain "test_say_hello_request ... FAILED"
+        err.message shouldContain "say_hello_request ... FAILED"
         err.message shouldContain "missing query param"
     }
 
@@ -295,7 +294,7 @@ class HttpProtocolTestGeneratorTest {
             writer.compileAndTest(expectFailure = true)
         }
         // Verify the test actually ran
-        err.message shouldContain "test_say_hello_request ... FAILED"
+        err.message shouldContain "say_hello_request ... FAILED"
         err.message shouldContain "forbidden query param"
     }
 
@@ -317,7 +316,7 @@ class HttpProtocolTestGeneratorTest {
             writer.compileAndTest(expectFailure = true)
         }
         // Verify the test actually ran
-        err.message shouldContain "test_say_hello_request ... FAILED"
+        err.message shouldContain "say_hello_request ... FAILED"
         err.message shouldContain "required query param missing"
     }
 
@@ -337,7 +336,7 @@ class HttpProtocolTestGeneratorTest {
         val err = assertThrows<CommandFailed> {
             writer.compileAndTest(expectFailure = true)
         }
-        err.message shouldContain "test_say_hello_request ... FAILED"
+        err.message shouldContain "say_hello_request ... FAILED"
         err.message shouldContain "invalid header value"
     }
 }
