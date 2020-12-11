@@ -87,7 +87,7 @@ class OperationNormalizer(private val model: Model) {
         val inputShapeBuilder = operation.input.map { shapeId ->
             model.expectShape(shapeId, StructureShape::class.java).toBuilder().rename(inputId)
         }.orElse(empty(inputId))
-        val inputShape = inputShapeBuilder.addTrait(SyntheticInputTrait(inputBodyShape?.id)).build()
+        val inputShape = inputShapeBuilder.addTrait(SyntheticInputTrait(operation.id, inputBodyShape?.id)).build()
         return listOf(inputShape, inputBodyShape).mapNotNull { it }
     }
 

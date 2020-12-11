@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.lang.rustBlock
@@ -17,6 +18,7 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.compileAndTest
+import software.amazon.smithy.rust.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class HttpProtocolTestGeneratorTest {
@@ -111,29 +113,51 @@ class HttpProtocolTestGeneratorTest {
         body: String = "${correctBody.dq()}.to_string()",
         correctResponse: String = """Ok(SayHelloOutput::builder().value("hey there!").build())"""
     ) {
-        val operation = model.lookup<OperationShape>("com.example#SayHello")
+        val shape: StructureShape = model.lookup("com.example#SayHelloInput")
+        val inputSymbol = symbolProvider.toSymbol(shape)
+        val operationShape: OperationShape = model.lookup("com.example#SayHello")
+        val builderGenerator = OperationInputBuilderGenerator(model, symbolProvider, model.lookup("com.example#SayHello"))
         writer.withModule("error") {
             StructureGenerator(model, symbolProvider, this, model.lookup("com.example#BadRequest")).render()
-            CombinedErrorGenerator(model, symbolProvider, operation).render(this)
+            CombinedErrorGenerator(model, symbolProvider, operationShape).render(this)
         }
         writer.withModule("operation") {
-            StructureGenerator(model, symbolProvider, this, model.lookup("com.example#SayHelloInput")).render()
-            StructureGenerator(model, symbolProvider, this, model.lookup("com.example#SayHelloOutput")).render()
             rustBlock("pub struct SayHello") {
-                rust("_input: SayHelloInput")
+                write("input: #T", inputSymbol)
             }
-            rustBlock("impl SayHello") {
+            implBlock(operationShape, symbolProvider) {
+                builderGenerator.renderConvenienceMethod(this)
+
+                rustBlock(
+                    "pub fn build_http_request(&self) -> #T<Vec<u8>>", RuntimeType.Http("request::Request")
+                ) {
+                    write("#T::assemble(self.input.request_builder_base(), self.input.build_body())", inputSymbol)
+                }
+
+                rustBlock("pub fn new(input: #T) -> Self", inputSymbol) {
+                    write("Self { input }")
+                }
+
                 rustBlock(
                     "pub fn from_response(_response: #T<impl AsRef<[u8]>>) -> Result<#T, #T>",
 
                     RuntimeType.Http("response::Response"),
-                    symbolProvider.toSymbol(operation.outputShape(model)),
-                    operation.errorSymbol(symbolProvider)
+                    symbolProvider.toSymbol(operationShape.outputShape(model)),
+                    operationShape.errorSymbol(symbolProvider)
                 ) {
                     writeWithNoFormatting(correctResponse)
                 }
             }
+        }
+        writer.withModule("output") {
+            val outputShape = operationShape.outputShape(model)
+            outputShape.renderWithModelBuilder(model, symbolProvider, this)
+        }
+        writer.withModule("input") {
+            StructureGenerator(model, symbolProvider, this, shape).render()
+            builderGenerator.render(this)
             rustBlock("impl SayHelloInput") {
+                builderGenerator.renderConvenienceMethod(this)
                 rustBlock("pub fn request_builder_base(&self) -> #T", RuntimeType.HttpRequestBuilder) {
                     write("#T::new()", RuntimeType.HttpRequestBuilder)
                     write(httpRequestBuilder)

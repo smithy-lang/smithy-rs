@@ -29,8 +29,8 @@ import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.render
 import software.amazon.smithy.rust.codegen.smithy.Errors
+import software.amazon.smithy.rust.codegen.smithy.Models
 import software.amazon.smithy.rust.codegen.smithy.Operations
-import software.amazon.smithy.rust.codegen.smithy.Shapes
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.testutil.asSmithyModel
@@ -57,7 +57,7 @@ class SymbolBuilderTest {
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(struct)
         sym.rustType().render(false) shouldBe "MyStruct"
-        sym.definitionFile shouldContain Shapes.filename
+        sym.definitionFile shouldContain Models.filename
         sym.namespace shouldBe "crate::model"
     }
 
@@ -101,7 +101,7 @@ class SymbolBuilderTest {
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(shape)
         sym.rustType().render(false) shouldBe "StandardUnit"
-        sym.definitionFile shouldContain Shapes.filename
+        sym.definitionFile shouldContain Models.filename
         sym.namespace shouldBe "crate::model"
     }
 

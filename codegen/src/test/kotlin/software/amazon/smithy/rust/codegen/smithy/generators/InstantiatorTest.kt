@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.compileAndTest
+import software.amazon.smithy.rust.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class InstantiatorTest {
@@ -105,8 +106,7 @@ class InstantiatorTest {
             """.trimIndent()
         )
         val writer = RustWriter.forModule("model")
-        val structureGenerator = StructureGenerator(model, symbolProvider, writer, structure)
-        structureGenerator.render()
+        structure.renderWithModelBuilder(model, symbolProvider, writer)
         writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(this, structure, data)
@@ -130,8 +130,7 @@ class InstantiatorTest {
             """.trimIndent()
         )
         val writer = RustWriter.forModule("model")
-        val structureGenerator = StructureGenerator(model, symbolProvider, writer, structure)
-        structureGenerator.render()
+        structure.renderWithModelBuilder(model, symbolProvider, writer)
         writer.test {
             withBlock("let result = ", ";") {
                 sut.render(this, structure, data)
@@ -204,8 +203,8 @@ class InstantiatorTest {
         )
         val writer = RustWriter.forModule("model")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
-        val structureGenerator = StructureGenerator(model, symbolProvider, writer, model.lookup("com.test#Inner"))
-        structureGenerator.render()
+        val inner: StructureShape = model.lookup("com.test#Inner")
+        inner.renderWithModelBuilder(model, symbolProvider, writer)
         writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(writer, model.lookup("com.test#NestedMap"), data)
