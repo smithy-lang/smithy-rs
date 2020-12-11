@@ -8,36 +8,31 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
-import software.amazon.smithy.rust.codegen.lang.conditionalBlock
-import software.amazon.smithy.rust.codegen.lang.docs
 import software.amazon.smithy.rust.codegen.lang.documentShape
-import software.amazon.smithy.rust.codegen.lang.render
 import software.amazon.smithy.rust.codegen.lang.rustBlock
-import software.amazon.smithy.rust.codegen.lang.stripOuter
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.isOptional
-import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.utils.CaseUtils
+
+fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: RustWriter.() -> Unit) {
+    rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
+        block(this)
+    }
+}
 
 class StructureGenerator(
     val model: Model,
     private val symbolProvider: SymbolProvider,
     private val writer: RustWriter,
-    private val shape: StructureShape,
-    private val renderBuilder: Boolean = true
+    private val shape: StructureShape
 ) {
     private val members: List<MemberShape> = shape.allMembers.values.toList()
-    private val structureSymbol = symbolProvider.toSymbol(shape)
-    private val builderSymbol =
-        RuntimeType("Builder", null, "${structureSymbol.namespace}::${structureSymbol.name.toSnakeCase()}")
 
     fun render() {
         renderStructure()
@@ -45,14 +40,6 @@ class StructureGenerator(
         errorTrait.map {
             val errorGenerator = ErrorGenerator(model, symbolProvider, writer, shape, it)
             errorGenerator.render()
-        }
-        if (renderBuilder) {
-            val symbol = symbolProvider.toSymbol(shape)
-            // TODO: figure out exactly what docs we want on a the builder module
-            writer.docs("See #D", symbol)
-            writer.withModule(symbol.name.toSnakeCase()) {
-                renderBuilder(this)
-            }
         }
     }
 
@@ -98,91 +85,5 @@ class StructureGenerator(
                 write("$memberName: #T,", symbolProvider.toSymbol(member))
             }
         }
-        if (renderBuilder) {
-            writer.rustBlock("impl ${symbol.name}") {
-                docs("Creates a new builder-style object to manufacture #D", symbol)
-                rustBlock("pub fn builder() -> #T", builderSymbol) {
-                    write("#T::default()", builderSymbol)
-                }
-            }
-        }
     }
-
-    private fun renderBuilder(writer: RustWriter) {
-        val builderName = "Builder"
-
-        val symbol = symbolProvider.toSymbol(shape)
-        writer.docs("A builder for #D", symbol)
-        writer.writeWithNoFormatting("#[non_exhaustive]")
-        writer.writeWithNoFormatting("#[derive(Debug, Clone, Default)]")
-        writer.rustBlock("pub struct $builderName") {
-            members.forEach { member ->
-                val memberName = symbolProvider.toMemberName(member)
-                // All fields in the builder are optional
-                val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
-                // TODO: should the builder members be public?
-                write("$memberName: #T,", memberSymbol)
-            }
-        }
-
-        fun builderConverter(coreType: RustType) = when (coreType) {
-            is RustType.String,
-            is RustType.Box -> "inp.into()"
-            else -> "inp"
-        }
-
-        writer.rustBlock("impl $builderName") {
-            members.forEach { member ->
-                val memberName = symbolProvider.toMemberName(member)
-                // All fields in the builder are optional
-                val memberSymbol = symbolProvider.toSymbol(member)
-                val outerType = memberSymbol.rustType()
-                val coreType = outerType.stripOuter<RustType.Option>()
-                val signature = when (coreType) {
-                    is RustType.String,
-                    is RustType.Box -> "(mut self, inp: impl Into<${coreType.render(true)}>) -> Self"
-                    else -> "(mut self, inp: ${coreType.render(true)}) -> Self"
-                }
-                writer.documentShape(member, model)
-                writer.rustBlock("pub fn $memberName$signature") {
-                    write("self.$memberName = Some(${builderConverter(coreType)});")
-                    write("self")
-                }
-            }
-
-            val fallibleBuilder = fallibleBuilder(shape, symbolProvider)
-            val returnType = when (fallibleBuilder) {
-                true -> "Result<#T, String>"
-                false -> "#T"
-            }
-
-            writer.docs("Consumes the builder and constructs a #D", symbol)
-            rustBlock("pub fn build(self) -> $returnType", structureSymbol) {
-                conditionalBlock("Ok(", ")", conditional = fallibleBuilder) {
-                    rustBlock("#T", structureSymbol) {
-                        members.forEach { member ->
-                            val memberName = symbolProvider.toMemberName(member)
-                            val memberSymbol = symbolProvider.toSymbol(member)
-                            val errorWhenMissing = "$memberName is required when building ${structureSymbol.name}"
-                            val modifier = when {
-                                !memberSymbol.isOptional() && memberSymbol.canUseDefault() -> ".unwrap_or_default()"
-                                !memberSymbol.isOptional() -> ".ok_or(${errorWhenMissing.dq()})?"
-                                else -> ""
-                            }
-                            write("$memberName: self.$memberName$modifier,")
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// String extensions
-fun String.toSnakeCase(): String {
-    return CaseUtils.toSnakeCase(this)
-}
-
-fun String.toPascalCase(): String {
-    return CaseUtils.toSnakeCase(this).let { CaseUtils.toPascalCase(it) }
 }

@@ -38,9 +38,9 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
-import software.amazon.smithy.rust.codegen.smithy.generators.toSnakeCase
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import software.amazon.smithy.utils.StringUtils
 
 // TODO: currently, respecting integer types.
@@ -71,10 +71,12 @@ data class SymbolLocation(val namespace: String) {
     val filename = "$namespace.rs"
 }
 
-val Shapes = SymbolLocation("model")
+val Models = SymbolLocation("model")
 val Errors = SymbolLocation("error")
 val Operations = SymbolLocation("operation")
 val Serializers = SymbolLocation("serializer")
+val Inputs = SymbolLocation("input")
+val Outputs = SymbolLocation("output")
 
 fun Symbol.makeOptional(): Symbol {
     return if (isOptional()) {
@@ -150,7 +152,7 @@ class SymbolVisitor(
     override fun doubleShape(shape: DoubleShape): Symbol = simpleShape(shape)
     override fun stringShape(shape: StringShape): Symbol {
         return if (shape.hasTrait(EnumTrait::class.java)) {
-            symbolBuilder(shape, RustType.Opaque(shape.id.name)).locatedIn(Shapes).build()
+            symbolBuilder(shape, RustType.Opaque(shape.id.name)).locatedIn(Models).build()
         } else {
             simpleShape(shape)
         }
@@ -208,8 +210,8 @@ class SymbolVisitor(
 
     override fun structureShape(shape: StructureShape): Symbol {
         val isError = shape.hasTrait(ErrorTrait::class.java)
-        val isIoShape =
-            shape.hasTrait(SyntheticInputTrait::class.java) || shape.hasTrait(SyntheticOutputTrait::class.java)
+        val isInput = shape.hasTrait(SyntheticInputTrait::class.java)
+        val isOutput = shape.hasTrait(SyntheticOutputTrait::class.java)
         val name = StringUtils.capitalize(shape.id.name).letIf(isError && config.codegenConfig.renameExceptions) {
             // TODO: Do we want to do this?
             // https://github.com/awslabs/smithy-rs/issues/77
@@ -218,15 +220,15 @@ class SymbolVisitor(
         val builder = symbolBuilder(shape, RustType.Opaque(name))
         return when {
             isError -> builder.locatedIn(Errors)
-            // Input shapes live with their Operations
-            isIoShape -> builder.locatedIn(Operations)
-            else -> builder.locatedIn(Shapes)
+            isInput -> builder.locatedIn(Inputs)
+            isOutput -> builder.locatedIn(Outputs)
+            else -> builder.locatedIn(Models)
         }.build()
     }
 
     override fun unionShape(shape: UnionShape): Symbol {
         val name = StringUtils.capitalize(shape.id.name)
-        val builder = symbolBuilder(shape, RustType.Opaque(name)).locatedIn(Shapes)
+        val builder = symbolBuilder(shape, RustType.Opaque(name)).locatedIn(Models)
 
         return builder.build()
     }

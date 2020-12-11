@@ -1,10 +1,12 @@
 package software.amazon.smithy.rust.codegen.smithy.generators
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.compileAndTest
+import software.amazon.smithy.rust.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 internal class CombinedErrorGeneratorTest {
@@ -34,7 +36,7 @@ internal class CombinedErrorGeneratorTest {
         val symbolProvider = testSymbolProvider(model)
         val writer = RustWriter.forModule("error")
         listOf("FooError", "ComplexError", "InvalidGreeting").forEach {
-            StructureGenerator(model, symbolProvider, writer, model.lookup("error#$it")).render()
+            model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, writer)
         }
         val generator = CombinedErrorGenerator(model, testSymbolProvider(model), model.lookup("error#Greeting"))
         generator.render(writer)

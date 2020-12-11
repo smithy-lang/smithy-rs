@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.util.inputShape
 
 class ServiceGenerator(
     private val writers: CodegenWriterDelegator<RustWriter>,
@@ -24,9 +25,11 @@ class ServiceGenerator(
     fun render() {
         val operations = index.getContainedOperations(config.serviceShape).sortedBy { it.id }
         operations.map { operation ->
-            writers.useShapeWriter(operation) { writer ->
-                protocolGenerator.renderOperation(writer, operation)
-                HttpProtocolTestGenerator(config, protocolSupport, operation, writer).render()
+            writers.useShapeWriter(operation) { operationWriter ->
+                writers.useShapeWriter(operation.inputShape(config.model)) { inputWriter ->
+                    protocolGenerator.renderOperation(operationWriter, inputWriter, operation)
+                    HttpProtocolTestGenerator(config, protocolSupport, operation, operationWriter).render()
+                }
             }
             val sym = operation.errorSymbol(config.symbolProvider)
             writers.useFileWriter("src/error.rs", sym.namespace) { writer ->
@@ -56,7 +59,7 @@ class ServiceGenerator(
             writers.useShapeWriter(body) { writer ->
                 with(config) {
                     // Generate a body via the structure generator
-                    StructureGenerator(model, symbolProvider, writer, body, renderBuilder = false).render()
+                    StructureGenerator(model, symbolProvider, writer, body).render()
                 }
             }
         }

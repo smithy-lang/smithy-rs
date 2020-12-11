@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.util.doubleQuote
+import software.amazon.smithy.rust.codegen.util.toPascalCase
 import java.lang.IllegalStateException
 
 class EnumGenerator(
