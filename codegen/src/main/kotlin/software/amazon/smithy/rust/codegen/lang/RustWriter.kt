@@ -29,7 +29,7 @@ fun <T : CodeWriter> T.withBlock(
     vararg args: Any,
     block: T.() -> Unit
 ): T {
-    return conditionalBlock(textBeforeNewLine, textAfterNewLine, conditional = true, block = block, args = *args)
+    return conditionalBlock(textBeforeNewLine, textAfterNewLine, conditional = true, block = block, args = args)
 }
 
 /**

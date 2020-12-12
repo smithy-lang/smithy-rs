@@ -42,10 +42,11 @@ import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import software.amazon.smithy.utils.StringUtils
+import kotlin.reflect.KClass
 
 // TODO: currently, respecting integer types.
 // Should we not? [Go does not]
-val SimpleShapes = mapOf(
+val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
     BooleanShape::class to RustType.Bool,
     FloatShape::class to RustType.Float(32),
     DoubleShape::class to RustType.Float(64),
