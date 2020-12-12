@@ -21,12 +21,15 @@ import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.contains
 import software.amazon.smithy.rust.codegen.lang.render
+import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.lang.rustBlock
+import software.amazon.smithy.rust.codegen.lang.rustTemplate
 import software.amazon.smithy.rust.codegen.lang.stripOuter
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
@@ -69,6 +72,10 @@ class JsonSerializerSymbolProvider(
         if (serdeConfig.deserialize) {
             serializerBuilder.deserializerFor(memberShape)?.also {
                 attribs.add(Custom("serde(deserialize_with = ${it.fullyQualifiedName().dq()})", listOf(it)))
+            }
+            if (model.expectShape(memberShape.container) is StructureShape && base.toSymbol(memberShape).isOptional()
+            ) {
+                attribs.add(Custom("serde(default)"))
             }
         }
         return currentMeta.copy(additionalAttributes = currentMeta.additionalAttributes + attribs)
@@ -165,6 +172,63 @@ class SerializerBuilder(
         }
     )
 
+    // TODO: this whole thing needs to be overhauled to be composable
+    private val handWrittenDeserializers: Map<String, (RustWriter) -> Unit> = mapOf(
+        "stdoptionoptioninstant_epoch_seconds_deser" to { writer ->
+            // Needed to pull the Option deserializer into scope
+            writer.write("use #T;", RuntimeType.Deserialize)
+            writer.rust(
+                """
+                let ts_opt = Option::<f64>::deserialize(_deser)?;
+                Ok(ts_opt.map(| ts | Instant ::from_fractional_seconds(ts.floor() as i64, ts - ts.floor())))
+            """
+            )
+        },
+        "blob_deser" to { writer ->
+            writer.rustTemplate(
+                """
+                use #{deserialize};
+                use #{de}::Error;
+                let data = <&str>::deserialize(_deser)?;
+                #{base64_decode}(data)
+                    .map(Blob::new)
+                    .map_err(|_|D::Error::invalid_value(#{de}::Unexpected::Str(data), &"valid base64"))
+
+            """,
+                "deserialize" to RuntimeType.Deserialize,
+                "de" to RuntimeType.Serde("de"),
+                "base64_decode" to RuntimeType.Base64Decode(runtimeConfig)
+            )
+        },
+        "stdoptionoptionblob_deser" to { writer ->
+            writer.rustTemplate(
+                """
+                use #{deserialize};
+                use #{de}::Error;
+                Option::<&str>::deserialize(_deser)?.map(|data| {
+                    #{base64_decode}(data)
+                        .map(Blob::new)
+                        .map_err(|_|D::Error::invalid_value(#{de}::Unexpected::Str(data), &"valid base64"))
+                }).transpose()
+
+            """,
+                "deserialize" to RuntimeType.Deserialize,
+                "de" to RuntimeType.Serde("de"),
+                "base64_decode" to RuntimeType.Base64Decode(runtimeConfig)
+            )
+        },
+        "instant_epoch_seconds_deser" to { writer ->
+            writer.write("use #T;", RuntimeType.Deserialize)
+            writer.rust(
+                """
+                let ts = f64::deserialize(_deser)?;
+                Ok(Instant::from_fractional_seconds(ts.floor() as i64, ts - ts.floor()))
+            """
+            )
+        }
+
+    )
+
     /** correct argument type for the serde custom serializer */
     private fun serializerType(symbol: Symbol): Symbol {
         val unref = symbol.rustType().stripOuter<RustType.Reference>()
@@ -188,7 +252,8 @@ class SerializerBuilder(
             else -> null
         }
         val typeToFnName =
-            rustType.stripOuter<RustType.Reference>().render(fullyQualified = true).filter { it.isLetterOrDigit() }.toLowerCase()
+            rustType.stripOuter<RustType.Reference>().render(fullyQualified = true).filter { it.isLetterOrDigit() }
+                .toLowerCase()
         return listOfNotNull(typeToFnName, context, suffix).joinToString("_")
     }
 
@@ -246,8 +311,7 @@ class SerializerBuilder(
         val fnName = serializerName(rustType, memberShape, "deser")
         return RuntimeType.forInlineFun(fnName, "serde_util") { writer ->
             deserializeFn(writer, fnName, symbol) {
-                // TODO: implement deserializers
-                write("todo!()")
+                handWrittenDeserializers[fnName]?.also { it(this) } ?: write("todo!()")
             }
         }
     }

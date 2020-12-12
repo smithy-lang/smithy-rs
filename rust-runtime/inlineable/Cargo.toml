@@ -9,9 +9,9 @@ The modules of this crate are intended to be inlined directly into the SDK as ne
 
 [dependencies]
 "serde" = { version ="1", features = ["derive"] }
-"smithy-types" = { version = "0.0.1", path = "../smithy-types" }
 "serde_json" = "1"
+"http" = "0.2.1"
+"smithy-types" = { version = "0.0.1", path = "../smithy-types" }
 
 [dev-dependencies]
 proptest = "0.10.1"
-serde_json = "1"

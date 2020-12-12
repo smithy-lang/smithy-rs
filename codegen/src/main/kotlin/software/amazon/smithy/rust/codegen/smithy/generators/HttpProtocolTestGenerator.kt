@@ -123,15 +123,19 @@ class HttpProtocolTestGenerator(
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.setNewlinePrefix("")
         testModuleWriter.writeWithNoFormatting("#[test]")
-        if (ExpectFail.contains(testCase.id)) {
-            testModuleWriter.writeWithNoFormatting("#[should_panic]")
-        }
-        val fnName = when (testCase) {
-            is HttpResponseTestCase -> "_response"
-            is HttpRequestTestCase -> "_request"
+        val action = when (testCase) {
+            is HttpResponseTestCase -> Action.Response
+            is HttpRequestTestCase -> Action.Request
             else -> throw CodegenException("unknown test case type")
         }
-        testModuleWriter.rustBlock("fn test_${testCase.id.toSnakeCase()}$fnName()") {
+        if (expectFail(testCase)) {
+            testModuleWriter.writeWithNoFormatting("#[should_panic]")
+        }
+        val fnName = when (action) {
+            is Action.Response -> "_response"
+            is Action.Request -> "_request"
+        }
+        testModuleWriter.rustBlock("fn ${testCase.id.toSnakeCase()}$fnName()") {
             block(this)
         }
     }
@@ -176,8 +180,18 @@ class HttpProtocolTestGenerator(
         }
     }
 
+    private fun HttpMessageTestCase.action(): Action = when (this) {
+        is HttpRequestTestCase -> Action.Request
+        is HttpResponseTestCase -> Action.Response
+        else -> throw CodegenException("Unknown test case type")
+    }
+
+    private fun expectFail(testCase: HttpMessageTestCase): Boolean = ExpectFail.find {
+        it.id == testCase.id && it.action == testCase.action() && it.service == protocolConfig.serviceShape.id.toString()
+    } != null
+
     private fun RustWriter.renderHttpResponseTestCase(
-        httpResponseTestCase: HttpResponseTestCase,
+        testCase: HttpResponseTestCase,
         expectedShape: StructureShape
     ) {
         if (!protocolSupport.responseDeserialization || (
@@ -187,23 +201,19 @@ class HttpProtocolTestGenerator(
             )
         ) {
             rust("/* test case disabled for this protocol (not yet supported) */")
-            if (ExpectFail.contains(httpResponseTestCase.id)) {
-                // this test needs to fail, minor hack. Caused by overlap between ids of request & response tests
-                write("todo!()")
-            }
             return
         }
         writeInline("let expected_output =")
-        instantiator.render(this, expectedShape, httpResponseTestCase.params)
+        instantiator.render(this, expectedShape, testCase.params)
         write(";")
         write("let http_response = #T::new()", RuntimeType.HttpResponseBuilder)
-        httpResponseTestCase.headers.forEach { (key, value) ->
+        testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
         }
         rust(
             """
-                .status(${httpResponseTestCase.code})
-                .body(${httpResponseTestCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"})
+                .status(${testCase.code})
+                .body(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"})
                 .unwrap();
             """
         )
@@ -238,7 +248,9 @@ class HttpProtocolTestGenerator(
             // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
             assertOk(rustWriter) {
                 rustWriter.write(
-                    "#T(&http_request.body(), ${rustWriter.escape(body).dq()}, #T::from(${(mediaType ?: "unknown").dq()}))",
+                    "#T(&http_request.body(), ${
+                    rustWriter.escape(body).dq()
+                    }, #T::from(${(mediaType ?: "unknown").dq()}))",
                     RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_body"),
                     RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "MediaType")
                 )
@@ -318,19 +330,47 @@ class HttpProtocolTestGenerator(
     }
 
     companion object {
+        sealed class Action {
+            object Request : Action()
+            object Response : Action()
+        }
+
+        data class FailingTest(val service: String, val id: String, val action: Action)
+
         // These tests fail due to shortcomings in our implementation.
         // These could be configured via runtime configuration, but since this won't be long-lasting,
         // it makes sense to do the simplest thing for now.
         // The test will _fail_ if these pass, so we will discover & remove if we fix them by accident
+        val JsonRpc10 = "aws.protocoltests.json10#JsonRpc10"
+        val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
+        val RestJson = "aws.protocoltests.restjson#RestJson"
         private val ExpectFail = setOf(
             // Query literals: https://github.com/awslabs/smithy-rs/issues/36
-            "RestJsonConstantQueryString",
-            "RestJsonConstantAndVariableQueryStringMissingOneValue",
-            "RestJsonConstantAndVariableQueryStringAllValues",
+            FailingTest(RestJson, "RestJsonConstantQueryString", Action.Request),
+            FailingTest(RestJson, "RestJsonConstantAndVariableQueryStringMissingOneValue", Action.Request),
+            FailingTest(RestJson, "RestJsonConstantAndVariableQueryStringAllValues", Action.Request),
 
             // Misc:
-            "RestJsonQueryIdempotencyTokenAutoFill", // https://github.com/awslabs/smithy-rs/issues/34
-            "RestJsonHttpPrefixHeadersArePresent" // https://github.com/awslabs/smithy-rs/issues/35
+
+            // https://github.com/awslabs/smithy-rs/issues/34
+            FailingTest(
+                RestJson,
+                "RestJsonQueryIdempotencyTokenAutoFill",
+                Action.Request
+            ),
+            // https://github.com/awslabs/smithy-rs/issues/35
+            FailingTest(
+                RestJson,
+                "RestJsonHttpPrefixHeadersArePresent",
+                Action.Request
+            ),
+
+            // Timestamp parsing: https://github.com/awslabs/smithy-rs/issues/80
+            FailingTest(AwsJson11, "parses_httpdate_timestamps", Action.Response),
+            FailingTest(AwsJson11, "parses_iso8601_timestamps", Action.Response),
+
+            // Document deserialization:
+            FailingTest(AwsJson11, "PutAndGetInlineDocumentsInput", Action.Response)
         )
         private val RunOnly: Set<String>? = null
 

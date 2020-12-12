@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.outputShape
 
 /**
  * Configuration needed to generate the client for a given Service<->Protocol pair
@@ -85,6 +86,17 @@ abstract class HttpProtocolGenerator(
                 write("#T::assemble(self.input.request_builder_base(), self.input.build_body())", inputSymbol)
             }
 
+            fromResponseImpl(this, operationShape)
+
+            rustBlock(
+                "pub fn parse_response(&self, response: #T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+                RuntimeType.Http("response::Response"),
+                symbolProvider.toSymbol(operationShape.outputShape(model)),
+                operationShape.errorSymbol(symbolProvider)
+            ) {
+                write("Self::from_response(response)")
+            }
+
             rustBlock("pub fn new(input: #T) -> Self", inputSymbol) {
                 write("Self { input }")
             }
@@ -107,6 +119,19 @@ abstract class HttpProtocolGenerator(
             f(this)
         }
     }
+
+    protected fun fromResponseFun(implBlockWriter: RustWriter, operationShape: OperationShape, f: RustWriter.() -> Unit) {
+        implBlockWriter.rustBlock(
+            "fn from_response(response: #T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+            RuntimeType.Http("response::Response"),
+            symbolProvider.toSymbol(operationShape.outputShape(model)),
+            operationShape.errorSymbol(symbolProvider)
+        ) {
+            f(this)
+        }
+    }
+
+    abstract fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape)
 
     /**
      * Add necessary methods to the impl block to generate the request body

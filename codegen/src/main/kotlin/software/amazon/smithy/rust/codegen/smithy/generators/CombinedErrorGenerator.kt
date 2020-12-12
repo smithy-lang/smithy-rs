@@ -72,6 +72,12 @@ class CombinedErrorGenerator(
             }
         }
 
+        writer.rustBlock("impl ${symbol.name}") {
+            writer.rustBlock("pub fn unhandled<E: Into<Box<dyn #T>>>(err: E) -> Self", RuntimeType.StdError) {
+                write("${symbol.name}::Unhandled(err.into())")
+            }
+        }
+
         writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.StdError) {
             rustBlock("fn source(&self) -> Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
                 rustBlock("match self") {

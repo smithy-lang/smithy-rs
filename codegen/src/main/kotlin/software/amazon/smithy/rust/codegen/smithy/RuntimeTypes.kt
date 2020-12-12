@@ -32,10 +32,10 @@ data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: S
     }
 }
 
-data class RuntimeType(val name: String, val dependency: RustDependency?, val namespace: String) {
+data class RuntimeType(val name: String?, val dependency: RustDependency?, val namespace: String) {
     fun toSymbol(): Symbol {
         val builder = Symbol.builder().name(name).namespace(namespace, "::")
-            .rustType(RustType.Opaque(name))
+            .rustType(RustType.Opaque(name ?: ""))
 
         dependency?.run { builder.addDependency(this) }
         return builder.build()
@@ -47,7 +47,8 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
         } else {
             "::"
         }
-        return "$prefix$namespace::$name"
+        val postFix = name?.let { "::$name" } ?: ""
+        return "$prefix$namespace$postFix"
     }
 
     // TODO: refactor to be RuntimeTypeProvider a la Symbol provider that packages the `RuntimeConfig` state.
@@ -117,6 +118,9 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
         val HttpRequestBuilder = Http("request::Builder")
         val HttpResponseBuilder = Http("response::Builder")
 
+        fun Serde(path: String) = RuntimeType(
+            path, dependency = CargoDependency.Serde, namespace = "serde"
+        )
         val Serialize = RuntimeType("Serialize", CargoDependency.Serde, namespace = "serde")
         val Deserialize: RuntimeType = RuntimeType("Deserialize", CargoDependency.Serde, namespace = "serde")
         val Serializer = RuntimeType("Serializer", CargoDependency.Serde, namespace = "serde")
@@ -124,7 +128,10 @@ data class RuntimeType(val name: String, val dependency: RustDependency?, val na
         fun SerdeJson(path: String) =
             RuntimeType(path, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
 
+        val SJ = RuntimeType(null, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
+
         val GenericError = RuntimeType("GenericError", InlineDependency.genericError(), "crate::types")
+        val ErrorCode = RuntimeType("error_code", dependency = InlineDependency.errorCode(), namespace = "crate")
 
         val DocJson = RuntimeType("doc_json", InlineDependency.docJson(), "crate")
 
