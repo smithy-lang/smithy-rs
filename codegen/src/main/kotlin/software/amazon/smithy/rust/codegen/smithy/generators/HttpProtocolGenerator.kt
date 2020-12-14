@@ -94,7 +94,7 @@ abstract class HttpProtocolGenerator(
                 symbolProvider.toSymbol(operationShape.outputShape(model)),
                 operationShape.errorSymbol(symbolProvider)
             ) {
-                write("Self::from_response(response)")
+                write("Self::from_response(&response)")
             }
 
             rustBlock("pub fn new(input: #T) -> Self", inputSymbol) {

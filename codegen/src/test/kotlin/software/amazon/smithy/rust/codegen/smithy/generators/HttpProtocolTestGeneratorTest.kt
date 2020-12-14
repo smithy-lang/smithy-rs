@@ -138,7 +138,7 @@ class HttpProtocolTestGeneratorTest {
                 }
 
                 rustBlock(
-                    "pub fn from_response(_response: #T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+                    "pub fn from_response(_response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
 
                     RuntimeType.Http("response::Response"),
                     symbolProvider.toSymbol(operationShape.outputShape(model)),

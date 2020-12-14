@@ -217,7 +217,7 @@ class HttpProtocolTestGenerator(
                 .unwrap();
             """
         )
-        write("let parsed = #T::from_response(http_response);", operationSymbol)
+        write("let parsed = #T::from_response(&http_response);", operationSymbol)
         if (expectedShape.hasTrait(ErrorTrait::class.java)) {
             val errorSymbol = operationShape.errorSymbol(protocolConfig.symbolProvider)
             val errorVariant = protocolConfig.symbolProvider.toSymbol(expectedShape).name
