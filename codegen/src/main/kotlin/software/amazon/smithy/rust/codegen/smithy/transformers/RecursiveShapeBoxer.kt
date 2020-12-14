@@ -59,7 +59,7 @@ object RecursiveShapeBoxer {
         return loopToFix?.let { loop: List<Shape> ->
             check(loop.isNotEmpty())
             // pick the shape to box in a deterministic way
-            val shapeToBox = loop.filterIsInstance<MemberShape>().minBy { it.id }!!
+            val shapeToBox = loop.filterIsInstance<MemberShape>().minByOrNull { it.id }!!
             ModelTransformer.create().mapShapes(model) { shape ->
                 if (shape == shapeToBox) {
                     shape.asMemberShape().get().toBuilder().addTrait(RustBoxTrait()).build()

@@ -27,7 +27,19 @@ import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.io.File
+import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
+
+/**
+ * Waiting for Kotlin to stabilize their temp directory stuff
+ */
+private fun tempDir(directory: File? = null): File {
+    return if (directory != null) {
+        createTempDirectory(directory.toPath(), "smithy-test").toFile()
+    } else {
+        createTempDirectory("smithy-test").toFile()
+    }
+}
 
 /**
  * Creates a Cargo workspace shared among all tests
@@ -35,7 +47,8 @@ import java.nio.file.Path
  * This workspace significantly improves test performance by sharing dependencies between different tests.
  */
 object TestWorkspace {
-    private val baseDir = System.getenv("SMITHY_TEST_WORKSPACE")?.let { File(it) } ?: createTempDir()
+    private val baseDir =
+        System.getenv("SMITHY_TEST_WORKSPACE")?.let { File(it) } ?: tempDir()
     private val subprojects = mutableListOf<String>()
 
     init {
@@ -56,7 +69,7 @@ object TestWorkspace {
 
     fun subproject(): File {
         synchronized(subprojects) {
-            val newProject = createTempDir(directory = baseDir)
+            val newProject = tempDir(directory = baseDir)
             subprojects.add(newProject.name)
             generate()
             return newProject
@@ -114,7 +127,7 @@ fun TestWriterDelegator.compileAndTest() {
 // TODO: unify these test helpers a bit
 fun String.shouldParseAsRust() {
     // quick hack via rustfmt
-    val tempFile = createTempFile(suffix = ".rs")
+    val tempFile = File.createTempFile("rust_test", ".rs")
     tempFile.writeText(this)
     "rustfmt ${tempFile.absolutePath}".runCommand()
 }
@@ -205,8 +218,8 @@ fun String.compileAndTest(
 
 fun String.shouldCompile(): File {
     this.shouldParseAsRust()
-    val tempFile = createTempFile(suffix = ".rs")
-    val tempDir = createTempDir()
+    val tempFile = File.createTempFile("rust_test", ".rs")
+    val tempDir = tempDir()
     tempFile.writeText(this)
     if (!this.contains("fn main")) {
         tempFile.appendText("\nfn main() {}\n")
