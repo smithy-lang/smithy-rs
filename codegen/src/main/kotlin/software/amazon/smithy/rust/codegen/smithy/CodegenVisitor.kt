@@ -78,7 +78,6 @@ class CodegenVisitor(context: PluginContext) : ShapeVisitor.Default<Unit>() {
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
         writers.finalize(settings)
-        writers.flushWriters()
         try {
             "cargo fmt".runCommand(fileManifest.baseDir)
         } catch (_: CommandFailed) {

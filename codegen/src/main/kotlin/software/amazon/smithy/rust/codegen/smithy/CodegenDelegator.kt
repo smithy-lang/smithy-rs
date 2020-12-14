@@ -30,6 +30,14 @@ fun CodegenWriterDelegator<RustWriter>.finalize(settings: RustSettings) {
             dep.renderer(it)
         }
     }
+    val newDeps = loadDependencies().filterIsInstance<InlineDependency>().distinctBy { it.key() }
+    newDeps.forEach { dep ->
+        if (!this.writers.containsKey("src/${dep.module}.rs")) {
+            this.useFileWriter("src/${dep.module}.rs", "crate::${dep.module}") {
+                dep.renderer(it)
+            }
+        }
+    }
     val cargoDependencies = loadDependencies().filterIsInstance<CargoDependency>().distinct()
     this.useFileWriter("Cargo.toml") {
         val cargoToml = CargoTomlGenerator(
@@ -46,7 +54,7 @@ fun CodegenWriterDelegator<RustWriter>.finalize(settings: RustSettings) {
         }
         LibRsGenerator(modules).render(writer)
     }
-    this.flushWriters()
+    flushWriters()
 }
 
 fun CodegenWriterDelegator<RustWriter>.withModule(

@@ -656,7 +656,6 @@ name = "smithy-types"
 version = "0.0.1"
 dependencies = [
  "chrono",
- "httpdate",
 ]
 
 [[package]]

@@ -158,13 +158,17 @@ class SerializerBuilder(
             }
         },
         "stdoptionoptioninstant_epoch_seconds_ser" to { writer ->
-            writer.rustBlock("match $inp") {
-                write("Some(ts) => $ser.serialize_some(&ts.epoch_seconds()),")
-                write("None => _serializer.serialize_none()")
-            }
+            writer.rustTemplate(
+                """
+                use #{serde};
+                $inp.map(#{instant_epoch}::InstantEpoch).serialize($ser)
+            """,
+                "serde" to RuntimeType.Serialize, "instant_epoch" to RuntimeType.InstantEpoch
+            )
         },
         "instant_epoch_seconds_ser" to { writer ->
-            writer.write("$ser.serialize_i64($inp.epoch_seconds())")
+            writer.write("use #T;", RuntimeType.Serialize)
+            writer.write("#T::InstantEpoch(*$inp).serialize($ser)", RuntimeType.InstantEpoch)
         },
         "document_ser" to { writer ->
             writer.write("use #T;", RuntimeType.Serialize)
@@ -175,13 +179,12 @@ class SerializerBuilder(
     // TODO: this whole thing needs to be overhauled to be composable
     private val handWrittenDeserializers: Map<String, (RustWriter) -> Unit> = mapOf(
         "stdoptionoptioninstant_epoch_seconds_deser" to { writer ->
-            // Needed to pull the Option deserializer into scope
             writer.write("use #T;", RuntimeType.Deserialize)
             writer.rust(
                 """
-                let ts_opt = Option::<f64>::deserialize(_deser)?;
-                Ok(ts_opt.map(| ts | Instant ::from_fractional_seconds(ts.floor() as i64, ts - ts.floor())))
-            """
+                Ok(Option::<#T::InstantEpoch>::deserialize(_deser)?.map(|i|i.0))
+            """,
+                RuntimeType.InstantEpoch
             )
         },
         "blob_deser" to { writer ->
@@ -224,6 +227,15 @@ class SerializerBuilder(
                 let ts = f64::deserialize(_deser)?;
                 Ok(Instant::from_fractional_seconds(ts.floor() as i64, ts - ts.floor()))
             """
+            )
+        },
+        "stdoptionoptioninstant_http_date_deser" to { writer ->
+            writer.write("use #T;", RuntimeType.Deserialize)
+            writer.rust(
+                """
+                Ok(Option::<#T::InstantHttpDate>::deserialize(_deser)?.map(|i|i.0))
+            """,
+                RuntimeType.InstantHttpDate
             )
         }
 
