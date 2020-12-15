@@ -89,12 +89,12 @@ abstract class HttpProtocolGenerator(
             fromResponseImpl(this, operationShape)
 
             rustBlock(
-                "pub fn parse_response(&self, response: #T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+                "pub fn parse_response(&self, response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
                 RuntimeType.Http("response::Response"),
                 symbolProvider.toSymbol(operationShape.outputShape(model)),
                 operationShape.errorSymbol(symbolProvider)
             ) {
-                write("Self::from_response(response)")
+                write("Self::from_response(&response)")
             }
 
             rustBlock("pub fn new(input: #T) -> Self", inputSymbol) {
@@ -122,7 +122,7 @@ abstract class HttpProtocolGenerator(
 
     protected fun fromResponseFun(implBlockWriter: RustWriter, operationShape: OperationShape, f: RustWriter.() -> Unit) {
         implBlockWriter.rustBlock(
-            "fn from_response(response: #T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+            "fn from_response(response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
             RuntimeType.Http("response::Response"),
             symbolProvider.toSymbol(operationShape.outputShape(model)),
             operationShape.errorSymbol(symbolProvider)

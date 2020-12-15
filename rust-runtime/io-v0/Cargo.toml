@@ -1,0 +1,17 @@
+[package]
+name = "io-v0"
+version = "0.1.0"
+authors = ["Russell Cohen <rcoh@amazon.com>"]
+edition = "2018"
+description = """
+V0 IO layer for the Rust SDK. This is strictly experimental and subject to change.
+"""
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+hyper = "0.13"
+http-body = "0.3.1"
+tokio = { version = "0.2", features = ["full"] }
+http = "0.2.1"
+pin-utils = "0.1.0"
+aws-sigv4 = "0.0.1"
