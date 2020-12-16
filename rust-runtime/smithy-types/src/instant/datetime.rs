@@ -1,10 +1,11 @@
 /*
- * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Original Copyright pyfisch 2018. Licensed under the Apache 2.0 License.
+ * Modifications Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
 
 // This code is taken from https://github.com/pyfisch/httpdate and modified under an
-// Apache 2.0 License. Modifications:
+// Apache 2.0 License. Amazon Modifications 2020-12-16:
 // - Trait implementations were removed and replaced with free
 //   functions for conversion to and from strings. These have moved to instant/format.rs
 // - Use of unsafe was removed and replaced with a panic
