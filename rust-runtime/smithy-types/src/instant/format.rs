@@ -1,9 +1,14 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 pub mod http_date {
-    use crate::instant::datetime::StructuredDate;
+    // This code is taken from https://github.com/pyfisch/httpdate and modified under an
+    // Apache 2.0 License. Modifications:
+    use crate::instant::datetime::{StructuredDate, NANOS_PER_SECOND};
     use crate::Instant;
     use std::str::FromStr;
-
-    const NANOS_PER_SECOND: u32 = 1_000_000_000;
 
     /// Ok: "Mon, 16 Dec 2019 23:48:18 GMT"
     /// Ok: "Mon, 16 Dec 2019 23:48:18.123 GMT"

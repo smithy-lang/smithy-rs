@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 use assert_json_diff::assert_json_eq_no_panic;
 use http::{Request, Uri};
 use std::collections::HashSet;

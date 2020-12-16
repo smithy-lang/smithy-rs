@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
 use std::time::{SystemTime, UNIX_EPOCH};
 

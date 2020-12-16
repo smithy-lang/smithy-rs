@@ -4,7 +4,14 @@
  */
 
 // This code is taken from https://github.com/pyfisch/httpdate and modified under an
-// Apache 2.0 License
+// Apache 2.0 License. Modifications:
+// - Trait implementations were removed and replaced with free
+//   functions for conversion to and from strings. These have moved to instant/format.rs
+// - Use of unsafe was removed and replaced with a panic
+// - HTTPDate was renamed `StructuredDate` and `nanos` was added to support subsecond precision
+// - Conversion to and from strings was updated to support fractional seconds
+
+pub const NANOS_PER_SECOND: u32 = 1_000_000_000;
 
 /// StructuredDate type
 ///
@@ -40,6 +47,7 @@ impl StructuredDate {
             && self.mon <= 12
             && self.year >= 1970
             && self.year <= 9999
+            && self.nanos < NANOS_PER_SECOND
     }
 
     pub fn from_epoch_secs(secs_since_epoch: i64, subsecond_nanos: u32) -> StructuredDate {
@@ -49,7 +57,8 @@ impl StructuredDate {
         }
 
         if secs_since_epoch < 0 {
-            todo!()
+            // We should support pre-epoch date eventually
+            todo!() // https://github.com/awslabs/smithy-rs/pull/86
         }
 
         /* 2000-03-01 (mod 400 year, immediately after feb29 */
