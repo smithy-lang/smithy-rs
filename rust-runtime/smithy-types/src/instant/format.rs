@@ -15,10 +15,16 @@ pub mod http_date {
     use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike, Weekday};
     use std::str::FromStr;
 
-    /// Ok: "Mon, 16 Dec 2019 23:48:18 GMT"
-    /// Ok: "Mon, 16 Dec 2019 23:48:18.123 GMT"
-    /// Ok: "Mon, 16 Dec 2019 23:48:18.12 GMT"
-    /// Not Ok: "Mon, 16 Dec 2019 23:48:18.1234 GMT"
+    /// Format an `instant` in the HTTP date format (imf-fixdate) with added support for subsecond precision
+    ///
+    /// Example: "Mon, 16 Dec 2019 23:48:18 GMT"
+    ///
+    /// Some notes:
+    /// - HTTP date does not support years before `0000`—this will cause a panic.
+    /// - If you _don't_ want subsecond precision (eg. if you want strict adherence to the spec),
+    ///   you need to zero-out the instant before formatting
+    /// - If subsecond nanos are 0, no fractional seconds are added
+    /// - If subsecond nanos are nonzero, 3 digits of fractional seconds are added
     pub fn format(instant: &Instant) -> String {
         let structured = instant.to_chrono();
         let weekday = match structured.weekday() {
@@ -62,6 +68,8 @@ pub mod http_date {
         out.push(' ');
 
         let year = structured.year();
+        // Although chrono can handle extremely early years, HTTP date does not support
+        // years before 0000
         let year = if year < 0 {
             panic!("negative years not supported")
         } else {
@@ -109,6 +117,16 @@ pub mod http_date {
         IntParseError,
     }
 
+    /// Parse an IMF-fixdate formatted date into an Instant
+    ///
+    /// This function has a few caveats:
+    /// 1. It DOES NOT support the "deprecated" formats supported by HTTP date
+    /// 2. It supports up to 3 digits of subsecond precision
+    ///
+    /// Ok: "Mon, 16 Dec 2019 23:48:18 GMT"
+    /// Ok: "Mon, 16 Dec 2019 23:48:18.123 GMT"
+    /// Ok: "Mon, 16 Dec 2019 23:48:18.12 GMT"
+    /// Not Ok: "Mon, 16 Dec 2019 23:48:18.1234 GMT"
     pub fn parse(s: &str) -> Result<Instant, DateParseError> {
         if !s.is_ascii() {
             return Err(DateParseError::Invalid("not ascii"));
@@ -147,10 +165,14 @@ pub mod http_date {
             _ => return Err(DateParseError::Invalid("incorrectly shaped string")),
         };
 
+        let hours = parse_slice(&s[17..19])?;
+
+        let minutes = parse_slice(&s[20..22])?;
+        let seconds = parse_slice(&s[23..25])?;
         let time = NaiveTime::from_hms_nano(
-            parse_slice(&s[17..19])?,
-            parse_slice(&s[20..22])?,
-            parse_slice(&s[23..25])?,
+            hours,
+            minutes,
+            seconds,
             nanos,
         );
         let month = match &s[7..12] {
@@ -168,7 +190,9 @@ pub mod http_date {
             b" Dec " => 12,
             _ => return Err(DateParseError::Invalid("invalid month")),
         };
-        let date = NaiveDate::from_ymd(parse_slice(&s[12..16])?, month, parse_slice(&s[5..7])?);
+        let year = parse_slice(&s[12..16])?;
+        let day = parse_slice(&s[5..7])?;
+        let date = NaiveDate::from_ymd(year, month, day);
         let datetime = NaiveDateTime::new(date, time);
 
         Ok(Instant::from_secs_and_nanos(
