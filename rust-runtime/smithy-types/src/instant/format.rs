@@ -267,10 +267,12 @@ mod test {
         let parsed = http_date::parse(&formatted);
         match parsed {
             Err(failure) => panic!("Date failed to parse {:?}", failure),
-            Ok(date) => if date.subsecond_nanos != subsecond_nanos {
-                assert_eq!(http_date::format(&instant), formatted);
-            } else {
-                assert_eq!(date, instant)
+            Ok(date) => {
+                if date.subsecond_nanos != subsecond_nanos {
+                    assert_eq!(http_date::format(&instant), formatted);
+                } else {
+                    assert_eq!(date, instant)
+                }
             }
         }
     }
