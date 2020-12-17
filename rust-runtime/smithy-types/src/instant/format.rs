@@ -3,30 +3,32 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+const NANOS_PER_SECOND: u32 = 1_000_000_000;
+
 pub mod http_date {
     // This code is taken from https://github.com/pyfisch/httpdate and modified under an
     // Apache 2.0 License. Modifications:
-    use crate::instant::datetime::{StructuredDate, NANOS_PER_SECOND};
     use crate::Instant;
     use std::str::FromStr;
+    use chrono::{Datelike, Weekday, Timelike, NaiveDateTime, NaiveDate, NaiveTime};
+    use crate::instant::format::NANOS_PER_SECOND;
 
     /// Ok: "Mon, 16 Dec 2019 23:48:18 GMT"
     /// Ok: "Mon, 16 Dec 2019 23:48:18.123 GMT"
     /// Ok: "Mon, 16 Dec 2019 23:48:18.12 GMT"
     /// Not Ok: "Mon, 16 Dec 2019 23:48:18.1234 GMT"
     pub fn format(instant: &Instant) -> String {
-        let structured = StructuredDate::from_epoch_secs(instant.seconds, instant.subsecond_nanos);
-        let weekday = match structured.wday {
-            1 => "Mon",
-            2 => "Tue",
-            3 => "Wed",
-            4 => "Thu",
-            5 => "Fri",
-            6 => "Sat",
-            7 => "Sun",
-            _ => unreachable!(),
+        let structured = instant.to_chrono();
+        let weekday = match structured.weekday() {
+            Weekday::Mon => "Mon",
+            Weekday::Tue => "Tue",
+            Weekday::Wed => "Wed",
+            Weekday::Thu => "Thu",
+            Weekday::Fri => "Fri",
+            Weekday::Sat => "Sat",
+            Weekday::Sun => "Sun"
         };
-        let month = match structured.mon {
+        let month = match structured.month() {
             1 => "Jan",
             2 => "Feb",
             3 => "Mar",
@@ -48,44 +50,55 @@ pub mod http_date {
 
         out.push_str(weekday);
         out.push_str(", ");
-        push_digit(&mut out, structured.day / 10);
-        push_digit(&mut out, structured.day % 10);
+        let day = structured.date().day() as u8;
+        push_digit(&mut out, day / 10);
+        push_digit(&mut out, day % 10);
 
         out.push(' ');
         out.push_str(month);
 
         out.push(' ');
 
-        push_digit(&mut out, (structured.year / 1000) as u8);
-        push_digit(&mut out, (structured.year / 100 % 10) as u8);
-        push_digit(&mut out, (structured.year / 10 % 10) as u8);
-        push_digit(&mut out, (structured.year % 10) as u8);
+        let year = structured.year();
+        let year = if year < 0 {
+            panic!("negative years not supported")
+        } else {
+            year as u32
+        };
+        push_digit(&mut out, (year / 1000) as u8);
+        push_digit(&mut out, (year / 100 % 10) as u8);
+        push_digit(&mut out, (year / 10 % 10) as u8);
+        push_digit(&mut out, (year % 10) as u8);
 
         out.push(' ');
 
-        push_digit(&mut out, structured.hour / 10);
-        push_digit(&mut out, structured.hour % 10);
+        let hour = structured.time().hour() as u8;
+        push_digit(&mut out, hour / 10);
+        push_digit(&mut out, hour % 10);
 
         out.push(':');
 
-        push_digit(&mut out, structured.min / 10);
-        push_digit(&mut out, structured.min % 10);
+        let minute = structured.minute() as u8;
+        push_digit(&mut out, minute / 10);
+        push_digit(&mut out, minute % 10);
 
         out.push(':');
 
-        push_digit(&mut out, structured.sec / 10);
-        push_digit(&mut out, structured.sec % 10);
+        let second = structured.second() as u8;
+        push_digit(&mut out, second / 10);
+        push_digit(&mut out, second % 10);
 
-        if structured.nanos != 0 {
+        let nanos = structured.timestamp_subsec_nanos();
+        if nanos != 0 {
             out.push('.');
-            push_digit(&mut out, (structured.nanos / (NANOS_PER_SECOND / 10)) as u8);
+            push_digit(&mut out, (nanos / (NANOS_PER_SECOND / 10)) as u8);
             push_digit(
                 &mut out,
-                (structured.nanos / (NANOS_PER_SECOND / 100) % 10) as u8,
+                (nanos / (NANOS_PER_SECOND / 100) % 10) as u8,
             );
             push_digit(
                 &mut out,
-                (structured.nanos / (NANOS_PER_SECOND / 1000) % 10) as u8,
+                (nanos / (NANOS_PER_SECOND / 1000) % 10) as u8,
             );
         }
 
@@ -105,15 +118,10 @@ pub mod http_date {
             return Err(DateParseError::Invalid("not ascii"));
         }
         let x = s.trim().as_bytes();
-        let date = parse_imf_fixdate(x)?;
-        if !date.is_valid() {
-            return Err(DateParseError::Invalid("invalid date"));
-        }
-        let (epoch_secs, nanos) = date.to_epoch_secs();
-        Ok(Instant::from_secs_and_nanos(epoch_secs, nanos))
+        parse_imf_fixdate(x)
     }
 
-    fn parse_imf_fixdate(s: &[u8]) -> Result<StructuredDate, DateParseError> {
+    fn parse_imf_fixdate(s: &[u8]) -> Result<Instant, DateParseError> {
         // Example: `Sun, 06 Nov 1994 08:49:37 GMT`
         if s.len() < 29
             || s.len() > 33
@@ -142,44 +150,41 @@ pub mod http_date {
             b' ' => 0,
             _ => return Err(DateParseError::Invalid("incorrectly shaped string")),
         };
-        Ok(StructuredDate {
+
+        let time = NaiveTime::from_hms_nano(
+            parse_slice(&s[17..19])?,
+            parse_slice(&s[20..22])?,
+            parse_slice(&s[23..25])?,
             nanos,
-            sec: parse_slice(&s[23..25])?,
-            min: parse_slice(&s[20..22])?,
-            hour: parse_slice(&s[17..19])?,
-            day: parse_slice(&s[5..7])?,
-            mon: match &s[7..12] {
-                b" Jan " => 1,
-                b" Feb " => 2,
-                b" Mar " => 3,
-                b" Apr " => 4,
-                b" May " => 5,
-                b" Jun " => 6,
-                b" Jul " => 7,
-                b" Aug " => 8,
-                b" Sep " => 9,
-                b" Oct " => 10,
-                b" Nov " => 11,
-                b" Dec " => 12,
-                _ => return Err(DateParseError::Invalid("invalid month")),
-            },
-            year: parse_slice(&s[12..16])?,
-            wday: match &s[..5] {
-                b"Mon, " => 1,
-                b"Tue, " => 2,
-                b"Wed, " => 3,
-                b"Thu, " => 4,
-                b"Fri, " => 5,
-                b"Sat, " => 6,
-                b"Sun, " => 7,
-                _ => return Err(DateParseError::Invalid("invalid day")),
-            },
-        })
+        );
+        let month = match &s[7..12] {
+            b" Jan " => 1,
+            b" Feb " => 2,
+            b" Mar " => 3,
+            b" Apr " => 4,
+            b" May " => 5,
+            b" Jun " => 6,
+            b" Jul " => 7,
+            b" Aug " => 8,
+            b" Sep " => 9,
+            b" Oct " => 10,
+            b" Nov " => 11,
+            b" Dec " => 12,
+            _ => return Err(DateParseError::Invalid("invalid month")),
+        };
+        let date = NaiveDate::from_ymd(parse_slice(&s[12..16])?,
+                                       month, parse_slice(&s[5..7])?,
+        );
+        let datetime = NaiveDateTime::new(date, time);
+
+        Ok(
+            Instant::from_secs_and_nanos(datetime.timestamp(), datetime.timestamp_subsec_nanos())
+        )
     }
 
     fn parse_slice<T>(ascii_slice: &[u8]) -> Result<T, DateParseError>
-    where
-        T: FromStr,
+        where
+            T: FromStr,
     {
         let as_str =
             std::str::from_utf8(ascii_slice).expect("should only be called on ascii strings");

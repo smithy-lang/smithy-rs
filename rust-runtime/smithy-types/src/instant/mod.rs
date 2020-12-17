@@ -6,7 +6,6 @@
 use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub mod datetime;
 mod format;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
