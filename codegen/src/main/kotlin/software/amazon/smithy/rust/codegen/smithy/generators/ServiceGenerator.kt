@@ -37,6 +37,10 @@ class ServiceGenerator(
             }
         }
         renderBodies(operations)
+
+        writers.useFileWriter("src/lib.rs", "crate::lib") { writer ->
+            ServiceConfigGenerator(config.serviceShape).render(writer)
+        }
     }
 
     private fun renderBodies(operations: List<OperationShape>) {

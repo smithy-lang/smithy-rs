@@ -8,14 +8,14 @@ mod doc_json;
 mod error_code;
 mod generic_error;
 #[allow(dead_code)]
-mod uuid;
+mod config;
 
 // This test is outside of uuid.rs to enable copying the entirety of uuid.rs into the SDK without
 // requiring a proptest dependency
 #[cfg(test)]
 mod test {
     use crate::doc_json::SerDoc;
-    use crate::uuid::v4;
+    use crate::config::v4;
     use proptest::prelude::*;
     use proptest::std_facade::HashMap;
     use smithy_types::Document;

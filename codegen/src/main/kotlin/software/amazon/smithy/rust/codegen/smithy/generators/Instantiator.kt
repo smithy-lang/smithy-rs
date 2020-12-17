@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
@@ -238,19 +239,36 @@ class Instantiator(
         shape: StructureShape,
         data: ObjectNode
     ) {
-        writer.write("#T::builder()", symbolProvider.toSymbol(shape))
-        data.members.forEach { (key, value) ->
-            val (memberShape, targetShape) = getMember(shape, key)
-            val func = symbolProvider.toMemberName(memberShape)
-            if (!value.isNullNode) {
-                writer.withBlock(".$func(", ")") {
-                    render(this, targetShape, value)
+        writer.rustBlock("") {
+            val isSyntheticInput = shape.hasTrait(SyntheticInputTrait::class.java)
+            if (isSyntheticInput) {
+                writer.rust(
+                    """
+                let config = #T::Config::builder().token_provider("00000000-0000-4000-8000-000000000000").build();
+            """,
+                    RuntimeType.Config
+                )
+            } else {
+                write("let _ = 5;")
+            }
+            writer.write("#T::builder()", symbolProvider.toSymbol(shape))
+            data.members.forEach { (key, value) ->
+                val (memberShape, targetShape) = getMember(shape, key)
+                val func = symbolProvider.toMemberName(memberShape)
+                if (!value.isNullNode) {
+                    writer.withBlock(".$func(", ")") {
+                        render(this, targetShape, value)
+                    }
                 }
             }
-        }
-        writer.write(".build()")
-        if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
-            writer.write(".unwrap()")
+            if (isSyntheticInput) {
+                writer.write(".build(&config)")
+            } else {
+                writer.write(".build()")
+            }
+            if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
+                writer.write(".unwrap()")
+            }
         }
     }
 
