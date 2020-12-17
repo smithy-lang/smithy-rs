@@ -8,6 +8,8 @@ const NANOS_PER_SECOND: u32 = 1_000_000_000;
 pub mod http_date {
     // This code is taken from https://github.com/pyfisch/httpdate and modified under an
     // Apache 2.0 License. Modifications:
+    // - Removed use of unsafe
+    // - Add serialization and deserialization of subsecond nanos
     use crate::Instant;
     use std::str::FromStr;
     use chrono::{Datelike, Weekday, Timelike, NaiveDateTime, NaiveDate, NaiveTime};
