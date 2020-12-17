@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 use serde::{Serialize, Serializer};
 use serde_json::Value;
 use smithy_types::{Document, Number};

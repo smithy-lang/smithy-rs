@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 /// GenericError represents an error from a service that is not modeled
 #[derive(Debug, PartialEq, Eq)]
 pub struct GenericError {

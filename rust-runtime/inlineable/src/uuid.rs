@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 pub fn v4(input: u128) -> String {
     let mut out = String::with_capacity(36);
     // u4-aligned index into [input]
