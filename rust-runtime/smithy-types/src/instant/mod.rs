@@ -23,13 +23,14 @@ impl Instant {
     }
 
     pub fn from_fractional_seconds(epoch_seconds: i64, fraction: f64) -> Self {
-        Instant {
-            seconds: epoch_seconds,
-            subsecond_nanos: (fraction * 1_000_000_000_f64) as u32,
-        }
+        let subsecond_nanos = (fraction * 1_000_000_000_f64) as u32;
+        Instant::from_secs_and_nanos(epoch_seconds, subsecond_nanos)
     }
 
     pub fn from_secs_and_nanos(seconds: i64, subsecond_nanos: u32) -> Self {
+        if subsecond_nanos >= 1_000_000_000 {
+            panic!("{} is > 1_000_000_000", subsecond_nanos)
+        }
         Instant {
             seconds,
             subsecond_nanos,

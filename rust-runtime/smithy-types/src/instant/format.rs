@@ -10,10 +10,10 @@ pub mod http_date {
     // Apache 2.0 License. Modifications:
     // - Removed use of unsafe
     // - Add serialization and deserialization of subsecond nanos
-    use crate::Instant;
-    use std::str::FromStr;
-    use chrono::{Datelike, Weekday, Timelike, NaiveDateTime, NaiveDate, NaiveTime};
     use crate::instant::format::NANOS_PER_SECOND;
+    use crate::Instant;
+    use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike, Weekday};
+    use std::str::FromStr;
 
     /// Ok: "Mon, 16 Dec 2019 23:48:18 GMT"
     /// Ok: "Mon, 16 Dec 2019 23:48:18.123 GMT"
@@ -28,7 +28,7 @@ pub mod http_date {
             Weekday::Thu => "Thu",
             Weekday::Fri => "Fri",
             Weekday::Sat => "Sat",
-            Weekday::Sun => "Sun"
+            Weekday::Sun => "Sun",
         };
         let month = match structured.month() {
             1 => "Jan",
@@ -94,14 +94,8 @@ pub mod http_date {
         if nanos != 0 {
             out.push('.');
             push_digit(&mut out, (nanos / (NANOS_PER_SECOND / 10)) as u8);
-            push_digit(
-                &mut out,
-                (nanos / (NANOS_PER_SECOND / 100) % 10) as u8,
-            );
-            push_digit(
-                &mut out,
-                (nanos / (NANOS_PER_SECOND / 1000) % 10) as u8,
-            );
+            push_digit(&mut out, (nanos / (NANOS_PER_SECOND / 100) % 10) as u8);
+            push_digit(&mut out, (nanos / (NANOS_PER_SECOND / 1000) % 10) as u8);
         }
 
         out.push_str(" GMT");
@@ -146,7 +140,7 @@ pub mod http_date {
                 let fraction: u32 = parse_slice(fraction_slice)?;
                 // We need to convert the fractional second to nanoseconds, so we need to scale
                 // according the the number of decimals provided
-                let multiplier = [10, 100, 100];
+                let multiplier = [10, 100, 1000];
                 fraction * (NANOS_PER_SECOND / multiplier[fraction_slice.len() - 1])
             }
             b' ' => 0,
@@ -174,19 +168,18 @@ pub mod http_date {
             b" Dec " => 12,
             _ => return Err(DateParseError::Invalid("invalid month")),
         };
-        let date = NaiveDate::from_ymd(parse_slice(&s[12..16])?,
-                                       month, parse_slice(&s[5..7])?,
-        );
+        let date = NaiveDate::from_ymd(parse_slice(&s[12..16])?, month, parse_slice(&s[5..7])?);
         let datetime = NaiveDateTime::new(date, time);
 
-        Ok(
-            Instant::from_secs_and_nanos(datetime.timestamp(), datetime.timestamp_subsec_nanos())
-        )
+        Ok(Instant::from_secs_and_nanos(
+            datetime.timestamp(),
+            datetime.timestamp_subsec_nanos(),
+        ))
     }
 
     fn parse_slice<T>(ascii_slice: &[u8]) -> Result<T, DateParseError>
-        where
-            T: FromStr,
+    where
+        T: FromStr,
     {
         let as_str =
             std::str::from_utf8(ascii_slice).expect("should only be called on ascii strings");
@@ -212,6 +205,14 @@ mod test {
     }
 
     #[test]
+    fn http_date_pre_epoch() {
+        let pre_epoch = "Sat, 27 Jan 1962 20:40:12.120 GMT";
+        let instant = Instant::from_secs_and_nanos(-250139988, 120_000_000);
+        assert_eq!(http_date::parse(pre_epoch), Ok(instant));
+        assert_eq!(http_date::format(&instant), pre_epoch);
+    }
+
+    #[test]
     fn http_date_format_fractional_zeroed() {
         let basic_http_date = "Mon, 16 Dec 2019 23:48:18 GMT";
         let fractional = "Mon, 16 Dec 2019 23:48:18.000 GMT";
@@ -227,6 +228,16 @@ mod test {
         let fractional_normalized = "Mon, 16 Dec 2019 23:48:18.120 GMT";
         let ts = 1576540098;
         let instant = Instant::from_fractional_seconds(ts, 0.12);
+        assert_eq!(http_date::parse(fractional), Ok(instant));
+        assert_eq!(http_date::format(&instant), fractional_normalized);
+    }
+
+    #[test]
+    fn http_date_format_fractional_nonzero2() {
+        let fractional = "Mon, 16 Dec 2019 23:48:18.123 GMT";
+        let fractional_normalized = "Mon, 16 Dec 2019 23:48:18.123 GMT";
+        let ts = 1576540098;
+        let instant = Instant::from_fractional_seconds(ts, 0.123);
         assert_eq!(http_date::parse(fractional), Ok(instant));
         assert_eq!(http_date::format(&instant), fractional_normalized);
     }
@@ -250,19 +261,37 @@ mod test {
     }
 
     #[track_caller]
-    fn check_roundtrip(epoch_secs: i64) {
-        let instant = Instant::from_epoch_seconds(epoch_secs);
-        let http_date = http_date::format(&instant);
-        assert_eq!(http_date::parse(&http_date), Ok(instant), "{}", http_date);
+    fn check_roundtrip(epoch_secs: i64, subsecond_nanos: u32) {
+        let instant = Instant::from_secs_and_nanos(epoch_secs, subsecond_nanos);
+        let formatted = http_date::format(&instant);
+        let parsed = http_date::parse(&formatted);
+        match parsed {
+            Err(failure) => panic!("Date failed to parse {:?}", failure),
+            Ok(date) => if date.subsecond_nanos != subsecond_nanos {
+                assert_eq!(http_date::format(&instant), formatted);
+            } else {
+                assert_eq!(date, instant)
+            }
+        }
     }
 
     #[test]
     fn http_date_roundtrip() {
-        for epoch_secs in 0..1000 {
-            check_roundtrip(epoch_secs);
+        for epoch_secs in -1000..1000 {
+            check_roundtrip(epoch_secs, 1);
         }
 
-        check_roundtrip(1576540098);
-        check_roundtrip(9999999999);
+        check_roundtrip(1576540098, 0);
+        check_roundtrip(9999999999, 0);
+    }
+
+    use proptest::prelude::*;
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(10000))]
+
+        #[test]
+        fn round_trip(secs in -10000000..9999999999i64, nanos in 0..1_000_000_000u32) {
+            check_roundtrip(secs, nanos);
+        }
     }
 }
