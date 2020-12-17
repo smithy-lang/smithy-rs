@@ -75,6 +75,8 @@ pub mod http_date {
         } else {
             year as u32
         };
+
+        // Extract the individual digits from year
         push_digit(&mut out, (year / 1000) as u8);
         push_digit(&mut out, (year / 100 % 10) as u8);
         push_digit(&mut out, (year / 10 % 10) as u8);
@@ -83,11 +85,14 @@ pub mod http_date {
         out.push(' ');
 
         let hour = structured.time().hour() as u8;
+
+        // Extract the individual digits from hour
         push_digit(&mut out, hour / 10);
         push_digit(&mut out, hour % 10);
 
         out.push(':');
 
+        // Extract the individual digits from minute
         let minute = structured.minute() as u8;
         push_digit(&mut out, minute / 10);
         push_digit(&mut out, minute % 10);
@@ -98,6 +103,7 @@ pub mod http_date {
         push_digit(&mut out, second / 10);
         push_digit(&mut out, second % 10);
 
+        // If non-zero nanos, push a 3-digit fractional second
         let nanos = structured.timestamp_subsec_nanos();
         if nanos != 0 {
             out.push('.');
