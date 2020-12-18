@@ -20,6 +20,7 @@ class RustCodegenPlugin : SmithyBuildPlugin {
     companion object {
         fun BaseSymbolProvider(model: Model, symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig) =
             SymbolVisitor(model, config = symbolVisitorConfig)
+                .let { IdempotencyTokenSymbolProvider(it) }
                 .let { BaseSymbolMetadataProvider(it) }
                 .let { RustReservedWordSymbolProvider(it) }
     }

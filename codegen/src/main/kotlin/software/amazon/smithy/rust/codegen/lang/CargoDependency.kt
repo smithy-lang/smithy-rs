@@ -84,6 +84,9 @@ class InlineDependency(
         fun genericError() = forRustFile("GenericError", "types", "generic_error.rs", CargoDependency.Serde)
         fun errorCode() = forRustFile("error_code", "error_code", "error_code.rs", CargoDependency.Http)
         fun docJson() = forRustFile("doc_json", "doc_json", "doc_json.rs", CargoDependency.Serde)
+
+        // Stub config implementation as a placeholder before one can be generated dynamically
+        fun config() = forRustFile("config", "config", "config.rs", CargoDependency.Rand)
     }
 }
 
@@ -143,6 +146,7 @@ data class CargoDependency(
     }
 
     companion object {
+        val Rand: CargoDependency = CargoDependency("rand", CratesIo("0.7"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2"))
         fun SmithyTypes(runtimeConfig: RuntimeConfig) =
             CargoDependency("${runtimeConfig.cratePrefix}-types", Local(runtimeConfig.relativePath))

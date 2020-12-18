@@ -38,6 +38,8 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
+import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.lang.Writable
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -141,7 +143,7 @@ class SymbolVisitor(
     }
 
     private fun simpleShape(shape: SimpleShape): Symbol {
-        return symbolBuilder(shape, SimpleShapes.getValue(shape::class)).canUseDefault().build()
+        return symbolBuilder(shape, SimpleShapes.getValue(shape::class)).setDefault(Default.RustDefault).build()
     }
 
     override fun booleanShape(shape: BooleanShape): Symbol = simpleShape(shape)
@@ -263,19 +265,42 @@ class SymbolVisitor(
 private const val RUST_TYPE_KEY = "rusttype"
 private const val SHAPE_KEY = "shape"
 private const val CAN_USE_DEFAULT = "canusedefault"
+private const val SYMBOL_DEFAULT = "symboldefault"
 
 fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder {
     return this.putProperty(RUST_TYPE_KEY, rustType)
 }
 
-fun Symbol.Builder.canUseDefault(value: Boolean = true): Symbol.Builder {
-    return this.putProperty(CAN_USE_DEFAULT, value)
+fun Symbol.defaultValue(): Default = this.getProperty(SYMBOL_DEFAULT, Default::class.java).orElse(Default.NoDefault)
+fun Symbol.Builder.setDefault(default: Default): Symbol.Builder {
+    return this.putProperty(SYMBOL_DEFAULT, default)
+}
+
+sealed class Default {
+    /**
+     * This symbol has no default value. If the symbol is not optional, this will be an error during builder construction
+     */
+    object NoDefault : Default()
+
+    /**
+     * This symbol should use the Rust `std::default::Default` when unset
+     */
+    object RustDefault : Default()
+
+    /**
+     * This symbol has a custom default implementation. This will be written into the block of `or_default(|| <block>)`
+     */
+    class Custom(val default: Writable) : Default() {
+        fun render(writer: RustWriter) {
+            default(writer)
+        }
+    }
 }
 
 /**
  * True when it is valid to use the default/0 value for [this] symbol during construction.
  */
-fun Symbol.canUseDefault(): Boolean = this.getProperty(CAN_USE_DEFAULT, Boolean::class.javaObjectType).orElse(false)
+fun Symbol.canUseDefault(): Boolean = this.defaultValue() != Default.NoDefault
 
 /**
  * True when [this] is will be represented by Option<T> in Rust
