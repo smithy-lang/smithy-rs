@@ -8,8 +8,11 @@ package software.amazon.smithy.rust.testutil
 import com.moandjiezana.toml.TomlWriter
 import org.intellij.lang.annotations.Language
 import software.amazon.smithy.build.FileManifest
+import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
+import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.lang.CargoDependency
@@ -92,6 +95,33 @@ object TestWorkspace {
             symbolProvider
         )
     }
+}
+
+/**
+ * Generates a test plugin context for [model] and returns the plugin context and the path it is rooted it.
+ *
+ * Example:
+ * ```kotlin
+ * val (pluginContext, path) = generatePluginContext(model)
+ * CodegenVisitor(pluginContext).execute()
+ * "cargo test".runCommand(path)
+ * ```
+ */
+fun generatePluginContext(model: Model): Pair<PluginContext, Path> {
+    val testDir = TestWorkspace.subproject()
+    val moduleName = "test_${testDir.nameWithoutExtension}"
+    val testPath = testDir.toPath()
+    val manifest = FileManifest.create(testPath)
+    val settings = Node.objectNodeBuilder()
+        .withMember("module", Node.from(moduleName))
+        .withMember("moduleVersion", Node.from("1.0.0"))
+        .withMember(
+            "runtimeConfig",
+            Node.objectNodeBuilder().withMember("relativePath", Node.from(TestRuntimeConfig.relativePath)).build()
+        )
+        .build()
+    val pluginContext = PluginContext.builder().model(model).fileManifest(manifest).settings(settings).build()
+    return pluginContext to testPath
 }
 
 fun RustWriter.unitTest(

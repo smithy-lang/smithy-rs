@@ -18,9 +18,10 @@ import software.amazon.smithy.rust.codegen.lang.render
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.stripOuter
 import software.amazon.smithy.rust.codegen.lang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.Default
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.canUseDefault
+import software.amazon.smithy.rust.codegen.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -70,7 +71,7 @@ class OperationInputBuilderGenerator(
         val outputSymbol = symbolProvider.toSymbol(shape)
 
         implBlockWriter.docs("Consumes the builder and constructs a #D", outputSymbol)
-        implBlockWriter.rustBlock("pub fn build(self) -> $returnType", outputSymbol) {
+        implBlockWriter.rustBlock("pub fn build(self, _config: &#T::Config) -> $returnType", RuntimeType.Config, outputSymbol) {
             conditionalBlock("Ok(", ")", conditional = fallibleBuilder) {
                 // If a wrapper is specified, use the `::new` associated function to construct the wrapper
                 withBlock("#T::new(", ")", outputSymbol) {
@@ -172,12 +173,17 @@ abstract class BuilderGenerator(
                 val memberName = symbolProvider.toMemberName(member)
                 val memberSymbol = symbolProvider.toSymbol(member)
                 val errorWhenMissing = "$memberName is required when building ${structureSymbol.name}"
-                val modifier = when {
-                    !memberSymbol.isOptional() && memberSymbol.canUseDefault() -> ".unwrap_or_default()"
-                    !memberSymbol.isOptional() -> ".ok_or(${errorWhenMissing.dq()})?"
-                    else -> ""
+                val default = memberSymbol.defaultValue()
+                withBlock("$memberName: self.$memberName", ",") {
+                    // Write the modifier
+                    when {
+                        !memberSymbol.isOptional() && default == Default.RustDefault -> write(".unwrap_or_default()")
+                        !memberSymbol.isOptional() -> write(".ok_or(${errorWhenMissing.dq()})?")
+                        memberSymbol.isOptional() && default is Default.Custom -> {
+                            withBlock(".or_else(||Some(", "))") { default.render(this) }
+                        }
+                    }
                 }
-                write("$memberName: self.$memberName$modifier,")
             }
         }
     }

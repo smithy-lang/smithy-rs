@@ -3,24 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use dynamo::model::{AttributeDefinition, KeySchemaElement, KeyType, ScalarAttributeType, ProvisionedThroughput};
-use dynamo::operation::CreateTable;
-use dynamo::output::{ListTablesOutput };
 use std::error::Error;
+
+use dynamo::model::{AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType};
+use dynamo::operation::CreateTable;
+use dynamo::output::ListTablesOutput;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let table_name = "new_table";
     let client = io_v0::Client::local("dynamodb");
+    let config = dynamo::Config::from_env();
     let clear_table = dynamo::operation::DeleteTable::builder()
         .table_name(table_name)
-        .build();
+        .build(&config);
     match io_v0::dispatch!(client, clear_table).parsed() {
         Ok(table_deleted) => println!("{:?} table was deleted", table_deleted),
         Err(e) => println!("dispatch error: {:?}", e),
     }
 
-    let tables = io_v0::dispatch!(client, dynamo::operation::ListTables::builder().build()).parsed.unwrap();
+    let tables = io_v0::dispatch!(client, dynamo::operation::ListTables::builder().build(&config)).parsed.unwrap();
     assert_eq!(
         tables.unwrap(),
         ListTablesOutput::builder().table_names(vec![]).build()
@@ -37,7 +39,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .key_type(KeyType::from("HASH"))
             .build()])
         .provisioned_throughput(ProvisionedThroughput::builder().read_capacity_units(100).write_capacity_units(100).build())
-        .build();
+        .build(&config);
 
     let response = io_v0::dispatch!(client, create_table);
     match response.parsed {
@@ -45,7 +47,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         _ => println!("{:?}", response.raw)
     }
 
-    let tables = io_v0::dispatch!(client, dynamo::operation::ListTables::builder().build()).parsed.unwrap();
+    let tables = io_v0::dispatch!(client, dynamo::operation::ListTables::builder().build(&config)).parsed.unwrap();
     assert_eq!(
         tables.unwrap(),
         ListTablesOutput::builder().table_names(vec![table_name.to_string()]).build()

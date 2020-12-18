@@ -357,12 +357,6 @@ class HttpProtocolTestGenerator(
 
             // Misc:
 
-            // https://github.com/awslabs/smithy-rs/issues/34
-            FailingTest(
-                RestJson,
-                "RestJsonQueryIdempotencyTokenAutoFill",
-                Action.Request
-            ),
             // https://github.com/awslabs/smithy-rs/issues/35
             FailingTest(
                 RestJson,

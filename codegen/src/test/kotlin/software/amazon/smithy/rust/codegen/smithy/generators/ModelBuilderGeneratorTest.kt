@@ -12,9 +12,10 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.generators.StructureGeneratorTest
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.smithy.Default
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.smithy.canUseDefault
+import software.amazon.smithy.rust.codegen.smithy.setDefault
 import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
@@ -55,7 +56,7 @@ internal class ModelBuilderGeneratorTest {
                 }
 
                 override fun toSymbol(shape: Shape?): Symbol {
-                    return baseProvider.toSymbol(shape).toBuilder().canUseDefault(false).build()
+                    return baseProvider.toSymbol(shape).toBuilder().setDefault(Default.NoDefault).build()
                 }
 
                 override fun toMemberName(shape: MemberShape?): String {

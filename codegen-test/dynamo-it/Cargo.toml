@@ -11,3 +11,4 @@ smithy-types = { path = "../../rust-runtime/smithy-types" }
 dynamo = { version = "0.0.1", path = "../build/smithyprojections/codegen-test/dynamo/rust-codegen/"}
 io-v0 = { path = "../../rust-runtime/io-v0" }
 tokio = { version = "0.2", features = ["full"] }
+rand  = "0.7.3"
