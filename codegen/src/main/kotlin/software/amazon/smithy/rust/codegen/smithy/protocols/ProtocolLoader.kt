@@ -17,8 +17,11 @@ import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 
+typealias ProtocolMap = Map<ShapeId, ProtocolGeneratorFactory<HttpProtocolGenerator>>
+
+// typealias ProtocolMap =
 // TODO: supportedProtocols must be runtime loadable via SPI; 2d
-class ProtocolLoader(private val supportedProtocols: Map<ShapeId, ProtocolGeneratorFactory<HttpProtocolGenerator>>) {
+class ProtocolLoader(private val supportedProtocols: ProtocolMap) {
     fun protocolFor(
         model: Model,
         serviceShape: ServiceShape
@@ -39,5 +42,6 @@ class ProtocolLoader(private val supportedProtocols: Map<ShapeId, ProtocolGenera
             RestJson1Trait.ID to AwsRestJsonFactory()
         )
         val Default = ProtocolLoader(Protocols)
+        fun withAdditional(protocols: ProtocolMap) = ProtocolLoader(Protocols + protocols)
     }
 }
