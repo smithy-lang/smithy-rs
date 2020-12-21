@@ -116,7 +116,7 @@ task("generateCargoWorkspace") {
 }
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
-tasks["build"].finalizedBy("generateCargoWorkspace")
+tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 
 tasks.register<Exec>("cargoCheck") {
@@ -124,7 +124,7 @@ tasks.register<Exec>("cargoCheck") {
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "check")
-    //dependsOn("build")
+    dependsOn("assemble")
 }
 
 tasks.register<Exec>("cargoTest") {
@@ -132,7 +132,7 @@ tasks.register<Exec>("cargoTest") {
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "test")
-    //dependsOn("build")
+    dependsOn("assemble")
 }
 
 tasks.register<Exec>("cargoDocs") {
@@ -140,7 +140,7 @@ tasks.register<Exec>("cargoDocs") {
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "doc", "--no-deps")
-    //dependsOn("build")
+    dependsOn("assemble")
 }
 
 tasks.register<Exec>("cargoClippy") {
@@ -148,7 +148,7 @@ tasks.register<Exec>("cargoClippy") {
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "clippy")
-    //dependsOn("build")
+    dependsOn("assemble")
 }
 
 tasks["test"].dependsOn("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs")
