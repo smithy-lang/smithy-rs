@@ -27,15 +27,16 @@ internal class InlineDependencyTest {
 
     @Test
     fun `locate dependencies from the inlineable module`() {
-        val dep = InlineDependency.uuid()
+        val dep = InlineDependency.idempotencyToken()
         val testWriter = RustWriter.root()
-        testWriter.withModule("uuid") {
+        testWriter.addDependency(CargoDependency.Rand)
+        testWriter.withModule(dep.module) {
             dep.renderer(this)
         }
         testWriter.compileAndTest(
             """
-            use crate::uuid;
-            let res = uuid::v4(0);
+            use crate::idempotency_token::uuid_v4;
+            let res = uuid_v4(0);
             assert_eq!(res, "00000000-0000-4000-8000-000000000000");
         """
         )

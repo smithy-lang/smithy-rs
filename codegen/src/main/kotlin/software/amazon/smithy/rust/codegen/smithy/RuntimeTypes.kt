@@ -138,7 +138,9 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val InstantEpoch = RuntimeType("instant_epoch", InlineDependency.instantEpoch(), "crate")
         val InstantHttpDate = RuntimeType("instant_httpdate", InlineDependency.instantHttpDate(), "crate")
         val Instant8601 = RuntimeType("instant_8601", InlineDependency.instant8601(), "crate")
-        val Config = RuntimeType("config", InlineDependency.config(), "crate")
+        val IdempotencyToken = RuntimeType("idempotency_token", InlineDependency.idempotencyToken(), "crate")
+
+        val Config = RuntimeType("config", null, "crate")
 
         fun forInlineFun(name: String, module: String, func: (RustWriter) -> Unit) = RuntimeType(
             name = name,

@@ -28,6 +28,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.conditionalBlock
@@ -242,12 +243,16 @@ class Instantiator(
         writer.rustBlock("") {
             val isSyntheticInput = shape.hasTrait(SyntheticInputTrait::class.java)
             if (isSyntheticInput) {
-                writer.rust(
+                rust(
                     """
-                let config = #T::Config::builder().token_provider("00000000-0000-4000-8000-000000000000").build();
+                let config = #T::Config::builder()
             """,
                     RuntimeType.Config
                 )
+                if (shape.allMembers.values.any { it.hasTrait(IdempotencyTokenTrait::class.java) }) {
+                    rust(".token_provider(\"00000000-0000-4000-8000-000000000000\")")
+                }
+                rust(".build();")
             } else {
                 write("let _ = 5;")
             }

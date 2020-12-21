@@ -265,7 +265,7 @@ class SerializerBuilder(
             is RustType.Vec -> RustType.Slice(unref.member)
             else -> unref
         }
-        val referenced = RustType.Reference(value = outType, lifetime = null)
+        val referenced = RustType.Reference(inner = outType, lifetime = null)
         return symbol.toBuilder().rustType(referenced).build()
     }
 
