@@ -3,19 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#[allow(dead_code)]
+mod config;
 mod doc_json;
 #[allow(dead_code)]
 mod error_code;
 mod generic_error;
-#[allow(dead_code)]
-mod config;
 
 // This test is outside of uuid.rs to enable copying the entirety of uuid.rs into the SDK without
 // requiring a proptest dependency
 #[cfg(test)]
 mod test {
-    use crate::doc_json::SerDoc;
     use crate::config::v4;
+    use crate::doc_json::SerDoc;
     use proptest::prelude::*;
     use proptest::std_facade::HashMap;
     use smithy_types::Document;
