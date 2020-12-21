@@ -4,6 +4,7 @@
  */
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.aws.traits.ServiceTrait
 import kotlin.streams.toList
 
 extra["displayName"] = "Smithy :: Rust :: AWS-SDK"
@@ -17,9 +18,17 @@ plugins {
 
 val smithyVersion: String by project
 
-val sdkOutput = buildDir.resolve("aws-sdk")
-val services = discoverServices()
+val sdkOutputDir = buildDir.resolve("aws-sdk")
+val awsServices = discoverServices()
+// TODO: smithy-http should be removed
+val runtimeModules = listOf("smithy-types", "smithy-http")
 
+buildscript {
+    val smithyVersion: String by project
+    dependencies {
+        classpath("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    }
+}
 
 dependencies {
     implementation(project(":codegen"))
@@ -34,12 +43,12 @@ fun discoverServices(): List<AwsService>  {
     val models = project.file("models")
     return fileTree(models).map { file ->
         val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
-        val services: List<ServiceShape> = model.shapes(ServiceShape::class.javaObjectType).sorted().toList()
+        val services: List<ServiceShape> = model.shapes(ServiceShape::class.java).sorted().toList()
         if (services.size != 1) {
             throw Exception("There must be exactly one service in each aws model file")
         }
         val service = services[0]
-        val (sdkId, version, _) = file.name.replace("-", "_").split(".")
+        val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId.toLowerCase()
         AwsService(service = service.id.toString(), module = sdkId, modelFile = file)
     }
 }
@@ -78,13 +87,13 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
     doFirst {
-        projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(discoverServices()))
+        projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices))
     }
     doLast {
-        discoverServices().forEach {
+        awsServices.forEach {
             copy {
                 from("$buildDir/smithyprojections/aws-sdk/${it.module}/rust-codegen")
-                into(sdkOutput.resolve(it.module))
+                into(sdkOutputDir.resolve(it.module))
             }
         }
     }
@@ -93,25 +102,27 @@ task("generateSmithyBuild") {
 
 tasks.register<Copy>("relocateRuntime") {
     from("$rootDir/rust-runtime") {
-        include("smithy-http/**")
-        include("smithy-types/**")
+        runtimeModules.forEach {
+            include("$it/**")
+        }
         exclude("**/target")
     }
-    into(sdkOutput)
+    into(sdkOutputDir)
 }
 
-fun generateCargoWorkspace(tests: List<AwsService>): String {
+fun generateCargoWorkspace(services: List<AwsService>): String {
+    val modules = services.map(AwsService::module) + runtimeModules
     return """
     [workspace]
     members = [
-        ${tests.joinToString(",") { "\"${it.module}\"" }}
+        ${modules.joinToString(",") { "\"$it\"" }}
     ]
     """.trimIndent()
 }
 task("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
-        sdkOutput.resolve("Cargo.toml").writeText(generateCargoWorkspace(discoverServices()))
+        sdkOutputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices))
     }
 }
 
