@@ -152,7 +152,7 @@ jobs:
         # Always upload the output even if the tests failed
       if: ${{ always() }}
       with:
-        name: codegen-output
+        name: sdk
         path: |
           aws-sdk/build/aws-sdk/
           aws-sdk/build/target/doc
