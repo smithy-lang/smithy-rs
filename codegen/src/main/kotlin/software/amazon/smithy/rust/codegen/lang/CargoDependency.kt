@@ -90,6 +90,7 @@ class InlineDependency(
 
         // Stub config implementation as a placeholder before one can be generated dynamically
         fun config() = forRustFile("config", "config", "config.rs", CargoDependency.Rand)
+        fun blobSerde(runtimeConfig: RuntimeConfig) = forRustFile("blob_serde", "blob_serde", "blob_serde.rs", CargoDependency.Serde, CargoDependency.SmithyHttp(runtimeConfig))
     }
 }
 
