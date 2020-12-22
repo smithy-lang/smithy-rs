@@ -242,6 +242,15 @@ class SerializerBuilder(
             """,
                 RuntimeType.InstantHttpDate
             )
+        },
+        "stdoptionoptioninstant_date_time_deser" to { writer ->
+            writer.write("use #T;", RuntimeType.Deserialize)
+            writer.rust(
+                """
+                Ok(Option::<#T::InstantIso8601>::deserialize(_deser)?.map(|i|i.0))
+            """,
+                RuntimeType.Instant8601
+            )
         }
 
     )

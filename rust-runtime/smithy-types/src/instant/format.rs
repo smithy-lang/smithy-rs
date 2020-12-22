@@ -5,15 +5,23 @@
 
 const NANOS_PER_SECOND: u32 = 1_000_000_000;
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum DateParseError {
+    Invalid(&'static str),
+    IntParseError,
+}
+
 pub mod http_date {
+    use std::str::FromStr;
+
+    use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike, Weekday};
+
+    use crate::Instant;
     // This code is taken from https://github.com/pyfisch/httpdate and modified under an
     // Apache 2.0 License. Modifications:
     // - Removed use of unsafe
     // - Add serialization and deserialization of subsecond nanos
-    use crate::instant::format::NANOS_PER_SECOND;
-    use crate::Instant;
-    use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike, Weekday};
-    use std::str::FromStr;
+    use crate::instant::format::{DateParseError, NANOS_PER_SECOND};
 
     /// Format an `instant` in the HTTP date format (imf-fixdate) with added support for subsecond precision
     ///
@@ -117,12 +125,6 @@ pub mod http_date {
         out
     }
 
-    #[derive(Debug, Eq, PartialEq)]
-    pub enum DateParseError {
-        Invalid(&'static str),
-        IntParseError,
-    }
-
     /// Parse an IMF-fixdate formatted date into an Instant
     ///
     /// This function has a few caveats:
@@ -175,12 +177,7 @@ pub mod http_date {
 
         let minutes = parse_slice(&s[20..22])?;
         let seconds = parse_slice(&s[23..25])?;
-        let time = NaiveTime::from_hms_nano(
-            hours,
-            minutes,
-            seconds,
-            nanos,
-        );
+        let time = NaiveTime::from_hms_nano(hours, minutes, seconds, nanos);
         let month = match &s[7..12] {
             b" Jan " => 1,
             b" Feb " => 2,
@@ -221,8 +218,9 @@ pub mod http_date {
 
 #[cfg(test)]
 mod test {
-    use crate::instant::format::http_date;
-    use crate::instant::format::http_date::DateParseError;
+    use proptest::prelude::*;
+
+    use crate::instant::format::{http_date, iso_8601, DateParseError};
     use crate::Instant;
 
     #[test]
@@ -317,7 +315,20 @@ mod test {
         check_roundtrip(9999999999, 0);
     }
 
-    use proptest::prelude::*;
+    #[test]
+    fn valid_iso_date() {
+        let date = "1985-04-12T23:20:50.52Z";
+        let expected = Instant::from_secs_and_nanos(482196050, 520000000);
+        assert_eq!(iso_8601::parse(date), Ok(expected));
+    }
+
+    #[test]
+    fn iso_date_no_fractional() {
+        let date = "1985-04-12T23:20:50Z";
+        let expected = Instant::from_secs_and_nanos(482196050, 0);
+        assert_eq!(iso_8601::parse(date), Ok(expected));
+    }
+
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(10000))]
 
@@ -325,5 +336,32 @@ mod test {
         fn round_trip(secs in -10000000..9999999999i64, nanos in 0..1_000_000_000u32) {
             check_roundtrip(secs, nanos);
         }
+    }
+}
+
+pub mod iso_8601 {
+    use chrono::format;
+
+    use crate::instant::format::DateParseError;
+    use crate::Instant;
+
+    // OK: 1985-04-12T23:20:50.52Z
+    // OK: 1985-04-12T23:20:50Z
+    //
+    // Timezones not supported:
+    // Not OK: 1985-04-12T23:20:50-02:00
+    pub fn parse(s: &str) -> Result<Instant, DateParseError> {
+        let mut date = format::Parsed::new();
+        let format = format::StrftimeItems::new("%Y-%m-%dT%H:%M:%S%.fZ");
+        // TODO: it may be helpful for debugging to keep these errors around
+        chrono::format::parse(&mut date, s, format)
+            .map_err(|_| DateParseError::Invalid("invalid iso8601 date"))?;
+        let utc_date = date
+            .to_naive_datetime_with_offset(0)
+            .map_err(|_| DateParseError::Invalid("invalid date"))?;
+        Ok(Instant::from_secs_and_nanos(
+            utc_date.timestamp(),
+            utc_date.timestamp_subsec_nanos(),
+        ))
     }
 }

@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-
 // TODO: Generate the config dynamically based on the requirements of the service
 use std::sync::Mutex;
 
@@ -16,7 +15,7 @@ pub(crate) fn v4(input: u128) -> String {
     for str_idx in 0..36 {
         if str_idx == 8 || str_idx == 13 || str_idx == 18 || str_idx == 23 {
             out.push('-');
-            // UUID version character
+        // UUID version character
         } else if str_idx == 14 {
             out.push('4');
         } else {
@@ -40,8 +39,10 @@ fn default_provider() -> impl ProvideIdempotencyToken {
     Mutex::new(rand::thread_rng())
 }
 
-
-impl<T> ProvideIdempotencyToken for Mutex<T> where T: rand::Rng {
+impl<T> ProvideIdempotencyToken for Mutex<T>
+where
+    T: rand::Rng,
+{
     fn token(&self) -> String {
         let input: u128 = self.lock().unwrap().gen();
         v4(input)
@@ -56,7 +57,7 @@ impl ProvideIdempotencyToken for &'static str {
 
 pub struct Config {
     #[allow(dead_code)]
-    pub(crate) token_provider: Box<dyn ProvideIdempotencyToken>
+    pub(crate) token_provider: Box<dyn ProvideIdempotencyToken>,
 }
 
 impl Config {
@@ -71,7 +72,7 @@ impl Config {
 #[derive(Default)]
 pub struct ConfigBuilder {
     #[allow(dead_code)]
-    token_provider: Option<Box<dyn ProvideIdempotencyToken>>
+    token_provider: Option<Box<dyn ProvideIdempotencyToken>>,
 }
 
 impl ConfigBuilder {
@@ -79,14 +80,19 @@ impl ConfigBuilder {
         Self::default()
     }
 
-    pub fn token_provider(mut self, token_provider: impl ProvideIdempotencyToken + 'static) -> Self {
+    pub fn token_provider(
+        mut self,
+        token_provider: impl ProvideIdempotencyToken + 'static,
+    ) -> Self {
         self.token_provider = Some(Box::new(token_provider));
         self
     }
 
     pub fn build(self) -> Config {
         Config {
-            token_provider: self.token_provider.unwrap_or_else(|| Box::new(default_provider()))
+            token_provider: self
+                .token_provider
+                .unwrap_or_else(|| Box::new(default_provider())),
         }
     }
 }
