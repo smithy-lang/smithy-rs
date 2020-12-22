@@ -7,6 +7,8 @@ mod doc_json;
 #[allow(dead_code)]
 mod error_code;
 mod generic_error;
+mod instant_epoch;
+mod instant_httpdate;
 #[allow(dead_code)]
 mod config;
 

@@ -135,6 +135,8 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
 
         val DocJson = RuntimeType("doc_json", InlineDependency.docJson(), "crate")
 
+        val InstantEpoch = RuntimeType("instant_epoch", InlineDependency.instantEpoch(), "crate")
+        val InstantHttpDate = RuntimeType("instant_httpdate", InlineDependency.instantHttpDate(), "crate")
         val Config = RuntimeType("config", InlineDependency.config(), "crate")
 
         fun forInlineFun(name: String, module: String, func: (RustWriter) -> Unit) = RuntimeType(

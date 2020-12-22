@@ -5,5 +5,8 @@ authors = ["rcoh@amazon.com"]
 edition = "2018"
 
 [dependencies]
-chrono = "0.4"
-httpdate = "0.3.2"
+# alloc can be removed if we implement our own date formatting, TBD if this is worthwhile
+chrono = { version = "0.4", default-features = false, features = ["alloc"] }
+
+[dev-dependencies]
+proptest = "0.10.1"
