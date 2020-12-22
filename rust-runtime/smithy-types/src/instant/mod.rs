@@ -4,6 +4,7 @@
  */
 
 use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
+use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod format;
@@ -55,9 +56,12 @@ impl Instant {
 
     pub fn from_str(s: &str, format: Format) -> Result<Self, ()> {
         match format {
-            Format::DateTime => todo!(),
+            Format::DateTime => format::iso_8601::parse(s).map_err(|_| ()),
             Format::HttpDate => format::http_date::parse(s).map_err(|_| ()),
-            Format::EpochSeconds => todo!(),
+            Format::EpochSeconds => <f64>::from_str(s)
+                // TODO: Parse base & fraction separately to achieve higher precision
+                .map(Self::from_f64)
+                .map_err(|_| ()),
         }
     }
 

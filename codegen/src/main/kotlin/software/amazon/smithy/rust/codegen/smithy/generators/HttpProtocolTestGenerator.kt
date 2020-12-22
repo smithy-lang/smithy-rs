@@ -364,10 +364,6 @@ class HttpProtocolTestGenerator(
                 Action.Request
             ),
 
-            // Timestamp parsing: https://github.com/awslabs/smithy-rs/issues/80
-            // FailingTest(AwsJson11, "parses_httpdate_timestamps", Action.Response),
-            FailingTest(AwsJson11, "parses_iso8601_timestamps", Action.Response),
-
             // Document deserialization:
             FailingTest(AwsJson11, "PutAndGetInlineDocumentsInput", Action.Response)
         )
