@@ -79,7 +79,6 @@ class CodegenVisitor(context: PluginContext, extraProtocols: ProtocolMap = mapOf
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
         writers.finalize(settings)
-        writers.flushWriters()
         try {
             "cargo fmt".runCommand(fileManifest.baseDir)
         } catch (_: CommandFailed) {

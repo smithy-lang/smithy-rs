@@ -88,7 +88,7 @@ fun <T : CodeWriter> T.rust(
  * `CodeWriter` formatting: `#{name:T}`
  */
 fun <T : CodeWriter> T.rustTemplate(
-    @Language("Rust", prefix = "fn foo(&self) {", suffix = "}") contents: String,
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
     vararg ctx: Pair<String, Any>
 ) {
     this.pushState()
