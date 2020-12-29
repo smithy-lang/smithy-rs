@@ -92,7 +92,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
 
     companion object {
         fun withBaseBehavior(protocolConfig: ProtocolConfig, extraCustomizations: List<ConfigCustomization>): ServiceConfigGenerator {
-            val baseFeatures = mutableListOf<NamedSectionGenerator<ServiceConfig>>()
+            val baseFeatures = mutableListOf<ConfigCustomization>()
             if (protocolConfig.serviceShape.needsIdempotencyToken(protocolConfig.model)) {
                 baseFeatures.add(IdempotencyProviderConfig())
             }
