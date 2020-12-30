@@ -63,13 +63,16 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "ADD"
+            "value": "ADD",
+            "name": "ADD"
           },
           {
-            "value": "PUT"
+            "value": "PUT",
+            "name": "PUT"
           },
           {
-            "value": "DELETE"
+            "value": "DELETE",
+            "name": "DELETE"
           }
         ]
       }
@@ -590,13 +593,16 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "CREATING"
+            "value": "CREATING",
+            "name": "CREATING"
           },
           {
-            "value": "DELETED"
+            "value": "DELETED",
+            "name": "DELETED"
           },
           {
-            "value": "AVAILABLE"
+            "value": "AVAILABLE",
+            "name": "AVAILABLE"
           }
         ]
       }
@@ -1102,10 +1108,12 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "PROVISIONED"
+            "value": "PROVISIONED",
+            "name": "PROVISIONED"
           },
           {
-            "value": "PAY_PER_REQUEST"
+            "value": "PAY_PER_REQUEST",
+            "name": "PAY_PER_REQUEST"
           }
         ]
       }
@@ -1235,43 +1243,56 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "EQ"
+            "value": "EQ",
+            "name": "EQ"
           },
           {
-            "value": "NE"
+            "value": "NE",
+            "name": "NE"
           },
           {
-            "value": "IN"
+            "value": "IN",
+            "name": "IN"
           },
           {
-            "value": "LE"
+            "value": "LE",
+            "name": "LE"
           },
           {
-            "value": "LT"
+            "value": "LT",
+            "name": "LT"
           },
           {
-            "value": "GE"
+            "value": "GE",
+            "name": "GE"
           },
           {
-            "value": "GT"
+            "value": "GT",
+            "name": "GT"
           },
           {
-            "value": "BETWEEN"
+            "value": "BETWEEN",
+            "name": "BETWEEN"
           },
           {
-            "value": "NOT_NULL"
+            "value": "NOT_NULL",
+            "name": "NOT_NULL"
           },
           {
-            "value": "NULL"
+            "value": "NULL",
+            "name": "NULL"
           },
           {
-            "value": "CONTAINS"
+            "value": "CONTAINS",
+            "name": "CONTAINS"
           },
           {
-            "value": "NOT_CONTAINS"
+            "value": "NOT_CONTAINS",
+            "name": "NOT_CONTAINS"
           },
           {
-            "value": "BEGINS_WITH"
+            "value": "BEGINS_WITH",
+            "name": "BEGINS_WITH"
           }
         ]
       }
@@ -1367,10 +1388,12 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "AND"
+            "value": "AND",
+            "name": "AND"
           },
           {
-            "value": "OR"
+            "value": "OR",
+            "name": "OR"
           }
         ]
       }
@@ -1469,10 +1492,12 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "ENABLED"
+            "value": "ENABLED",
+            "name": "ENABLED"
           },
           {
-            "value": "DISABLED"
+            "value": "DISABLED",
+            "name": "DISABLED"
           }
         ]
       }
@@ -1494,10 +1519,12 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "ENABLE"
+            "value": "ENABLE",
+            "name": "ENABLE"
           },
           {
-            "value": "DISABLE"
+            "value": "DISABLE",
+            "name": "DISABLE"
           }
         ]
       }
@@ -1519,19 +1546,24 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "ENABLING"
+            "value": "ENABLING",
+            "name": "ENABLING"
           },
           {
-            "value": "ENABLED"
+            "value": "ENABLED",
+            "name": "ENABLED"
           },
           {
-            "value": "DISABLING"
+            "value": "DISABLING",
+            "name": "DISABLING"
           },
           {
-            "value": "DISABLED"
+            "value": "DISABLED",
+            "name": "DISABLED"
           },
           {
-            "value": "FAILED"
+            "value": "FAILED",
+            "name": "FAILED"
           }
         ]
       }
@@ -2710,7 +2742,41 @@
         }
       ],
       "traits": {
-        "smithy.api#documentation": "<p>Returns information about the table, including the current status of the table, when it was created, the primary key schema, and any indexes on the table.</p>\n         <note>\n            <p>If you issue a <code>DescribeTable</code> request immediately after a <code>CreateTable</code> request, DynamoDB might\n        return a <code>ResourceNotFoundException</code>. This is because <code>DescribeTable</code> uses an eventually\n        consistent query, and the metadata for your table might not be available at that moment.\n        Wait for a few seconds, and then try the <code>DescribeTable</code> request again.</p>\n         </note>"
+        "smithy.api#documentation": "<p>Returns information about the table, including the current status of the table, when it was created, the primary key schema, and any indexes on the table.</p>\n         <note>\n            <p>If you issue a <code>DescribeTable</code> request immediately after a <code>CreateTable</code> request, DynamoDB might\n        return a <code>ResourceNotFoundException</code>. This is because <code>DescribeTable</code> uses an eventually\n        consistent query, and the metadata for your table might not be available at that moment.\n        Wait for a few seconds, and then try the <code>DescribeTable</code> request again.</p>\n         </note>",
+        "smithy.waiters#waitable": {
+          "TableExists": {
+            "acceptors": [
+              {
+                "state": "success",
+                "matcher": {
+                  "output": {
+                    "path": "Table.TableStatus",
+                    "expected": "ACTIVE",
+                    "comparator": "stringEquals"
+                  }
+                }
+              },
+              {
+                "state": "retry",
+                "matcher": {
+                  "errorType": "ResourceNotFoundException"
+                }
+              }
+            ],
+            "minDelay": 20
+          },
+          "TableNotExists": {
+            "acceptors": [
+              {
+                "state": "success",
+                "matcher": {
+                  "errorType": "ResourceNotFoundException"
+                }
+              }
+            ],
+            "minDelay": 20
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#DescribeTableInput": {
@@ -2836,19 +2902,24 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "ENABLING"
+            "value": "ENABLING",
+            "name": "ENABLING"
           },
           {
-            "value": "ACTIVE"
+            "value": "ACTIVE",
+            "name": "ACTIVE"
           },
           {
-            "value": "DISABLING"
+            "value": "DISABLING",
+            "name": "DISABLING"
           },
           {
-            "value": "DISABLED"
+            "value": "DISABLED",
+            "name": "DISABLED"
           },
           {
-            "value": "ENABLE_FAILED"
+            "value": "ENABLE_FAILED",
+            "name": "ENABLE_FAILED"
           }
         ]
       }
@@ -3064,7 +3135,8 @@
           "sdkId": "DynamoDB",
           "arnNamespace": "dynamodb",
           "cloudFormationName": "DynamoDB",
-          "cloudTrailEventSource": "dynamodb.amazonaws.com"
+          "cloudTrailEventSource": "dynamodb.amazonaws.com",
+          "endpointPrefix": "dynamodb"
         },
         "aws.auth#sigv4": {
           "name": "dynamodb"
@@ -4202,16 +4274,20 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "CREATING"
+            "value": "CREATING",
+            "name": "CREATING"
           },
           {
-            "value": "ACTIVE"
+            "value": "ACTIVE",
+            "name": "ACTIVE"
           },
           {
-            "value": "DELETING"
+            "value": "DELETING",
+            "name": "DELETING"
           },
           {
-            "value": "UPDATING"
+            "value": "UPDATING",
+            "name": "UPDATING"
           }
         ]
       }
@@ -4255,16 +4331,20 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "CREATING"
+            "value": "CREATING",
+            "name": "CREATING"
           },
           {
-            "value": "UPDATING"
+            "value": "UPDATING",
+            "name": "UPDATING"
           },
           {
-            "value": "DELETING"
+            "value": "DELETING",
+            "name": "DELETING"
           },
           {
-            "value": "ACTIVE"
+            "value": "ACTIVE",
+            "name": "ACTIVE"
           }
         ]
       }
@@ -4528,10 +4608,12 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "HASH"
+            "value": "HASH",
+            "name": "HASH"
           },
           {
-            "value": "RANGE"
+            "value": "RANGE",
+            "name": "RANGE"
           }
         ]
       }
@@ -5385,10 +5467,12 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "ENABLED"
+            "value": "ENABLED",
+            "name": "ENABLED"
           },
           {
-            "value": "DISABLED"
+            "value": "DISABLED",
+            "name": "DISABLED"
           }
         ]
       }
@@ -5462,13 +5546,16 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "ALL"
+            "value": "ALL",
+            "name": "ALL"
           },
           {
-            "value": "KEYS_ONLY"
+            "value": "KEYS_ONLY",
+            "name": "KEYS_ONLY"
           },
           {
-            "value": "INCLUDE"
+            "value": "INCLUDE",
+            "name": "INCLUDE"
           }
         ]
       }
@@ -5789,7 +5876,16 @@
         }
       ],
       "traits": {
-        "smithy.api#documentation": "<p>The <code>Query</code> operation finds items based on primary key values.\n            You can query any table or secondary index that has a composite primary key (a partition\n            key and a sort key).\n        </p>\n        <p>Use the <code>KeyConditionExpression</code> parameter to provide a specific value\n            for the partition key. The <code>Query</code> operation will return all of the items\n            from the table or index with that partition key value. You can optionally narrow the\n            scope of the <code>Query</code> operation by specifying a sort key value and a\n            comparison operator in <code>KeyConditionExpression</code>. To further refine the <code>Query</code> results,\n            you can optionally provide a <code>FilterExpression</code>. A <code>FilterExpression</code> determines which items\n            within the results should be returned to you. All of the other results are discarded.\n        </p>\n        <p>\n            A <code>Query</code> operation always returns a result set. If no matching items are found,\n            the result set will be empty. Queries that do not return results consume the minimum number of\n            read capacity units for that type of read operation.\n        </p>\n        <note>\n            <p>\n                DynamoDB calculates the number of read capacity units consumed based on item size,\n                not on the amount of data that is returned to an application. The number of capacity\n                units consumed will be the same whether you request all of the attributes (the default behavior)\n                or just some of them (using a projection expression). The number will also be the same\n                whether or not you use a <code>FilterExpression</code>.\n            </p>\n        </note>\n        <p>\n            <code>Query</code> results are always sorted by the sort key value. If the data type of the sort key is Number,\n            the results are returned in numeric order; otherwise, the results are returned in order of UTF-8 bytes.\n            By default, the sort order is ascending. To reverse the order, set the <code>ScanIndexForward</code> parameter\n            to false.\n        </p>\n        <p> A single <code>Query</code> operation will read up to the maximum number of items\n            set (if using the <code>Limit</code> parameter) or a maximum of 1 MB of data and then\n            apply any filtering to the results using <code>FilterExpression</code>. If\n                <code>LastEvaluatedKey</code> is present in the response, you will need to paginate\n            the result set. For more information, see <a href=\"https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Query.html#Query.Pagination\">Paginating\n                the Results</a> in the <i>Amazon DynamoDB Developer Guide</i>. </p>\n        <p>\n            <code>FilterExpression</code> is applied after a <code>Query</code> finishes, but before\n            the results are returned.\n            A <code>FilterExpression</code> cannot contain partition key or sort key attributes.\n            You need to specify those attributes in the <code>KeyConditionExpression</code>.\n        </p>\n        <note>\n            <p>\n                A <code>Query</code> operation can return an empty result set and a <code>LastEvaluatedKey</code>\n                if all the items read for the page of results are filtered out.\n            </p>\n        </note>\n        <p>You can query a table, a local secondary index, or a global secondary index. For a\n            query on a table or on a local secondary index, you can set the\n                <code>ConsistentRead</code> parameter to <code>true</code> and obtain a\n            strongly consistent result. Global secondary indexes support eventually consistent reads\n            only, so do not specify <code>ConsistentRead</code> when querying a global\n            secondary index.</p>"
+        "smithy.api#documentation": "<p>The <code>Query</code> operation finds items based on primary key values.\n            You can query any table or secondary index that has a composite primary key (a partition\n            key and a sort key).\n        </p>\n        <p>Use the <code>KeyConditionExpression</code> parameter to provide a specific value\n            for the partition key. The <code>Query</code> operation will return all of the items\n            from the table or index with that partition key value. You can optionally narrow the\n            scope of the <code>Query</code> operation by specifying a sort key value and a\n            comparison operator in <code>KeyConditionExpression</code>. To further refine the <code>Query</code> results,\n            you can optionally provide a <code>FilterExpression</code>. A <code>FilterExpression</code> determines which items\n            within the results should be returned to you. All of the other results are discarded.\n        </p>\n        <p>\n            A <code>Query</code> operation always returns a result set. If no matching items are found,\n            the result set will be empty. Queries that do not return results consume the minimum number of\n            read capacity units for that type of read operation.\n        </p>\n        <note>\n            <p>\n                DynamoDB calculates the number of read capacity units consumed based on item size,\n                not on the amount of data that is returned to an application. The number of capacity\n                units consumed will be the same whether you request all of the attributes (the default behavior)\n                or just some of them (using a projection expression). The number will also be the same\n                whether or not you use a <code>FilterExpression</code>.\n            </p>\n        </note>\n        <p>\n            <code>Query</code> results are always sorted by the sort key value. If the data type of the sort key is Number,\n            the results are returned in numeric order; otherwise, the results are returned in order of UTF-8 bytes.\n            By default, the sort order is ascending. To reverse the order, set the <code>ScanIndexForward</code> parameter\n            to false.\n        </p>\n        <p> A single <code>Query</code> operation will read up to the maximum number of items\n            set (if using the <code>Limit</code> parameter) or a maximum of 1 MB of data and then\n            apply any filtering to the results using <code>FilterExpression</code>. If\n                <code>LastEvaluatedKey</code> is present in the response, you will need to paginate\n            the result set. For more information, see <a href=\"https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Query.html#Query.Pagination\">Paginating\n                the Results</a> in the <i>Amazon DynamoDB Developer Guide</i>. </p>\n        <p>\n            <code>FilterExpression</code> is applied after a <code>Query</code> finishes, but before\n            the results are returned.\n            A <code>FilterExpression</code> cannot contain partition key or sort key attributes.\n            You need to specify those attributes in the <code>KeyConditionExpression</code>.\n        </p>\n        <note>\n            <p>\n                A <code>Query</code> operation can return an empty result set and a <code>LastEvaluatedKey</code>\n                if all the items read for the page of results are filtered out.\n            </p>\n        </note>\n        <p>You can query a table, a local secondary index, or a global secondary index. For a\n            query on a table or on a local secondary index, you can set the\n                <code>ConsistentRead</code> parameter to <code>true</code> and obtain a\n            strongly consistent result. Global secondary indexes support eventually consistent reads\n            only, so do not specify <code>ConsistentRead</code> when querying a global\n            secondary index.</p>",
+        "smithy.api#paginated": {
+          "inputToken": "ExclusiveStartKey",
+          "outputToken": "LastEvaluatedKey",
+          "items": "Items",
+          "pageSize": "Limit"
+        },
+        "smithy.api#suppress": [
+          "PaginatedTrait"
+        ]
       }
     },
     "com.amazonaws.dynamodb#QueryInput": {
@@ -6436,25 +6532,32 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "CREATING"
+            "value": "CREATING",
+            "name": "CREATING"
           },
           {
-            "value": "CREATION_FAILED"
+            "value": "CREATION_FAILED",
+            "name": "CREATION_FAILED"
           },
           {
-            "value": "UPDATING"
+            "value": "UPDATING",
+            "name": "UPDATING"
           },
           {
-            "value": "DELETING"
+            "value": "DELETING",
+            "name": "DELETING"
           },
           {
-            "value": "ACTIVE"
+            "value": "ACTIVE",
+            "name": "ACTIVE"
           },
           {
-            "value": "REGION_DISABLED"
+            "value": "REGION_DISABLED",
+            "name": "REGION_DISABLED"
           },
           {
-            "value": "INACCESSIBLE_ENCRYPTION_CREDENTIALS"
+            "value": "INACCESSIBLE_ENCRYPTION_CREDENTIALS",
+            "name": "INACCESSIBLE_ENCRYPTION_CREDENTIALS"
           }
         ]
       }
@@ -6835,13 +6938,16 @@
         "smithy.api#documentation": "<p>Determines the level of detail about provisioned throughput consumption that is returned in the response:</p>\n         <ul>\n            <li>\n               <p>\n                  <code>INDEXES</code> - The response includes the aggregate <code>ConsumedCapacity</code> for the operation, together with <code>ConsumedCapacity</code> for each table and secondary index that was accessed.</p>\n               <p>Note that some operations, such as <code>GetItem</code> and <code>BatchGetItem</code>, do not access any indexes at all.  In these cases, specifying <code>INDEXES</code> will only return <code>ConsumedCapacity</code> information for table(s).</p>\n            </li>\n            <li>\n               <p>\n                  <code>TOTAL</code> - The response includes only the aggregate <code>ConsumedCapacity</code> for the operation.</p>\n            </li>\n            <li>\n               <p>\n                  <code>NONE</code> - No <code>ConsumedCapacity</code> details are included in the response.</p>\n            </li>\n         </ul>",
         "smithy.api#enum": [
           {
-            "value": "INDEXES"
+            "value": "INDEXES",
+            "name": "INDEXES"
           },
           {
-            "value": "TOTAL"
+            "value": "TOTAL",
+            "name": "TOTAL"
           },
           {
-            "value": "NONE"
+            "value": "NONE",
+            "name": "NONE"
           }
         ]
       }
@@ -6851,10 +6957,12 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "SIZE"
+            "value": "SIZE",
+            "name": "SIZE"
           },
           {
-            "value": "NONE"
+            "value": "NONE",
+            "name": "NONE"
           }
         ]
       }
@@ -6864,19 +6972,24 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "NONE"
+            "value": "NONE",
+            "name": "NONE"
           },
           {
-            "value": "ALL_OLD"
+            "value": "ALL_OLD",
+            "name": "ALL_OLD"
           },
           {
-            "value": "UPDATED_OLD"
+            "value": "UPDATED_OLD",
+            "name": "UPDATED_OLD"
           },
           {
-            "value": "ALL_NEW"
+            "value": "ALL_NEW",
+            "name": "ALL_NEW"
           },
           {
-            "value": "UPDATED_NEW"
+            "value": "UPDATED_NEW",
+            "name": "UPDATED_NEW"
           }
         ]
       }
@@ -6886,10 +6999,12 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "ALL_OLD"
+            "value": "ALL_OLD",
+            "name": "ALL_OLD"
           },
           {
-            "value": "NONE"
+            "value": "NONE",
+            "name": "NONE"
           }
         ]
       }
@@ -6908,10 +7023,12 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "AES256"
+            "value": "AES256",
+            "name": "AES256"
           },
           {
-            "value": "KMS"
+            "value": "KMS",
+            "name": "KMS"
           }
         ]
       }
@@ -6994,19 +7111,24 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "ENABLING"
+            "value": "ENABLING",
+            "name": "ENABLING"
           },
           {
-            "value": "ENABLED"
+            "value": "ENABLED",
+            "name": "ENABLED"
           },
           {
-            "value": "DISABLING"
+            "value": "DISABLING",
+            "name": "DISABLING"
           },
           {
-            "value": "DISABLED"
+            "value": "DISABLED",
+            "name": "DISABLED"
           },
           {
-            "value": "UPDATING"
+            "value": "UPDATING",
+            "name": "UPDATING"
           }
         ]
       }
@@ -7016,10 +7138,12 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "AES256"
+            "value": "AES256",
+            "name": "AES256"
           },
           {
-            "value": "KMS"
+            "value": "KMS",
+            "name": "KMS"
           }
         ]
       }
@@ -7029,13 +7153,16 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "S"
+            "value": "S",
+            "name": "S"
           },
           {
-            "value": "N"
+            "value": "N",
+            "name": "N"
           },
           {
-            "value": "B"
+            "value": "B",
+            "name": "B"
           }
         ]
       }
@@ -7066,7 +7193,16 @@
         }
       ],
       "traits": {
-        "smithy.api#documentation": "<p>The <code>Scan</code> operation returns one or more items and item attributes by accessing every\n      item in a table or a secondary index. To have DynamoDB return fewer items, you can provide a <code>FilterExpression</code> operation.</p>\n         <p>If the total number of scanned items exceeds the maximum dataset size limit of 1 MB, the\n            scan stops and results are returned to the user as a <code>LastEvaluatedKey</code> value\n            to continue the scan in a subsequent operation. The results also include the number of\n            items exceeding the limit. A scan can result in no table data meeting the filter\n            criteria. </p>\n         <p>A single <code>Scan</code> operation reads up to the maximum number of items set (if\n            using the <code>Limit</code> parameter) or a maximum of 1 MB of data and then apply any\n            filtering to the results using <code>FilterExpression</code>. If\n                <code>LastEvaluatedKey</code> is present in the response, you need to paginate the\n            result set. For more information, see <a href=\"https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Scan.html#Scan.Pagination\">Paginating the\n                Results</a> in the <i>Amazon DynamoDB Developer Guide</i>. </p>\n         <p>\n            <code>Scan</code> operations proceed sequentially; however, for faster performance on\n            a large table or secondary index, applications can request a parallel <code>Scan</code>\n            operation by providing the <code>Segment</code> and <code>TotalSegments</code>\n            parameters. For more information, see <a href=\"https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Scan.html#Scan.ParallelScan\">Parallel\n                Scan</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>\n         <p>\n            <code>Scan</code> uses eventually consistent reads when accessing the data in a\n            table; therefore, the result set might not include the changes to data in the table\n            immediately before the operation began. If you need a consistent copy of the data, as of\n            the time that the <code>Scan</code> begins, you can set the <code>ConsistentRead</code>\n            parameter to <code>true</code>.</p>"
+        "smithy.api#documentation": "<p>The <code>Scan</code> operation returns one or more items and item attributes by accessing every\n      item in a table or a secondary index. To have DynamoDB return fewer items, you can provide a <code>FilterExpression</code> operation.</p>\n         <p>If the total number of scanned items exceeds the maximum dataset size limit of 1 MB, the\n            scan stops and results are returned to the user as a <code>LastEvaluatedKey</code> value\n            to continue the scan in a subsequent operation. The results also include the number of\n            items exceeding the limit. A scan can result in no table data meeting the filter\n            criteria. </p>\n         <p>A single <code>Scan</code> operation reads up to the maximum number of items set (if\n            using the <code>Limit</code> parameter) or a maximum of 1 MB of data and then apply any\n            filtering to the results using <code>FilterExpression</code>. If\n                <code>LastEvaluatedKey</code> is present in the response, you need to paginate the\n            result set. For more information, see <a href=\"https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Scan.html#Scan.Pagination\">Paginating the\n                Results</a> in the <i>Amazon DynamoDB Developer Guide</i>. </p>\n         <p>\n            <code>Scan</code> operations proceed sequentially; however, for faster performance on\n            a large table or secondary index, applications can request a parallel <code>Scan</code>\n            operation by providing the <code>Segment</code> and <code>TotalSegments</code>\n            parameters. For more information, see <a href=\"https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Scan.html#Scan.ParallelScan\">Parallel\n                Scan</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>\n         <p>\n            <code>Scan</code> uses eventually consistent reads when accessing the data in a\n            table; therefore, the result set might not include the changes to data in the table\n            immediately before the operation began. If you need a consistent copy of the data, as of\n            the time that the <code>Scan</code> begins, you can set the <code>ConsistentRead</code>\n            parameter to <code>true</code>.</p>",
+        "smithy.api#paginated": {
+          "inputToken": "ExclusiveStartKey",
+          "outputToken": "LastEvaluatedKey",
+          "items": "Items",
+          "pageSize": "Limit"
+        },
+        "smithy.api#suppress": [
+          "PaginatedTrait"
+        ]
       }
     },
     "com.amazonaws.dynamodb#ScanInput": {
@@ -7243,16 +7379,20 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "ALL_ATTRIBUTES"
+            "value": "ALL_ATTRIBUTES",
+            "name": "ALL_ATTRIBUTES"
           },
           {
-            "value": "ALL_PROJECTED_ATTRIBUTES"
+            "value": "ALL_PROJECTED_ATTRIBUTES",
+            "name": "ALL_PROJECTED_ATTRIBUTES"
           },
           {
-            "value": "SPECIFIC_ATTRIBUTES"
+            "value": "SPECIFIC_ATTRIBUTES",
+            "name": "SPECIFIC_ATTRIBUTES"
           },
           {
-            "value": "COUNT"
+            "value": "COUNT",
+            "name": "COUNT"
           }
         ]
       }
@@ -7403,16 +7543,20 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "NEW_IMAGE"
+            "value": "NEW_IMAGE",
+            "name": "NEW_IMAGE"
           },
           {
-            "value": "OLD_IMAGE"
+            "value": "OLD_IMAGE",
+            "name": "OLD_IMAGE"
           },
           {
-            "value": "NEW_AND_OLD_IMAGES"
+            "value": "NEW_AND_OLD_IMAGES",
+            "name": "NEW_AND_OLD_IMAGES"
           },
           {
-            "value": "KEYS_ONLY"
+            "value": "KEYS_ONLY",
+            "name": "KEYS_ONLY"
           }
         ]
       }
@@ -7658,25 +7802,32 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "CREATING"
+            "value": "CREATING",
+            "name": "CREATING"
           },
           {
-            "value": "UPDATING"
+            "value": "UPDATING",
+            "name": "UPDATING"
           },
           {
-            "value": "DELETING"
+            "value": "DELETING",
+            "name": "DELETING"
           },
           {
-            "value": "ACTIVE"
+            "value": "ACTIVE",
+            "name": "ACTIVE"
           },
           {
-            "value": "INACCESSIBLE_ENCRYPTION_CREDENTIALS"
+            "value": "INACCESSIBLE_ENCRYPTION_CREDENTIALS",
+            "name": "INACCESSIBLE_ENCRYPTION_CREDENTIALS"
           },
           {
-            "value": "ARCHIVING"
+            "value": "ARCHIVING",
+            "name": "ARCHIVING"
           },
           {
-            "value": "ARCHIVED"
+            "value": "ARCHIVED",
+            "name": "ARCHIVED"
           }
         ]
       }
@@ -7846,16 +7997,20 @@
       "traits": {
         "smithy.api#enum": [
           {
-            "value": "ENABLING"
+            "value": "ENABLING",
+            "name": "ENABLING"
           },
           {
-            "value": "DISABLING"
+            "value": "DISABLING",
+            "name": "DISABLING"
           },
           {
-            "value": "ENABLED"
+            "value": "ENABLED",
+            "name": "ENABLED"
           },
           {
-            "value": "DISABLED"
+            "value": "DISABLED",
+            "name": "DISABLED"
           }
         ]
       }

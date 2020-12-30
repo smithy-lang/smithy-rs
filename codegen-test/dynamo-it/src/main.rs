@@ -50,11 +50,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .table_name(table_name)
         .attribute_definitions(vec![AttributeDefinition::builder()
             .attribute_name("ForumName")
-            .attribute_type(ScalarAttributeType::from("S"))
+            .attribute_type(ScalarAttributeType::S)
             .build()])
         .key_schema(vec![KeySchemaElement::builder()
             .attribute_name("ForumName")
-            .key_type(KeyType::from("HASH"))
+            .key_type(KeyType::Hash)
             .build()])
         .provisioned_throughput(
             ProvisionedThroughput::builder()
