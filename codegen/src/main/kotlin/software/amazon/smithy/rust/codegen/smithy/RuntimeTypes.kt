@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.lang.InlineDependency
 import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
-import java.io.File
 import java.util.Optional
 
 data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: String = "../") {
@@ -23,7 +22,7 @@ data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: S
             return if (node.isPresent) {
                 RuntimeConfig(
                     node.get().getStringMemberOrDefault("cratePrefix", "smithy"),
-                    File(node.get().getStringMemberOrDefault("relativePath", "../")).absolutePath
+                    node.get().getStringMemberOrDefault("relativePath", "../")
                 )
             } else {
                 RuntimeConfig()
@@ -141,6 +140,8 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val IdempotencyToken = RuntimeType("idempotency_token", InlineDependency.idempotencyToken(), "crate")
 
         val Config = RuntimeType("config", null, "crate")
+
+        fun BlobSerde(runtimeConfig: RuntimeConfig) = RuntimeType("blob_serde", InlineDependency.blobSerde(runtimeConfig), "crate")
 
         fun forInlineFun(name: String, module: String, func: (RustWriter) -> Unit) = RuntimeType(
             name = name,

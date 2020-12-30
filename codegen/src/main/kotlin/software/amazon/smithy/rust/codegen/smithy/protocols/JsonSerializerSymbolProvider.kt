@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.rustTemplate
 import software.amazon.smithy.rust.codegen.lang.stripOuter
+import software.amazon.smithy.rust.codegen.lang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolMetadataProvider
@@ -129,6 +130,7 @@ class SerializerBuilder(
 
     private val handWrittenSerializers: Map<String, (RustWriter) -> Unit> = mapOf(
         "stdoptionoptionblob_ser" to { writer ->
+
             writer.rustBlock("match $inp") {
                 write(
                     "Some(blob) => $ser.serialize_str(&#T(blob.as_ref())),",
@@ -143,7 +145,6 @@ class SerializerBuilder(
                 RuntimeType.Base64Encode(runtimeConfig)
             )
         },
-
         "stdoptionoptioninstant_http_date_ser" to { writer ->
             val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, TimestampFormatTrait.Format.HTTP_DATE)
             writer.rustBlock("match $inp") {
@@ -181,79 +182,67 @@ class SerializerBuilder(
         }
     )
 
-    // TODO: this whole thing needs to be overhauled to be composable
-    private val handWrittenDeserializers: Map<String, (RustWriter) -> Unit> = mapOf(
-        "stdoptionoptioninstant_epoch_seconds_deser" to { writer ->
-            writer.write("use #T;", RuntimeType.Deserialize)
-            writer.rust(
-                """
-                Ok(Option::<#T::InstantEpoch>::deserialize(_deser)?.map(|i|i.0))
-            """,
-                RuntimeType.InstantEpoch
-            )
-        },
-        "blob_deser" to { writer ->
-            writer.rustTemplate(
-                """
-                use #{deserialize};
-                use #{de}::Error;
-                let data = <&str>::deserialize(_deser)?;
-                #{base64_decode}(data)
-                    .map(Blob::new)
-                    .map_err(|_|D::Error::invalid_value(#{de}::Unexpected::Str(data), &"valid base64"))
-
-            """,
-                "deserialize" to RuntimeType.Deserialize,
-                "de" to RuntimeType.Serde("de"),
-                "base64_decode" to RuntimeType.Base64Decode(runtimeConfig)
-            )
-        },
-        "stdoptionoptionblob_deser" to { writer ->
-            writer.rustTemplate(
-                """
-                use #{deserialize};
-                use #{de}::Error;
-                Option::<&str>::deserialize(_deser)?.map(|data| {
-                    #{base64_decode}(data)
-                        .map(Blob::new)
-                        .map_err(|_|D::Error::invalid_value(#{de}::Unexpected::Str(data), &"valid base64"))
-                }).transpose()
-
-            """,
-                "deserialize" to RuntimeType.Deserialize,
-                "de" to RuntimeType.Serde("de"),
-                "base64_decode" to RuntimeType.Base64Decode(runtimeConfig)
-            )
-        },
-        "instant_epoch_seconds_deser" to { writer ->
-            writer.write("use #T;", RuntimeType.Deserialize)
-            writer.rust(
-                """
-                let ts = f64::deserialize(_deser)?;
-                Ok(Instant::from_fractional_seconds(ts.floor() as i64, ts - ts.floor()))
-            """
-            )
-        },
-        "stdoptionoptioninstant_http_date_deser" to { writer ->
-            writer.write("use #T;", RuntimeType.Deserialize)
-            writer.rust(
-                """
-                Ok(Option::<#T::InstantHttpDate>::deserialize(_deser)?.map(|i|i.0))
-            """,
-                RuntimeType.InstantHttpDate
-            )
-        },
-        "stdoptionoptioninstant_date_time_deser" to { writer ->
-            writer.write("use #T;", RuntimeType.Deserialize)
-            writer.rust(
-                """
-                Ok(Option::<#T::InstantIso8601>::deserialize(_deser)?.map(|i|i.0))
-            """,
-                RuntimeType.Instant8601
-            )
+    /**
+     * Generate a deserializer for the given type dynamically, eg:
+     * ```rust
+     *  use ::serde::Deserialize;
+     *  Ok(
+     *      Option::<crate::instant_epoch::InstantEpoch>::deserialize(_deser)?
+     *          .map(|el| el.0)
+     *  )
+     * ```
+     *
+     * It utilizes a newtype that defines the given serialization to access the serde serializer
+     * then performs any necessary mapping / unmapping. This has a slight disadvantage in that
+     * that wrapping structures like `Vec` may be allocated twice—I think we should be able to avoid
+     * this eventually however.
+     */
+    private fun RustWriter.deserializer(t: RustType, memberShape: MemberShape) {
+        write("use #T;", RuntimeType.Deserialize)
+        withBlock("Ok(", ")") {
+            writeSerdeType(t, memberShape)
+            write("::deserialize(_deser)?")
+            unrollDeser(t)
         }
+    }
 
-    )
+    private fun RustWriter.unrollDeser(realType: RustType) {
+        when (realType) {
+            is RustType.Vec -> withBlock(".into_iter().map(|el|el", ").collect()") {
+                unrollDeser(realType.member)
+            }
+            is RustType.Option -> withBlock(".map(|el|el", ")") {
+                unrollDeser(realType.value)
+            }
+            else -> write(".0")
+        }
+    }
+
+    private fun RustWriter.writeSerdeType(realType: RustType, memberShape: MemberShape) {
+        when (realType) {
+            is RustType.Option -> {
+                withBlock("Option::<", ">") {
+                    writeSerdeType(realType.value, memberShape)
+                }
+            }
+            is RustType.Vec -> {
+                withBlock("Vec::<", ">") {
+                    writeSerdeType(realType.member, memberShape)
+                }
+            }
+            instant -> {
+                val format = tsFormat(memberShape)
+                when (format) {
+                    TimestampFormatTrait.Format.DATE_TIME -> write("#T::InstantIso8601", RuntimeType.Instant8601)
+                    TimestampFormatTrait.Format.EPOCH_SECONDS -> write("#T::InstantEpoch", RuntimeType.InstantEpoch)
+                    TimestampFormatTrait.Format.HTTP_DATE -> write("#T::InstantHttpDate", RuntimeType.InstantHttpDate)
+                    else -> write("todo!() /* unknown timestamp format */")
+                }
+            }
+            blob -> write("#T::BlobDeser", RuntimeType.BlobSerde(runtimeConfig))
+            else -> writeWithNoFormatting("todo!() /* not sure what type to use for $realType */")
+        }
+    }
 
     /** correct argument type for the serde custom serializer */
     private fun serializerType(symbol: Symbol): Symbol {
@@ -337,7 +326,11 @@ class SerializerBuilder(
         val fnName = serializerName(rustType, memberShape, "deser")
         return RuntimeType.forInlineFun(fnName, "serde_util") { writer ->
             deserializeFn(writer, fnName, symbol) {
-                handWrittenDeserializers[fnName]?.also { it(this) } ?: write("todo!()")
+                if (rustType.contains(document)) {
+                    write("todo!()")
+                } else {
+                    deserializer(rustType, memberShape)
+                }
             }
         }
     }

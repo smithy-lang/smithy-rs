@@ -89,6 +89,7 @@ class InlineDependency(
         fun instant8601() = forRustFile("instant_8601", "instant_8601", "instant_iso8601.rs", CargoDependency.Serde)
 
         fun idempotencyToken() = forRustFile("idempotency_token", "idempotency_token", "idempotency_token.rs", CargoDependency.Rand)
+        fun blobSerde(runtimeConfig: RuntimeConfig) = forRustFile("blob_serde", "blob_serde", "blob_serde.rs", CargoDependency.Serde, CargoDependency.SmithyHttp(runtimeConfig))
     }
 }
 

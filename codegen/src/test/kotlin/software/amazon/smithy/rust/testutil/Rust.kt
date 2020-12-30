@@ -73,6 +73,12 @@ object TestWorkspace {
     fun subproject(): File {
         synchronized(subprojects) {
             val newProject = tempDir(directory = baseDir)
+            newProject.resolve("Cargo.toml").writeText(
+                """
+                [package]
+                name = "stub-${newProject.name}"
+                """.trimIndent()
+            )
             subprojects.add(newProject.name)
             generate()
             return newProject
@@ -141,6 +147,12 @@ class TestWriterDelegator(fileManifest: FileManifest, symbolProvider: RustSymbol
 }
 
 fun TestWriterDelegator.compileAndTest() {
+    val stubModel = """
+    namespace fake
+    service Fake {
+        version: "123"
+    }
+    """.asSmithyModel()
     this.finalize(
         RustSettings(
             ShapeId.from("fake#Fake"),
@@ -148,7 +160,8 @@ fun TestWriterDelegator.compileAndTest() {
             "0.0.1",
             runtimeConfig = TestRuntimeConfig,
             codegenConfig = CodegenConfig(),
-            build = BuildSettings.Default()
+            build = BuildSettings.Default(),
+            model = stubModel
         )
     )
     "cargo test".runCommand(baseDir)

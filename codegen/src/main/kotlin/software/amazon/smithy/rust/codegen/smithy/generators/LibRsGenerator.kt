@@ -8,8 +8,9 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 import software.amazon.smithy.rust.codegen.lang.RustModule
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 
-class LibRsGenerator(private val modules: List<RustModule>) {
+class LibRsGenerator(private val libraryDocs: String, private val modules: List<RustModule>) {
     fun render(writer: RustWriter) {
+        writer.setHeaderDocs(libraryDocs)
         modules.forEach { it.render(writer) }
     }
 }

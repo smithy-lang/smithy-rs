@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+mod blob_serde;
 #[allow(dead_code)]
 mod doc_json;
 #[allow(dead_code)]
