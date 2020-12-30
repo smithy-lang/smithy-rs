@@ -26,7 +26,6 @@ import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
 import software.amazon.smithy.rust.codegen.lang.contains
 import software.amazon.smithy.rust.codegen.lang.render
-import software.amazon.smithy.rust.codegen.lang.rust
 import software.amazon.smithy.rust.codegen.lang.rustBlock
 import software.amazon.smithy.rust.codegen.lang.rustTemplate
 import software.amazon.smithy.rust.codegen.lang.stripOuter
@@ -212,7 +211,7 @@ class SerializerBuilder(
                 unrollDeser(realType.member)
             }
             is RustType.Option -> withBlock(".map(|el|el", ")") {
-                unrollDeser(realType.value)
+                unrollDeser(realType.member)
             }
             else -> write(".0")
         }
@@ -222,7 +221,7 @@ class SerializerBuilder(
         when (realType) {
             is RustType.Option -> {
                 withBlock("Option::<", ">") {
-                    writeSerdeType(realType.value, memberShape)
+                    writeSerdeType(realType.member, memberShape)
                 }
             }
             is RustType.Vec -> {
@@ -254,7 +253,7 @@ class SerializerBuilder(
             is RustType.Vec -> RustType.Slice(unref.member)
             else -> unref
         }
-        val referenced = RustType.Reference(inner = outType, lifetime = null)
+        val referenced = RustType.Reference(member = outType, lifetime = null)
         return symbol.toBuilder().rustType(referenced).build()
     }
 
