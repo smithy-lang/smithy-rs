@@ -188,7 +188,7 @@ mod tests {
     #[tokio::test]
     async fn make_test_request() -> Result<(), Box<dyn Error>> {
         let client = Client::local("dynamodb");
-        let response = dispatch!(client, TestOperation);
+        let _response = dispatch!(client, TestOperation);
         Ok(())
     }
 }

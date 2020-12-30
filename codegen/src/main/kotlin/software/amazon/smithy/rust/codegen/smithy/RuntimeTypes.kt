@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.lang.InlineDependency
 import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
-import java.io.File
 import java.util.Optional
 
 data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: String = "../") {
@@ -23,7 +22,7 @@ data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: S
             return if (node.isPresent) {
                 RuntimeConfig(
                     node.get().getStringMemberOrDefault("cratePrefix", "smithy"),
-                    File(node.get().getStringMemberOrDefault("relativePath", "../")).absolutePath
+                    node.get().getStringMemberOrDefault("relativePath", "../")
                 )
             } else {
                 RuntimeConfig()
@@ -135,6 +134,9 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
 
         val DocJson = RuntimeType("doc_json", InlineDependency.docJson(), "crate")
 
+        val InstantEpoch = RuntimeType("instant_epoch", InlineDependency.instantEpoch(), "crate")
+        val InstantHttpDate = RuntimeType("instant_httpdate", InlineDependency.instantHttpDate(), "crate")
+        val Instant8601 = RuntimeType("instant_8601", InlineDependency.instant8601(), "crate")
         val Config = RuntimeType("config", InlineDependency.config(), "crate")
 
         fun forInlineFun(name: String, module: String, func: (RustWriter) -> Unit) = RuntimeType(
