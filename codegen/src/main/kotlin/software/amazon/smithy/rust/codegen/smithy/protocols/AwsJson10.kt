@@ -118,7 +118,7 @@ class SyntheticBodySymbolProvider(private val model: Model, private val base: Ru
                     initialSymbol.toBuilder().rustType(
                         RustType.Reference(
                             lifetime = "a",
-                            value = initialSymbol.rustType().stripOuter<RustType.Box>()
+                            member = initialSymbol.rustType().stripOuter<RustType.Box>()
                         )
                     ).build()
                 } else {

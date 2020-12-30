@@ -5,11 +5,12 @@
 
 mod blob_serde;
 #[allow(dead_code)]
-mod config;
 mod doc_json;
 #[allow(dead_code)]
 mod error_code;
 mod generic_error;
+#[allow(dead_code)]
+mod idempotency_token;
 mod instant_epoch;
 mod instant_httpdate;
 mod instant_iso8601;
@@ -18,8 +19,8 @@ mod instant_iso8601;
 // requiring a proptest dependency
 #[cfg(test)]
 mod test {
-    use crate::config::v4;
     use crate::doc_json::SerDoc;
+    use crate::idempotency_token::uuid_v4;
     use proptest::prelude::*;
     use proptest::std_facade::HashMap;
     use smithy_types::Document;
@@ -39,10 +40,10 @@ mod test {
 
     #[test]
     fn test_uuid() {
-        assert_eq!(v4(0), "00000000-0000-4000-8000-000000000000");
-        assert_eq!(v4(12341234), "2ff4cb00-0000-4000-8000-000000000000");
+        assert_eq!(uuid_v4(0), "00000000-0000-4000-8000-000000000000");
+        assert_eq!(uuid_v4(12341234), "2ff4cb00-0000-4000-8000-000000000000");
         assert_eq!(
-            v4(u128::max_value()),
+            uuid_v4(u128::max_value()),
             "ffffffff-ffff-4fff-ffff-ffffffffffff"
         );
     }
@@ -65,7 +66,7 @@ mod test {
     proptest! {
         #[test]
         fn doesnt_crash_uuid(v in any::<u128>()) {
-            let uuid = v4(v);
+            let uuid = uuid_v4(v);
             assert_valid(uuid);
         }
     }

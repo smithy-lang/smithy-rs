@@ -156,6 +156,11 @@ fun CodeWriter.raw(text: String) = writeInline(escape(text))
 
 typealias Writable = RustWriter.() -> Unit
 
+/** Helper to allow coercing the Writeable signature
+ *  writable { rust("fn foo() { }")
+ */
+fun writeable(w: Writable): Writable = w
+
 class RustWriter private constructor(
     private val filename: String,
     val namespace: String,

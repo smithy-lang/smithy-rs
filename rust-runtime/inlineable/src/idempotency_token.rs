@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-pub fn v4(input: u128) -> String {
+use std::sync::Mutex;
+
+pub(crate) fn uuid_v4(input: u128) -> String {
     let mut out = String::with_capacity(36);
     // u4-aligned index into [input]
     let mut rnd_idx: u8 = 0;
@@ -26,4 +28,28 @@ pub fn v4(input: u128) -> String {
         }
     }
     out
+}
+
+pub trait ProvideIdempotencyToken {
+    fn token(&self) -> String;
+}
+
+pub fn default_provider() -> impl ProvideIdempotencyToken {
+    Mutex::new(rand::thread_rng())
+}
+
+impl<T> ProvideIdempotencyToken for Mutex<T>
+where
+    T: rand::Rng,
+{
+    fn token(&self) -> String {
+        let input: u128 = self.lock().unwrap().gen();
+        uuid_v4(input)
+    }
+}
+
+impl ProvideIdempotencyToken for &'static str {
+    fn token(&self) -> String {
+        self.to_string()
+    }
 }

@@ -8,7 +8,7 @@ package software.amazon.smithy.rust.codegen.lang
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
 interface Container {
-    val value: RustType
+    val member: RustType
 }
 
 /**
@@ -40,39 +40,44 @@ sealed class RustType {
         override val name: kotlin.String = "i$precision"
     }
 
-    data class Vec(val member: RustType) : RustType() {
+    data class Vec(override val member: RustType) : RustType(), Container {
         override val name: kotlin.String = "Vec"
         override val namespace = "::std::vec"
     }
 
-    data class Slice(val member: RustType) : RustType() {
+    data class Slice(override val member: RustType) : RustType(), Container {
         override val name: kotlin.String = ""
     }
 
-    data class HashMap(val key: RustType, val value: RustType) : RustType() {
+    data class HashMap(val key: RustType, override val member: RustType) : RustType(), Container {
         // TODO: assert that underneath, the member is a String
         override val name: kotlin.String = "HashMap"
         override val namespace = "::std::collections"
     }
 
-    data class HashSet(val member: RustType) : RustType() {
+    data class HashSet(override val member: RustType) : RustType(), Container {
         // TODO: assert that underneath, the member is a String
         override val name: kotlin.String = SetType
         override val namespace = SetNamespace
     }
 
-    data class Reference(val lifetime: kotlin.String?, override val value: RustType) : RustType(), Container {
-        override val name: kotlin.String = value.name
+    data class Reference(val lifetime: kotlin.String?, override val member: RustType) : RustType(), Container {
+        override val name: kotlin.String = member.name
     }
 
-    data class Option(override val value: RustType) : RustType(), Container {
+    data class Option(override val member: RustType) : RustType(), Container {
         override val name: kotlin.String = "Option"
         override val namespace = "::std::option"
     }
 
-    data class Box(override val value: RustType) : RustType(), Container {
+    data class Box(override val member: RustType) : RustType(), Container {
         override val name: kotlin.String = "Box"
         override val namespace = "::std::boxed"
+    }
+
+    data class Dyn(override val member: RustType) : RustType(), Container {
+        override val name = "dyn"
+        override val namespace: kotlin.String? = null
     }
 
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
@@ -94,11 +99,12 @@ fun RustType.render(fullyQualified: Boolean): String {
         is RustType.String -> this.name
         is RustType.Vec -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Slice -> "[${this.member.render(fullyQualified)}]"
-        is RustType.HashMap -> "${this.name}<${this.key.render(fullyQualified)}, ${this.value.render(fullyQualified)}>"
+        is RustType.HashMap -> "${this.name}<${this.key.render(fullyQualified)}, ${this.member.render(fullyQualified)}>"
         is RustType.HashSet -> "${this.name}<${this.member.render(fullyQualified)}>"
-        is RustType.Reference -> "&${this.lifetime?.let { "'$it" } ?: ""} ${this.value.render(fullyQualified)}"
-        is RustType.Option -> "${this.name}<${this.value.render(fullyQualified)}>"
-        is RustType.Box -> "${this.name}<${this.value.render(fullyQualified)}>"
+        is RustType.Reference -> "&${this.lifetime?.let { "'$it" } ?: ""} ${this.member.render(fullyQualified)}"
+        is RustType.Option -> "${this.name}<${this.member.render(fullyQualified)}>"
+        is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"
+        is RustType.Dyn -> "${this.name} ${this.member.render(fullyQualified)}"
         is RustType.Opaque -> this.name
     }
     return "$namespace$base"
@@ -115,18 +121,14 @@ fun <T : RustType> RustType.contains(t: T): Boolean {
     }
 
     return when (this) {
-        is RustType.Vec -> this.member.contains(t)
-        is RustType.HashSet -> this.member.contains(t)
-        is RustType.Reference -> this.value.contains(t)
-        is RustType.Option -> this.value.contains(t)
-        is RustType.Box -> this.value.contains(t)
+        is Container -> this.member.contains(t)
         else -> false
     }
 }
 
 inline fun <reified T : Container> RustType.stripOuter(): RustType {
     return when (this) {
-        is T -> this.value
+        is T -> this.member
         else -> this
     }
 }

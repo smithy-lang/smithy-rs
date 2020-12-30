@@ -10,6 +10,7 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
@@ -38,8 +39,12 @@ class ServiceGenerator(
         }
         renderBodies(operations)
 
-        writers.useFileWriter("src/lib.rs", "crate::lib") { writer ->
-            ServiceConfigGenerator(config.serviceShape).render(writer)
+        writers.useFileWriter("src/config.rs", "crate::config") { writer ->
+            // TODO: pull in extra customizations from SPI
+            ServiceConfigGenerator.withBaseBehavior(config, extraCustomizations = listOf()).render(writer)
+        }
+        writers.useFileWriter("src/lib.rs", "crate::lib") {
+            it.write("pub use config::Config;")
         }
     }
 
