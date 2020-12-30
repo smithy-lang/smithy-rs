@@ -95,7 +95,6 @@ jobs:
         path: |
           codegen-test/build/smithyprojections/codegen-test/*/rust-codegen/
           codegen-test/build/smithyprojections/codegen-test/Cargo.toml
-          codegen-test/build/smithyprojections/codegen-test/target/doc
   runtime-tests:
     name: Rust runtime tests
     runs-on: ubuntu-latest
@@ -113,3 +112,47 @@ jobs:
         toolchain: ${{ env.rust_version }}
     - name: execute runtime tests
       run: ./rust-runtime/test.sh
+
+  generate-sdk:
+    name: Generate an AWS SDK
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - uses: actions/cache@v2
+      name: Cargo Cache
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.java_version }}
+    - name: integration-tests
+      run: ./gradlew :aws-sdk:assemble
+    - name: docs
+      run: ./gradlew :aws-sdk:cargoDocs
+    - uses: actions/upload-artifact@v2
+      name: Upload Codegen Output for inspection
+        # Always upload the output even if the tests failed
+      if: ${{ always() }}
+      with:
+        name: sdk
+        path: |
+          aws-sdk/build/aws-sdk/
+          aws-sdk/build/target/doc
+          !aws-sdk/build/target/debug
