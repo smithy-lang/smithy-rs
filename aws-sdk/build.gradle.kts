@@ -8,7 +8,7 @@ import software.amazon.smithy.aws.traits.ServiceTrait
 import kotlin.streams.toList
 
 extra["displayName"] = "Smithy :: Rust :: AWS-SDK"
-extra["moduleName"] = "software.amazon.smithy.kotlin.awssdk"
+extra["moduleName"] = "software.amazon.smithy.rust.awssdk"
 
 tasks["jar"].enabled = false
 

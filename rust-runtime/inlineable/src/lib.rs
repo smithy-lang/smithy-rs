@@ -9,6 +9,9 @@ mod doc_json;
 #[allow(dead_code)]
 mod error_code;
 mod generic_error;
+mod instant_epoch;
+mod instant_httpdate;
+mod instant_iso8601;
 
 // This test is outside of uuid.rs to enable copying the entirety of uuid.rs into the SDK without
 // requiring a proptest dependency

@@ -74,7 +74,7 @@ class InlineDependency(
         ): InlineDependency {
             // The inline crate is loaded as a dependency on the runtime classpath
             val rustFile = this::class.java.getResource("/inlineable/src/$filename")
-            check(rustFile != null)
+            check(rustFile != null) { "Rust file $filename was missing from the resource bundle!" }
             return InlineDependency(name, module, additionalDepencies.toList()) { writer ->
                 writer.raw(rustFile.readText())
             }
@@ -84,6 +84,9 @@ class InlineDependency(
         fun genericError() = forRustFile("GenericError", "types", "generic_error.rs", CargoDependency.Serde)
         fun errorCode() = forRustFile("error_code", "error_code", "error_code.rs", CargoDependency.Http)
         fun docJson() = forRustFile("doc_json", "doc_json", "doc_json.rs", CargoDependency.Serde)
+        fun instantEpoch() = forRustFile("instant_epoch", "instant_epoch", "instant_epoch.rs", CargoDependency.Serde)
+        fun instantHttpDate() = forRustFile("instant_httpdate", "instant_httpdate", "instant_httpdate.rs", CargoDependency.Serde)
+        fun instant8601() = forRustFile("instant_8601", "instant_8601", "instant_iso8601.rs", CargoDependency.Serde)
 
         // Stub config implementation as a placeholder before one can be generated dynamically
         fun config() = forRustFile("config", "config", "config.rs", CargoDependency.Rand)
