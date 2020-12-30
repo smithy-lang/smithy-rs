@@ -26,6 +26,7 @@ dependencies {
     api("com.moandjiezana.toml:toml4j:0.7.2")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-waiters:$smithyVersion")
     runtimeOnly(project(":rust-runtime"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
