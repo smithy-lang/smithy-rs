@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.lang.InlineDependency
 import software.amazon.smithy.rust.codegen.lang.RustDependency
 import software.amazon.smithy.rust.codegen.lang.RustType
 import software.amazon.smithy.rust.codegen.lang.RustWriter
-import java.io.File
 import java.util.Optional
 
 data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: String = "../") {
@@ -23,7 +22,7 @@ data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: S
             return if (node.isPresent) {
                 RuntimeConfig(
                     node.get().getStringMemberOrDefault("cratePrefix", "smithy"),
-                    File(node.get().getStringMemberOrDefault("relativePath", "../")).absolutePath
+                    node.get().getStringMemberOrDefault("relativePath", "../")
                 )
             } else {
                 RuntimeConfig()
