@@ -13,6 +13,7 @@ import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.traits.DocumentationTrait
 import java.util.Optional
 import java.util.logging.Logger
 import kotlin.streams.toList
@@ -46,11 +47,11 @@ class RustSettings(
     val service: ShapeId,
     val moduleName: String,
     val moduleVersion: String,
-    val moduleDescription: String = "",
     val moduleAuthors: List<String> = listOf("TODO@todo.com"),
     val runtimeConfig: RuntimeConfig,
     val codegenConfig: CodegenConfig,
-    val build: BuildSettings
+    val build: BuildSettings,
+    private val model: Model
 ) {
 
     /**
@@ -65,6 +66,12 @@ class RustSettings(
             .asServiceShape()
             .orElseThrow { CodegenException("Shape is not a service: $service") }
     }
+
+    val moduleDescription: String
+        get() {
+            val service = getService(model)
+            return service.getTrait(DocumentationTrait::class.java).map { it.value }.orElse(moduleName)
+        }
 
     companion object {
         private val LOGGER: Logger = Logger.getLogger(RustSettings::class.java.name)
@@ -95,7 +102,6 @@ class RustSettings(
 
             val moduleName = config.expectStringMember(MODULE_NAME).value
             val version = config.expectStringMember(MODULE_VERSION).value
-            val desc = config.getStringMemberOrDefault(MODULE_DESCRIPTION, "$moduleName client")
             val build = config.getObjectMember(BUILD_SETTINGS)
             val runtimeConfig = config.getObjectMember(RUNTIME_CONFIG)
             val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
@@ -103,10 +109,10 @@ class RustSettings(
                 service,
                 moduleName,
                 version,
-                desc,
                 runtimeConfig = RuntimeConfig.fromNode(runtimeConfig),
                 codegenConfig = CodegenConfig.fromNode(codegenSettings),
-                build = BuildSettings.fromNode(build)
+                build = BuildSettings.fromNode(build),
+                model = model
             )
         }
 

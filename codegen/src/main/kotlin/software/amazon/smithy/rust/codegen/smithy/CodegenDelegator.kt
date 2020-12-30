@@ -48,7 +48,7 @@ fun CodegenWriterDelegator<RustWriter>.finalize(settings: RustSettings) {
         val cargoToml = CargoTomlGenerator(
             settings,
             it,
-            cargoDependencies
+            cargoDependencies,
         )
         cargoToml.render()
     }
@@ -57,7 +57,7 @@ fun CodegenWriterDelegator<RustWriter>.finalize(settings: RustSettings) {
         val modules = includedModules.map { moduleName ->
             RustModule.default(moduleName, PublicModules.contains(moduleName))
         }
-        LibRsGenerator(modules).render(writer)
+        LibRsGenerator(settings.moduleDescription, modules).render(writer)
     }
     flushWriters()
 }

@@ -114,7 +114,7 @@ class EnumGeneratorTest {
                 assert_ne!(FooEnum::from("Bar"), FooEnum::from("Foo"));
                 let mut hash_of_enums = std::collections::HashSet::new();
                 hash_of_enums.insert(FooEnum::from("Foo"));
-            """.trimIndent()
+            """
         )
     }
 
