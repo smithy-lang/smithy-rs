@@ -148,13 +148,13 @@ jobs:
       run: ./gradlew :aws-sdk:cargoDocs
     - name: Get current date
       id: date
-      run: echo "name=${GITHUB_HEAD_REF:nightly}-$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+      run: echo "name=${GITHUB_HEAD_REF:-nightly}-$(date +'%Y-%m-%d')" >> $GITHUB_ENV
     - uses: actions/upload-artifact@v2
       name: Upload Codegen Output for inspection
         # Always upload the output even if the tests failed
       if: ${{ always() }}
       with:
-        name: aws-sdk-${{ steps.date.outputs.date }}-${{ github.sha }}
+        name: aws-sdk-${{ env.name }}-${{ github.sha }}
         path: |
           aws-sdk/build/aws-sdk/
           !aws-sdk/build/aws-sdk/target
