@@ -5,6 +5,7 @@
 
 const NANOS_PER_SECOND: u32 = 1_000_000_000;
 
+#[non_exhaustive]
 #[derive(Debug, Eq, PartialEq)]
 pub enum DateParseError {
     Invalid(&'static str),
