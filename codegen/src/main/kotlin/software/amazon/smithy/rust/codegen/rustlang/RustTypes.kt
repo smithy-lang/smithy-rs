@@ -13,6 +13,10 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 sealed class RustType {
 
     // TODO: when Kotlin supports, sealed interfaces, seal Container
+    /**
+     * A Rust type that contains [member], another RustType. Used to generically operate over
+     * shapes that contain other shapes, eg. [stripOuter] and [contains].
+     */
     interface Container {
         val member: RustType
         val namespace: kotlin.String?
