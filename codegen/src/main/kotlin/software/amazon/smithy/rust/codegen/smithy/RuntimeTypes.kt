@@ -8,11 +8,11 @@ package software.amazon.smithy.rust.codegen.smithy
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.lang.CargoDependency
-import software.amazon.smithy.rust.codegen.lang.InlineDependency
-import software.amazon.smithy.rust.codegen.lang.RustDependency
-import software.amazon.smithy.rust.codegen.lang.RustType
-import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustType
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import java.util.Optional
 
 data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: String = "../") {

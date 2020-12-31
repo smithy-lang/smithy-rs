@@ -11,8 +11,8 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpTrait
-import software.amazon.smithy.rust.codegen.lang.RustWriter
-import software.amazon.smithy.rust.codegen.lang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpTraitBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.uriFormatString

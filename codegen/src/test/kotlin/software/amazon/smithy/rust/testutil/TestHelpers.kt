@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.testutil
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCodegenPlugin

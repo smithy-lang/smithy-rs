@@ -5,8 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators.config
 
-import software.amazon.smithy.rust.codegen.lang.Writable
-import software.amazon.smithy.rust.codegen.lang.writeable
+import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.writable
 
 /**
  * An overrideable section for code generation. Usage:
@@ -42,5 +42,5 @@ abstract class Section(val name: String)
  */
 abstract class NamedSectionGenerator<T : Section> {
     abstract fun section(section: T): Writable
-    protected val emptySection = writeable { }
+    protected val emptySection = writable { }
 }

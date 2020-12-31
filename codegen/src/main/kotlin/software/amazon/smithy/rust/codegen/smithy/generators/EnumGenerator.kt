@@ -9,9 +9,9 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.rust.codegen.lang.RustWriter
-import software.amazon.smithy.rust.codegen.lang.rustBlock
-import software.amazon.smithy.rust.codegen.lang.withBlock
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.util.doubleQuote

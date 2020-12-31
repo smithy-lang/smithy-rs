@@ -6,11 +6,11 @@
 package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
-import software.amazon.smithy.rust.codegen.lang.CargoDependency
-import software.amazon.smithy.rust.codegen.lang.InlineDependency
-import software.amazon.smithy.rust.codegen.lang.RustDependency
-import software.amazon.smithy.rust.codegen.lang.RustModule
-import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsGenerator
 

@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.lang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.util.CommandFailed

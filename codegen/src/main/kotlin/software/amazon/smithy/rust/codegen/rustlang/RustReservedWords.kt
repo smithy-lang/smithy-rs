@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.lang
+package software.amazon.smithy.rust.codegen.rustlang
 
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.codegen.core.ReservedWords

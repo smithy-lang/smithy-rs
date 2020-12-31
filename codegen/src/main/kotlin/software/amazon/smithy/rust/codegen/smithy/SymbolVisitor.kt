@@ -37,9 +37,9 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpLabelTrait
-import software.amazon.smithy.rust.codegen.lang.RustType
-import software.amazon.smithy.rust.codegen.lang.RustWriter
-import software.amazon.smithy.rust.codegen.lang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.RustType
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -91,6 +91,17 @@ fun Symbol.makeOptional(): Symbol {
             .addReference(this)
             .name(rustType.name)
             .build()
+    }
+}
+
+fun Symbol.makeRustBoxed(): Symbol {
+    val symbol = this
+    val rustType = RustType.Box(symbol.rustType())
+    return with(Symbol.builder()) {
+        rustType(rustType)
+        addReference(symbol)
+        name(rustType.name)
+        build()
     }
 }
 

@@ -15,11 +15,11 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.lang.CargoDependency
-import software.amazon.smithy.rust.codegen.lang.RustDependency
-import software.amazon.smithy.rust.codegen.lang.RustWriter
-import software.amazon.smithy.rust.codegen.lang.raw
-import software.amazon.smithy.rust.codegen.lang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.raw
+import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.BuildSettings
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.RustSettings

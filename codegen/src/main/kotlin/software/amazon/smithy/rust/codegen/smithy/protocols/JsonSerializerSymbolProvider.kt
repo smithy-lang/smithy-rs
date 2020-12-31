@@ -15,21 +15,22 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.lang.Attribute
-import software.amazon.smithy.rust.codegen.lang.Custom
-import software.amazon.smithy.rust.codegen.lang.RustMetadata
-import software.amazon.smithy.rust.codegen.lang.RustType
-import software.amazon.smithy.rust.codegen.lang.RustWriter
-import software.amazon.smithy.rust.codegen.lang.contains
-import software.amazon.smithy.rust.codegen.lang.render
-import software.amazon.smithy.rust.codegen.lang.rustBlock
-import software.amazon.smithy.rust.codegen.lang.rustTemplate
-import software.amazon.smithy.rust.codegen.lang.stripOuter
-import software.amazon.smithy.rust.codegen.lang.withBlock
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.Custom
+import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.rustlang.RustType
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.contains
+import software.amazon.smithy.rust.codegen.rustlang.render
+import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.stripOuter
+import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolMetadataProvider
@@ -122,7 +123,7 @@ class SerializerBuilder(
     private val runtimeConfig = symbolProvider.config().runtimeConfig
 
     // Small hack to get the Rust type for these problematic shapes
-    private val instant = symbolProvider.toSymbol(TimestampShape.builder().id("dummy#ts").build()).rustType()
+    private val instant = RuntimeType.Instant(runtimeConfig).toSymbol().rustType()
     private val blob = symbolProvider.toSymbol(BlobShape.builder().id("dummy#blob").build()).rustType()
     private val document = symbolProvider.toSymbol(DocumentShape.builder().id("dummy#doc").build()).rustType()
     private val customShapes = setOf(instant, blob, document)
@@ -199,7 +200,7 @@ class SerializerBuilder(
     private fun RustWriter.deserializer(t: RustType, memberShape: MemberShape) {
         write("use #T;", RuntimeType.Deserialize)
         withBlock("Ok(", ")") {
-            writeSerdeType(t, memberShape)
+            serdeType(t, memberShape)(this)
             write("::deserialize(_deser)?")
             unrollDeser(t)
         }
@@ -213,33 +214,54 @@ class SerializerBuilder(
             is RustType.Option -> withBlock(".map(|el|el", ")") {
                 unrollDeser(realType.member)
             }
-            else -> write(".0")
+
+            is RustType.HashMap -> withBlock(".into_iter().map(|(k,el)|(k, el", ")).collect()") {
+                unrollDeser(realType.member)
+            }
+
+            // We will only create HashSets of strings, so we shouldn't ever hit this
+            is RustType.HashSet -> TODO("https://github.com/awslabs/smithy-rs/issues/44")
+
+            is RustType.Box -> {
+                unrollDeser(realType.member)
+                write(".into()")
+            }
+
+            else -> if (customShapes.contains(realType)) {
+                write(".0")
+            } else {
+                TODO("unsupported type $realType")
+            }
         }
     }
 
-    private fun RustWriter.writeSerdeType(realType: RustType, memberShape: MemberShape) {
-        when (realType) {
-            is RustType.Option -> {
-                withBlock("Option::<", ">") {
-                    writeSerdeType(realType.member, memberShape)
-                }
-            }
-            is RustType.Vec -> {
-                withBlock("Vec::<", ">") {
-                    writeSerdeType(realType.member, memberShape)
-                }
-            }
-            instant -> {
+    private fun RustWriter.serdeContainerType(realType: RustType.Container, memberShape: MemberShape) {
+        val prefix = when (realType) {
+            is RustType.HashMap -> "${realType.namespace}::${realType.name}::<String, "
+            else -> "${realType.namespace}::${realType.name}::<"
+        }
+        withBlock(prefix, ">") {
+            serdeType(realType.member, memberShape)(this)
+        }
+    }
+
+    private fun serdeType(realType: RustType, memberShape: MemberShape): Writable {
+        return when (realType) {
+            instant -> writable {
                 val format = tsFormat(memberShape)
                 when (format) {
                     TimestampFormatTrait.Format.DATE_TIME -> write("#T::InstantIso8601", RuntimeType.Instant8601)
                     TimestampFormatTrait.Format.EPOCH_SECONDS -> write("#T::InstantEpoch", RuntimeType.InstantEpoch)
-                    TimestampFormatTrait.Format.HTTP_DATE -> write("#T::InstantHttpDate", RuntimeType.InstantHttpDate)
+                    TimestampFormatTrait.Format.HTTP_DATE -> write(
+                        "#T::InstantHttpDate",
+                        RuntimeType.InstantHttpDate
+                    )
                     else -> write("todo!() /* unknown timestamp format */")
                 }
             }
-            blob -> write("#T::BlobDeser", RuntimeType.BlobSerde(runtimeConfig))
-            else -> writeWithNoFormatting("todo!() /* not sure what type to use for $realType */")
+            blob -> writable { write("#T::BlobDeser", RuntimeType.BlobSerde(runtimeConfig)) }
+            is RustType.Container -> writable { serdeContainerType(realType, memberShape) }
+            else -> TODO("Serializing $realType is not supported")
         }
     }
 

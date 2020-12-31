@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.lang
+package software.amazon.smithy.rust.codegen.rustlang
 
 import org.intellij.lang.annotations.Language
 import software.amazon.smithy.codegen.core.CodegenException
@@ -159,7 +159,7 @@ typealias Writable = RustWriter.() -> Unit
 /** Helper to allow coercing the Writeable signature
  *  writable { rust("fn foo() { }")
  */
-fun writeable(w: Writable): Writable = w
+fun writable(w: Writable): Writable = w
 
 class RustWriter private constructor(
     private val filename: String,
