@@ -35,7 +35,7 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
  *  avoidable. This may be an eventual performance bottleneck, but it should be totally avoidable with slightly
  *  more complex code generation.
  */
-class SerializerBuilder(
+class CustomSerializerGenerator(
     private val symbolProvider: RustSymbolProvider,
     model: Model,
     private val defaultTimestampFormat: TimestampFormatTrait.Format

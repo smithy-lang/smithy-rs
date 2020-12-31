@@ -46,7 +46,7 @@ class JsonSerializerSymbolProvider(
     private fun MemberShape.serializedName() =
         this.getTrait(JsonNameTrait::class.java).map { it.value }.orElse(this.memberName)
 
-    private val serializerBuilder = SerializerBuilder(base, model, defaultTimestampFormat)
+    private val serializerBuilder = CustomSerializerGenerator(base, model, defaultTimestampFormat)
     override fun memberMeta(memberShape: MemberShape): RustMetadata {
         val currentMeta = base.toSymbol(memberShape).expectRustMetadata()
         val serdeConfig = serdeRequired(model.expectShape(memberShape.container))

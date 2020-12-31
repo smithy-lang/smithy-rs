@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.testutil.asSmithyModel
 import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
-internal class SerializerBuilderTest {
+internal class CustomSerializerGeneratorTest {
     private val model = """
     namespace test
     structure S {
@@ -53,20 +53,20 @@ internal class SerializerBuilderTest {
 
     @Test
     fun `generate correct function names`() {
-        val serializerBuilder = SerializerBuilder(provider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
+        val serializerBuilder = CustomSerializerGenerator(provider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
         serializerBuilder.serializerFor(model.lookup("test#S\$timestamp"))!!.name shouldBe "stdoptionoptioninstant_epoch_seconds_ser"
         serializerBuilder.serializerFor(model.lookup("test#S\$blob"))!!.name shouldBe "stdoptionoptionblob_ser"
         serializerBuilder.deserializerFor(model.lookup("test#S\$blob"))!!.name shouldBe "stdoptionoptionblob_deser"
         serializerBuilder.deserializerFor(model.lookup("test#S\$string")) shouldBe null
     }
 
-    private fun checkDeserializer(builder: SerializerBuilder, shapeId: String) {
+    private fun checkDeserializer(builder: CustomSerializerGenerator, shapeId: String) {
         val symbol = builder.deserializerFor(model.lookup(shapeId))
         check(symbol != null) { "For $shapeId, expected a custom deserializer" }
         checkSymbol(symbol)
     }
 
-    private fun checkSerializer(builder: SerializerBuilder, shapeId: String) {
+    private fun checkSerializer(builder: CustomSerializerGenerator, shapeId: String) {
         val symbol = builder.serializerFor(model.lookup(shapeId))
         check(symbol != null) { "For $shapeId, expected a custom serializer" }
         checkSymbol(symbol)
@@ -98,14 +98,14 @@ internal class SerializerBuilderTest {
         "sparseBlobList"
     )
     fun `generate basic deserializers that compile`(memberName: String) {
-        val serializerBuilder = SerializerBuilder(provider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
+        val serializerBuilder = CustomSerializerGenerator(provider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
         checkDeserializer(serializerBuilder, "test#S\$$memberName")
         checkSerializer(serializerBuilder, "test#S\$$memberName")
     }
 
     @Test
     fun `support deeply nested structures`() {
-        val serializerBuilder = SerializerBuilder(provider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
+        val serializerBuilder = CustomSerializerGenerator(provider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
         checkDeserializer(serializerBuilder, "test#TopLevel\$member")
         checkSerializer(serializerBuilder, "test#TopLevel\$member")
     }
@@ -117,7 +117,7 @@ internal class SerializerBuilderTest {
                 return provider.toSymbol(shape).makeRustBoxed()
             }
         }
-        val serializerBuilder = SerializerBuilder(boxingProvider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
+        val serializerBuilder = CustomSerializerGenerator(boxingProvider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
         checkSerializer(serializerBuilder, "test#S\$timestamp")
         checkDeserializer(serializerBuilder, "test#S\$timestamp")
     }
