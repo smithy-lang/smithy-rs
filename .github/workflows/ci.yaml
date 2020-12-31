@@ -142,15 +142,16 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: ${{ env.java_version }}
-    - name: integration-tests
+    - name: Generate the SDK
       run: ./gradlew :aws-sdk:assemble
-    - name: docs
+      # docs are not included in the artifact; this step validates that they can be generated
+    - name: Generate docs
       run: ./gradlew :aws-sdk:cargoDocs
     - name: Get current date
       id: date
       run: echo "name=${GITHUB_HEAD_REF:-nightly}-$(date +'%Y-%m-%d')" >> $GITHUB_ENV
     - uses: actions/upload-artifact@v2
-      name: Upload Codegen Output for inspection
+      name: Upload SDK Artifact
         # Always upload the output even if the tests failed
       if: ${{ always() }}
       with:
