@@ -7,10 +7,13 @@ package software.amazon.smithy.rust.codegen.smithy.protocols
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.rust
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.util.lookup
@@ -23,11 +26,11 @@ internal class SerializerBuilderTest {
     private val model = """
     namespace test
     structure S {
-        ts: Timestamp,
-        s: String,
-        b: Blob,
-        bl: BlobList,
-        sbl: SparseBlobList
+        timestamp: Timestamp,
+        string: String,
+        blob: Blob,
+        blobList: BlobList,
+        sparseBlobList: SparseBlobList
     }
     list BlobList {
         member: Blob
@@ -51,58 +54,60 @@ internal class SerializerBuilderTest {
     @Test
     fun `generate correct function names`() {
         val serializerBuilder = SerializerBuilder(provider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
-        serializerBuilder.serializerFor(model.lookup("test#S\$ts"))!!.name shouldBe "stdoptionoptioninstant_epoch_seconds_ser"
-        serializerBuilder.serializerFor(model.lookup("test#S\$b"))!!.name shouldBe "stdoptionoptionblob_ser"
-        serializerBuilder.deserializerFor(model.lookup("test#S\$b"))!!.name shouldBe "stdoptionoptionblob_deser"
-        serializerBuilder.deserializerFor(model.lookup("test#S\$s")) shouldBe null
+        serializerBuilder.serializerFor(model.lookup("test#S\$timestamp"))!!.name shouldBe "stdoptionoptioninstant_epoch_seconds_ser"
+        serializerBuilder.serializerFor(model.lookup("test#S\$blob"))!!.name shouldBe "stdoptionoptionblob_ser"
+        serializerBuilder.deserializerFor(model.lookup("test#S\$blob"))!!.name shouldBe "stdoptionoptionblob_deser"
+        serializerBuilder.deserializerFor(model.lookup("test#S\$string")) shouldBe null
     }
 
-    @Test
-    fun `generate basic deserializers that compile`() {
-        val serializerBuilder = SerializerBuilder(provider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
-        val timestamp = serializerBuilder.deserializerFor(model.lookup("test#S\$ts"))!!
-        val blob = serializerBuilder.deserializerFor(model.lookup("test#S\$b"))!!
-        val blobList = serializerBuilder.deserializerFor(model.lookup("test#S\$bl"))!!
-        val sparseBlobList = serializerBuilder.deserializerFor(model.lookup("test#S\$sbl"))!!
+    private fun checkDeserializer(builder: SerializerBuilder, shapeId: String) {
+        val symbol = builder.deserializerFor(model.lookup(shapeId))
+        check(symbol != null) { "For $shapeId, expected a custom deserializer" }
+        checkSymbol(symbol)
+    }
+
+    private fun checkSerializer(builder: SerializerBuilder, shapeId: String) {
+        val symbol = builder.serializerFor(model.lookup(shapeId))
+        check(symbol != null) { "For $shapeId, expected a custom serializer" }
+        checkSymbol(symbol)
+    }
+
+    private fun checkSymbol(symbol: RuntimeType) {
         val writer = TestWorkspace.testProject(provider)
         writer.useFileWriter("src/lib.rs", "crate::lib") {
             it.rust(
                 """
-                fn foo() {
-                    // commented out so that we generate the import & inject the serializer
-                    // but I don't want to deal with getting the argument to compile
-                    // let _ = #T();
-                    // let _ = #T();
-                    // let _ = #T();
-                    // let _ = #T();
-                }
-            """,
-                timestamp, blob, blobList, sparseBlobList
+                    fn foo() {
+                        // commented out so that we generate the import & inject the serializer
+                        // but I don't want to deal with getting the argument to compile
+                        // let _ = #T();
+                    }
+                """,
+                symbol
             )
         }
         println("file:///${writer.baseDir}/src/serde_util.rs")
         writer.compileAndTest()
+    }
+
+    @ParameterizedTest(name = "{index} ==> ''{0}''")
+    @CsvSource(
+        "timestamp",
+        "blob",
+        "blobList",
+        "sparseBlobList"
+    )
+    fun `generate basic deserializers that compile`(memberName: String) {
+        val serializerBuilder = SerializerBuilder(provider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
+        checkDeserializer(serializerBuilder, "test#S\$$memberName")
+        checkSerializer(serializerBuilder, "test#S\$$memberName")
     }
 
     @Test
     fun `support deeply nested structures`() {
         val serializerBuilder = SerializerBuilder(provider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
-        val timestamp = serializerBuilder.deserializerFor(model.lookup("test#TopLevel\$member"))!!
-        val writer = TestWorkspace.testProject(provider)
-        writer.useFileWriter("src/lib.rs", "crate::lib") {
-            it.rust(
-                """
-                fn foo() {
-                    // commented out so that we generate the import & inject the serializer
-                    // but I don't want to deal with getting the argument to compile
-                    // let _ = #T();
-                }
-            """,
-                timestamp
-            )
-        }
-        println("file:///${writer.baseDir}/src/serde_util.rs")
-        writer.compileAndTest()
+        checkDeserializer(serializerBuilder, "test#TopLevel\$member")
+        checkSerializer(serializerBuilder, "test#TopLevel\$member")
     }
 
     @Test
@@ -113,21 +118,7 @@ internal class SerializerBuilderTest {
             }
         }
         val serializerBuilder = SerializerBuilder(boxingProvider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
-        val timestamp = serializerBuilder.deserializerFor(model.lookup("test#S\$ts"))!!
-        val writer = TestWorkspace.testProject(provider)
-        writer.useFileWriter("src/lib.rs", "crate::lib") {
-            it.rust(
-                """
-                fn foo() {
-                    // commented out so that we generate the import & inject the serializer
-                    // but I don't want to deal with getting the argument to compile
-                    // let _ = #T();
-                }
-            """,
-                timestamp
-            )
-        }
-        println("file:///${writer.baseDir}/src/serde_util.rs")
-        writer.compileAndTest()
+        checkSerializer(serializerBuilder, "test#S\$timestamp")
+        checkDeserializer(serializerBuilder, "test#S\$timestamp")
     }
 }

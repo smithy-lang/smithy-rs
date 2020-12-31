@@ -8,7 +8,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use smithy_http::base64;
 use smithy_types::Blob;
 
-struct BlobSer<'a>(pub &'a Blob);
+pub struct BlobSer<'a>(pub &'a Blob);
 
 impl Serialize for BlobSer<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>

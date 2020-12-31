@@ -77,6 +77,7 @@ object TestWorkspace {
                 """
                 [package]
                 name = "stub-${newProject.name}"
+                version = "0.0.1"
                 """.trimIndent()
             )
             subprojects.add(newProject.name)
