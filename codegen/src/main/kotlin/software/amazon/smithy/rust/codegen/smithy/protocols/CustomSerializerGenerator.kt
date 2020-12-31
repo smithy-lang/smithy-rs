@@ -58,7 +58,25 @@ class CustomSerializerGenerator(
      * The returned object is a RuntimeType, which generates and creates all necessary dependencies when used.
      *
      * If this shape does not require custom serialization, this function returns null.
+     *
+     * For Example, for `Option<Instant>` being serialized in Epoch seconds:
+     * To make it more readable, I've manually removed the fully qualified types.
+     *   ```rust
+     *   pub fn stdoptionoptioninstant_epoch_seconds_ser<S>(
+     *     _inp: &Option<Instant>,
+     *     _serializer: S,
+     *   ) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
+     *   where S: Serializer, {
+     *      use Serialize;
+     *      let el = _inp;
+     *      el.as_ref()
+     *          .map(|el| instant_epoch::InstantEpoch(*el))
+     *          .serialize(_serializer)
+     *   }
+     *  ```
+     *
      */
+
     fun serializerFor(memberShape: MemberShape): RuntimeType? {
         val symbol = symbolProvider.toSymbol(memberShape)
         val rustType = symbol.rustType()
@@ -80,7 +98,25 @@ class CustomSerializerGenerator(
      * The returned object is a RuntimeType, which generates and creates all necessary dependencies when used.
      *
      * If this shape does not require custom serialization, this function returns null.
+     *
+     * For example, the deserializer for `Option<Instant>` when converted to epoch seconds:
+     * To make it more readable, I've manually removed the fully qualified types.
+     * ```rust
+     * pub fn stdoptionoptioninstant_epoch_seconds_deser<'de, D>(
+     * _deser: D,
+     * ) -> Result<Option<Instant>, D::Error>
+     * where
+     * D: Deserializer<'de>,
+     * {
+     *     use ::serde::Deserialize;
+     *     Ok(
+     *         Option::<instant_epoch::InstantEpoch>::deserialize(_deser)?
+     *         .map(|el| el.0),
+     *     )
+     * }
+     * ```
      */
+
     fun deserializerFor(memberShape: MemberShape): RuntimeType? {
         val symbol = symbolProvider.toSymbol(memberShape)
         val rustType = symbol.rustType()
