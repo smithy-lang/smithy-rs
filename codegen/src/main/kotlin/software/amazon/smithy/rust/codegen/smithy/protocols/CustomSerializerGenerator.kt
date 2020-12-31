@@ -31,9 +31,10 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
  *  For a given type that does not implement serialize/deserialize, convert it to a `newtype` that _does_ (for example,
  *  see `InstantEpoch` in `instant_epoch.rs`. Then, using those types, invoke the serde derived serializer.
  *
- *  The generated code isn't ideal for a number of reasons—It may `collect()` / allocate in places that may be technically
- *  avoidable. This may be an eventual performance bottleneck, but it should be totally avoidable with slightly
- *  more complex code generation.
+ *  The generated code isn't optimal performance-wise. It uses `.collect()` (creating a new Vector from an iterator)
+ *  in places that may be avoidable.
+ *  This may be an eventual performance bottleneck, but it should be totally avoidable with slightly more complex
+ *  code generation. Furthermore, these code paths are only hit for custom types.
  */
 class CustomSerializerGenerator(
     private val symbolProvider: RustSymbolProvider,

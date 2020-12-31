@@ -7,12 +7,12 @@ package software.amazon.smithy.rust.codegen.rustlang
 
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
-// TODO: when Kotlin supports, sealed traits, seal this
-
 /**
  * A hierarchy of types handled by Smithy codegen
  */
 sealed class RustType {
+
+    // TODO: when Kotlin supports, sealed interfaces, seal Container
     interface Container {
         val member: RustType
         val namespace: kotlin.String?
