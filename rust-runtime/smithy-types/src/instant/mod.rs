@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use crate::instant::format::DateParseError;
 use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -54,14 +55,14 @@ impl Instant {
         }
     }
 
-    pub fn from_str(s: &str, format: Format) -> Result<Self, ()> {
+    pub fn from_str(s: &str, format: Format) -> Result<Self, DateParseError> {
         match format {
-            Format::DateTime => format::iso_8601::parse(s).map_err(|_| ()),
-            Format::HttpDate => format::http_date::parse(s).map_err(|_| ()),
+            Format::DateTime => format::iso_8601::parse(s),
+            Format::HttpDate => format::http_date::parse(s),
             Format::EpochSeconds => <f64>::from_str(s)
                 // TODO: Parse base & fraction separately to achieve higher precision
                 .map(Self::from_f64)
-                .map_err(|_| ()),
+                .map_err(|_| DateParseError::Invalid("expected float")),
         }
     }
 
@@ -87,7 +88,7 @@ impl Instant {
     pub fn fmt(&self, format: Format) -> String {
         match format {
             Format::DateTime => {
-                // TODO: hand write rfc3339 formatter & remove chrono dependency
+                // TODO: hand write rfc3339 formatter & remove Chrono alloc feature
                 let rfc3339 = self
                     .to_chrono()
                     .to_rfc3339_opts(SecondsFormat::AutoSi, true);
