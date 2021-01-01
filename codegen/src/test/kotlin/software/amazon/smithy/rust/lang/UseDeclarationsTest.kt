@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.lang
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.lang.UseDeclarations
+import software.amazon.smithy.rust.codegen.rustlang.UseDeclarations
 import software.amazon.smithy.rust.testutil.shouldCompile
 
 class UseDeclarationsTest {

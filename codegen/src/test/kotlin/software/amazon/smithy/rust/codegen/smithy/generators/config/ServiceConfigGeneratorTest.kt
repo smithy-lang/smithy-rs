@@ -8,9 +8,9 @@ package software.amazon.smithy.rust.codegen.smithy.generators.config
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.lang.Writable
-import software.amazon.smithy.rust.codegen.lang.rust
-import software.amazon.smithy.rust.codegen.lang.writeable
+import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.rust
+import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.testutil.TestWorkspace
 import software.amazon.smithy.rust.testutil.asSmithyModel
@@ -55,11 +55,11 @@ internal class ServiceConfigGeneratorTest {
         class ServiceCustomizer : NamedSectionGenerator<ServiceConfig>() {
             override fun section(section: ServiceConfig): Writable {
                 return when (section) {
-                    ServiceConfig.ConfigStruct -> writeable { rust("config_field: u64,") }
+                    ServiceConfig.ConfigStruct -> writable { rust("config_field: u64,") }
                     ServiceConfig.ConfigImpl -> emptySection
-                    ServiceConfig.BuilderStruct -> writeable { rust("config_field: Option<u64>") }
+                    ServiceConfig.BuilderStruct -> writable { rust("config_field: Option<u64>") }
                     ServiceConfig.BuilderImpl -> emptySection
-                    ServiceConfig.BuilderBuild -> writeable { rust("config_field: self.config_field.unwrap_or_default(),") }
+                    ServiceConfig.BuilderBuild -> writable { rust("config_field: self.config_field.unwrap_or_default(),") }
                 }
             }
         }

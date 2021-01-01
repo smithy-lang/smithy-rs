@@ -6,9 +6,9 @@
 package software.amazon.smithy.rust.codegen.smithy.generators
 
 import com.moandjiezana.toml.TomlWriter
-import software.amazon.smithy.rust.codegen.lang.CargoDependency
-import software.amazon.smithy.rust.codegen.lang.Compile
-import software.amazon.smithy.rust.codegen.lang.Dev
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.Compile
+import software.amazon.smithy.rust.codegen.rustlang.Dev
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.utils.CodeWriter
 

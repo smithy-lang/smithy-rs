@@ -13,9 +13,9 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.rust.codegen.lang.Attribute.Companion.NonExhaustive
-import software.amazon.smithy.rust.codegen.lang.Derives
-import software.amazon.smithy.rust.codegen.lang.RustMetadata
+import software.amazon.smithy.rust.codegen.rustlang.Attribute.Companion.NonExhaustive
+import software.amazon.smithy.rust.codegen.rustlang.Derives
+import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 
 /**
  * Default delegator to enable easily decorating another symbol provider.

@@ -26,8 +26,8 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SparseTrait
-import software.amazon.smithy.rust.codegen.lang.RustType
-import software.amazon.smithy.rust.codegen.lang.render
+import software.amazon.smithy.rust.codegen.rustlang.RustType
+import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.smithy.Errors
 import software.amazon.smithy.rust.codegen.smithy.Models
 import software.amazon.smithy.rust.codegen.smithy.Operations

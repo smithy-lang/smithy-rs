@@ -5,9 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators.config
 
-import software.amazon.smithy.rust.codegen.lang.Writable
-import software.amazon.smithy.rust.codegen.lang.rust
-import software.amazon.smithy.rust.codegen.lang.writeable
+import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.rust
+import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
 /**
@@ -16,14 +16,14 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 class IdempotencyProviderConfig : NamedSectionGenerator<ServiceConfig>() {
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
-            is ServiceConfig.ConfigStruct -> writeable {
+            is ServiceConfig.ConfigStruct -> writable {
                 rust("pub (crate) token_provider: Box<dyn #T::ProvideIdempotencyToken>,", RuntimeType.IdempotencyToken)
             }
             ServiceConfig.ConfigImpl -> emptySection
-            ServiceConfig.BuilderStruct -> writeable {
+            ServiceConfig.BuilderStruct -> writable {
                 rust("token_provider: Option<Box<dyn #T::ProvideIdempotencyToken>>", RuntimeType.IdempotencyToken)
             }
-            ServiceConfig.BuilderImpl -> writeable {
+            ServiceConfig.BuilderImpl -> writable {
                 rust(
                     """
             pub fn token_provider(mut self, token_provider: impl #T::ProvideIdempotencyToken + 'static) -> Self {
@@ -34,7 +34,7 @@ class IdempotencyProviderConfig : NamedSectionGenerator<ServiceConfig>() {
                     RuntimeType.IdempotencyToken
                 )
             }
-            ServiceConfig.BuilderBuild -> writeable {
+            ServiceConfig.BuilderBuild -> writable {
                 rust("token_provider: self.token_provider.unwrap_or_else(|| Box::new(#T::default_provider())),", RuntimeType.IdempotencyToken)
             }
         }

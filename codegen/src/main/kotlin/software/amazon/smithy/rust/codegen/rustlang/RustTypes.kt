@@ -3,18 +3,25 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.lang
+package software.amazon.smithy.rust.codegen.rustlang
 
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-
-interface Container {
-    val member: RustType
-}
 
 /**
  * A hierarchy of types handled by Smithy codegen
  */
 sealed class RustType {
+
+    // TODO: when Kotlin supports, sealed interfaces, seal Container
+    /**
+     * A Rust type that contains [member], another RustType. Used to generically operate over
+     * shapes that contain other shapes, eg. [stripOuter] and [contains].
+     */
+    interface Container {
+        val member: RustType
+        val namespace: kotlin.String?
+        val name: kotlin.String
+    }
 
     /*
      * Name refers to the top-level type for import purposes
@@ -38,11 +45,6 @@ sealed class RustType {
 
     data class Integer(val precision: Int) : RustType() {
         override val name: kotlin.String = "i$precision"
-    }
-
-    data class Vec(override val member: RustType) : RustType(), Container {
-        override val name: kotlin.String = "Vec"
-        override val namespace = "::std::vec"
     }
 
     data class Slice(override val member: RustType) : RustType(), Container {
@@ -78,6 +80,11 @@ sealed class RustType {
     data class Dyn(override val member: RustType) : RustType(), Container {
         override val name = "dyn"
         override val namespace: kotlin.String? = null
+    }
+
+    data class Vec(override val member: RustType) : RustType(), Container {
+        override val name: kotlin.String = "Vec"
+        override val namespace = "::std::vec"
     }
 
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
@@ -121,12 +128,12 @@ fun <T : RustType> RustType.contains(t: T): Boolean {
     }
 
     return when (this) {
-        is Container -> this.member.contains(t)
+        is RustType.Container -> this.member.contains(t)
         else -> false
     }
 }
 
-inline fun <reified T : Container> RustType.stripOuter(): RustType {
+inline fun <reified T : RustType.Container> RustType.stripOuter(): RustType {
     return when (this) {
         is T -> this.member
         else -> this
