@@ -31,7 +31,7 @@ buildscript {
 }
 
 dependencies {
-    implementation(project(":codegen"))
+    implementation(project(":aws-sdk-codegen"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
@@ -39,7 +39,7 @@ dependencies {
 
 data class AwsService(val service: String, val module: String, val modelFile: File, val extraConfig: String? = null)
 
-fun discoverServices(): List<AwsService>  {
+fun discoverServices(): List<AwsService> {
     val models = project.file("models")
     return fileTree(models).map { file ->
         val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
@@ -89,6 +89,10 @@ task("generateSmithyBuild") {
     doFirst {
         projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices))
     }
+}
+
+task("relocateServices") {
+    description = "relocate AWS services to their final destination"
     doLast {
         awsServices.forEach {
             copy {
@@ -97,7 +101,6 @@ task("generateSmithyBuild") {
             }
         }
     }
-    finalizedBy("relocateRuntime")
 }
 
 tasks.register<Copy>("relocateRuntime") {
@@ -126,8 +129,13 @@ task("generateCargoWorkspace") {
     }
 }
 
+task("finalizeSdk") {
+    finalizedBy("relocateServices", "relocateRuntime", "generateCargoWorkspace")
+}
+
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
-tasks["assemble"].finalizedBy("generateCargoWorkspace")
+tasks["assemble"].dependsOn("smithyBuildJar")
+tasks["assemble"].finalizedBy("finalizeSdk")
 
 
 tasks.register<Exec>("cargoCheck") {
@@ -162,7 +170,7 @@ tasks.register<Exec>("cargoClippy") {
     dependsOn("assemble")
 }
 
-tasks["test"].dependsOn("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs")
+tasks["test"].finalizedBy("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs")
 
 tasks["clean"].doFirst {
     delete("smithy-build.json")
