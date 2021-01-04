@@ -10,6 +10,7 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
@@ -19,7 +20,8 @@ class ServiceGenerator(
     private val writers: CodegenWriterDelegator<RustWriter>,
     private val protocolGenerator: HttpProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
-    private val config: ProtocolConfig
+    private val config: ProtocolConfig,
+    private val extraCustomizations: List<ConfigCustomization>,
 ) {
     private val index = TopDownIndex.of(config.model)
 
@@ -40,8 +42,7 @@ class ServiceGenerator(
         renderBodies(operations)
 
         writers.useFileWriter("src/config.rs", "crate::config") { writer ->
-            // TODO: pull in extra customizations from SPI
-            ServiceConfigGenerator.withBaseBehavior(config, extraCustomizations = listOf()).render(writer)
+            ServiceConfigGenerator.withBaseBehavior(config, extraCustomizations = extraCustomizations).render(writer)
         }
         writers.useFileWriter("src/lib.rs", "crate::lib") {
             it.write("pub use config::Config;")

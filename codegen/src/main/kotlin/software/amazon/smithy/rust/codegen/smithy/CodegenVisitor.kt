@@ -25,16 +25,16 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFa
 import software.amazon.smithy.rust.codegen.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
 
-class CodegenVisitor(context: PluginContext, extraProtocols: ProtocolMap = mapOf()) : ShapeVisitor.Default<Unit>() {
+class CodegenVisitor(context: PluginContext, codegenDecorator: RustCodegenDecorator) : ShapeVisitor.Default<Unit>() {
 
     private val logger = Logger.getLogger(javaClass.name)
     private val settings = RustSettings.from(context.model, context.settings)
@@ -46,26 +46,27 @@ class CodegenVisitor(context: PluginContext, extraProtocols: ProtocolMap = mapOf
     private val protocolConfig: ProtocolConfig
     private val protocolGenerator: ProtocolGeneratorFactory<HttpProtocolGenerator>
     private val httpGenerator: HttpProtocolGenerator
+    private val configCustomizations: List<ConfigCustomization>
 
     init {
         val symbolVisitorConfig =
             SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig, codegenConfig = settings.codegenConfig)
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
-        val (protocol, generator) = ProtocolLoader.withAdditional(extraProtocols).protocolFor(context.model, service)
+        val (protocol, generator) = ProtocolLoader(codegenDecorator.protocols(service.id, ProtocolLoader.DefaultProtocols)).protocolFor(context.model, service)
         protocolGenerator = generator
         model = generator.transformModel(baseModel)
         val baseProvider = RustCodegenPlugin.BaseSymbolProvider(model, symbolVisitorConfig)
-        symbolProvider = generator.symbolProvider(model, baseProvider)
+        symbolProvider = codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
         protocolConfig = ProtocolConfig(model, symbolProvider, settings.runtimeConfig, service, protocol)
         writers = CodegenWriterDelegator(
             context.fileManifest,
-            // TODO: load symbol visitor from integrations; 2d
             symbolProvider,
             RustWriter.Factory
         )
         httpGenerator = protocolGenerator.buildProtocolGenerator(protocolConfig)
+        configCustomizations = codegenDecorator.configCustomizations(protocolConfig, listOf())
     }
 
     private fun baselineTransform(model: Model) = RecursiveShapeBoxer.transform(model)
@@ -118,6 +119,6 @@ class CodegenVisitor(context: PluginContext, extraProtocols: ProtocolMap = mapOf
     }
 
     override fun serviceShape(shape: ServiceShape) {
-        ServiceGenerator(writers, httpGenerator, protocolGenerator.support(), protocolConfig).render()
+        ServiceGenerator(writers, httpGenerator, protocolGenerator.support(), protocolConfig, configCustomizations).render()
     }
 }

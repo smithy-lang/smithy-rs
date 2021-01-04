@@ -11,10 +11,13 @@ import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.dq
@@ -159,8 +162,17 @@ class HttpProtocolTestGeneratorTest {
         }
 
         val (pluginContext, testDir) = generatePluginContext(model)
-        // Intentionally shadow the builtin implementation of RestJson1 with our fake protocol
-        val visitor = CodegenVisitor(pluginContext, mapOf(RestJson1Trait.ID to TestProtocolFactory()))
+        val visitor = CodegenVisitor(
+            pluginContext,
+            object : RustCodegenDecorator {
+                override val name: String = "mock"
+                override val order: Byte = 0
+                override fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap {
+                    // Intentionally replace the builtin implementation of RestJson1 with our fake protocol
+                    return mapOf(RestJson1Trait.ID to TestProtocolFactory())
+                }
+            }
+        )
         visitor.execute()
         return testDir
     }
