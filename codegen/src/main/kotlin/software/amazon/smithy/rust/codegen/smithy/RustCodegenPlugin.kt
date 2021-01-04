@@ -14,7 +14,8 @@ class RustCodegenPlugin : SmithyBuildPlugin {
     override fun getName(): String = "rust-codegen"
 
     override fun execute(context: PluginContext) {
-        CodegenVisitor(context).execute()
+        val codegenDecorator = CombinedCodegenDecorator.fromClasspath(context)
+        CodegenVisitor(context, codegenDecorator).execute()
     }
 
     companion object {
