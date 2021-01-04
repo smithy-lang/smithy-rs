@@ -73,8 +73,10 @@ class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : RustCod
                 RustCodegenDecorator::class.java,
                 context.pluginClassLoader.orElse(RustCodegenDecorator::class.java.classLoader)
             )
-                .also { decorator ->
-                    logger.info("Adding Codegen Decorator: ${decorator.javaClass.name}")
+                .also { decorators ->
+                    decorators.forEach {
+                        logger.info("Adding Codegen Decorator: ${it.javaClass.name}")
+                    }
                 }.toList()
             return CombinedCodegenDecorator(decorators)
         }

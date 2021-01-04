@@ -85,13 +85,14 @@ class CodegenVisitor(context: PluginContext, codegenDecorator: RustCodegenDecora
         } catch (_: CommandFailed) {
             logger.warning("Generated output did not parse [${service.id}]")
         }
+        logger.info("Rust Client generation complete!")
     }
 
     override fun getDefault(shape: Shape?) {
     }
 
     override fun structureShape(shape: StructureShape) {
-        logger.info("generating a structure...")
+        logger.fine("generating a structure...")
         writers.useShapeWriter(shape) { writer ->
             StructureGenerator(model, symbolProvider, writer, shape).render()
             if (!shape.hasTrait(SyntheticInputTrait::class.java)) {
