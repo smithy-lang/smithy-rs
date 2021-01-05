@@ -196,7 +196,7 @@ class HttpTraitBindingGenerator(
                                 memberShape,
                                 innerField
                             )
-                            }))"
+                            }));"
                         )
                     }
                 }
