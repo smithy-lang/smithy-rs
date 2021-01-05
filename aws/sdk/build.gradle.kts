@@ -21,7 +21,8 @@ val smithyVersion: String by project
 val sdkOutputDir = buildDir.resolve("aws-sdk")
 val awsServices = discoverServices()
 // TODO: smithy-http should be removed
-val runtimeModules = listOf("smithy-types", "smithy-http")
+val runtimeModules = listOf("smithy-types", "smithy-http", "io-v0")
+val awsModules = listOf("auth", "operation", "aws-hyper")
 
 buildscript {
     val smithyVersion: String by project
@@ -109,7 +110,19 @@ tasks.register<Copy>("relocateRuntime") {
             include("$it/**")
         }
         exclude("**/target")
+        exclude("**/Cargo.lock")
     }
+    into(sdkOutputDir)
+
+}
+
+tasks.register<Copy>("relocateAwsRuntime") {
+    from("$rootDir/aws/rust-runtime")
+    awsModules.forEach {
+        include("$it/**")
+    }
+    exclude("**/target")
+    exclude("**/Cargo.lock")
     into(sdkOutputDir)
 }
 
@@ -130,7 +143,7 @@ task("generateCargoWorkspace") {
 }
 
 task("finalizeSdk") {
-    finalizedBy("relocateServices", "relocateRuntime", "generateCargoWorkspace")
+    finalizedBy("relocateServices", "relocateRuntime", "relocateAwsRuntime", "generateCargoWorkspace")
 }
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
@@ -168,6 +181,14 @@ tasks.register<Exec>("cargoClippy") {
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "clippy")
     dependsOn("assemble")
+}
+
+tasks.register<Exec>("dynamoIt") {
+    workingDir(projectDir.resolve("dynamo-it"))
+    // disallow warnings
+    commandLine("cargo", "run")
+    dependsOn("assemble")
+
 }
 
 tasks["test"].finalizedBy("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs")

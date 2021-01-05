@@ -14,29 +14,32 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
  * Add a `token_provider` field to Service config. See below for the resulting generated code.
  */
 class IdempotencyProviderConfig : NamedSectionGenerator<ServiceConfig>() {
-    override fun section(section: ServiceConfig): Writable {
-        return when (section) {
-            is ServiceConfig.ConfigStruct -> writable {
-                rust("pub (crate) token_provider: Box<dyn #T::ProvideIdempotencyToken>,", RuntimeType.IdempotencyToken)
+    override fun section(section: ServiceConfig): Writable = writable {
+        when (section) {
+            is ServiceConfig.ConfigStruct -> rust(
+                "pub (crate) token_provider: Box<dyn #T::ProvideIdempotencyToken>,",
+                RuntimeType.IdempotencyToken
+            )
+            is ServiceConfig.ConfigImpl -> {
             }
-            ServiceConfig.ConfigImpl -> emptySection
-            ServiceConfig.BuilderStruct -> writable {
-                rust("token_provider: Option<Box<dyn #T::ProvideIdempotencyToken>>", RuntimeType.IdempotencyToken)
-            }
-            ServiceConfig.BuilderImpl -> writable {
-                rust(
-                    """
+            is ServiceConfig.BuilderStruct -> rust(
+                "token_provider: Option<Box<dyn #T::ProvideIdempotencyToken>>,",
+                RuntimeType.IdempotencyToken
+            )
+            is ServiceConfig.BuilderImpl -> rust(
+                """
             pub fn token_provider(mut self, token_provider: impl #T::ProvideIdempotencyToken + 'static) -> Self {
                 self.token_provider = Some(Box::new(token_provider));
                 self
             }
             """,
+                RuntimeType.IdempotencyToken
+            )
+            is ServiceConfig.BuilderBuild ->
+                rust(
+                    "token_provider: self.token_provider.unwrap_or_else(|| Box::new(#T::default_provider())),",
                     RuntimeType.IdempotencyToken
                 )
-            }
-            ServiceConfig.BuilderBuild -> writable {
-                rust("token_provider: self.token_provider.unwrap_or_else(|| Box::new(#T::default_provider())),", RuntimeType.IdempotencyToken)
-            }
         }
     }
 }

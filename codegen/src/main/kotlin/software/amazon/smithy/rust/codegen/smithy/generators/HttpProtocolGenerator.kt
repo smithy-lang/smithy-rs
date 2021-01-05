@@ -16,6 +16,8 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.config.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.config.Section
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -38,6 +40,12 @@ interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
     fun support(): ProtocolSupport
 }
 
+sealed class OperationSection(name: String) : Section(name) {
+    object ImplBlock : OperationSection("ImplBlock")
+}
+
+typealias OperationCustomization = NamedSectionGenerator<OperationSection>
+
 /**
  * Abstract class providing scaffolding for HTTP based protocols that must build an HTTP request (headers / URL) and
  * a body.
@@ -47,7 +55,12 @@ abstract class HttpProtocolGenerator(
 ) {
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
-    fun renderOperation(operationWriter: RustWriter, inputWriter: RustWriter, operationShape: OperationShape) {
+    fun renderOperation(
+        operationWriter: RustWriter,
+        inputWriter: RustWriter,
+        operationShape: OperationShape,
+        customizations: List<OperationCustomization>
+    ) {
         val inputShape = operationShape.inputShape(model)
         val inputSymbol = symbolProvider.toSymbol(inputShape)
         val builderGenerator = OperationInputBuilderGenerator(model, symbolProvider, operationShape)
@@ -100,6 +113,8 @@ abstract class HttpProtocolGenerator(
             rustBlock("pub fn new(input: #T) -> Self", inputSymbol) {
                 write("Self { input }")
             }
+
+            customizations.forEach { customization -> customization.section(OperationSection.ImplBlock)(this) }
         }
     }
 
@@ -120,7 +135,11 @@ abstract class HttpProtocolGenerator(
         }
     }
 
-    protected fun fromResponseFun(implBlockWriter: RustWriter, operationShape: OperationShape, f: RustWriter.() -> Unit) {
+    protected fun fromResponseFun(
+        implBlockWriter: RustWriter,
+        operationShape: OperationShape,
+        f: RustWriter.() -> Unit
+    ) {
         implBlockWriter.rustBlock(
             "fn from_response(response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
             RuntimeType.Http("response::Response"),
@@ -145,5 +164,9 @@ abstract class HttpProtocolGenerator(
      *
      * Your implementation MUST call [httpBuilderFun] to create the public method.
      */
-    abstract fun toHttpRequestImpl(implBlockWriter: RustWriter, operationShape: OperationShape, inputShape: StructureShape)
+    abstract fun toHttpRequestImpl(
+        implBlockWriter: RustWriter,
+        operationShape: OperationShape,
+        inputShape: StructureShape
+    )
 }

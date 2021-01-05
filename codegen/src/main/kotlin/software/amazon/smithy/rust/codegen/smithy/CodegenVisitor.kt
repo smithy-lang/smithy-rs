@@ -25,7 +25,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFa
 import software.amazon.smithy.rust.codegen.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
@@ -34,7 +33,7 @@ import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
 
-class CodegenVisitor(context: PluginContext, codegenDecorator: RustCodegenDecorator) : ShapeVisitor.Default<Unit>() {
+class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) : ShapeVisitor.Default<Unit>() {
 
     private val logger = Logger.getLogger(javaClass.name)
     private val settings = RustSettings.from(context.model, context.settings)
@@ -46,7 +45,6 @@ class CodegenVisitor(context: PluginContext, codegenDecorator: RustCodegenDecora
     private val protocolConfig: ProtocolConfig
     private val protocolGenerator: ProtocolGeneratorFactory<HttpProtocolGenerator>
     private val httpGenerator: HttpProtocolGenerator
-    private val configCustomizations: List<ConfigCustomization>
 
     init {
         val symbolVisitorConfig =
@@ -66,7 +64,6 @@ class CodegenVisitor(context: PluginContext, codegenDecorator: RustCodegenDecora
             RustWriter.Factory
         )
         httpGenerator = protocolGenerator.buildProtocolGenerator(protocolConfig)
-        configCustomizations = codegenDecorator.configCustomizations(protocolConfig, listOf())
     }
 
     private fun baselineTransform(model: Model) = RecursiveShapeBoxer.transform(model)
@@ -120,6 +117,6 @@ class CodegenVisitor(context: PluginContext, codegenDecorator: RustCodegenDecora
     }
 
     override fun serviceShape(shape: ServiceShape) {
-        ServiceGenerator(writers, httpGenerator, protocolGenerator.support(), protocolConfig, configCustomizations).render()
+        ServiceGenerator(writers, httpGenerator, protocolGenerator.support(), protocolConfig, codegenDecorator).render()
     }
 }

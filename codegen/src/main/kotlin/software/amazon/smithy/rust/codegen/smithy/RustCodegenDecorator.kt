@@ -6,7 +6,9 @@
 package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
@@ -24,16 +26,22 @@ interface RustCodegenDecorator {
     /**
      * The name of this [RustCodegenDecorator], used for logging and debug information
      */
-    abstract val name: String
+    val name: String
 
     /**
      * Enable a deterministic ordering to be applied, with the lowest numbered integrations being applied first
      */
-    abstract val order: Byte
+    val order: Byte
     fun configCustomizations(
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> = baseCustomizations
+
+    fun operationCustomizations(
+        protocolConfig: ProtocolConfig,
+        operation: OperationShape,
+        baseCustomizations: List<OperationCustomization>
+    ): List<OperationCustomization> = baseCustomizations
 
     fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap = currentProtocols
 
@@ -64,6 +72,14 @@ class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : RustCod
 
     override fun symbolProvider(baseProvider: RustSymbolProvider): RustSymbolProvider {
         return orderedDecorators.foldRight(baseProvider) { decorator, provider -> decorator.symbolProvider(provider) }
+    }
+
+    override fun operationCustomizations(
+        protocolConfig: ProtocolConfig,
+        operation: OperationShape,
+        baseCustomizations: List<OperationCustomization>
+    ): List<OperationCustomization> {
+        return orderedDecorators.foldRight(baseCustomizations) { decorator, customizations -> decorator.operationCustomizations(protocolConfig, operation, customizations) }
     }
 
     companion object {
