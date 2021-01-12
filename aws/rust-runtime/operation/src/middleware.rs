@@ -142,9 +142,7 @@ where
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
-        this.f
-            .poll(cx)
-            .map_err(|e| OperationError::DispatchError(e))
+        this.f.poll(cx).map_err(OperationError::DispatchError)
     }
 }
 
@@ -159,7 +157,7 @@ where
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner
             .poll_ready(cx)
-            .map_err(|e| OperationError::DispatchError(e))
+            .map_err(OperationError::DispatchError)
     }
 
     fn call(&mut self, req: Operation<H>) -> Self::Future {
@@ -178,13 +176,12 @@ mod test {
         Credentials, HttpSignatureType, HttpSigningConfig, RequestConfig, ServiceConfig,
         SigningAlgorithm, SigningConfig,
     };
+    use bytes::Bytes;
     use http::header::HeaderName;
     use http::{HeaderValue, Request, Response};
-    use hyper::body::Bytes;
-    use std::convert::TryInto;
     use std::error::Error;
     use std::str::FromStr;
-    use std::time::{Instant, SystemTime};
+    use std::time::SystemTime;
     use tower::service_fn;
     use tower::{Layer, Service};
 
@@ -192,11 +189,11 @@ mod test {
     impl HttpRequestResponse for TestOperationParser {
         type O = String;
 
-        fn parse_unloaded(&self, response: &mut Response<SdkBody>) -> Option<Self::O> {
+        fn parse_unloaded<B>(&self, _response: &mut Response<B>) -> Option<Self::O> {
             Some("Hello!".to_string())
         }
 
-        fn parse_loaded(&self, response: &Response<Bytes>) -> Self::O {
+        fn parse_loaded(&self, _response: &Response<Bytes>) -> Self::O {
             "Hello!".to_string()
         }
     }
@@ -254,7 +251,7 @@ mod test {
             }),
             credentials_provider: Box::new(Credentials::from_static("key", "secret", None)),
             endpoint_config: Box::new(StaticEndpoint::from_service_region("dynamodb", "us-east-1")),
-            response_handler: Box::new(TestOperationParser),
+            response_handler: Some(Box::new(TestOperationParser)),
         };
         let response = service.call(operation).await;
         assert_eq!(response.unwrap().body(), "x-key:\"X-Key\"");

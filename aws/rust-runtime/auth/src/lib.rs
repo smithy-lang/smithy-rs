@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::future::Future;
+use std::fmt::{Display, Formatter};
 use std::time::{Instant, SystemTime};
 
 /// AWS SDK Credentials
@@ -59,7 +59,6 @@ impl Display for CredentialsProviderError {
 }
 
 impl Error for CredentialsProviderError {}
-
 
 // TODO
 type CredentialsError = Box<dyn Error>;
@@ -126,11 +125,6 @@ pub struct ServiceConfig {
 }
 
 type SigningError = Box<dyn Error + Send + Sync + 'static>;
-
-use std::fmt::{Display, Formatter};
-use std::pin::Pin;
-use std::task;
-use std::task::Poll;
 
 #[derive(Clone)]
 pub struct HttpSigner {}

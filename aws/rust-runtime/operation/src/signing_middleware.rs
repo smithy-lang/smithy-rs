@@ -13,6 +13,12 @@ pub struct SigningMiddleware {
     signer: HttpSigner,
 }
 
+impl Default for SigningMiddleware {
+    fn default() -> Self {
+        SigningMiddleware::new()
+    }
+}
+
 impl SigningMiddleware {
     pub fn new() -> Self {
         SigningMiddleware {

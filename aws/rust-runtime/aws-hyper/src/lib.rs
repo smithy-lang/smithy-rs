@@ -1,9 +1,9 @@
 use bytes::{Buf, Bytes};
-use operation::{HttpRequestResponse, Operation, SdkBody, middleware::OperationError};
+use hyper::Client as HyperClient;
+use operation::{middleware::OperationError, HttpRequestResponse, Operation, SdkBody};
 use std::error::Error;
 use tower::util::ReadyOneshot;
 use tower::{Layer, Service};
-use hyper::{Client as HyperClient};
 
 type ResponseBody = hyper::Body;
 
@@ -30,7 +30,7 @@ impl<E: Error + 'static> SdkError<E> {
         match self {
             SdkError::DispatchFailure(e) => e,
             SdkError::ResponseError { err, .. } => err,
-            SdkError::ServiceError { err, .. } => Box::new(err)
+            SdkError::ServiceError { err, .. } => Box::new(err),
         }
     }
 }
@@ -42,24 +42,24 @@ pub struct Client<S> {
 impl Client<hyper::Client<HttpsConnector<HttpConnector>, SdkBody>> {
     pub fn default() -> Self {
         let https = HttpsConnector::new();
-        let client = HyperClient::builder()
-            .build::<_, SdkBody>(https);
-        Client {
-            inner: client
-        }
+        let client = HyperClient::builder().build::<_, SdkBody>(https);
+        Client { inner: client }
     }
 }
 
 impl<S> Client<S>
-    where
-        S: Service<http::Request<SdkBody>, Response=http::Response<hyper::Body>> + Clone,
-        S::Error: std::error::Error + 'static,
+where
+    S: Service<http::Request<SdkBody>, Response = http::Response<hyper::Body>> + Clone,
+    S::Error: std::error::Error + 'static,
 {
-    pub async fn call<O, R, E>(&self, mut input: Operation<O>) -> Result<SdkResponse<R>, SdkError<E>>
-        where
+    pub async fn call<O, R, E>(
+        &self,
+        mut input: Operation<O>,
+    ) -> Result<SdkResponse<R>, SdkError<E>>
+    where
         // TODO: clean up the way that response handlers work—should they be disconnected from the operation,
         // at least at this level of the API?
-            O: HttpRequestResponse<O=Result<R, E>>,
+        O: HttpRequestResponse<O = Result<R, E>>,
     {
         let ready_service = ReadyOneshot::new(self.inner.clone())
             .await
@@ -67,14 +67,13 @@ impl<S> Client<S>
 
         let signer = OperationRequestMiddlewareLayer::for_middleware(SigningMiddleware::new());
         let endpoint_resolver = OperationRequestMiddlewareLayer::for_middleware(EndpointMiddleware);
-        let mut ready_service = signer.layer(endpoint_resolver.layer(DispatchLayer.layer(ready_service)));
+        let mut ready_service =
+            signer.layer(endpoint_resolver.layer(DispatchLayer.layer(ready_service)));
         let handler = input.response_handler.take().unwrap();
-        let mut response: http::Response<hyper::Body> = ready_service
-            .call(input)
-            .await
-            .map_err(|e| match e {
+        let mut response: http::Response<hyper::Body> =
+            ready_service.call(input).await.map_err(|e| match e {
                 OperationError::DispatchError(e) => SdkError::DispatchFailure(Box::new(e)),
-                OperationError::ConstructionError(e) => SdkError::DispatchFailure(e)
+                OperationError::ConstructionError(e) => SdkError::DispatchFailure(e),
             })?;
 
         let parsed = handler.parse_unloaded(&mut response);
@@ -106,7 +105,7 @@ impl<S> Client<S>
 
         let response = response.map(|_| Bytes::from(body));
         let parsed = handler.parse_loaded(&response);
-        let raw = response.map(|bytes| hyper::Body::from(bytes));
+        let raw = response.map(hyper::Body::from);
         match parsed {
             Ok(parsed) => Ok(SdkResponse { raw, parsed }),
             Err(err) => Err(SdkError::ServiceError { raw, err }),
@@ -114,13 +113,12 @@ impl<S> Client<S>
     }
 }
 
-use http_body;
 use http_body::Body;
+use hyper::client::HttpConnector;
+use hyper_tls::HttpsConnector;
+use operation::endpoint::EndpointMiddleware;
 use operation::middleware::{DispatchLayer, OperationRequestMiddlewareLayer};
 use operation::signing_middleware::SigningMiddleware;
-use operation::endpoint::EndpointMiddleware;
-use hyper_tls::HttpsConnector;
-use hyper::client::HttpConnector;
 
 async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
     let mut output = Vec::new();
@@ -137,18 +135,20 @@ async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
 
 #[cfg(test)]
 mod test {
-    use operation::{Operation, HttpRequestResponse, SdkBody};
-    use std::time::SystemTime;
-    use operation::endpoint::StaticEndpoint;
-    use http::{Response, Request};
-    use bytes::Bytes;
-    use std::sync::{Arc, Mutex};
-    use hyper::service::service_fn;
     use crate::{read_body, Client};
-    use auth::{SigningConfig, HttpSigningConfig, SigningAlgorithm, HttpSignatureType, ServiceConfig, RequestConfig, Credentials};
-    use tower::Service;
-    use std::error::Error;
+    use auth::{
+        Credentials, HttpSignatureType, HttpSigningConfig, RequestConfig, ServiceConfig,
+        SigningAlgorithm, SigningConfig,
+    };
+    use bytes::Bytes;
+    use http::{Request, Response};
+    use hyper::service::service_fn;
+    use operation::endpoint::StaticEndpoint;
+    use operation::{HttpRequestResponse, Operation, SdkBody};
     use pin_utils::core_reexport::fmt::Formatter;
+    use std::error::Error;
+    use std::sync::{Arc, Mutex};
+    use std::time::SystemTime;
 
     #[derive(Clone)]
     struct TestOperationParser;
@@ -166,7 +166,6 @@ mod test {
 
     #[tokio::test]
     async fn e2e_service() {
-
         #[derive(Debug)]
         struct TestError;
 
@@ -205,17 +204,27 @@ mod test {
         let http_service = service_fn(|request: Request<SdkBody>| async {
             let mut request = request;
             let body = read_body(request.body_mut()).await.unwrap();
-            *(test_request.clone().lock().unwrap()) = Some(request.map(|_|Bytes::from(body)));
-            Result::<Response<hyper::Body>, TestError>::Ok(Response::new(hyper::Body::from("hello!")))
+            *(test_request.clone().lock().unwrap()) = Some(request.map(|_| Bytes::from(body)));
+            Result::<Response<hyper::Body>, TestError>::Ok(Response::new(hyper::Body::from(
+                "hello!",
+            )))
         });
         //let x: () = http_service;
         //http_service.call(http::Request::new(SdkBody::from("123")));
-        let client = Client { inner: http_service };
+        let client = Client {
+            inner: http_service,
+        };
         let response = client.call(operation).await;
         let request = test_request.lock().unwrap().take().unwrap();
-        assert_eq!(request.headers().keys().map(|it|it.as_str()).collect::<Vec<_>>(), vec!["authorization", "x-amz-date"]);
+        assert_eq!(
+            request
+                .headers()
+                .keys()
+                .map(|it| it.as_str())
+                .collect::<Vec<_>>(),
+            vec!["authorization", "x-amz-date"]
+        );
         assert!(response.is_ok());
-
     }
 
     #[test]
@@ -244,6 +253,6 @@ mod test {
             response_handler: Some(Box::new(TestOperationParser)),
         };
         let client = Client::default();
-        let _  = client.call(operation);
+        let _ = client.call(operation);
     }
 }

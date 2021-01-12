@@ -7,9 +7,8 @@ pub mod middleware;
 pub mod signing_middleware;
 
 use endpoint::ProvideEndpoint;
-use http::{HeaderValue, HeaderMap};
+use http::{HeaderMap, HeaderValue};
 use std::error::Error;
-use std::fmt::Debug;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
