@@ -60,28 +60,6 @@ impl Display for CredentialsProviderError {
 
 impl Error for CredentialsProviderError {}
 
-/// A `Future` that will resolve to Credentials or a credentials loading error
-///
-/// This is returned by ProvideCredentials
-#[must_use = "futures do nothing unless polled"]
-pub struct CredentialsFuture {
-    inner: Pin<Box<dyn Future<Output = Result<Credentials, CredentialsProviderError>> + Send>>,
-}
-
-impl Future for CredentialsFuture {
-    type Output = Result<Credentials, CredentialsProviderError>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
-        Pin::new(&mut self.inner).poll(cx)
-    }
-}
-
-impl CredentialsFuture {
-    pub fn ready(credentials: Credentials) -> Self {
-        let inner = Pin::new(Box::new(std::future::ready(Ok(credentials))));
-        CredentialsFuture { inner }
-    }
-}
 
 // TODO
 type CredentialsError = Box<dyn Error>;
