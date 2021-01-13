@@ -70,6 +70,12 @@ class HttpTraitBindingGeneratorTest {
                 @httpQuery("paramName")
                 someValue: String,
 
+                @httpQuery("primitive")
+                primitive: PrimitiveInteger,
+
+                @httpQuery("enabled")
+                enabled: PrimitiveBoolean,
+
                 @httpQuery("hello")
                 extras: Extras,
 
@@ -132,6 +138,28 @@ class HttpTraitBindingGeneratorTest {
             inp.uri_query(&mut o);
             assert_eq!(o.as_str(), "?paramName=svq!!%25%26&hello=0&hello=1&hello=2&hello=44")
             """
+        )
+    }
+
+    @Test
+    fun `generate serialize non-zero values`() {
+        val writer = RustWriter.forModule("input")
+        // currently rendering the operation renders the protocols—I want to separate that at some point.
+        renderOperation(writer)
+        writer.compileAndTest(
+            """
+            let ts = Instant::from_epoch_seconds(10123125);
+            let inp = PutObjectInput::builder()
+                .bucket_name("somebucket/ok")
+                .key(ts.clone())
+                .primitive(1)
+                .enabled(true)
+                .build().expect("build should succeed");
+            let mut o = String::new();
+            inp.uri_query(&mut o);
+            assert_eq!(o.as_str(), "?primitive=1&enabled=true")
+            """,
+            clippy = true
         )
     }
 
