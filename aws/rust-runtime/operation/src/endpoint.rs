@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::middleware::OperationMiddleware;
-use crate::Operation;
 use core::convert::AsRef;
-use http::uri::Uri;
 use std::error::Error;
 use std::str::FromStr;
+
+use http::uri::Uri;
+
+use crate::middleware::OperationMiddleware;
 
 pub struct StaticEndpoint(http::Uri);
 
@@ -54,11 +55,11 @@ impl ProvideEndpoint for StaticEndpoint {
     }
 }
 
-impl<H, T> OperationMiddleware<H> for T
+impl<T> OperationMiddleware for T
 where
     T: ProvideEndpoint,
 {
-    fn apply(&self, request: &mut Operation<H>) -> Result<(), Box<dyn Error>> {
+    fn apply(&self, request: &mut crate::Request) -> Result<(), Box<dyn Error>> {
         self.set_endpoint(&mut request.base.uri_mut());
         Ok(())
     }
@@ -68,8 +69,8 @@ where
 #[derive(Clone, Copy)]
 /// Set the endpoint for a request based on the endpoint config
 pub struct EndpointMiddleware;
-impl<H> OperationMiddleware<H> for EndpointMiddleware {
-    fn apply(&self, request: &mut Operation<H>) -> Result<(), Box<dyn Error>> {
+impl OperationMiddleware for EndpointMiddleware {
+    fn apply(&self, request: &mut crate::Request) -> Result<(), Box<dyn Error>> {
         let endpoint_config = &request.endpoint_config;
         endpoint_config.set_endpoint(&mut request.base.uri_mut());
         Ok(())
@@ -78,9 +79,11 @@ impl<H> OperationMiddleware<H> for EndpointMiddleware {
 
 #[cfg(test)]
 mod test {
-    use crate::endpoint::StaticEndpoint;
-    use http::Uri;
     use std::str::FromStr;
+
+    use http::Uri;
+
+    use crate::endpoint::StaticEndpoint;
 
     #[test]
     fn endpoint_from_svc() {

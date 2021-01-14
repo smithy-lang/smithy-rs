@@ -3,15 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::{Operation, SdkBody};
+use crate::SdkBody;
 use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
-pub trait OperationMiddleware<H> {
-    fn apply(&self, request: &mut Operation<H>) -> Result<(), Box<dyn Error>>;
+pub trait OperationMiddleware {
+    fn apply(&self, request: &mut crate::Request) -> Result<(), Box<dyn Error>>;
 }
 
 pub struct OperationRequestMiddlewareService<S, M> {
@@ -67,10 +67,10 @@ where
     }
 }
 
-impl<H, S, M> Service<Operation<H>> for OperationRequestMiddlewareService<S, M>
+impl<S, M> Service<crate::Request> for OperationRequestMiddlewareService<S, M>
 where
-    S: Service<Operation<H>>,
-    M: OperationMiddleware<H>,
+    S: Service<crate::Request>,
+    M: OperationMiddleware,
     S::Error: RequestConstructionErr,
 {
     type Response = S::Response;
@@ -81,7 +81,7 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, mut req: Operation<H>) -> Self::Future {
+    fn call(&mut self, mut req: crate::Request) -> Self::Future {
         if let Err(e) = self
             .middleware
             .apply(&mut req)
@@ -146,7 +146,7 @@ where
     }
 }
 
-impl<H, S> Service<Operation<H>> for DispatchMiddleware<S>
+impl<S> Service<crate::Request> for DispatchMiddleware<S>
 where
     S: Service<http::Request<SdkBody>>,
 {
@@ -160,7 +160,7 @@ where
             .map_err(OperationError::DispatchError)
     }
 
-    fn call(&mut self, req: Operation<H>) -> Self::Future {
+    fn call(&mut self, req: crate::Request) -> Self::Future {
         OperationFuture {
             f: self.inner.call(req.base),
         }
@@ -171,7 +171,7 @@ where
 mod test {
     use crate::endpoint::StaticEndpoint;
     use crate::middleware::{DispatchLayer, OperationMiddleware, OperationRequestMiddlewareLayer};
-    use crate::{HttpRequestResponse, Operation, SdkBody};
+    use crate::{ParseHttpResponse, SdkBody};
     use auth::{
         Credentials, HttpSignatureType, HttpSigningConfig, RequestConfig, ServiceConfig,
         SigningAlgorithm, SigningConfig,
@@ -186,7 +186,8 @@ mod test {
     use tower::{Layer, Service};
 
     struct TestOperationParser;
-    impl HttpRequestResponse for TestOperationParser {
+
+    impl ParseHttpResponse for TestOperationParser {
         type O = String;
 
         fn parse_unloaded<B>(&self, _response: &mut Response<B>) -> Option<Self::O> {
@@ -202,8 +203,8 @@ mod test {
     async fn middleware_test() {
         #[derive(Clone)]
         struct AddHeader(String, String);
-        impl<H> OperationMiddleware<H> for AddHeader {
-            fn apply(&self, request: &mut Operation<H>) -> Result<(), Box<dyn Error>> {
+        impl OperationMiddleware for AddHeader {
+            fn apply(&self, request: &mut crate::Request) -> Result<(), Box<dyn Error>> {
                 request.base.headers_mut().append(
                     HeaderName::from_str(&self.0).unwrap(),
                     HeaderValue::from_str(&self.0).unwrap(),
@@ -230,7 +231,7 @@ mod test {
             }
         });
         let mut service = add_header.layer(DispatchLayer.layer(http_service));
-        let operation = Operation {
+        let operation = crate::Request {
             base: Request::builder()
                 .uri("/some_url")
                 .body(SdkBody::from("Hello"))
@@ -251,7 +252,6 @@ mod test {
             }),
             credentials_provider: Box::new(Credentials::from_static("key", "secret", None)),
             endpoint_config: Box::new(StaticEndpoint::from_service_region("dynamodb", "us-east-1")),
-            response_handler: Some(Box::new(TestOperationParser)),
         };
         let response = service.call(operation).await;
         assert_eq!(response.unwrap().body(), "x-key:\"X-Key\"");

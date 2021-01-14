@@ -71,6 +71,11 @@ impl From<Vec<u8>> for SdkBody {
 
 // TODO: consider field privacy, builders, etc.
 pub struct Operation<H> {
+    pub request: Request,
+    pub response_handler: Box<H>,
+}
+
+pub struct Request {
     pub base: http::Request<SdkBody>,
 
     // These could also be attached in as extensions, but explicit might be better.
@@ -79,11 +84,9 @@ pub struct Operation<H> {
     pub signing_config: SigningConfig,
     pub credentials_provider: Box<dyn ProvideCredentials>,
     pub endpoint_config: Box<dyn ProvideEndpoint>,
-
-    pub response_handler: Option<Box<H>>,
 }
 
-pub trait HttpRequestResponse {
+pub trait ParseHttpResponse {
     type O;
     /// Parse an HTTP request without reading the body. If the body must be provided to proceed,
     /// return `None`
@@ -91,6 +94,9 @@ pub trait HttpRequestResponse {
     /// This exists to serve APIs like S3::GetObject where the body is passed directly into the
     /// response and consumed by the client. However, even in the case of S3::GetObject, errors
     /// require reading the entire body.
-    fn parse_unloaded<B>(&self, response: &mut http::Response<B>) -> Option<Self::O>;
+    fn parse_unloaded<B: http_body::Body>(
+        &self,
+        response: &mut http::Response<B>,
+    ) -> Option<Self::O>;
     fn parse_loaded(&self, response: &http::Response<Bytes>) -> Self::O;
 }

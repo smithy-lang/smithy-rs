@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 use crate::middleware::OperationMiddleware;
-use crate::Operation;
 use crate::SdkBody;
 use auth::{HttpSigner, SigningConfig};
 use std::error::Error;
@@ -27,8 +26,8 @@ impl SigningMiddleware {
     }
 }
 
-impl<H> OperationMiddleware<H> for SigningMiddleware {
-    fn apply(&self, request: &mut Operation<H>) -> Result<(), Box<dyn Error>> {
+impl OperationMiddleware for SigningMiddleware {
+    fn apply(&self, request: &mut crate::Request) -> Result<(), Box<dyn Error>> {
         let signing_config = &request.signing_config;
         let creds = request.credentials_provider.credentials()?;
         let body = match request.base.body() {
