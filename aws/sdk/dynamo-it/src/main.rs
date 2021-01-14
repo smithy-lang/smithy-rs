@@ -10,7 +10,7 @@ use dynamodb::model::{
 };
 use dynamodb::operation::CreateTable;
 use dynamodb::output::{ListTablesOutput, DeleteTableOutput};
-use operation::{HttpRequestResponse, SdkBody, Operation};
+use operation::{HttpRequestResponse, SdkBody, Operation, ParseStrictResponse, Request};
 use dynamodb::error::DeleteTableError;
 
 struct DeleteTable(dynamodb::operation::DeleteTable);
@@ -21,14 +21,9 @@ use std::time::SystemTime;
 use operation::endpoint::StaticEndpoint;
 use http::{Response, Uri};
 
-impl HttpRequestResponse for DeleteTable {
-    type O = Result<DeleteTableOutput, DeleteTableError>;
-
-    fn parse_unloaded<B>(&self, _: &mut Response<B>) -> Option<Self::O> {
-        None
-    }
-
-    fn parse_loaded(&self, response: &Response<Bytes>) -> Self::O {
+impl ParseStrictResponse for DeleteTable {
+    type Output = Result<DeleteTableOutput, DeleteTableError>;
+    fn parse(&self, response: &Response<Bytes>) -> Self::O {
         self.0.parse_response(response)
     }
 }
@@ -36,25 +31,27 @@ impl HttpRequestResponse for DeleteTable {
 impl DeleteTable {
     fn into_operation(self, config: dynamodb::Config) -> Operation<DeleteTable> {
         Operation {
-            base: self.0.build_http_request().map(|body|SdkBody::from(body)),
-            signing_config: SigningConfig::Http(HttpSigningConfig {
-                algorithm: SigningAlgorithm::SigV4,
-                signature_type: HttpSignatureType::HttpRequestHeaders,
-                service_config: ServiceConfig {
-                    // TODO: these get loaded from the config
-                    service: "dynamodb".to_string(),
-                    region: "us-east-1".to_string(),
-                },
-                request_config: RequestConfig {
-                    request_ts: || SystemTime::now(),
-                },
-                double_uri_encode: false,
-                normalize_uri_path: true,
-                omit_session_token: false,
-            }),
-            credentials_provider: config.credentials_provider,
-            endpoint_config: Box::new(StaticEndpoint::from_uri(Uri::from_static("http://localhost:8000"))),
-            response_handler: Some(Box::new(self)),
+            request: Request {
+                base: self.0.build_http_request().map(|body| SdkBody::from(body)),
+                signing_config: SigningConfig::Http(HttpSigningConfig {
+                    algorithm: SigningAlgorithm::SigV4,
+                    signature_type: HttpSignatureType::HttpRequestHeaders,
+                    service_config: ServiceConfig {
+                        // TODO: these get loaded from the config
+                        service: "dynamodb".to_string(),
+                        region: "us-east-1".to_string(),
+                    },
+                    request_config: RequestConfig {
+                        request_ts: || SystemTime::now(),
+                    },
+                    double_uri_encode: false,
+                    normalize_uri_path: true,
+                    omit_session_token: false,
+                }),
+                credentials_provider: config.credentials_provider,
+                endpoint_config: Box::new(StaticEndpoint::from_uri(Uri::from_static("http://localhost:8000"))),
+            },
+            response_handler: Box::new(self),
         }
     }
 }

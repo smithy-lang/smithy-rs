@@ -187,14 +187,17 @@ mod test {
 
     struct TestOperationParser;
 
-    impl ParseHttpResponse for TestOperationParser {
-        type O = String;
+    impl<B> ParseHttpResponse<B> for TestOperationParser
+    where
+        B: http_body::Body,
+    {
+        type Output = String;
 
-        fn parse_unloaded<B>(&self, _response: &mut Response<B>) -> Option<Self::O> {
+        fn parse_unloaded(&self, _response: &mut Response<B>) -> Option<Self::Output> {
             Some("Hello!".to_string())
         }
 
-        fn parse_loaded(&self, _response: &Response<Bytes>) -> Self::O {
+        fn parse_loaded(&self, _response: &Response<Bytes>) -> Self::Output {
             "Hello!".to_string()
         }
     }

@@ -54,7 +54,7 @@ where
 {
     pub async fn call<O, R, E>(&self, input: Operation<O>) -> Result<SdkResponse<R>, SdkError<E>>
     where
-        O: ParseHttpResponse<O = Result<R, E>>,
+        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>>,
     {
         let ready_service = ReadyOneshot::new(self.inner.clone())
             .await
@@ -153,14 +153,17 @@ mod test {
 
     #[derive(Clone)]
     struct TestOperationParser;
-    impl ParseHttpResponse for TestOperationParser {
-        type O = Result<String, String>;
+    impl<B> ParseHttpResponse<B> for TestOperationParser
+    where
+        B: http_body::Body,
+    {
+        type Output = Result<String, String>;
 
-        fn parse_unloaded<B>(&self, _response: &mut Response<B>) -> Option<Self::O> {
+        fn parse_unloaded(&self, _response: &mut Response<B>) -> Option<Self::Output> {
             Some(Ok("Hello!".to_string()))
         }
 
-        fn parse_loaded(&self, _response: &Response<Bytes>) -> Self::O {
+        fn parse_loaded(&self, _response: &Response<Bytes>) -> Self::Output {
             Ok("Hello!".to_string())
         }
     }

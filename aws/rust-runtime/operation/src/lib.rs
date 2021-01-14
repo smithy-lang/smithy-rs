@@ -7,7 +7,7 @@ pub mod middleware;
 pub mod signing_middleware;
 
 use endpoint::ProvideEndpoint;
-use http::{HeaderMap, HeaderValue};
+use http::{HeaderMap, HeaderValue, Response};
 use std::error::Error;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -86,17 +86,34 @@ pub struct Request {
     pub endpoint_config: Box<dyn ProvideEndpoint>,
 }
 
-pub trait ParseHttpResponse {
-    type O;
+pub trait ParseHttpResponse<B> {
+    type Output;
     /// Parse an HTTP request without reading the body. If the body must be provided to proceed,
     /// return `None`
     ///
     /// This exists to serve APIs like S3::GetObject where the body is passed directly into the
     /// response and consumed by the client. However, even in the case of S3::GetObject, errors
     /// require reading the entire body.
-    fn parse_unloaded<B: http_body::Body>(
-        &self,
-        response: &mut http::Response<B>,
-    ) -> Option<Self::O>;
-    fn parse_loaded(&self, response: &http::Response<Bytes>) -> Self::O;
+    fn parse_unloaded(&self, response: &mut http::Response<B>) -> Option<Self::Output>;
+    fn parse_loaded(&self, response: &http::Response<Bytes>) -> Self::Output;
+}
+
+pub trait ParseStrictResponse {
+    type Output;
+    fn parse(&self, response: &Response<Bytes>) -> Self::Output;
+}
+
+impl<B, T> ParseHttpResponse<B> for T
+where
+    T: ParseStrictResponse,
+{
+    type Output = T::Output;
+
+    fn parse_unloaded(&self, _response: &mut Response<B>) -> Option<Self::Output> {
+        None
+    }
+
+    fn parse_loaded(&self, response: &Response<Bytes>) -> Self::Output {
+        self.parse(response)
+    }
 }
