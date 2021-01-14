@@ -55,7 +55,7 @@ class ErrorGenerator(
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 write("write!(f, ${symbol.name.dq()})?;")
                 messageShape.map {
-                    OptionForEach(symbolProvider.toSymbol(it), "&self.message") { field ->
+                    ifSet(it, symbolProvider.toSymbol(it), "&self.message") { field ->
                         write("""write!(f, ": {}", $field)?;""")
                     }
                 }
