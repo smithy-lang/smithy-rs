@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::time::{Instant, SystemTime};
+use std::borrow::Cow;
 
 /// AWS SDK Credentials
 ///
@@ -30,15 +31,14 @@ pub struct Credentials {
 
 impl Credentials {
     /// Create a Credentials struct from static credentials
-    pub fn from_static<T: ToString>(
-        access_key_id: T,
-        secret_access_key: T,
-        session_token: Option<T>,
+    pub fn from_static(
+        access_key_id: impl ToString,
+        secret_access_key: impl ToString,
     ) -> Self {
         Credentials {
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
-            session_token: session_token.map(|tok| tok.to_string()),
+            session_token: None,
             expiration: None,
         }
     }
@@ -75,7 +75,7 @@ pub trait ProvideCredentials {
 pub fn default_provider() -> impl ProvideCredentials {
     // todo: this should be a chain, maybe CRT?
     // Determine what the minimum support is
-    Credentials::from_static("todo", "todo", None)
+    Credentials::from_static("todo", "todo")
 }
 
 impl ProvideCredentials for Credentials {
@@ -120,8 +120,8 @@ pub struct RequestConfig {
 }
 
 pub struct ServiceConfig {
-    pub service: String,
-    pub region: String,
+    pub service: Cow<'static, str>,
+    pub region: Cow<'static, str>,
 }
 
 type SigningError = Box<dyn Error + Send + Sync + 'static>;
@@ -187,19 +187,19 @@ mod test {
     struct DynamoConfig {
         signer: HttpSigner,
         credentials_provider: Box<dyn ProvideCredentials>,
-        service: String,
-        region: String,
+        service: &'static str,
+        region: &'static str,
         time_source: fn() -> SystemTime,
     }
 
     impl DynamoConfig {
         pub fn from_env() -> Self {
-            let stub_creds = Credentials::from_static("asdf", "asef", None);
+            let stub_creds = Credentials::from_static("asdf", "asef");
             DynamoConfig {
                 signer: HttpSigner {},
                 credentials_provider: Box::new(stub_creds),
-                service: "dynamodb".to_string(),
-                region: "us-east-1".to_string(),
+                service: "dynamodb",
+                region: "us-east-1",
                 time_source: || SystemTime::now(),
             }
         }
@@ -212,6 +212,8 @@ mod test {
     struct ListTablesOperation {
         input: ListTablesOperationInput,
     }
+
+    use std::borrow::Cow;
 
     impl ListTablesOperation {
         pub fn raw_request(
@@ -229,8 +231,8 @@ mod test {
         }
         pub async fn finalize(config: &DynamoConfig, mut request: &mut http::Request<Vec<u8>>) {
             let service_config = ServiceConfig {
-                service: config.service.clone(),
-                region: config.region.clone(),
+                service: Cow::Borrowed(config.service),
+                region: Cow::Borrowed(config.region),
             };
             let signing_config = ListTablesOperation::signing_config(
                 RequestConfig {

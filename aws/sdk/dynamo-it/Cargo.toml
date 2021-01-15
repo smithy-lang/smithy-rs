@@ -14,6 +14,7 @@ aws-hyper = { path = "../build/aws-sdk/aws-hyper"}
 tokio = { version = "1", features = ["full"] }
 rand  = "0.7.3"
 bytes = "1"
+hyper = "0.14.2"
 
 
 # these are just for the stub implementation

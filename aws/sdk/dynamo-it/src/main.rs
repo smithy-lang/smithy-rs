@@ -5,25 +5,24 @@
 
 use std::error::Error;
 
-use dynamodb::model::{
-    AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType,
-};
-use dynamodb::operation::CreateTable;
-use dynamodb::output::{ListTablesOutput, DeleteTableOutput};
-use operation::{HttpRequestResponse, SdkBody, Operation, ParseStrictResponse, Request};
+use dynamodb::output::{DeleteTableOutput, ListTablesOutput};
+use operation::{SdkBody, Operation, ParseStrictResponse, Request};
 use dynamodb::error::DeleteTableError;
 
 struct DeleteTable(dynamodb::operation::DeleteTable);
 
-use bytes::Bytes;
-use auth::{SigningConfig, HttpSigningConfig, SigningAlgorithm, HttpSignatureType, ServiceConfig, RequestConfig};
-use std::time::SystemTime;
-use operation::endpoint::StaticEndpoint;
+//use bytes::Bytes;
+//use auth::{SigningConfig, ServiceConfig, RequestConfig};
+//use std::time::SystemTime;
+//use operation::endpoint::StaticEndpoint;
 use http::{Response, Uri};
+use dynamodb::operation::CreateTable;
+use dynamodb::model::{AttributeDefinition, ScalarAttributeType, KeySchemaElement, ProvisionedThroughput, KeyType};
 
+/*
 impl ParseStrictResponse for DeleteTable {
     type Output = Result<DeleteTableOutput, DeleteTableError>;
-    fn parse(&self, response: &Response<Bytes>) -> Self::O {
+    fn parse(&self, response: &Response<Bytes>) -> Self::Output {
         self.0.parse_response(response)
     }
 }
@@ -33,45 +32,35 @@ impl DeleteTable {
         Operation {
             request: Request {
                 base: self.0.build_http_request().map(|body| SdkBody::from(body)),
-                signing_config: SigningConfig::Http(HttpSigningConfig {
-                    algorithm: SigningAlgorithm::SigV4,
-                    signature_type: HttpSignatureType::HttpRequestHeaders,
-                    service_config: ServiceConfig {
-                        // TODO: these get loaded from the config
-                        service: "dynamodb".to_string(),
-                        region: "us-east-1".to_string(),
+                signing_config: SigningConfig::default_configuration(
+                    RequestConfig {
+                        request_ts: ||SystemTime::now()
                     },
-                    request_config: RequestConfig {
-                        request_ts: || SystemTime::now(),
-                    },
-                    double_uri_encode: false,
-                    normalize_uri_path: true,
-                    omit_session_token: false,
-                }),
+                    ServiceConfig {
+                        service: "dynamodb".into(),
+                        region: "us-east-1".into()
+                    }
+                ),
                 credentials_provider: config.credentials_provider,
                 endpoint_config: Box::new(StaticEndpoint::from_uri(Uri::from_static("http://localhost:8000"))),
             },
             response_handler: Box::new(self),
         }
     }
-}
+}*/
 
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let table_name = "new_table";
-    let client = aws_hyper::Client::default();
+    //let client = aws_hyper::Client::default();
+    let client = io_v0::Client::local("dynamodb");
     let config = dynamodb::Config::builder().build();
     let clear_table = dynamodb::operation::DeleteTable::builder()
         .table_name(table_name)
         .build(&config);
-    let clear_table = DeleteTable(clear_table);
-    match client.call(clear_table.into_operation(config)).await {
-        Ok(response) => println!("OK! {:?}", response.parsed),
-        Err(_response) => println!("failure: {}", _response.error())
-    }
 
-    /*
+
     match io_v0::dispatch!(client, clear_table).parsed() {
         Ok(Ok(table_deleted)) => println!(
             "{:?} was deleted",
@@ -144,7 +133,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         ListTablesOutput::builder()
             .table_names(vec![table_name.to_string()])
             .build()
-    );*/
+    );
 
     Ok(())
 }

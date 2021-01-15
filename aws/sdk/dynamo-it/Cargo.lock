@@ -150,6 +150,7 @@ dependencies = [
  "bytes 1.0.0",
  "dynamodb",
  "http",
+ "hyper 0.14.2",
  "io-v0",
  "operation",
  "rand 0.7.3",
