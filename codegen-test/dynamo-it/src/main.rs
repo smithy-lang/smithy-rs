@@ -15,7 +15,7 @@ use dynamo::output::ListTablesOutput;
 async fn main() -> Result<(), Box<dyn Error>> {
     let table_name = "new_table";
     let client = io_v0::Client::local("dynamodb");
-    let config = dynamo::Config::from_env();
+    let config = dynamo::Config::builder().build();
     let clear_table = dynamo::operation::DeleteTable::builder()
         .table_name(table_name)
         .build(&config);
@@ -63,6 +63,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .build(),
         )
         .build(&config);
+
+    let body = String::from_utf8(create_table.build_http_request().body().clone()).unwrap();
+    println!("{}", body);
 
     let response = io_v0::dispatch!(client, create_table);
     match response.parsed {
