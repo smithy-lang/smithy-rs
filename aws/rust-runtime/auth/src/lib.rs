@@ -68,7 +68,7 @@ type CredentialsError = Box<dyn Error>;
 /// Credentials providers may be sync or async, they may cache credentials, etc.
 ///
 /// WARNING: This interface is unstable pending async traits
-pub trait ProvideCredentials {
+pub trait ProvideCredentials: Send + Sync {
     fn credentials(&self) -> Result<Credentials, CredentialsError>;
 }
 

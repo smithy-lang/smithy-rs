@@ -4,7 +4,7 @@
  */
 use crate::middleware::OperationMiddleware;
 use crate::SdkBody;
-use auth::{HttpSigner, SigningConfig};
+use auth::{HttpSigner, SigningConfig, ProvideCredentials};
 use std::error::Error;
 
 #[derive(Clone)]
@@ -28,8 +28,9 @@ impl SigningMiddleware {
 
 impl OperationMiddleware for SigningMiddleware {
     fn apply(&self, request: &mut crate::Request) -> Result<(), Box<dyn Error>> {
-        let signing_config = &request.signing_config;
-        let creds = request.credentials_provider.credentials()?;
+        let signing_config = request.extensions.get::<SigningConfig>().unwrap();
+        let cred_provider: &Box<dyn ProvideCredentials> = request.extensions.get().unwrap();
+        let creds = cred_provider.credentials()?;
         let body = match request.base.body() {
             SdkBody::Once(Some(bytes)) => bytes.clone(),
             SdkBody::Once(None) => bytes::Bytes::new(),

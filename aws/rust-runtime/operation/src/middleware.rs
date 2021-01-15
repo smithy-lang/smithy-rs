@@ -234,11 +234,10 @@ mod test {
             }
         });
         let mut service = add_header.layer(DispatchLayer.layer(http_service));
-        let operation = crate::Request {
-            base: Request::builder()
+        let operation = crate::Request::new(Request::builder()
                 .uri("/some_url")
                 .body(SdkBody::from("Hello"))
-                .unwrap(),
+                .unwrap()); /*,
             signing_config: SigningConfig::Http(HttpSigningConfig {
                 algorithm: SigningAlgorithm::SigV4,
                 signature_type: HttpSignatureType::HttpRequestHeaders,
@@ -255,7 +254,7 @@ mod test {
             }),
             credentials_provider: Box::new(Credentials::from_static("key", "secret", None)),
             endpoint_config: Box::new(StaticEndpoint::from_service_region("dynamodb", "us-east-1")),
-        };
+        };*/
         let response = service.call(operation).await;
         assert_eq!(response.unwrap().body(), "x-key:\"X-Key\"");
     }

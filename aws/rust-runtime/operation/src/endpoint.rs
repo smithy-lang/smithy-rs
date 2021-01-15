@@ -44,7 +44,7 @@ impl StaticEndpoint {
     }
 }
 
-pub trait ProvideEndpoint {
+pub trait ProvideEndpoint: Send + Sync {
     fn set_endpoint(&self, request_uri: &mut Uri);
 }
 
@@ -71,8 +71,9 @@ where
 pub struct EndpointMiddleware;
 impl OperationMiddleware for EndpointMiddleware {
     fn apply(&self, request: &mut crate::Request) -> Result<(), Box<dyn Error>> {
-        let endpoint_config = &request.endpoint_config;
-        endpoint_config.set_endpoint(&mut request.base.uri_mut());
+        let extensions = &request.extensions;
+        let endpoint_provider: &Box<dyn ProvideEndpoint> = extensions.get().unwrap();
+        endpoint_provider.set_endpoint(&mut request.base.uri_mut());
         Ok(())
     }
 }

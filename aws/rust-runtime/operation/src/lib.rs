@@ -5,12 +5,15 @@ use auth::{ProvideCredentials, SigningConfig};
 pub mod endpoint;
 pub mod middleware;
 pub mod signing_middleware;
+mod extensions;
 
 use endpoint::ProvideEndpoint;
 use http::{HeaderMap, HeaderValue, Response};
 use std::error::Error;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use std::sync::{Arc, Mutex};
+use crate::extensions::Extensions;
 
 type BodyError = Box<dyn Error + Send + Sync>;
 
@@ -78,12 +81,44 @@ pub struct Operation<H> {
 pub struct Request {
     pub base: http::Request<SdkBody>,
 
+    pub extensions: Extensions,
+
     // These could also be attached in as extensions, but explicit might be better.
     // Having some explicit configurations as explicit fields doesn't preclude storing data as
     // extensions in the future
-    pub signing_config: SigningConfig,
-    pub credentials_provider: Box<dyn ProvideCredentials>,
-    pub endpoint_config: Box<dyn ProvideEndpoint>,
+    // pub signing_config: SigningConfig,
+    // pub credentials_provider: Box<dyn ProvideCredentials>,
+    // pub endpoint_config: Box<dyn ProvideEndpoint>,
+}
+
+impl Request {
+
+    pub fn new(base: http::Request<SdkBody>) -> Self {
+        Request {
+            base,
+            extensions: Extensions::new()
+        }
+    }
+
+    pub fn signing_config(&self) -> &SigningConfig {
+        self.extensions.get().unwrap()
+    }
+
+    pub fn credentials_provider(&self) -> &Box<dyn ProvideCredentials> {
+        self.extensions.get().unwrap()
+    }
+
+    pub fn endpoint_provider(&self) -> &Box<dyn ProvideEndpoint> {
+        self.extensions.get().unwrap()
+    }
+
+    pub fn request_mut(&mut self) -> &mut http::Request<SdkBody> {
+        &mut self.base
+    }
+
+    pub fn add_config<T: Send + Sync + 'static>(&mut self, val: T) -> Option<T> {
+        self.extensions.insert(val)
+    }
 }
 
 pub trait ParseHttpResponse<B> {

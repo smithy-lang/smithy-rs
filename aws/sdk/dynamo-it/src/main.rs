@@ -18,8 +18,11 @@ struct DeleteTable(dynamodb::operation::DeleteTable);
 use http::{Response, Uri};
 use dynamodb::operation::CreateTable;
 use dynamodb::model::{AttributeDefinition, ScalarAttributeType, KeySchemaElement, ProvisionedThroughput, KeyType};
+use bytes::Bytes;
+use auth::{RequestConfig, ServiceConfig};
+use std::time::SystemTime;
 
-/*
+
 impl ParseStrictResponse for DeleteTable {
     type Output = Result<DeleteTableOutput, DeleteTableError>;
     fn parse(&self, response: &Response<Bytes>) -> Self::Output {
@@ -27,27 +30,27 @@ impl ParseStrictResponse for DeleteTable {
     }
 }
 
+use auth::SigningConfig;
+
 impl DeleteTable {
     fn into_operation(self, config: dynamodb::Config) -> Operation<DeleteTable> {
-        Operation {
-            request: Request {
-                base: self.0.build_http_request().map(|body| SdkBody::from(body)),
-                signing_config: SigningConfig::default_configuration(
-                    RequestConfig {
-                        request_ts: ||SystemTime::now()
-                    },
-                    ServiceConfig {
-                        service: "dynamodb".into(),
-                        region: "us-east-1".into()
-                    }
-                ),
-                credentials_provider: config.credentials_provider,
-                endpoint_config: Box::new(StaticEndpoint::from_uri(Uri::from_static("http://localhost:8000"))),
+        let mut request = operation::Request::new(self.0.build_http_request().map(|body|SdkBody::from(body)));
+        request.extensions.insert(SigningConfig::default_configuration(
+            RequestConfig {
+                request_ts: ||SystemTime::now()
             },
-            response_handler: Box::new(self),
+            ServiceConfig {
+                service: "dynamodb".into(),
+                region: "us-east-1".into()
+            }
+        ));
+        request.extensions.insert(config.credentials_provider);
+        Operation {
+            request,
+            response_handler: Box::new(self)
         }
     }
-}*/
+}
 
 
 #[tokio::main]
