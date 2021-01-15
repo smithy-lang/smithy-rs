@@ -11,6 +11,7 @@ import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
@@ -28,6 +29,7 @@ class EnumGenerator(
     private val symbol = symbolProvider.toSymbol(shape)
     private val enumName = symbol.name
     private val meta = symbol.expectRustMetadata()
+
     companion object {
         const val Values = "values"
     }
@@ -41,10 +43,11 @@ class EnumGenerator(
             renderFromStr()
             writer.insertTrailingNewline()
             // impl Blah { pub fn as_str(&self) -> &str
-            renderAsStr()
+            implBlock()
         } else {
             renderUnamedEnum()
         }
+        renderSerde()
     }
 
     private fun renderUnamedEnum() {
@@ -74,7 +77,8 @@ class EnumGenerator(
         // Because enum variants always start with an upper case letter, they will never
         // conflict with reserved words (which are always lower case), therefore, we never need
         // to fall back to raw identifiers
-        return name.orElse(null)?.toPascalCase() ?: throw IllegalStateException("Enum variants must be named to derive a name. This is a bug.")
+        return name.orElse(null)?.toPascalCase()
+            ?: throw IllegalStateException("Enum variants must be named to derive a name. This is a bug.")
     }
 
     private fun renderEnum() {
@@ -89,7 +93,7 @@ class EnumGenerator(
         }
     }
 
-    private fun renderAsStr() {
+    private fun implBlock() {
         // TODO: should enums also implement AsRef<str>?
         writer.rustBlock("impl $enumName") {
             writer.rustBlock("pub fn as_str(&self) -> &str") {
@@ -101,6 +105,29 @@ class EnumGenerator(
                 }
             }
         }
+    }
+
+    private fun renderSerde() {
+        writer.rustTemplate(
+            """
+                impl #{serialize} for $enumName {
+                    fn serialize<S>(&self, serializer: S) -> Result<<S as #{serializer}>::Ok, <S as #{serializer}>::Error> where S: #{serializer}{
+                        serializer.serialize_str(self.as_str())
+                    }
+                }
+
+                impl<'de> #{deserialize}<'de> for $enumName {
+                    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: #{deserializer}<'de> {
+                        let data = <&str>::deserialize(deserializer)?;
+                        Ok(Self::from(data))
+                    }
+                }
+            """,
+            "serializer" to RuntimeType.Serializer,
+            "serialize" to RuntimeType.Serialize,
+            "deserializer" to RuntimeType.Deserializer,
+            "deserialize" to RuntimeType.Deserialize
+        )
     }
 
     private fun renderFromStr() {

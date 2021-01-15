@@ -38,7 +38,7 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
  */
 class CustomSerializerGenerator(
     private val symbolProvider: RustSymbolProvider,
-    model: Model,
+    private val model: Model,
     private val defaultTimestampFormat: TimestampFormatTrait.Format
 ) {
     private val inp = "_inp"
