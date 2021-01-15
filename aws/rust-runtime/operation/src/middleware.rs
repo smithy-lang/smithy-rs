@@ -234,27 +234,29 @@ mod test {
             }
         });
         let mut service = add_header.layer(DispatchLayer.layer(http_service));
-        let operation = crate::Request::new(Request::builder()
+        let operation = crate::Request::new(
+            Request::builder()
                 .uri("/some_url")
                 .body(SdkBody::from("Hello"))
-                .unwrap()); /*,
-            signing_config: SigningConfig::Http(HttpSigningConfig {
-                algorithm: SigningAlgorithm::SigV4,
-                signature_type: HttpSignatureType::HttpRequestHeaders,
-                service_config: ServiceConfig {
-                    service: "svc".to_string(),
-                    region: "region".to_string(),
-                },
-                request_config: RequestConfig {
-                    request_ts: || SystemTime::now(),
-                },
-                double_uri_encode: false,
-                normalize_uri_path: false,
-                omit_session_token: false,
-            }),
-            credentials_provider: Box::new(Credentials::from_static("key", "secret", None)),
-            endpoint_config: Box::new(StaticEndpoint::from_service_region("dynamodb", "us-east-1")),
-        };*/
+                .unwrap(),
+        ); /*,
+               signing_config: SigningConfig::Http(HttpSigningConfig {
+                   algorithm: SigningAlgorithm::SigV4,
+                   signature_type: HttpSignatureType::HttpRequestHeaders,
+                   service_config: ServiceConfig {
+                       service: "svc".to_string(),
+                       region: "region".to_string(),
+                   },
+                   request_config: RequestConfig {
+                       request_ts: || SystemTime::now(),
+                   },
+                   double_uri_encode: false,
+                   normalize_uri_path: false,
+                   omit_session_token: false,
+               }),
+               credentials_provider: Box::new(Credentials::from_static("key", "secret", None)),
+               endpoint_config: Box::new(StaticEndpoint::from_service_region("dynamodb", "us-east-1")),
+           };*/
         let response = service.call(operation).await;
         assert_eq!(response.unwrap().body(), "x-key:\"X-Key\"");
     }

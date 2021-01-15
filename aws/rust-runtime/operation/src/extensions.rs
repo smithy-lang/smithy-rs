@@ -44,6 +44,16 @@ pub struct Extensions {
     map: Option<Box<AnyMap>>,
 }
 
+/*
+macro_rules! extension_trait {
+    ($name1:expr, $name2:expr, $t:ty) => {{
+        trait $name1 {
+
+        }
+
+    }}
+}*/
+
 impl Extensions {
     /// Create an empty `Extensions`.
     #[inline]

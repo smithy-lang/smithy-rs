@@ -21,22 +21,22 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfi
 class CredentialProviderConfig : ConfigCustomization() {
     override fun section(section: ServiceConfig) = writable {
         when (section) {
-            is ServiceConfig.ConfigStruct -> rust("pub credentials_provider: Box<dyn #T>,", CredentialsProvider)
+            is ServiceConfig.ConfigStruct -> rust("pub credentials_provider: ::std::sync::Arc<dyn #T>,", CredentialsProvider)
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
-                rust("credentials_provider: Option<Box<dyn #T>>", CredentialsProvider)
+                rust("credentials_provider: Option<::std::sync::Arc<dyn #T>>", CredentialsProvider)
             ServiceConfig.BuilderImpl ->
                 rust(
                     """
             pub fn credentials_provider(mut self, credentials_provider: impl #T + 'static) -> Self {
-                self.credentials_provider = Some(Box::new(credentials_provider));
+                self.credentials_provider = Some(::std::sync::Arc::new(credentials_provider));
                 self
             }
             """,
                     CredentialsProvider
                 )
             ServiceConfig.BuilderBuild -> rust(
-                "credentials_provider: self.credentials_provider.unwrap_or_else(|| Box::new(#T())),",
+                "credentials_provider: self.credentials_provider.unwrap_or_else(|| ::std::sync::Arc::new(#T())),",
                 DefaultProvider
             )
         }

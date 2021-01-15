@@ -1,7 +1,7 @@
+use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::time::{Instant, SystemTime};
-use std::borrow::Cow;
 
 /// AWS SDK Credentials
 ///
@@ -23,18 +23,14 @@ pub struct Credentials {
     ///
     /// If these credentials never expire, this value will be set to `None`
     ///
-    /// TODO: consider if `Instant` is the best representation—other options:
-    /// - SystemTime, we don't need monotonicity for this
+    /// TODO: consider if `SystemTime` is the best representation—other options:
     /// - u64
-    expiration: Option<Instant>,
+    expiration: Option<SystemTime>,
 }
 
 impl Credentials {
     /// Create a Credentials struct from static credentials
-    pub fn from_static(
-        access_key_id: impl ToString,
-        secret_access_key: impl ToString,
-    ) -> Self {
+    pub fn from_static(access_key_id: impl ToString, secret_access_key: impl ToString) -> Self {
         Credentials {
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
@@ -101,6 +97,20 @@ pub enum SigningConfig {
     Http(HttpSigningConfig),
     // Http Chunked Body
     // Event Stream
+}
+
+impl SigningConfig {
+    pub fn default_config(service_config: ServiceConfig, request_config: RequestConfig) -> Self {
+        SigningConfig::Http(HttpSigningConfig {
+            algorithm: SigningAlgorithm::SigV4,
+            signature_type: HttpSignatureType::HttpRequestHeaders,
+            service_config,
+            request_config,
+            double_uri_encode: false,
+            normalize_uri_path: true,
+            omit_session_token: false,
+        })
+    }
 }
 
 pub struct HttpSigningConfig {
