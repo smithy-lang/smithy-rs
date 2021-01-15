@@ -105,7 +105,7 @@ class HttpTraitBindingGenerator(
                 val memberType = model.expectShape(memberShape.target)
                 val memberSymbol = symbolProvider.toSymbol(memberShape)
                 val memberName = symbolProvider.toMemberName(memberShape)
-                OptionForEach(memberSymbol, "&self.$memberName") { field ->
+                ifSet(memberType, memberSymbol, "&self.$memberName") { field ->
                     ListForEach(memberType, field) { innerField, targetId ->
                         val innerMemberType = model.expectShape(targetId)
                         val formatted = headerFmtFun(innerMemberType, memberShape, innerField)
@@ -186,7 +186,7 @@ class HttpTraitBindingGenerator(
                 val memberSymbol = symbolProvider.toSymbol(memberShape)
                 val memberName = symbolProvider.toMemberName(memberShape)
                 val outerTarget = model.expectShape(memberShape.target)
-                OptionForEach(memberSymbol, "&self.$memberName") { field ->
+                ifSet(outerTarget, memberSymbol, "&self.$memberName") { field ->
                     ListForEach(outerTarget, field) { innerField, targetId ->
                         val target = model.expectShape(targetId)
                         write(

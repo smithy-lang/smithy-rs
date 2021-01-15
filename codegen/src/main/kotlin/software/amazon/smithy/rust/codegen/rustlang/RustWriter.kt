@@ -11,7 +11,9 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.writer.CodegenWriter
 import software.amazon.smithy.codegen.core.writer.CodegenWriterFactory
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DocumentationTrait
@@ -243,21 +245,37 @@ class RustWriter private constructor(
         return this
     }
 
-    // TODO: refactor both of these methods & add a parent method to for_each across any field type
-    // generically
-    fun OptionForEach(member: Symbol, outerField: String, block: CodeWriter.(field: String) -> Unit) {
-        if (member.isOptional()) {
-            val derefName = safeName("inner")
-            // TODO: `inner` should be custom codegenned to avoid shadowing
-            rustBlock("if let Some($derefName) = $outerField") {
-                block(derefName)
+    /**
+     * Generate a wrapping if statement around a field.
+     *
+     * - If the field is optional, it will only be called if the field is present
+     * - If the field is an unboxed primitive, it will only be called if the field is non-zero
+     *
+     */
+    fun ifSet(shape: Shape, member: Symbol, outerField: String, block: CodeWriter.(field: String) -> Unit) {
+        // TODO: this API should be refactored so that we don't need to strip `&` to get reference comparisons to work.
+        when {
+            member.isOptional() -> {
+                val derefName = safeName("inner")
+                rustBlock("if let Some($derefName) = $outerField") {
+                    block(derefName)
+                }
             }
-        } else {
-            this.block(outerField)
+            shape is NumberShape -> rustBlock("if ${outerField.removePrefix("&")} != 0") {
+                block(outerField)
+            }
+            shape is BooleanShape -> rustBlock("if ${outerField.removePrefix("&")}") {
+                block(outerField)
+            }
+            else -> this.block(outerField)
         }
     }
 
-    fun ListForEach(target: Shape, outerField: String, block: CodeWriter.(field: String, target: ShapeId) -> Unit) {
+    fun ListForEach(
+        target: Shape,
+        outerField: String,
+        block: CodeWriter.(field: String, target: ShapeId) -> Unit
+    ) {
         if (target is CollectionShape) {
             val derefName = safeName("inner")
             rustBlock("for $derefName in $outerField") {
@@ -279,9 +297,10 @@ class RustWriter private constructor(
         return "${headerDocs ?: ""}\n$header\n$useDecls\n$contents\n"
     }
 
-    fun format(r: Any): String {
-        return formatter.apply(r, "")
-    }
+    fun format(r: Any):
+        String {
+            return formatter.apply(r, "")
+        }
 
     fun useAs(target: Shape, base: String): String {
         return if (target.hasTrait(EnumTrait::class.java)) {
