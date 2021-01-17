@@ -11,6 +11,9 @@ use std::error::Error;
 use dynamodb::{model::{AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType}, operation::CreateTable};
 use http::Uri;
 use operation::endpoint::StaticEndpoint;
+use aws_hyper::{SdkError, SdkResponse};
+use dynamodb::output::CreateTableOutput;
+use dynamodb::error::CreateTableError;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -48,9 +51,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .build(),
         )
         .build(&config);
-        client.call(create_table).await.map_err(|err| {
-            eprintln!("failed to create table: {}", err.error());
-        });
+        match client.call(create_table).await {
+            Ok(created) => println!("table created! {:#?}", created.parsed),
+            Err(failed) => println!("failed to create table: {:?}", failed)
+        }
     }
     Ok(())
 }
