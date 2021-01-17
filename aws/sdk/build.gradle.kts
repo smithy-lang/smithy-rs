@@ -188,10 +188,9 @@ tasks.register<Exec>("dynamoIt") {
     // disallow warnings
     commandLine("cargo", "run")
     dependsOn("assemble")
-
 }
 
-tasks["test"].finalizedBy("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs")
+tasks["test"].finalizedBy("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs", "dynamoIt")
 
 tasks["clean"].doFirst {
     delete("smithy-build.json")
