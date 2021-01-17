@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.testutil.asSmithyModel
-import software.amazon.smithy.rust.testutil.compileAndRun
 import software.amazon.smithy.rust.testutil.compileAndTest
 import software.amazon.smithy.rust.testutil.testSymbolProvider
 
@@ -45,8 +44,7 @@ class EnumGeneratorTest {
         val shape = model.lookup<StringShape>("test#InstanceType")
         val generator = EnumGenerator(provider, writer, shape, shape.expectTrait(EnumTrait::class.java))
         generator.render()
-        val result = writer.toString()
-        result.compileAndRun(
+        writer.compileAndTest(
             """
             let instance = InstanceType::T2Micro;
             assert_eq!(instance.as_str(), "t2.micro");

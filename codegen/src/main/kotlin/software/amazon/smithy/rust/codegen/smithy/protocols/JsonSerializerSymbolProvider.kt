@@ -66,7 +66,8 @@ class JsonSerializerSymbolProvider(
             serializerBuilder.deserializerFor(memberShape)?.also {
                 attribs.add(Custom("serde(deserialize_with = ${it.fullyQualifiedName().dq()})", listOf(it)))
             }
-            if (model.expectShape(memberShape.container) is StructureShape && base.toSymbol(memberShape).isOptional()
+            if (model.expectShape(memberShape.container) is StructureShape && base.toSymbol(memberShape)
+                .isOptional()
             ) {
                 attribs.add(Custom("serde(default)"))
             }
@@ -76,7 +77,7 @@ class JsonSerializerSymbolProvider(
 
     override fun structureMeta(structureShape: StructureShape): RustMetadata = containerMeta(structureShape)
     override fun unionMeta(unionShape: UnionShape): RustMetadata = containerMeta(unionShape)
-    override fun enumMeta(stringShape: StringShape): RustMetadata = containerMeta(stringShape)
+    override fun enumMeta(stringShape: StringShape): RustMetadata = base.toSymbol(stringShape).expectRustMetadata()
 
     private fun containerMeta(container: Shape): RustMetadata {
         val currentMeta = base.toSymbol(container).expectRustMetadata()
