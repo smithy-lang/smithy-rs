@@ -13,6 +13,7 @@ pub struct SdkResponse<O> {
     pub parsed: O,
 }
 
+#[derive(Debug)]
 pub enum SdkError<E> {
     DispatchFailure(Box<dyn Error>),
     ResponseError {
@@ -137,19 +138,16 @@ async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
 #[cfg(test)]
 mod test {
     use crate::{read_body, Client};
-    use auth::{
-        Credentials, HttpSignatureType, HttpSigningConfig, RequestConfig, ServiceConfig,
-        SigningAlgorithm, SigningConfig,
-    };
+    use auth::Credentials;
     use bytes::Bytes;
-    use http::{Request, Response};
+    use http::{Request, Response, Uri};
     use hyper::service::service_fn;
     use operation::endpoint::StaticEndpoint;
+    use operation::signing_middleware::SigningConfigExt;
     use operation::{Operation, ParseHttpResponse, SdkBody};
     use pin_utils::core_reexport::fmt::Formatter;
     use std::error::Error;
     use std::sync::{Arc, Mutex};
-    use std::time::SystemTime;
 
     #[derive(Clone)]
     struct TestOperationParser;
@@ -180,7 +178,41 @@ mod test {
         }
         impl Error for TestError {};
 
+        let mut request = operation::Request::new(
+            Request::builder()
+                .uri("/some_url")
+                .body(SdkBody::from("Hello"))
+                .unwrap(),
+        );
+
+        request
+            .config
+            .insert_signing_config(auth::SigningConfig::default_config(
+                auth::ServiceConfig {
+                    service: "some-service".into(),
+                    region: "some-region".into(),
+                },
+                auth::RequestConfig {
+                    request_ts: || std::time::SystemTime::now(),
+                },
+            ));
+        use operation::signing_middleware::CredentialProviderExt;
+        request
+            .config
+            .insert_credentials_provider(Arc::new(Credentials::from_static("access", "secret")));
+
+        use operation::endpoint::EndpointProviderExt;
+        request
+            .config
+            .insert_endpoint_provider(Arc::new(StaticEndpoint::from_uri(Uri::from_static(
+                "http://localhost:8000",
+            ))));
         let operation = Operation {
+            request,
+            response_handler: Box::new(TestOperationParser),
+        };
+
+        /*let operation = Operation {
             request: operation::Request {
                 base: Request::builder()
                     .uri("/some_url")
@@ -207,7 +239,7 @@ mod test {
                 )),
             },
             response_handler: Box::new(TestOperationParser),
-        };
+        };*/
 
         let test_request: Arc<Mutex<Option<http::Request<Bytes>>>> = Arc::new(Mutex::new(None));
         let http_service = service_fn(|request: Request<SdkBody>| async {
@@ -218,12 +250,13 @@ mod test {
                 "hello!",
             )))
         });
-        //let x: () = http_service;
-        //http_service.call(http::Request::new(SdkBody::from("123")));
         let client = Client {
             inner: http_service,
         };
-        let response = client.call(operation).await;
+        let _ = client
+            .call(operation)
+            .await
+            .expect("operation should succeed");
         let request = test_request.lock().unwrap().take().unwrap();
         assert_eq!(
             request
@@ -233,7 +266,6 @@ mod test {
                 .collect::<Vec<_>>(),
             vec!["authorization", "x-amz-date"]
         );
-        assert!(response.is_ok());
     }
 
     /*

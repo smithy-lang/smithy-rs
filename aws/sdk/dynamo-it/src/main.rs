@@ -5,19 +5,15 @@
 
 use std::error::Error;
 
-use dynamodb::error::DeleteTableError;
-use dynamodb::output::{DeleteTableOutput, ListTablesOutput};
 
-use dynamodb::model::{
-    AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType,
-};
-use dynamodb::operation::CreateTable;
+
+
+use dynamodb::{model::{AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType}, operation::CreateTable};
 use http::Uri;
 use operation::endpoint::StaticEndpoint;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let table_name = "new_table";
     let config = dynamodb::Config::builder()
         .region("us-east-1")
         .endpoint_provider(StaticEndpoint::from_uri(Uri::from_static(
@@ -25,13 +21,36 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )))
         .build();
     let client = aws_hyper::Client::default();
-    let delete_table = dynamodb::operation::DeleteTable::builder()
-        .table_name(table_name)
+    let list_tables = dynamodb::operation::ListTables::builder().build(&config);
+
+    let response = client.call(list_tables).await;
+    let tables = match response {
+        Ok(output) => {
+            output.parsed.table_names.unwrap()
+        },
+        Err(e) => panic!("err: {:?}", e.error()),
+    };
+    if tables.is_empty() {
+        let create_table = CreateTable::builder()
+        .table_name("new_table")
+        .attribute_definitions(vec![AttributeDefinition::builder()
+            .attribute_name("ForumName")
+            .attribute_type(ScalarAttributeType::S)
+            .build()])
+        .key_schema(vec![KeySchemaElement::builder()
+            .attribute_name("ForumName")
+            .key_type(KeyType::Hash)
+            .build()])
+        .provisioned_throughput(
+            ProvisionedThroughput::builder()
+                .read_capacity_units(100)
+                .write_capacity_units(100)
+                .build(),
+        )
         .build(&config);
-    let response = client.call(delete_table).await;
-    match response {
-        Ok(output) => println!("deleted! {:?}", output.parsed),
-        Err(e) => println!("err: {:?}", e.error()),
+        client.call(create_table).await.map_err(|err| {
+            eprintln!("failed to create table: {}", err.error());
+        });
     }
     Ok(())
 }

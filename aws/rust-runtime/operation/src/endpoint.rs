@@ -9,9 +9,9 @@ use std::str::FromStr;
 
 use http::uri::Uri;
 
+use crate::extensions::Extensions;
 use crate::middleware::OperationMiddleware;
 use std::sync::Arc;
-use crate::extensions::Extensions;
 
 pub struct StaticEndpoint(http::Uri);
 
@@ -67,7 +67,6 @@ where
     }
 }
 
-
 pub trait EndpointProviderExt {
     fn endpoint_provider(&self) -> Option<&Arc<dyn ProvideEndpoint>>;
     fn insert_endpoint_provider(
@@ -95,7 +94,10 @@ impl EndpointProviderExt for Extensions {
 pub struct EndpointMiddleware;
 impl OperationMiddleware for EndpointMiddleware {
     fn apply(&self, request: &mut crate::Request) -> Result<(), Box<dyn Error>> {
-        let endpoint_provider: &Arc<dyn ProvideEndpoint> = request.config.endpoint_provider().ok_or_else(||"missing endpoint provider")?;
+        let endpoint_provider: &Arc<dyn ProvideEndpoint> = request
+            .config
+            .endpoint_provider()
+            .ok_or("missing endpoint provider")?;
         endpoint_provider.set_endpoint(&mut request.base.uri_mut());
         Ok(())
     }

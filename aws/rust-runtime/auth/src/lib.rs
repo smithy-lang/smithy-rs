@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::time::{Instant, SystemTime};
+use std::time::SystemTime;
 
 /// AWS SDK Credentials
 ///

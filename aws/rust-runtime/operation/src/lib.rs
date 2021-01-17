@@ -1,18 +1,14 @@
 use bytes::Bytes;
 
-use auth::{ProvideCredentials, SigningConfig};
-
 pub mod endpoint;
 mod extensions;
 pub mod middleware;
 pub mod signing_middleware;
 
 use crate::extensions::Extensions;
-use endpoint::ProvideEndpoint;
 use http::{HeaderMap, HeaderValue, Response};
 use std::error::Error;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
 type BodyError = Box<dyn Error + Send + Sync>;

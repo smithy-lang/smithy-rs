@@ -169,19 +169,15 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::endpoint::StaticEndpoint;
     use crate::middleware::{DispatchLayer, OperationMiddleware, OperationRequestMiddlewareLayer};
     use crate::{ParseHttpResponse, SdkBody};
-    use auth::{
-        Credentials, HttpSignatureType, HttpSigningConfig, RequestConfig, ServiceConfig,
-        SigningAlgorithm, SigningConfig,
-    };
+
     use bytes::Bytes;
     use http::header::HeaderName;
     use http::{HeaderValue, Request, Response};
     use std::error::Error;
     use std::str::FromStr;
-    use std::time::SystemTime;
+
     use tower::service_fn;
     use tower::{Layer, Service};
 

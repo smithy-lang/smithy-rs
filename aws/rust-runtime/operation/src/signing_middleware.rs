@@ -69,11 +69,11 @@ impl OperationMiddleware for SigningMiddleware {
         let signing_config = request
             .config
             .signing_config()
-            .ok_or_else(||"Missing signing config")?;
+            .ok_or("Missing signing config")?;
         let cred_provider = request
             .config
             .credentials_provider()
-            .ok_or_else (||"Missing credentials provider")?;
+            .ok_or("Missing credentials provider")?;
         let creds = cred_provider.credentials()?;
         let body = match request.base.body() {
             SdkBody::Once(Some(bytes)) => bytes.clone(),
