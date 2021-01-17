@@ -53,6 +53,8 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
     // TODO: refactor to be RuntimeTypeProvider a la Symbol provider that packages the `RuntimeConfig` state.
     companion object {
 
+        val Bytes = RuntimeType("Bytes", dependency = CargoDependency.Bytes, namespace = "bytes")
+
         // val Blob = RuntimeType("Blob", RustDependency.IO_CORE, "blob")
         val From = RuntimeType("From", dependency = null, namespace = "std::convert")
         val AsRef = RuntimeType("AsRef", dependency = null, namespace = "std::convert")
@@ -141,6 +143,8 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
 
         val Config = RuntimeType("config", null, "crate")
 
+        fun Operation(runtimeConfig: RuntimeConfig) = RuntimeType("Operation", dependency = CargoDependency.Operation(runtimeConfig), namespace = "operation")
+
         fun BlobSerde(runtimeConfig: RuntimeConfig) = RuntimeType("blob_serde", InlineDependency.blobSerde(runtimeConfig), "crate")
 
         fun forInlineFun(name: String, module: String, func: (RustWriter) -> Unit) = RuntimeType(
@@ -148,5 +152,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             dependency = InlineDependency(name, module, listOf(), func),
             namespace = "crate::$module"
         )
+
+        fun ParseStrict(runtimeConfig: RuntimeConfig): RuntimeType = RuntimeType("ParseStrictResponse", dependency = CargoDependency.Operation(runtimeConfig), namespace = "operation")
     }
 }

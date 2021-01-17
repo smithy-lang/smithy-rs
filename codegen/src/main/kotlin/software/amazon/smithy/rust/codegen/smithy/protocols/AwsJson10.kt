@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.StructureModifier
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.outputShape
 
 sealed class AwsJsonVersion {
     abstract val value: String
@@ -261,5 +262,20 @@ class BasicAwsJsonGenerator(
             }
         }
         write("unknown => #T::unhandled(unknown)", errorSymbol)
+    }
+
+    override fun extras(moduleWriter: RustWriter, operationShape: OperationShape) {
+        val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
+        moduleWriter.rustTemplate(
+            """
+            impl #{parse_strict} for ${symbolProvider.toSymbol(operationShape).name} {
+                type Output = Result<#{output}, #{error}>;
+                fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
+                    self.parse_response(response)
+                }
+            }
+        """,
+            "parse_strict" to RuntimeType.ParseStrict(symbolProvider.config().runtimeConfig), "output" to outputSymbol, "error" to operationShape.errorSymbol(symbolProvider), "response" to RuntimeType.Http("Response"), "bytes" to RuntimeType.Bytes
+        )
     }
 }

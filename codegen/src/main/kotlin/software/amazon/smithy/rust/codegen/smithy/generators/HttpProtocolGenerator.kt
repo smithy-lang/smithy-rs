@@ -42,6 +42,7 @@ interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
 
 sealed class OperationSection(name: String) : Section(name) {
     object ImplBlock : OperationSection("ImplBlock")
+    object Plugin : OperationSection("Feature")
 }
 
 typealias OperationCustomization = NamedSectionGenerator<OperationSection>
@@ -63,7 +64,7 @@ abstract class HttpProtocolGenerator(
     ) {
         val inputShape = operationShape.inputShape(model)
         val inputSymbol = symbolProvider.toSymbol(inputShape)
-        val builderGenerator = OperationInputBuilderGenerator(model, symbolProvider, operationShape)
+        val builderGenerator = OperationInputBuilderGenerator(model, symbolProvider, operationShape, customizations)
         builderGenerator.render(inputWriter)
         // impl OperationInputShape { ... }
         inputWriter.implBlock(inputShape, symbolProvider) {
@@ -85,6 +86,7 @@ abstract class HttpProtocolGenerator(
             // pub fn builder() -> ... { }
             builderGenerator.renderConvenienceMethod(this)
         }
+        extras(operationWriter, operationShape)
         val operationName = symbolProvider.toSymbol(operationShape).name
         operationWriter.documentShape(operationShape, model)
         operationWriter.rustBlock("pub struct $operationName") {
@@ -169,4 +171,6 @@ abstract class HttpProtocolGenerator(
         operationShape: OperationShape,
         inputShape: StructureShape
     )
+
+    open fun extras(moduleWriter: RustWriter, operationShape: OperationShape) {}
 }

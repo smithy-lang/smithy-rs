@@ -54,13 +54,17 @@ sealed class ServiceConfig(name: String) : Section(name) {
     object BuilderStruct : ServiceConfig("BuilderStruct")
     /** impl block of `ConfigBuilder` **/
     object BuilderImpl : ServiceConfig("BuilderImpl")
+
+    /** Setup shared resources in the build method **/
+    object BuilderPreamble : ServiceConfig("BuilderBuildPreamble")
+
     /** Convert from a field in the builder to the final field in config
      *  eg.
      *  ```kotlin
      *  rust("""my_field: my_field.unwrap_or_else(||"default")""")
      *  ```
      **/
-    object BuilderBuild : ServiceConfig("BuilderBuild")
+    object BuilderBuild : ServiceConfig("BuilderBuildPreamble")
 }
 
 // TODO: if this becomes hot, it may need to be cached in a knowledge index
@@ -130,6 +134,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
                 it.section(ServiceConfig.BuilderImpl)(this)
             }
             rustBlock("pub fn build(self) -> Config") {
+                customizations.forEach { it.section(ServiceConfig.BuilderPreamble)(this) }
                 rustBlock("Config") {
                     customizations.forEach {
                         it.section(ServiceConfig.BuilderBuild)(this)

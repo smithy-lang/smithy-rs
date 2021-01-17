@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
@@ -60,23 +61,43 @@ class ModelBuilderGenerator(
 class OperationInputBuilderGenerator(
     model: Model,
     private val symbolProvider: RustSymbolProvider,
-    private val shape: OperationShape
+    private val shape: OperationShape,
+    private val plugins: List<OperationCustomization> = listOf()
 ) : BuilderGenerator(model, symbolProvider, shape.inputShape(model)) {
     override fun buildFn(implBlockWriter: RustWriter) {
         val fallibleBuilder = StructureGenerator.fallibleBuilder(shape.inputShape(model), symbolProvider)
         val returnType = when (fallibleBuilder) {
-            true -> "Result<#T, String>"
-            false -> "#T"
+            true -> "Result<#T<#{T}>, String>"
+            false -> "#T<#T>"
         }
         val outputSymbol = symbolProvider.toSymbol(shape)
 
-        implBlockWriter.docs("Consumes the builder and constructs a #D", outputSymbol)
-        implBlockWriter.rustBlock("pub fn build(self, _config: &#T::Config) -> $returnType", RuntimeType.Config, outputSymbol) {
+        implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
+        implBlockWriter.rustBlock("pub fn build(self, _config: &#T::Config) -> $returnType", RuntimeType.Config, RuntimeType.Operation(symbolProvider.config().runtimeConfig), outputSymbol) {
             conditionalBlock("Ok(", ")", conditional = fallibleBuilder) {
-                // If a wrapper is specified, use the `::new` associated function to construct the wrapper
-                withBlock("#T::new(", ")", outputSymbol) {
+                withBlock("let op = #T::new(", ");", outputSymbol) {
                     coreBuilder(this)
                 }
+                val mut = if (plugins.isEmpty()) {
+                    ""
+                } else {
+                    "mut"
+                }
+                rust(
+                    """
+                    let $mut request = operation::Request::new(op.build_http_request().map(|body|operation::SdkBody::from(body)));
+                """
+                )
+                plugins.forEach { it.section(OperationSection.Plugin)(this) }
+                rust(
+                    """
+                    #T {
+                        request,
+                        response_handler: Box::new(op)
+                    }
+                """,
+                    RuntimeType.Operation(symbolProvider.config().runtimeConfig)
+                )
             }
         }
     }

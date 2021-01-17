@@ -163,7 +163,9 @@ name = "dynamodb"
 version = "0.0.1"
 dependencies = [
  "auth",
+ "bytes 1.0.0",
  "http",
+ "operation",
  "rand 0.7.3",
  "serde",
  "serde_json",

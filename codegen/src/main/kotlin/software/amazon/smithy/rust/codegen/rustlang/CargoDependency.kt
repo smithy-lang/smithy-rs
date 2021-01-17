@@ -149,8 +149,10 @@ data class CargoDependency(
     }
 
     companion object {
+        val Bytes: RustDependency = CargoDependency("bytes", CratesIo("1"))
         val Rand: CargoDependency = CargoDependency("rand", CratesIo("0.7"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2"))
+        fun Operation(runtimeConfig: RuntimeConfig): CargoDependency = CargoDependency("operation", Local(runtimeConfig.relativePath))
         fun SmithyTypes(runtimeConfig: RuntimeConfig) =
             CargoDependency("${runtimeConfig.cratePrefix}-types", Local(runtimeConfig.relativePath))
 

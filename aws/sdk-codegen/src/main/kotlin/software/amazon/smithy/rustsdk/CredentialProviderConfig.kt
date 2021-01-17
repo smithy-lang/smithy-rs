@@ -24,7 +24,7 @@ class CredentialProviderConfig : ConfigCustomization() {
             is ServiceConfig.ConfigStruct -> rust("pub credentials_provider: ::std::sync::Arc<dyn #T>,", CredentialsProvider)
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
-                rust("credentials_provider: Option<::std::sync::Arc<dyn #T>>", CredentialsProvider)
+                rust("credentials_provider: Option<::std::sync::Arc<dyn #T>>,", CredentialsProvider)
             ServiceConfig.BuilderImpl ->
                 rust(
                     """
