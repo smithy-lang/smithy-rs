@@ -11,9 +11,9 @@ use std::error::Error;
 use dynamodb::{model::{AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType}, operation::CreateTable};
 use http::Uri;
 use operation::endpoint::StaticEndpoint;
-use aws_hyper::{SdkError, SdkResponse};
-use dynamodb::output::CreateTableOutput;
-use dynamodb::error::CreateTableError;
+
+
+
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
