@@ -1,0 +1,4 @@
+[workspace]
+members = [
+    "dynamodb","auth","operation","aws-hyper","smithy-types","smithy-http","examples/dynamo-helloworld"
+]
