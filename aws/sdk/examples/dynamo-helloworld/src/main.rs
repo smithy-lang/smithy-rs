@@ -50,5 +50,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
             Err(failed) => println!("failed to create table: {:?}", failed)
         }
     }
+
+    let list_tables = dynamodb::operation::ListTables::builder().build(&config);
+
+    let response = client.call(list_tables).await;
+    match response {
+        Ok(output) => {
+            println!("tables: {:?}", output.parsed.table_names.unwrap_or_default());
+        },
+        Err(e) => panic!("err: {:?}", e.error()),
+    };
+
     Ok(())
 }
