@@ -143,10 +143,10 @@ jobs:
       with:
         java-version: ${{ env.java_version }}
     - name: Generate the SDK
-      run: ./gradlew :aws-sdk:assemble
+      run: ./gradlew :aws:sdk:assemble
       # docs are not included in the artifact; this step validates that they can be generated
     - name: Generate docs
-      run: ./gradlew :aws-sdk:cargoDocs
+      run: ./gradlew :aws:sdk:cargoDocs
     - name: Get current date
       id: date
       run: echo "name=${GITHUB_REF##*/}-$(date +'%Y-%m-%d')" >> $GITHUB_ENV
@@ -157,5 +157,5 @@ jobs:
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
         path: |
-          aws-sdk/build/aws-sdk/
-          !aws-sdk/build/aws-sdk/target
+          aws/sdk/build/aws-sdk/
+          !aws/sdk/build/aws-sdk/target
