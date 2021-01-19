@@ -5,15 +5,9 @@
 
 use std::error::Error;
 
-
-
-
 use dynamodb::{model::{AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType}, operation::CreateTable};
 use http::Uri;
 use operation::endpoint::StaticEndpoint;
-
-
-
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {

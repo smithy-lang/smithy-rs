@@ -21,7 +21,8 @@ val smithyVersion: String by project
 val sdkOutputDir = buildDir.resolve("aws-sdk")
 val awsServices = discoverServices()
 // TODO: smithy-http should be removed
-val runtimeModules = listOf("smithy-types", "smithy-http", "io-v0")
+val runtimeModules = listOf("smithy-types", "smithy-http")
+val examples = listOf("dynamo-helloworld")
 val awsModules = listOf("auth", "operation", "aws-hyper")
 
 buildscript {
@@ -104,6 +105,19 @@ task("relocateServices") {
     }
 }
 
+task("relocateExamples") {
+    description = "relocate the examples folder & rewrite path dependencies"
+    doLast {
+        copy {
+            from(projectDir)
+            include("examples/**")
+            into(sdkOutputDir)
+            exclude("**/target")
+            filter { line -> line.replace("build/aws-sdk/", "") }
+        }
+    }
+}
+
 tasks.register<Copy>("relocateRuntime") {
     from("$rootDir/rust-runtime") {
         runtimeModules.forEach {
@@ -127,7 +141,7 @@ tasks.register<Copy>("relocateAwsRuntime") {
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {
-    val modules = services.map(AwsService::module) + runtimeModules
+    val modules = services.map(AwsService::module) + awsModules + runtimeModules + examples.map { "examples/$it" }
     return """
     [workspace]
     members = [
@@ -143,7 +157,13 @@ task("generateCargoWorkspace") {
 }
 
 task("finalizeSdk") {
-    finalizedBy("relocateServices", "relocateRuntime", "relocateAwsRuntime", "generateCargoWorkspace")
+    finalizedBy(
+        "relocateServices",
+        "relocateRuntime",
+        "relocateAwsRuntime",
+        "generateCargoWorkspace",
+        "relocateExamples"
+    )
 }
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
