@@ -6,6 +6,9 @@ edition = "2018"
 
 [dependencies]
 smithy-types = { path = "../smithy-types" }
+bytes = "1"
+http-body = "0.4.0"
+http = "0.2.3"
 
 [dev-dependencies]
 proptest = "0.10.1"
