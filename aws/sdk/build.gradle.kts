@@ -31,7 +31,7 @@ buildscript {
 }
 
 dependencies {
-    implementation(project(":aws-sdk-codegen"))
+    implementation(project(":aws:sdk-codegen"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
@@ -96,7 +96,7 @@ task("relocateServices") {
     doLast {
         awsServices.forEach {
             copy {
-                from("$buildDir/smithyprojections/aws-sdk/${it.module}/rust-codegen")
+                from("$buildDir/smithyprojections/sdk/${it.module}/rust-codegen")
                 into(sdkOutputDir.resolve(it.module))
             }
         }
@@ -109,6 +109,7 @@ tasks.register<Copy>("relocateRuntime") {
             include("$it/**")
         }
         exclude("**/target")
+        exclude("**/Cargo.lock")
     }
     into(sdkOutputDir)
 }
@@ -139,7 +140,7 @@ tasks["assemble"].finalizedBy("finalizeSdk")
 
 
 tasks.register<Exec>("cargoCheck") {
-    workingDir(buildDir.resolve("aws-sdk"))
+    workingDir(sdkOutputDir)
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "check")
@@ -147,7 +148,7 @@ tasks.register<Exec>("cargoCheck") {
 }
 
 tasks.register<Exec>("cargoTest") {
-    workingDir(buildDir.resolve("aws-sdk"))
+    workingDir(sdkOutputDir)
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "test")
@@ -155,7 +156,7 @@ tasks.register<Exec>("cargoTest") {
 }
 
 tasks.register<Exec>("cargoDocs") {
-    workingDir(buildDir.resolve("aws-sdk"))
+    workingDir(sdkOutputDir)
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "doc", "--no-deps")
@@ -163,7 +164,7 @@ tasks.register<Exec>("cargoDocs") {
 }
 
 tasks.register<Exec>("cargoClippy") {
-    workingDir(buildDir.resolve("aws-sdk"))
+    workingDir(sdkOutputDir)
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "clippy")
