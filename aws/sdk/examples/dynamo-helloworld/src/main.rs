@@ -13,7 +13,7 @@ use auth::Credentials;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::init_from_env(Env::default().default_filter_or("trace"));
+    env_logger::init_from_env(Env::default().default_filter_or("debug"));
     let config = dynamodb::Config::builder()
         .region("us-east-1")
         .credentials_provider(Credentials::from_static("<fill me in>", "<fill me in>"))
