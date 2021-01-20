@@ -95,17 +95,18 @@ impl EndpointProviderExt for Extensions {
 pub struct EndpointMiddleware;
 impl OperationMiddleware for EndpointMiddleware {
     fn apply(&self, request: &mut crate::Request) -> Result<(), Box<dyn Error>> {
-        let endpoint_provider: &Arc<dyn ProvideEndpoint> = request
-            .config
-            .endpoint_provider()
-            .ok_or("missing endpoint provider")?;
-        endpoint_provider.set_endpoint(&mut request.base.uri_mut());
-        let uri = request.base.uri().host().unwrap().to_string();
-        request.base.headers_mut().append(
-            HOST,
-            uri.parse().expect("host should be valid header value"),
-        );
-        Ok(())
+        request.augment(|request, extensions| {
+            let endpoint_provider: &Arc<dyn ProvideEndpoint> = extensions
+                .endpoint_provider()
+                .ok_or("missing endpoint provider")?;
+            endpoint_provider.set_endpoint(&mut request.uri_mut());
+            let uri = request.uri().host().unwrap().to_string();
+            request.headers_mut().append(
+                HOST,
+                uri.parse().expect("host should be valid header value"),
+            );
+            Ok(())
+        })
     }
 }
 

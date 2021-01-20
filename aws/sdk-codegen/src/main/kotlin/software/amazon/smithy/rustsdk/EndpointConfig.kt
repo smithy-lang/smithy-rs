@@ -66,7 +66,7 @@ class EndpointConfigPlugin(private val operationShape: OperationShape) : Operati
                 rust(
                     """
                 use operation::endpoint::EndpointProviderExt;
-                request.config.insert_endpoint_provider(_config.endpoint_provider.clone());
+                request.config.lock().unwrap().insert_endpoint_provider(_config.endpoint_provider.clone());
                 """
                 )
             }

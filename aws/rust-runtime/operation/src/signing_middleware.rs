@@ -66,27 +66,29 @@ impl CredentialProviderExt for Extensions {
 
 impl OperationMiddleware for SigningMiddleware {
     fn apply(&self, request: &mut crate::Request) -> Result<(), Box<dyn Error>> {
-        let signing_config = request
-            .config
-            .signing_config()
-            .ok_or("Missing signing config")?;
-        let cred_provider = request
-            .config
-            .credentials_provider()
-            .ok_or("Missing credentials provider")?;
-        let creds = cred_provider.credentials()?;
-        let body = match request.base.body() {
-            SdkBody::Once(Some(bytes)) => bytes.clone(),
-            SdkBody::Once(None) => bytes::Bytes::new(),
-            // in the future, chan variants which will cause an error
-        };
-        match signing_config {
-            SigningConfig::Http(config) => {
-                if let Err(e) = self.signer.sign(config, &creds, &mut request.base, body) {
-                    return Err(e);
+        request.augment(|mut request, config| {
+            let signing_config = config.signing_config().ok_or("Missing signing config")?;
+            let cred_provider = config
+                .credentials_provider()
+                .ok_or("Missing credentials provider")?;
+            let creds = match cred_provider.credentials() {
+                Ok(creds) => creds,
+                Err(e) => return Err(e as _),
+            };
+            let body = match request.body() {
+                SdkBody::Once(Some(bytes)) => bytes.clone(),
+                SdkBody::Once(None) => bytes::Bytes::new(),
+                // in the future, chan variants which will cause an error
+            };
+
+            match signing_config {
+                SigningConfig::Http(config) => {
+                    if let Err(e) = self.signer.sign(config, &creds, &mut request, body) {
+                        return Err(e as _);
+                    }
                 }
-            }
-        };
-        Ok(())
+            };
+            Ok(())
+        })
     }
 }

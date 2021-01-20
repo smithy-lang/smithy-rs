@@ -60,7 +60,7 @@ impl Display for CredentialsProviderError {
 impl Error for CredentialsProviderError {}
 
 // TODO
-type CredentialsError = Box<dyn Error>;
+type CredentialsError = Box<dyn Error + Send + Sync + 'static>;
 
 /// A credentials provider
 ///
@@ -79,8 +79,9 @@ pub fn default_provider() -> impl ProvideCredentials {
 struct EnvironmentProvider;
 impl ProvideCredentials for EnvironmentProvider {
     fn credentials(&self) -> Result<Credentials, CredentialsError> {
-        let access_key = std::env::var("AWS_ACCESS_KEY_ID").map_err(|_|"Access key missing")?;
-        let secret_key = std::env::var("AWS_SECRET_ACCESS_KEY").map_err(|_|"Secret key missing")?;
+        let access_key = std::env::var("AWS_ACCESS_KEY_ID").map_err(|_| "Access key missing")?;
+        let secret_key =
+            std::env::var("AWS_SECRET_ACCESS_KEY").map_err(|_| "Secret key missing")?;
         Ok(Credentials::from_static(access_key, secret_key))
     }
 }

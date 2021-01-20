@@ -199,6 +199,8 @@ mod test {
 
         request
             .config
+            .lock()
+            .unwrap()
             .insert_signing_config(auth::SigningConfig::default_config(
                 auth::ServiceConfig {
                     service: "some-service".into(),
@@ -212,11 +214,15 @@ mod test {
         use operation::signing_middleware::CredentialProviderExt;
         request
             .config
+            .lock()
+            .unwrap()
             .insert_credentials_provider(Arc::new(Credentials::from_static("access", "secret")));
 
         use operation::endpoint::EndpointProviderExt;
         request
             .config
+            .lock()
+            .unwrap()
             .insert_endpoint_provider(Arc::new(StaticEndpoint::from_uri(Uri::from_static(
                 "http://localhost:8000",
             ))));

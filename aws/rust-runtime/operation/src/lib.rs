@@ -9,6 +9,7 @@ use crate::extensions::Extensions;
 use http::{HeaderMap, HeaderValue, Response};
 use std::error::Error;
 use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
 type BodyError = Box<dyn Error + Send + Sync>;
@@ -49,6 +50,12 @@ impl SdkBody {
             }
         }
     }
+
+    pub fn try_clone(&self) -> Option<SdkBody> {
+        match self {
+            SdkBody::Once(bytes) => Some(SdkBody::Once(bytes.clone())),
+        }
+    }
 }
 
 impl From<&str> for SdkBody {
@@ -77,22 +84,37 @@ pub struct Operation<H> {
 
 pub struct Request {
     pub base: http::Request<SdkBody>,
-
-    pub config: Extensions,
-    // These could also be attached in as extensions, but explicit might be better.
-    // Having some explicit configurations as explicit fields doesn't preclude storing data as
-    // extensions in the future
-    // pub signing_config: SigningConfig,
-    // pub credentials_provider: Box<dyn ProvideCredentials>,
-    // pub endpoint_config: Box<dyn ProvideEndpoint>,
+    pub config: Arc<Mutex<Extensions>>,
 }
 
 impl Request {
     pub fn new(base: http::Request<SdkBody>) -> Self {
         Request {
             base,
-            config: Extensions::new(),
+            config: Arc::new(Mutex::new(Extensions::new())),
         }
+    }
+
+    pub fn augment<T>(&mut self, f: impl Fn(&mut http::Request<SdkBody>, &Extensions) -> T) -> T {
+        let extensions = self.config.lock().unwrap();
+        f(&mut self.base, &extensions)
+    }
+
+    pub fn try_clone(&self) -> Option<Request> {
+        let cloned_body = self.base.body().try_clone()?;
+        let mut cloned_request = http::Request::builder()
+            .uri(self.base.uri().clone())
+            .method(self.base.method());
+        for (name, value) in self.base.headers() {
+            cloned_request = cloned_request.header(name, value)
+        }
+        let base = cloned_request
+            .body(cloned_body)
+            .expect("should be clonable");
+        Some(Request {
+            base,
+            config: self.config.clone(),
+        })
     }
 }
 

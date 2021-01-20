@@ -41,7 +41,7 @@ class SigV4SigningPlugin(operationShape: OperationShape) : OperationCustomizatio
                 rust(
                     """
                 use operation::signing_middleware::SigningConfigExt;
-                request.config.insert_signing_config(auth::SigningConfig::default_config(
+                request.config.lock().unwrap().insert_signing_config(auth::SigningConfig::default_config(
                     auth::ServiceConfig {
                         service: _config.signing_service().into(),
                         region: _config.region.clone().into()
@@ -51,7 +51,7 @@ class SigV4SigningPlugin(operationShape: OperationShape) : OperationCustomizatio
                     },
                 ));
                 use operation::signing_middleware::CredentialProviderExt;
-                request.config.insert_credentials_provider(_config.credentials_provider.clone());
+                request.config.lock().unwrap().insert_credentials_provider(_config.credentials_provider.clone());
                 """
                 )
             }
