@@ -6,18 +6,18 @@
 use std::error::Error;
 
 use dynamodb::{model::{AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType}, operation::CreateTable};
+use operation::endpoint::StaticEndpoint;
 use env_logger::Env;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::init_from_env(Env::default().default_filter_or("debug"));
+    env_logger::init_from_env(Env::default().default_filter_or("info"));
     let config = dynamodb::Config::builder()
         .region("us-east-1")
-        // By default, it will load credentials from the environment variables (config file not supported)
-        // .credentials_provider(auth::Credentials::from_static("<fill me in>", "<fill me in>"))
-        // For DynamoDB local:
-        // use operation::endpoint::StaticEndpoint;
-        // .endpoint_provider(StaticEndpoint::from_uri(http::Uri::from_static("http://localhost:8000")))
+        // To load credentials from environment variables, delete this line
+        .credentials_provider(auth::Credentials::from_static("<fill me in>", "<fill me in>"))
+        // To use real DynamoDB, delete this line:
+        .endpoint_provider(StaticEndpoint::from_uri(http::Uri::from_static("http://localhost:8000")))
         .build();
     let client = aws_hyper::Client::default().with_tracing();
     let list_tables = dynamodb::operation::ListTables::builder().build(&config);
