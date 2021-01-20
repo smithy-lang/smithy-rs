@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
@@ -66,10 +67,8 @@ class OperationInputBuilderGenerator(
 ) : BuilderGenerator(model, symbolProvider, shape.inputShape(model)) {
     override fun buildFn(implBlockWriter: RustWriter) {
         val fallibleBuilder = StructureGenerator.fallibleBuilder(shape.inputShape(model), symbolProvider)
-        val returnType = when (fallibleBuilder) {
-            true -> "Result<#T<#{T}>, String>"
-            false -> "#T<#T>"
-        }
+        val retryType = "()"
+        val returnType = "#T<#{T}, $retryType>".letIf(fallibleBuilder) { "Result<$it, String>" }
         val outputSymbol = symbolProvider.toSymbol(shape)
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
@@ -86,10 +85,10 @@ class OperationInputBuilderGenerator(
                 plugins.forEach { it.section(OperationSection.Plugin)(this) }
                 rust(
                     """
-                    #T {
+                    #T::new(
                         request,
-                        response_handler: Box::new(op)
-                    }
+                        op
+                    )
                 """,
                     RuntimeType.Operation(symbolProvider.config().runtimeConfig)
                 )

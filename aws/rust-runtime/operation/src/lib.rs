@@ -4,6 +4,7 @@ pub mod endpoint;
 mod extensions;
 pub mod middleware;
 pub mod signing_middleware;
+pub mod retry_policy;
 
 use crate::extensions::Extensions;
 use http::{HeaderMap, HeaderValue, Response};
@@ -77,9 +78,20 @@ impl From<Vec<u8>> for SdkBody {
 }
 
 // TODO: consider field privacy, builders, etc.
-pub struct Operation<H> {
+pub struct Operation<H, R> {
     pub request: Request,
-    pub response_handler: Box<H>,
+    pub response_handler: H,
+    pub retry_policy: R
+}
+
+impl<H> Operation<H, ()> {
+    pub fn new(request: Request, response_handler: H) -> Self {
+        Operation {
+            request,
+            response_handler,
+            retry_policy: ()
+        }
+    }
 }
 
 pub struct Request {

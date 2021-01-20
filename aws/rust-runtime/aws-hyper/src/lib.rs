@@ -56,14 +56,16 @@ impl<S> Client<S> {
     }
 }
 
+
 impl<S> Client<S>
 where
     S: Service<http::Request<SdkBody>, Response = http::Response<hyper::Body>> + Clone,
     S::Error: std::error::Error + 'static,
 {
-    pub async fn call<O, R, E>(&self, input: Operation<O>) -> Result<SdkResponse<R>, SdkError<E>>
+    pub async fn call<O, R, E, Retry>(&self, input: Operation<O, Retry>) -> Result<SdkResponse<R>, SdkError<E>>
     where
         O: ParseHttpResponse<hyper::Body, Output = Result<R, E>>,
+        Retry: RetryPolicy<Result<R, E>>
     {
         let ready_service = ReadyOneshot::new(self.inner.clone())
             .await
@@ -130,6 +132,7 @@ use middleware_tracing::RawRequestLogging;
 use operation::endpoint::EndpointMiddleware;
 use operation::middleware::{DispatchLayer, OperationRequestMiddlewareLayer};
 use operation::signing_middleware::SigningMiddleware;
+use operation::retry_policy::RetryPolicy;
 
 async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
     let mut output = Vec::new();
@@ -155,8 +158,8 @@ mod test {
     use operation::endpoint::StaticEndpoint;
     use operation::signing_middleware::SigningConfigExt;
     use operation::{Operation, ParseHttpResponse, SdkBody};
-    use pin_utils::core_reexport::fmt::Formatter;
-    use pin_utils::core_reexport::time::Duration;
+    use std::fmt::Formatter;
+    use std::time::Duration;
     use std::error::Error;
     use std::sync::{Arc, Mutex};
     use std::time::UNIX_EPOCH;
