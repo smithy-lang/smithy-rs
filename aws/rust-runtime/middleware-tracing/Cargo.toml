@@ -1,0 +1,13 @@
+[package]
+name = "middleware-tracing"
+version = "0.1.0"
+authors = ["Russell Cohen <rcoh@amazon.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tracing = "0.1.22"
+tower = "0.4.3"
+http = "0.2.3"
+tracing-futures = "0.2.4"
