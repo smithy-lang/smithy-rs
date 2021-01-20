@@ -48,6 +48,14 @@ impl Client<hyper::Client<HttpsConnector<HttpConnector>, SdkBody>> {
     }
 }
 
+impl<S> Client<S> {
+    pub fn with_tracing(self) -> Client<RawRequestLogging<S>> {
+        Client {
+            inner: RawRequestLogging { inner: self.inner },
+        }
+    }
+}
+
 impl<S> Client<S>
 where
     S: Service<http::Request<SdkBody>, Response = http::Response<hyper::Body>> + Clone,
@@ -64,8 +72,8 @@ where
         let signer = OperationRequestMiddlewareLayer::for_middleware(SigningMiddleware::new());
         let endpoint_resolver = OperationRequestMiddlewareLayer::for_middleware(EndpointMiddleware);
         let mut ready_service = ServiceBuilder::new()
-            .layer(signer)
             .layer(endpoint_resolver)
+            .layer(signer)
             .layer(DispatchLayer)
             .service(ready_service);
         // TODO: enable operations to specify their own extra middleware to add
@@ -118,6 +126,7 @@ where
 use http_body::Body;
 use hyper::client::HttpConnector;
 use hyper_tls::HttpsConnector;
+use middleware_tracing::RawRequestLogging;
 use operation::endpoint::EndpointMiddleware;
 use operation::middleware::{DispatchLayer, OperationRequestMiddlewareLayer};
 use operation::signing_middleware::SigningMiddleware;
@@ -140,14 +149,17 @@ mod test {
     use crate::{read_body, Client};
     use auth::Credentials;
     use bytes::Bytes;
+    use http::header::AUTHORIZATION;
     use http::{Request, Response, Uri};
     use hyper::service::service_fn;
     use operation::endpoint::StaticEndpoint;
     use operation::signing_middleware::SigningConfigExt;
     use operation::{Operation, ParseHttpResponse, SdkBody};
     use pin_utils::core_reexport::fmt::Formatter;
+    use pin_utils::core_reexport::time::Duration;
     use std::error::Error;
     use std::sync::{Arc, Mutex};
+    use std::time::UNIX_EPOCH;
 
     #[derive(Clone)]
     struct TestOperationParser;
@@ -193,7 +205,8 @@ mod test {
                     region: "some-region".into(),
                 },
                 auth::RequestConfig {
-                    request_ts: || std::time::SystemTime::now(),
+                    // 1/20/2021
+                    request_ts: || UNIX_EPOCH + Duration::new(1611160427, 0),
                 },
             ));
         use operation::signing_middleware::CredentialProviderExt;
@@ -211,35 +224,6 @@ mod test {
             request,
             response_handler: Box::new(TestOperationParser),
         };
-
-        /*let operation = Operation {
-            request: operation::Request {
-                base: Request::builder()
-                    .uri("/some_url")
-                    .body(SdkBody::from("Hello"))
-                    .unwrap(),
-                signing_config: SigningConfig::Http(HttpSigningConfig {
-                    algorithm: SigningAlgorithm::SigV4,
-                    signature_type: HttpSignatureType::HttpRequestHeaders,
-                    service_config: ServiceConfig {
-                        service: "svc".to_string(),
-                        region: "region".to_string(),
-                    },
-                    request_config: RequestConfig {
-                        request_ts: || SystemTime::now(),
-                    },
-                    double_uri_encode: false,
-                    normalize_uri_path: true,
-                    omit_session_token: false,
-                }),
-                credentials_provider: Box::new(Credentials::from_static("key", "secret", None)),
-                endpoint_config: Box::new(StaticEndpoint::from_service_region(
-                    "dynamodb",
-                    "us-east-1",
-                )),
-            },
-            response_handler: Box::new(TestOperationParser),
-        };*/
 
         let test_request: Arc<Mutex<Option<http::Request<Bytes>>>> = Arc::new(Mutex::new(None));
         let http_service = service_fn(|request: Request<SdkBody>| async {
@@ -264,8 +248,9 @@ mod test {
                 .keys()
                 .map(|it| it.as_str())
                 .collect::<Vec<_>>(),
-            vec!["authorization", "x-amz-date"]
+            vec!["host", "authorization", "x-amz-date"]
         );
+        assert_eq!(request.headers().get(AUTHORIZATION).unwrap(), "AWS4-HMAC-SHA256 Credential=access/20210120/some-region/some-service/aws4_request, SignedHeaders=host, Signature=f179c6899f0a11051a11dc1bb022252b0741953663bc5ff33dfa2abfed51e0b1");
     }
 
     /*

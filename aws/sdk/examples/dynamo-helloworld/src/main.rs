@@ -8,16 +8,17 @@ use std::error::Error;
 use dynamodb::{model::{AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType}, operation::CreateTable};
 use http::Uri;
 use operation::endpoint::StaticEndpoint;
+use env_logger::Env;
+use auth::Credentials;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init_from_env(Env::default().default_filter_or("trace"));
     let config = dynamodb::Config::builder()
         .region("us-east-1")
-        .endpoint_provider(StaticEndpoint::from_uri(Uri::from_static(
-            "http://localhost:8000",
-        )))
+        .credentials_provider(Credentials::from_static("<fill me in>", "<fill me in>"))
         .build();
-    let client = aws_hyper::Client::default();
+    let client = aws_hyper::Client::default().with_tracing();
     let list_tables = dynamodb::operation::ListTables::builder().build(&config);
 
     let response = client.call(list_tables).await;
@@ -25,7 +26,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Ok(output) => {
             output.parsed.table_names.unwrap()
         },
-        Err(e) => panic!("err: {:?}", e.error()),
+        Err(e) => panic!("err: {:?}", e),
     };
     if tables.is_empty() {
         let create_table = CreateTable::builder()

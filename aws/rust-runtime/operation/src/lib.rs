@@ -13,6 +13,7 @@ use std::task::{Context, Poll};
 
 type BodyError = Box<dyn Error + Send + Sync>;
 
+#[derive(Debug)]
 pub enum SdkBody {
     Once(Option<Bytes>),
 }

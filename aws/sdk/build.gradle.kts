@@ -23,7 +23,7 @@ val awsServices = discoverServices()
 // TODO: smithy-http should be removed
 val runtimeModules = listOf("smithy-types", "smithy-http")
 val examples = listOf("dynamo-helloworld")
-val awsModules = listOf("auth", "operation", "aws-hyper")
+val awsModules = listOf("auth", "operation", "aws-hyper", "middleware-tracing")
 
 buildscript {
     val smithyVersion: String by project
@@ -204,7 +204,7 @@ tasks.register<Exec>("cargoClippy") {
 }
 
 tasks.register<Exec>("dynamoIt") {
-    workingDir(projectDir.resolve("dynamo-it"))
+    workingDir(projectDir.resolve("examples/dynamo-helloworld"))
     // disallow warnings
     commandLine("cargo", "run")
     dependsOn("assemble")

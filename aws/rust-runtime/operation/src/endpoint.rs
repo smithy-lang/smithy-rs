@@ -11,6 +11,7 @@ use http::uri::Uri;
 
 use crate::extensions::Extensions;
 use crate::middleware::OperationMiddleware;
+use http::header::HOST;
 use std::sync::Arc;
 
 pub struct StaticEndpoint(http::Uri);
@@ -99,6 +100,11 @@ impl OperationMiddleware for EndpointMiddleware {
             .endpoint_provider()
             .ok_or("missing endpoint provider")?;
         endpoint_provider.set_endpoint(&mut request.base.uri_mut());
+        let uri = request.base.uri().host().unwrap().to_string();
+        request.base.headers_mut().append(
+            HOST,
+            uri.parse().expect("host should be valid header value"),
+        );
         Ok(())
     }
 }
