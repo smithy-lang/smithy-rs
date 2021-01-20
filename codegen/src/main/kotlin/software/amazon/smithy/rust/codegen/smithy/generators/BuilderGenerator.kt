@@ -78,14 +78,9 @@ class OperationInputBuilderGenerator(
                 withBlock("let op = #T::new(", ");", outputSymbol) {
                     coreBuilder(this)
                 }
-                val mut = if (plugins.isEmpty()) {
-                    ""
-                } else {
-                    "mut"
-                }
                 rust(
                     """
-                    let $mut request = operation::Request::new(op.build_http_request().map(|body|operation::SdkBody::from(body)));
+                    let request = operation::Request::new(op.build_http_request().map(|body|operation::SdkBody::from(body)));
                 """
                 )
                 plugins.forEach { it.section(OperationSection.Plugin)(this) }

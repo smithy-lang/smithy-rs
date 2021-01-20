@@ -95,7 +95,7 @@ impl Request {
         }
     }
 
-    pub fn augment<T>(&mut self, f: impl Fn(&mut http::Request<SdkBody>, &Extensions) -> T) -> T {
+    pub fn augment<T>(&mut self, f: impl FnOnce(&mut http::Request<SdkBody>, &Extensions) -> T) -> T {
         let extensions = self.config.lock().unwrap();
         f(&mut self.base, &extensions)
     }
