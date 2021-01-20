@@ -62,9 +62,9 @@ impl<T> OperationMiddleware for T
 where
     T: ProvideEndpoint,
 {
-    fn apply(&self, request: &mut crate::Request) -> Result<(), Box<dyn Error>> {
+    fn apply(&self, mut request: crate::Request) -> Result<crate::Request, Box<dyn Error>> {
         self.set_endpoint(&mut request.base.uri_mut());
-        Ok(())
+        Ok(request)
     }
 }
 
@@ -94,8 +94,8 @@ impl EndpointProviderExt for Extensions {
 /// Set the endpoint for a request based on the endpoint config
 pub struct EndpointMiddleware;
 impl OperationMiddleware for EndpointMiddleware {
-    fn apply(&self, request: &mut crate::Request) -> Result<(), Box<dyn Error>> {
-        request.augment(|request, extensions| {
+    fn apply(&self, request: crate::Request) -> Result<crate::Request, Box<dyn Error>> {
+        request.augment(|mut request, extensions| {
             let endpoint_provider: &Arc<dyn ProvideEndpoint> = extensions
                 .endpoint_provider()
                 .ok_or("missing endpoint provider")?;
@@ -105,7 +105,7 @@ impl OperationMiddleware for EndpointMiddleware {
                 HOST,
                 uri.parse().expect("host should be valid header value"),
             );
-            Ok(())
+            Ok(request)
         })
     }
 }

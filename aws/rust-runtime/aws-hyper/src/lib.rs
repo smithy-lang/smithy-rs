@@ -190,7 +190,7 @@ mod test {
         }
         impl Error for TestError {};
 
-        let mut request = operation::Request::new(
+        let request = operation::Request::new(
             Request::builder()
                 .uri("/some_url")
                 .body(SdkBody::from("Hello"))

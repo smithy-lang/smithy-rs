@@ -11,7 +11,7 @@ use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
 pub trait OperationMiddleware {
-    fn apply(&self, request: &mut crate::Request) -> Result<(), Box<dyn Error>>;
+    fn apply(&self, request: crate::Request) -> Result<crate::Request, Box<dyn Error>>;
 }
 
 pub struct OperationRequestMiddlewareService<S, M> {
@@ -81,15 +81,15 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, mut req: crate::Request) -> Self::Future {
-        if let Err(e) = self
+    fn call(&mut self, req: crate::Request) -> Self::Future {
+        match self
             .middleware
-            .apply(&mut req)
+            .apply(req)
             .map_err(|e| S::Error::request_error(e))
         {
-            return OperationMiddlewareFuture::Ready(Some(e));
+            Err(e) => OperationMiddlewareFuture::Ready(Some(e)),
+            Ok(req) => OperationMiddlewareFuture::Inner(self.inner.call(req)),
         }
-        OperationMiddlewareFuture::Inner(self.inner.call(req))
     }
 }
 
@@ -203,12 +203,12 @@ mod test {
         #[derive(Clone)]
         struct AddHeader(String, String);
         impl OperationMiddleware for AddHeader {
-            fn apply(&self, request: &mut crate::Request) -> Result<(), Box<dyn Error>> {
+            fn apply(&self, mut request: crate::Request) -> Result<crate::Request, Box<dyn Error>> {
                 request.base.headers_mut().append(
                     HeaderName::from_str(&self.0).unwrap(),
                     HeaderValue::from_str(&self.0).unwrap(),
                 );
-                Ok(())
+                Ok(request)
             }
         }
 

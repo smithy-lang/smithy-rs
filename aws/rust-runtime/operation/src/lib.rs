@@ -95,9 +95,18 @@ impl Request {
         }
     }
 
-    pub fn augment<T>(&mut self, f: impl FnOnce(&mut http::Request<SdkBody>, &Extensions) -> T) -> T {
-        let extensions = self.config.lock().unwrap();
-        f(&mut self.base, &extensions)
+    pub fn augment<T>(
+        self,
+        f: impl FnOnce(http::Request<SdkBody>, &Extensions) -> Result<http::Request<SdkBody>, T>,
+    ) -> Result<Request, T> {
+        let base = {
+            let extensions = (&self.config).lock().unwrap();
+            f(self.base, &extensions)?
+        };
+        Ok(Request {
+            base,
+            config: self.config,
+        })
     }
 
     pub fn try_clone(&self) -> Option<Request> {

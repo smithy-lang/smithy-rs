@@ -65,7 +65,7 @@ impl CredentialProviderExt for Extensions {
 }
 
 impl OperationMiddleware for SigningMiddleware {
-    fn apply(&self, request: &mut crate::Request) -> Result<(), Box<dyn Error>> {
+    fn apply(&self, request: crate::Request) -> Result<crate::Request, Box<dyn Error>> {
         request.augment(|mut request, config| {
             let signing_config = config.signing_config().ok_or("Missing signing config")?;
             let cred_provider = config
@@ -88,7 +88,7 @@ impl OperationMiddleware for SigningMiddleware {
                     }
                 }
             };
-            Ok(())
+            Ok(request)
         })
     }
 }
