@@ -30,10 +30,13 @@ pub struct Credentials {
 
 impl Credentials {
     /// Create a Credentials struct from static credentials
-    pub fn from_static(access_key_id: impl ToString, secret_access_key: impl ToString) -> Self {
+    pub fn from_static(
+        access_key_id: impl Into<String>,
+        secret_access_key: impl Into<String>,
+    ) -> Self {
         Credentials {
-            access_key_id: access_key_id.to_string(),
-            secret_access_key: secret_access_key.to_string(),
+            access_key_id: access_key_id.into(),
+            secret_access_key: secret_access_key.into(),
             session_token: None,
             expiration: None,
         }
@@ -69,9 +72,17 @@ pub trait ProvideCredentials: Send + Sync {
 }
 
 pub fn default_provider() -> impl ProvideCredentials {
-    // todo: this should be a chain, maybe CRT?
-    // Determine what the minimum support is
-    Credentials::from_static("todo", "todo")
+    // TODO: this should be a chain based on the CRT
+    EnvironmentProvider
+}
+
+struct EnvironmentProvider;
+impl ProvideCredentials for EnvironmentProvider {
+    fn credentials(&self) -> Result<Credentials, CredentialsError> {
+        let access_key = std::env::var("AWS_ACCESS_KEY_ID").map_err("Access key missing")?;
+        let secret_key = std::env::var("AWS_SECRET_ACCESS_KEY").map_err("Secrete key missing")?;
+        Ok(Credentials::from_static(access_key, secret_key))
+    }
 }
 
 impl ProvideCredentials for Credentials {
