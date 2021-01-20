@@ -13,7 +13,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init_from_env(Env::default().default_filter_or("debug"));
     let config = dynamodb::Config::builder()
         .region("us-east-1")
-        // By default, it will load credentials from the environment variables
+        // By default, it will load credentials from the environment variables (config file not supported)
         // .credentials_provider(auth::Credentials::from_static("<fill me in>", "<fill me in>"))
         // For DynamoDB local:
         // use operation::endpoint::StaticEndpoint;
