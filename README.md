@@ -1,6 +1,8 @@
 # Smithy Rust ![status](https://github.com/awslabs/smithy-rs/workflows/CI/badge.svg)
 Smithy code generators for Rust
 
+The nightly SDK build can be found under `Actions -> CI (take latest run) -> Artifacts`
+
 **All internal and external interfaces are considered unstable and subject to change without notice.**
 
 ## Setup
