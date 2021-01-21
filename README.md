@@ -1,15 +1,17 @@
 # Smithy Rust ![status](https://github.com/awslabs/smithy-rs/workflows/CI/badge.svg)
 Smithy code generators for Rust
 
+**All internal and external interfaces are considered unstable and subject to change without notice.**
+
 ## Setup
 1. `./gradlew` will setup gradle for you
 2. Running tests requires a working Rust installation. See [Rust docs](https://www.rust-lang.org/learn/get-started) for
-installation instructions on your platform.
+installation instructions on your platform. Minimum supported Rust version is the latest released Rust version, although older versions may work.
 
 ## Run tests
 ```./tesh.sh```
 
-This will run all the unit tests, codegen an example model end-to-end and validates that the generated code compiles.
+This will run all the unit tests, codegen example models & Dynamo DB, validate the generated code compiles, and run any tests targetting the generated code.
 
 ## Development
 For development, pre-commit hooks may be useful. Setup:
