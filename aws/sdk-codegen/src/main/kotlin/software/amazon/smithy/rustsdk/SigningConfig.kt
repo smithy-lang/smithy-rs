@@ -41,15 +41,9 @@ class SigV4SigningPlugin(operationShape: OperationShape) : OperationCustomizatio
                 rust(
                     """
                 use operation::signing_middleware::SigningConfigExt;
-                request.config.lock().unwrap().insert_signing_config(auth::SigningConfig::default_config(
-                    auth::ServiceConfig {
-                        service: _config.signing_service().into(),
-                        region: _config.region.clone().into()
-                    },
-                    auth::RequestConfig {
-                        request_ts: ||std::time::SystemTime::now()
-                    },
-                ));
+                request.config.lock().unwrap().insert_signing_config(
+                    auth::OperationSigningConfig::default_config(_config.signing_service())
+                );
                 use operation::signing_middleware::CredentialProviderExt;
                 request.config.lock().unwrap().insert_credentials_provider(_config.credentials_provider.clone());
                 """

@@ -43,7 +43,7 @@ class EndpointConfigCustomization(private val protocolConfig: ProtocolConfig) : 
             ServiceConfig.BuilderBuild -> rust(
                 """endpoint_provider: self.endpoint_provider.unwrap_or_else(||
                                 ::std::sync::Arc::new(
-                                    #T::from_service_region(${endpointPrefix.dq()}, &region)
+                                    #T::from_service_region(${endpointPrefix.dq()}, region.as_ref().expect("region must be specified"))
                                 )
                          ),""",
                 StaticEndpoint(protocolConfig.runtimeConfig)

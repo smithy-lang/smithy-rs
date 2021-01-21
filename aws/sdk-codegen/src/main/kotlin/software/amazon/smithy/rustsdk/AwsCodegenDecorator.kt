@@ -34,6 +34,6 @@ class AwsCodegenDecorator : RustCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return listOf(SigV4SigningPlugin(operation), EndpointConfigPlugin(operation)) + baseCustomizations
+        return listOf(SigV4SigningPlugin(operation), EndpointConfigPlugin(operation), RegionConfigPlugin(operation)) + baseCustomizations
     }
 }

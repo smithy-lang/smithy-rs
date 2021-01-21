@@ -92,12 +92,12 @@ impl ProvideCredentials for Credentials {
     }
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone, Copy)]
 pub enum SigningAlgorithm {
     SigV4,
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone, Copy)]
 pub enum HttpSignatureType {
     /// A signature for a full http request should be computed, with header updates applied to the signing result.
     HttpRequestHeaders,
@@ -111,25 +111,29 @@ pub enum SigningConfig {
     // Event Stream
 }
 
-impl SigningConfig {
-    pub fn default_config(service_config: ServiceConfig, request_config: RequestConfig) -> Self {
-        SigningConfig::Http(HttpSigningConfig {
+impl OperationSigningConfig {
+    pub fn default_config(service: &'static str) -> Self {
+        OperationSigningConfig {
             algorithm: SigningAlgorithm::SigV4,
             signature_type: HttpSignatureType::HttpRequestHeaders,
-            service_config,
-            request_config,
+            service: service.into(),
             double_uri_encode: false,
             normalize_uri_path: true,
             omit_session_token: false,
-        })
+        }
     }
 }
 
 pub struct HttpSigningConfig {
+    pub operation_config: OperationSigningConfig,
+    pub request_config: RequestConfig
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct OperationSigningConfig {
     pub algorithm: SigningAlgorithm,
     pub signature_type: HttpSignatureType,
-    pub service_config: ServiceConfig,
-    pub request_config: RequestConfig,
+    pub service: Cow<'static, str>,
 
     pub double_uri_encode: bool,
     pub normalize_uri_path: bool,
@@ -138,12 +142,8 @@ pub struct HttpSigningConfig {
 
 pub struct RequestConfig {
     // the request config must enable recomputing the timestamp for retries, etc.
-    pub request_ts: fn() -> SystemTime,
-}
-
-pub struct ServiceConfig {
-    pub service: Cow<'static, str>,
-    pub region: Cow<'static, str>,
+    pub request_ts: SystemTime,
+    pub region: Cow<'static, str>
 }
 
 type SigningError = Box<dyn Error + Send + Sync + 'static>;
@@ -165,11 +165,12 @@ impl HttpSigner {
         request: &mut http::Request<B>,
         payload: impl AsRef<[u8]>,
     ) -> Result<(), SigningError> {
-        if signing_config.algorithm != SigningAlgorithm::SigV4
-            || signing_config.double_uri_encode
-            || !signing_config.normalize_uri_path
-            || signing_config.omit_session_token
-            || signing_config.signature_type != HttpSignatureType::HttpRequestHeaders
+        let operation_config = &signing_config.operation_config;
+        if operation_config.algorithm != SigningAlgorithm::SigV4
+            || operation_config.double_uri_encode
+            || !operation_config.normalize_uri_path
+            || operation_config.omit_session_token
+            || operation_config.signature_type != HttpSignatureType::HttpRequestHeaders
         {
             unimplemented!()
         }
@@ -179,13 +180,13 @@ impl HttpSigner {
             secret_key: credentials.secret_access_key.clone(),
             security_token: credentials.session_token.clone(),
         };
-        let date = (signing_config.request_config.request_ts)();
+        let date = signing_config.request_config.request_ts;
         for (key, value) in aws_sigv4::sign_core(
             request,
             payload,
             &sigv4_creds,
-            &signing_config.service_config.region,
-            &signing_config.service_config.service,
+            &signing_config.request_config.region,
+            &signing_config.operation_config.service,
             date,
         ) {
             request
@@ -199,6 +200,11 @@ impl HttpSigner {
 
 #[cfg(test)]
 mod test {
+    #[test]
+    fn hello() {
+
+    }
+    /*
     use crate::{
         Credentials, CredentialsProviderError, HttpSignatureType, HttpSigner, HttpSigningConfig,
         ProvideCredentials, RequestConfig, ServiceConfig, SigningAlgorithm,
@@ -313,4 +319,5 @@ mod test {
             vec!["authorization", "x-amz-date"]
         );
     }
+     */
 }

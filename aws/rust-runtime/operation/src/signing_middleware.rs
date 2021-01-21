@@ -5,9 +5,11 @@
 use crate::extensions::Extensions;
 use crate::middleware::OperationMiddleware;
 use crate::SdkBody;
-use auth::{HttpSigner, ProvideCredentials, SigningConfig};
+use auth::{HttpSigner, ProvideCredentials, SigningConfig, OperationSigningConfig, RequestConfig, HttpSigningConfig};
 use std::error::Error;
 use std::sync::Arc;
+use std::time::SystemTime;
+use crate::region::RegionExt;
 
 #[derive(Clone)]
 pub struct SigningMiddleware {
@@ -29,16 +31,16 @@ impl SigningMiddleware {
 }
 
 pub trait SigningConfigExt {
-    fn signing_config(&self) -> Option<&SigningConfig>;
-    fn insert_signing_config(&mut self, signing_config: SigningConfig) -> Option<SigningConfig>;
+    fn signing_config(&self) -> Option<&OperationSigningConfig>;
+    fn insert_signing_config(&mut self, signing_config: OperationSigningConfig) -> Option<OperationSigningConfig>;
 }
 
 impl SigningConfigExt for Extensions {
-    fn signing_config(&self) -> Option<&SigningConfig> {
+    fn signing_config(&self) -> Option<&OperationSigningConfig> {
         self.get()
     }
 
-    fn insert_signing_config(&mut self, signing_config: SigningConfig) -> Option<SigningConfig> {
+    fn insert_signing_config(&mut self, signing_config: OperationSigningConfig) -> Option<OperationSigningConfig> {
         self.insert(signing_config)
     }
 }
@@ -67,7 +69,7 @@ impl CredentialProviderExt for Extensions {
 impl OperationMiddleware for SigningMiddleware {
     fn apply(&self, request: crate::Request) -> Result<crate::Request, Box<dyn Error>> {
         request.augment(|mut request, config| {
-            let signing_config = config.signing_config().ok_or("Missing signing config")?;
+            let operation_config = config.signing_config().ok_or("Missing signing config")?;
             let cred_provider = config
                 .credentials_provider()
                 .ok_or("Missing credentials provider")?;
@@ -80,10 +82,19 @@ impl OperationMiddleware for SigningMiddleware {
                 SdkBody::Once(None) => bytes::Bytes::new(),
                 // in the future, chan variants which will cause an error
             };
+            let region = config.signing_region().ok_or("Can't sign; No region defined")?.to_string();
+            let request_config = RequestConfig {
+                request_ts: SystemTime::now(), // TODO: replace with Extensions.now();
+                region: region.into()
+            };
+            let signing_config = SigningConfig::Http(HttpSigningConfig {
+                operation_config: operation_config.clone(),
+                request_config
+            });
 
             match signing_config {
                 SigningConfig::Http(config) => {
-                    if let Err(e) = self.signer.sign(config, &creds, &mut request, body) {
+                    if let Err(e) = self.signer.sign(&config, &creds, &mut request, body) {
                         return Err(e as _);
                     }
                 }

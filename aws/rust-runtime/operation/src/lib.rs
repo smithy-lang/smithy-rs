@@ -5,6 +5,7 @@ mod extensions;
 pub mod middleware;
 pub mod signing_middleware;
 pub mod retry_policy;
+pub mod region;
 
 use crate::extensions::Extensions;
 use http::{HeaderMap, HeaderValue, Response};
@@ -109,11 +110,11 @@ impl Request {
 
     pub fn augment<T>(
         self,
-        f: impl FnOnce(http::Request<SdkBody>, &Extensions) -> Result<http::Request<SdkBody>, T>,
+        f: impl FnOnce(http::Request<SdkBody>, &mut Extensions) -> Result<http::Request<SdkBody>, T>,
     ) -> Result<Request, T> {
         let base = {
-            let extensions = (&self.config).lock().unwrap();
-            f(self.base, &extensions)?
+            let mut extensions = (&self.config).lock().unwrap();
+            f(self.base, &mut extensions)?
         };
         Ok(Request {
             base,
