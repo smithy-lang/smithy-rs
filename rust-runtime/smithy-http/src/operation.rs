@@ -75,7 +75,7 @@ impl Request {
             .method(self.inner.method());
         *cloned_request
             .headers_mut()
-            .expect("builder has not been modified—headers must be valid") =
+            .expect("builder has not been modified, headers must be valid") =
             self.inner.headers().clone();
         let inner = cloned_request
             .body(cloned_body)
