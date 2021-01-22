@@ -37,7 +37,7 @@ In order to construct an operation, the generated code injects appropriate middl
 config, copying them as necessary, and loading them into the `Request`:
 
 ```rust,ignore
-// This is approximately the generated code—I've cleaned a few things up for readability
+// This is approximately the generated code, I've cleaned a few things up for readability.
 pub fn build(self, config: &dynamodb::config::Config) -> Operation<BatchExecuteStatement> {
     let op = BatchExecuteStatement::new(BatchExecuteStatementInput {
         statements: self.statements,
