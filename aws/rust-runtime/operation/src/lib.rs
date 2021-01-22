@@ -3,9 +3,9 @@ use bytes::Bytes;
 pub mod endpoint;
 mod extensions;
 pub mod middleware;
-pub mod signing_middleware;
-pub mod retry_policy;
 pub mod region;
+pub mod retry_policy;
+pub mod signing_middleware;
 
 use crate::extensions::Extensions;
 use http::{HeaderMap, HeaderValue, Response};
@@ -53,6 +53,18 @@ impl SdkBody {
         }
     }
 
+    /// If possible, return a reference to this body as `&[u8]`
+    ///
+    /// If this SdkBody is NOT streaming, this will return the byte slab
+    /// If this SdkBody is streaming, this will return `None`
+    pub fn bytes(&self) -> Option<&[u8]> {
+        match self {
+            SdkBody::Once(Some(b)) => Some(&b),
+            SdkBody::Once(None) => Some(&[]),
+            // In the future, streaming variants will return `None`
+        }
+    }
+
     pub fn try_clone(&self) -> Option<SdkBody> {
         match self {
             SdkBody::Once(bytes) => Some(SdkBody::Once(bytes.clone())),
@@ -82,7 +94,7 @@ impl From<Vec<u8>> for SdkBody {
 pub struct Operation<H, R> {
     pub request: Request,
     pub response_handler: H,
-    pub retry_policy: R
+    pub retry_policy: R,
 }
 
 impl<H> Operation<H, ()> {
@@ -90,7 +102,7 @@ impl<H> Operation<H, ()> {
         Operation {
             request,
             response_handler,
-            retry_policy: ()
+            retry_policy: (),
         }
     }
 }

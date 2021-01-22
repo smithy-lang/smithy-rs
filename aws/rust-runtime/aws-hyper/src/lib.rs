@@ -2,28 +2,39 @@ use bytes::{Buf, Bytes};
 use hyper::Client as HyperClient;
 use operation::{middleware::OperationError, Operation, ParseHttpResponse, SdkBody};
 use std::error::Error;
-use tower::util::ReadyOneshot;
-use tower::{Service, ServiceBuilder};
+use tower::{Service, ServiceBuilder, Layer, ServiceExt};
 
-type ResponseBody = hyper::Body;
+type SdkSuccess<O> = _SdkSuccess<O, hyper::Body>;
+type SdkError<E> = _SdkError<E, hyper::Body>;
 
 #[derive(Debug)]
-pub struct SdkResponse<O> {
-    pub raw: http::Response<ResponseBody>,
+pub struct _SdkSuccess<O, B> {
+    pub raw: http::Response<B>,
     pub parsed: O,
 }
 
 #[derive(Debug)]
-pub enum SdkError<E> {
+pub enum _SdkError<E, B> {
+    ConstructionFailure(Box<dyn Error>),
     DispatchFailure(Box<dyn Error>),
     ResponseError {
-        raw: http::Response<ResponseBody>,
+        raw: http::Response<B>,
         err: Box<dyn Error>,
     },
     ServiceError {
-        raw: http::Response<ResponseBody>,
+        raw: http::Response<B>,
         err: E,
     },
+}
+
+pub fn sdk_result<T, E, B>(
+    parsed: Result<T, E>,
+    raw: http::Response<B>,
+) -> Result<_SdkSuccess<T, B>, _SdkError<E, B>> {
+    match parsed {
+        Ok(parsed) => Ok(_SdkSuccess { raw, parsed }),
+        Err(err) => Err(_SdkError::ServiceError { raw, err })
+    }
 }
 
 impl<E: Error + 'static> SdkError<E> {
@@ -32,6 +43,7 @@ impl<E: Error + 'static> SdkError<E> {
             SdkError::DispatchFailure(e) => e,
             SdkError::ResponseError { err, .. } => err,
             SdkError::ServiceError { err, .. } => Box::new(err),
+            SdkError::ConstructionFailure(e) => e
         }
     }
 }
@@ -56,72 +68,117 @@ impl<S> Client<S> {
     }
 }
 
+fn operation_error<OE, E, B>(o: OperationError<OE>) -> _SdkError<E, B> where OE: Error + 'static {
+    match o {
+        OperationError::DispatchError(e) => _SdkError::DispatchFailure(Box::new(e)),
+        OperationError::ConstructionError(e) => _SdkError::ConstructionFailure(e)
+    }
+}
+
+async fn load_response<B, T, E, O>(
+    mut response: http::Response<B>,
+    handler: &O,
+) -> Result<_SdkSuccess<T, B>, _SdkError<E, B>>
+    where
+        B: http_body::Body + Unpin,
+        B: From<Bytes>,
+        B::Error: Error + 'static,
+        O: ParseHttpResponse<B, Output=Result<T, E>>,
+{
+    if let Some(parsed_response) = handler.parse_unloaded(&mut response) {
+        return sdk_result(parsed_response, response);
+    }
+
+    let body = match read_body(response.body_mut()).await {
+        Ok(body) => body,
+        Err(e) => {
+            return Err(_SdkError::ResponseError {
+                raw: response,
+                err: Box::new(e),
+            });
+        }
+    };
+
+    let response = response.map(|_| Bytes::from(body));
+    let parsed = handler.parse_loaded(&response);
+    return sdk_result(parsed, response.map(B::from));
+}
+
+pub struct LoadResponseMiddleware<S> {
+    inner: S,
+}
+
+pub struct ParseResponseLayer;
+
+impl<S> Layer<S> for ParseResponseLayer
+    where
+        S: Service<operation::Request>,
+{
+    type Service = LoadResponseMiddleware<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        LoadResponseMiddleware { inner }
+    }
+}
+
+impl<S, O, T, E, B, R, OE> tower::Service<operation::Operation<O, R>> for LoadResponseMiddleware<S>
+    where
+        S: Service<operation::Request, Response=http::Response<B>, Error=OperationError<OE>>,
+        OE: Error + 'static,
+        S::Future: 'static,
+        O: ParseHttpResponse<B, Output=Result<T, E>> + 'static,
+        B: http_body::Body + Unpin,
+        B: From<Bytes>,
+        B::Error: Error + 'static,
+{
+    type Response = _SdkSuccess<T, B>;
+    type Error = _SdkError<E, B>;
+    type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>>>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx).map_err( operation_error)
+    }
+
+    fn call(&mut self, req: Operation<O, R>) -> Self::Future {
+        let resp = self.inner.call(req.request);
+        let handler = req.response_handler;
+        let fut = async move {
+            match resp.await {
+                // TODO: split variant so they we don't retry missing credentials
+                Err(e) => Err(operation_error::<OE, E, B>(e)),
+                Ok(resp) => load_response(resp, &handler).await
+            }
+        };
+        Box::pin(fut)
+    }
+}
 
 impl<S> Client<S>
-where
-    S: Service<http::Request<SdkBody>, Response = http::Response<hyper::Body>> + Clone,
-    S::Error: std::error::Error + 'static,
-{
-    pub async fn call<O, R, E, Retry>(&self, input: Operation<O, Retry>) -> Result<SdkResponse<R>, SdkError<E>>
     where
-        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>>,
-        Retry: RetryPolicy<Result<R, E>>
+        S: Service<http::Request<SdkBody>, Response=http::Response<hyper::Body>> + Clone,
+        S::Error: std::error::Error + 'static,
+        S::Future: 'static,
+{
+    pub async fn call<O, R, E, Retry>(
+        &self,
+        input: Operation<O, Retry>,
+    ) -> Result<SdkSuccess<R>, SdkError<E>>
+        where
+            O: ParseHttpResponse<hyper::Body, Output=Result<R, E>> + 'static,
+            Retry: RetryPolicy<Result<R, E>> + 'static,
     {
-        let ready_service = ReadyOneshot::new(self.inner.clone())
-            .await
-            .map_err(|e| SdkError::DispatchFailure(e.into()))?;
-
         let signer = OperationRequestMiddlewareLayer::for_middleware(SigningMiddleware::new());
         let endpoint_resolver = OperationRequestMiddlewareLayer::for_middleware(EndpointMiddleware);
-        let mut ready_service = ServiceBuilder::new()
+        let mut inner = self.inner.clone();
+        // TODO: reorder to call ready_and on the entire stack
+        let inner = inner.ready_and().await.map_err(|e|_SdkError::DispatchFailure(Box::new(e)))?;
+        let mut svc = ServiceBuilder::new()
+            .layer(ParseResponseLayer)
             .layer(endpoint_resolver)
             .layer(signer)
             .layer(DispatchLayer)
-            .service(ready_service);
-        // TODO: enable operations to specify their own extra middleware to add
-        let handler = input.response_handler;
-        let mut response: http::Response<hyper::Body> = ready_service
-            .call(input.request)
-            .await
-            .map_err(|e| match e {
-                OperationError::DispatchError(e) => SdkError::DispatchFailure(Box::new(e)),
-                OperationError::ConstructionError(e) => SdkError::DispatchFailure(e),
-            })?;
-
-        let parsed = handler.parse_unloaded(&mut response);
-        let mut response = match parsed {
-            Some(Ok(r)) => {
-                return Ok(SdkResponse {
-                    raw: response,
-                    parsed: r,
-                });
-            }
-            Some(Err(e)) => {
-                return Err(SdkError::ServiceError {
-                    raw: response,
-                    err: e,
-                });
-            }
-            None => response,
-        };
-
-        let body = match read_body(response.body_mut()).await {
-            Ok(body) => body,
-            Err(e) => {
-                return Err(SdkError::ResponseError {
-                    raw: response,
-                    err: Box::new(e),
-                });
-            }
-        };
-
-        let response = response.map(|_| Bytes::from(body));
-        let parsed = handler.parse_loaded(&response);
-        let raw = response.map(hyper::Body::from);
-        match parsed {
-            Ok(parsed) => Ok(SdkResponse { raw, parsed }),
-            Err(err) => Err(SdkError::ServiceError { raw, err }),
-        }
+            .service(inner);
+        svc.call(input).await
     }
 }
 
@@ -131,8 +188,11 @@ use hyper_tls::HttpsConnector;
 use middleware_tracing::RawRequestLogging;
 use operation::endpoint::EndpointMiddleware;
 use operation::middleware::{DispatchLayer, OperationRequestMiddlewareLayer};
-use operation::signing_middleware::SigningMiddleware;
 use operation::retry_policy::RetryPolicy;
+use operation::signing_middleware::SigningMiddleware;
+use std::future::Future;
+use std::task::{Context, Poll};
+use std::pin::Pin;
 
 async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
     let mut output = Vec::new();
@@ -158,17 +218,18 @@ mod test {
     use operation::endpoint::StaticEndpoint;
     use operation::signing_middleware::SigningConfigExt;
     use operation::{Operation, ParseHttpResponse, SdkBody};
-    use std::fmt::Formatter;
-    use std::time::Duration;
     use std::error::Error;
+    use std::fmt::Formatter;
     use std::sync::{Arc, Mutex};
+    use std::time::Duration;
     use std::time::UNIX_EPOCH;
 
     #[derive(Clone)]
     struct TestOperationParser;
+
     impl<B> ParseHttpResponse<B> for TestOperationParser
-    where
-        B: http_body::Body,
+        where
+            B: http_body::Body,
     {
         type Output = Result<String, String>;
 
@@ -191,7 +252,8 @@ mod test {
                 unimplemented!()
             }
         }
-        impl Error for TestError {};
+        impl Error for TestError {}
+        ;
 
         let request = operation::Request::new(
             Request::builder()
@@ -204,16 +266,7 @@ mod test {
             .config
             .lock()
             .unwrap()
-            .insert_signing_config(auth::SigningConfig::default_config(
-                auth::ServiceConfig {
-                    service: "some-service".into(),
-                    region: "some-region".into(),
-                },
-                auth::RequestConfig {
-                    // 1/20/2021
-                    request_ts: || UNIX_EPOCH + Duration::new(1611160427, 0),
-                },
-            ));
+            .insert_signing_config(auth::OperationSigningConfig::default_config("some-service"));
         use operation::signing_middleware::CredentialProviderExt;
         request
             .config
@@ -231,7 +284,8 @@ mod test {
             ))));
         let operation = Operation {
             request,
-            response_handler: Box::new(TestOperationParser),
+            response_handler: TestOperationParser,
+            retry_policy: (),
         };
 
         let test_request: Arc<Mutex<Option<http::Request<Bytes>>>> = Arc::new(Mutex::new(None));

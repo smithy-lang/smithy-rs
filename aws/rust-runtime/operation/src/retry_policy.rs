@@ -26,7 +26,7 @@ pub enum RetryType {
 
     /// An explicit retry in a set duration. This allows waiters
     /// to be a special case of retries
-    Explicit(Duration)
+    Explicit(Duration),
 }
 
 pub trait RetryPolicy<T> {

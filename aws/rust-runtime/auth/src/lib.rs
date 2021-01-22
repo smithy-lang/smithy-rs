@@ -126,7 +126,7 @@ impl OperationSigningConfig {
 
 pub struct HttpSigningConfig {
     pub operation_config: OperationSigningConfig,
-    pub request_config: RequestConfig
+    pub request_config: RequestConfig,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -143,7 +143,7 @@ pub struct OperationSigningConfig {
 pub struct RequestConfig {
     // the request config must enable recomputing the timestamp for retries, etc.
     pub request_ts: SystemTime,
-    pub region: Cow<'static, str>
+    pub region: Cow<'static, str>,
 }
 
 type SigningError = Box<dyn Error + Send + Sync + 'static>;
@@ -163,8 +163,10 @@ impl HttpSigner {
         signing_config: &HttpSigningConfig,
         credentials: &Credentials,
         request: &mut http::Request<B>,
-        payload: impl AsRef<[u8]>,
-    ) -> Result<(), SigningError> {
+    ) -> Result<(), SigningError>
+    where
+        B: AsRef<[u8]>,
+    {
         let operation_config = &signing_config.operation_config;
         if operation_config.algorithm != SigningAlgorithm::SigV4
             || operation_config.double_uri_encode
@@ -183,7 +185,7 @@ impl HttpSigner {
         let date = signing_config.request_config.request_ts;
         for (key, value) in aws_sigv4::sign_core(
             request,
-            payload,
+            request.body(),
             &sigv4_creds,
             &signing_config.request_config.region,
             &signing_config.operation_config.service,
@@ -201,9 +203,7 @@ impl HttpSigner {
 #[cfg(test)]
 mod test {
     #[test]
-    fn hello() {
-
-    }
+    fn hello() {}
     /*
     use crate::{
         Credentials, CredentialsProviderError, HttpSignatureType, HttpSigner, HttpSigningConfig,

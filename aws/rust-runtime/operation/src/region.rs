@@ -47,7 +47,6 @@ impl SigningRegion {
     pub fn new(region: impl Into<String>) -> Self {
         SigningRegion(region.into())
     }
-
 }
 
 pub trait RegionExt {
@@ -55,14 +54,15 @@ pub trait RegionExt {
     fn signing_region(&self) -> Option<&str>;
 }
 
-
 impl RegionExt for Extensions {
     fn request_region(&self) -> Option<&str> {
-        self.get::<Region>().map(|reg|reg.0.as_str())
+        self.get::<Region>().map(|reg| reg.0.as_str())
     }
 
-    fn signing_region(&self) -> Option<&str>{
-        self.get::<SigningRegion>().map(|reg|reg.0.as_str()).or_else(||self.request_region())
+    fn signing_region(&self) -> Option<&str> {
+        self.get::<SigningRegion>()
+            .map(|reg| reg.0.as_str())
+            .or_else(|| self.request_region())
     }
 }
 
