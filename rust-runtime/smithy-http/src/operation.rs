@@ -27,7 +27,7 @@ pub struct Request {
     /// The underlying HTTP Request
     inner: http::Request<SdkBody>,
 
-    /// Property bag of configuration opionts
+    /// Property bag of configuration options
     ///
     /// Middleware can read and write from the property bag and use its
     /// contents to augment the request (see `Request::augment`)
