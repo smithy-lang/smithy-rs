@@ -34,7 +34,7 @@ By using a property bag, we can define the `Operation` in Smithy core–AWS spec
 
 ### Operation Construction
 In order to construct an operation, the generated code injects appropriate middleware & configuration via the configuration property bag. It does this by reading the configuration properties out of the service
-config, copying them as necessary, and loading them into the Request:
+config, copying them as necessary, and loading them into the `Request`:
 
 ```rust,ignore
 // This is approximately the generated code—I've cleaned a few things up for readability
