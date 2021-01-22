@@ -105,6 +105,14 @@ impl<H> Operation<H, ()> {
             retry_policy: (),
         }
     }
+
+    pub fn with_policy<R>(self, retry_policy: R) -> Operation<H, R> {
+        Operation {
+            request: self.request,
+            response_handler: self.response_handler,
+            retry_policy,
+        }
+    }
 }
 
 pub struct Request {
@@ -170,8 +178,8 @@ pub trait ParseStrictResponse {
 }
 
 impl<B, T> ParseHttpResponse<B> for T
-where
-    T: ParseStrictResponse,
+    where
+        T: ParseStrictResponse,
 {
     type Output = T::Output;
 

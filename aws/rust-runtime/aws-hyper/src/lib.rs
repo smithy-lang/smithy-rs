@@ -2,7 +2,7 @@ use bytes::{Buf, Bytes};
 use hyper::Client as HyperClient;
 use operation::{middleware::OperationError, Operation, ParseHttpResponse, SdkBody};
 use std::error::Error;
-use tower::{Layer, Service, ServiceBuilder, ServiceExt};
+use tower::{Layer, Service, ServiceBuilder};
 
 type SdkSuccess<O> = _SdkSuccess<O, hyper::Body>;
 type SdkError<E> = _SdkError<E, hyper::Body>;
@@ -70,8 +70,8 @@ impl<S> Client<S> {
 }
 
 fn operation_error<OE, E, B>(o: OperationError<OE>) -> _SdkError<E, B>
-where
-    OE: Into<BoxError>,
+    where
+        OE: Into<BoxError>,
 {
     match o {
         OperationError::DispatchError(e) => _SdkError::DispatchFailure(e.into()),
@@ -83,11 +83,11 @@ async fn load_response<B, T, E, O>(
     mut response: http::Response<B>,
     handler: &O,
 ) -> Result<_SdkSuccess<T, B>, _SdkError<E, B>>
-where
-    B: http_body::Body + Unpin,
-    B: From<Bytes>,
-    B::Error: Error + Send + Sync + 'static,
-    O: ParseHttpResponse<B, Output = Result<T, E>>,
+    where
+        B: http_body::Body + Unpin,
+        B: From<Bytes>,
+        B::Error: Error + Send + Sync + 'static,
+        O: ParseHttpResponse<B, Output=Result<T, E>>,
 {
     if let Some(parsed_response) = handler.parse_unloaded(&mut response) {
         return sdk_result(parsed_response, response);
@@ -113,28 +113,27 @@ pub struct LoadResponseMiddleware<S> {
     inner: S,
 }
 
-pub struct RetryService<S, R, E> {
-    inner: S,
-    retry_strategy: R,
-    _e: PhantomData<E>,
-}
-
 #[derive(Clone)]
 struct RetryStrategy {}
 
 impl<Handler: Clone, R: Clone, Response, Error>
-    tower::retry::Policy<operation::Operation<Handler, R>, Response, Error>
-    for RetryStrategy where R: RetryPolicy<Response, Error>
+tower::retry::Policy<operation::Operation<Handler, R>, Response, Error>
+for RetryStrategy where R: RetryPolicy<Response, Error>
 {
-    type Future = std::future::Ready<Self>;
+    type Future = Pin<Box<dyn Future<Output=Self>>>;
 
     fn retry(
         &self,
         req: &Operation<Handler, R>,
         result: Result<&Response, &Error>,
     ) -> Option<Self::Future> {
-        let _ = req.retry_policy.should_retry(result);
-        None
+        let _resp = req.retry_policy.should_retry(result)?;
+        let next = self.clone();
+        let fut = async move {
+            tokio::time::sleep(Duration::new(5, 0)).await;
+            next
+        };
+        Some(Box::pin(fut))
     }
 
     fn clone_request(
@@ -176,8 +175,8 @@ impl <O, R, S, T, B> tower::Service<operation::Operation<O, R>> for RetryService
 pub struct ParseResponseLayer;
 
 impl<S> Layer<S> for ParseResponseLayer
-where
-    S: Service<operation::Request>,
+    where
+        S: Service<operation::Request>,
 {
     type Service = LoadResponseMiddleware<S>;
 
@@ -187,18 +186,18 @@ where
 }
 
 impl<S, O, T, E, B, R, OE> tower::Service<operation::Operation<O, R>> for LoadResponseMiddleware<S>
-where
-    S: Service<operation::Request, Response = http::Response<B>, Error = OperationError<OE>>,
-    OE: Into<BoxError>,
-    S::Future: 'static,
-    O: ParseHttpResponse<B, Output = Result<T, E>> + 'static,
-    B: http_body::Body + Unpin,
-    B: From<Bytes>,
-    B::Error: Error + Send + Sync + 'static,
+    where
+        S: Service<operation::Request, Response=http::Response<B>, Error=OperationError<OE>>,
+        OE: Into<BoxError>,
+        S::Future: 'static,
+        O: ParseHttpResponse<B, Output=Result<T, E>> + 'static,
+        B: http_body::Body + Unpin,
+        B: From<Bytes>,
+        B::Error: Error + Send + Sync + 'static,
 {
     type Response = _SdkSuccess<T, B>;
     type Error = _SdkError<E, B>;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
+    type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>>>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx).map_err(operation_error)
@@ -229,25 +228,25 @@ where
  */
 
 impl<S> Client<S>
-where
-    S: Service<http::Request<SdkBody>, Response = http::Response<hyper::Body>>
+    where
+        S: Service<http::Request<SdkBody>, Response=http::Response<hyper::Body>>
         + Send
         + Clone
         + 'static,
-    S::Error: Into<BoxError> + Send + Sync + 'static,
-    S::Future: Send + 'static,
+        S::Error: Into<BoxError> + Send + Sync + 'static,
+        S::Future: Send + 'static,
 {
     pub async fn call<O, R, E, Retry>(
         &self,
         input: Operation<O, Retry>,
     ) -> Result<SdkSuccess<R>, SdkError<E>>
-    where
-        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + Clone + 'static,
-        Retry: RetryPolicy<SdkSuccess<R>, SdkError<E>> + Send + Clone + 'static,
+        where
+            O: ParseHttpResponse<hyper::Body, Output=Result<R, E>> + Send + Clone + 'static,
+            Retry: RetryPolicy<SdkSuccess<R>, SdkError<E>> + Send + Clone + 'static,
     {
         let signer = OperationRequestMiddlewareLayer::for_middleware(SigningMiddleware::new());
         let endpoint_resolver = OperationRequestMiddlewareLayer::for_middleware(EndpointMiddleware);
-        let mut inner = self.inner.clone();
+        let inner = self.inner.clone();
         // TODO: reorder to call ready_and on the entire stack
         /*let inner = inner
         .ready_and()
@@ -268,21 +267,18 @@ where
     }
 }
 
-use http::Response;
 use http_body::Body;
 use hyper::client::HttpConnector;
 use hyper_tls::HttpsConnector;
 use middleware_tracing::RawRequestLogging;
 use operation::endpoint::EndpointMiddleware;
 use operation::middleware::{DispatchLayer, OperationRequestMiddlewareLayer};
-use operation::retry_policy::{RetryPolicy, RetryType};
+use operation::retry_policy::{RetryPolicy};
 use operation::signing_middleware::SigningMiddleware;
-use pin_utils::core_reexport::time::Duration;
 use std::future::Future;
-use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tower::retry::{Policy, RetryLayer};
+use pin_utils::core_reexport::time::Duration;
 
 async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
     let mut output = Vec::new();
@@ -335,7 +331,7 @@ mod test {
     impl tower::Service<http::Request<SdkBody>> for TestService {
         type Response = http::Response<hyper::Body>;
         type Error = BoxError;
-        type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
+        type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>> + Send>>;
 
         fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
             Poll::Ready(Ok(()))
@@ -352,8 +348,8 @@ mod test {
     struct TestOperationParser;
 
     impl<B> ParseHttpResponse<B> for TestOperationParser
-    where
-        B: http_body::Body,
+        where
+            B: http_body::Body,
     {
         type Output = Result<String, String>;
 
@@ -424,7 +420,6 @@ mod test {
 
         let (svc, rx) = TestService::new(|_req| http::Response::new(hyper::Body::from("hello!")));
         let client = Client { inner: svc };
-        //handle.sen
         let resp = client.call(operation).await;
         println!("{:?}", resp);
         let request = rx.try_recv().unwrap();

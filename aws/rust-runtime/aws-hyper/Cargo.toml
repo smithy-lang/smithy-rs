@@ -16,6 +16,7 @@ auth  = { path = "../auth" }
 http = "0.2.3"
 bytes = "1"
 http-body = "0.4.0"
+tokio = { version = "1", features = ["time"]}
 pin-utils = "0.1.0"
 
 [dev-dependencies]

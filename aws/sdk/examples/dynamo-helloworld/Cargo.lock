@@ -47,6 +47,7 @@ dependencies = [
  "middleware-tracing",
  "operation",
  "pin-utils",
+ "tokio",
  "tower",
 ]
 

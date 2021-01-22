@@ -4,7 +4,6 @@
  */
 
 use core::convert::AsRef;
-use std::error::Error;
 use std::str::FromStr;
 
 use http::uri::Uri;

@@ -10,7 +10,6 @@ use auth::{
     SigningConfig,
 };
 use http::Request;
-use std::error::Error;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tower::BoxError;
