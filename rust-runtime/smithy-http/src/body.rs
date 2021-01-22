@@ -69,7 +69,7 @@ impl From<Bytes> for SdkBody {
 }
 
 impl From<Vec<u8>> for SdkBody {
-    fn from(data: Vec<u8>) -> SdkBody {
+    fn from(data: Vec<u8>) -> Self {
         Self::from(Bytes::from(data))
     }
 }
