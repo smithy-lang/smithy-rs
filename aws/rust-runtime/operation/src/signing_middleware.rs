@@ -91,7 +91,10 @@ impl OperationMiddleware for SigningMiddleware {
                 .ok_or("Can't sign; No region defined")?
                 .to_string();
             let request_config = RequestConfig {
-                request_ts: SystemTime::now(), // TODO: replace with Extensions.now();
+                request_ts: config
+                    .get::<SystemTime>()
+                    .map(|t| t.clone())
+                    .unwrap_or_else(|| SystemTime::now()), // TODO: replace with Extensions.now();
                 region: region.into(),
             };
             let signing_config = SigningConfig::Http(HttpSigningConfig {
