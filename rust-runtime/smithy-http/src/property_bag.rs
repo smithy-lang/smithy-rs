@@ -36,8 +36,14 @@ impl Hasher for IdHasher {
 ///
 /// `PropertyBag` can be used by `Request` and `Response` to store
 /// extra data derived from the underlying protocol.
+///
+/// TODO: We should consider if we want to require members of the property to be "resettable" in some
+/// way to reset any state prior to a retry. I think this is worth delaying until we need it, but
+/// is worth keeping in mind.
 #[derive(Default)]
 pub struct PropertyBag {
+    // In http where this property bag is usually empty, this makes sense. We will almost always put
+    // something in the bag, so we could consider removing the layer of indirection.
     // If extensions are never used, no need to carry around an empty HashMap.
     // That's 3 words. Instead, this is only 1 word.
     map: Option<Box<AnyMap>>,
@@ -55,14 +61,17 @@ impl PropertyBag {
     /// If a extension of this type already existed, it will
     /// be returned.
     ///
+    /// Generally, this method should not be called directly. The best practice is
+    /// calling this method via an extension trait on `PropertyBag`.
+    ///
     /// # Example
     ///
     /// ```
     /// # use smithy_http::property_bag::PropertyBag;
     /// let mut ext = PropertyBag::new();
-    /// assert!(ext.insert(5i32).is_none());
-    /// assert!(ext.insert(4u8).is_none());
-    /// assert_eq!(ext.insert(9i32), Some(5i32));
+    /// struct Endpoint(&'static str);
+    /// assert!(ext.insert(Endpoint("dynamo.amazon.com")).is_none());
+    /// assert_eq!(ext.insert(Endpoint("kinesis.amazon.com")), Some(Endpoint("dynamo.amazon.com")));
     /// ```
     pub fn insert<T: Send + Sync + 'static>(&mut self, val: T) -> Option<T> {
         self.map

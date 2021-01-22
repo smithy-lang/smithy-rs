@@ -36,6 +36,24 @@ impl SdkBody {
             }
         }
     }
+
+    /// If possible, return a reference to this body as `&[u8]`
+    ///
+    /// If this SdkBody is NOT streaming, this will return the byte slab
+    /// If this SdkBody is streaming, this will return `None`
+    pub fn bytes(&self) -> Option<&[u8]> {
+        match self {
+            SdkBody::Once(Some(b)) => Some(&b),
+            SdkBody::Once(None) => Some(&[]),
+            // In the future, streaming variants will return `None`
+        }
+    }
+
+    pub fn try_clone(&self) -> Option<Self> {
+        match self {
+            SdkBody::Once(bytes) => Some(SdkBody::Once(bytes.clone())),
+        }
+    }
 }
 
 impl From<&str> for SdkBody {
