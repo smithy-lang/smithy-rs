@@ -29,13 +29,13 @@ pub enum RetryType {
     Explicit(Duration),
 }
 
-pub trait RetryPolicy<T> {
-    fn should_retry(&self, input: &T) -> Option<RetryType>;
+pub trait RetryPolicy<T, E> {
+    fn should_retry(&self, input: Result<&T, &E>) -> Option<RetryType>;
 }
 
 /// () is the default policy: never retry
-impl<T> RetryPolicy<T> for () {
-    fn should_retry(&self, _: &T) -> Option<RetryType> {
+impl<T, E> RetryPolicy<T, E> for () {
+    fn should_retry(&self, _: Result<&T, &E>) -> Option<RetryType> {
         None
     }
 }

@@ -91,7 +91,7 @@ class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvi
     }
 
     companion object {
-        private val defaultDerives =
+        val defaultDerives =
             listOf(RuntimeType.StdFmt("Debug"), RuntimeType.Std("cmp::PartialEq"), RuntimeType.Std("clone::Clone"))
     }
 }

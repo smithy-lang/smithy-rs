@@ -9,11 +9,13 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
+type BoxError = Box<dyn Error + Send + Sync>;
 
 pub trait OperationMiddleware {
-    fn apply(&self, request: crate::Request) -> Result<crate::Request, Box<dyn Error>>;
+    fn apply(&self, request: crate::Request) -> Result<crate::Request, BoxError>;
 }
 
+#[derive(Clone)]
 pub struct OperationRequestMiddlewareService<S, M> {
     inner: S,
     middleware: M,
@@ -44,7 +46,7 @@ where
 }
 
 pub trait RequestConstructionErr {
-    fn request_error(err: Box<dyn Error>) -> Self;
+    fn request_error(err: Box<dyn Error + Send + Sync + 'static>) -> Self;
 }
 
 #[pin_project(project = EnumProj)]
@@ -97,10 +99,12 @@ where
 ///
 /// It will also wrap the error type in OperationError to enable operation middleware
 /// reporting specific errors
+#[derive(Clone)]
 pub struct DispatchMiddleware<S> {
     inner: S,
 }
 
+#[derive(Clone, Copy)]
 pub struct DispatchLayer;
 
 impl<S> Layer<S> for DispatchLayer
@@ -117,11 +121,11 @@ where
 #[derive(Debug)]
 pub enum OperationError<E> {
     DispatchError(E),
-    ConstructionError(Box<dyn Error>),
+    ConstructionError(Box<dyn Error + Send + Sync + 'static>),
 }
 
 impl<E> RequestConstructionErr for OperationError<E> {
-    fn request_error(err: Box<dyn Error>) -> Self {
+    fn request_error(err: Box<dyn Error + Send + Sync + 'static>) -> Self {
         OperationError::ConstructionError(err)
     }
 }

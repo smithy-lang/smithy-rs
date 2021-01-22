@@ -13,6 +13,7 @@ use http::Request;
 use std::error::Error;
 use std::sync::Arc;
 use std::time::SystemTime;
+use tower::BoxError;
 
 #[derive(Clone)]
 pub struct SigningMiddleware {
@@ -76,7 +77,7 @@ impl CredentialProviderExt for Extensions {
 }
 
 impl OperationMiddleware for SigningMiddleware {
-    fn apply(&self, request: crate::Request) -> Result<crate::Request, Box<dyn Error>> {
+    fn apply(&self, request: crate::Request) -> Result<crate::Request, BoxError> {
         request.augment(|request, config| {
             let operation_config = config.signing_config().ok_or("Missing signing config")?;
             let cred_provider = config

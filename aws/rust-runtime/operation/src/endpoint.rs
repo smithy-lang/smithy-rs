@@ -13,6 +13,7 @@ use crate::extensions::Extensions;
 use crate::middleware::OperationMiddleware;
 use http::header::HOST;
 use std::sync::Arc;
+use tower::BoxError;
 
 pub struct StaticEndpoint(http::Uri);
 
@@ -62,7 +63,7 @@ impl<T> OperationMiddleware for T
 where
     T: ProvideEndpoint,
 {
-    fn apply(&self, mut request: crate::Request) -> Result<crate::Request, Box<dyn Error>> {
+    fn apply(&self, mut request: crate::Request) -> Result<crate::Request, BoxError> {
         self.set_endpoint(&mut request.base.uri_mut());
         Ok(request)
     }
@@ -94,7 +95,7 @@ impl EndpointProviderExt for Extensions {
 /// Set the endpoint for a request based on the endpoint config
 pub struct EndpointMiddleware;
 impl OperationMiddleware for EndpointMiddleware {
-    fn apply(&self, request: crate::Request) -> Result<crate::Request, Box<dyn Error>> {
+    fn apply(&self, request: crate::Request) -> Result<crate::Request, BoxError> {
         request.augment(|mut request, extensions| {
             let endpoint_provider: &Arc<dyn ProvideEndpoint> = extensions
                 .endpoint_provider()
