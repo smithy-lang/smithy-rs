@@ -4,37 +4,41 @@ use operation::{middleware::OperationError, Operation, ParseHttpResponse, SdkBod
 use std::error::Error;
 use tower::{Layer, Service, ServiceBuilder};
 
-type SdkSuccess<O> = _SdkSuccess<O, hyper::Body>;
-type SdkError<E> = _SdkError<E, hyper::Body>;
 type BoxError = Box<dyn Error + Send + Sync>;
 
 #[derive(Debug)]
-pub struct _SdkSuccess<O, B> {
-    pub raw: http::Response<B>,
+pub struct SdkSuccess<O> {
+    pub raw: http::Response<Box<dyn Debug>>,
     pub parsed: O,
 }
 
 #[derive(Debug)]
-pub enum _SdkError<E, B> {
+pub enum SdkError<E> {
     ConstructionFailure(BoxError),
     DispatchFailure(BoxError),
     ResponseError {
-        raw: http::Response<B>,
+        raw: http::Response<Box<dyn Debug>>,
         err: BoxError,
     },
     ServiceError {
-        raw: http::Response<B>,
+        raw: http::Response<Box<dyn Debug>>,
         err: E,
     },
 }
 
-pub fn sdk_result<T, E, B>(
+pub fn sdk_result<T, E, B: Debug + 'static>(
     parsed: Result<T, E>,
     raw: http::Response<B>,
-) -> Result<_SdkSuccess<T, B>, _SdkError<E, B>> {
+) -> Result<SdkSuccess<T>, SdkError<E>> {
     match parsed {
-        Ok(parsed) => Ok(_SdkSuccess { raw, parsed }),
-        Err(err) => Err(_SdkError::ServiceError { raw, err }),
+        Ok(parsed) => Ok(SdkSuccess {
+            raw: raw.map(|b| Box::new(b) as _),
+            parsed,
+        }),
+        Err(err) => Err(SdkError::ServiceError {
+            raw: raw.map(|b| Box::new(b) as _),
+            err,
+        }),
     }
 }
 
@@ -69,25 +73,25 @@ impl<S> Client<S> {
     }
 }
 
-fn operation_error<OE, E, B>(o: OperationError<OE>) -> _SdkError<E, B>
-    where
-        OE: Into<BoxError>,
+fn operation_error<OE, E>(o: OperationError<OE>) -> SdkError<E>
+where
+    OE: Into<BoxError>,
 {
     match o {
-        OperationError::DispatchError(e) => _SdkError::DispatchFailure(e.into()),
-        OperationError::ConstructionError(e) => _SdkError::ConstructionFailure(e),
+        OperationError::DispatchError(e) => SdkError::DispatchFailure(e.into()),
+        OperationError::ConstructionError(e) => SdkError::ConstructionFailure(e),
     }
 }
 
 async fn load_response<B, T, E, O>(
     mut response: http::Response<B>,
     handler: &O,
-) -> Result<_SdkSuccess<T, B>, _SdkError<E, B>>
-    where
-        B: http_body::Body + Unpin,
-        B: From<Bytes>,
-        B::Error: Error + Send + Sync + 'static,
-        O: ParseHttpResponse<B, Output=Result<T, E>>,
+) -> Result<SdkSuccess<T>, SdkError<E>>
+where
+    B: http_body::Body + Unpin,
+    B: From<Bytes> + Debug + 'static,
+    B::Error: Error + Send + Sync + 'static,
+    O: ParseHttpResponse<B, Output = Result<T, E>>,
 {
     if let Some(parsed_response) = handler.parse_unloaded(&mut response) {
         return sdk_result(parsed_response, response);
@@ -96,8 +100,8 @@ async fn load_response<B, T, E, O>(
     let body = match read_body(response.body_mut()).await {
         Ok(body) => body,
         Err(e) => {
-            return Err(_SdkError::ResponseError {
-                raw: response,
+            return Err(SdkError::ResponseError {
+                raw: response.map(|b| Box::new(b) as _),
                 err: Box::new(e),
             });
         }
@@ -109,18 +113,20 @@ async fn load_response<B, T, E, O>(
 }
 
 #[derive(Clone)]
-pub struct LoadResponseMiddleware<S> {
+pub struct ParseResponseService<S> {
     inner: S,
 }
 
+// In the future, this needs to use the CRT
 #[derive(Clone)]
 struct RetryStrategy {}
 
 impl<Handler: Clone, R: Clone, Response, Error>
-tower::retry::Policy<operation::Operation<Handler, R>, Response, Error>
-for RetryStrategy where R: RetryPolicy<Response, Error>
+    tower::retry::Policy<operation::Operation<Handler, R>, Response, Error> for RetryStrategy
+where
+    R: RetryPolicy<Response, Error>,
 {
-    type Future = Pin<Box<dyn Future<Output=Self>>>;
+    type Future = Pin<Box<dyn Future<Output = Self>>>;
 
     fn retry(
         &self,
@@ -136,10 +142,7 @@ for RetryStrategy where R: RetryPolicy<Response, Error>
         Some(Box::pin(fut))
     }
 
-    fn clone_request(
-        &self,
-        req: &Operation<Handler, R>,
-    ) -> Option<Operation<Handler, R>> {
+    fn clone_request(&self, req: &Operation<Handler, R>) -> Option<Operation<Handler, R>> {
         let inner = req.request.try_clone()?;
         Some(Operation {
             request: inner,
@@ -149,55 +152,32 @@ for RetryStrategy where R: RetryPolicy<Response, Error>
     }
 }
 
-/*
-impl <O, R, S, T, B> tower::Service<operation::Operation<O, R>> for RetryService<S, R, (T, B)> where
-    S: Service<operation::Operation<O, R>>,
-    O: ParseHttpResponse<B, Output = T> + 'static,
-    R: RetryPolicy<T> + Clone + 'static,
-    {
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>>>>;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, req: Operation<O, R>) -> Self::Future {
-        let fut = async {
-            self.inner.call(req).await
-        };
-        Box::pin(fut)
-
-    }
-}*/
-
 pub struct ParseResponseLayer;
 
 impl<S> Layer<S> for ParseResponseLayer
-    where
-        S: Service<operation::Request>,
+where
+    S: Service<operation::Request>,
 {
-    type Service = LoadResponseMiddleware<S>;
+    type Service = ParseResponseService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        LoadResponseMiddleware { inner }
+        ParseResponseService { inner }
     }
 }
 
-impl<S, O, T, E, B, R, OE> tower::Service<operation::Operation<O, R>> for LoadResponseMiddleware<S>
-    where
-        S: Service<operation::Request, Response=http::Response<B>, Error=OperationError<OE>>,
-        OE: Into<BoxError>,
-        S::Future: 'static,
-        O: ParseHttpResponse<B, Output=Result<T, E>> + 'static,
-        B: http_body::Body + Unpin,
-        B: From<Bytes>,
-        B::Error: Error + Send + Sync + 'static,
+impl<S, O, T, E, B, R, OE> tower::Service<operation::Operation<O, R>> for ParseResponseService<S>
+where
+    S: Service<operation::Request, Response = http::Response<B>, Error = OperationError<OE>>,
+    OE: Into<BoxError>,
+    S::Future: 'static,
+    O: ParseHttpResponse<B, Output = Result<T, E>> + 'static,
+    B: http_body::Body + Unpin + Debug + 'static,
+    B: From<Bytes>,
+    B::Error: Error + Send + Sync + 'static,
 {
-    type Response = _SdkSuccess<T, B>;
-    type Error = _SdkError<E, B>;
-    type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>>>>;
+    type Response = SdkSuccess<T>;
+    type Error = SdkError<E>;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx).map_err(operation_error)
@@ -208,8 +188,7 @@ impl<S, O, T, E, B, R, OE> tower::Service<operation::Operation<O, R>> for LoadRe
         let handler = req.response_handler;
         let fut = async move {
             match resp.await {
-                // TODO: split variant so they we don't retry missing credentials
-                Err(e) => Err(operation_error::<OE, E, B>(e)),
+                Err(e) => Err(operation_error::<OE, E>(e)),
                 Ok(resp) => load_response(resp, &handler).await,
             }
         };
@@ -217,45 +196,33 @@ impl<S, O, T, E, B, R, OE> tower::Service<operation::Operation<O, R>> for LoadRe
     }
 }
 
-/*
-impl<S, Request> Layer<S> for BufferLayer<Request>
-where
-    S: Service<Request> + Send + 'static,
-    S::Future: Send,
-    S::Error: Into<crate::BoxError> + Send + Sync,
-    Request: Send + 'static,
-
- */
-
 impl<S> Client<S>
-    where
-        S: Service<http::Request<SdkBody>, Response=http::Response<hyper::Body>>
+where
+    S: Service<http::Request<SdkBody>, Response = http::Response<hyper::Body>>
         + Send
         + Clone
         + 'static,
-        S::Error: Into<BoxError> + Send + Sync + 'static,
-        S::Future: Send + 'static,
+    S::Error: Into<BoxError> + Send + Sync + 'static,
+    S::Future: Send + 'static,
 {
     pub async fn call<O, R, E, Retry>(
         &self,
         input: Operation<O, Retry>,
     ) -> Result<SdkSuccess<R>, SdkError<E>>
-        where
-            O: ParseHttpResponse<hyper::Body, Output=Result<R, E>> + Send + Clone + 'static,
-            Retry: RetryPolicy<SdkSuccess<R>, SdkError<E>> + Send + Clone + 'static,
+    where
+        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + Clone + 'static,
+        Retry: RetryPolicy<SdkSuccess<R>, SdkError<E>> + Send + Clone + 'static,
     {
-        let signer = OperationRequestMiddlewareLayer::for_middleware(SigningMiddleware::new());
-        let endpoint_resolver = OperationRequestMiddlewareLayer::for_middleware(EndpointMiddleware);
+        let signer = OperationPipelineService::for_stage(SignRequestStage::new());
+        let endpoint_resolver = OperationPipelineService::for_stage(AddEndpointStage);
         let inner = self.inner.clone();
         // TODO: reorder to call ready_and on the entire stack
         /*let inner = inner
         .ready_and()
         .await
         .map_err(|e| _SdkError::DispatchFailure(e.into()))?;*/
-        //let retry_layer = RetryLayer::new(RetryStrategy {});
         let mut svc = ServiceBuilder::new()
             .retry(RetryStrategy {})
-            //.buffer(100)
             .layer(ParseResponseLayer)
             .layer(endpoint_resolver)
             .layer(signer)
@@ -271,14 +238,15 @@ use http_body::Body;
 use hyper::client::HttpConnector;
 use hyper_tls::HttpsConnector;
 use middleware_tracing::RawRequestLogging;
-use operation::endpoint::EndpointMiddleware;
-use operation::middleware::{DispatchLayer, OperationRequestMiddlewareLayer};
-use operation::retry_policy::{RetryPolicy};
-use operation::signing_middleware::SigningMiddleware;
+use operation::endpoint::AddEndpointStage;
+use operation::middleware::{DispatchLayer, OperationPipelineService};
+use operation::retry_policy::RetryPolicy;
+use operation::signing_middleware::SignRequestStage;
+use pin_utils::core_reexport::time::Duration;
+use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use pin_utils::core_reexport::time::Duration;
 
 async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
     let mut output = Vec::new();
@@ -331,7 +299,7 @@ mod test {
     impl tower::Service<http::Request<SdkBody>> for TestService {
         type Response = http::Response<hyper::Body>;
         type Error = BoxError;
-        type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>> + Send>>;
+        type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
         fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
             Poll::Ready(Ok(()))
@@ -348,8 +316,8 @@ mod test {
     struct TestOperationParser;
 
     impl<B> ParseHttpResponse<B> for TestOperationParser
-        where
-            B: http_body::Body,
+    where
+        B: http_body::Body,
     {
         type Output = Result<String, String>;
 
@@ -434,34 +402,4 @@ mod test {
         );
         assert_eq!(request.headers().get(AUTHORIZATION).unwrap(), "AWS4-HMAC-SHA256 Credential=access/20210120/some-region/some-service/aws4_request, SignedHeaders=host, Signature=f179c6899f0a11051a11dc1bb022252b0741953663bc5ff33dfa2abfed51e0b1");
     }
-
-    /*
-    #[test]
-    fn real_service() {
-        let operation = Operation {
-            base: Request::builder()
-                .uri("/some_url")
-                .body(SdkBody::from("Hello"))
-                .unwrap(),
-            signing_config: SigningConfig::Http(HttpSigningConfig {
-                algorithm: SigningAlgorithm::SigV4,
-                signature_type: HttpSignatureType::HttpRequestHeaders,
-                service_config: ServiceConfig {
-                    service: "svc".to_string(),
-                    region: "region".to_string(),
-                },
-                request_config: RequestConfig {
-                    request_ts: || SystemTime::now(),
-                },
-                double_uri_encode: false,
-                normalize_uri_path: true,
-                omit_session_token: false,
-            }),
-            credentials_provider: Box::new(Credentials::from_static("key", "secret", None)),
-            endpoint_config: Box::new(StaticEndpoint::from_service_region("dynamodb", "us-east-1")),
-            response_handler: Some(Box::new(TestOperationParser)),
-        };
-        let client = Client::default();
-        let _ = client.call(operation);
-    }*/
 }

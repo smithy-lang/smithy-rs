@@ -5,6 +5,7 @@
 
 use std::error::Error;
 
+use aws_hyper::{SdkError, SdkSuccess};
 use dynamodb::error::ListTablesError;
 use dynamodb::output::ListTablesOutput;
 use dynamodb::{
@@ -17,15 +18,18 @@ use env_logger::Env;
 use operation::endpoint::StaticEndpoint;
 use operation::retry_policy::{RetryPolicy, RetryType};
 use tokio::time::Duration;
-use aws_hyper::{_SdkSuccess, _SdkError};
 
 #[derive(Clone)]
 struct RetryIfNoTables;
-impl<B> RetryPolicy<_SdkSuccess<ListTablesOutput, B>, _SdkError<ListTablesError, B>> for RetryIfNoTables {
-    fn should_retry(&self, input: Result<&_SdkSuccess<ListTablesOutput, B>, &_SdkError<ListTablesError, B>>) -> Option<RetryType> {
+impl RetryPolicy<SdkSuccess<ListTablesOutput>, SdkError<ListTablesError>> for RetryIfNoTables {
+    fn should_retry(
+        &self,
+        input: Result<&SdkSuccess<ListTablesOutput>, &SdkError<ListTablesError>>,
+    ) -> Option<RetryType> {
         match input {
             Ok(list_tables) => {
-                if list_tables.parsed
+                if list_tables
+                    .parsed
                     .table_names
                     .as_ref()
                     .map(|t| t.len())
@@ -58,10 +62,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )))
         .build();
     let client = aws_hyper::Client::default().with_tracing();
-    let list_tables = dynamodb::operation::ListTables::builder()
-        .build(&config);
-        // For a custom retry policy:
-        // .with_policy(RetryIfNoTables);
+    let list_tables = dynamodb::operation::ListTables::builder().build(&config);
+    // For a custom retry policy:
+    // .with_policy(RetryIfNoTables);
 
     let response = client.call(list_tables).await;
     let tables = match response {

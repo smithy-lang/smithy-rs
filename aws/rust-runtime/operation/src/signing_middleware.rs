@@ -15,19 +15,19 @@ use std::time::SystemTime;
 use tower::BoxError;
 
 #[derive(Clone)]
-pub struct SigningMiddleware {
+pub struct SignRequestStage {
     signer: HttpSigner,
 }
 
-impl Default for SigningMiddleware {
+impl Default for SignRequestStage {
     fn default() -> Self {
-        SigningMiddleware::new()
+        SignRequestStage::new()
     }
 }
 
-impl SigningMiddleware {
+impl SignRequestStage {
     pub fn new() -> Self {
-        SigningMiddleware {
+        SignRequestStage {
             signer: HttpSigner {},
         }
     }
@@ -75,7 +75,7 @@ impl CredentialProviderExt for Extensions {
     }
 }
 
-impl OperationMiddleware for SigningMiddleware {
+impl OperationMiddleware for SignRequestStage {
     fn apply(&self, request: crate::Request) -> Result<crate::Request, BoxError> {
         request.augment(|request, config| {
             let operation_config = config.signing_config().ok_or("Missing signing config")?;

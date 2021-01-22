@@ -178,8 +178,8 @@ pub trait ParseStrictResponse {
 }
 
 impl<B, T> ParseHttpResponse<B> for T
-    where
-        T: ParseStrictResponse,
+where
+    T: ParseStrictResponse,
 {
     type Output = T::Output;
 

@@ -92,8 +92,8 @@ impl EndpointProviderExt for Extensions {
 // TODO: this should probably move to a collection of middlewares
 #[derive(Clone, Copy)]
 /// Set the endpoint for a request based on the endpoint config
-pub struct EndpointMiddleware;
-impl OperationMiddleware for EndpointMiddleware {
+pub struct AddEndpointStage;
+impl OperationMiddleware for AddEndpointStage {
     fn apply(&self, request: crate::Request) -> Result<crate::Request, BoxError> {
         request.augment(|mut request, extensions| {
             let endpoint_provider: &Arc<dyn ProvideEndpoint> = extensions

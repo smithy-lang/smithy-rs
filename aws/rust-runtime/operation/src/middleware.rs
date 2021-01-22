@@ -21,17 +21,17 @@ pub struct OperationRequestMiddlewareService<S, M> {
     middleware: M,
 }
 
-pub struct OperationRequestMiddlewareLayer<M> {
+pub struct OperationPipelineService<M> {
     layer: M,
 }
 
-impl<M: Clone> OperationRequestMiddlewareLayer<M> {
-    pub fn for_middleware(layer: M) -> Self {
-        OperationRequestMiddlewareLayer { layer }
+impl<M: Clone> OperationPipelineService<M> {
+    pub fn for_stage(layer: M) -> Self {
+        OperationPipelineService { layer }
     }
 }
 
-impl<S, M> Layer<S> for OperationRequestMiddlewareLayer<M>
+impl<S, M> Layer<S> for OperationPipelineService<M>
 where
     M: Clone,
 {
@@ -173,7 +173,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::middleware::{DispatchLayer, OperationMiddleware, OperationRequestMiddlewareLayer};
+    use crate::middleware::{DispatchLayer, OperationMiddleware, OperationPipelineService};
     use crate::{ParseHttpResponse, SdkBody};
 
     use bytes::Bytes;
@@ -216,7 +216,7 @@ mod test {
             }
         }
 
-        let add_header = OperationRequestMiddlewareLayer::for_middleware(AddHeader(
+        let add_header = OperationPipelineService::for_stage(AddHeader(
             "X-Key".to_string(),
             "X-Value".to_string(),
         ));
