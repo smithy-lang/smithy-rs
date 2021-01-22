@@ -28,7 +28,7 @@ pub struct Request {
 }
 ```
 
-For most requests, `.build()` will NOT consume the input—a user can call `.build()` multiple times to produce multiple operations from the same input.
+For most requests, `.build()` will NOT consume the input. A user can call `.build()` multiple times to produce multiple operations from the same input.
 
 By using a property bag, we can define the `Operation` in Smithy core–AWS specific configuration can be added later in the stack.
 
