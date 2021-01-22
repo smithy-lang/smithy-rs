@@ -69,6 +69,7 @@ impl PropertyBag {
     /// ```
     /// # use smithy_http::property_bag::PropertyBag;
     /// let mut ext = PropertyBag::new();
+    /// #[derive(Debug, Eq, PartialEq)]
     /// struct Endpoint(&'static str);
     /// assert!(ext.insert(Endpoint("dynamo.amazon.com")).is_none());
     /// assert_eq!(ext.insert(Endpoint("kinesis.amazon.com")), Some(Endpoint("dynamo.amazon.com")));

@@ -6,7 +6,7 @@ use std::rc::Rc;
 pub struct Operation<H, R> {
     request: Request,
     response_handler: H,
-    retry_policy: R
+    _retry_policy: R,
 }
 
 impl<H> Operation<H, ()> {
@@ -17,8 +17,8 @@ impl<H> Operation<H, ()> {
     pub fn new(request: Request, response_handler: H) -> Self {
         Operation {
             request,
-            response_handler: response_handler.into(),
-            retry_policy: ()
+            response_handler,
+            _retry_policy: (),
         }
     }
 }
@@ -95,7 +95,7 @@ impl Request {
 mod test {
     use crate::body::SdkBody;
     use crate::operation::Request;
-    use http::header::{CONTENT_LENGTH, AUTHORIZATION};
+    use http::header::{AUTHORIZATION, CONTENT_LENGTH};
     use http::Uri;
 
     #[test]
@@ -116,7 +116,10 @@ mod test {
         assert_eq!(request.uri(), &Uri::from_static("http://www.amazon.com"));
         assert_eq!(request.method(), "POST");
         assert_eq!(request.headers().len(), 2);
-        assert_eq!(request.headers().get(AUTHORIZATION).unwrap(), "Token: hello");
+        assert_eq!(
+            request.headers().get(AUTHORIZATION).unwrap(),
+            "Token: hello"
+        );
         assert_eq!(request.headers().get(CONTENT_LENGTH).unwrap(), "456");
         assert_eq!(request.body().bytes().unwrap(), "hello world!".as_bytes());
         assert_eq!(config.as_ref().borrow().get::<&str>(), Some(&"hello"));
