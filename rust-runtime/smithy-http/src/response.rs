@@ -8,7 +8,7 @@ use http::Response;
 
 /// `ParseHttpResponse` is a generic trait for parsing structured data from HTTP respsones.
 ///
-/// It is designed to be nearly infinitely flexible—because Because `Output` is unstrained, it can be used to support
+/// It is designed to be nearly infinitely flexible, because `Output` is unconstrained, it can be used to support
 /// event streams, S3 streaming responses, regular request-response style operations, as well
 /// as any other HTTP-based protocol that we manage to come up with.
 ///
