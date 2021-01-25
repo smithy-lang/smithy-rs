@@ -13,7 +13,7 @@ installation instructions on your platform. Minimum supported Rust version is th
 ## Run tests
 ```./tesh.sh```
 
-This will run all the unit tests, codegen example models & Dynamo DB, validate the generated code compiles, and run any tests targetting the generated code.
+This will run all the unit tests, codegen example models & Dynamo DB, validate that the generated code compiles, and run any tests targeting the generated code.
 
 ## Development
 For development, pre-commit hooks may be useful. Setup:
