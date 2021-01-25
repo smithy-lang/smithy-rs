@@ -88,7 +88,7 @@ class InlineDependency(
         fun instantHttpDate() =
             forRustFile("instant_httpdate", CargoDependency.Serde)
 
-        fun instant8601() = forRustFile("instant_8601", CargoDependency.Serde)
+        fun instant8601() = forRustFile("instant_iso8601", CargoDependency.Serde)
 
         fun idempotencyToken() =
             forRustFile("idempotency_token", CargoDependency.Rand)
