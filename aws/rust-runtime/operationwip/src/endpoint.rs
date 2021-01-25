@@ -10,10 +10,10 @@ use http::uri::Uri;
 
 use crate::middleware::OperationMiddleware;
 use http::header::HOST;
-use std::sync::Arc;
-use tower::BoxError;
 use smithy_http::operation;
 use smithy_http::property_bag::PropertyBag;
+use std::sync::Arc;
+use tower::BoxError;
 
 pub struct StaticEndpoint(http::Uri);
 

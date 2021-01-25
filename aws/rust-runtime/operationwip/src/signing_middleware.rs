@@ -3,17 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 use crate::middleware::OperationMiddleware;
+use crate::region::RegionExt;
 use auth::{
     HttpSigner, HttpSigningConfig, OperationSigningConfig, ProvideCredentials, RequestConfig,
     SigningConfig,
 };
 use http::Request;
+use smithy_http::operation;
+use smithy_http::property_bag::PropertyBag;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tower::BoxError;
-use smithy_http::operation;
-use smithy_http::property_bag::PropertyBag;
-use crate::region::RegionExt;
 
 #[derive(Clone)]
 pub struct SignRequestStage {
@@ -94,8 +94,8 @@ impl OperationMiddleware for SignRequestStage {
             let request_config = RequestConfig {
                 request_ts: config
                     .get::<SystemTime>()
-                    .map(|t| t.clone())
-                    .unwrap_or_else(|| SystemTime::now()), // TODO: replace with Extensions.now();
+                    .copied()
+                    .unwrap_or_else(SystemTime::now), // TODO: replace with Extensions.now();
                 region: region.into(),
             };
             let signing_config = SigningConfig::Http(HttpSigningConfig {

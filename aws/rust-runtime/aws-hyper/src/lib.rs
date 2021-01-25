@@ -163,6 +163,8 @@ where
     }
 }
 
+type BoxedResultFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>>>>;
+
 impl<S, O, T, E, B, R, OE> tower::Service<operation::Operation<O, R>> for ParseResponseService<S>
 where
     S: Service<operation::Request, Response = http::Response<B>, Error = OperationError<OE>>,
@@ -175,7 +177,7 @@ where
 {
     type Response = SdkSuccess<T>;
     type Error = SdkError<E>;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
+    type Future = BoxedResultFuture<Self::Response, Self::Error>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx).map_err(operation_error)
@@ -240,11 +242,11 @@ use operationwip::endpoint::AddEndpointStage;
 use operationwip::middleware::{DispatchLayer, OperationPipelineService};
 use operationwip::retry_policy::RetryPolicy;
 use operationwip::signing_middleware::SignRequestStage;
+use smithy_http::operation::Operation;
 use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use smithy_http::operation::Operation;
 use std::time::Duration;
 
 async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
@@ -267,21 +269,21 @@ mod test {
     use bytes::Bytes;
     use http::header::AUTHORIZATION;
     use http::{Request, Response, Uri};
-    use operationwip::endpoint::{StaticEndpoint, EndpointProviderExt};
+    use operationwip::endpoint::{EndpointProviderExt, StaticEndpoint};
     use operationwip::region::Region;
     use operationwip::signing_middleware::SigningConfigExt;
-    use smithy_http::operation::Operation;
     use pin_utils::core_reexport::task::{Context, Poll};
-    use std::time::Duration;
+    use smithy_http::body::SdkBody;
+    use smithy_http::operation;
+    use smithy_http::operation::Operation;
+    use smithy_http::response::ParseHttpResponse;
     use std::error::Error;
     use std::fmt::Formatter;
     use std::future::Future;
     use std::pin::Pin;
     use std::sync::{mpsc, Arc};
+    use std::time::Duration;
     use std::time::UNIX_EPOCH;
-    use smithy_http::body::SdkBody;
-    use smithy_http::response::ParseHttpResponse;
-    use smithy_http::operation;
 
     #[derive(Clone)]
     struct TestService {
@@ -349,17 +351,23 @@ mod test {
                 .uri("/some_url")
                 .body(SdkBody::from("Hello"))
                 .unwrap(),
-        ).augment(|req, config| {
+        )
+        .augment(|req, config| {
             config.insert(Region::new("some-region"));
             config.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
-            config.insert_signing_config(auth::OperationSigningConfig::default_config("some-service"));
+            config.insert_signing_config(auth::OperationSigningConfig::default_config(
+                "some-service",
+            ));
             use operationwip::signing_middleware::CredentialProviderExt;
-            config.insert_credentials_provider(Arc::new(Credentials::from_static("access", "secret")));
+            config.insert_credentials_provider(Arc::new(Credentials::from_static(
+                "access", "secret",
+            )));
             config.insert_endpoint_provider(Arc::new(StaticEndpoint::from_uri(Uri::from_static(
                 "http://localhost:8000",
             ))));
             Result::<_, ()>::Ok(req)
-        }).expect("valid request");
+        })
+        .expect("valid request");
 
         let operation = Operation::new(request, TestOperationParser);
 

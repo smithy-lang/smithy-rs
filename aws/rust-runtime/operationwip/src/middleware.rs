@@ -174,15 +174,17 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::middleware::{DispatchLayer, OperationMiddleware, OperationPipelineService};
-    use crate::{ParseHttpResponse, SdkBody};
-
+    use crate::middleware::{
+        BoxError, DispatchLayer, OperationMiddleware, OperationPipelineService,
+    };
     use bytes::Bytes;
     use http::header::HeaderName;
     use http::{HeaderValue, Request, Response};
-    use std::error::Error;
     use std::str::FromStr;
 
+    use smithy_http::body::SdkBody;
+    use smithy_http::operation;
+    use smithy_http::response::ParseHttpResponse;
     use tower::service_fn;
     use tower::{Layer, Service};
 
@@ -208,12 +210,14 @@ mod test {
         #[derive(Clone)]
         struct AddHeader(String, String);
         impl OperationMiddleware for AddHeader {
-            fn apply(&self, mut request: operation::Request) -> Result<operation::Request, Box<dyn Error>> {
-                request.base.headers_mut().append(
-                    HeaderName::from_str(&self.0).unwrap(),
-                    HeaderValue::from_str(&self.0).unwrap(),
-                );
-                Ok(request)
+            fn apply(&self, request: operation::Request) -> Result<operation::Request, BoxError> {
+                request.augment(|mut request, _| {
+                    request.headers_mut().append(
+                        HeaderName::from_str(&self.0).unwrap(),
+                        HeaderValue::from_str(&self.0).unwrap(),
+                    );
+                    Ok(request)
+                })
             }
         }
 

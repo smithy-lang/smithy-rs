@@ -68,16 +68,16 @@ impl RegionExt for PropertyBag {
 
 #[cfg(test)]
 mod test {
-    use crate::extensions::Extensions;
     use crate::region::{Region, RegionExt, SigningRegion};
+    use smithy_http::property_bag::PropertyBag;
 
     #[test]
     fn signing_region_fallback() {
-        let mut extensions = Extensions::new();
-        extensions.insert(Region::new("aws-global"));
-        assert_eq!(extensions.signing_region(), Some("aws-global"));
+        let mut property_bag = PropertyBag::new();
+        property_bag.insert(Region::new("aws-global"));
+        assert_eq!(property_bag.signing_region(), Some("aws-global"));
 
-        extensions.insert(SigningRegion::new("us-east-1"));
-        assert_eq!(extensions.signing_region(), Some("us-east-1"))
+        property_bag.insert(SigningRegion::new("us-east-1"));
+        assert_eq!(property_bag.signing_region(), Some("us-east-1"))
     }
 }
