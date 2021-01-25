@@ -7,23 +7,24 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 
-class RegionConfig : ConfigCustomization() {
+class RegionConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
+    private val region = Region(runtimeConfig)
     override fun section(section: ServiceConfig) = writable {
         when (section) {
-            is ServiceConfig.ConfigStruct -> rust("pub region: Option<#T::Region>,", Region)
+            is ServiceConfig.ConfigStruct -> rust("pub region: Option<#T::Region>,", region)
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
-                rust("region: Option<#T::Region>,", Region)
+                rust("region: Option<#T::Region>,", region)
             ServiceConfig.BuilderImpl ->
                 rust(
                     """
@@ -32,14 +33,14 @@ class RegionConfig : ConfigCustomization() {
                 self
             }
             """,
-                    Region
+                    region
                 )
             ServiceConfig.BuilderPreamble -> rust(
                 """
                 use #1T::ProvideRegion;
                 let region = self.region.or_else(||#1T::default_provider().region());
             """,
-                Region
+                region
             )
             ServiceConfig.BuilderBuild -> rust(
                 """region: region.clone(),""",
@@ -56,7 +57,7 @@ class RegionConfigPlugin(private val operationShape: OperationShape) : Operation
                 rust(
                     """
                 if let Some(region) = &_config.region {
-                    request.config.lock().unwrap().insert(region.clone());
+                    request.config_mut().insert(region.clone());
 
                 }
                 """
@@ -66,5 +67,5 @@ class RegionConfigPlugin(private val operationShape: OperationShape) : Operation
     }
 }
 
-val Operation = CargoDependency("operation", Local("../"))
-val Region = RuntimeType("region", Operation, "operation")
+fun Region(runtimeConfig: RuntimeConfig) =
+    RuntimeType("region", CargoDependency.OperationWip(runtimeConfig), "operationwip")

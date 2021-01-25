@@ -23,7 +23,7 @@ val awsServices = discoverServices()
 // TODO: smithy-http should be removed
 val runtimeModules = listOf("smithy-types", "smithy-http")
 val examples = listOf("dynamo-helloworld")
-val awsModules = listOf("auth", "operation", "aws-hyper", "middleware-tracing")
+val awsModules = listOf("auth", "operationwip", "aws-hyper", "middleware-tracing")
 
 buildscript {
     val smithyVersion: String by project
@@ -137,7 +137,9 @@ tasks.register<Copy>("relocateAwsRuntime") {
     }
     exclude("**/target")
     exclude("**/Cargo.lock")
+    filter { line -> line.replace("../../rust-runtime/", "") }
     into(sdkOutputDir)
+    outputs.upToDateWhen { false }
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {

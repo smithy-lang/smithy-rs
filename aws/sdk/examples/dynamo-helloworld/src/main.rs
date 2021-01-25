@@ -15,8 +15,8 @@ use dynamodb::{
     operation::CreateTable,
 };
 use env_logger::Env;
-use operation::endpoint::StaticEndpoint;
-use operation::retry_policy::{RetryPolicy, RetryType};
+use operationwip::endpoint::StaticEndpoint;
+use operationwip::retry_policy::{RetryPolicy, RetryType};
 use tokio::time::Duration;
 
 #[derive(Clone)]

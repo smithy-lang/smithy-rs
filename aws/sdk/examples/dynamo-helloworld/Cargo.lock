@@ -45,8 +45,9 @@ dependencies = [
  "hyper",
  "hyper-tls",
  "middleware-tracing",
- "operation",
+ "operationwip",
  "pin-utils",
+ "smithy-http",
  "tokio",
  "tower",
 ]
@@ -139,7 +140,7 @@ dependencies = [
  "dynamodb",
  "env_logger",
  "http",
- "operation",
+ "operationwip",
  "tokio",
 ]
 
@@ -150,7 +151,7 @@ dependencies = [
  "auth",
  "bytes",
  "http",
- "operation",
+ "operationwip",
  "rand 0.7.3",
  "serde",
  "serde_json",
@@ -585,7 +586,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "operation"
+name = "operationwip"
 version = "0.1.0"
 dependencies = [
  "auth",
@@ -593,6 +594,7 @@ dependencies = [
  "http",
  "http-body",
  "pin-project 1.0.4",
+ "smithy-http",
  "tower",
 ]
 
@@ -960,6 +962,9 @@ checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
 name = "smithy-http"
 version = "0.0.1"
 dependencies = [
+ "bytes",
+ "http",
+ "http-body",
  "smithy-types",
 ]
 

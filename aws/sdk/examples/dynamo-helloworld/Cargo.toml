@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 dynamodb = { version = "0.0.1", path = "../../build/aws-sdk/dynamodb" }
 aws-hyper = { path = "../../build/aws-sdk/aws-hyper" }
-operation = { path = "../../build/aws-sdk/operation" }
+operationwip = { path = "../../build/aws-sdk/operationwip" }
 auth = { path = "../../build/aws-sdk/auth" }
 tokio = { version = "1", features = ["full"] }
 http = "0.2.3"

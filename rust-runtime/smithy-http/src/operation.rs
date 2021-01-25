@@ -36,6 +36,14 @@ impl <H, R> Operation<H, R>  {
     pub fn retry_policy(&self) -> &R {
         &self._retry_policy
     }
+
+    pub fn with_policy<T>(self, r: T) -> Operation<H, T> {
+        Operation {
+            request: self.request,
+            response_handler: self.response_handler,
+            _retry_policy: r
+        }
+    }
 }
 
 pub struct Request {

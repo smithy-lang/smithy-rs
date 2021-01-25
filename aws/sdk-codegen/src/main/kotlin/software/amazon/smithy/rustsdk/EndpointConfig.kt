@@ -52,8 +52,8 @@ class EndpointConfigCustomization(private val protocolConfig: ProtocolConfig) : 
     }
 }
 
-fun EndpointProvider(runtimeConfig: RuntimeConfig) = RuntimeType("ProvideEndpoint", CargoDependency.Operation(runtimeConfig), "operation::endpoint")
-fun StaticEndpoint(runtimeConfig: RuntimeConfig) = RuntimeType("StaticEndpoint", CargoDependency.Operation(runtimeConfig), "operation::endpoint")
+fun EndpointProvider(runtimeConfig: RuntimeConfig) = RuntimeType("ProvideEndpoint", CargoDependency.OperationWip(runtimeConfig), "operationwip::endpoint")
+fun StaticEndpoint(runtimeConfig: RuntimeConfig) = RuntimeType("StaticEndpoint", CargoDependency.OperationWip(runtimeConfig), "operationwip::endpoint")
 
 class EndpointConfigPlugin(private val operationShape: OperationShape) : OperationCustomization() {
     override fun section(section: OperationSection): Writable {
@@ -65,8 +65,8 @@ class EndpointConfigPlugin(private val operationShape: OperationShape) : Operati
             OperationSection.Plugin -> writable {
                 rust(
                     """
-                use operation::endpoint::EndpointProviderExt;
-                request.config.lock().unwrap().insert_endpoint_provider(_config.endpoint_provider.clone());
+                use operationwip::endpoint::EndpointProviderExt;
+                request.config_mut().insert_endpoint_provider(_config.endpoint_provider.clone());
                 """
                 )
             }

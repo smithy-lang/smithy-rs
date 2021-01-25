@@ -40,12 +40,12 @@ class SigV4SigningPlugin(operationShape: OperationShape) : OperationCustomizatio
             is OperationSection.Plugin -> writable {
                 rust(
                     """
-                use operation::signing_middleware::SigningConfigExt;
-                request.config.lock().unwrap().insert_signing_config(
+                use operationwip::signing_middleware::SigningConfigExt;
+                request.config_mut().insert_signing_config(
                     auth::OperationSigningConfig::default_config(_config.signing_service())
                 );
-                use operation::signing_middleware::CredentialProviderExt;
-                request.config.lock().unwrap().insert_credentials_provider(_config.credentials_provider.clone());
+                use operationwip::signing_middleware::CredentialProviderExt;
+                request.config_mut().insert_credentials_provider(_config.credentials_provider.clone());
                 """
                 )
             }

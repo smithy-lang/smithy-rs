@@ -143,7 +143,8 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
 
         val Config = RuntimeType("config", null, "crate")
 
-        fun Operation(runtimeConfig: RuntimeConfig) = RuntimeType("Operation", dependency = CargoDependency.Operation(runtimeConfig), namespace = "operation")
+        fun Operation(runtimeConfig: RuntimeConfig) = RuntimeType("Operation", dependency = CargoDependency.SmithyHttp(runtimeConfig), namespace = "smithy_http::operation")
+        fun OperationModule(runtimeConfig: RuntimeConfig) = RuntimeType(null, dependency = CargoDependency.SmithyHttp(runtimeConfig), namespace = "smithy_http::operation")
 
         fun BlobSerde(runtimeConfig: RuntimeConfig) = RuntimeType("blob_serde", InlineDependency.blobSerde(runtimeConfig), "crate")
 
@@ -153,6 +154,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             namespace = "crate::$module"
         )
 
-        fun ParseStrict(runtimeConfig: RuntimeConfig): RuntimeType = RuntimeType("ParseStrictResponse", dependency = CargoDependency.Operation(runtimeConfig), namespace = "operation")
+        fun ParseStrict(runtimeConfig: RuntimeConfig): RuntimeType = RuntimeType("ParseStrictResponse", dependency = CargoDependency.SmithyHttp(runtimeConfig), namespace = "smithy_http::response")
+        fun SdkBody(runtimeConfig: RuntimeConfig): RuntimeType = RuntimeType("SdkBody", dependency = CargoDependency.SmithyHttp(runtimeConfig), "smithy_http::body")
     }
 }

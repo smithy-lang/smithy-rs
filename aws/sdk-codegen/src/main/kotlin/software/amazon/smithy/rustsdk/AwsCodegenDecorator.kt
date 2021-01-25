@@ -21,7 +21,7 @@ class AwsCodegenDecorator : RustCodegenDecorator {
     ): List<ConfigCustomization> {
         val awsCustomizations = mutableListOf<ConfigCustomization>()
         awsCustomizations += CredentialProviderConfig()
-        awsCustomizations += RegionConfig()
+        awsCustomizations += RegionConfig(protocolConfig.runtimeConfig)
         awsCustomizations += EndpointConfigCustomization(protocolConfig)
         protocolConfig.serviceShape.getTrait(SigV4Trait::class.java).map { trait ->
             awsCustomizations += SigV4SigningConfig(trait)
