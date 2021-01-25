@@ -1,5 +1,5 @@
 [package]
-name = "operation"
+name = "operationwip"
 version = "0.1.0"
 authors = ["Russell Cohen <rcoh@amazon.com>"]
 edition = "2018"
@@ -13,6 +13,7 @@ bytes = "1"
 tower = { version = "0.4.2", features = ["util"] }
 http-body = "0.4.0"
 pin-project = "1.0.4"
+smithy-http = { path = "../../../rust-runtime/smithy-http"}
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

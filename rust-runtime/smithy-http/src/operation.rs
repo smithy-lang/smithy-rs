@@ -10,16 +10,31 @@ pub struct Operation<H, R> {
 }
 
 impl<H> Operation<H, ()> {
-    pub fn into_request_response(self) -> (Request, H) {
-        (self.request, self.response_handler)
-    }
-
     pub fn new(request: Request, response_handler: H) -> Self {
         Operation {
             request,
             response_handler,
             _retry_policy: (),
         }
+    }
+}
+
+impl <H, R> Operation<H, R>  {
+    pub fn try_clone(&self) -> Option<Self> where H: Clone, R: Clone {
+        let inner = self.request.try_clone()?;
+        Some(Operation {
+            request: inner,
+            response_handler: self.response_handler.clone(),
+            _retry_policy: self._retry_policy.clone(),
+        })
+    }
+
+    pub fn into_request_response(self) -> (Request, H) {
+        (self.request, self.response_handler)
+    }
+
+    pub fn retry_policy(&self) -> &R {
+        &self._retry_policy
     }
 }
 

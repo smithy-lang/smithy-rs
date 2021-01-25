@@ -1,6 +1,9 @@
 use bytes::{Buf, Bytes};
 use hyper::Client as HyperClient;
-use operation::{middleware::OperationError, Operation, ParseHttpResponse, SdkBody};
+use operationwip::middleware::OperationError;
+use smithy_http::body::SdkBody;
+use smithy_http::operation;
+use smithy_http::response::ParseHttpResponse;
 use std::error::Error;
 use tower::{Layer, Service, ServiceBuilder};
 
@@ -133,7 +136,7 @@ where
         req: &Operation<Handler, R>,
         result: Result<&Response, &Error>,
     ) -> Option<Self::Future> {
-        let _resp = req.retry_policy.should_retry(result)?;
+        let _resp = req.retry_policy().should_retry(result)?;
         let next = self.clone();
         let fut = async move {
             tokio::time::sleep(Duration::new(5, 0)).await;
@@ -143,12 +146,7 @@ where
     }
 
     fn clone_request(&self, req: &Operation<Handler, R>) -> Option<Operation<Handler, R>> {
-        let inner = req.request.try_clone()?;
-        Some(Operation {
-            request: inner,
-            response_handler: req.response_handler.clone(),
-            retry_policy: req.retry_policy.clone(),
-        })
+        req.try_clone()
     }
 }
 
@@ -184,8 +182,8 @@ where
     }
 
     fn call(&mut self, req: Operation<O, R>) -> Self::Future {
-        let resp = self.inner.call(req.request);
-        let handler = req.response_handler;
+        let (req, handler) = req.into_request_response();
+        let resp = self.inner.call(req);
         let fut = async move {
             match resp.await {
                 Err(e) => Err(operation_error::<OE, E>(e)),
@@ -238,15 +236,16 @@ use http_body::Body;
 use hyper::client::HttpConnector;
 use hyper_tls::HttpsConnector;
 use middleware_tracing::RawRequestLogging;
-use operation::endpoint::AddEndpointStage;
-use operation::middleware::{DispatchLayer, OperationPipelineService};
-use operation::retry_policy::RetryPolicy;
-use operation::signing_middleware::SignRequestStage;
-use pin_utils::core_reexport::time::Duration;
+use operationwip::endpoint::AddEndpointStage;
+use operationwip::middleware::{DispatchLayer, OperationPipelineService};
+use operationwip::retry_policy::RetryPolicy;
+use operationwip::signing_middleware::SignRequestStage;
 use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use smithy_http::operation::Operation;
+use std::time::Duration;
 
 async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
     let mut output = Vec::new();
@@ -268,18 +267,21 @@ mod test {
     use bytes::Bytes;
     use http::header::AUTHORIZATION;
     use http::{Request, Response, Uri};
-    use operation::endpoint::StaticEndpoint;
-    use operation::region::Region;
-    use operation::signing_middleware::SigningConfigExt;
-    use operation::{Operation, ParseHttpResponse, SdkBody};
+    use operationwip::endpoint::{StaticEndpoint, EndpointProviderExt};
+    use operationwip::region::Region;
+    use operationwip::signing_middleware::SigningConfigExt;
+    use smithy_http::operation::Operation;
     use pin_utils::core_reexport::task::{Context, Poll};
-    use pin_utils::core_reexport::time::Duration;
+    use std::time::Duration;
     use std::error::Error;
     use std::fmt::Formatter;
     use std::future::Future;
     use std::pin::Pin;
     use std::sync::{mpsc, Arc};
     use std::time::UNIX_EPOCH;
+    use smithy_http::body::SdkBody;
+    use smithy_http::response::ParseHttpResponse;
+    use smithy_http::operation;
 
     #[derive(Clone)]
     struct TestService {
@@ -347,44 +349,19 @@ mod test {
                 .uri("/some_url")
                 .body(SdkBody::from("Hello"))
                 .unwrap(),
-        );
-
-        request
-            .config
-            .lock()
-            .unwrap()
-            .insert(Region::new("some-region"));
-        request
-            .config
-            .lock()
-            .unwrap()
-            .insert(UNIX_EPOCH + Duration::new(1611160427, 0));
-
-        request
-            .config
-            .lock()
-            .unwrap()
-            .insert_signing_config(auth::OperationSigningConfig::default_config("some-service"));
-        use operation::signing_middleware::CredentialProviderExt;
-        request
-            .config
-            .lock()
-            .unwrap()
-            .insert_credentials_provider(Arc::new(Credentials::from_static("access", "secret")));
-
-        use operation::endpoint::EndpointProviderExt;
-        request
-            .config
-            .lock()
-            .unwrap()
-            .insert_endpoint_provider(Arc::new(StaticEndpoint::from_uri(Uri::from_static(
+        ).augment(|req, config| {
+            config.insert(Region::new("some-region"));
+            config.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
+            config.insert_signing_config(auth::OperationSigningConfig::default_config("some-service"));
+            use operationwip::signing_middleware::CredentialProviderExt;
+            config.insert_credentials_provider(Arc::new(Credentials::from_static("access", "secret")));
+            config.insert_endpoint_provider(Arc::new(StaticEndpoint::from_uri(Uri::from_static(
                 "http://localhost:8000",
             ))));
-        let operation = Operation {
-            request,
-            response_handler: TestOperationParser,
-            retry_policy: (),
-        };
+            Result::<_, ()>::Ok(req)
+        }).expect("valid request");
+
+        let operation = Operation::new(request, TestOperationParser);
 
         let (svc, rx) = TestService::new(|_req| http::Response::new(hyper::Body::from("hello!")));
         let client = Client { inner: svc };

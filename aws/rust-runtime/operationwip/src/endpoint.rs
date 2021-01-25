@@ -8,11 +8,12 @@ use std::str::FromStr;
 
 use http::uri::Uri;
 
-use crate::extensions::Extensions;
 use crate::middleware::OperationMiddleware;
 use http::header::HOST;
 use std::sync::Arc;
 use tower::BoxError;
+use smithy_http::operation;
+use smithy_http::property_bag::PropertyBag;
 
 pub struct StaticEndpoint(http::Uri);
 
@@ -58,15 +59,17 @@ impl ProvideEndpoint for StaticEndpoint {
     }
 }
 
+/*
 impl<T> OperationMiddleware for T
 where
     T: ProvideEndpoint,
 {
-    fn apply(&self, mut request: crate::Request) -> Result<crate::Request, BoxError> {
-        self.set_endpoint(&mut request.base.uri_mut());
-        Ok(request)
+    fn apply(&self, mut request: operation::Request) -> Result<operation::Request, BoxError> {
+        request.augment(|request, config| {
+            self.set_endpoint(&mut request.);
+        })
     }
-}
+}*/
 
 pub trait EndpointProviderExt {
     fn endpoint_provider(&self) -> Option<&Arc<dyn ProvideEndpoint>>;
@@ -76,7 +79,7 @@ pub trait EndpointProviderExt {
     ) -> Option<Arc<dyn ProvideEndpoint>>;
 }
 
-impl EndpointProviderExt for Extensions {
+impl EndpointProviderExt for PropertyBag {
     fn endpoint_provider(&self) -> Option<&Arc<dyn ProvideEndpoint>> {
         self.get()
     }
@@ -94,7 +97,7 @@ impl EndpointProviderExt for Extensions {
 /// Set the endpoint for a request based on the endpoint config
 pub struct AddEndpointStage;
 impl OperationMiddleware for AddEndpointStage {
-    fn apply(&self, request: crate::Request) -> Result<crate::Request, BoxError> {
+    fn apply(&self, request: operation::Request) -> Result<operation::Request, BoxError> {
         request.augment(|mut request, extensions| {
             let endpoint_provider: &Arc<dyn ProvideEndpoint> = extensions
                 .endpoint_provider()

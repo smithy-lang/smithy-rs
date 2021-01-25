@@ -3,16 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::SdkBody;
 use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 type BoxError = Box<dyn Error + Send + Sync>;
+use pin_project::pin_project;
+use smithy_http::body::SdkBody;
+use smithy_http::operation;
 
 pub trait OperationMiddleware {
-    fn apply(&self, request: crate::Request) -> Result<crate::Request, BoxError>;
+    fn apply(&self, request: operation::Request) -> Result<operation::Request, BoxError>;
 }
 
 #[derive(Clone)]
@@ -69,9 +71,9 @@ where
     }
 }
 
-impl<S, M> Service<crate::Request> for OperationRequestMiddlewareService<S, M>
+impl<S, M> Service<operation::Request> for OperationRequestMiddlewareService<S, M>
 where
-    S: Service<crate::Request>,
+    S: Service<operation::Request>,
     M: OperationMiddleware,
     S::Error: RequestConstructionErr,
 {
@@ -83,7 +85,7 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: crate::Request) -> Self::Future {
+    fn call(&mut self, req: operation::Request) -> Self::Future {
         match self
             .middleware
             .apply(req)
@@ -130,8 +132,6 @@ impl<E> RequestConstructionErr for OperationError<E> {
     }
 }
 
-use pin_project::pin_project;
-
 #[pin_project]
 pub struct OperationFuture<F> {
     #[pin]
@@ -150,7 +150,7 @@ where
     }
 }
 
-impl<S> Service<crate::Request> for DispatchMiddleware<S>
+impl<S> Service<operation::Request> for DispatchMiddleware<S>
 where
     S: Service<http::Request<SdkBody>>,
 {
@@ -164,9 +164,10 @@ where
             .map_err(OperationError::DispatchError)
     }
 
-    fn call(&mut self, req: crate::Request) -> Self::Future {
+    fn call(&mut self, req: operation::Request) -> Self::Future {
+        let (req, _propery_bag) = req.into_parts();
         OperationFuture {
-            f: self.inner.call(req.base),
+            f: self.inner.call(req),
         }
     }
 }
@@ -207,7 +208,7 @@ mod test {
         #[derive(Clone)]
         struct AddHeader(String, String);
         impl OperationMiddleware for AddHeader {
-            fn apply(&self, mut request: crate::Request) -> Result<crate::Request, Box<dyn Error>> {
+            fn apply(&self, mut request: operation::Request) -> Result<operation::Request, Box<dyn Error>> {
                 request.base.headers_mut().append(
                     HeaderName::from_str(&self.0).unwrap(),
                     HeaderValue::from_str(&self.0).unwrap(),
@@ -234,7 +235,7 @@ mod test {
             }
         });
         let mut service = add_header.layer(DispatchLayer.layer(http_service));
-        let operation = crate::Request::new(
+        let operation = operation::Request::new(
             Request::builder()
                 .uri("/some_url")
                 .body(SdkBody::from("Hello"))

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::extensions::Extensions;
+use smithy_http::property_bag::PropertyBag;
 
 #[derive(Clone)]
 pub struct Region(String);
@@ -54,7 +54,7 @@ pub trait RegionExt {
     fn signing_region(&self) -> Option<&str>;
 }
 
-impl RegionExt for Extensions {
+impl RegionExt for PropertyBag {
     fn request_region(&self) -> Option<&str> {
         self.get::<Region>().map(|reg| reg.0.as_str())
     }

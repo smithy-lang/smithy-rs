@@ -2,9 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-use crate::extensions::Extensions;
 use crate::middleware::OperationMiddleware;
-use crate::region::RegionExt;
 use auth::{
     HttpSigner, HttpSigningConfig, OperationSigningConfig, ProvideCredentials, RequestConfig,
     SigningConfig,
@@ -13,6 +11,9 @@ use http::Request;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tower::BoxError;
+use smithy_http::operation;
+use smithy_http::property_bag::PropertyBag;
+use crate::region::RegionExt;
 
 #[derive(Clone)]
 pub struct SignRequestStage {
@@ -41,7 +42,7 @@ pub trait SigningConfigExt {
     ) -> Option<OperationSigningConfig>;
 }
 
-impl SigningConfigExt for Extensions {
+impl SigningConfigExt for PropertyBag {
     fn signing_config(&self) -> Option<&OperationSigningConfig> {
         self.get()
     }
@@ -62,7 +63,7 @@ pub trait CredentialProviderExt {
     ) -> Option<Arc<dyn ProvideCredentials>>;
 }
 
-impl CredentialProviderExt for Extensions {
+impl CredentialProviderExt for PropertyBag {
     fn credentials_provider(&self) -> Option<&Arc<dyn ProvideCredentials>> {
         self.get()
     }
@@ -76,7 +77,7 @@ impl CredentialProviderExt for Extensions {
 }
 
 impl OperationMiddleware for SignRequestStage {
-    fn apply(&self, request: crate::Request) -> Result<crate::Request, BoxError> {
+    fn apply(&self, request: operation::Request) -> Result<operation::Request, BoxError> {
         request.augment(|request, config| {
             let operation_config = config.signing_config().ok_or("Missing signing config")?;
             let cred_provider = config
