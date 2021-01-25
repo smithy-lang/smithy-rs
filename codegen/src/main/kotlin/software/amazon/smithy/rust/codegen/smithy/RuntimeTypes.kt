@@ -129,8 +129,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
 
         val SJ = RuntimeType(null, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
 
-        val GenericError = RuntimeType("GenericError", InlineDependency.genericError(), "crate::types")
-        val ErrorCode = RuntimeType("error_code", dependency = InlineDependency.errorCode(), namespace = "crate")
+        fun awsJsonErrors(runtimeConfig: RuntimeConfig) = RuntimeType("aws_json_errors", dependency = InlineDependency.errorCode(runtimeConfig), namespace = "crate")
 
         val DocJson = RuntimeType("doc_json", InlineDependency.docJson(), "crate")
 

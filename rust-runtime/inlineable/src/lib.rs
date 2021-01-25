@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#[allow(dead_code)]
+mod aws_json_errors;
 mod blob_serde;
 #[allow(dead_code)]
 mod doc_json;
-#[allow(dead_code)]
-mod error_code;
-mod generic_error;
 #[allow(dead_code)]
 mod idempotency_token;
 mod instant_epoch;
