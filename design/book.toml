@@ -1,0 +1,6 @@
+[book]
+authors = ["Russell Cohen"]
+language = "en"
+multilingual = false
+src = "src"
+title = "AWS Rust SDK Design"
