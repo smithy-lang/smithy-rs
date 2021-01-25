@@ -17,3 +17,8 @@ For development, pre-commit hooks may be useful. Setup:
 brew install pre-commit # (or appropriate for your platform: https://pre-commit.com/)
 pre-commit install
 ```
+
+### Project Layout
+* `aws`: AWS specific codegen & Rust code (signing, endpoints, customizations, etc.)
+* `codegen`: Whitelabel Smithy code generation
+* `codegen-test`: Smithy protocol test generation & integration tests for Smithy whitelabel code

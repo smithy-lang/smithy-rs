@@ -62,9 +62,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )))
         .build();
     let client = aws_hyper::Client::default().with_tracing();
-    let list_tables = dynamodb::operation::ListTables::builder().build(&config);
-    // For a custom retry policy:
-    // .with_policy(RetryIfNoTables);
+    let list_tables = dynamodb::operation::ListTables::builder()
+        .build(&config)
+        .with_policy(RetryIfNoTables);
 
     let response = client.call(list_tables).await;
     let tables = match response {
