@@ -151,11 +151,11 @@ class HttpProtocolTestGenerator(
         writeInline("let input =")
         instantiator.render(this, inputShape, httpRequestTestCase.params)
         write(";")
-        if (protocolSupport.requestBodySerialization) {
-            write("let http_request = input.build_http_request();")
-        } else {
+        // if (protocolSupport.requestBodySerialization) {
+        write("let (http_request, _) = input.into_request_response().0.into_parts();")
+        /*} else {
             write("let http_request = ${protocolConfig.symbolProvider.toSymbol(inputShape).name}::assemble(input.input.request_builder_base(), vec![]);")
-        }
+        }*/
         with(httpRequestTestCase) {
             write(
                 """
@@ -248,12 +248,12 @@ class HttpProtocolTestGenerator(
     private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {
         if (body == "") {
             rustWriter.write("// No body")
-            rustWriter.write("assert!(&http_request.body().is_empty());")
+            rustWriter.write("assert!(&http_request.body().bytes().expect(\"should be strict\").is_empty());")
         } else {
             // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
             assertOk(rustWriter) {
                 rustWriter.write(
-                    "#T(&http_request.body(), ${
+                    "#T(&http_request.body().bytes().expect(\"body should be strict\"), ${
                     rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
                     RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_body"),

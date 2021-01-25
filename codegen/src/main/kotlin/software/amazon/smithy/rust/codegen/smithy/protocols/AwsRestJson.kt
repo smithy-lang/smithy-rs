@@ -64,7 +64,7 @@ class AwsRestJsonGenerator(
 
     override fun toBodyImpl(implBlockWriter: RustWriter, inputShape: StructureShape, inputBody: StructureShape?) {
         bodyBuilderFun(implBlockWriter) {
-            write("todo!()")
+            rust(""""body not supported".into()""")
         }
     }
 

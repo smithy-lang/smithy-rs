@@ -75,13 +75,14 @@ class OperationInputBuilderGenerator(
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
         implBlockWriter.rustBlock("pub fn build(self, _config: &#T::Config) -> $returnType", RuntimeType.Config, RuntimeType.Operation(runtimeConfig), outputSymbol) {
-            conditionalBlock("Ok(", ")", conditional = fallibleBuilder) {
+            conditionalBlock("Ok({", "})", conditional = fallibleBuilder) {
                 withBlock("let op = #T::new(", ");", outputSymbol) {
                     coreBuilder(this)
                 }
                 rust(
                     """
-                    let mut request = #T::Request::new(op.build_http_request().map(|body|#T::from(body)));
+                    ##[allow(unused_mut)]
+                    let mut request = #T::Request::new(op.build_http_request().map(#T::from));
                 """,
                     RuntimeType.OperationModule(runtimeConfig), RuntimeType.SdkBody(runtimeConfig),
                 )
