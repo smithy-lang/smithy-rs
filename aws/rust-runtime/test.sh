@@ -14,5 +14,6 @@ do
     (cd "$crate" && cargo fmt -- --check)
     (cd "$crate" && cargo clippy -- -D warnings)
     (cd "$crate" && cargo test)
+    (cd "$crate" && cargo doc --no-deps)
   fi
 done

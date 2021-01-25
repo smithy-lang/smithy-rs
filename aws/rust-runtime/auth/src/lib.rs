@@ -185,7 +185,6 @@ impl HttpSigner {
         let date = signing_config.request_config.request_ts;
         for (key, value) in aws_sigv4::sign_core(
             request,
-            request.body(),
             &sigv4_creds,
             &signing_config.request_config.region,
             &signing_config.operation_config.service,
