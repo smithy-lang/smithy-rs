@@ -25,7 +25,9 @@ macro_rules! dispatch {
     ($client:expr, $input:expr) => {{
         use $crate::http;
         let inp = $input;
-        let request = inp.build_http_request();
+        let (request, handler) = inp.into_request_response();
+        let request = request.into_parts().0;
+        let request: http::Request<Vec<u8>> = request.map(|body|body.bytes().unwrap().into());
         let request = $crate::prepare_request(&$client, request);
         let response = $client.http_client.request(request).await;
         match response {
@@ -35,7 +37,7 @@ macro_rules! dispatch {
                     parsed: None,
                 },
                 Ok(resp) => {
-                    let parsed = Some(inp.parse_response(&resp));
+                    let parsed = Some(handler.parse_response(&resp));
                     $crate::ApiResponse {
                         raw: $crate::Raw::Response(resp).convert_to_str(),
                         parsed,
