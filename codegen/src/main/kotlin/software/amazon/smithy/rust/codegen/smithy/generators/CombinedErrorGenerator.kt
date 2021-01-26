@@ -98,7 +98,8 @@ class CombinedErrorGenerator(
                 delegateToVariants {
                     when (it) {
                         is VariantMatch.Unhandled -> writable { rust("None") }
-                        else -> writable { rust("_inner.code().into()") }
+                        is VariantMatch.Modeled -> writable { rust("Some(_inner.code())") }
+                        is VariantMatch.Generic -> writable { rust("_inner.code()") }
                     }
                 }
             }
