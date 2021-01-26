@@ -80,7 +80,6 @@ class InlineDependency(
             }
         }
 
-        fun uuid() = forRustFile("v4", "uuid", "uuid.rs")
         fun genericError() = forRustFile("GenericError", "types", "generic_error.rs", CargoDependency.Serde)
         fun errorCode() = forRustFile("error_code", "error_code", "error_code.rs", CargoDependency.Http)
         fun docJson() = forRustFile("doc_json", "doc_json", "doc_json.rs", CargoDependency.Serde)
@@ -164,5 +163,6 @@ data class CargoDependency(
 
         val SerdeJson: CargoDependency = CargoDependency("serde_json", CratesIo("1"), features = listOf("float_roundtrip"))
         val Serde = CargoDependency("serde", CratesIo("1"), features = listOf("derive"))
+        val Bytes: RustDependency = CargoDependency("bytes", CratesIo("1"))
     }
 }
