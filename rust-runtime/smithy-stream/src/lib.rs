@@ -1,23 +1,26 @@
+use bytes::Buf;
+use bytes::{Bytes, BytesMut};
+use http_body::Body;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use http_body::Body;
-use bytes::{Bytes, BytesMut};
-use bytes::Buf;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ByteStream<B> {
     body: B,
 }
 
 impl<B> ByteStream<B> {
     pub fn new(body: B) -> Self {
-        ByteStream {
-            body
-        }
+        ByteStream { body }
     }
 
-    pub async fn data(self) -> Result<Bytes, B::Error> where B: http_body::Body {
+    pub async fn data(self) -> Result<Bytes, B::Error>
+    where
+        B: http_body::Body,
+    {
         let sz_hint = http_body::Body::size_hint(&self.body);
-        let mut output = BytesMut::with_capacity(sz_hint.upper().unwrap_or_else(|| sz_hint.lower()) as usize);
+        let mut output =
+            BytesMut::with_capacity(sz_hint.upper().unwrap_or_else(|| sz_hint.lower()) as usize);
         let body = self.body;
         pin_utils::pin_mut!(body);
         while let Some(buf) = body.data().await {
@@ -32,8 +35,8 @@ impl<B> ByteStream<B> {
 }
 
 impl<B> futures_core::stream::Stream for ByteStream<B>
-    where
-        B: http_body::Body + Unpin,
+where
+    B: http_body::Body + Unpin,
 {
     type Item = Result<Bytes, B::Error>;
 
@@ -64,17 +67,20 @@ impl<B> futures_core::stream::Stream for ByteStream<B>
 #[cfg(test)]
 mod tests {
     use crate::ByteStream;
-    use bytes::{Bytes, Buf};
-    use pin_utils::core_reexport::task::{Context, Poll};
+    use bytes::buf::Chain;
+    use bytes::{Buf, Bytes};
     use hyper::http::HeaderValue;
     use hyper::HeaderMap;
     use pin_utils::core_reexport::pin::Pin;
-    use bytes::buf::Chain;
+    use pin_utils::core_reexport::task::{Context, Poll};
 
     #[tokio::test]
     async fn read_from_string_body() {
         let body = hyper::Body::from("a simple body");
-        assert_eq!(ByteStream::new(body).data().await.expect("no errors"), Bytes::from("a simple body"));
+        assert_eq!(
+            ByteStream::new(body).data().await.expect("no errors"),
+            Bytes::from("a simple body")
+        );
     }
 
     #[tokio::test]
@@ -86,7 +92,10 @@ mod tests {
             sender.send_data(Bytes::from("data 2")).await.unwrap();
             sender.send_data(Bytes::from("data 3")).await.unwrap();
         });
-        assert_eq!(byte_stream.data().await.expect("no errors"), Bytes::from("data 1data 2data 3"));
+        assert_eq!(
+            byte_stream.data().await.expect("no errors"),
+            Bytes::from("data 1data 2data 3")
+        );
     }
 
     #[tokio::test]
@@ -97,7 +106,7 @@ mod tests {
         struct ChainBody(Vec<NestedChain>);
         impl ChainBody {
             fn poll_inner(&mut self) -> Poll<Option<Result<NestedChain, ()>>> {
-                Poll::Ready(self.0.pop().map(|b|Ok(b)))
+                Poll::Ready(self.0.pop().map(|b| Ok(b)))
             }
         }
         impl http_body::Body for ChainBody {
@@ -111,8 +120,10 @@ mod tests {
                 self.poll_inner()
             }
 
-
-            fn poll_trailers(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
+            fn poll_trailers(
+                self: Pin<&mut Self>,
+                _cx: &mut Context<'_>,
+            ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
                 unimplemented!()
             }
         }
@@ -120,10 +131,10 @@ mod tests {
         let chain1 = Bytes::from("a").chain(Bytes::from("b").chain(Bytes::from("c")));
         let chain2 = Bytes::from("c").chain(Bytes::from("d").chain(Bytes::from("e")));
 
-        let body = ChainBody(vec![
-            chain2,
-            chain1,
-        ]);
-        assert_eq!(ByteStream::new(body).data().await.expect("no errors"), Bytes::from("abccde"));
+        let body = ChainBody(vec![chain2, chain1]);
+        assert_eq!(
+            ByteStream::new(body).data().await.expect("no errors"),
+            Bytes::from("abccde")
+        );
     }
 }

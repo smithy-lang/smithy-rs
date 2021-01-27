@@ -158,6 +158,10 @@ data class CargoDependency(
             "${runtimeConfig.cratePrefix}-http", Local(runtimeConfig.relativePath)
         )
 
+        fun SmithyStream(runtimeConfig: RuntimeConfig) = CargoDependency(
+            "${runtimeConfig.cratePrefix}-stream", Local(runtimeConfig.relativePath)
+        )
+
         fun ProtocolTestHelpers(runtimeConfig: RuntimeConfig) = CargoDependency(
             "protocol-test-helpers", Local(runtimeConfig.relativePath), scope = Dev
         )

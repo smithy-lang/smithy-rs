@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.rustlang
 
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.letIf
 
 /**
  * A hierarchy of types handled by Smithy codegen
@@ -87,7 +88,11 @@ sealed class RustType {
         override val namespace = "::std::vec"
     }
 
-    data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
+    data class Opaque(
+        override val name: kotlin.String,
+        override val namespace: kotlin.String? = null,
+        val typeParameters: List<kotlin.String> = listOf()
+    ) : RustType()
 
     companion object {
         const val SetType = "BTreeSet"
@@ -112,7 +117,16 @@ fun RustType.render(fullyQualified: Boolean): String {
         is RustType.Option -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Dyn -> "${this.name} ${this.member.render(fullyQualified)}"
-        is RustType.Opaque -> this.name
+        is RustType.Opaque -> {
+            val typeParams = "".letIf(this.typeParameters.isNotEmpty()) {
+                typeParameters.joinToString(prefix = "<", postfix = ">") { it }
+            }
+            if (false) {
+                return "${this.namespace.let { "$it::" }}${this.name}$typeParams"
+            } else {
+                "${this.name}$typeParams"
+            }
+        }
     }
     return "$namespace$base"
 }

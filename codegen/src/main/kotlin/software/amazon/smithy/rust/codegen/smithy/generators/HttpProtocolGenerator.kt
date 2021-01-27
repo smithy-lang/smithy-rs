@@ -6,10 +6,12 @@
 package software.amazon.smithy.rust.codegen.smithy.generators
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -36,6 +38,15 @@ interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
     fun transformModel(model: Model): Model
     fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider = base
     fun support(): ProtocolSupport
+}
+
+fun OperationShape.streamingOutput(model: Model): Boolean {
+    return OperationIndex.of(model).getOutputMembers(this).values.any {
+        it.getMemberTrait(
+            model,
+            StreamingTrait::class.java
+        ).isPresent
+    }
 }
 
 /**
@@ -86,15 +97,18 @@ abstract class HttpProtocolGenerator(
                 write("#T::assemble(self.input.request_builder_base(), self.input.build_body())", inputSymbol)
             }
 
-            fromResponseImpl(this, operationShape)
+            // TODO: Streaming output support
+            if (!operationShape.streamingOutput(model)) {
+                fromResponseImpl(this, operationShape)
 
-            rustBlock(
-                "pub fn parse_response(&self, response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
-                RuntimeType.Http("response::Response"),
-                symbolProvider.toSymbol(operationShape.outputShape(model)),
-                operationShape.errorSymbol(symbolProvider)
-            ) {
-                write("Self::from_response(&response)")
+                rustBlock(
+                    "pub fn parse_response(&self, response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+                    RuntimeType.Http("response::Response"),
+                    symbolProvider.toSymbol(operationShape.outputShape(model)),
+                    operationShape.errorSymbol(symbolProvider)
+                ) {
+                    write("Self::from_response(&response)")
+                }
             }
 
             rustBlock("pub fn new(input: #T) -> Self", inputSymbol) {
@@ -120,7 +134,11 @@ abstract class HttpProtocolGenerator(
         }
     }
 
-    protected fun fromResponseFun(implBlockWriter: RustWriter, operationShape: OperationShape, f: RustWriter.() -> Unit) {
+    protected fun fromResponseFun(
+        implBlockWriter: RustWriter,
+        operationShape: OperationShape,
+        f: RustWriter.() -> Unit
+    ) {
         implBlockWriter.rustBlock(
             "fn from_response(response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
             RuntimeType.Http("response::Response"),
@@ -145,5 +163,9 @@ abstract class HttpProtocolGenerator(
      *
      * Your implementation MUST call [httpBuilderFun] to create the public method.
      */
-    abstract fun toHttpRequestImpl(implBlockWriter: RustWriter, operationShape: OperationShape, inputShape: StructureShape)
+    abstract fun toHttpRequestImpl(
+        implBlockWriter: RustWriter,
+        operationShape: OperationShape,
+        inputShape: StructureShape
+    )
 }

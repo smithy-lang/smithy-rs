@@ -21,7 +21,10 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: RustWriter.() -> Unit) {
-    rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
+    val generics = if (structureShape is StructureShape) {
+        StructureGenerator.lifetimeDeclaration(structureShape, symbolProvider)
+    } else ""
+    rustBlock("impl $generics ${symbolProvider.toSymbol(structureShape).name} $generics") {
         block(this)
     }
 }
@@ -51,24 +54,32 @@ class StructureGenerator(
                 // generate a fallible builder
                 !it.isOptional() && !it.canUseDefault()
             }
-    }
 
-    /**
-     * Search for lifetimes used by the members of the struct and generate a declaration.
-     * eg. `<'a, 'b>`
-     */
-    private fun lifetimeDeclaration(): String {
-        val lifetimes = members
-            .map { symbolProvider.toSymbol(it).rustType() }
-            .mapNotNull {
+        /**
+         * Search for lifetimes used by the members of the struct and generate a declaration.
+         * eg. `<'a, 'b>`
+         */
+        fun lifetimeDeclaration(structureShape: StructureShape, symbolProvider: SymbolProvider): String {
+            val rustTypes: List<RustType> =
+                structureShape.allMembers.values.mapNotNull { symbolProvider.toSymbol(it).rustType() }
+            val lifetimes = rustTypes.mapNotNull {
                 when (it) {
-                    is RustType.Reference -> it.lifetime
+                    is RustType.Reference -> "'${it.lifetime}"
                     else -> null
                 }
             }.toSet().sorted()
-        return if (lifetimes.isNotEmpty()) {
-            "<${lifetimes.joinToString { "'$it" }}>"
-        } else ""
+
+            val generics = rustTypes.flatMap {
+                when (it) {
+                    is RustType.Opaque -> it.typeParameters
+                    else -> listOf()
+                }
+            }.toSet().sorted()
+            val combined = lifetimes + generics
+            return if (combined.isNotEmpty()) {
+                "<${combined.joinToString { it }}>"
+            } else ""
+        }
     }
 
     private fun renderStructure() {
@@ -77,7 +88,7 @@ class StructureGenerator(
         writer.documentShape(shape, model)
         containerMeta.render(writer)
 
-        writer.rustBlock("struct ${symbol.name} ${lifetimeDeclaration()}") {
+        writer.rustBlock("struct ${symbol.name} ${lifetimeDeclaration(shape, symbolProvider)}") {
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
                 writer.documentShape(member, model)

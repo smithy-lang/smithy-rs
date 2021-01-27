@@ -66,6 +66,8 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun Instant(runtimeConfig: RuntimeConfig) =
             RuntimeType("Instant", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.cratePrefix}_types")
 
+        fun byteStream(runtimeConfig: RuntimeConfig) = RuntimeType("ByteStream", CargoDependency.SmithyStream(runtimeConfig), "${runtimeConfig.cratePrefix}_stream")
+
         fun Blob(runtimeConfig: RuntimeConfig) =
             RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.cratePrefix}_types")
 

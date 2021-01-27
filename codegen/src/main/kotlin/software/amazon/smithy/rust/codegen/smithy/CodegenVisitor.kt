@@ -94,8 +94,11 @@ class CodegenVisitor(context: PluginContext, codegenDecorator: RustCodegenDecora
     override fun structureShape(shape: StructureShape) {
         logger.fine("generating a structure...")
         writers.useShapeWriter(shape) { writer ->
-            StructureGenerator(model, symbolProvider, writer, shape).render()
-            if (!shape.hasTrait(SyntheticInputTrait::class.java)) {
+            val structureGenerator = StructureGenerator(model, symbolProvider, writer, shape)
+            structureGenerator.render()
+            val noGenerics = StructureGenerator.lifetimeDeclaration(shape, symbolProvider) == ""
+            // Don't both making builders for generic shapes
+            if (!shape.hasTrait(SyntheticInputTrait::class.java) && noGenerics) {
                 val builderGenerator = ModelBuilderGenerator(protocolConfig.model, protocolConfig.symbolProvider, shape)
                 builderGenerator.render(writer)
                 writer.implBlock(shape, symbolProvider) {
