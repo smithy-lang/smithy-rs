@@ -120,6 +120,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun Serde(path: String) = RuntimeType(
             path, dependency = CargoDependency.Serde, namespace = "serde"
         )
+
         val Serialize = RuntimeType("Serialize", CargoDependency.Serde, namespace = "serde")
         val Deserialize: RuntimeType = RuntimeType("Deserialize", CargoDependency.Serde, namespace = "serde")
         val Serializer = RuntimeType("Serializer", CargoDependency.Serde, namespace = "serde")
@@ -129,19 +130,22 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
 
         val SJ = RuntimeType(null, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
 
-        val GenericError = RuntimeType("GenericError", InlineDependency.genericError(), "crate::types")
-        val ErrorCode = RuntimeType("error_code", dependency = InlineDependency.errorCode(), namespace = "crate")
+        fun awsJsonErrors(runtimeConfig: RuntimeConfig) =
+            forInlineDependency(InlineDependency.awsJsonErrors(runtimeConfig))
 
-        val DocJson = RuntimeType("doc_json", InlineDependency.docJson(), "crate")
+        val DocJson = forInlineDependency(InlineDependency.docJson())
 
-        val InstantEpoch = RuntimeType("instant_epoch", InlineDependency.instantEpoch(), "crate")
-        val InstantHttpDate = RuntimeType("instant_httpdate", InlineDependency.instantHttpDate(), "crate")
-        val Instant8601 = RuntimeType("instant_8601", InlineDependency.instant8601(), "crate")
-        val IdempotencyToken = RuntimeType("idempotency_token", InlineDependency.idempotencyToken(), "crate")
+        val InstantEpoch = forInlineDependency(InlineDependency.instantEpoch())
+        val InstantHttpDate = forInlineDependency(InlineDependency.instantHttpDate())
+        val Instant8601 = forInlineDependency(InlineDependency.instant8601())
+        val IdempotencyToken = forInlineDependency(InlineDependency.idempotencyToken())
 
         val Config = RuntimeType("config", null, "crate")
 
-        fun BlobSerde(runtimeConfig: RuntimeConfig) = RuntimeType("blob_serde", InlineDependency.blobSerde(runtimeConfig), "crate")
+        fun BlobSerde(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.blobSerde(runtimeConfig))
+
+        private fun forInlineDependency(inlineDependency: InlineDependency) =
+            RuntimeType(inlineDependency.name, inlineDependency, namespace = "crate")
 
         fun forInlineFun(name: String, module: String, func: (RustWriter) -> Unit) = RuntimeType(
             name = name,
