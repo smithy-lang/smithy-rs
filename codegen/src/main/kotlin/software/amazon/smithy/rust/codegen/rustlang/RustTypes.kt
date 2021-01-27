@@ -121,11 +121,7 @@ fun RustType.render(fullyQualified: Boolean): String {
             val typeParams = "".letIf(this.typeParameters.isNotEmpty()) {
                 typeParameters.joinToString(prefix = "<", postfix = ">") { it }
             }
-            if (false) {
-                return "${this.namespace.let { "$it::" }}${this.name}$typeParams"
-            } else {
-                "${this.name}$typeParams"
-            }
+            "${this.name}$typeParams"
         }
     }
     return "$namespace$base"

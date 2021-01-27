@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: RustWriter.() -> Unit) {
     val generics = if (structureShape is StructureShape) {
-        StructureGenerator.lifetimeDeclaration(structureShape, symbolProvider)
+        StructureGenerator.genericsDeclaration(structureShape, symbolProvider)
     } else ""
     rustBlock("impl $generics ${symbolProvider.toSymbol(structureShape).name} $generics") {
         block(this)
@@ -56,10 +56,10 @@ class StructureGenerator(
             }
 
         /**
-         * Search for lifetimes used by the members of the struct and generate a declaration.
-         * eg. `<'a, 'b>`
+         * Search for lifetimes & generics used by the members of the struct and generate a declaration.
+         * eg. `<'a, 'b, T>`
          */
-        fun lifetimeDeclaration(structureShape: StructureShape, symbolProvider: SymbolProvider): String {
+        fun genericsDeclaration(structureShape: StructureShape, symbolProvider: SymbolProvider): String {
             val rustTypes: List<RustType> =
                 structureShape.allMembers.values.mapNotNull { symbolProvider.toSymbol(it).rustType() }
             val lifetimes = rustTypes.mapNotNull {
@@ -88,7 +88,7 @@ class StructureGenerator(
         writer.documentShape(shape, model)
         containerMeta.render(writer)
 
-        writer.rustBlock("struct ${symbol.name} ${lifetimeDeclaration(shape, symbolProvider)}") {
+        writer.rustBlock("struct ${symbol.name} ${genericsDeclaration(shape, symbolProvider)}") {
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
                 writer.documentShape(member, model)

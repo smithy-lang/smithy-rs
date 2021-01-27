@@ -40,7 +40,7 @@ interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
     fun support(): ProtocolSupport
 }
 
-fun OperationShape.streamingOutput(model: Model): Boolean {
+fun OperationShape.hasStreamingOutput(model: Model): Boolean {
     return OperationIndex.of(model).getOutputMembers(this).values.any {
         it.getMemberTrait(
             model,
@@ -98,7 +98,7 @@ abstract class HttpProtocolGenerator(
             }
 
             // TODO: Streaming output support
-            if (!operationShape.streamingOutput(model)) {
+            if (!operationShape.hasStreamingOutput(model)) {
                 fromResponseImpl(this, operationShape)
 
                 rustBlock(
