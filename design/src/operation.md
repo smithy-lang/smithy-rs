@@ -17,9 +17,10 @@ A customer interacts with the SDK builders to construct an input. The `build()` 
 an `Operation<Output>`. This codifies the base HTTP request & all the configuration and middleware layers required to modify and dispatch the request.
 
 ```rust,ignore
-pub struct Operation<H> {
+pub struct Operation<H, R> {
     request: Request,
-    response_handler: Box<H>,
+    response_handler: H,
+    _retry_policy: R,
 }
 
 pub struct Request {
@@ -42,33 +43,22 @@ pub fn build(self, config: &dynamodb::config::Config) -> Operation<BatchExecuteS
     let op = BatchExecuteStatement::new(BatchExecuteStatementInput {
         statements: self.statements,
     });
-    let mut request = operation::Request::new(
-        op.build_http_request()
-            .map(|body| operation::SdkBody::from(body)),
-    );
+    let req = op.build_http_request().map(SdkBody::from);
 
-    use operation::signing_middleware::SigningConfigExt;
-    request
-        .config
-        .insert_signingconfig(SigningConfig::default_config(
-            auth::ServiceConfig {
-                service: config.signing_service().into(),
-                region: config.region.clone().into(),
-            },
-            auth::RequestConfig {
-                request_ts: || std::time::SystemTime::now(),
-            },
-        ));
-    use operation::signing_middleware::CredentialProviderExt;
-    request
-        .config
-        .insert_credentials_provider(config.credentials_provider.clone());
-
-    use operation::endpoint::EndpointProviderExt;
-    request
-        .config
-        .insert_endpoint_provider(config.endpoint_provider.clone());
-
-    Operation::new(request, op)
+    let mut req = operation::Request::new(req);
+    let mut conf = req.config_mut();
+    conf.insert_signing_config(config.signing_service());
+    conf.insert_endpoint_provider(config.endpoint_provider.clone());
+    Operation::new(req)
 }
 ```
+
+### Operation Dispatch and Middleware
+
+The Rust SDK endeavors to behave as predictably as possible. This means that if at all possible we will not dispatch extra HTTP requests during the dispatch of normal operation. Making this work is covered in more detail in the design of credentials providers & endpoint resolution.
+
+The upshot is that we will always prefer a design where the user has explicit control of when credentials are loaded and endpoints are resolved. This doesn't mean that users can't use easy-to-use options (We will provide an automatically refreshing credentials provider), however, the credential provider won't load requests during the dispatch of an individual request.
+
+## Operation Parsing and Response Loading
+
+The fundamental trait for HTTP-based protocols is `ParseHttpResponse`

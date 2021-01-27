@@ -9,6 +9,7 @@ smithy-types = { path = "../smithy-types" }
 bytes = "1"
 http-body = "0.4.0"
 http = "0.2.3"
+pin-utils = "0.1.0"
 
 [dev-dependencies]
 proptest = "0.10.1"
