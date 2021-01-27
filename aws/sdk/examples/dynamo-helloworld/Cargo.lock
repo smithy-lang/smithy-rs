@@ -148,6 +148,7 @@ dependencies = [
 name = "dynamodb"
 version = "0.0.1"
 dependencies = [
+ "bytes",
  "http",
  "rand 0.7.3",
  "serde",

@@ -13,8 +13,9 @@ use pin_project::pin_project;
 use smithy_http::body::SdkBody;
 use smithy_http::operation;
 
-pub trait OperationMiddleware {
-    fn apply(&self, request: operation::Request) -> Result<operation::Request, BoxError>;
+pub trait RequestStage {
+    type Error: Into<BoxError>;
+    fn apply(&self, request: operation::Request) -> Result<operation::Request, Self::Error>;
 }
 
 #[derive(Clone)]
@@ -48,7 +49,7 @@ where
 }
 
 pub trait RequestConstructionErr {
-    fn request_error(err: Box<dyn Error + Send + Sync + 'static>) -> Self;
+    fn request_error(err: BoxError) -> Self;
 }
 
 #[pin_project(project = EnumProj)]
@@ -74,7 +75,7 @@ where
 impl<S, M> Service<operation::Request> for OperationRequestMiddlewareService<S, M>
 where
     S: Service<operation::Request>,
-    M: OperationMiddleware,
+    M: RequestStage,
     S::Error: RequestConstructionErr,
 {
     type Response = S::Response;
@@ -89,7 +90,7 @@ where
         match self
             .middleware
             .apply(req)
-            .map_err(|e| S::Error::request_error(e))
+            .map_err(|e| S::Error::request_error(e.into()))
         {
             Err(e) => OperationMiddlewareFuture::Ready(Some(e)),
             Ok(req) => OperationMiddlewareFuture::Inner(self.inner.call(req)),
@@ -104,6 +105,10 @@ where
 #[derive(Clone)]
 pub struct DispatchMiddleware<S> {
     inner: S,
+}
+
+pub fn to_request<E>(request: operation::Request) -> Result<http::Request<SdkBody>, OperationError<E>> {
+    Ok(request.into_parts().0)
 }
 
 #[derive(Clone, Copy)]
@@ -175,7 +180,7 @@ where
 #[cfg(test)]
 mod test {
     use crate::middleware::{
-        BoxError, DispatchLayer, OperationMiddleware, OperationPipelineService,
+        BoxError, DispatchLayer, RequestStage, OperationPipelineService,
     };
     use bytes::Bytes;
     use http::header::HeaderName;
@@ -187,6 +192,7 @@ mod test {
     use smithy_http::response::ParseHttpResponse;
     use tower::service_fn;
     use tower::{Layer, Service};
+    use std::convert::Infallible;
 
     struct TestOperationParser;
 
@@ -209,8 +215,9 @@ mod test {
     async fn middleware_test() {
         #[derive(Clone)]
         struct AddHeader(String, String);
-        impl OperationMiddleware for AddHeader {
-            fn apply(&self, request: operation::Request) -> Result<operation::Request, BoxError> {
+        impl RequestStage for AddHeader {
+            type Error = Infallible;
+            fn apply(&self, request: operation::Request) -> Result<operation::Request, Self::Error> {
                 request.augment(|mut request, _| {
                     request.headers_mut().append(
                         HeaderName::from_str(&self.0).unwrap(),

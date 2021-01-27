@@ -8,12 +8,11 @@ use std::str::FromStr;
 
 use http::uri::Uri;
 
-use crate::middleware::OperationMiddleware;
+use crate::middleware::RequestStage;
 use http::header::HOST;
 use smithy_http::operation;
 use smithy_http::property_bag::PropertyBag;
 use std::sync::Arc;
-use tower::BoxError;
 
 pub struct StaticEndpoint(http::Uri);
 
@@ -96,8 +95,9 @@ impl EndpointProviderExt for PropertyBag {
 #[derive(Clone, Copy)]
 /// Set the endpoint for a request based on the endpoint config
 pub struct AddEndpointStage;
-impl OperationMiddleware for AddEndpointStage {
-    fn apply(&self, request: operation::Request) -> Result<operation::Request, BoxError> {
+impl RequestStage for AddEndpointStage {
+    type Error = String;
+    fn apply(&self, request: operation::Request) -> Result<operation::Request, Self::Error> {
         request.augment(|mut request, extensions| {
             let endpoint_provider: &Arc<dyn ProvideEndpoint> = extensions
                 .endpoint_provider()

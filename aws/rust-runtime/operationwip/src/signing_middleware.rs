@@ -2,7 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-use crate::middleware::OperationMiddleware;
+use crate::middleware::RequestStage;
 use crate::region::RegionExt;
 use auth::{
     HttpSigner, HttpSigningConfig, OperationSigningConfig, ProvideCredentials, RequestConfig,
@@ -76,8 +76,9 @@ impl CredentialProviderExt for PropertyBag {
     }
 }
 
-impl OperationMiddleware for SignRequestStage {
-    fn apply(&self, request: operation::Request) -> Result<operation::Request, BoxError> {
+impl RequestStage for SignRequestStage {
+    type Error = BoxError;
+    fn apply(&self, request: operation::Request) -> Result<operation::Request, Self::Error> {
         request.augment(|request, config| {
             let operation_config = config.signing_config().ok_or("Missing signing config")?;
             let cred_provider = config
@@ -95,7 +96,7 @@ impl OperationMiddleware for SignRequestStage {
                 request_ts: config
                     .get::<SystemTime>()
                     .copied()
-                    .unwrap_or_else(SystemTime::now), // TODO: replace with Extensions.now();
+                    .unwrap_or_else(SystemTime::now),
                 region: region.into(),
             };
             let signing_config = SigningConfig::Http(HttpSigningConfig {
