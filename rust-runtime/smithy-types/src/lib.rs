@@ -63,26 +63,26 @@ impl Error {
     pub fn code(&self) -> Option<&str> {
         self.code.as_deref()
     }
+
     pub fn message(&self) -> Option<&str> {
         self.message.as_deref()
     }
     pub fn request_id(&self) -> Option<&str> { self.request_id.as_deref() }
 }
 
-/// For the moment, a debug style format that only shows the visible fields
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut f = f.debug_struct("Error");
+        write!(f, "Smithy Error")?;
         if let Some(code) = &self.code {
-            f.field("code", code);
+            write!(f, " code={}", code)?;
         }
         if let Some(message) = &self.message {
-            f.field("message", message);
+            write!(f, " message={}", message)?;
         }
         if let Some(req_id) = &self.request_id {
-            f.field("request_id", req_id);
+            write!(f, " request_id={}", req_id)?;
         }
-        f.finish()
+        Ok(())
     }
 }
 
