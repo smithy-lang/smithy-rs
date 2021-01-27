@@ -107,7 +107,9 @@ pub struct DispatchMiddleware<S> {
     inner: S,
 }
 
-pub fn to_request<E>(request: operation::Request) -> Result<http::Request<SdkBody>, OperationError<E>> {
+pub fn to_request<E>(
+    request: operation::Request,
+) -> Result<http::Request<SdkBody>, OperationError<E>> {
     Ok(request.into_parts().0)
 }
 
@@ -179,9 +181,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::middleware::{
-        BoxError, DispatchLayer, RequestStage, OperationPipelineService,
-    };
+    use crate::middleware::{BoxError, DispatchLayer, OperationPipelineService, RequestStage};
     use bytes::Bytes;
     use http::header::HeaderName;
     use http::{HeaderValue, Request, Response};
@@ -190,9 +190,9 @@ mod test {
     use smithy_http::body::SdkBody;
     use smithy_http::operation;
     use smithy_http::response::ParseHttpResponse;
+    use std::convert::Infallible;
     use tower::service_fn;
     use tower::{Layer, Service};
-    use std::convert::Infallible;
 
     struct TestOperationParser;
 
@@ -217,7 +217,10 @@ mod test {
         struct AddHeader(String, String);
         impl RequestStage for AddHeader {
             type Error = Infallible;
-            fn apply(&self, request: operation::Request) -> Result<operation::Request, Self::Error> {
+            fn apply(
+                &self,
+                request: operation::Request,
+            ) -> Result<operation::Request, Self::Error> {
                 request.augment(|mut request, _| {
                     request.headers_mut().append(
                         HeaderName::from_str(&self.0).unwrap(),

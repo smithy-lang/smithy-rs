@@ -68,7 +68,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let response = client.call(list_tables).await;
     let tables = match response {
-        Ok(output) => output.parsed.table_names.unwrap(),
+        Ok(output) => output.table_names.unwrap(),
         Err(e) => panic!("err: {:?}", e),
     };
     if tables.is_empty() {
@@ -90,7 +90,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             )
             .build(&config);
         match client.call(create_table).await {
-            Ok(created) => println!("table created! {:#?}", created.parsed),
+            Ok(created) => println!("table created! {:#?}", created),
             Err(failed) => println!("failed to create table: {:?}", failed),
         }
     }
@@ -102,7 +102,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Ok(output) => {
             println!(
                 "tables: {:?}",
-                output.parsed.table_names.unwrap_or_default()
+                output.table_names.unwrap_or_default()
             );
         }
         Err(e) => panic!("err: {:?}", e.error()),

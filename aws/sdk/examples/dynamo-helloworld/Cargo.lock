@@ -55,7 +55,7 @@ dependencies = [
 [[package]]
 name = "aws-sigv4"
 version = "0.0.1"
-source = "git+https://github.com/rcoh/sigv4#ef394a689c695f057ce9870b38bf4b470efcfc36"
+source = "git+https://github.com/rcoh/sigv4?rev=05f90abc02a868cb570ed3006d950947cc0898b0#05f90abc02a868cb570ed3006d950947cc0898b0"
 dependencies = [
  "bytes",
  "chrono",
@@ -148,8 +148,10 @@ dependencies = [
 name = "dynamodb"
 version = "0.0.1"
 dependencies = [
+ "auth",
  "bytes",
  "http",
+ "operationwip",
  "rand 0.7.3",
  "serde",
  "serde_json",

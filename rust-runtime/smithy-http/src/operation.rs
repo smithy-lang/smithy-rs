@@ -19,8 +19,12 @@ impl<H> Operation<H, ()> {
     }
 }
 
-impl <H, R> Operation<H, R>  {
-    pub fn try_clone(&self) -> Option<Self> where H: Clone, R: Clone {
+impl<H, R> Operation<H, R> {
+    pub fn try_clone(&self) -> Option<Self>
+    where
+        H: Clone,
+        R: Clone,
+    {
         let inner = self.request.try_clone()?;
         Some(Operation {
             request: inner,
@@ -41,7 +45,7 @@ impl <H, R> Operation<H, R>  {
         Operation {
             request: self.request,
             response_handler: self.response_handler,
-            _retry_policy: r
+            _retry_policy: r,
         }
     }
 }
