@@ -42,15 +42,21 @@ pub trait ProvideErrorKind {
     fn code(&self) -> Option<&str>;
 }
 
+/// `RetryKind` describes how a request MAY be retried for a given response
+///
+/// A `RetryKind` describes how a response MAY be retried; it does not mandate retry behavior.
+/// The actual retry behavior is at the sole discretion of the RetryStrategy in place.
+/// A RetryStrategy may ignore the suggestion for a number of reasons including but not limited to:
+/// - Number of retry attempts exceeded
+/// - The required retry delay exceeds the maximum backoff configured by the client
+/// - No retry tokens are available due to service health
 pub enum RetryKind {
     /// Retry due to a specific `ErrorKind`
     Error(ErrorKind),
 
     /// An Explicit retry (eg. from `x-amz-retry-after`).
     ///
-    /// Note: The specified `Duration` is considered a suggestion and may be ignored. For example:
-    /// - No retry tokens are available.
-    /// - The retry duration exceeds that maximum backoff configured by the client.
+    /// Note: The specified `Duration` is considered a suggestion and may be replaced or ignored.
     Explicit(Duration),
 
     /// This response should not be retried
