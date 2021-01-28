@@ -67,7 +67,9 @@ impl Error {
     pub fn message(&self) -> Option<&str> {
         self.message.as_deref()
     }
-    pub fn request_id(&self) -> Option<&str> { self.request_id.as_deref() }
+    pub fn request_id(&self) -> Option<&str> {
+        self.request_id.as_deref()
+    }
 }
 
 impl Display for Error {
