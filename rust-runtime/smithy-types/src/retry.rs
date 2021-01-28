@@ -9,8 +9,11 @@ use std::time::Duration;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum ErrorKind {
-    /// This is a connection level error such as a socket timeout, socket connect error,
-    /// tls negotiation timeout etc...
+    /// A connection-level error.
+    ///
+    /// A `TransientError` can represent conditions such as socket timeouts, socket connection errors, or TLS negotiation timeouts.
+    /// 
+    /// `TransientError` is not modeled by Smithy and is instead determined through client-specific heuristics and response status codes.
     ///
     /// Typically these should never be applied for non-idempotent request types
     /// since in this scenario, it's impossible to know whether the operation had
@@ -51,7 +54,7 @@ pub trait ProvideErrorKind {
 /// - The required retry delay exceeds the maximum backoff configured by the client
 /// - No retry tokens are available due to service health
 pub enum RetryKind {
-    /// Retry due to a specific `ErrorKind`
+    /// Retry the associated request due to a known `ErrorKind`.
     Error(ErrorKind),
 
     /// An Explicit retry (eg. from `x-amz-retry-after`).
@@ -59,6 +62,6 @@ pub enum RetryKind {
     /// Note: The specified `Duration` is considered a suggestion and may be replaced or ignored.
     Explicit(Duration),
 
-    /// This response should not be retried
+    /// The response associated with this variant should not be retried.
     NotRetryable,
 }
