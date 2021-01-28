@@ -78,6 +78,23 @@ class CombinedErrorGenerator(
             }
         }
 
+        val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
+        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.provideErrorKind(symbolProvider.config().runtimeConfig)) {
+            rustBlock("fn code(&self) -> Option<&str>") {
+                rust("${symbol.name}::code(self)")
+            }
+
+            rustBlock("fn error_kind(&self) -> Option<#T>", errorKindT) {
+                delegateToVariants {
+                    when (it) {
+                        is VariantMatch.Modeled -> writable { rust("_inner.error_kind()") }
+                        is VariantMatch.Generic -> writable { rust("_inner.error_kind()") }
+                        is VariantMatch.Unhandled -> writable { rust("None") }
+                    }
+                }
+            }
+        }
+
         writer.rustBlock("impl ${symbol.name}") {
             writer.rustBlock("pub fn unhandled<E: Into<Box<dyn #T>>>(err: E) -> Self", RuntimeType.StdError) {
                 write("${symbol.name}::Unhandled(err.into())")

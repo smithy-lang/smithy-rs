@@ -22,7 +22,7 @@ val sdkOutputDir = buildDir.resolve("aws-sdk")
 val awsServices = discoverServices()
 // TODO: smithy-http should be removed
 val runtimeModules = listOf("smithy-types", "smithy-http")
-val awsModules = listOf("auth")
+val awsModules = listOf("auth", "aws-http")
 
 buildscript {
     val smithyVersion: String by project
@@ -111,7 +111,7 @@ tasks.register<Copy>("relocateAwsRuntime") {
     }
     exclude("**/target")
     exclude("**/Cargo.lock")
-    // filter { line -> line.replace("../../rust-runtime/", "") }
+    filter { line -> line.replace("../../rust-runtime/", "") }
     into(sdkOutputDir)
     outputs.upToDateWhen { false }
 }

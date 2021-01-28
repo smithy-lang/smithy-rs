@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.generators
 
 import io.kotest.matchers.string.shouldContainInOrder
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Custom
@@ -44,6 +43,7 @@ class StructureGeneratorTest {
         }
 
         @error("server")
+        @retryable
         structure MyError {
             message: String
         }
@@ -75,7 +75,7 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate structures with public fields`() {
-        val provider: SymbolProvider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
         writer.withModule("model") {
             val innerGenerator = StructureGenerator(model, provider, this, inner)
@@ -103,11 +103,16 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate error structures`() {
-        val provider: SymbolProvider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model)
         val writer = RustWriter.forModule("error")
         val generator = StructureGenerator(model, provider, writer, error)
         generator.render()
-        writer.compileAndTest()
+        writer.compileAndTest(
+            """
+            let err = MyError { message: None };
+            assert_eq!(err.error_kind(), Some(smithy_types::retry::ErrorKind::ServerError));
+        """
+        )
     }
 
     @Test
@@ -127,7 +132,7 @@ class StructureGeneratorTest {
 
            nested2: Inner
         }""".asSmithyModel()
-        val provider: SymbolProvider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
         writer.docs("module docs")
         writer
