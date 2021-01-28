@@ -298,6 +298,7 @@ mod test {
     use std::sync::{mpsc, Arc};
     use std::time::Duration;
     use std::time::UNIX_EPOCH;
+    use aws_sig_auth::OperationSigningConfig;
 
     #[derive(Clone)]
     struct TestService {
@@ -369,12 +370,12 @@ mod test {
         .augment(|req, config| {
             config.insert(Region::new("some-region"));
             config.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
-            config.insert_signing_config(auth::OperationSigningConfig::default_config(
+            config.insert_signing_config(OperationSigningConfig::default_config(
                 "some-service",
             ));
             use operationwip::signing_middleware::CredentialProviderExt;
-            config.insert_credentials_provider(Arc::new(Credentials::from_static(
-                "access", "secret",
+            config.insert_credentials_provider(Arc::new(Credentials::from_keys(
+                "access", "secret", None
             )));
             config.insert_endpoint_provider(Arc::new(StaticEndpoint::from_uri(Uri::from_static(
                 "http://localhost:8000",

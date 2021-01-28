@@ -1,16 +1,18 @@
-use std::borrow::Cow;
-use std::error::Error;
-use std::fmt::{Display, Formatter};
+pub mod provider;
+
 use std::time::SystemTime;
+use std::error::Error;
+use std::fmt::{Display, Formatter, Debug};
+use std::fmt;
 
 /// AWS SDK Credentials
 ///
 /// An opaque struct representing credentials that may be used in an AWS SDK, modeled on
 /// the [CRT credentials implementation](https://github.com/awslabs/aws-c-auth/blob/main/source/credentials.c).
+///
+/// Future design note: It may be desirable to make Credentials cheap to clone because they are cloned frequently.
 #[derive(Clone)]
 pub struct Credentials {
-    // TODO: consider if these fields should be Arc'd; Credentials are cloned when
-    // retrieved from a credentials provider.
     access_key_id: String,
     secret_access_key: String,
     session_token: Option<String>,
@@ -22,301 +24,92 @@ pub struct Credentials {
     /// credentials to communicate to the caching provider when they need to be refreshed.
     ///
     /// If these credentials never expire, this value will be set to `None`
-    ///
-    /// TODO: consider if `SystemTime` is the best representation—other options:
-    /// - u64
-    expiration: Option<SystemTime>,
+    expires_after: Option<SystemTime>,
+
+    provider_name: &'static str,
 }
 
+impl Debug for Credentials {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut creds = f.debug_struct("Credentials");
+        creds.field("provider_name", &self.provider_name);
+        creds.finish()
+    }
+}
+
+const STATIC_CREDENTIALS: &'static str = "static";
 impl Credentials {
-    /// Create a Credentials struct from static credentials
-    pub fn from_static(
+    pub fn from_keys(
         access_key_id: impl Into<String>,
         secret_access_key: impl Into<String>,
+        session_token: Option<String>,
     ) -> Self {
         Credentials {
             access_key_id: access_key_id.into(),
             secret_access_key: secret_access_key.into(),
-            session_token: None,
-            expiration: None,
+            session_token,
+            expires_after: None,
+
+            provider_name: STATIC_CREDENTIALS
+        }
+    }
+
+    pub fn access_key_id(&self) -> &str {
+        &self.access_key_id
+    }
+
+    pub fn secret_access_key(&self) -> &str {
+        &self.secret_access_key
+    }
+
+    pub fn session_token(&self) -> Option<&str> {
+        self.session_token.as_deref()
+    }
+}
+
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum CredentialsError {
+    CredentialsNotLoaded,
+    Unhandled(Box<dyn Error + Send + Sync + 'static>)
+}
+
+impl Display for CredentialsError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            CredentialsError::CredentialsNotLoaded => write!(f, "CredentialsNotLoaded"),
+            CredentialsError::Unhandled(err) => write!(f, "{}", err)
         }
     }
 }
 
-/// An error retrieving credentials from a credentials provider
-///
-/// TODO: consider possible explicit variants
-#[derive(Debug)]
-pub struct CredentialsProviderError {
-    cause: Box<dyn Error + Send>,
-}
-
-impl Display for CredentialsProviderError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.cause.fmt(f)
+impl Error for CredentialsError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            CredentialsError::Unhandled(e) => Some(e.as_ref() as _),
+            _ => None
+        }
     }
 }
 
-impl Error for CredentialsProviderError {}
-
-// TODO
-type CredentialsError = Box<dyn Error + Send + Sync + 'static>;
-
-/// A credentials provider
+/// A Credentials Provider
 ///
-/// Credentials providers may be sync or async, they may cache credentials, etc.
+/// This interface is intentionally NOT async. Credential providers should provide a separate
+/// async method to drive refresh (eg. in a background task).
 ///
-/// WARNING: This interface is unstable pending async traits
+/// Pending future design iteration, an async credentials provider may be introduced.
 pub trait ProvideCredentials: Send + Sync {
     fn credentials(&self) -> Result<Credentials, CredentialsError>;
 }
 
+
 pub fn default_provider() -> impl ProvideCredentials {
     // TODO: this should be a chain based on the CRT
-    EnvironmentProvider
-}
-
-struct EnvironmentProvider;
-impl ProvideCredentials for EnvironmentProvider {
-    fn credentials(&self) -> Result<Credentials, CredentialsError> {
-        let access_key = std::env::var("AWS_ACCESS_KEY_ID").map_err(|_| "Access key missing")?;
-        let secret_key =
-            std::env::var("AWS_SECRET_ACCESS_KEY").map_err(|_| "Secret key missing")?;
-        Ok(Credentials::from_static(access_key, secret_key))
-    }
+    provider::EnvironmentVariableCredentialsProvider::new()
 }
 
 impl ProvideCredentials for Credentials {
     fn credentials(&self) -> Result<Credentials, CredentialsError> {
         Ok(self.clone())
     }
-}
-
-#[derive(Eq, PartialEq, Clone, Copy)]
-pub enum SigningAlgorithm {
-    SigV4,
-}
-
-#[derive(Eq, PartialEq, Clone, Copy)]
-pub enum HttpSignatureType {
-    /// A signature for a full http request should be computed, with header updates applied to the signing result.
-    HttpRequestHeaders,
-    /// A signature for a full http request should be computed, with query param updates applied to the signing result.
-    HttpRequestQueryParams,
-}
-
-pub enum SigningConfig {
-    Http(HttpSigningConfig),
-    // Http Chunked Body
-    // Event Stream
-}
-
-impl OperationSigningConfig {
-    pub fn default_config(service: &'static str) -> Self {
-        OperationSigningConfig {
-            algorithm: SigningAlgorithm::SigV4,
-            signature_type: HttpSignatureType::HttpRequestHeaders,
-            service: service.into(),
-            double_uri_encode: false,
-            normalize_uri_path: true,
-            omit_session_token: false,
-        }
-    }
-}
-
-pub struct HttpSigningConfig {
-    pub operation_config: OperationSigningConfig,
-    pub request_config: RequestConfig,
-}
-
-#[derive(Clone, PartialEq, Eq)]
-pub struct OperationSigningConfig {
-    pub algorithm: SigningAlgorithm,
-    pub signature_type: HttpSignatureType,
-    pub service: Cow<'static, str>,
-
-    pub double_uri_encode: bool,
-    pub normalize_uri_path: bool,
-    pub omit_session_token: bool,
-}
-
-pub struct RequestConfig {
-    // the request config must enable recomputing the timestamp for retries, etc.
-    pub request_ts: SystemTime,
-    pub region: Cow<'static, str>,
-}
-
-type SigningError = Box<dyn Error + Send + Sync + 'static>;
-
-#[derive(Clone)]
-pub struct HttpSigner {}
-
-impl HttpSigner {
-    /// Sign an HTTP request
-    ///
-    /// You may need to modify the body of your HTTP request to be signable.
-    ///
-    /// NOTE: This design may change, a modified design that returns a SigningResult may be
-    /// used instead, this design allows for current compatibility with `aws-sigv4`
-    pub fn sign<B>(
-        &self,
-        signing_config: &HttpSigningConfig,
-        credentials: &Credentials,
-        request: &mut http::Request<B>,
-    ) -> Result<(), SigningError>
-    where
-        B: AsRef<[u8]>,
-    {
-        let operation_config = &signing_config.operation_config;
-        if operation_config.algorithm != SigningAlgorithm::SigV4
-            || operation_config.double_uri_encode
-            || !operation_config.normalize_uri_path
-            || operation_config.omit_session_token
-            || operation_config.signature_type != HttpSignatureType::HttpRequestHeaders
-        {
-            unimplemented!()
-        }
-        // TODO: update the aws_sigv4 API to avoid needing the clone the credentials
-        let sigv4_creds = aws_sigv4::Credentials {
-            access_key: credentials.access_key_id.clone(),
-            secret_key: credentials.secret_access_key.clone(),
-            security_token: credentials.session_token.clone(),
-        };
-        let date = signing_config.request_config.request_ts;
-        for (key, value) in aws_sigv4::sign_core(
-            request,
-            &sigv4_creds,
-            &signing_config.request_config.region,
-            &signing_config.operation_config.service,
-            date,
-        ) {
-            request
-                .headers_mut()
-                .append(key.header_name(), value.parse()?);
-        }
-
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod test {
-    #[test]
-    fn hello() {}
-    /*
-    use crate::{
-        Credentials, CredentialsProviderError, HttpSignatureType, HttpSigner, HttpSigningConfig,
-        ProvideCredentials, RequestConfig, ServiceConfig, SigningAlgorithm,
-    };
-    use std::error::Error;
-    use std::time::SystemTime;
-
-    struct DynamoConfig {
-        signer: HttpSigner,
-        credentials_provider: Box<dyn ProvideCredentials>,
-        service: &'static str,
-        region: &'static str,
-        time_source: fn() -> SystemTime,
-    }
-
-    impl DynamoConfig {
-        pub fn from_env() -> Self {
-            let stub_creds = Credentials::from_static("asdf", "asef");
-            DynamoConfig {
-                signer: HttpSigner {},
-                credentials_provider: Box::new(stub_creds),
-                service: "dynamodb",
-                region: "us-east-1",
-                time_source: || SystemTime::now(),
-            }
-        }
-    }
-
-    struct ListTablesOperationInput {
-        field: u32,
-    }
-
-    struct ListTablesOperation {
-        input: ListTablesOperationInput,
-    }
-
-    use std::borrow::Cow;
-
-    impl ListTablesOperation {
-        pub fn raw_request(
-            &self,
-            _config: &DynamoConfig,
-        ) -> Result<http::Request<Vec<u8>>, Box<dyn Error + Send + Sync>> {
-            let base = http::Request::new(vec![self.input.field as u8]);
-            Ok(base)
-        }
-
-        pub async fn build_request(&self, config: &DynamoConfig) -> http::Request<Vec<u8>> {
-            let mut raw_request = self.raw_request(&config).unwrap();
-            Self::finalize(&config, &mut raw_request).await;
-            raw_request
-        }
-        pub async fn finalize(config: &DynamoConfig, mut request: &mut http::Request<Vec<u8>>) {
-            let service_config = ServiceConfig {
-                service: Cow::Borrowed(config.service),
-                region: Cow::Borrowed(config.region),
-            };
-            let signing_config = ListTablesOperation::signing_config(
-                RequestConfig {
-                    request_ts: config.time_source,
-                },
-                service_config,
-            );
-            let credentials = config.credentials_provider.credentials().unwrap();
-            config
-                .signer
-                .sign(&signing_config, &credentials, &mut request, &[1, 2, 3])
-                .expect("signing failed");
-            // Ok(base)
-        }
-
-        fn signing_config(
-            request_config: RequestConfig,
-            service_config: ServiceConfig,
-        ) -> HttpSigningConfig {
-            // Different operations can use different signing configurations
-            HttpSigningConfig {
-                algorithm: SigningAlgorithm::SigV4,
-                signature_type: HttpSignatureType::HttpRequestHeaders,
-                service_config,
-                request_config,
-                double_uri_encode: false,
-                normalize_uri_path: true,
-                omit_session_token: false,
-            }
-        }
-    }
-
-    impl ListTablesOperationInput {
-        fn build(
-            self,
-            _config: &DynamoConfig,
-        ) -> Result<ListTablesOperation, CredentialsProviderError> {
-            Ok(ListTablesOperation { input: self })
-        }
-    }
-
-    #[tokio::test]
-    async fn sign_operation() {
-        let inp = ListTablesOperationInput { field: 123 };
-        let dynamo = DynamoConfig::from_env();
-        // Various problems, eg. credentials provider error
-        let operation = inp.build(&dynamo).expect("failed to get creds");
-        // Eg. signing error, expired credentials, etc.
-        let base_request = operation.build_request(&dynamo).await;
-        assert_eq!(
-            base_request
-                .headers()
-                .keys()
-                .map(|k| k.as_str())
-                .collect::<Vec<_>>(),
-            vec!["authorization", "x-amz-date"]
-        );
-    }
-     */
 }

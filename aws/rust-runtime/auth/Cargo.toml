@@ -8,8 +8,3 @@ description = "Authentication related functionality for the AWS Rust SDK. All in
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-http = "0.2.2"
-aws-sigv4 = { git = "https://github.com/rcoh/sigv4", rev = "05f90abc02a868cb570ed3006d950947cc0898b0" }
-
-[dev-dependencies]
-tokio = { version = "1", features = ["full"]}

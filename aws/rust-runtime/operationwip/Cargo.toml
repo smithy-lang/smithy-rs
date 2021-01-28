@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 auth = { path = "../auth" }
+aws-sig-auth = { path = "../aws-sig-auth" }
 http = "0.2.3"
 bytes = "1"
 tower = { version = "0.4.2", features = ["util"] }

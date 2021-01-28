@@ -4,8 +4,8 @@
  */
 use crate::middleware::RequestStage;
 use crate::region::RegionExt;
-use auth::{
-    HttpSigner, HttpSigningConfig, OperationSigningConfig, ProvideCredentials, RequestConfig,
+use aws_sig_auth::{
+    HttpSigner, HttpSigningConfig, OperationSigningConfig, RequestConfig,
     SigningConfig,
 };
 use http::Request;
@@ -14,6 +14,7 @@ use smithy_http::property_bag::PropertyBag;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tower::BoxError;
+use auth::ProvideCredentials;
 
 #[derive(Clone)]
 pub struct SignRequestStage {
@@ -86,7 +87,7 @@ impl RequestStage for SignRequestStage {
                 .ok_or("Missing credentials provider")?;
             let creds = match cred_provider.credentials() {
                 Ok(creds) => creds,
-                Err(e) => return Err(e as _),
+                Err(e) => return Err(e.into()),
             };
             let region = config
                 .signing_region()
