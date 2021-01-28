@@ -68,7 +68,7 @@ fun <T : CodeWriter> T.conditionalBlock(
  * Convenience wrapper that tells Intellij that the contents of this block are Rust
  */
 fun <T : CodeWriter> T.rust(
-    @Language("Rust", prefix = "fn foo(&self) {", suffix = "}") contents: String,
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
     vararg args: Any
 ) {
     this.write(contents, *args)
@@ -80,7 +80,7 @@ fun <T : CodeWriter> T.rust(
  * This enables writing code like:
  *
  * ```kotlin
- * writer.rustCtx("""
+ * writer.rustTemplate("""
  * let some_val = #{operation}::from_response(response);
  * let serialized = #{serde_json}::to_json(some_val);
  * """, "operation" to operationSymbol, "serde_json" to RuntimeType.SerdeJson)

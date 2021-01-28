@@ -9,7 +9,7 @@ pub fn is_error<B>(response: &http::Response<B>) -> bool {
     !response.status().is_success()
 }
 
-pub fn error_type_from_header<B>(response: &http::Response<B>) -> Result<Option<&str>, ToStrError> {
+fn error_type_from_header<B>(response: &http::Response<B>) -> Result<Option<&str>, ToStrError> {
     response
         .headers()
         .get("X-Amzn-Errortype")
@@ -17,7 +17,7 @@ pub fn error_type_from_header<B>(response: &http::Response<B>) -> Result<Option<
         .transpose()
 }
 
-pub fn error_type_from_body(body: &serde_json::Value) -> Option<&str> {
+fn error_type_from_body(body: &serde_json::Value) -> Option<&str> {
     body.as_object()
         .and_then(|b: &serde_json::Map<String, serde_json::Value>| {
             b.get("code").or_else(|| b.get("__type"))
@@ -25,7 +25,7 @@ pub fn error_type_from_body(body: &serde_json::Value) -> Option<&str> {
         .and_then(|v| v.as_str())
 }
 
-pub fn sanitize_error_code(error_code: &str) -> &str {
+fn sanitize_error_code(error_code: &str) -> &str {
     // Trim a trailing URL from the error code, beginning with a `:`
     let error_code = match error_code.find(':') {
         Some(idx) => &error_code[..idx],
@@ -39,13 +39,57 @@ pub fn sanitize_error_code(error_code: &str) -> &str {
     }
 }
 
+pub fn parse_generic_error<B>(
+    response: &http::Response<B>,
+    body: &serde_json::Value,
+) -> smithy_types::Error {
+    let code = error_type_from_header(&response)
+        .unwrap_or(Some("header was not valid UTF-8"))
+        .or_else(|| error_type_from_body(body))
+        .map(|s| sanitize_error_code(s).to_string());
+    let message = body
+        .get("message")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let request_id = response
+        .headers()
+        .get("X-Amzn-Requestid")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    smithy_types::Error {
+        code,
+        message,
+        request_id,
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use crate::error_code::{error_type_from_body, sanitize_error_code};
+    use crate::aws_json_errors::{error_type_from_body, parse_generic_error, sanitize_error_code};
     use serde_json::json;
+    use smithy_types::Error;
 
     #[test]
-    fn test_error_type() {
+    fn generic_error() {
+        let response = http::Response::builder()
+            .header("X-Amzn-Requestid", "1234")
+            .body(json!({
+                "__type": "FooError",
+                "message": "Go to foo"
+            }))
+            .unwrap();
+        assert_eq!(
+            parse_generic_error(&response, response.body()),
+            Error {
+                code: Some("FooError".to_string()),
+                message: Some("Go to foo".to_string()),
+                request_id: Some("1234".to_string()),
+            }
+        )
+    }
+
+    #[test]
+    fn error_type() {
         let error_body = json!({
             "__type": "FooError"
         });
