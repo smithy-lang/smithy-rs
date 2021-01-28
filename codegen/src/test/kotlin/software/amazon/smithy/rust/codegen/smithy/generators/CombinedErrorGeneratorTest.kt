@@ -45,7 +45,6 @@ internal class CombinedErrorGeneratorTest {
         }
         val generator = CombinedErrorGenerator(model, testSymbolProvider(model), model.lookup("error#Greeting"))
         generator.render(writer)
-        println(writer)
         writer.compileAndTest(
             """
             let error = GreetingError::InvalidGreeting(InvalidGreeting::builder().message("an error").build());
