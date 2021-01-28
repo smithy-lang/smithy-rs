@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .build()])
         .provisioned_throughput(
             ProvisionedThroughput::builder()
-                .read_capacity_units(100)
+                //.read_capacity_units(100)
                 .write_capacity_units(100)
                 .build(),
         )
@@ -76,7 +76,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             );
             println!("{} was created", table_name);
         }
-        _ => println!("{:?}", response.raw),
+        Some(Err(e)) => println!("{}", e),
+        _ => println!("something else")
     }
 
     let tables = io_v0::dispatch!(
