@@ -47,10 +47,10 @@ abstract class HttpProtocolGenerator(
 ) {
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
-    fun renderOperation(operationWriter: RustWriter, inputWriter: RustWriter, operationShape: OperationShape) {
+    fun renderOperation(operationWriter: RustWriter, inputWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
         val inputShape = operationShape.inputShape(model)
         val inputSymbol = symbolProvider.toSymbol(inputShape)
-        val builderGenerator = OperationInputBuilderGenerator(model, symbolProvider, operationShape)
+        val builderGenerator = OperationInputBuilderGenerator(model, symbolProvider, operationShape, customizations)
         builderGenerator.render(inputWriter)
         // impl OperationInputShape { ... }
         inputWriter.implBlock(inputShape, symbolProvider) {
@@ -100,6 +100,8 @@ abstract class HttpProtocolGenerator(
             rustBlock("pub fn new(input: #T) -> Self", inputSymbol) {
                 write("Self { input }")
             }
+
+            customizations.forEach { customization -> customization.section(OperationSection.ImplBlock)(this) }
         }
     }
 

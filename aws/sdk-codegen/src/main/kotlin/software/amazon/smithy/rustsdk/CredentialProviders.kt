@@ -49,7 +49,9 @@ class CredentialProviderConfig(private val runtimeConfig: RuntimeConfig) : Confi
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rust(
-                "pub(crate) credentials_provider: ::std::sync::Arc<dyn #T>,",
+                """
+                    ##[allow(dead_code)] // Just temporary until we use this in the plugins
+                    pub(crate) credentials_provider: ::std::sync::Arc<dyn #T>,""",
                 credentialsProvider
             )
             is ServiceConfig.ConfigImpl -> emptySection
