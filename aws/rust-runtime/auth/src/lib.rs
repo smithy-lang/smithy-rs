@@ -90,6 +90,11 @@ pub trait ProvideCredentials: Send + Sync {
     fn credentials(&self) -> Result<Credentials, CredentialsError>;
 }
 
+pub fn default_provider() -> impl ProvideCredentials {
+    // TODO: this should be a chain based on the CRT
+    provider::EnvironmentVariableCredentialsProvider::new()
+}
+
 impl ProvideCredentials for Credentials {
     fn credentials(&self) -> Result<Credentials, CredentialsError> {
         Ok(self.clone())

@@ -5,6 +5,7 @@
 plugins {
     kotlin("jvm")
     id("org.jetbrains.dokka")
+    `java-test-fixtures`
     jacoco
     maven
     `maven-publish`

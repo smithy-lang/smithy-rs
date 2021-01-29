@@ -33,8 +33,8 @@ import software.amazon.smithy.rust.codegen.smithy.Models
 import software.amazon.smithy.rust.codegen.smithy.Operations
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.testutil.asSmithyModel
-import software.amazon.smithy.rust.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 
 class SymbolBuilderTest {
     private fun Symbol.referenceClosure(): List<Symbol> {

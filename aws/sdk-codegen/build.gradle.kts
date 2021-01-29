@@ -23,6 +23,7 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
 }
 
 tasks.compileKotlin {
