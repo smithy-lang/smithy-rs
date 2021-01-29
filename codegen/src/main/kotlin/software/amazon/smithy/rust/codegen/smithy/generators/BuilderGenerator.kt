@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
@@ -23,6 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
@@ -64,19 +66,35 @@ class OperationInputBuilderGenerator(
 ) : BuilderGenerator(model, symbolProvider, shape.inputShape(model)) {
     override fun buildFn(implBlockWriter: RustWriter) {
         val fallibleBuilder = StructureGenerator.fallibleBuilder(shape.inputShape(model), symbolProvider)
-        val returnType = when (fallibleBuilder) {
-            true -> "Result<#T, String>"
-            false -> "#T"
-        }
+        val retryType = "()"
+        val returnType = "#T<#{T}, $retryType>".letIf(fallibleBuilder) { "Result<$it, String>" }
         val outputSymbol = symbolProvider.toSymbol(shape)
+        val operationT = RuntimeType.operation(symbolProvider.config().runtimeConfig)
+        val operationModule = RuntimeType.operationModule(symbolProvider.config().runtimeConfig)
+        val sdkBody = RuntimeType.sdkBody(symbolProvider.config().runtimeConfig)
 
-        implBlockWriter.docs("Consumes the builder and constructs a #D", outputSymbol)
-        implBlockWriter.rustBlock("pub fn build(self, _config: &#T::Config) -> $returnType", RuntimeType.Config, outputSymbol) {
-            conditionalBlock("Ok(", ")", conditional = fallibleBuilder) {
-                // If a wrapper is specified, use the `::new` associated function to construct the wrapper
-                withBlock("#T::new(", ")", outputSymbol) {
+        implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
+        implBlockWriter.rustBlock("pub fn build(self, _config: &#T::Config) -> $returnType", RuntimeType.Config, operationT, outputSymbol) {
+            conditionalBlock("Ok({", "})", conditional = fallibleBuilder) {
+                withBlock("let op = #T::new(", ");", outputSymbol) {
                     coreBuilder(this)
                 }
+                rust(
+                    """
+                    ##[allow(unused_mut)]
+                    let mut request = #T::Request::new(op.build_http_request().map(#T::from));
+                """,
+                    operationModule, sdkBody
+                )
+                rust(
+                    """
+                    #T::new(
+                        request,
+                        op
+                    )
+                """,
+                    operationT
+                )
             }
         }
     }
