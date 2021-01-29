@@ -5,6 +5,7 @@
 
 pub mod base64;
 pub mod body;
+pub mod endpoint;
 pub mod label;
 pub mod operation;
 pub mod property_bag;
