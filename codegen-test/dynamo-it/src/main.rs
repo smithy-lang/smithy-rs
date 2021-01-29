@@ -64,9 +64,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .build(&config);
 
-    let body = String::from_utf8(create_table.build_http_request().body().clone()).unwrap();
-    println!("{}", body);
-
     let response = io_v0::dispatch!(client, create_table);
     match response.parsed {
         Some(Ok(output)) => {
@@ -83,9 +80,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let tables = io_v0::dispatch!(
         client,
         dynamo::operation::ListTables::builder().build(&config)
-    )
-    .parsed
-    .unwrap();
+    ).parsed.unwrap();
     println!(
         "current tables: {:?}",
         &tables.as_ref().unwrap().table_names

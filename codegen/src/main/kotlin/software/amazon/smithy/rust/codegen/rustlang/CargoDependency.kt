@@ -173,5 +173,6 @@ data class CargoDependency(
         val SerdeJson: CargoDependency =
             CargoDependency("serde_json", CratesIo("1"), features = listOf("float_roundtrip"))
         val Serde = CargoDependency("serde", CratesIo("1"), features = listOf("derive"))
+        val Bytes: RustDependency = CargoDependency("bytes", CratesIo("1"))
     }
 }

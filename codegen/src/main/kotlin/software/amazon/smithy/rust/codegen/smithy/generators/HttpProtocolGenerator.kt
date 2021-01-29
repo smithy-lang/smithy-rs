@@ -103,6 +103,7 @@ abstract class HttpProtocolGenerator(
 
             customizations.forEach { customization -> customization.section(OperationSection.ImplBlock)(this) }
         }
+        traitImplementations(operationWriter, operationShape)
     }
 
     protected fun httpBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
@@ -132,6 +133,8 @@ abstract class HttpProtocolGenerator(
             f(this)
         }
     }
+
+    abstract fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape)
 
     abstract fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape)
 
