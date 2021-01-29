@@ -52,7 +52,7 @@ class EnumGeneratorTest {
             assert_eq!(InstanceType::from("other"), InstanceType::Unknown("other".to_owned()));
             // round trip unknown variants:
             assert_eq!(InstanceType::from("other").as_str(), "other");
-            """.trimIndent()
+            """
         )
 
         writer.toString() shouldContain "#[non_exhaustive]"

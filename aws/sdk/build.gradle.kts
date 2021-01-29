@@ -111,9 +111,17 @@ tasks.register<Copy>("relocateAwsRuntime") {
     }
     exclude("**/target")
     exclude("**/Cargo.lock")
-    // filter { line -> line.replace("../../rust-runtime/", "") }
+    filter { line -> rewritePathDependency(line) }
     into(sdkOutputDir)
     outputs.upToDateWhen { false }
+}
+
+/**
+ * The aws/rust-runtime crates depend on local versions of the Smithy core runtime enabling local compilation. However,
+ * those paths need to be replaced in the final build. We should probably fix this with some symlinking.
+ */
+fun rewritePathDependency(line: String): String {
+    return line.replace("../../rust-runtime/", "")
 }
 
 tasks.register<Copy>("relocateRuntime") {

@@ -49,9 +49,7 @@ class CredentialProviderConfig(private val runtimeConfig: RuntimeConfig) : Confi
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rust(
-                """
-                    ##[allow(dead_code)] // Just temporary until we use this in the plugins
-                    pub(crate) credentials_provider: ::std::sync::Arc<dyn #T>,""",
+                """pub(crate) credentials_provider: ::std::sync::Arc<dyn #T>,""",
                 credentialsProvider
             )
             is ServiceConfig.ConfigImpl -> emptySection
@@ -82,7 +80,7 @@ class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : Ope
             is OperationSection.Feature -> writable {
                 rust(
                     """
-                #T(${section.request}.config_mut(), ${section.config}.credentials_provider.clone);
+                #T(&mut ${section.request}.config_mut(), ${section.config}.credentials_provider.clone());
                 """,
                     setProvider(runtimeConfig)
                 )

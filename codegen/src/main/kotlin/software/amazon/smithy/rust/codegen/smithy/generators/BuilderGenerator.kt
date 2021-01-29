@@ -87,6 +87,7 @@ class OperationInputBuilderGenerator(
                 """,
                     operationModule, sdkBody
                 )
+                features.forEach { it.section(OperationSection.Feature("request", "_config"))(this) }
                 rust(
                     """
                     #T::new(
