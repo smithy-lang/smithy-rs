@@ -128,7 +128,7 @@ tasks.register<Copy>("relocateRuntime") {
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {
-    val modules = services.map(AwsService::module) + runtimeModules
+    val modules = services.map(AwsService::module) + runtimeModules + awsModules
     return """
     [workspace]
     members = [
@@ -144,7 +144,7 @@ task("generateCargoWorkspace") {
 }
 
 task("finalizeSdk") {
-    finalizedBy("relocateServices", "relocateRuntime", "generateCargoWorkspace")
+    finalizedBy("relocateServices", "relocateRuntime", "relocateAwsRuntime", "generateCargoWorkspace")
 }
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
