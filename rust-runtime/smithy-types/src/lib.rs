@@ -4,9 +4,12 @@
  */
 
 pub mod instant;
+
 use std::collections::HashMap;
 
 pub use crate::instant::Instant;
+use std::fmt;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Blob {
@@ -43,3 +46,46 @@ pub enum Number {
     NegInt(i64),
     Float(f64),
 }
+
+/// Generic Error type
+///
+/// For many services, Errors are modeled. However, many services only partially model errors or don't
+/// model errors at all. In these cases, the SDK will return this generic error type to expose the
+/// `code`, `message` and `request_id`.
+#[derive(Debug, Eq, PartialEq, Default)]
+pub struct Error {
+    pub code: Option<String>,
+    pub message: Option<String>,
+    pub request_id: Option<String>,
+}
+
+impl Error {
+    pub fn code(&self) -> Option<&str> {
+        self.code.as_deref()
+    }
+
+    pub fn message(&self) -> Option<&str> {
+        self.message.as_deref()
+    }
+    pub fn request_id(&self) -> Option<&str> {
+        self.request_id.as_deref()
+    }
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Smithy Error")?;
+        if let Some(code) = &self.code {
+            write!(f, " code={}", code)?;
+        }
+        if let Some(message) = &self.message {
+            write!(f, " message={}", message)?;
+        }
+        if let Some(req_id) = &self.request_id {
+            write!(f, " request_id={}", req_id)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for Error {}

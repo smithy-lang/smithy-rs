@@ -226,7 +226,7 @@ class HttpProtocolTestGenerator(
                 write("assert_eq!(expected_output, actual_error);")
             }
             rustBlock("else") {
-                write("panic!(\"wrong variant: {:?}\", parsed);")
+                write("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
             }
         } else {
             write("assert_eq!(parsed.unwrap(), expected_output);")

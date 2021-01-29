@@ -68,27 +68,36 @@ class InlineDependency(
     companion object {
         fun forRustFile(
             name: String,
-            module: String,
-            filename: String,
-            vararg additionalDepencies: RustDependency
+            vararg additionalDependencies: RustDependency
         ): InlineDependency {
+            val module = name
+            val filename = "$name.rs"
             // The inline crate is loaded as a dependency on the runtime classpath
             val rustFile = this::class.java.getResource("/inlineable/src/$filename")
             check(rustFile != null) { "Rust file $filename was missing from the resource bundle!" }
-            return InlineDependency(name, module, additionalDepencies.toList()) { writer ->
+            return InlineDependency(name, module, additionalDependencies.toList()) { writer ->
                 writer.raw(rustFile.readText())
             }
         }
 
-        fun genericError() = forRustFile("GenericError", "types", "generic_error.rs", CargoDependency.Serde)
-        fun errorCode() = forRustFile("error_code", "error_code", "error_code.rs", CargoDependency.Http)
-        fun docJson() = forRustFile("doc_json", "doc_json", "doc_json.rs", CargoDependency.Serde)
-        fun instantEpoch() = forRustFile("instant_epoch", "instant_epoch", "instant_epoch.rs", CargoDependency.Serde)
-        fun instantHttpDate() = forRustFile("instant_httpdate", "instant_httpdate", "instant_httpdate.rs", CargoDependency.Serde)
-        fun instant8601() = forRustFile("instant_8601", "instant_8601", "instant_iso8601.rs", CargoDependency.Serde)
+        fun awsJsonErrors(runtimeConfig: RuntimeConfig) =
+            forRustFile("aws_json_errors", CargoDependency.Http, CargoDependency.SmithyTypes(runtimeConfig))
 
-        fun idempotencyToken() = forRustFile("idempotency_token", "idempotency_token", "idempotency_token.rs", CargoDependency.Rand)
-        fun blobSerde(runtimeConfig: RuntimeConfig) = forRustFile("blob_serde", "blob_serde", "blob_serde.rs", CargoDependency.Serde, CargoDependency.SmithyHttp(runtimeConfig))
+        fun docJson() = forRustFile("doc_json", CargoDependency.Serde)
+        fun instantEpoch() = forRustFile("instant_epoch", CargoDependency.Serde)
+        fun instantHttpDate() =
+            forRustFile("instant_httpdate", CargoDependency.Serde)
+
+        fun instant8601() = forRustFile("instant_iso8601", CargoDependency.Serde)
+
+        fun idempotencyToken() =
+            forRustFile("idempotency_token", CargoDependency.Rand)
+
+        fun blobSerde(runtimeConfig: RuntimeConfig) = forRustFile(
+            "blob_serde",
+            CargoDependency.Serde,
+            CargoDependency.SmithyHttp(runtimeConfig)
+        )
     }
 }
 
@@ -161,7 +170,8 @@ data class CargoDependency(
             "protocol-test-helpers", Local(runtimeConfig.relativePath), scope = Dev
         )
 
-        val SerdeJson: CargoDependency = CargoDependency("serde_json", CratesIo("1"), features = listOf("float_roundtrip"))
+        val SerdeJson: CargoDependency =
+            CargoDependency("serde_json", CratesIo("1"), features = listOf("float_roundtrip"))
         val Serde = CargoDependency("serde", CratesIo("1"), features = listOf("derive"))
         val Bytes: RustDependency = CargoDependency("bytes", CratesIo("1"))
     }
