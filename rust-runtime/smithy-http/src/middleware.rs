@@ -76,7 +76,7 @@ pub async fn load_response<B, T, E, O>(
 where
     B: http_body::Body + Unpin,
     B: From<Bytes> + 'static,
-    B::Error: Error + Send + Sync + 'static,
+    B::Error: Into<BoxError>,
     O: ParseHttpResponse<B, Output = Result<T, E>>,
 {
     if let Some(parsed_response) = handler.parse_unloaded(&mut response) {
@@ -88,7 +88,7 @@ where
         Err(e) => {
             return Err(SdkError::ResponseError {
                 raw: response,
-                err: Box::new(e),
+                err: e.into(),
             });
         }
     };
@@ -117,10 +117,7 @@ fn sdk_result<T, E, B>(
     raw: http::Response<B>,
 ) -> Result<SdkSuccess<T, B>, SdkError<E, B>> {
     match parsed {
-        Ok(parsed) => Ok(SdkSuccess {
-            raw,
-            parsed,
-        }),
+        Ok(parsed) => Ok(SdkSuccess { raw, parsed }),
         Err(err) => Err(SdkError::ServiceError { raw, err }),
     }
 }

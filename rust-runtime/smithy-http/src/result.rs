@@ -55,8 +55,5 @@ pub enum SdkError<E, B> {
     },
 
     /// An error response was received from the service
-    ServiceError {
-        raw: http::Response<B>,
-        err: E,
-    },
+    ServiceError { raw: http::Response<B>, err: E },
 }
