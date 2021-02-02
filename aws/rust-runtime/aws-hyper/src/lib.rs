@@ -60,6 +60,14 @@ pub struct Client<S> {
     inner: S,
 }
 
+impl<S> Client<S> {
+    pub fn new(connector: S) -> Self {
+        Client {
+            inner: connector
+        }
+    }
+}
+
 impl Client<hyper::Client<HttpsConnector<HttpConnector>, SdkBody>> {
     pub fn default() -> Self {
         let https = HttpsConnector::new();
@@ -77,8 +85,8 @@ impl<S> Client<S> {
 }
 
 fn operation_error<OE, E>(o: OperationError<OE>) -> SdkError<E>
-where
-    OE: Into<BoxError>,
+    where
+        OE: Into<BoxError>,
 {
     match o {
         OperationError::DispatchError(e) => SdkError::DispatchFailure(e.into()),
@@ -90,11 +98,11 @@ async fn load_response<B, T, E, O>(
     mut response: http::Response<B>,
     handler: &O,
 ) -> Result<SdkSuccess<T>, SdkError<E>>
-where
-    B: http_body::Body + Unpin,
-    B: From<Bytes> + Debug + 'static,
-    B::Error: Error + Send + Sync + 'static,
-    O: ParseHttpResponse<B, Output = Result<T, E>>,
+    where
+        B: http_body::Body + Unpin,
+        B: From<Bytes> + Debug + 'static,
+        B::Error: Error + Send + Sync + 'static,
+        O: ParseHttpResponse<B, Output=Result<T, E>>,
 {
     if let Some(parsed_response) = handler.parse_unloaded(&mut response) {
         return sdk_result(parsed_response, response);
@@ -125,11 +133,11 @@ pub struct ParseResponseService<S> {
 struct RetryStrategy {}
 
 impl<Handler: Clone, R: Clone, Response, Error>
-    tower::retry::Policy<operation::Operation<Handler, R>, Response, Error> for RetryStrategy
-where
-    R: RetryPolicy<Response, Error>,
+tower::retry::Policy<operation::Operation<Handler, R>, Response, Error> for RetryStrategy
+    where
+        R: RetryPolicy<Response, Error>,
 {
-    type Future = Pin<Box<dyn Future<Output = Self>>>;
+    type Future = Pin<Box<dyn Future<Output=Self>>>;
 
     fn retry(
         &self,
@@ -153,8 +161,8 @@ where
 pub struct ParseResponseLayer;
 
 impl<S> Layer<S> for ParseResponseLayer
-where
-    S: Service<operation::Request>,
+    where
+        S: Service<operation::Request>,
 {
     type Service = ParseResponseService<S>;
 
@@ -163,17 +171,17 @@ where
     }
 }
 
-type BoxedResultFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>>>>;
+type BoxedResultFuture<T, E> = Pin<Box<dyn Future<Output=Result<T, E>>>>;
 
 impl<S, O, T, E, B, R, OE> tower::Service<operation::Operation<O, R>> for ParseResponseService<S>
-where
-    S: Service<operation::Request, Response = http::Response<B>, Error = OperationError<OE>>,
-    OE: Into<BoxError>,
-    S::Future: 'static,
-    O: ParseHttpResponse<B, Output = Result<T, E>> + 'static,
-    B: http_body::Body + Unpin + Debug + 'static,
-    B: From<Bytes>,
-    B::Error: Error + Send + Sync + 'static,
+    where
+        S: Service<operation::Request, Response=http::Response<B>, Error=OperationError<OE>>,
+        OE: Into<BoxError>,
+        S::Future: 'static,
+        O: ParseHttpResponse<B, Output=Result<T, E>> + 'static,
+        B: http_body::Body + Unpin + Debug + 'static,
+        B: From<Bytes>,
+        B::Error: Error + Send + Sync + 'static,
 {
     type Response = SdkSuccess<T>;
     type Error = SdkError<E>;
@@ -197,22 +205,22 @@ where
 }
 
 impl<S> Client<S>
-where
-    S: Service<http::Request<SdkBody>, Response = http::Response<hyper::Body>>
+    where
+        S: Service<http::Request<SdkBody>, Response=http::Response<hyper::Body>>
         + Send
         + Clone
         + 'static,
-    S::Error: Into<BoxError> + Send + Sync + 'static,
-    S::Future: Send + 'static,
+        S::Error: Into<BoxError> + Send + Sync + 'static,
+        S::Future: Send + 'static,
 {
     /// Dispatch this request to the network
     ///
     /// For ergonomics, this does not include the raw response for successful responses. To
     /// access the raw response use `call_raw`.
     pub async fn call<O, R, E, Retry>(&self, input: Operation<O, Retry>) -> Result<R, SdkError<E>>
-    where
-        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + Clone + 'static,
-        Retry: RetryPolicy<SdkSuccess<R>, SdkError<E>> + Send + Clone + 'static,
+        where
+            O: ParseHttpResponse<hyper::Body, Output=Result<R, E>> + Send + Clone + 'static,
+            Retry: RetryPolicy<SdkSuccess<R>, SdkError<E>> + Send + Clone + 'static,
     {
         self.call_raw(input).await.map(|res| res.parsed)
     }
@@ -221,9 +229,9 @@ where
         &self,
         input: Operation<O, Retry>,
     ) -> Result<SdkSuccess<R>, SdkError<E>>
-    where
-        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + Clone + 'static,
-        Retry: RetryPolicy<SdkSuccess<R>, SdkError<E>> + Send + Clone + 'static,
+        where
+            O: ParseHttpResponse<hyper::Body, Output=Result<R, E>> + Send + Clone + 'static,
+            Retry: RetryPolicy<SdkSuccess<R>, SdkError<E>> + Send + Clone + 'static,
     {
         let signer = OperationPipelineService::for_stage(SignRequestStage::new());
         let endpoint_resolver = OperationPipelineService::for_stage(AddEndpointStage);
@@ -318,7 +326,7 @@ mod test {
     impl tower::Service<http::Request<SdkBody>> for TestService {
         type Response = http::Response<hyper::Body>;
         type Error = BoxError;
-        type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+        type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>> + Send>>;
 
         fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
             Poll::Ready(Ok(()))
@@ -335,8 +343,8 @@ mod test {
     struct TestOperationParser;
 
     impl<B> ParseHttpResponse<B> for TestOperationParser
-    where
-        B: http_body::Body,
+        where
+            B: http_body::Body,
     {
         type Output = Result<String, String>;
 
@@ -367,22 +375,22 @@ mod test {
                 .body(SdkBody::from("Hello"))
                 .unwrap(),
         )
-        .augment(|req, config| {
-            config.insert(Region::new("some-region"));
-            config.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
-            config.insert_signing_config(OperationSigningConfig::default_config(
-                "some-service",
-            ));
-            use operationwip::signing_middleware::CredentialProviderExt;
-            config.insert_credentials_provider(Arc::new(Credentials::from_keys(
-                "access", "secret", None
-            )));
-            config.insert_endpoint_provider(Arc::new(StaticEndpoint::from_uri(Uri::from_static(
-                "http://localhost:8000",
-            ))));
-            Result::<_, ()>::Ok(req)
-        })
-        .expect("valid request");
+            .augment(|req, config| {
+                config.insert(Region::new("some-region"));
+                config.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
+                config.insert_signing_config(OperationSigningConfig::default_config(
+                    "some-service",
+                ));
+                use operationwip::signing_middleware::CredentialProviderExt;
+                config.insert_credentials_provider(Arc::new(Credentials::from_keys(
+                    "access", "secret", None,
+                )));
+                config.insert_endpoint_provider(Arc::new(StaticEndpoint::from_uri(Uri::from_static(
+                    "http://localhost:8000",
+                ))));
+                Result::<_, ()>::Ok(req)
+            })
+            .expect("valid request");
 
         let operation = Operation::new(request, TestOperationParser);
 
