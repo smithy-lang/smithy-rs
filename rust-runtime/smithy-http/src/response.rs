@@ -86,30 +86,31 @@ where
 
 #[cfg(test)]
 mod test {
-    use http_body::Body;
     use crate::response::ParseHttpResponse;
-    use http::Response;
     use bytes::Bytes;
+    use http::Response;
+    use http_body::Body;
     use std::mem;
 
     #[test]
     fn supports_streaming_body() {
         struct S3GetObject<B: Body> {
-            pub body: B
+            pub body: B,
         }
 
         struct S3GetObjectParser;
 
-        impl<B> ParseHttpResponse<B> for S3GetObjectParser where B: Default + Body {
+        impl<B> ParseHttpResponse<B> for S3GetObjectParser
+        where
+            B: Default + Body,
+        {
             type Output = S3GetObject<B>;
 
             fn parse_unloaded(&self, response: &mut Response<B>) -> Option<Self::Output> {
                 // For responses that pass on the body, use mem::take to leave behind an empty
                 // body
                 let body = mem::take(response.body_mut());
-                Some(S3GetObject {
-                    body
-                })
+                Some(S3GetObject { body })
             }
 
             fn parse_loaded(&self, _response: &Response<Bytes>) -> Self::Output {

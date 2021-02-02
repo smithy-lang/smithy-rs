@@ -9,12 +9,13 @@
 //! smithy-middleware-tower provides Tower-specific middleware utilities (todo)
 
 use crate::operation;
-use std::error::Error;
-use bytes::{Bytes, Buf};
-use std::fmt::Debug;
+use crate::pin_mut;
 use crate::response::ParseHttpResponse;
-use crate::result::{SdkSuccess, SdkError};
+use crate::result::{SdkError, SdkSuccess};
+use bytes::{Buf, Bytes};
 use http_body::Body;
+use std::error::Error;
+use std::fmt::Debug;
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
@@ -48,7 +49,15 @@ type BoxError = Box<dyn Error + Send + Sync>;
 /// }
 /// ```
 pub trait MapRequest {
+    /// The Error type returned by this operation.
+    ///
+    /// If this middleware never fails use [std::convert::Infallible] or similar.
     type Error: Into<BoxError>;
+
+    /// Apply this middleware to a request.
+    ///
+    /// Typically, implementations will use [`request.augment`](crate::operation::Request::augment)
+    /// to be able to transform an owned `http::Request`.
     fn apply(&self, request: operation::Request) -> Result<operation::Request, Self::Error>;
 }
 
@@ -57,15 +66,19 @@ pub trait MapRequest {
 /// This function is intended to be used on the response side of a middleware chain.
 ///
 /// Success and failure will be split and mapped into `SdkSuccess` and `SdkError`.
+/// Generic Parameters:
+/// - `B`: The Response Body
+/// - `O`: The Http response handler that returns `Result<T, E>`
+/// - `T`/`E`: `Result<T, E>` returned by `handler`.
 pub async fn load_response<B, T, E, O>(
     mut response: http::Response<B>,
     handler: &O,
 ) -> Result<SdkSuccess<T>, SdkError<E>>
-    where
-        B: http_body::Body + Unpin,
-        B: From<Bytes> + Debug + 'static,
-        B::Error: Error + Send + Sync + 'static,
-        O: ParseHttpResponse<B, Output=Result<T, E>>,
+where
+    B: http_body::Body + Unpin,
+    B: From<Bytes> + Debug + 'static,
+    B::Error: Error + Send + Sync + 'static,
+    O: ParseHttpResponse<B, Output = Result<T, E>>,
 {
     if let Some(parsed_response) = handler.parse_unloaded(&mut response) {
         return sdk_result(parsed_response, response);
@@ -88,7 +101,7 @@ pub async fn load_response<B, T, E, O>(
 
 async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
     let mut output = Vec::new();
-    pin_utils::pin_mut!(body);
+    pin_mut!(body);
     while let Some(buf) = body.data().await {
         let mut buf = buf?;
         while buf.has_remaining() {
@@ -109,9 +122,6 @@ fn sdk_result<T, E, B: Debug + 'static>(
             raw: dyn_body,
             parsed,
         }),
-        Err(err) => Err(SdkError::ServiceError {
-            raw: dyn_body,
-            err,
-        }),
+        Err(err) => Err(SdkError::ServiceError { raw: dyn_body, err }),
     }
 }

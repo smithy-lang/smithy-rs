@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use std::fmt::Debug;
 use std::error::Error;
+use std::fmt::Debug;
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
