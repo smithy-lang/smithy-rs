@@ -15,7 +15,6 @@ use crate::result::{SdkError, SdkSuccess};
 use bytes::{Buf, Bytes};
 use http_body::Body;
 use std::error::Error;
-use std::fmt::Debug;
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
@@ -73,10 +72,10 @@ pub trait MapRequest {
 pub async fn load_response<B, T, E, O>(
     mut response: http::Response<B>,
     handler: &O,
-) -> Result<SdkSuccess<T>, SdkError<E>>
+) -> Result<SdkSuccess<T, B>, SdkError<E, B>>
 where
     B: http_body::Body + Unpin,
-    B: From<Bytes> + Debug + 'static,
+    B: From<Bytes> + 'static,
     B::Error: Error + Send + Sync + 'static,
     O: ParseHttpResponse<B, Output = Result<T, E>>,
 {
@@ -88,7 +87,7 @@ where
         Ok(body) => body,
         Err(e) => {
             return Err(SdkError::ResponseError {
-                raw: response.map(|b| Box::new(b) as _),
+                raw: response,
                 err: Box::new(e),
             });
         }
@@ -112,16 +111,16 @@ async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
     Ok(output)
 }
 
-fn sdk_result<T, E, B: Debug + 'static>(
+/// Convert a `Result<T, E>` into an `SdkResult` that includes the raw HTTP response
+fn sdk_result<T, E, B>(
     parsed: Result<T, E>,
     raw: http::Response<B>,
-) -> Result<SdkSuccess<T>, SdkError<E>> {
-    let dyn_body = raw.map(|b| Box::new(b) as _);
+) -> Result<SdkSuccess<T, B>, SdkError<E, B>> {
     match parsed {
         Ok(parsed) => Ok(SdkSuccess {
-            raw: dyn_body,
+            raw,
             parsed,
         }),
-        Err(err) => Err(SdkError::ServiceError { raw: dyn_body, err }),
+        Err(err) => Err(SdkError::ServiceError { raw, err }),
     }
 }
