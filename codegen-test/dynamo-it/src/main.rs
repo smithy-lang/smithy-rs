@@ -58,14 +58,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .build()])
         .provisioned_throughput(
             ProvisionedThroughput::builder()
-                .read_capacity_units(100)
+                //.read_capacity_units(100)
                 .write_capacity_units(100)
                 .build(),
         )
         .build(&config);
-
-    let body = String::from_utf8(create_table.build_http_request().body().clone()).unwrap();
-    println!("{}", body);
 
     let response = io_v0::dispatch!(client, create_table);
     match response.parsed {
@@ -76,15 +73,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             );
             println!("{} was created", table_name);
         }
-        _ => println!("{:?}", response.raw),
+        Some(Err(e)) => println!("{}", e),
+        _ => println!("something else")
     }
 
     let tables = io_v0::dispatch!(
         client,
         dynamo::operation::ListTables::builder().build(&config)
-    )
-    .parsed
-    .unwrap();
+    ).parsed.unwrap();
     println!(
         "current tables: {:?}",
         &tables.as_ref().unwrap().table_names

@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.StructureModifier
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.outputShape
 
 sealed class AwsJsonVersion {
     abstract val value: String
@@ -136,6 +137,27 @@ class BasicAwsJsonGenerator(
     private val awsJsonVersion: AwsJsonVersion
 ) : HttpProtocolGenerator(protocolConfig) {
     private val model = protocolConfig.model
+    override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
+        // All AWS JSON protocols do NOT support streaming shapes
+        val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
+        val operationName = symbolProvider.toSymbol(operationShape).name
+        operationWriter.rustTemplate(
+            """
+            impl #{parse_strict} for $operationName {
+                type Output = Result<#{output}, #{error}>;
+                fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
+                    self.parse_response(response)
+                }
+            }
+        """,
+            "parse_strict" to RuntimeType.parseStrict(symbolProvider.config().runtimeConfig),
+            "output" to outputSymbol,
+            "error" to operationShape.errorSymbol(symbolProvider),
+            "response" to RuntimeType.Http("Response"),
+            "bytes" to RuntimeType.Bytes
+        )
+    }
+
     private val symbolProvider = protocolConfig.symbolProvider
     private val operationIndex = OperationIndex.of(model)
     override fun toHttpRequestImpl(
@@ -183,22 +205,29 @@ class BasicAwsJsonGenerator(
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         val bodyId = outputShape.expectTrait(SyntheticOutputTrait::class.java).body
         val bodyShape = bodyId?.let { model.expectShape(bodyId, StructureShape::class.java) }
+        val jsonErrors = RuntimeType.awsJsonErrors(protocolConfig.runtimeConfig)
         fromResponseFun(implBlockWriter, operationShape) {
-            rustBlock("if #T::is_error(&response)", RuntimeType.ErrorCode) {
+            rustBlock("if #T::is_error(&response)", jsonErrors) {
                 // TODO: experiment with refactoring this segment into `error_code.rs`. Currently it isn't
                 // to avoid the need to double deserialize the body.
                 rustTemplate(
                     """
-                    let body: #{sj}::Value = #{sj}::from_slice(response.body().as_ref())
+                    let body = #{sj}::from_slice(response.body().as_ref())
                         .unwrap_or_else(|_|#{sj}::json!({}));
-                    let error_code = #{error_code}::error_type_from_header(&response).map_err(#{error_symbol}::unhandled)?;
-                    let error_code = error_code.or_else(||#{error_code}::error_type_from_body(&body));
-                    let error_code = error_code.ok_or_else(||#{error_symbol}::unhandled("no error code".to_string()))?;
-                    let error_code = #{error_code}::sanitize_error_code(error_code);
+                    let generic = #{aws_json_errors}::parse_generic_error(&response, &body);
                     """,
-                    "error_code" to RuntimeType.ErrorCode, "error_symbol" to errorSymbol, "sj" to RuntimeType.SJ
+                    "aws_json_errors" to jsonErrors, "sj" to RuntimeType.SJ
                 )
                 if (operationShape.errors.isNotEmpty()) {
+                    rustTemplate(
+                        """
+
+                    let error_code = match generic.code() {
+                        Some(code) => code,
+                        None => return Err(#{error_symbol}::unhandled(generic))
+                    };""",
+                        "error_symbol" to errorSymbol
+                    )
                     withBlock("return Err(match error_code {", "})") {
                         // approx:
                         /*
@@ -210,8 +239,7 @@ class BasicAwsJsonGenerator(
                         parseErrorVariants(operationShape, errorSymbol)
                     }
                 } else {
-                    // TODO: this should actually be a generic error that tries to parse a message
-                    write("return Err(#T::unhandled(error_code))", errorSymbol)
+                    write("return Err(#T::unhandled(generic))", errorSymbol)
                 }
             }
             // let body: OperationOutputBody = serde_json::from_slice(response.body()...);
@@ -260,6 +288,6 @@ class BasicAwsJsonGenerator(
                 write("Err(e) => #T::unhandled(e)", errorSymbol)
             }
         }
-        write("unknown => #T::unhandled(unknown)", errorSymbol)
+        write("_ => #T::unhandled(generic)", errorSymbol)
     }
 }

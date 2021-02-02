@@ -116,6 +116,10 @@ class HttpProtocolTestGeneratorTest {
 
         // A stubbed test protocol to do enable testing intentionally broken protocols
         class TestProtocol(protocolConfig: ProtocolConfig) : HttpProtocolGenerator(protocolConfig) {
+            override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
+                // no trait implementations for tests
+            }
+
             override fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape) {
                 fromResponseFun(implBlockWriter, operationShape) {
                     writeWithNoFormatting(correctResponse)

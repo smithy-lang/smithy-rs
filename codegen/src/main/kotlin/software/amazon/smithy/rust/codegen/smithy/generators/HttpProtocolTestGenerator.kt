@@ -151,11 +151,7 @@ class HttpProtocolTestGenerator(
         writeInline("let input =")
         instantiator.render(this, inputShape, httpRequestTestCase.params)
         write(";")
-        if (protocolSupport.requestBodySerialization) {
-            write("let http_request = input.build_http_request();")
-        } else {
-            write("let http_request = ${protocolConfig.symbolProvider.toSymbol(inputShape).name}::assemble(input.input.request_builder_base(), vec![]);")
-        }
+        write("let (http_request, _) = input.into_request_response().0.into_parts();")
         with(httpRequestTestCase) {
             write(
                 """
@@ -230,7 +226,7 @@ class HttpProtocolTestGenerator(
                 write("assert_eq!(expected_output, actual_error);")
             }
             rustBlock("else") {
-                write("panic!(\"wrong variant: {:?}\", parsed);")
+                write("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
             }
         } else {
             write("assert_eq!(parsed.unwrap(), expected_output);")
@@ -246,14 +242,15 @@ class HttpProtocolTestGenerator(
     }
 
     private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {
+        rustWriter.write("""let body = http_request.body().bytes().expect("body should be strict");""")
         if (body == "") {
             rustWriter.write("// No body")
-            rustWriter.write("assert!(&http_request.body().is_empty());")
+            rustWriter.write("assert!(&body.is_empty());")
         } else {
             // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
             assertOk(rustWriter) {
                 rustWriter.write(
-                    "#T(&http_request.body(), ${
+                    "#T(&body, ${
                     rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
                     RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_body"),
