@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-//! This modules defines the core, framework agnostic HTTP middleware interface
+//! This modules defines the core, framework agnostic, HTTP middleware interface
 //! used by the SDK
 //!
-//! smithy-middleware-tower provides Tower-specific middleware utilities
+//! smithy-middleware-tower provides Tower-specific middleware utilities (todo)
 
 use crate::operation;
 use std::error::Error;
@@ -18,7 +18,7 @@ use http_body::Body;
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
-/// `MapRequest` defines a synchronous middleware that transforms an `operation::Request`.
+/// [`MapRequest`] defines a synchronous middleware that transforms an [`operation::Request`].
 ///
 /// Typically, these middleware will read configuration from the `PropertyBag` and use it to
 /// augment the request. Most fundamental middleware is expressed as `MapRequest`, including
@@ -28,16 +28,20 @@ type BoxError = Box<dyn Error + Send + Sync>;
 /// # use smithy_http::middleware::MapRequest;
 /// # use std::convert::Infallible;
 /// # use smithy_http::operation;
-/// # use http::header::HeaderName;
-/// struct AddHeader(&'static str, &'static str);
+/// use http::header::{HeaderName, HeaderValue};
+/// struct AddHeader(HeaderName, HeaderValue);
+/// /// Signaling struct added to the request property bag if a header should be added
+/// struct NeedsHeader;
 /// impl MapRequest for AddHeader {
-///     type Error = &'static str;
+///     type Error = Infallible;
 ///     fn apply(&self, request: operation::Request) -> Result<operation::Request, Self::Error> {
-///         request.augment(|mut request, _| {
-///             request.headers_mut().append(
-///                 self.0,
-///                 self.1.parse().map_err(|_|"must be valid header")?,
-///             );
+///         request.augment(|mut request, properties| {
+///             if properties.get::<NeedsHeader>().is_some() {
+///                 request.headers_mut().append(
+///                     self.0.clone(),
+///                     self.1.clone(),
+///                 );
+///             }
 ///             Ok(request)
 ///         })
 ///     }
