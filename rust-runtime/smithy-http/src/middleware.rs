@@ -95,7 +95,7 @@ where
 
     let response = response.map(|_| Bytes::from(body));
     let parsed = handler.parse_loaded(&response);
-    return sdk_result(parsed, response.map(B::from));
+    sdk_result(parsed, response.map(B::from))
 }
 
 async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
