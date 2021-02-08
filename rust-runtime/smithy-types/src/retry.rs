@@ -55,6 +55,7 @@ pub trait ProvideErrorKind {
 /// - The required retry delay exceeds the maximum backoff configured by the client
 /// - No retry tokens are available due to service health
 #[non_exhaustive]
+#[derive(Eq, PartialEq, Debug)]
 pub enum RetryKind {
     /// Retry the associated request due to a known `ErrorKind`.
     Error(ErrorKind),
