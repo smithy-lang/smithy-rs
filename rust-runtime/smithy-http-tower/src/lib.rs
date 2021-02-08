@@ -2,8 +2,8 @@ pub mod dispatch;
 pub mod map_request;
 pub mod parse_response;
 
-use tower::BoxError;
 use smithy_http::result::SdkError;
+use tower::BoxError;
 
 /// An Error Occurred During the process of sending an Operation
 ///
@@ -27,7 +27,7 @@ impl<E, B> From<SendOperationError> for SdkError<E, B> {
     fn from(err: SendOperationError) -> Self {
         match err {
             SendOperationError::RequestDispatchError(e) => {
-                smithy_http::result::SdkError::DispatchFailure(e.into())
+                smithy_http::result::SdkError::DispatchFailure(e)
             }
             SendOperationError::RequestConstructionError(e) => {
                 smithy_http::result::SdkError::ConstructionFailure(e)

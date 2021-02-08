@@ -26,6 +26,7 @@ pub struct ParseResponseService<S, O> {
     _output_type: PhantomData<O>,
 }
 
+#[derive(Default)]
 pub struct ParseResponseLayer<O> {
     _output_type: PhantomData<O>,
 }
@@ -55,7 +56,6 @@ where
 
 type BoxedResultFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>>>>;
 
-
 /// ParseResponseService
 ///
 /// Generic Parameter Listing:
@@ -78,7 +78,7 @@ where
     type Future = BoxedResultFuture<Self::Response, Self::Error>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx).map_err(|err|err.into())
+        self.inner.poll_ready(cx).map_err(|err| err.into())
     }
 
     fn call(&mut self, req: Operation<O, R>) -> Self::Future {
