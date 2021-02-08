@@ -40,11 +40,12 @@ let (endpoint_req, req) = GetRecord::builder().endpoint_disco(rx).build_with_end
 // depending on the duration of endpoint expiration, this may be spawned into a separate task to continuously
 // refresh endpoints.
 if tx.needs(endpoint_req) {
-    tx.send(client.call(endpoint_req).await)
+    let new_endpoint = client.
+        call(endpoint_req)
+        .await;
+    tx.send(new_endpoint)
 }
-let endpoints = client.call(endpoint_req).await?;
-tx.send(new_endpoints);
 let rsp = client.call(req).await?;
 ```
 
-We believe that this design results in an SDK that both offers customers more control & reduces the likelyhood of bugs from nested operation dispatch. Endpoint resolution is currently extremely rare in AWS services so this design may remain a prototype while we solidify other behaviors.
+We believe that this design results in an SDK that both offers customers more control & reduces the likelihood of bugs from nested operation dispatch. Endpoint resolution is currently extremely rare in AWS services so this design may remain a prototype while we solidify other behaviors.

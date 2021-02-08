@@ -8,7 +8,8 @@ use std::str::FromStr;
 
 /// API Endpoint
 ///
-/// This implements an API endpoint as specified in https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html
+/// This implements an API endpoint as specified in the
+/// [Smithy Endpoint Specification](https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html)
 pub struct Endpoint {
     uri: http::Uri,
 
@@ -40,7 +41,7 @@ impl Endpoint {
     ///
     /// Certain protocols will attempt to prefix additional information onto an endpoint. If you
     /// wish to ignore these prefixes (for example, when communicating with localhost), set `immutable` to `true`.
-    pub fn new(uri: http::Uri, immutable: bool) -> Result<Self, InvalidEndpoint> {
+    pub fn new(uri: Uri, immutable: bool) -> Result<Self, InvalidEndpoint> {
         Ok(Endpoint { uri, immutable })
     }
 
