@@ -2,7 +2,6 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-use crate::middleware::RequestStage;
 use crate::region::RegionExt;
 use auth::ProvideCredentials;
 use aws_sig_auth::{
@@ -14,6 +13,7 @@ use smithy_http::property_bag::PropertyBag;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tower::BoxError;
+use smithy_http::middleware::MapRequest;
 
 #[derive(Clone)]
 pub struct SignRequestStage {
@@ -76,7 +76,7 @@ impl CredentialProviderExt for PropertyBag {
     }
 }
 
-impl RequestStage for SignRequestStage {
+impl MapRequest for SignRequestStage {
     type Error = BoxError;
     fn apply(&self, request: operation::Request) -> Result<operation::Request, Self::Error> {
         request.augment(|request, config| {

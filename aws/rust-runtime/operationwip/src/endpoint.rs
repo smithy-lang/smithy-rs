@@ -8,11 +8,11 @@ use std::str::FromStr;
 
 use http::uri::Uri;
 
-use crate::middleware::RequestStage;
 use http::header::HOST;
 use smithy_http::operation;
 use smithy_http::property_bag::PropertyBag;
 use std::sync::Arc;
+use smithy_http::middleware::MapRequest;
 
 pub struct StaticEndpoint(http::Uri);
 
@@ -95,7 +95,7 @@ impl EndpointProviderExt for PropertyBag {
 #[derive(Clone, Copy)]
 /// Set the endpoint for a request based on the endpoint config
 pub struct AddEndpointStage;
-impl RequestStage for AddEndpointStage {
+impl MapRequest for AddEndpointStage {
     type Error = String;
     fn apply(&self, request: operation::Request) -> Result<operation::Request, Self::Error> {
         request.augment(|mut request, extensions| {

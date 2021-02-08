@@ -12,11 +12,7 @@ type BoxError = Box<dyn Error + Send + Sync>;
 use pin_project::pin_project;
 use smithy_http::body::SdkBody;
 use smithy_http::operation;
-
-pub trait RequestStage {
-    type Error: Into<BoxError>;
-    fn apply(&self, request: operation::Request) -> Result<operation::Request, Self::Error>;
-}
+use smithy_http::middleware::MapRequest;
 
 #[derive(Clone)]
 pub struct OperationRequestMiddlewareService<S, M> {
@@ -75,7 +71,7 @@ where
 impl<S, M> Service<operation::Request> for OperationRequestMiddlewareService<S, M>
 where
     S: Service<operation::Request>,
-    M: RequestStage,
+    M: MapRequest,
     S::Error: RequestConstructionErr,
 {
     type Response = S::Response;
@@ -181,7 +177,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::middleware::{DispatchLayer, OperationPipelineService, RequestStage};
+    use crate::middleware::{DispatchLayer, OperationPipelineService};
     use bytes::Bytes;
     use http::header::HeaderName;
     use http::{HeaderValue, Request, Response};
@@ -193,6 +189,7 @@ mod test {
     use std::convert::Infallible;
     use tower::service_fn;
     use tower::{Layer, Service};
+    use smithy_http::middleware::MapRequest;
 
     struct TestOperationParser;
 
@@ -215,7 +212,7 @@ mod test {
     async fn middleware_test() {
         #[derive(Clone)]
         struct AddHeader(String, String);
-        impl RequestStage for AddHeader {
+        impl MapRequest for AddHeader {
             type Error = Infallible;
             fn apply(
                 &self,
