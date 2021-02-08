@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use http::uri::{Authority, InvalidUri};
-use http::Uri;
+use http::uri::{Authority, InvalidUri, Uri};
 use std::str::FromStr;
 
 /// API Endpoint
@@ -52,7 +51,7 @@ impl Endpoint {
     /// use http::Uri;
     /// let endpoint = Endpoint::from_uri(Uri::from_static("http://localhost:8000"));
     /// ```
-    pub fn from_uri(uri: http::Uri) -> Self {
+    pub fn from_uri(uri: Uri) -> Self {
         Endpoint {
             uri,
             immutable: true,

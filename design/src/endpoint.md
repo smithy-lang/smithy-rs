@@ -33,7 +33,7 @@ In the case of endpoint discovery, we envision a different pattern:
 // EndpointClient manages the endpoint cache
 let (tx, rx) = dynamodb::EndpointClient::new();
 let client = aws_hyper::Client::new();
-// endpoint_req is an operation that can be dispatched to retrieve endpoints
+// `endpoint_req` is an operation that can be dispatched to retrieve endpoints
 // During operation construction, the endpoint resolver is configured to be `rx` instead static endpoint
 // resolver provided by the service.
 let (endpoint_req, req) = GetRecord::builder().endpoint_disco(rx).build_with_endpoint();
