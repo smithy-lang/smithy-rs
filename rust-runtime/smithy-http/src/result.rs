@@ -4,9 +4,10 @@
  */
 
 use std::error::Error;
-use std::fmt::Debug;
+use std::fmt;
+use std::fmt::{Debug, Display, Formatter};
 
-type BoxError = Box<dyn Error + Send + Sync>;
+type BoxError = Box<dyn Error + Send + Sync + 'static>;
 
 /// Body type when a response is returned. Currently, the only use case is introspecting errors
 /// so it is simply `Debug`. This is an area of potential design iteration.
@@ -30,7 +31,7 @@ pub struct SdkSuccess<O, B> {
 
 /// Failing Sdk Result
 ///
-/// Typically, transport implementations will type alias (or entirely wrap / transform) this type
+/// Typically, transport implementations will type alias (or wrap / transform) this type
 /// by specifying a concrete body implementation:
 /// ```rust
 /// # mod hyper {
@@ -56,4 +57,29 @@ pub enum SdkError<E, B> {
 
     /// An error response was received from the service
     ServiceError { raw: http::Response<B>, err: E },
+}
+
+impl<E, B> Display for SdkError<E, B>
+where
+    E: Error,
+    B: Debug,
+{
+    fn fmt(&self, _f: &mut Formatter<'_>) -> fmt::Result {
+        unimplemented!()
+    }
+}
+
+impl<E, B> Error for SdkError<E, B>
+where
+    E: Error + 'static,
+    B: Debug,
+{
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            SdkError::ConstructionFailure(err)
+            | SdkError::DispatchFailure(err)
+            | SdkError::ResponseError { err, .. } => Some(err.as_ref()),
+            SdkError::ServiceError { err, .. } => Some(err),
+        }
+    }
 }

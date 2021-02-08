@@ -181,7 +181,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::middleware::{BoxError, DispatchLayer, OperationPipelineService, RequestStage};
+    use crate::middleware::{DispatchLayer, OperationPipelineService, RequestStage};
     use bytes::Bytes;
     use http::header::HeaderName;
     use http::{HeaderValue, Request, Response};

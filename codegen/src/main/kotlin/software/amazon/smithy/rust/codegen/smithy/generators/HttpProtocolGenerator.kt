@@ -87,7 +87,6 @@ abstract class HttpProtocolGenerator(
             // pub fn builder() -> ... { }
             builderGenerator.renderConvenienceMethod(this)
         }
-        extras(operationWriter, operationShape)
         val operationName = symbolProvider.toSymbol(operationShape).name
         operationWriter.documentShape(operationShape, model)
         Derives(setOf(RuntimeType.Std("clone::Clone"))).render(operationWriter)
@@ -176,6 +175,4 @@ abstract class HttpProtocolGenerator(
         operationShape: OperationShape,
         inputShape: StructureShape
     )
-
-    open fun extras(moduleWriter: RustWriter, operationShape: OperationShape) {}
 }

@@ -1,7 +1,7 @@
-use std::borrow::Cow;
-use std::time::SystemTime;
-use std::error::Error;
 use auth::Credentials;
+use std::borrow::Cow;
+use std::error::Error;
+use std::time::SystemTime;
 
 #[derive(Eq, PartialEq, Clone, Copy)]
 pub enum SigningAlgorithm {
@@ -75,8 +75,8 @@ impl HttpSigner {
         credentials: &Credentials,
         request: &mut http::Request<B>,
     ) -> Result<(), SigningError>
-        where
-            B: AsRef<[u8]>,
+    where
+        B: AsRef<[u8]>,
     {
         let operation_config = &signing_config.operation_config;
         if operation_config.algorithm != SigningAlgorithm::SigV4
@@ -91,7 +91,7 @@ impl HttpSigner {
         let sigv4_creds = aws_sigv4::Credentials {
             access_key: credentials.access_key_id().to_string(),
             secret_key: credentials.secret_access_key().to_string(),
-            security_token: credentials.session_token().map(|s|s.to_string()),
+            security_token: credentials.session_token().map(|s| s.to_string()),
         };
         let date = signing_config.request_config.request_ts;
         for (key, value) in aws_sigv4::sign_core(

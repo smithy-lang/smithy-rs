@@ -52,9 +52,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config = dynamodb::Config::builder()
         .region("us-east-1")
         // To load credentials from environment variables, delete this line
-        .credentials_provider(auth::Credentials::from_static(
+        .credentials_provider(auth::Credentials::from_keys(
             "<fill me in2>",
             "<fill me in>",
+            None
         ))
         // To use real DynamoDB, delete this line:
         .endpoint_provider(StaticEndpoint::from_uri(http::Uri::from_static(
@@ -106,7 +107,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 output.table_names.unwrap_or_default()
             );
         }
-        Err(e) => panic!("err: {:?}", e.error()),
+        Err(e) => panic!("err: {:?}", e.source()),
     };
 
     Ok(())

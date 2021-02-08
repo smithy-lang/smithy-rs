@@ -73,8 +73,6 @@ class OperationInputBuilderGenerator(
         val returnType = "#T<#{T}, $retryType>".letIf(fallibleBuilder) { "Result<$it, String>" }
         val outputSymbol = symbolProvider.toSymbol(shape)
         val operationT = RuntimeType.operation(symbolProvider.config().runtimeConfig)
-        val operationModule = RuntimeType.operationModule(symbolProvider.config().runtimeConfig)
-        val sdkBody = RuntimeType.sdkBody(symbolProvider.config().runtimeConfig)
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
         implBlockWriter.rustBlock(

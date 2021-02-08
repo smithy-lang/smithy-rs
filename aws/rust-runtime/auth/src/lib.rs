@@ -1,9 +1,9 @@
 pub mod provider;
 
-use std::time::SystemTime;
 use std::error::Error;
-use std::fmt::{Display, Formatter, Debug};
 use std::fmt;
+use std::fmt::{Debug, Display, Formatter};
+use std::time::SystemTime;
 
 /// AWS SDK Credentials
 ///
@@ -50,7 +50,7 @@ impl Credentials {
             session_token,
             expires_after: None,
 
-            provider_name: STATIC_CREDENTIALS
+            provider_name: STATIC_CREDENTIALS,
         }
     }
 
@@ -71,14 +71,14 @@ impl Credentials {
 #[non_exhaustive]
 pub enum CredentialsError {
     CredentialsNotLoaded,
-    Unhandled(Box<dyn Error + Send + Sync + 'static>)
+    Unhandled(Box<dyn Error + Send + Sync + 'static>),
 }
 
 impl Display for CredentialsError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             CredentialsError::CredentialsNotLoaded => write!(f, "CredentialsNotLoaded"),
-            CredentialsError::Unhandled(err) => write!(f, "{}", err)
+            CredentialsError::Unhandled(err) => write!(f, "{}", err),
         }
     }
 }
@@ -87,7 +87,7 @@ impl Error for CredentialsError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             CredentialsError::Unhandled(e) => Some(e.as_ref() as _),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -101,7 +101,6 @@ impl Error for CredentialsError {
 pub trait ProvideCredentials: Send + Sync {
     fn credentials(&self) -> Result<Credentials, CredentialsError>;
 }
-
 
 pub fn default_provider() -> impl ProvideCredentials {
     // TODO: this should be a chain based on the CRT

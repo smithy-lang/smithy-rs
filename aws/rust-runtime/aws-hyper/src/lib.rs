@@ -1,4 +1,4 @@
-use bytes::{Buf, Bytes};
+use bytes::Bytes;
 use hyper::Client as HyperClient;
 use operationwip::middleware::OperationError;
 use smithy_http::body::SdkBody;
@@ -9,52 +9,8 @@ use tower::{Layer, Service, ServiceBuilder, ServiceExt};
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
-#[derive(Debug)]
-pub struct SdkSuccess<O> {
-    pub raw: http::Response<Box<dyn Debug>>,
-    pub parsed: O,
-}
-
-#[derive(Debug)]
-pub enum SdkError<E> {
-    ConstructionFailure(BoxError),
-    DispatchFailure(BoxError),
-    ResponseError {
-        raw: http::Response<Box<dyn Debug>>,
-        err: BoxError,
-    },
-    ServiceError {
-        raw: http::Response<Box<dyn Debug>>,
-        err: E,
-    },
-}
-
-pub fn sdk_result<T, E, B: Debug + 'static>(
-    parsed: Result<T, E>,
-    raw: http::Response<B>,
-) -> Result<SdkSuccess<T>, SdkError<E>> {
-    match parsed {
-        Ok(parsed) => Ok(SdkSuccess {
-            raw: raw.map(|b| Box::new(b) as _),
-            parsed,
-        }),
-        Err(err) => Err(SdkError::ServiceError {
-            raw: raw.map(|b| Box::new(b) as _),
-            err,
-        }),
-    }
-}
-
-impl<E: Error + 'static> SdkError<E> {
-    pub fn error(self) -> Box<dyn Error> {
-        match self {
-            SdkError::DispatchFailure(e) => e,
-            SdkError::ResponseError { err, .. } => err,
-            SdkError::ServiceError { err, .. } => Box::new(err),
-            SdkError::ConstructionFailure(e) => e,
-        }
-    }
-}
+pub type SdkError<E> = smithy_http::result::SdkError<E, hyper::Body>;
+pub type SdkSuccess<T> = smithy_http::result::SdkSuccess<T, hyper::Body>;
 
 pub struct Client<S> {
     inner: S,
@@ -62,9 +18,7 @@ pub struct Client<S> {
 
 impl<S> Client<S> {
     pub fn new(connector: S) -> Self {
-        Client {
-            inner: connector
-        }
+        Client { inner: connector }
     }
 }
 
@@ -84,43 +38,18 @@ impl<S> Client<S> {
     }
 }
 
-fn operation_error<OE, E>(o: OperationError<OE>) -> SdkError<E>
-    where
-        OE: Into<BoxError>,
+fn operation_error<OE, E, B>(o: OperationError<OE>) -> smithy_http::result::SdkError<E, B>
+where
+    OE: Into<BoxError>,
 {
     match o {
-        OperationError::DispatchError(e) => SdkError::DispatchFailure(e.into()),
-        OperationError::ConstructionError(e) => SdkError::ConstructionFailure(e),
-    }
-}
-
-async fn load_response<B, T, E, O>(
-    mut response: http::Response<B>,
-    handler: &O,
-) -> Result<SdkSuccess<T>, SdkError<E>>
-    where
-        B: http_body::Body + Unpin,
-        B: From<Bytes> + Debug + 'static,
-        B::Error: Error + Send + Sync + 'static,
-        O: ParseHttpResponse<B, Output=Result<T, E>>,
-{
-    if let Some(parsed_response) = handler.parse_unloaded(&mut response) {
-        return sdk_result(parsed_response, response);
-    }
-
-    let body = match read_body(response.body_mut()).await {
-        Ok(body) => body,
-        Err(e) => {
-            return Err(SdkError::ResponseError {
-                raw: response.map(|b| Box::new(b) as _),
-                err: Box::new(e),
-            });
+        OperationError::DispatchError(e) => {
+            smithy_http::result::SdkError::DispatchFailure(e.into())
         }
-    };
-
-    let response = response.map(|_| Bytes::from(body));
-    let parsed = handler.parse_loaded(&response);
-    return sdk_result(parsed, response.map(B::from));
+        OperationError::ConstructionError(e) => {
+            smithy_http::result::SdkError::ConstructionFailure(e)
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -133,11 +62,11 @@ pub struct ParseResponseService<S> {
 struct RetryStrategy {}
 
 impl<Handler: Clone, R: Clone, Response, Error>
-tower::retry::Policy<operation::Operation<Handler, R>, Response, Error> for RetryStrategy
-    where
-        R: RetryPolicy<Response, Error>,
+    tower::retry::Policy<operation::Operation<Handler, R>, Response, Error> for RetryStrategy
+where
+    R: RetryPolicy<Response, Error>,
 {
-    type Future = Pin<Box<dyn Future<Output=Self>>>;
+    type Future = Pin<Box<dyn Future<Output = Self>>>;
 
     fn retry(
         &self,
@@ -161,8 +90,8 @@ tower::retry::Policy<operation::Operation<Handler, R>, Response, Error> for Retr
 pub struct ParseResponseLayer;
 
 impl<S> Layer<S> for ParseResponseLayer
-    where
-        S: Service<operation::Request>,
+where
+    S: Service<operation::Request>,
 {
     type Service = ParseResponseService<S>;
 
@@ -171,20 +100,19 @@ impl<S> Layer<S> for ParseResponseLayer
     }
 }
 
-type BoxedResultFuture<T, E> = Pin<Box<dyn Future<Output=Result<T, E>>>>;
+type BoxedResultFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>>>>;
 
 impl<S, O, T, E, B, R, OE> tower::Service<operation::Operation<O, R>> for ParseResponseService<S>
-    where
-        S: Service<operation::Request, Response=http::Response<B>, Error=OperationError<OE>>,
-        OE: Into<BoxError>,
-        S::Future: 'static,
-        O: ParseHttpResponse<B, Output=Result<T, E>> + 'static,
-        B: http_body::Body + Unpin + Debug + 'static,
-        B: From<Bytes>,
-        B::Error: Error + Send + Sync + 'static,
+where
+    S: Service<operation::Request, Response = http::Response<B>, Error = OperationError<OE>>,
+    OE: Into<BoxError>,
+    S::Future: 'static,
+    B: http_body::Body + Unpin + From<Bytes> + 'static,
+    B::Error: Into<BoxError>,
+    O: ParseHttpResponse<B, Output = Result<T, E>> + 'static,
 {
-    type Response = SdkSuccess<T>;
-    type Error = SdkError<E>;
+    type Response = smithy_http::result::SdkSuccess<T, B>;
+    type Error = smithy_http::result::SdkError<E, B>;
     type Future = BoxedResultFuture<Self::Response, Self::Error>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -196,7 +124,7 @@ impl<S, O, T, E, B, R, OE> tower::Service<operation::Operation<O, R>> for ParseR
         let resp = self.inner.call(req);
         let fut = async move {
             match resp.await {
-                Err(e) => Err(operation_error::<OE, E>(e)),
+                Err(e) => Err(operation_error::<OE, E, B>(e)),
                 Ok(resp) => load_response(resp, &handler).await,
             }
         };
@@ -205,22 +133,22 @@ impl<S, O, T, E, B, R, OE> tower::Service<operation::Operation<O, R>> for ParseR
 }
 
 impl<S> Client<S>
-    where
-        S: Service<http::Request<SdkBody>, Response=http::Response<hyper::Body>>
+where
+    S: Service<http::Request<SdkBody>, Response = http::Response<hyper::Body>>
         + Send
         + Clone
         + 'static,
-        S::Error: Into<BoxError> + Send + Sync + 'static,
-        S::Future: Send + 'static,
+    S::Error: Into<BoxError> + Send + Sync + 'static,
+    S::Future: Send + 'static,
 {
     /// Dispatch this request to the network
     ///
     /// For ergonomics, this does not include the raw response for successful responses. To
     /// access the raw response use `call_raw`.
     pub async fn call<O, R, E, Retry>(&self, input: Operation<O, Retry>) -> Result<R, SdkError<E>>
-        where
-            O: ParseHttpResponse<hyper::Body, Output=Result<R, E>> + Send + Clone + 'static,
-            Retry: RetryPolicy<SdkSuccess<R>, SdkError<E>> + Send + Clone + 'static,
+    where
+        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + Clone + 'static,
+        Retry: RetryPolicy<SdkSuccess<R>, SdkError<E>> + Send + Clone + 'static,
     {
         self.call_raw(input).await.map(|res| res.parsed)
     }
@@ -229,18 +157,13 @@ impl<S> Client<S>
         &self,
         input: Operation<O, Retry>,
     ) -> Result<SdkSuccess<R>, SdkError<E>>
-        where
-            O: ParseHttpResponse<hyper::Body, Output=Result<R, E>> + Send + Clone + 'static,
-            Retry: RetryPolicy<SdkSuccess<R>, SdkError<E>> + Send + Clone + 'static,
+    where
+        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + Clone + 'static,
+        Retry: RetryPolicy<SdkSuccess<R>, SdkError<E>> + Send + Clone + 'static,
     {
         let signer = OperationPipelineService::for_stage(SignRequestStage::new());
         let endpoint_resolver = OperationPipelineService::for_stage(AddEndpointStage);
         let inner = self.inner.clone();
-        // TODO: reorder to call ready_and on the entire stack
-        /*let inner = inner
-        .ready_and()
-        .await
-        .map_err(|e| _SdkError::DispatchFailure(e.into()))?;*/
         let mut svc = ServiceBuilder::new()
             .retry(RetryStrategy {})
             .map_request(|r: Operation<O, Retry>| r)
@@ -256,7 +179,6 @@ impl<S> Client<S>
     }
 }
 
-use http_body::Body;
 use hyper::client::HttpConnector;
 use hyper_tls::HttpsConnector;
 use middleware_tracing::RawRequestLogging;
@@ -264,30 +186,18 @@ use operationwip::endpoint::AddEndpointStage;
 use operationwip::middleware::{DispatchLayer, OperationPipelineService};
 use operationwip::retry_policy::RetryPolicy;
 use operationwip::signing_middleware::SignRequestStage;
+use smithy_http::middleware::load_response;
 use smithy_http::operation::Operation;
-use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
-    let mut output = Vec::new();
-    pin_utils::pin_mut!(body);
-    while let Some(buf) = body.data().await {
-        let mut buf = buf?;
-        while buf.has_remaining() {
-            output.extend_from_slice(buf.chunk());
-            buf.advance(buf.chunk().len())
-        }
-    }
-    Ok(output)
-}
-
 #[cfg(test)]
 mod test {
     use crate::{BoxError, Client};
     use auth::Credentials;
+    use aws_sig_auth::OperationSigningConfig;
     use bytes::Bytes;
     use http::header::AUTHORIZATION;
     use http::{Request, Response, Uri};
@@ -306,7 +216,6 @@ mod test {
     use std::sync::{mpsc, Arc};
     use std::time::Duration;
     use std::time::UNIX_EPOCH;
-    use aws_sig_auth::OperationSigningConfig;
 
     #[derive(Clone)]
     struct TestService {
@@ -326,7 +235,7 @@ mod test {
     impl tower::Service<http::Request<SdkBody>> for TestService {
         type Response = http::Response<hyper::Body>;
         type Error = BoxError;
-        type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>> + Send>>;
+        type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
         fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
             Poll::Ready(Ok(()))
@@ -343,8 +252,8 @@ mod test {
     struct TestOperationParser;
 
     impl<B> ParseHttpResponse<B> for TestOperationParser
-        where
-            B: http_body::Body,
+    where
+        B: http_body::Body,
     {
         type Output = Result<String, String>;
 
@@ -375,22 +284,20 @@ mod test {
                 .body(SdkBody::from("Hello"))
                 .unwrap(),
         )
-            .augment(|req, config| {
-                config.insert(Region::new("some-region"));
-                config.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
-                config.insert_signing_config(OperationSigningConfig::default_config(
-                    "some-service",
-                ));
-                use operationwip::signing_middleware::CredentialProviderExt;
-                config.insert_credentials_provider(Arc::new(Credentials::from_keys(
-                    "access", "secret", None,
-                )));
-                config.insert_endpoint_provider(Arc::new(StaticEndpoint::from_uri(Uri::from_static(
-                    "http://localhost:8000",
-                ))));
-                Result::<_, ()>::Ok(req)
-            })
-            .expect("valid request");
+        .augment(|req, config| {
+            config.insert(Region::new("some-region"));
+            config.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
+            config.insert_signing_config(OperationSigningConfig::default_config("some-service"));
+            use operationwip::signing_middleware::CredentialProviderExt;
+            config.insert_credentials_provider(Arc::new(Credentials::from_keys(
+                "access", "secret", None,
+            )));
+            config.insert_endpoint_provider(Arc::new(StaticEndpoint::from_uri(Uri::from_static(
+                "http://localhost:8000",
+            ))));
+            Result::<_, ()>::Ok(req)
+        })
+        .expect("valid request");
 
         let operation = Operation::new(request, TestOperationParser);
 

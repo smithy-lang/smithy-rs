@@ -4,9 +4,9 @@
  */
 use crate::middleware::RequestStage;
 use crate::region::RegionExt;
+use auth::ProvideCredentials;
 use aws_sig_auth::{
-    HttpSigner, HttpSigningConfig, OperationSigningConfig, RequestConfig,
-    SigningConfig,
+    HttpSigner, HttpSigningConfig, OperationSigningConfig, RequestConfig, SigningConfig,
 };
 use http::Request;
 use smithy_http::operation;
@@ -14,7 +14,6 @@ use smithy_http::property_bag::PropertyBag;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tower::BoxError;
-use auth::ProvideCredentials;
 
 #[derive(Clone)]
 pub struct SignRequestStage {
