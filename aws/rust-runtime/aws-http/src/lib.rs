@@ -46,6 +46,12 @@ impl AwsErrorRetryPolicy {
     }
 }
 
+impl Default for AwsErrorRetryPolicy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ClassifyResponse for AwsErrorRetryPolicy {
     fn classify<E, B>(&self, err: E, response: &http::Response<B>) -> RetryKind
     where
