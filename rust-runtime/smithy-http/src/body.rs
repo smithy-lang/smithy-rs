@@ -6,6 +6,8 @@
 use bytes::Bytes;
 use http::{HeaderMap, HeaderValue};
 use std::error::Error;
+use std::fmt;
+use std::fmt::{Debug, Formatter};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -22,6 +24,19 @@ type BodyError = Box<dyn Error + Send + Sync>;
 pub enum SdkBody {
     Once(Option<Bytes>),
     // TODO: tokio::sync::mpsc based streaming body
+}
+
+impl Debug for SdkBody {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            SdkBody::Once(Some(bytes)) => {
+                write!(f, "SdkBody {:?}", bytes)
+            }
+            SdkBody::Once(None) => {
+                write!(f, "SdkBody::Empty")
+            }
+        }
+    }
 }
 
 impl SdkBody {
