@@ -48,6 +48,13 @@ fun validateConfigCustomizations(vararg customization: ConfigCustomization) {
     val project = TestWorkspace.testProject()
     project.useFileWriter("src/config.rs", "crate::config") {
         generator.render(it)
+        it.unitTest(
+            """
+            fn assert_send_sync<T: Send + Sync>() {}
+            assert_send_sync::<Config>();
+
+        """
+        )
     }
     project.compileAndTest()
 }

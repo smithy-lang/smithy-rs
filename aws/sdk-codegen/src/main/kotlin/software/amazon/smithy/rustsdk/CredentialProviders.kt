@@ -9,6 +9,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
@@ -43,31 +44,33 @@ class CredentialsProviderDecorator : RustCodegenDecorator {
 /**
  * Add a `.credentials_provider` field and builder to the `Config` for a given service
  */
-class CredentialProviderConfig(private val runtimeConfig: RuntimeConfig) : ConfigCustomization() {
+class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
     private val credentialsProvider = credentialsProvider(runtimeConfig)
     private val defaultProvider = defaultProvider(runtimeConfig)
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rust(
-                """pub(crate) credentials_provider: ::std::sync::Arc<dyn #T>,""",
+                """pub(crate) credentials_provider: std::sync::Arc<dyn #T>,""",
                 credentialsProvider
             )
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
-                rust("credentials_provider: Option<::std::sync::Arc<dyn #T>>,", credentialsProvider)
-            ServiceConfig.BuilderImpl ->
+                rust("credentials_provider: Option<std::sync::Arc<dyn #T>>,", credentialsProvider)
+            ServiceConfig.BuilderImpl -> {
+                docs("""Set the credentials provider for this service""")
                 rust(
                     """
             pub fn credentials_provider(mut self, credentials_provider: impl #T + 'static) -> Self {
-                self.credentials_provider = Some(::std::sync::Arc::new(credentials_provider));
+                self.credentials_provider = Some(std::sync::Arc::new(credentials_provider));
                 self
             }
             """,
                     credentialsProvider
 
                 )
+            }
             ServiceConfig.BuilderBuild -> rust(
-                "credentials_provider: self.credentials_provider.unwrap_or_else(|| ::std::sync::Arc::new(#T())),",
+                "credentials_provider: self.credentials_provider.unwrap_or_else(|| std::sync::Arc::new(#T())),",
                 defaultProvider
             )
         }

@@ -24,6 +24,7 @@ mod test {
     use proptest::std_facade::HashMap;
     use smithy_types::Document;
     use smithy_types::Number;
+    use crate::idempotency_token;
 
     #[test]
     fn nan_floats_serialize_null() {
@@ -45,6 +46,12 @@ mod test {
             uuid_v4(u128::max_value()),
             "ffffffff-ffff-4fff-ffff-ffffffffffff"
         );
+    }
+
+    #[test]
+    fn default_token_generator() {
+       use crate::idempotency_token::ProvideIdempotencyToken;
+       assert_eq!(idempotency_token::default_provider().token().len(), 36);
     }
 
     fn assert_valid(uuid: String) {
