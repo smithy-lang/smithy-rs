@@ -137,6 +137,27 @@ class BasicAwsJsonGenerator(
     private val awsJsonVersion: AwsJsonVersion
 ) : HttpProtocolGenerator(protocolConfig) {
     private val model = protocolConfig.model
+    override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
+        // All AWS JSON protocols do NOT support streaming shapes
+        val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
+        val operationName = symbolProvider.toSymbol(operationShape).name
+        operationWriter.rustTemplate(
+            """
+            impl #{parse_strict} for $operationName {
+                type Output = Result<#{output}, #{error}>;
+                fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
+                    self.parse_response(response)
+                }
+            }
+        """,
+            "parse_strict" to RuntimeType.parseStrict(symbolProvider.config().runtimeConfig),
+            "output" to outputSymbol,
+            "error" to operationShape.errorSymbol(symbolProvider),
+            "response" to RuntimeType.Http("Response"),
+            "bytes" to RuntimeType.Bytes
+        )
+    }
+
     private val symbolProvider = protocolConfig.symbolProvider
     private val operationIndex = OperationIndex.of(model)
     override fun toHttpRequestImpl(

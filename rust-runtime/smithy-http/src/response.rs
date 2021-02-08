@@ -6,7 +6,7 @@
 use bytes::Bytes;
 use http::Response;
 
-/// `ParseHttpResponse` is a generic trait for parsing structured data from HTTP respsones.
+/// `ParseHttpResponse` is a generic trait for parsing structured data from HTTP responses.
 ///
 /// It is designed to be nearly infinitely flexible, because `Output` is unconstrained, it can be used to support
 /// event streams, S3 streaming responses, regular request-response style operations, as well
@@ -47,10 +47,16 @@ pub trait ParseHttpResponse<B> {
     fn parse_unloaded(&self, response: &mut http::Response<B>) -> Option<Self::Output>;
 
     /// Parse an HTTP request from a fully loaded body. This is for standard request/response style
-    /// APIs like AwsJSON as well as for the error path of most streaming APIs
+    /// APIs like AwsJson 1.0/1.1 and the error path of most streaming APIs
     ///
     /// Using an explicit body type of Bytes here is a conscious decision—If you _really_ need
-    /// to precisely control how the data is loaded into memory, use `parse_unloaded`.
+    /// to precisely control how the data is loaded into memory (eg. by using `bytes::Buf`), implement
+    /// your handler in `parse_unloaded`.
+    ///
+    /// Production code will never call `parse_loaded` without first calling `parse_unloaded`. However,
+    /// in tests it may be easier to use `parse_loaded` directly. It is OK to panic in `parse_loaded`
+    /// if `parse_unloaded` will never return `None`, however, it may make your code easier to test if an
+    /// implementation is provided.
     fn parse_loaded(&self, response: &http::Response<Bytes>) -> Self::Output;
 }
 
@@ -75,5 +81,41 @@ where
 
     fn parse_loaded(&self, response: &Response<Bytes>) -> Self::Output {
         self.parse(response)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::response::ParseHttpResponse;
+    use bytes::Bytes;
+    use http::Response;
+    use http_body::Body;
+    use std::mem;
+
+    #[test]
+    fn supports_streaming_body() {
+        struct S3GetObject<B: Body> {
+            pub body: B,
+        }
+
+        struct S3GetObjectParser;
+
+        impl<B> ParseHttpResponse<B> for S3GetObjectParser
+        where
+            B: Default + Body,
+        {
+            type Output = S3GetObject<B>;
+
+            fn parse_unloaded(&self, response: &mut Response<B>) -> Option<Self::Output> {
+                // For responses that pass on the body, use mem::take to leave behind an empty
+                // body
+                let body = mem::take(response.body_mut());
+                Some(S3GetObject { body })
+            }
+
+            fn parse_loaded(&self, _response: &Response<Bytes>) -> Self::Output {
+                unimplemented!()
+            }
+        }
     }
 }

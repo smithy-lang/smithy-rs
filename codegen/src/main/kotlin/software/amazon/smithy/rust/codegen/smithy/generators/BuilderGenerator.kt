@@ -72,9 +72,17 @@ class OperationInputBuilderGenerator(
         val retryType = "()"
         val returnType = "#T<#{T}, $retryType>".letIf(fallibleBuilder) { "Result<$it, String>" }
         val outputSymbol = symbolProvider.toSymbol(shape)
+        val operationT = RuntimeType.operation(symbolProvider.config().runtimeConfig)
+        val operationModule = RuntimeType.operationModule(symbolProvider.config().runtimeConfig)
+        val sdkBody = RuntimeType.sdkBody(symbolProvider.config().runtimeConfig)
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
-        implBlockWriter.rustBlock("pub fn build(self, _config: &#T::Config) -> $returnType", RuntimeType.Config, RuntimeType.Operation(runtimeConfig), outputSymbol) {
+        implBlockWriter.rustBlock(
+            "pub fn build(self, _config: &#T::Config) -> $returnType",
+            RuntimeType.Config,
+            RuntimeType.operation(runtimeConfig),
+            outputSymbol
+        ) {
             conditionalBlock("Ok({", "})", conditional = fallibleBuilder) {
                 withBlock("let op = #T::new(", ");", outputSymbol) {
                     coreBuilder(this)
@@ -84,7 +92,7 @@ class OperationInputBuilderGenerator(
                     ##[allow(unused_mut)]
                     let mut request = #T::Request::new(op.build_http_request().map(#T::from));
                 """,
-                    RuntimeType.OperationModule(runtimeConfig), RuntimeType.SdkBody(runtimeConfig),
+                    RuntimeType.operationModule(runtimeConfig), RuntimeType.sdkBody(runtimeConfig),
                 )
                 plugins.forEach { it.section(OperationSection.Plugin)(this) }
                 rust(
@@ -94,7 +102,7 @@ class OperationInputBuilderGenerator(
                         op
                     )
                 """,
-                    RuntimeType.Operation(symbolProvider.config().runtimeConfig)
+                    operationT
                 )
             }
         }
