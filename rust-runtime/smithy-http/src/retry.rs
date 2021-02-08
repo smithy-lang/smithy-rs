@@ -9,8 +9,8 @@
 
 use smithy_types::retry::{ProvideErrorKind, RetryKind};
 
-pub trait HttpRetryPolicy {
-    fn retry_kind<E, B>(&self, e: E, response: &http::Response<B>) -> RetryKind
+pub trait ClassifyResponse {
+    fn classify<E, B>(&self, e: E, response: &http::Response<B>) -> RetryKind
     where
         E: ProvideErrorKind;
 }
