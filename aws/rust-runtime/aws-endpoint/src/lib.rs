@@ -19,16 +19,41 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct AwsEndpoint {
     endpoint: Endpoint,
-    signing_service: SigningService,
-    signing_region: SigningRegion,
+    signing_service: Option<SigningService>,
+    signing_region: Option<SigningRegion>,
 }
 
 pub type BoxError = Box<dyn Error + Send + Sync + 'static>;
 
 /// Resolve the AWS Endpoint for a given region
 ///
-/// Each individual service will generate their own implementation of `ResolveAwsEndpoint`. This implementation
-/// may use endpoint discovery (if used by the service). The list of supported regions for a given service
+/// To provide a static endpoint, [`Endpoint`](smithy_http::endpoint::Endpoint) implements this trait.
+/// Example usage:
+/// ```rust
+/// # mod dynamodb {
+/// # use aws_endpoint::ResolveAwsEndpoint;
+/// # pub struct ConfigBuilder;
+/// # impl ConfigBuilder {
+/// #     pub fn endpoint(&mut self, resolver: impl ResolveAwsEndpoint + 'static) {
+/// #         // ...
+/// #     }
+/// # }
+/// # pub struct Config;
+/// # impl Config {
+/// #     pub fn builder() -> ConfigBuilder {
+/// #         ConfigBuilder
+/// #     }
+/// # }
+/// # }
+/// use smithy_http::endpoint::Endpoint;
+/// use http::Uri;
+/// let config = dynamodb::Config::builder()
+///     .endpoint(
+///         Endpoint::immutable(Uri::from_static("http://localhost:8080"))
+///     );
+/// ```
+/// In the future, each AWS service will generate their own implementation of `ResolveAwsEndpoint`. This implementation
+/// may use endpoint discovery. The list of supported regions for a given service
 /// will be codegenerated from `endpoints.json`.
 pub trait ResolveAwsEndpoint: Send + Sync {
     // TODO: consider if we want modeled error variants here
@@ -50,6 +75,17 @@ impl DefaultAwsEndpointResolver {
     }
 }
 
+/// An `Endpoint` can be its own resolver to support static endpoints
+impl ResolveAwsEndpoint for Endpoint {
+    fn endpoint(&self, _region: &Region) -> Result<AwsEndpoint, BoxError> {
+        Ok(AwsEndpoint {
+            endpoint: self.clone(),
+            signing_service: None,
+            signing_region: None,
+        })
+    }
+}
+
 impl ResolveAwsEndpoint for DefaultAwsEndpointResolver {
     fn endpoint(&self, region: &Region) -> Result<AwsEndpoint, BoxError> {
         let uri = Uri::from_str(&format!(
@@ -59,8 +95,8 @@ impl ResolveAwsEndpoint for DefaultAwsEndpointResolver {
         ))?;
         Ok(AwsEndpoint {
             endpoint: Endpoint::mutable(uri),
-            signing_region: region.clone().into(),
-            signing_service: SigningService::from_static(self.service),
+            signing_region: Some(region.clone().into()),
+            signing_service: Some(SigningService::from_static(self.service)),
         })
     }
 }
@@ -111,8 +147,13 @@ impl MapRequest for AwsEndpointStage {
             let endpoint = provider
                 .endpoint(region)
                 .map_err(AwsEndpointStageError::EndpointResolutionError)?;
-            config.insert(endpoint.signing_region);
-            config.insert(endpoint.signing_service);
+            let signing_region = endpoint
+                .signing_region
+                .unwrap_or_else(|| region.clone().into());
+            config.insert::<SigningRegion>(signing_region);
+            if let Some(signing_service) = endpoint.signing_service {
+                config.insert::<SigningService>(signing_service);
+            }
             endpoint
                 .endpoint
                 .set_endpoint(http_req.uri_mut(), config.get::<EndpointPrefix>());

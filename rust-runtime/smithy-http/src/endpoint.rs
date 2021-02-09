@@ -3,10 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::middleware::MapRequest;
-use crate::operation::Request;
 use http::uri::{Authority, InvalidUri, Uri};
-use std::convert::Infallible;
 use std::str::FromStr;
 
 /// API Endpoint
@@ -88,23 +85,6 @@ impl Endpoint {
             .build()
             .expect("valid uri");
         *uri = new_uri;
-    }
-}
-
-/// An EndpointProvider operates at the request mapper level
-///
-/// A simple StaticEndpoint provider like `Endpoint` will simply set the URI of the request.
-/// However, a more complex endpoint provider may mutate the config map (eg. by adding setting a signing region)
-pub trait ProvideEndpoint: MapRequest + Send + Sync {}
-
-impl MapRequest for Endpoint {
-    type Error = Infallible;
-
-    fn apply(&self, request: Request) -> Result<Request, Self::Error> {
-        request.augment(|mut req, conf| {
-            self.set_endpoint(req.uri_mut(), conf.get::<EndpointPrefix>());
-            Ok(req)
-        })
     }
 }
 
