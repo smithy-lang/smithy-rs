@@ -55,6 +55,18 @@ impl Credentials {
             provider_name: STATIC_CREDENTIALS
         }
     }
+
+    pub fn access_key_id(&self) -> &str {
+        &self.access_key_id
+    }
+
+    pub fn secret_access_key(&self) -> &str {
+        &self.secret_access_key
+    }
+
+    pub fn session_token(&self) -> Option<&str> {
+        self.session_token.as_deref()
+    }
 }
 
 #[derive(Debug)]
