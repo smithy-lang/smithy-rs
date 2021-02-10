@@ -50,7 +50,7 @@ fun discoverServices(): List<AwsService> {
             throw Exception("There must be exactly one service in each aws model file")
         }
         val service = services[0]
-        val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId.toLowerCase()
+        val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId.toLowerCase().replace(" ", "")
         AwsService(service = service.id.toString(), module = sdkId, modelFile = file)
     }
 }
