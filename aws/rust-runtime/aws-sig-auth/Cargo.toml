@@ -13,3 +13,6 @@ aws-sigv4-poc = { package = "aws-sigv4", git = "https://github.com/rcoh/sigv4", 
 aws-auth = { path = "../aws-auth" }
 aws-types = { path = "../aws-types" }
 smithy-http = { path = "../../../rust-runtime/smithy-http" }
+# Trying this out as an experiment. thiserror can be removed and replaced with hand written error
+# implementations and it is not a breaking change.
+thiserror = "1"

@@ -4,51 +4,76 @@
  */
 
 use crate::signer::{OperationSigningConfig, RequestConfig, SigV4Signer, SigningError};
-use aws_auth::{Credentials, CredentialsProvider};
+use aws_auth::{Credentials, CredentialsError, CredentialsProvider};
 use aws_types::{SigningRegion, SigningService};
 use smithy_http::middleware::MapRequest;
 use smithy_http::operation::Request;
 use smithy_http::property_bag::PropertyBag;
 use std::time::SystemTime;
 
+/// Middleware stage to sign requests with SigV4
+///
+/// SigV4RequestSignerStage will load configuration from the request property bag and add
+/// a signature.
+///
+/// Prior to signing, the following fields MUST be present in the property bag:
+/// - [`SigningRegion`](SigningRegion): The region used when signing the request, eg. `us-east-1`
+/// - [`SigningService`](SigningService): The name of the service to use when signing the request, eg. `dynamodb`
+/// - [`CredentialsProvider`](CredentialsProvider): A credentials provider to retrieve credentials
+/// - [`OperationSigningConfig`](OperationSigningConfig): Operation specific signing configuration, eg.
+///   changes to URL encoding behavior, or headers that must be omitted.
+/// If any of these fields are missing, the middleware will return an error.
+///
+/// The following fields MAY be present in the property bag:
+/// - [`SystemTime`](SystemTime): The timestamp to use when signing the request. If this field is not present
+///   [`SystemTime::now`](SystemTime::now) will be used.
 #[derive(Clone)]
-pub struct SigV4RequestSignerStage {
+pub struct SigV4SigningStage {
     signer: SigV4Signer,
 }
 
-impl SigV4RequestSignerStage {
+impl SigV4SigningStage {
     pub fn new(signer: SigV4Signer) -> Self {
         Self { signer }
     }
 }
 
-enum SigningStageError {
+use thiserror::Error;
+#[derive(Debug, Error)]
+pub enum SigningStageError {
+    #[error("No credentials provider in the property bag")]
     MissingCredentialsProvider,
+    #[error("No signing region in the property bag")]
     MissingSigningRegion,
+    #[error("No signing service in the property bag")]
     MissingSigningService,
+    #[error("No signing configuration in the property bag")]
     MissingSigningConfig,
+    #[error("The request body could not be signed by this configuration")]
     InvalidBodyType,
-    SigningFailure(SigningError),
+    #[error("Signing failed")]
+    SigningFailure(#[from] SigningError),
+    #[error("Failed to load credentials from the credentials provider")]
+    CredentialsLoadingError(#[from] CredentialsError),
 }
 
+/// Extract a signing config from a [`PropertyBag`](smithy_http::property_bag::PropertyBag)
 fn signing_config(
     config: &PropertyBag,
 ) -> Result<(&OperationSigningConfig, RequestConfig, Credentials), SigningStageError> {
     let operation_config = config
         .get::<OperationSigningConfig>()
-        .ok_or(SigningError::MissingSigningConfig)?;
-    let cred_provider = config.get::<CredentialsProvider>();
-    let creds = match cred_provider.credentials() {
-        Ok(creds) => creds,
-        Err(e) => return Err(e.into()),
-    };
+        .ok_or(SigningStageError::MissingSigningConfig)?;
+    let cred_provider = config
+        .get::<CredentialsProvider>()
+        .ok_or(SigningStageError::MissingCredentialsProvider)?;
+    let creds = cred_provider.credentials()?;
     let region = config
-        .signing_region()
-        .ok_or(SigningError::MissingSigningRegion)?
-        .to_string();
+        .get::<SigningRegion>()
+        .ok_or(SigningStageError::MissingSigningRegion)?;
     let signing_service = config
         .get::<SigningService>()
-        .ok_or(SigningError::MissingSigningService)?;
+        .ok_or(SigningStageError::MissingSigningService)?;
     let request_config = RequestConfig {
         request_ts: config
             .get::<SystemTime>()
@@ -60,8 +85,8 @@ fn signing_config(
     Ok((operation_config, request_config, creds))
 }
 
-impl MapRequest for SigV4RequestSignerStage {
-    type Error = SigningError;
+impl MapRequest for SigV4SigningStage {
+    type Error = SigningStageError;
 
     fn apply(&self, req: Request) -> Result<Request, Self::Error> {
         req.augment(|req, config| {
@@ -71,13 +96,8 @@ impl MapRequest for SigV4RequestSignerStage {
             // amounts to verifying that it is in fact, a strict body based on a `Bytes` and not a stream
             // Streams must be signed with a different signing mode. Seperate support will be added for
             // this at a later date.
-            let (parts, body) = request.into_parts();
-            let signable_body = match body.bytes() {
-                Some(bytes) => bytes,
-                None => {
-                    return Err("Cannot convert body to signing payload (body is streaming)".into());
-                } // in the future, chan variants which will cause an error
-            };
+            let (parts, body) = req.into_parts();
+            let signable_body = body.bytes().ok_or(SigningStageError::InvalidBodyType)?;
             let mut signable_request = http::Request::from_parts(parts, signable_body);
 
             self.signer
@@ -89,7 +109,7 @@ impl MapRequest for SigV4RequestSignerStage {
                 )
                 .map_err(|err| SigningStageError::SigningFailure(err))?;
             let (signed_parts, _) = signable_request.into_parts();
-            Ok(Request::from_parts(signed_parts, body))
+            Ok(http::Request::from_parts(signed_parts, body))
         })
     }
 }

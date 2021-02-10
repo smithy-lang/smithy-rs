@@ -70,6 +70,7 @@ pub struct RequestConfig<'a> {
     pub service: &'a SigningService,
 }
 
+#[derive(Clone)]
 pub struct SigV4Signer {
     // In the future, the SigV4Signer will use the CRT signer. This will require constructing
     // and holding an instance of the signer, so prevent people from constructing a SigV4Signer without
@@ -84,6 +85,10 @@ impl SigV4Signer {
         SigV4Signer { _private: () }
     }
 
+    /// Sign a request using the SigV4 Protocol
+    ///
+    /// Although the direct signing implementation MAY be used directly. End users will not typically
+    /// interact with this code. It is generally used via middleware in the request pipeline. See [`SigV4SigningStage`](crate::middleware::SigV4SigningStage).
     pub fn sign<B>(
         &self,
         // There is currently only 1 way to sign, so operation level configuration is unused
