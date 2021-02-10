@@ -93,7 +93,7 @@ class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : Ope
     }
 }
 
-fun auth(runtimeConfig: RuntimeConfig) = CargoDependency("auth", Local(runtimeConfig.relativePath))
-fun credentialsProvider(runtimeConfig: RuntimeConfig) = RuntimeType("ProvideCredentials", auth(runtimeConfig), "auth")
-fun defaultProvider(runtimeConfig: RuntimeConfig) = RuntimeType("default_provider", auth(runtimeConfig), "auth")
-fun setProvider(runtimeConfig: RuntimeConfig) = RuntimeType("set_provider", auth(runtimeConfig), "auth")
+fun awsAuth(runtimeConfig: RuntimeConfig) = CargoDependency("aws-auth", Local(runtimeConfig.relativePath))
+fun credentialsProvider(runtimeConfig: RuntimeConfig) = RuntimeType("ProvideCredentials", awsAuth(runtimeConfig), "aws_auth")
+fun defaultProvider(runtimeConfig: RuntimeConfig) = RuntimeType("default_provider", awsAuth(runtimeConfig), "aws_auth")
+fun setProvider(runtimeConfig: RuntimeConfig) = RuntimeType("set_provider", awsAuth(runtimeConfig), "aws_auth")
