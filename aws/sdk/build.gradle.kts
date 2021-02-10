@@ -22,8 +22,8 @@ val sdkOutputDir = buildDir.resolve("aws-sdk")
 val awsServices = discoverServices()
 // TODO: smithy-http should be removed
 val runtimeModules = listOf("smithy-types", "smithy-http")
-val examples = listOf("dynamo-helloworld")
-val awsModules = listOf("auth", "operationwip", "aws-hyper", "middleware-tracing", "aws-sig-auth")
+val examples = listOf("dynamo-helloworld", "kms-helloworld")
+val awsModules = listOf("aws-auth", "operationwip", "aws-hyper", "middleware-tracing", "aws-sig-auth")
 
 buildscript {
     val smithyVersion: String by project

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 use crate::region::RegionExt;
-use auth::ProvideCredentials;
+use aws_auth::ProvideCredentials;
 use aws_sig_auth::{
     HttpSigner, HttpSigningConfig, OperationSigningConfig, RequestConfig, SigningConfig,
 };

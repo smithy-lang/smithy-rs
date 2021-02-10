@@ -196,7 +196,7 @@ use std::time::Duration;
 #[cfg(test)]
 mod test {
     use crate::{BoxError, Client};
-    use auth::Credentials;
+    use aws_auth::Credentials;
     use aws_sig_auth::OperationSigningConfig;
     use bytes::Bytes;
     use http::header::AUTHORIZATION;

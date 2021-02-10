@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use auth::Credentials;
+use aws_auth::Credentials;
 use bytes::Bytes;
 use dynamodb::operation::ListTables;
 use smithy_http::body::SdkBody;

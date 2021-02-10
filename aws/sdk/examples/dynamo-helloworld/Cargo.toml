@@ -8,9 +8,10 @@ edition = "2018"
 
 [dependencies]
 dynamodb = { version = "0.0.1", path = "../../build/aws-sdk/dynamodb" }
+kms = { path = "../../build/aws-sdk/kms" }
 aws-hyper = { path = "../../build/aws-sdk/aws-hyper" }
 operationwip = { path = "../../build/aws-sdk/operationwip" }
-auth = { path = "../../build/aws-sdk/auth" }
+aws-auth = { path = "../../build/aws-sdk/aws-auth" }
 tokio = { version = "1", features = ["full"] }
 http = "0.2.3"
 env_logger = "0.8.2"

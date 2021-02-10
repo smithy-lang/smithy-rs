@@ -43,6 +43,6 @@ class CredentialProviderConfig : ConfigCustomization() {
     }
 }
 
-val Auth = CargoDependency("auth", Local("../"))
-val CredentialsProvider = RuntimeType("ProvideCredentials", Auth, "auth")
-val DefaultProvider = RuntimeType("default_provider", Auth, "auth")
+val Auth = CargoDependency("aws-auth", Local("../"))
+val CredentialsProvider = RuntimeType("ProvideCredentials", Auth, "aws_auth")
+val DefaultProvider = RuntimeType("default_provider", Auth, "aws_auth")

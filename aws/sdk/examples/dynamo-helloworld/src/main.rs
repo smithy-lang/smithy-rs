@@ -19,33 +19,6 @@ use operationwip::endpoint::StaticEndpoint;
 use operationwip::retry_policy::{RetryPolicy, RetryType};
 use tokio::time::Duration;
 
-#[derive(Clone)]
-struct RetryIfNoTables;
-impl RetryPolicy<SdkSuccess<ListTablesOutput>, SdkError<ListTablesError>> for RetryIfNoTables {
-    fn should_retry(
-        &self,
-        input: Result<&SdkSuccess<ListTablesOutput>, &SdkError<ListTablesError>>,
-    ) -> Option<RetryType> {
-        match input {
-            Ok(list_tables) => {
-                if list_tables
-                    .parsed
-                    .table_names
-                    .as_ref()
-                    .map(|t| t.len())
-                    .unwrap_or_default()
-                    == 0
-                {
-                    Some(RetryType::Explicit(Duration::new(5, 0)))
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init_from_env(Env::default().default_filter_or("info"));

@@ -1,4 +1,4 @@
-use auth::Credentials;
+use aws_auth::Credentials;
 use std::borrow::Cow;
 use std::error::Error;
 use std::time::SystemTime;
