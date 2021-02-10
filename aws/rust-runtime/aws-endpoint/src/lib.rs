@@ -101,12 +101,12 @@ impl ResolveAwsEndpoint for DefaultAwsEndpointResolver {
     }
 }
 
-type AwsEndpointProvider = Arc<dyn ResolveAwsEndpoint>;
-fn get_endpoint_provider(config: &PropertyBag) -> Option<&AwsEndpointProvider> {
+type AwsEndpointResolver = Arc<dyn ResolveAwsEndpoint>;
+fn get_endpoint_resolver(config: &PropertyBag) -> Option<&AwsEndpointResolver> {
     config.get()
 }
 
-pub fn set_endpoint_provider(provider: AwsEndpointProvider, config: &mut PropertyBag) {
+pub fn set_endpoint_resolver(provider: AwsEndpointResolver, config: &mut PropertyBag) {
     config.insert(provider);
 }
 
@@ -122,7 +122,7 @@ pub struct AwsEndpointStage;
 
 #[derive(Debug)]
 pub enum AwsEndpointStageError {
-    NoEndpointProvider,
+    NoEndpointResolver,
     NoRegion,
     EndpointResolutionError(BoxError),
 }
@@ -140,7 +140,7 @@ impl MapRequest for AwsEndpointStage {
     fn apply(&self, request: Request) -> Result<Request, Self::Error> {
         request.augment(|mut http_req, config| {
             let provider =
-                get_endpoint_provider(config).ok_or(AwsEndpointStageError::NoEndpointProvider)?;
+                get_endpoint_resolver(config).ok_or(AwsEndpointStageError::NoEndpointResolver)?;
             let region = config
                 .get::<Region>()
                 .ok_or(AwsEndpointStageError::NoRegion)?;
@@ -164,7 +164,7 @@ impl MapRequest for AwsEndpointStage {
 
 #[cfg(test)]
 mod test {
-    use crate::{set_endpoint_provider, AwsEndpointStage, DefaultAwsEndpointResolver};
+    use crate::{set_endpoint_resolver, AwsEndpointStage, DefaultAwsEndpointResolver};
     use aws_types::{Region, SigningRegion, SigningService};
     use http::Uri;
     use smithy_http::body::SdkBody;
@@ -181,7 +181,7 @@ mod test {
         {
             let mut conf = req.config_mut();
             conf.insert(region.clone());
-            set_endpoint_provider(provider, &mut conf);
+            set_endpoint_resolver(provider, &mut conf);
         };
         let req = AwsEndpointStage.apply(req).expect("should succeed");
         assert_eq!(
