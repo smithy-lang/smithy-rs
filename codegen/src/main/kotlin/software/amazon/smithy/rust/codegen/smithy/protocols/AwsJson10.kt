@@ -143,13 +143,13 @@ class BasicAwsJsonGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         operationWriter.rustTemplate(
             """
-            impl #{parse_strict} for $operationName {
-                type Output = Result<#{output}, #{error}>;
-                fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
-                    self.parse_response(response)
-                }
-            }
-        """,
+            |impl #{parse_strict} for $operationName {
+            |    type Output = Result<#{output}, #{error}>;
+            |    fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
+            |        self.parse_response(response)
+            |    }
+            |}
+        """.trimMargin(),
             "parse_strict" to RuntimeType.parseStrict(symbolProvider.config().runtimeConfig),
             "output" to outputSymbol,
             "error" to operationShape.errorSymbol(symbolProvider),
@@ -169,11 +169,11 @@ class BasicAwsJsonGenerator(
             write("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
             rust(
                 """
-                builder
-                   .method("POST")
-                   .header("Content-Type", "application/x-amz-json-${awsJsonVersion.value}")
-                   .header("X-Amz-Target", "${protocolConfig.serviceShape.id.name}.${operationShape.id.name}")
-               """
+                |builder
+                |   .method("POST")
+                |   .header("Content-Type", "application/x-amz-json-${awsJsonVersion.value}")
+                |   .header("X-Amz-Target", "${protocolConfig.serviceShape.id.name}.${operationShape.id.name}")
+               """.trimMargin()
             )
         }
     }
@@ -212,20 +212,20 @@ class BasicAwsJsonGenerator(
                 // to avoid the need to double deserialize the body.
                 rustTemplate(
                     """
-                    let body = #{sj}::from_slice(response.body().as_ref())
-                        .unwrap_or_else(|_|#{sj}::json!({}));
-                    let generic = #{aws_json_errors}::parse_generic_error(&response, &body);
-                    """,
+                    |let body = #{sj}::from_slice(response.body().as_ref())
+                    |    .unwrap_or_else(|_|#{sj}::json!({}));
+                    |let generic = #{aws_json_errors}::parse_generic_error(&response, &body);
+                    """.trimMargin(),
                     "aws_json_errors" to jsonErrors, "sj" to RuntimeType.SJ
                 )
                 if (operationShape.errors.isNotEmpty()) {
                     rustTemplate(
                         """
-
-                    let error_code = match generic.code() {
-                        Some(code) => code,
-                        None => return Err(#{error_symbol}::unhandled(generic))
-                    };""",
+                    |
+                    |let error_code = match generic.code() {
+                    |    Some(code) => code,
+                    |    None => return Err(#{error_symbol}::unhandled(generic))
+                    };""".trimMargin(),
                         "error_symbol" to errorSymbol
                     )
                     withBlock("return Err(match error_code {", "})") {

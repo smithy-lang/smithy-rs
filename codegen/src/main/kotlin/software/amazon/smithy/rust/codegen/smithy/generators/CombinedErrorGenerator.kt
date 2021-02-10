@@ -64,9 +64,9 @@ class CombinedErrorGenerator(
             }
             rust(
                 """
-                /// An unexpected error, eg. invalid JSON returned by the service
-                Unhandled(Box<dyn #T>),
-            """,
+                |/// An unexpected error, eg. invalid JSON returned by the service
+                |Unhandled(Box<dyn #T>),
+            """.trimMargin(),
                 RuntimeType.StdError
             )
         }

@@ -43,11 +43,11 @@ class ErrorGenerator(
         writer.rustBlock("impl ${symbol.name}") {
             rust(
                 """
-            pub fn retryable(&self) -> bool { $retryable }
-            pub fn throttling(&self) -> bool { $throttling }
-            pub fn code(&self) -> &str { ${shape.id.name.dq()} }
-            pub fn message(&self) -> Option<&str> { $message }
-                """
+            |pub fn retryable(&self) -> bool { $retryable }
+            |pub fn throttling(&self) -> bool { $throttling }
+            |pub fn code(&self) -> &str { ${shape.id.name.dq()} }
+            |pub fn message(&self) -> Option<&str> { $message }
+                """.trimMargin()
             )
         }
 

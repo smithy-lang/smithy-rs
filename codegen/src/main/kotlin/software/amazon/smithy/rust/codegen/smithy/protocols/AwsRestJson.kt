@@ -59,9 +59,9 @@ class AwsRestJsonGenerator(
             // avoid non-usage warnings
             rust(
                 """
-                let _ = response;
-                todo!()
-            """
+                |let _ = response;
+                |todo!()
+            """.trimMargin()
             )
         }
     }
@@ -99,10 +99,10 @@ class AwsRestJsonGenerator(
         httpBuilderFun(implBlockWriter) {
             rust(
                 """
-            let builder = #T::new();
-            let builder = builder.header("Content-Type", ${contentType.dq()});
-            self.update_http_builder(builder)
-            """,
+            |let builder = #T::new();
+            |let builder = builder.header("Content-Type", ${contentType.dq()});
+            |self.update_http_builder(builder)
+            """.trimMargin(),
                 requestBuilder
             )
         }

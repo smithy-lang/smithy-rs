@@ -155,9 +155,9 @@ class HttpProtocolTestGenerator(
         with(httpRequestTestCase) {
             write(
                 """
-                    assert_eq!(http_request.method(), ${method.dq()});
-                    assert_eq!(http_request.uri().path(), ${uri.dq()});
-                """
+                    |assert_eq!(http_request.method(), ${method.dq()});
+                    |assert_eq!(http_request.uri().path(), ${uri.dq()});
+                """.trimMargin()
             )
         }
         checkQueryParams(this, httpRequestTestCase.queryParams)
@@ -213,10 +213,10 @@ class HttpProtocolTestGenerator(
         }
         rust(
             """
-                .status(${testCase.code})
-                .body(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"})
-                .unwrap();
-            """
+            |   .status(${testCase.code})
+            |   .body(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"})
+            |   .unwrap();
+            """.trimMargin()
         )
         write("let parsed = #T::from_response(&http_response);", operationSymbol)
         if (expectedShape.hasTrait(ErrorTrait::class.java)) {

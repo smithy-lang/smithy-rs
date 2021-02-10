@@ -91,9 +91,9 @@ class Instantiator(
             is DocumentShape -> {
                 writer.rust(
                     """{
-                    let as_json = #T! { ${Node.prettyPrintJson(arg)} };
-                    #T::json_to_doc(as_json)
-                }""",
+                    |let as_json = #T! { ${Node.prettyPrintJson(arg)} };
+                    |#T::json_to_doc(as_json)
+                }""".trimMargin(),
                     RuntimeType.SerdeJson("json"), RuntimeType.DocJson
                 )
             }
@@ -244,9 +244,7 @@ class Instantiator(
             val isSyntheticInput = shape.hasTrait(SyntheticInputTrait::class.java)
             if (isSyntheticInput) {
                 rust(
-                    """
-                let config = #T::Config::builder()
-            """,
+                    """let config = #T::Config::builder()""",
                     RuntimeType.Config
                 )
                 if (shape.allMembers.values.any { it.hasTrait(IdempotencyTokenTrait::class.java) }) {

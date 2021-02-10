@@ -109,9 +109,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
 
         writer.rustBlock("impl Config") {
             rustTemplate(
-                """
-                pub fn builder() -> ConfigBuilder { ConfigBuilder::default() }
-            """
+                """pub fn builder() -> ConfigBuilder { ConfigBuilder::default() }"""
             )
             customizations.forEach {
                 it.section(ServiceConfig.ConfigImpl)(this)

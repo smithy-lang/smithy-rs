@@ -26,11 +26,11 @@ class IdempotencyProviderConfig : NamedSectionGenerator<ServiceConfig>() {
             ServiceConfig.BuilderImpl -> writable {
                 rust(
                     """
-            pub fn token_provider(mut self, token_provider: impl #T::ProvideIdempotencyToken + 'static) -> Self {
-                self.token_provider = Some(Box::new(token_provider));
-                self
-            }
-            """,
+            |pub fn token_provider(mut self, token_provider: impl #T::ProvideIdempotencyToken + 'static) -> Self {
+            |    self.token_provider = Some(Box::new(token_provider));
+            |    self
+            |}
+            """.trimMargin(),
                     RuntimeType.IdempotencyToken
                 )
             }

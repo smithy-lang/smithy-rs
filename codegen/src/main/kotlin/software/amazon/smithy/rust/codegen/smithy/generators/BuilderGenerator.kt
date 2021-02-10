@@ -81,18 +81,18 @@ class OperationInputBuilderGenerator(
                 }
                 rust(
                     """
-                    ##[allow(unused_mut)]
-                    let mut request = #T::Request::new(op.build_http_request().map(#T::from));
-                """,
+                    |##[allow(unused_mut)]
+                    |let mut request = #T::Request::new(op.build_http_request().map(#T::from));
+                """.trimMargin(),
                     operationModule, sdkBody
                 )
                 rust(
                     """
-                    #T::new(
-                        request,
-                        op
-                    )
-                """,
+                    |#T::new(
+                    |    request,
+                    |    op
+                    |)
+                """.trimMargin(),
                     operationT
                 )
             }
