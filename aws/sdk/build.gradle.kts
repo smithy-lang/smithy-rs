@@ -22,7 +22,7 @@ val sdkOutputDir = buildDir.resolve("aws-sdk")
 val awsServices = discoverServices()
 // TODO: smithy-http should be removed
 val runtimeModules = listOf("smithy-types", "smithy-http")
-val awsModules = listOf("auth")
+val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types")
 
 buildscript {
     val smithyVersion: String by project
@@ -111,9 +111,17 @@ tasks.register<Copy>("relocateAwsRuntime") {
     }
     exclude("**/target")
     exclude("**/Cargo.lock")
-    // filter { line -> line.replace("../../rust-runtime/", "") }
+    filter { line -> rewritePathDependency(line) }
     into(sdkOutputDir)
     outputs.upToDateWhen { false }
+}
+
+/**
+ * The aws/rust-runtime crates depend on local versions of the Smithy core runtime enabling local compilation. However,
+ * those paths need to be replaced in the final build. We should probably fix this with some symlinking.
+ */
+fun rewritePathDependency(line: String): String {
+    return line.replace("../../rust-runtime/", "")
 }
 
 tasks.register<Copy>("relocateRuntime") {
@@ -128,7 +136,7 @@ tasks.register<Copy>("relocateRuntime") {
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {
-    val modules = services.map(AwsService::module) + runtimeModules
+    val modules = services.map(AwsService::module) + runtimeModules + awsModules
     return """
     [workspace]
     members = [
@@ -144,7 +152,7 @@ task("generateCargoWorkspace") {
 }
 
 task("finalizeSdk") {
-    finalizedBy("relocateServices", "relocateRuntime", "generateCargoWorkspace")
+    finalizedBy("relocateServices", "relocateRuntime", "relocateAwsRuntime", "generateCargoWorkspace")
 }
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")

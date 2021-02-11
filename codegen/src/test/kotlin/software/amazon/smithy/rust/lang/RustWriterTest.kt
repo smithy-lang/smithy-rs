@@ -20,14 +20,14 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.testutil.compileAndRun
+import software.amazon.smithy.rust.codegen.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.testutil.shouldCompile
+import software.amazon.smithy.rust.codegen.testutil.shouldParseAsRust
+import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.util.lookup
-import software.amazon.smithy.rust.testutil.asSmithyModel
-import software.amazon.smithy.rust.testutil.compileAndRun
-import software.amazon.smithy.rust.testutil.compileAndTest
-import software.amazon.smithy.rust.testutil.shouldCompile
 import software.amazon.smithy.rust.testutil.shouldMatchResource
-import software.amazon.smithy.rust.testutil.shouldParseAsRust
-import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class RustWriterTest {
     @Test

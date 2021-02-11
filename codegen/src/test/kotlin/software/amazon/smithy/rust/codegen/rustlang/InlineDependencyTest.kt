@@ -8,7 +8,7 @@ package software.amazon.smithy.rust.codegen.rustlang
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 
 internal class InlineDependencyTest {
     fun makeDep(name: String) = InlineDependency(name, "module") {
@@ -29,7 +29,7 @@ internal class InlineDependencyTest {
     fun `locate dependencies from the inlineable module`() {
         val dep = InlineDependency.idempotencyToken()
         val testWriter = RustWriter.root()
-        testWriter.addDependency(CargoDependency.Rand)
+        testWriter.addDependency(CargoDependency.FastRand)
         testWriter.withModule(dep.module) {
             dep.renderer(this)
         }

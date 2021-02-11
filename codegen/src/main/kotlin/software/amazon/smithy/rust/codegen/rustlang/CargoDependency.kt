@@ -91,7 +91,7 @@ class InlineDependency(
         fun instant8601() = forRustFile("instant_iso8601", CargoDependency.Serde)
 
         fun idempotencyToken() =
-            forRustFile("idempotency_token", CargoDependency.Rand)
+            forRustFile("idempotency_token", CargoDependency.FastRand)
 
         fun blobSerde(runtimeConfig: RuntimeConfig) = forRustFile(
             "blob_serde",
@@ -157,7 +157,7 @@ data class CargoDependency(
     }
 
     companion object {
-        val Rand: CargoDependency = CargoDependency("rand", CratesIo("0.7"))
+        val FastRand = CargoDependency("fastrand", CratesIo("1"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2"))
         fun SmithyTypes(runtimeConfig: RuntimeConfig) =
             CargoDependency("${runtimeConfig.cratePrefix}-types", Local(runtimeConfig.relativePath))

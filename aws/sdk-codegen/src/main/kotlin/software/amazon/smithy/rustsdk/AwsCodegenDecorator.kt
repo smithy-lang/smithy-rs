@@ -5,7 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.rust.codegen.smithy.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 

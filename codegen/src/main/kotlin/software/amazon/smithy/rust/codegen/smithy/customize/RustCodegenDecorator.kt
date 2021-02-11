@@ -3,10 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy
+package software.amazon.smithy.rust.codegen.smithy.customize
 
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
@@ -24,24 +27,36 @@ interface RustCodegenDecorator {
     /**
      * The name of this [RustCodegenDecorator], used for logging and debug information
      */
-    abstract val name: String
+    val name: String
 
     /**
      * Enable a deterministic ordering to be applied, with the lowest numbered integrations being applied first
      */
-    abstract val order: Byte
+    val order: Byte
+
     fun configCustomizations(
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> = baseCustomizations
+
+    fun operationCustomizations(
+        protocolConfig: ProtocolConfig,
+        operation: OperationShape,
+        baseCustomizations: List<OperationCustomization>
+    ): List<OperationCustomization> = baseCustomizations
 
     fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap = currentProtocols
 
     fun symbolProvider(baseProvider: RustSymbolProvider): RustSymbolProvider = baseProvider
 }
 
+/**
+ * [CombinedCodegenDecorator] merges the results of multiple decorators into a single decorator.
+ *
+ * This makes the actual concrete codegen simpler by not needing to deal with multiple separate decorators.
+ */
 class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : RustCodegenDecorator {
-    val orderedDecorators = decorators.sortedBy { it.order }
+    private val orderedDecorators = decorators.sortedBy { it.order }
     override val name: String
         get() = "MetaDecorator"
     override val order: Byte
@@ -53,6 +68,16 @@ class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : RustCod
     ): List<ConfigCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator, customizations ->
             decorator.configCustomizations(protocolConfig, customizations)
+        }
+    }
+
+    override fun operationCustomizations(
+        protocolConfig: ProtocolConfig,
+        operation: OperationShape,
+        baseCustomizations: List<OperationCustomization>
+    ): List<OperationCustomization> {
+        return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator, customizations ->
+            decorator.operationCustomizations(protocolConfig, operation, customizations)
         }
     }
 

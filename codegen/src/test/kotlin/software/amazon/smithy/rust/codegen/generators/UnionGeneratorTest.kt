@@ -10,10 +10,10 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.util.lookup
-import software.amazon.smithy.rust.testutil.asSmithyModel
-import software.amazon.smithy.rust.testutil.compileAndTest
-import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class UnionGeneratorTest {
     @Test
