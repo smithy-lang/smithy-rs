@@ -39,6 +39,7 @@ impl SigV4SigningStage {
 }
 
 use thiserror::Error;
+
 #[derive(Debug, Error)]
 pub enum SigningStageError {
     #[error("No credentials provider in the property bag")]
@@ -92,9 +93,9 @@ impl MapRequest for SigV4SigningStage {
         req.augment(|req, config| {
             let (operation_config, request_config, creds) = signing_config(config)?;
 
-            // A short dance is required to extract a signable body from an SdkBody, which basically
-            // amounts to verifying that it is in fact, a strict body based on a `Bytes` and not a stream
-            // Streams must be signed with a different signing mode. Seperate support will be added for
+            // A short dance is required to extract a signable body from an SdkBody, which
+            // amounts to verifying that it a strict body based on a `Bytes` and not a stream.
+            // Streams must be signed with a different signing mode. Separate support will be added for
             // this at a later date.
             let (parts, body) = req.into_parts();
             let signable_body = body.bytes().ok_or(SigningStageError::InvalidBodyType)?;
@@ -111,5 +112,76 @@ impl MapRequest for SigV4SigningStage {
             let (signed_parts, _) = signable_request.into_parts();
             Ok(http::Request::from_parts(signed_parts, body))
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::middleware::{SigV4SigningStage, SigningStageError};
+    use crate::signer::{OperationSigningConfig, SigV4Signer};
+    use aws_auth::CredentialsProvider;
+    use aws_endpoint::{set_endpoint_resolver, AwsEndpointStage, DefaultAwsEndpointResolver};
+    use aws_types::Region;
+    use http::header::AUTHORIZATION;
+    use smithy_http::body::SdkBody;
+    use smithy_http::middleware::MapRequest;
+    use smithy_http::operation;
+    use std::convert::Infallible;
+    use std::sync::Arc;
+    use std::time::{Duration, UNIX_EPOCH};
+
+    // check that the endpoint middleware followed by signing middleware produce the expected result
+    #[test]
+    fn endpoint_plus_signer() {
+        let provider = Arc::new(DefaultAwsEndpointResolver::for_service("kinesis"));
+        let req = http::Request::new(SdkBody::from(""));
+        let region = Region::new("us-east-1");
+        let req = operation::Request::new(req)
+            .augment(|req, conf| {
+                conf.insert(region.clone());
+                conf.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
+                set_endpoint_resolver(provider, conf);
+                Result::<_, Infallible>::Ok(req)
+            })
+            .expect("succeeds");
+
+        let endpoint = AwsEndpointStage;
+        let signer = SigV4SigningStage::new(SigV4Signer::new());
+        let mut req = endpoint.apply(req).expect("add endpoint should succeed");
+        let mut errs = vec![];
+        errs.push(
+            signer
+                .apply(req.try_clone().expect("can clone"))
+                .expect_err("no signing config"),
+        );
+        req.config_mut()
+            .insert(OperationSigningConfig::default_config());
+        errs.push(
+            signer
+                .apply(req.try_clone().expect("can clone"))
+                .expect_err("no cred provider"),
+        );
+        let cred_provider: CredentialsProvider =
+            Arc::new(aws_auth::Credentials::from_keys("AKIAfoo", "bar", None));
+        req.config_mut().insert(cred_provider);
+        let req = signer.apply(req).expect("signing succeeded");
+        // make sure we got the correct error types in any order
+        assert!(errs.iter().all(|el| matches!(
+            el,
+            SigningStageError::MissingCredentialsProvider | SigningStageError::MissingSigningConfig
+        )));
+
+        let (req, _) = req.into_parts();
+        assert_eq!(
+            req.headers()
+                .get("x-amz-date")
+                .expect("x-amz-date must be present"),
+            "20210120T163347Z"
+        );
+        let auth_header = req
+            .headers()
+            .get(AUTHORIZATION)
+            .expect("auth header must be present");
+        assert_eq!(auth_header, "AWS4-HMAC-SHA256 Credential=AKIAfoo/20210120/us-east-1/kinesis/aws4_request, SignedHeaders=, Signature=bf3af0f70e58cb7f70cc545f1b2e83293b3e9860880bf8aef3fae0f3de324427");
     }
 }

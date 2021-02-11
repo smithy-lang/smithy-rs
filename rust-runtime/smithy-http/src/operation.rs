@@ -23,6 +23,7 @@ impl<H> Operation<H, ()> {
     }
 }
 
+#[derive(Debug)]
 pub struct Request {
     /// The underlying HTTP Request
     inner: http::Request<SdkBody>,

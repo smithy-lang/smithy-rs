@@ -16,3 +16,6 @@ smithy-http = { path = "../../../rust-runtime/smithy-http" }
 # Trying this out as an experiment. thiserror can be removed and replaced with hand written error
 # implementations and it is not a breaking change.
 thiserror = "1"
+
+[dev-dependencies]
+aws-endpoint = { path = "../aws-endpoint" }
