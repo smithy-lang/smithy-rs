@@ -38,9 +38,7 @@ pub fn default_provider() -> impl ProvideIdempotencyToken {
     Mutex::new(fastrand::Rng::new())
 }
 
-impl ProvideIdempotencyToken for Mutex<fastrand::Rng>
-where
-{
+impl ProvideIdempotencyToken for Mutex<fastrand::Rng> {
     fn token(&self) -> String {
         let input: u128 = self.lock().unwrap().u128(..);
         uuid_v4(input)

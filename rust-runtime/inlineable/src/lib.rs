@@ -19,12 +19,13 @@ mod instant_iso8601;
 #[cfg(test)]
 mod test {
     use crate::doc_json::SerDoc;
+    use crate::idempotency_token;
     use crate::idempotency_token::uuid_v4;
     use proptest::prelude::*;
     use proptest::std_facade::HashMap;
     use smithy_types::Document;
     use smithy_types::Number;
-    use crate::idempotency_token;
+    use std::sync::Mutex;
 
     #[test]
     fn nan_floats_serialize_null() {
@@ -49,9 +50,17 @@ mod test {
     }
 
     #[test]
-    fn default_token_generator() {
-       use crate::idempotency_token::ProvideIdempotencyToken;
-       assert_eq!(idempotency_token::default_provider().token().len(), 36);
+    fn default_token_generator_smoke_test() {
+        // smoke test to make sure the default token generator produces a token-like object
+        use crate::idempotency_token::ProvideIdempotencyToken;
+        assert_eq!(idempotency_token::default_provider().token().len(), 36);
+    }
+
+    #[test]
+    fn token_generator() {
+        let provider = Mutex::new(fastrand::Rng::with_seed(123));
+        use crate::idempotency_token::ProvideIdempotencyToken;
+        assert_eq!(provider.token(), "b4021a03-ae07-4db5-fc1b-38bf919691f8");
     }
 
     fn assert_valid(uuid: String) {
