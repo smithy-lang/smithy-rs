@@ -18,7 +18,7 @@ use tower::{BoxError, Layer, Service};
 /// `ParseResponseService` dispatches [`Operation`](smithy_http::operation::Operation)s and parses them.
 ///
 /// `ParseResponseService` is intended to wrap a `DispatchService` which will handle the interface between
-/// services that operate on [`smithy_http::Request`](smithy_http::Request) and services that operate
+/// services that operate on [`operation::Request`](operation::Request) and services that operate
 /// on [`http::Request`](http::Request).
 #[derive(Clone)]
 pub struct ParseResponseService<S, O> {

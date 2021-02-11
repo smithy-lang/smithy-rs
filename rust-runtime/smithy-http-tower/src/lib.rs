@@ -8,14 +8,24 @@ use tower::BoxError;
 /// An Error Occurred During the process of sending an Operation
 ///
 /// The variants are split to enable the final [SdkError](`smithy_http::result::SdkError`) to differentiate
-/// between errors that were never sent across the wire (eg. because a region wasn't set) and errors that failed
-/// to send (eg. because the hostname couldn't be resolved).
+/// between two types of errors:
+/// 1. [`RequestConstructionError`](SendOperationError::RequestConstructionError): Errors where the
+///    SDK never attempted to dispatch the underlying `http::Request`. These represent errors that
+///    occurred during the request construction pipeline. These generally stem from configuration issues.
+/// 2. [`RequestDispatchError`](SendOperationError::RequestDispatchError): Errors where the inner
+///    tower service failed (eg. because the hostname couldn't be resolved, connection errors,
+///    socket hangup etc.). In this case, we don't know how much of the request was _actually_ sent
+///    to the client. We only know that we never got back an `http::Response` (and instead got an error).
 ///
 /// `SendOperationError` is currently defined only in `smithy-http-tower` because it may be removed
 /// or replaced with `SdkError` in the future.
+///
+/// `SendOperationError` MAY be moved to a private module in the future.
 #[derive(Debug)]
 pub enum SendOperationError {
     /// The request could not be constructed
+    ///
+    /// These errors usually stem from configuration issues (eg. no region, bad credential provider, etc.)
     RequestConstructionError(BoxError),
 
     /// The request could not be dispatched
