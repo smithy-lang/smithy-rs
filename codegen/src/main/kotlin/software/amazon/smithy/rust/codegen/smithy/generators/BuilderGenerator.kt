@@ -63,7 +63,7 @@ class OperationInputBuilderGenerator(
     model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val shape: OperationShape,
-    private val plugins: List<OperationCustomization> = listOf()
+    private val features: List<OperationCustomization>,
 ) : BuilderGenerator(model, symbolProvider, shape.inputShape(model)) {
     private val runtimeConfig = symbolProvider.config().runtimeConfig
 
@@ -92,7 +92,7 @@ class OperationInputBuilderGenerator(
                 """,
                     RuntimeType.operationModule(runtimeConfig), RuntimeType.sdkBody(runtimeConfig),
                 )
-                plugins.forEach { it.section(OperationSection.Plugin)(this) }
+                features.forEach { it.section(OperationSection.Feature("request", "_config"))(this) }
                 rust(
                     """
                     #T::new(

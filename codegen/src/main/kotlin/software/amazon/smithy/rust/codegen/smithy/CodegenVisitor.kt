@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ModelBuilderGenerator
@@ -67,9 +68,6 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     }
 
     private fun baselineTransform(model: Model) = RecursiveShapeBoxer.transform(model)
-
-    private fun CodegenWriterDelegator<RustWriter>.includedModules(): List<String> =
-        this.writers.values.mapNotNull { it.module() }
 
     fun execute() {
         logger.info("generating Rust client...")

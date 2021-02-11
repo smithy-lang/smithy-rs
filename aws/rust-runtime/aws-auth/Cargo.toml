@@ -8,3 +8,4 @@ description = "Authentication related functionality for the AWS Rust SDK. All in
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+smithy-http = { path = "../../../rust-runtime/smithy-http" }

@@ -10,7 +10,7 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.smithy.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
@@ -30,7 +30,12 @@ class ServiceGenerator(
         operations.map { operation ->
             writers.useShapeWriter(operation) { operationWriter ->
                 writers.useShapeWriter(operation.inputShape(config.model)) { inputWriter ->
-                    protocolGenerator.renderOperation(operationWriter, inputWriter, operation, decorator.operationCustomizations(config, operation, listOf()))
+                    protocolGenerator.renderOperation(
+                        operationWriter,
+                        inputWriter,
+                        operation,
+                        decorator.operationCustomizations(config, operation, listOf())
+                    )
                     HttpProtocolTestGenerator(config, protocolSupport, operation, operationWriter).render()
                 }
             }
@@ -42,7 +47,10 @@ class ServiceGenerator(
         renderBodies(operations)
 
         writers.useFileWriter("src/config.rs", "crate::config") { writer ->
-            ServiceConfigGenerator.withBaseBehavior(config, extraCustomizations = decorator.configCustomizations(config, listOf())).render(writer)
+            ServiceConfigGenerator.withBaseBehavior(
+                config,
+                extraCustomizations = decorator.configCustomizations(config, listOf())
+            ).render(writer)
         }
         writers.useFileWriter("src/lib.rs", "crate::lib") {
             it.write("pub use config::Config;")

@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy
+package software.amazon.smithy.rust.codegen.smithy.customize
 
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
@@ -48,8 +49,13 @@ interface RustCodegenDecorator {
     fun symbolProvider(baseProvider: RustSymbolProvider): RustSymbolProvider = baseProvider
 }
 
+/**
+ * [CombinedCodegenDecorator] merges the results of multiple decorators into a single decorator.
+ *
+ * This makes the actual concrete codegen simpler by not needing to deal with multiple separate decorators.
+ */
 class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : RustCodegenDecorator {
-    val orderedDecorators = decorators.sortedBy { it.order }
+    private val orderedDecorators = decorators.sortedBy { it.order }
     override val name: String
         get() = "MetaDecorator"
     override val order: Byte
@@ -64,6 +70,16 @@ class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : RustCod
         }
     }
 
+    override fun operationCustomizations(
+        protocolConfig: ProtocolConfig,
+        operation: OperationShape,
+        baseCustomizations: List<OperationCustomization>
+    ): List<OperationCustomization> {
+        return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator, customizations ->
+            decorator.operationCustomizations(protocolConfig, operation, customizations)
+        }
+    }
+
     override fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap {
         return orderedDecorators.foldRight(currentProtocols) { decorator, protocolMap ->
             decorator.protocols(serviceId, protocolMap)
@@ -72,14 +88,6 @@ class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : RustCod
 
     override fun symbolProvider(baseProvider: RustSymbolProvider): RustSymbolProvider {
         return orderedDecorators.foldRight(baseProvider) { decorator, provider -> decorator.symbolProvider(provider) }
-    }
-
-    override fun operationCustomizations(
-        protocolConfig: ProtocolConfig,
-        operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
-    ): List<OperationCustomization> {
-        return orderedDecorators.foldRight(baseCustomizations) { decorator, customizations -> decorator.operationCustomizations(protocolConfig, operation, customizations) }
     }
 
     companion object {

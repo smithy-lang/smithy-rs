@@ -17,8 +17,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.generators.config.NamedSectionGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.config.Section
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -40,13 +38,6 @@ interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
     fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider = base
     fun support(): ProtocolSupport
 }
-
-sealed class OperationSection(name: String) : Section(name) {
-    object ImplBlock : OperationSection("ImplBlock")
-    object Plugin : OperationSection("Feature")
-}
-
-typealias OperationCustomization = NamedSectionGenerator<OperationSection>
 
 /**
  * Abstract class providing scaffolding for HTTP based protocols that must build an HTTP request (headers / URL) and

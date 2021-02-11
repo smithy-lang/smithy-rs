@@ -1,8 +1,10 @@
 pub mod provider;
 
+use smithy_http::property_bag::PropertyBag;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 /// AWS SDK Credentials
@@ -111,4 +113,8 @@ impl ProvideCredentials for Credentials {
     fn credentials(&self) -> Result<Credentials, CredentialsError> {
         Ok(self.clone())
     }
+}
+
+pub fn set_provider(config: &mut PropertyBag, provider: Arc<dyn ProvideCredentials>) {
+    config.insert(provider);
 }

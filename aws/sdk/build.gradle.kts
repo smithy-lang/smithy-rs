@@ -23,7 +23,7 @@ val awsServices = discoverServices()
 // TODO: smithy-http should be removed
 val runtimeModules = listOf("smithy-types", "smithy-http")
 val examples = listOf("dynamo-helloworld", "kms-helloworld")
-val awsModules = listOf("aws-auth", "operationwip", "aws-hyper", "middleware-tracing", "aws-sig-auth")
+val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types", "operationwip", "aws-hyper", "middleware-tracing", "aws-sig-auth")
 
 buildscript {
     val smithyVersion: String by project
@@ -116,6 +116,14 @@ task("relocateExamples") {
             filter { line -> line.replace("build/aws-sdk/", "") }
         }
     }
+}
+
+/**
+ * The aws/rust-runtime crates depend on local versions of the Smithy core runtime enabling local compilation. However,
+ * those paths need to be replaced in the final build. We should probably fix this with some symlinking.
+ */
+fun rewritePathDependency(line: String): String {
+    return line.replace("../../rust-runtime/", "")
 }
 
 tasks.register<Copy>("relocateRuntime") {
