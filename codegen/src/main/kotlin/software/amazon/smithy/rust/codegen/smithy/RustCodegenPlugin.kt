@@ -9,6 +9,7 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 
 class RustCodegenPlugin : SmithyBuildPlugin {
     override fun getName(): String = "rust-codegen"

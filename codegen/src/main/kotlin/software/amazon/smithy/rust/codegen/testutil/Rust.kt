@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.testutil
+package software.amazon.smithy.rust.codegen.testutil
 
 import com.moandjiezana.toml.TomlWriter
 import org.intellij.lang.annotations.Language
@@ -86,7 +86,7 @@ object TestWorkspace {
         }
     }
 
-    fun testProject(symbolProvider: RustSymbolProvider?): TestWriterDelegator {
+    fun testProject(symbolProvider: RustSymbolProvider? = null): TestWriterDelegator {
         val subprojectDir = subproject()
         val symbolProvider = symbolProvider ?: object : RustSymbolProvider {
             override fun config(): SymbolVisitorConfig {

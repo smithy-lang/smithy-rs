@@ -18,7 +18,7 @@ impl EnvironmentVariableCredentialsProvider {
     }
 
     /// Create a EnvironmentVariable provider from a HashMap for testing
-    fn for_map(env: HashMap<String, String>) -> Self {
+    pub fn for_map(env: HashMap<String, String>) -> Self {
         EnvironmentVariableCredentialsProvider {
             env: Box::new(move |key: &str| {
                 env.get(key)

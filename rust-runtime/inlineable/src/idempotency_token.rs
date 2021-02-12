@@ -30,20 +30,17 @@ pub(crate) fn uuid_v4(input: u128) -> String {
     out
 }
 
-pub trait ProvideIdempotencyToken {
+pub trait ProvideIdempotencyToken: Send + Sync {
     fn token(&self) -> String;
 }
 
 pub fn default_provider() -> impl ProvideIdempotencyToken {
-    Mutex::new(rand::thread_rng())
+    Mutex::new(fastrand::Rng::new())
 }
 
-impl<T> ProvideIdempotencyToken for Mutex<T>
-where
-    T: rand::Rng,
-{
+impl ProvideIdempotencyToken for Mutex<fastrand::Rng> {
     fn token(&self) -> String {
-        let input: u128 = self.lock().unwrap().gen();
+        let input: u128 = self.lock().unwrap().u128(..);
         uuid_v4(input)
     }
 }

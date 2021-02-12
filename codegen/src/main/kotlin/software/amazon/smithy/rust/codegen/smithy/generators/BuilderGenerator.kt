@@ -62,7 +62,8 @@ class ModelBuilderGenerator(
 class OperationInputBuilderGenerator(
     model: Model,
     private val symbolProvider: RustSymbolProvider,
-    private val shape: OperationShape
+    private val shape: OperationShape,
+    private val features: List<OperationCustomization>,
 ) : BuilderGenerator(model, symbolProvider, shape.inputShape(model)) {
     override fun buildFn(implBlockWriter: RustWriter) {
         val fallibleBuilder = StructureGenerator.fallibleBuilder(shape.inputShape(model), symbolProvider)
@@ -86,6 +87,7 @@ class OperationInputBuilderGenerator(
                 """,
                     operationModule, sdkBody
                 )
+                features.forEach { it.section(OperationSection.Feature("request", "_config"))(this) }
                 rust(
                     """
                     #T::new(
