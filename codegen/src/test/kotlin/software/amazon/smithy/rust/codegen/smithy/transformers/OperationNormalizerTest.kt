@@ -14,10 +14,10 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.codegen.util.orNull
-import software.amazon.smithy.rust.testutil.asSmithyModel
-import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 internal class OperationNormalizerTest {
 

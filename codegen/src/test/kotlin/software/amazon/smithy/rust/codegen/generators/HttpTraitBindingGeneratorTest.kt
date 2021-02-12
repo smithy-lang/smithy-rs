@@ -17,12 +17,12 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpTraitBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.uriFormatString
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.testutil.renderWithModelBuilder
+import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.testutil.asSmithyModel
-import software.amazon.smithy.rust.testutil.compileAndTest
-import software.amazon.smithy.rust.testutil.renderWithModelBuilder
-import software.amazon.smithy.rust.testutil.testSymbolProvider
 
 class HttpTraitBindingGeneratorTest {
     private val baseModel = """

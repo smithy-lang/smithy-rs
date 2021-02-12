@@ -14,7 +14,7 @@ are to allow this crate to be compilable and testable in isolation, no client co
 "http" = "0.2.1"
 "smithy-types" = { version = "0.0.1", path = "../smithy-types" }
 "smithy-http" = { version = "0.0.1", path = "../smithy-http"}
-"rand" = "0.7"
+"fastrand" = "1"
 
 [dev-dependencies]
 proptest = "0.10.1"

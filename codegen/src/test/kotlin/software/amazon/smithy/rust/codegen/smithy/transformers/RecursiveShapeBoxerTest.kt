@@ -9,8 +9,8 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
+import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.util.lookup
-import software.amazon.smithy.rust.testutil.asSmithyModel
 import kotlin.streams.toList
 
 internal class RecursiveShapeBoxerTest {
