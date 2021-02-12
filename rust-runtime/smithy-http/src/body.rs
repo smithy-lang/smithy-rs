@@ -19,6 +19,8 @@ type BodyError = Box<dyn Error + Send + Sync>;
 ///
 /// TODO: Consider renaming to simply `Body`, although I'm concerned about naming headaches
 /// between hyper::Body and our Body
+/// TODO: Once we add streaming bodies, we will need a custom debug implementation
+#[derive(Debug)]
 pub enum SdkBody {
     Once(Option<Bytes>),
     // TODO: tokio::sync::mpsc based streaming body
