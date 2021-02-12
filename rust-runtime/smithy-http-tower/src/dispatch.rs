@@ -65,7 +65,7 @@ where
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 #[non_exhaustive]
 pub struct DispatchLayer;
 
