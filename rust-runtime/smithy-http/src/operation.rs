@@ -9,6 +9,12 @@ pub struct Operation<H, R> {
     _retry_policy: R,
 }
 
+impl<H, R> Operation<H, R> {
+    pub fn into_request_response(self) -> (Request, H) {
+        (self.request, self.response_handler)
+    }
+}
+
 impl<H> Operation<H, ()> {
     pub fn new(request: Request, response_handler: H) -> Self {
         Operation {
