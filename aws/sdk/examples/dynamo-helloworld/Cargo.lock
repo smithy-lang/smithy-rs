@@ -79,6 +79,7 @@ dependencies = [
  "operationwip",
  "pin-utils",
  "smithy-http",
+ "smithy-http-tower",
  "tokio",
  "tower",
 ]
@@ -985,6 +986,18 @@ dependencies = [
  "http",
  "http-body",
  "smithy-types",
+]
+
+[[package]]
+name = "smithy-http-tower"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "http",
+ "http-body",
+ "pin-project 1.0.4",
+ "smithy-http",
+ "tower",
 ]
 
 [[package]]

@@ -15,7 +15,6 @@ use dynamodb::{
     operation::CreateTable,
 };
 use env_logger::Env;
-use operationwip::endpoint::StaticEndpoint;
 use smithy_http::endpoint::Endpoint;
 
 #[tokio::main]
