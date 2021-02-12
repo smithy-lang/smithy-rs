@@ -55,7 +55,7 @@ interface RustCodegenDecorator {
  *
  * This makes the actual concrete codegen simpler by not needing to deal with multiple separate decorators.
  */
-class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : RustCodegenDecorator {
+open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : RustCodegenDecorator {
     private val orderedDecorators = decorators.sortedBy { it.order }
     override val name: String
         get() = "MetaDecorator"
