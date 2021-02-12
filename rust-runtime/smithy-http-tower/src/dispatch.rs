@@ -65,8 +65,15 @@ where
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
+#[non_exhaustive]
 pub struct DispatchLayer;
+
+impl DispatchLayer {
+    pub fn new() -> Self {
+        DispatchLayer
+    }
+}
 
 impl<S> Layer<S> for DispatchLayer
 where
