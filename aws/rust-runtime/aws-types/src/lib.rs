@@ -23,6 +23,25 @@ impl Region {
     }
 }
 
+trait ProvideRegion: Send + Sync {
+    fn region(&self) -> Region;
+}
+
+impl ProvideRegion for Region {
+    fn region(&self) -> Region {
+        self.clone()
+    }
+}
+
+#[non_exhaustive]
+struct EnvironmentProvider;
+
+impl EnvironmentProvider {
+    pub fn new() -> Self {
+        EnvironmentProvider
+    }
+}
+
 /// The region to use when signing requests
 ///
 /// Generally, user code will not need to interact with `SigningRegion`. See `[Region](crate::Region)`.
