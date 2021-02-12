@@ -20,7 +20,6 @@ class AwsCodegenDecorator : RustCodegenDecorator {
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
         val awsCustomizations = mutableListOf<ConfigCustomization>()
-        awsCustomizations += CredentialProviderConfig()
         awsCustomizations += RegionConfig(protocolConfig.runtimeConfig)
         awsCustomizations += EndpointConfigCustomization(protocolConfig)
         protocolConfig.serviceShape.getTrait(SigV4Trait::class.java).map { trait ->
@@ -34,6 +33,6 @@ class AwsCodegenDecorator : RustCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return listOf(SigV4SigningPlugin(operation), EndpointConfigPlugin(operation), RegionConfigPlugin(operation)) + baseCustomizations
+        return listOf(SigV4SigningPlugin(operation, protocolConfig.runtimeConfig), EndpointConfigPlugin(protocolConfig.runtimeConfig, operation), RegionConfigPlugin(operation)) + baseCustomizations
     }
 }

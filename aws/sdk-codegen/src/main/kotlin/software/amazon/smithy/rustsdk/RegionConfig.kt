@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
@@ -28,7 +29,7 @@ class RegionConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
             ServiceConfig.BuilderImpl ->
                 rust(
                     """
-            pub fn region(mut self, region: impl #T::ProvideRegion) -> Self {
+            pub fn region(mut self, region: impl #T::region::ProvideRegion) -> Self {
                 self.region = region.region();
                 self
             }
@@ -37,8 +38,8 @@ class RegionConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
                 )
             ServiceConfig.BuilderPreamble -> rust(
                 """
-                use #1T::ProvideRegion;
-                let region = self.region.or_else(||#1T::default_provider().region());
+                use #1T::region::ProvideRegion;
+                let region = self.region.or_else(||#1T::region::default_provider().region());
             """,
                 region
             )
@@ -53,11 +54,11 @@ class RegionConfigPlugin(private val operationShape: OperationShape) : Operation
     override fun section(section: OperationSection): Writable {
         return when (section) {
             OperationSection.ImplBlock -> emptySection
-            OperationSection.Plugin -> writable {
+            is OperationSection.Feature -> writable {
                 rust(
                     """
-                if let Some(region) = &_config.region {
-                    request.config_mut().insert(region.clone());
+                if let Some(region) = &${section.config}.region {
+                    ${section.request}.config_mut().insert(region.clone());
 
                 }
                 """
@@ -68,4 +69,6 @@ class RegionConfigPlugin(private val operationShape: OperationShape) : Operation
 }
 
 fun Region(runtimeConfig: RuntimeConfig) =
-    RuntimeType("region", CargoDependency.OperationWip(runtimeConfig), "operationwip")
+    RuntimeType(null, awsTypes(runtimeConfig), "aws_types")
+
+fun awsTypes(runtimeConfig: RuntimeConfig) = CargoDependency("aws-types", Local(runtimeConfig.relativePath))

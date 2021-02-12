@@ -13,5 +13,6 @@ aws-hyper = { path = "../../build/aws-sdk/aws-hyper" }
 operationwip = { path = "../../build/aws-sdk/operationwip" }
 aws-auth = { path = "../../build/aws-sdk/aws-auth" }
 tokio = { version = "1", features = ["full"] }
+smithy-http = { path = "../../build/aws-sdk/smithy-http"}
 http = "0.2.3"
 env_logger = "0.8.2"

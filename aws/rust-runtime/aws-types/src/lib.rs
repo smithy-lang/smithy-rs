@@ -23,6 +23,32 @@ impl Region {
     }
 }
 
+pub mod region {
+    use crate::Region;
+
+    pub trait ProvideRegion {
+        fn region(&self) -> Option<Region>;
+    }
+
+    impl ProvideRegion for &str {
+        fn region(&self) -> Option<Region> {
+            Some(Region::new(*self))
+        }
+    }
+
+    struct RegionEnvironment;
+
+    impl ProvideRegion for RegionEnvironment {
+        fn region(&self) -> Option<Region> {
+            std::env::var("AWS_DEFAULT_REGION").map(Region::new).ok()
+        }
+    }
+
+    pub fn default_provider() -> impl ProvideRegion {
+        RegionEnvironment
+    }
+}
+
 /// The region to use when signing requests
 ///
 /// Generally, user code will not need to interact with `SigningRegion`. See `[Region](crate::Region)`.

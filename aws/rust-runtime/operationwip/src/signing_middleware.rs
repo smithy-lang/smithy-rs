@@ -2,7 +2,6 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-use crate::region::RegionExt;
 use aws_auth::ProvideCredentials;
 use aws_sig_auth::{
     HttpSigner, HttpSigningConfig, OperationSigningConfig, RequestConfig, SigningConfig,
@@ -14,6 +13,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tower::BoxError;
 use smithy_http::middleware::MapRequest;
+use aws_types::SigningRegion;
 
 #[derive(Clone)]
 pub struct SignRequestStage {
@@ -88,10 +88,9 @@ impl MapRequest for SignRequestStage {
                 Ok(creds) => creds,
                 Err(e) => return Err(e.into()),
             };
-            let region = config
-                .signing_region()
+            let region = config.get::<SigningRegion>()
                 .ok_or("Can't sign; No region defined")?
-                .to_string();
+                .as_ref().to_string();
             let request_config = RequestConfig {
                 request_ts: config
                     .get::<SystemTime>()

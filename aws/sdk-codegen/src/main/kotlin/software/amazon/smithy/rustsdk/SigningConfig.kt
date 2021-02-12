@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationSection
@@ -37,10 +38,11 @@ class SigV4SigningConfig(private val sigV4Trait: SigV4Trait) : ConfigCustomizati
     }
 }
 
-class SigV4SigningPlugin(operationShape: OperationShape) : OperationCustomization() {
+class SigV4SigningPlugin(operationShape: OperationShape, private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         return when (section) {
-            is OperationSection.Plugin -> writable {
+            is OperationSection.Feature -> writable {
+                addDependency(CargoDependency.OperationWip(runtimeConfig))
                 rust(
                     """
                 use operationwip::signing_middleware::SigningConfigExt;

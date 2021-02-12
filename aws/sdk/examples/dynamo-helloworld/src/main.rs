@@ -16,8 +16,7 @@ use dynamodb::{
 };
 use env_logger::Env;
 use operationwip::endpoint::StaticEndpoint;
-use operationwip::retry_policy::{RetryPolicy, RetryType};
-use tokio::time::Duration;
+use smithy_http::endpoint::Endpoint;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -25,20 +24,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config = dynamodb::Config::builder()
         .region("us-east-1")
         // To load credentials from environment variables, delete this line
-        .credentials_provider(auth::Credentials::from_keys(
+        .credentials_provider(aws_auth::Credentials::from_keys(
             "<fill me in2>",
             "<fill me in>",
             None
         ))
         // To use real DynamoDB, delete this line:
-        .endpoint_provider(StaticEndpoint::from_uri(http::Uri::from_static(
+        .endpoint_provider(Endpoint::immutable(http::Uri::from_static(
             "http://localhost:8000",
         )))
         .build();
     let client = aws_hyper::Client::default().with_tracing();
     let list_tables = dynamodb::operation::ListTables::builder()
-        .build(&config)
-        .with_policy(RetryIfNoTables);
+        .build(&config);
 
     let response = client.call(list_tables).await;
     let tables = match response {

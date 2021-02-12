@@ -9,6 +9,7 @@ import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
@@ -43,31 +44,37 @@ class EndpointConfigCustomization(private val protocolConfig: ProtocolConfig) : 
             ServiceConfig.BuilderBuild -> rust(
                 """endpoint_provider: self.endpoint_provider.unwrap_or_else(||
                                 ::std::sync::Arc::new(
-                                    #T::from_service_region(${endpointPrefix.dq()}, region.as_ref().expect("region must be specified"))
+                                    #T::DefaultAwsEndpointResolver::for_service(${endpointPrefix.dq()})
                                 )
                          ),""",
-                StaticEndpoint(protocolConfig.runtimeConfig)
+                awsEndpoint(protocolConfig.runtimeConfig)
             )
         }
     }
 }
 
-fun EndpointProvider(runtimeConfig: RuntimeConfig) = RuntimeType("ProvideEndpoint", CargoDependency.OperationWip(runtimeConfig), "operationwip::endpoint")
-fun StaticEndpoint(runtimeConfig: RuntimeConfig) = RuntimeType("StaticEndpoint", CargoDependency.OperationWip(runtimeConfig), "operationwip::endpoint")
+fun AwsEndpoint(runtimeConfig: RuntimeConfig) = CargoDependency("aws-endpoint", Local(runtimeConfig.relativePath))
+fun EndpointProvider(runtimeConfig: RuntimeConfig) =
+    RuntimeType("ResolveAwsEndpoint", AwsEndpoint(runtimeConfig), "aws_endpoint")
 
-class EndpointConfigPlugin(private val operationShape: OperationShape) : OperationCustomization() {
+fun awsEndpoint(runtimeConfig: RuntimeConfig) = RuntimeType(null, AwsEndpoint(runtimeConfig), "aws_endpoint")
+fun StaticEndpoint(runtimeConfig: RuntimeConfig) =
+    RuntimeType("Endpoint", CargoDependency.SmithyHttp(runtimeConfig), "smithy_http::endpoint")
+
+class EndpointConfigPlugin(private val runtimeConfig: RuntimeConfig, private val operationShape: OperationShape) : OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         if (operationShape.hasTrait(EndpointTrait::class.java)) {
             TODO()
         }
         return when (section) {
             OperationSection.ImplBlock -> emptySection
-            OperationSection.Plugin -> writable {
+            is OperationSection.Feature -> writable {
                 rust(
                     """
-                use operationwip::endpoint::EndpointProviderExt;
-                request.config_mut().insert_endpoint_provider(_config.endpoint_provider.clone());
-                """
+
+                #T::set_endpoint_resolver(${section.config}.endpoint_provider.clone(), &mut ${section.request}.config_mut());
+                """,
+                    awsEndpoint(runtimeConfig)
                 )
             }
         }

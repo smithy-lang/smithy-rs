@@ -118,6 +118,7 @@ pub fn set_endpoint_resolver(provider: AwsEndpointResolver, config: &mut Propert
 /// 3. Apply the endpoint to the URI in the request
 /// 4. Set the `SigningRegion` and `SigningService` in the property bag to drive downstream
 /// signing middleware.
+#[derive(Clone)]
 pub struct AwsEndpointStage;
 
 #[derive(Debug)]

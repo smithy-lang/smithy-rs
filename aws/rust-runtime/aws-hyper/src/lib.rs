@@ -162,7 +162,7 @@ where
         Retry: RetryPolicy<SdkSuccess<R>, SdkError<E>> + Send + Clone + 'static,
     {
         let signer = OperationPipelineService::for_stage(SignRequestStage::new());
-        let endpoint_resolver = OperationPipelineService::for_stage(AddEndpointStage);
+        let endpoint_resolver = OperationPipelineService::for_stage(AwsEndpointStage);
         let inner = self.inner.clone();
         let mut svc = ServiceBuilder::new()
             .retry(RetryStrategy {})
@@ -182,7 +182,6 @@ where
 use hyper::client::HttpConnector;
 use hyper_tls::HttpsConnector;
 use middleware_tracing::RawRequestLogging;
-use operationwip::endpoint::AddEndpointStage;
 use operationwip::middleware::{DispatchLayer, OperationPipelineService};
 use operationwip::retry_policy::RetryPolicy;
 use operationwip::signing_middleware::SignRequestStage;
@@ -192,6 +191,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
+use aws_endpoint::AwsEndpointStage;
 
 #[cfg(test)]
 mod test {
@@ -201,7 +201,6 @@ mod test {
     use bytes::Bytes;
     use http::header::AUTHORIZATION;
     use http::{Request, Response, Uri};
-    use operationwip::endpoint::{EndpointProviderExt, StaticEndpoint};
     use operationwip::region::Region;
     use operationwip::signing_middleware::SigningConfigExt;
     use pin_utils::core_reexport::task::{Context, Poll};

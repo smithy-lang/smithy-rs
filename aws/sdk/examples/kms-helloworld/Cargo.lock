@@ -29,12 +29,25 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 [[package]]
 name = "aws-auth"
 version = "0.1.0"
+dependencies = [
+ "smithy-http",
+]
+
+[[package]]
+name = "aws-endpoint"
+version = "0.1.0"
+dependencies = [
+ "aws-types",
+ "http",
+ "smithy-http",
+]
 
 [[package]]
 name = "aws-hyper"
 version = "0.1.0"
 dependencies = [
  "aws-auth",
+ "aws-endpoint",
  "aws-sig-auth",
  "bytes",
  "http",
@@ -72,6 +85,10 @@ dependencies = [
  "serde",
  "serde_urlencoded",
 ]
+
+[[package]]
+name = "aws-types"
+version = "0.1.0"
 
 [[package]]
 name = "bitflags"
@@ -381,7 +398,9 @@ name = "kms"
 version = "0.0.1"
 dependencies = [
  "aws-auth",
+ "aws-endpoint",
  "aws-sig-auth",
+ "aws-types",
  "bytes",
  "http",
  "operationwip",
@@ -577,6 +596,7 @@ version = "0.1.0"
 dependencies = [
  "aws-auth",
  "aws-sig-auth",
+ "aws-types",
  "bytes",
  "http",
  "http-body",
