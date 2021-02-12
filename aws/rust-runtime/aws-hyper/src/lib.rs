@@ -1,10 +1,10 @@
-use bytes::Bytes;
+
 use hyper::Client as HyperClient;
 use smithy_http::body::SdkBody;
 use smithy_http::operation;
 use smithy_http::response::ParseHttpResponse;
 use std::error::Error;
-use tower::{Layer, Service, ServiceBuilder, ServiceExt};
+use tower::{Service, ServiceBuilder, ServiceExt};
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
@@ -120,11 +120,11 @@ use hyper_tls::HttpsConnector;
 use middleware_tracing::RawRequestLogging;
 use operationwip::retry_policy::RetryPolicy;
 use operationwip::signing_middleware::SignRequestStage;
-use smithy_http::middleware::load_response;
+
 use smithy_http::operation::Operation;
 use std::future::Future;
 use std::pin::Pin;
-use std::task::{Context, Poll};
+
 use std::time::Duration;
 use aws_endpoint::AwsEndpointStage;
 use smithy_http_tower::map_request::MapRequestLayer;
@@ -133,26 +133,26 @@ use smithy_http_tower::dispatch::DispatchLayer;
 
 #[cfg(test)]
 mod test {
-    use crate::{BoxError, Client};
-    use aws_auth::Credentials;
-    use aws_sig_auth::OperationSigningConfig;
+    use crate::{BoxError};
+
+
     use bytes::Bytes;
-    use http::header::AUTHORIZATION;
-    use http::{Request, Response, Uri};
-    use operationwip::signing_middleware::SigningConfigExt;
+
+    use http::{Request, Response};
+
     use pin_utils::core_reexport::task::{Context, Poll};
     use smithy_http::body::SdkBody;
-    use smithy_http::operation;
-    use smithy_http::operation::Operation;
+
+
     use smithy_http::response::ParseHttpResponse;
-    use std::error::Error;
-    use std::fmt::Formatter;
+
+
     use std::future::Future;
     use std::pin::Pin;
-    use std::sync::{mpsc, Arc};
-    use std::time::Duration;
-    use std::time::UNIX_EPOCH;
-    use aws_types::Region;
+    use std::sync::{mpsc};
+
+
+
 
     #[derive(Clone)]
     struct TestService {
