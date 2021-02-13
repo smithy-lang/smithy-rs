@@ -94,6 +94,8 @@ impl Error for CredentialsError {
     }
 }
 
+pub type CredentialsProvider = Arc<dyn ProvideCredentials>;
+
 /// A Credentials Provider
 ///
 /// This interface is intentionally NOT async. Credential providers should provide a separate

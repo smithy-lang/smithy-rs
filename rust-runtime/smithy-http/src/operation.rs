@@ -9,6 +9,12 @@ pub struct Operation<H, R> {
     _retry_policy: R,
 }
 
+impl<H, R> Operation<H, R> {
+    pub fn into_request_response(self) -> (Request, H) {
+        (self.request, self.response_handler)
+    }
+}
+
 impl<H> Operation<H, ()> {
     pub fn new(request: Request, response_handler: H) -> Self {
         Operation {
@@ -19,37 +25,7 @@ impl<H> Operation<H, ()> {
     }
 }
 
-impl<H, R> Operation<H, R> {
-    pub fn try_clone(&self) -> Option<Self>
-    where
-        H: Clone,
-        R: Clone,
-    {
-        let inner = self.request.try_clone()?;
-        Some(Operation {
-            request: inner,
-            response_handler: self.response_handler.clone(),
-            _retry_policy: self._retry_policy.clone(),
-        })
-    }
-
-    pub fn into_request_response(self) -> (Request, H) {
-        (self.request, self.response_handler)
-    }
-
-    pub fn retry_policy(&self) -> &R {
-        &self._retry_policy
-    }
-
-    pub fn with_policy<T>(self, r: T) -> Operation<H, T> {
-        Operation {
-            request: self.request,
-            response_handler: self.response_handler,
-            _retry_policy: r,
-        }
-    }
-}
-
+#[derive(Debug)]
 pub struct Request {
     /// The underlying HTTP Request
     inner: http::Request<SdkBody>,
