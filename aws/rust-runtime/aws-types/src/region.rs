@@ -28,6 +28,10 @@ impl Region {
     }
 }
 
+/// Provide a [`Region`](Region) to use with AWS requests
+///
+/// For most cases [`default_provider`](default_provider) will be the best option, implementing
+/// a standard provider chain.
 pub trait ProvideRegion: Send + Sync {
     fn region(&self) -> Option<Region>;
 }
