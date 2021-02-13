@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -38,21 +39,21 @@ class SigV4SigningConfig(private val sigV4Trait: SigV4Trait) : ConfigCustomizati
     }
 }
 
-class SigV4SigningPlugin(operationShape: OperationShape, private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
+class SigV4SigningPlugin(operationShape: OperationShape, private val runtimeConfig: RuntimeConfig) :
+    OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         return when (section) {
             is OperationSection.Feature -> writable {
                 addDependency(CargoDependency.OperationWip(runtimeConfig))
-                rust(
+                rustTemplate(
                     """
-                use operationwip::signing_middleware::SigningConfigExt;
-                request.config_mut().insert_signing_config(
-                    #T::OperationSigningConfig::default_config(_config.signing_service())
+                request.config_mut().insert(
+                    #{sig_auth}::signer::OperationSigningConfig::default_config()
                 );
-                use operationwip::signing_middleware::CredentialProviderExt;
-                request.config_mut().insert_credentials_provider(_config.credentials_provider.clone());
+                request.config_mut().insert(#{aws_types}::SigningService::from_static(${section.config}.signing_service()));
                 """,
-                    awsSigAuth
+                    "sig_auth" to awsSigAuth,
+                    "aws_types" to awsTypes(runtimeConfig)
                 )
             }
             else -> emptySection

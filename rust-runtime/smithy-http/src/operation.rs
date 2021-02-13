@@ -13,6 +13,18 @@ impl<H, R> Operation<H, R> {
     pub fn into_request_response(self) -> (Request, H) {
         (self.request, self.response_handler)
     }
+
+    pub fn retry_policy(&self) -> &R {
+        &self._retry_policy
+    }
+
+    pub fn try_clone(&self) -> Option<Self> where H: Clone, R: Clone {
+        Some(Operation {
+            request: self.request.try_clone()?,
+            response_handler: self.response_handler.clone(),
+            _retry_policy: self._retry_policy.clone()
+        })
+    }
 }
 
 impl<H> Operation<H, ()> {

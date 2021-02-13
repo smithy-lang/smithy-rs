@@ -1,4 +1,3 @@
-
 use hyper::Client as HyperClient;
 use smithy_http::body::SdkBody;
 use smithy_http::operation;
@@ -36,7 +35,6 @@ impl<S> Client<S> {
         }
     }
 }
-
 
 // In the future, this needs to use the CRT
 #[derive(Clone)]
@@ -97,7 +95,7 @@ where
         O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + Clone + 'static,
         Retry: RetryPolicy<SdkSuccess<R>, SdkError<E>> + Send + Clone + 'static,
     {
-        let signer = MapRequestLayer::for_mapper(SignRequestStage::new());
+        let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
         let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);
         let inner = self.inner.clone();
         let mut svc = ServiceBuilder::new()
@@ -119,22 +117,22 @@ use hyper::client::HttpConnector;
 use hyper_tls::HttpsConnector;
 use middleware_tracing::RawRequestLogging;
 use operationwip::retry_policy::RetryPolicy;
-use operationwip::signing_middleware::SignRequestStage;
 
 use smithy_http::operation::Operation;
 use std::future::Future;
 use std::pin::Pin;
 
-use std::time::Duration;
 use aws_endpoint::AwsEndpointStage;
+use aws_sig_auth::middleware::SigV4SigningStage;
+use aws_sig_auth::signer::SigV4Signer;
+use smithy_http_tower::dispatch::DispatchLayer;
 use smithy_http_tower::map_request::MapRequestLayer;
 use smithy_http_tower::parse_response::ParseResponseLayer;
-use smithy_http_tower::dispatch::DispatchLayer;
+use std::time::Duration;
 
 #[cfg(test)]
 mod test {
-    use crate::{BoxError};
-
+    use crate::BoxError;
 
     use bytes::Bytes;
 
@@ -143,16 +141,11 @@ mod test {
     use pin_utils::core_reexport::task::{Context, Poll};
     use smithy_http::body::SdkBody;
 
-
     use smithy_http::response::ParseHttpResponse;
-
 
     use std::future::Future;
     use std::pin::Pin;
-    use std::sync::{mpsc};
-
-
-
+    use std::sync::mpsc;
 
     #[derive(Clone)]
     struct TestService {

@@ -6,8 +6,6 @@
 use std::error::Error;
 
 use aws_hyper::{SdkError, SdkSuccess};
-use dynamodb::error::ListTablesError;
-use dynamodb::output::ListTablesOutput;
 use dynamodb::{
     model::{
         AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType,

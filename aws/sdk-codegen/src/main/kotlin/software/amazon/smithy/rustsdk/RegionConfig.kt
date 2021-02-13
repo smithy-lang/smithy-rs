@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustom
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 
 class RegionConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
-    private val region = Region(runtimeConfig)
+    private val region = awsTypes(runtimeConfig)
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rust("pub region: Option<#T::Region>,", region)
@@ -68,7 +68,7 @@ class RegionConfigPlugin(private val operationShape: OperationShape) : Operation
     }
 }
 
-fun Region(runtimeConfig: RuntimeConfig) =
-    RuntimeType(null, awsTypes(runtimeConfig), "aws_types")
+fun awsTypes(runtimeConfig: RuntimeConfig) =
+    RuntimeType(null, awsTypesDep(runtimeConfig), "aws_types")
 
-fun awsTypes(runtimeConfig: RuntimeConfig) = CargoDependency("aws-types", Local(runtimeConfig.relativePath))
+fun awsTypesDep(runtimeConfig: RuntimeConfig) = CargoDependency("aws-types", Local(runtimeConfig.relativePath))
