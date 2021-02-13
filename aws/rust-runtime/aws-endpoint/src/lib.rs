@@ -1,14 +1,17 @@
-use aws_types::{Region, SigningRegion, SigningService};
-use http::Uri;
-use smithy_http::endpoint::{Endpoint, EndpointPrefix};
-use smithy_http::middleware::MapRequest;
-use smithy_http::operation::Request;
-use smithy_http::property_bag::PropertyBag;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
+
+use http::Uri;
+
+use aws_types::region::{Region, SigningRegion};
+use aws_types::SigningService;
+use smithy_http::endpoint::{Endpoint, EndpointPrefix};
+use smithy_http::middleware::MapRequest;
+use smithy_http::operation::Request;
+use smithy_http::property_bag::PropertyBag;
 
 /// Endpoint to connect to an AWS Service
 ///
@@ -164,13 +167,17 @@ impl MapRequest for AwsEndpointStage {
 
 #[cfg(test)]
 mod test {
-    use crate::{set_endpoint_resolver, AwsEndpointStage, DefaultAwsEndpointResolver};
-    use aws_types::{Region, SigningRegion, SigningService};
+    use std::sync::Arc;
+
     use http::Uri;
+
+    use aws_types::region::{Region, SigningRegion};
+    use aws_types::SigningService;
     use smithy_http::body::SdkBody;
     use smithy_http::middleware::MapRequest;
     use smithy_http::operation;
-    use std::sync::Arc;
+
+    use crate::{AwsEndpointStage, DefaultAwsEndpointResolver, set_endpoint_resolver};
 
     #[test]
     fn default_endpoint_updates_request() {
