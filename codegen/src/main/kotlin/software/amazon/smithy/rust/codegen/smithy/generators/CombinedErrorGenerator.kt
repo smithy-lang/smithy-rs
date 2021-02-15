@@ -10,6 +10,8 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.traits.RetryableTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.Derives
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
@@ -79,7 +81,10 @@ class CombinedErrorGenerator(
         }
 
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
-        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.provideErrorKind(symbolProvider.config().runtimeConfig)) {
+        writer.rustBlock(
+            "impl #T for ${symbol.name}",
+            RuntimeType.provideErrorKind(symbolProvider.config().runtimeConfig)
+        ) {
             rustBlock("fn code(&self) -> Option<&str>") {
                 rust("${symbol.name}::code(self)")
             }
@@ -87,7 +92,13 @@ class CombinedErrorGenerator(
             rustBlock("fn error_kind(&self) -> Option<#T>", errorKindT) {
                 delegateToVariants {
                     when (it) {
-                        is VariantMatch.Modeled -> writable { rust("_inner.error_kind()") }
+                        is VariantMatch.Modeled -> writable {
+                            if (it.shape.hasTrait(RetryableTrait::class.java)) {
+                                rust("Some(_inner.error_kind())")
+                            } else {
+                                rust("None")
+                            }
+                        }
                         is VariantMatch.Generic -> writable { rust("_inner.error_kind()") }
                         is VariantMatch.Unhandled -> writable { rust("None") }
                     }
@@ -139,7 +150,7 @@ class CombinedErrorGenerator(
     sealed class VariantMatch(name: String) : Section(name) {
         object Unhandled : VariantMatch("Unhandled")
         object Generic : VariantMatch("Generic")
-        data class Modeled(val symbol: Symbol) : VariantMatch("Modeled")
+        data class Modeled(val symbol: Symbol, val shape: Shape) : VariantMatch("Modeled")
     }
 
     /**
@@ -171,7 +182,7 @@ class CombinedErrorGenerator(
             errors.forEach {
                 val errorSymbol = symbolProvider.toSymbol(it)
                 rust("""${symbol.name}::${errorSymbol.name}(_inner) => """)
-                handler(VariantMatch.Modeled(errorSymbol))(this)
+                handler(VariantMatch.Modeled(errorSymbol, it))(this)
                 write(",")
             }
             val genericHandler = handler(VariantMatch.Generic)

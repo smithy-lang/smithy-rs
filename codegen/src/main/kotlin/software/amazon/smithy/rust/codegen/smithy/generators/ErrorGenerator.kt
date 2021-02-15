@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -37,7 +36,12 @@ sealed class ErrorKind {
     }
 }
 
-fun StructureShape.retryKind(errorTrait: ErrorTrait): ErrorKind? {
+/**
+ * Returns the modeled retryKind for this shape
+ *
+ * This is _only_ non-null in cases where the @retryable trait has been applied.
+ */
+fun StructureShape.modeledRetryKind(errorTrait: ErrorTrait): ErrorKind? {
     val retryableTrait = this.getTrait(RetryableTrait::class.java).orNull() ?: return null
     return when {
         retryableTrait.throttling -> ErrorKind.Throttling
@@ -65,12 +69,10 @@ class ErrorGenerator(
         val message = messageShape.map { "self.message.as_deref()" }.orElse("None")
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
         writer.rustBlock("impl ${symbol.name}") {
-            rustBlock("pub fn error_kind(&self) -> Option<#T>", errorKindT) {
-                val writable = shape.retryKind(error)?.writable(symbolProvider.config().runtimeConfig)
-                if (writable != null) {
-                    withBlock("Some(", ")") { writable(this) }
-                } else {
-                    rust("None")
+            val retryKindWriteable = shape.modeledRetryKind(error)?.writable(symbolProvider.config().runtimeConfig)
+            if (retryKindWriteable != null) {
+                rustBlock("pub fn error_kind(&self) -> #T", errorKindT) {
+                    retryKindWriteable(this)
                 }
             }
             rust(
