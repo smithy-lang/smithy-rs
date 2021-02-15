@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.rustlang
 import software.amazon.smithy.codegen.core.SymbolDependency
 import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
 
 sealed class DependencyScope
@@ -100,6 +101,9 @@ class InlineDependency(
         )
     }
 }
+
+fun CargoDependency.asType(): RuntimeType =
+    RuntimeType(null, dependency = this, namespace = this.name.replace("-", "_"))
 
 /**
  * A dependency on an internal or external Cargo Crate
