@@ -9,11 +9,12 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 
 /**
  * Add a `token_provider` field to Service config. See below for the resulting generated code.
  */
-class IdempotencyProviderConfig : NamedSectionGenerator<ServiceConfig>() {
+class IdempotencyTokenProviderCustomization : NamedSectionGenerator<ServiceConfig>() {
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             is ServiceConfig.ConfigStruct -> writable {
@@ -21,7 +22,7 @@ class IdempotencyProviderConfig : NamedSectionGenerator<ServiceConfig>() {
             }
             ServiceConfig.ConfigImpl -> emptySection
             ServiceConfig.BuilderStruct -> writable {
-                rust("token_provider: Option<Box<dyn #T::ProvideIdempotencyToken>>", RuntimeType.IdempotencyToken)
+                rust("token_provider: Option<Box<dyn #T::ProvideIdempotencyToken>>,", RuntimeType.IdempotencyToken)
             }
             ServiceConfig.BuilderImpl -> writable {
                 rust(

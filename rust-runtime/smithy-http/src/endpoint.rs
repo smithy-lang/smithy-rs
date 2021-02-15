@@ -10,6 +10,7 @@ use std::str::FromStr;
 ///
 /// This implements an API endpoint as specified in the
 /// [Smithy Endpoint Specification](https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html)
+#[derive(Clone)]
 pub struct Endpoint {
     uri: http::Uri,
 
@@ -41,8 +42,11 @@ impl Endpoint {
     ///
     /// Certain protocols will attempt to prefix additional information onto an endpoint. If you
     /// wish to ignore these prefixes (for example, when communicating with localhost), set `immutable` to `true`.
-    pub fn new(uri: Uri, immutable: bool) -> Result<Self, InvalidEndpoint> {
-        Ok(Endpoint { uri, immutable })
+    pub fn mutable(uri: Uri) -> Self {
+        Endpoint {
+            uri,
+            immutable: false,
+        }
     }
 
     /// Create a new immutable endpoint from a URI
@@ -50,9 +54,9 @@ impl Endpoint {
     /// ```rust
     /// # use smithy_http::endpoint::Endpoint;
     /// use http::Uri;
-    /// let endpoint = Endpoint::from_uri(Uri::from_static("http://localhost:8000"));
+    /// let endpoint = Endpoint::immutable(Uri::from_static("http://localhost:8000"));
     /// ```
-    pub fn from_uri(uri: Uri) -> Self {
+    pub fn immutable(uri: Uri) -> Self {
         Endpoint {
             uri,
             immutable: true,
@@ -91,11 +95,7 @@ mod test {
 
     #[test]
     fn prefix_endpoint() {
-        let ep = Endpoint::new(
-            Uri::from_static("https://us-east-1.dynamo.amazonaws.com"),
-            false,
-        )
-        .expect("valid endpoint");
+        let ep = Endpoint::mutable(Uri::from_static("https://us-east-1.dynamo.amazonaws.com"));
         let mut uri = Uri::from_static("/list_tables?k=v");
         ep.set_endpoint(
             &mut uri,
@@ -109,11 +109,9 @@ mod test {
 
     #[test]
     fn prefix_endpoint_custom_port() {
-        let ep = Endpoint::new(
-            Uri::from_static("https://us-east-1.dynamo.amazonaws.com:6443"),
-            false,
-        )
-        .expect("valid endpoint");
+        let ep = Endpoint::mutable(Uri::from_static(
+            "https://us-east-1.dynamo.amazonaws.com:6443",
+        ));
         let mut uri = Uri::from_static("/list_tables?k=v");
         ep.set_endpoint(
             &mut uri,
@@ -129,11 +127,7 @@ mod test {
 
     #[test]
     fn prefix_immutable_endpoint() {
-        let ep = Endpoint::new(
-            Uri::from_static("https://us-east-1.dynamo.amazonaws.com"),
-            true,
-        )
-        .expect("valid endpoint");
+        let ep = Endpoint::immutable(Uri::from_static("https://us-east-1.dynamo.amazonaws.com"));
         let mut uri = Uri::from_static("/list_tables?k=v");
         ep.set_endpoint(
             &mut uri,
@@ -147,8 +141,7 @@ mod test {
 
     #[test]
     fn set_endpoint_empty_path() {
-        let ep =
-            Endpoint::new(Uri::from_static("http://localhost:8000"), true).expect("valid endpoint");
+        let ep = Endpoint::immutable(Uri::from_static("http://localhost:8000"));
         let mut uri = Uri::from_static("/");
         ep.set_endpoint(&mut uri, None);
         assert_eq!(uri, Uri::from_static("http://localhost:8000/"))

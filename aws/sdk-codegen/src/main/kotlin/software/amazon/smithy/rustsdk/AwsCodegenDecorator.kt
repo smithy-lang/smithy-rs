@@ -5,17 +5,14 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.rust.codegen.smithy.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
-import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 
-class AwsCodegenDecorator : RustCodegenDecorator {
-    override val name: String = "AwsSdkCodgenDecorator"
+val DECORATORS = listOf(
+    CredentialsProviderDecorator(),
+    RegionDecorator()
+)
+
+class AwsCodegenDecorator : CombinedCodegenDecorator(DECORATORS) {
+    override val name: String = "AwsSdkCodegenDecorator"
     override val order: Byte = -1
-    override fun configCustomizations(
-        protocolConfig: ProtocolConfig,
-        baseCustomizations: List<ConfigCustomization>
-    ): List<ConfigCustomization> {
-        return listOf(BaseAwsConfig()) + baseCustomizations
-    }
 }

@@ -9,11 +9,13 @@ pub struct Operation<H, R> {
     _retry_policy: R,
 }
 
-impl<H> Operation<H, ()> {
+impl<H, R> Operation<H, R> {
     pub fn into_request_response(self) -> (Request, H) {
         (self.request, self.response_handler)
     }
+}
 
+impl<H> Operation<H, ()> {
     pub fn new(request: Request, response_handler: H) -> Self {
         Operation {
             request,
@@ -23,6 +25,7 @@ impl<H> Operation<H, ()> {
     }
 }
 
+#[derive(Debug)]
 pub struct Request {
     /// The underlying HTTP Request
     inner: http::Request<SdkBody>,

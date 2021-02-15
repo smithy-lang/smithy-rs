@@ -13,6 +13,8 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 
 /**
@@ -94,7 +96,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         fun withBaseBehavior(protocolConfig: ProtocolConfig, extraCustomizations: List<ConfigCustomization>): ServiceConfigGenerator {
             val baseFeatures = mutableListOf<ConfigCustomization>()
             if (protocolConfig.serviceShape.needsIdempotencyToken(protocolConfig.model)) {
-                baseFeatures.add(IdempotencyProviderConfig())
+                baseFeatures.add(IdempotencyTokenProviderCustomization())
             }
             return ServiceConfigGenerator(baseFeatures + extraCustomizations)
         }

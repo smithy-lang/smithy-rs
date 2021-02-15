@@ -1,8 +1,10 @@
 pub mod provider;
 
+use smithy_http::property_bag::PropertyBag;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 /// AWS SDK Credentials
@@ -37,7 +39,7 @@ impl Debug for Credentials {
     }
 }
 
-const STATIC_CREDENTIALS: &str = "Static";
+const STATIC_CREDENTIALS: &'static str = "static";
 impl Credentials {
     pub fn from_keys(
         access_key_id: impl Into<String>,
@@ -52,6 +54,18 @@ impl Credentials {
 
             provider_name: STATIC_CREDENTIALS,
         }
+    }
+
+    pub fn access_key_id(&self) -> &str {
+        &self.access_key_id
+    }
+
+    pub fn secret_access_key(&self) -> &str {
+        &self.secret_access_key
+    }
+
+    pub fn session_token(&self) -> Option<&str> {
+        self.session_token.as_deref()
     }
 }
 
@@ -80,6 +94,8 @@ impl Error for CredentialsError {
     }
 }
 
+pub type CredentialsProvider = Arc<dyn ProvideCredentials>;
+
 /// A Credentials Provider
 ///
 /// This interface is intentionally NOT async. Credential providers should provide a separate
@@ -90,8 +106,17 @@ pub trait ProvideCredentials: Send + Sync {
     fn credentials(&self) -> Result<Credentials, CredentialsError>;
 }
 
+pub fn default_provider() -> impl ProvideCredentials {
+    // TODO: this should be a chain based on the CRT
+    provider::EnvironmentVariableCredentialsProvider::new()
+}
+
 impl ProvideCredentials for Credentials {
     fn credentials(&self) -> Result<Credentials, CredentialsError> {
         Ok(self.clone())
     }
+}
+
+pub fn set_provider(config: &mut PropertyBag, provider: Arc<dyn ProvideCredentials>) {
+    config.insert(provider);
 }

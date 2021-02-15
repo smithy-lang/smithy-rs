@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.generators.config.Section
+import software.amazon.smithy.rust.codegen.smithy.customize.Section
 
 /**
  * For a given Operation ([this]), return the symbol referring to the unified error? This can be used
