@@ -11,15 +11,18 @@ import java.util.concurrent.TimeUnit
 
 class CommandFailed(output: String) : Exception("Command Failed\n$output")
 
-fun String.runCommand(workdir: Path? = null): String {
+fun String.runCommand(workdir: Path? = null, environment: Map<String, String> = mapOf()): String {
     val parts = this.split("\\s".toRegex())
-    val proc = ProcessBuilder(*parts.toTypedArray())
+    val builder = ProcessBuilder(*parts.toTypedArray())
         .redirectOutput(ProcessBuilder.Redirect.PIPE)
         .redirectError(ProcessBuilder.Redirect.PIPE)
         .letIf(workdir != null) {
             it.directory(workdir?.toFile())
         }
-        .start()
+
+    val env = builder.environment()
+    environment.forEach { (k, v) -> env[k] = v }
+    val proc = builder.start()
 
     proc.waitFor(60, TimeUnit.MINUTES)
     val stdErr = proc.errorStream.bufferedReader().readText()

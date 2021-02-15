@@ -26,6 +26,12 @@ pub struct AwsEndpoint {
     signing_region: Option<SigningRegion>,
 }
 
+impl AwsEndpoint {
+    pub fn set_endpoint(&self, mut uri: &mut http::Uri, endpoint_prefix: Option<&EndpointPrefix>) {
+        self.endpoint.set_endpoint(&mut uri, endpoint_prefix);
+    }
+}
+
 pub type BoxError = Box<dyn Error + Send + Sync + 'static>;
 
 /// Resolve the AWS Endpoint for a given region
@@ -109,7 +115,7 @@ fn get_endpoint_resolver(config: &PropertyBag) -> Option<&AwsEndpointResolver> {
     config.get()
 }
 
-pub fn set_endpoint_resolver(provider: AwsEndpointResolver, config: &mut PropertyBag) {
+pub fn set_endpoint_resolver(config: &mut PropertyBag, provider: AwsEndpointResolver) {
     config.insert(provider);
 }
 
@@ -117,7 +123,7 @@ pub fn set_endpoint_resolver(provider: AwsEndpointResolver, config: &mut Propert
 ///
 /// AwsEndpointStage implements [`MapRequest`](smithy_http::middleware::MapRequest). It will:
 /// 1. Load an endpoint provider from the property bag.
-/// 2. Load an endpoint given the [`Region`](aws_types::Region) in the property bag.
+/// 2. Load an endpoint given the [`Region`](aws_types::region::Region) in the property bag.
 /// 3. Apply the endpoint to the URI in the request
 /// 4. Set the `SigningRegion` and `SigningService` in the property bag to drive downstream
 /// signing middleware.
@@ -189,7 +195,7 @@ mod test {
         {
             let mut conf = req.config_mut();
             conf.insert(region.clone());
-            set_endpoint_resolver(provider, &mut conf);
+            set_endpoint_resolver(&mut conf, provider);
         };
         let req = AwsEndpointStage.apply(req).expect("should succeed");
         assert_eq!(

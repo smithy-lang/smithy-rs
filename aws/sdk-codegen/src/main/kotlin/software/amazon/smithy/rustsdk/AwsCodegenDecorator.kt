@@ -9,7 +9,8 @@ import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecor
 
 val DECORATORS = listOf(
     CredentialsProviderDecorator(),
-    RegionDecorator()
+    RegionDecorator(),
+    AwsEndpointDecorator()
 )
 
 class AwsCodegenDecorator : CombinedCodegenDecorator(DECORATORS) {

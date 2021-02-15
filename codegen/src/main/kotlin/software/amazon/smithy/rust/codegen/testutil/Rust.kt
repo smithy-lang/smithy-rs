@@ -165,7 +165,7 @@ fun TestWriterDelegator.compileAndTest() {
             model = stubModel
         )
     )
-    "cargo test".runCommand(baseDir)
+    "cargo test".runCommand(baseDir, mapOf("RUSTFLAGS" to "-A dead_code"))
 }
 
 // TODO: unify these test helpers a bit

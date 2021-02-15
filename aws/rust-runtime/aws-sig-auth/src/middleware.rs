@@ -142,7 +142,7 @@ mod test {
             .augment(|req, conf| {
                 conf.insert(region.clone());
                 conf.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
-                set_endpoint_resolver(provider, conf);
+                set_endpoint_resolver(conf, provider);
                 Result::<_, Infallible>::Ok(req)
             })
             .expect("succeeds");
