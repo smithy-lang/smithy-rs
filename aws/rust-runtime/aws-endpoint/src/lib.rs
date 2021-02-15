@@ -123,7 +123,7 @@ pub fn set_endpoint_resolver(config: &mut PropertyBag, provider: AwsEndpointReso
 ///
 /// AwsEndpointStage implements [`MapRequest`](smithy_http::middleware::MapRequest). It will:
 /// 1. Load an endpoint provider from the property bag.
-/// 2. Load an endpoint given the [`Region`](aws_types::Region) in the property bag.
+/// 2. Load an endpoint given the [`Region`](aws_types::region::Region) in the property bag.
 /// 3. Apply the endpoint to the URI in the request
 /// 4. Set the `SigningRegion` and `SigningService` in the property bag to drive downstream
 /// signing middleware.
