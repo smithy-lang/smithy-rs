@@ -9,40 +9,32 @@ use std::time::Duration;
 /// 2. The modeled error retry mode is checked
 /// 3. The code is checked against a predetermined list of throttling errors & transient error codes
 /// 4. The status code is checked against a predetermined list of status codes
-pub struct AwsErrorRetryPolicy {
-    throttling_errors: &'static [&'static str],
-    transient_errors: &'static [&'static str],
-    transient_status_codes: &'static [u16],
-}
+#[non_exhaustive]
+pub struct AwsErrorRetryPolicy;
 
 const TRANSIENT_ERROR_STATUS_CODES: [u16; 2] = [400, 408];
+const THROTTLING_ERRORS: &[&str] = &[
+    "Throttling",
+    "ThrottlingException",
+    "ThrottledException",
+    "RequestThrottledException",
+    "TooManyRequestsException",
+    "ProvisionedThroughputExceededException",
+    "TransactionInProgressException",
+    "RequestLimitExceeded",
+    "BandwidthLimitExceeded",
+    "LimitExceededException",
+    "RequestThrottled",
+    "SlowDown",
+    "PriorRequestNotComplete",
+    "EC2ThrottledException",
+];
+const TRANSIENT_ERRORS: &[&str] = &["RequestTimeout", "RequestTimeoutException"];
 
 impl AwsErrorRetryPolicy {
     /// Create an `AwsErrorRetryPolicy` with the default set of known error & status codes
     pub fn new() -> Self {
-        let throttling_errors = &[
-            "Throttling",
-            "ThrottlingException",
-            "ThrottledException",
-            "RequestThrottledException",
-            "TooManyRequestsException",
-            "ProvisionedThroughputExceededException",
-            "TransactionInProgressException",
-            "RequestLimitExceeded",
-            "BandwidthLimitExceeded",
-            "LimitExceededException",
-            "RequestThrottled",
-            "SlowDown",
-            "PriorRequestNotComplete",
-            "EC2ThrottledException",
-        ];
-
-        let transient_errors = &["RequestTimeout", "RequestTimeoutException"];
-        AwsErrorRetryPolicy {
-            throttling_errors,
-            transient_errors,
-            transient_status_codes: &TRANSIENT_ERROR_STATUS_CODES,
-        }
+        AwsErrorRetryPolicy
     }
 }
 
@@ -54,8 +46,8 @@ impl Default for AwsErrorRetryPolicy {
 
 impl ClassifyResponse for AwsErrorRetryPolicy {
     fn classify<E, B>(&self, err: E, response: &http::Response<B>) -> RetryKind
-    where
-        E: ProvideErrorKind,
+        where
+            E: ProvideErrorKind,
     {
         if let Some(retry_after_delay) = response
             .headers()
@@ -69,15 +61,14 @@ impl ClassifyResponse for AwsErrorRetryPolicy {
             return RetryKind::Error(kind);
         };
         if let Some(code) = err.code() {
-            if self.throttling_errors.contains(&code) {
+            if THROTTLING_ERRORS.contains(&code) {
                 return RetryKind::Error(ErrorKind::ThrottlingError);
             }
-            if self.transient_errors.contains(&code) {
+            if TRANSIENT_ERRORS.contains(&code) {
                 return RetryKind::Error(ErrorKind::TransientError);
             }
         };
-        if self
-            .transient_status_codes
+        if TRANSIENT_ERROR_STATUS_CODES
             .contains(&response.status().as_u16())
         {
             return RetryKind::Error(ErrorKind::TransientError);
@@ -95,6 +86,7 @@ mod test {
     use std::time::Duration;
 
     struct UnmodeledError;
+
     struct CodedError {
         code: &'static str,
     }
@@ -157,7 +149,7 @@ mod test {
                 CodedError {
                     code: "RequestTimeout"
                 },
-                &test_response
+                &test_response,
             ),
             RetryKind::Error(ErrorKind::TransientError)
         )
