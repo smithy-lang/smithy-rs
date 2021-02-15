@@ -25,6 +25,10 @@ impl EndpointPrefix {
         let _ = Authority::from_str(&prefix)?;
         Ok(EndpointPrefix(prefix))
     }
+
+    pub fn prefix(&self) -> &str {
+        &self.0
+    }
 }
 
 #[non_exhaustive]

@@ -36,6 +36,7 @@ import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.model.traits.HostLabelTrait
 import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -68,7 +69,12 @@ data class SymbolVisitorConfig(
 
 // TODO: consider if this is better handled as a wrapper
 val DefaultConfig =
-    SymbolVisitorConfig(runtimeConfig = RuntimeConfig(), handleOptionality = true, handleRustBoxing = true, codegenConfig = CodegenConfig())
+    SymbolVisitorConfig(
+        runtimeConfig = RuntimeConfig(),
+        handleOptionality = true,
+        handleRustBoxing = true,
+        codegenConfig = CodegenConfig()
+    )
 
 data class SymbolLocation(val namespace: String) {
     val filename = "$namespace.rs"
@@ -132,10 +138,14 @@ class SymbolVisitor(
     }
 
     private fun handleOptionality(symbol: Symbol, member: MemberShape, container: Shape): Symbol {
-        // If a field has the httpLabel trait and we are generating
+        // If a field has the httpLabel or hostLabel trait and we are generating
         // an Input shape, then the field is _not optional_.
         val httpLabeledInput =
-            container.hasTrait(SyntheticInputTrait::class.java) && member.hasTrait(HttpLabelTrait::class.java)
+            container.hasTrait(SyntheticInputTrait::class.java) && (
+                member.hasTrait(HttpLabelTrait::class.java) || member.hasTrait(
+                    HostLabelTrait::class.java
+                )
+                )
         return if (nullableIndex.isNullable(member) && !httpLabeledInput) {
             symbol.makeOptional()
         } else symbol

@@ -9,6 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
@@ -20,6 +21,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.Default
+import software.amazon.smithy.rust.codegen.smithy.EndpointTraitBindings
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.defaultValue
@@ -66,8 +68,9 @@ class OperationInputBuilderGenerator(
     private val features: List<OperationCustomization>,
 ) : BuilderGenerator(model, symbolProvider, shape.inputShape(model)) {
     override fun buildFn(implBlockWriter: RustWriter) {
-        val fallibleBuilder = StructureGenerator.fallibleBuilder(shape.inputShape(model), symbolProvider)
+        val fallibleBuilder = StructureGenerator.fallibleBuilder(shape.inputShape(model), symbolProvider) || shape.hasTrait(EndpointTrait::class.java)
         val retryType = "()"
+        // TODO: This should be a modeled error type
         val returnType = "#T<#{T}, $retryType>".letIf(fallibleBuilder) { "Result<$it, String>" }
         val outputSymbol = symbolProvider.toSymbol(shape)
         val operationT = RuntimeType.operation(symbolProvider.config().runtimeConfig)
@@ -87,6 +90,13 @@ class OperationInputBuilderGenerator(
                 """,
                     operationModule, sdkBody
                 )
+                shape.getTrait(EndpointTrait::class.java).map { epTrait ->
+                    val endpointTraitBindings = EndpointTraitBindings(model, symbolProvider, shape, epTrait)
+                    withBlock("let endpoint_prefix = ", ".map_err(|_|\"Invalid endpoint prefix\")?;") {
+                        endpointTraitBindings.render(this, "&op")
+                    }
+                    rust("request.config_mut().insert(endpoint_prefix);")
+                }
                 features.forEach { it.section(OperationSection.Feature("request", "_config"))(this) }
                 rust(
                     """

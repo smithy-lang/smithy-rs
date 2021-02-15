@@ -40,7 +40,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private val settings = RustSettings.from(context.model, context.settings)
 
     private val symbolProvider: RustSymbolProvider
-    private val writers: CodegenWriterDelegator<RustWriter>
+    val writers: CodegenWriterDelegator<RustWriter>
     private val fileManifest = context.fileManifest
     private val model: Model
     private val protocolConfig: ProtocolConfig

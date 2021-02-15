@@ -165,7 +165,7 @@ class HttpProtocolTestGeneratorTest {
             }
         }
 
-        val (pluginContext, testDir) = generatePluginContext(model)
+        val (pluginContext, testDir) = generatePluginContext(model, "com.example#HelloService")
         val visitor = CodegenVisitor(
             pluginContext,
             object : RustCodegenDecorator {

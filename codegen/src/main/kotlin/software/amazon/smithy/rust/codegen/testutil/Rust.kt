@@ -114,13 +114,14 @@ object TestWorkspace {
  * "cargo test".runCommand(path)
  * ```
  */
-fun generatePluginContext(model: Model): Pair<PluginContext, Path> {
+fun generatePluginContext(model: Model, service: String): Pair<PluginContext, Path> {
     val testDir = TestWorkspace.subproject()
     val moduleName = "test_${testDir.nameWithoutExtension}"
     val testPath = testDir.toPath()
     val manifest = FileManifest.create(testPath)
     val settings = Node.objectNodeBuilder()
         .withMember("module", Node.from(moduleName))
+        .withMember("service", Node.from(service))
         .withMember("moduleVersion", Node.from("1.0.0"))
         .withMember(
             "runtimeConfig",
@@ -135,7 +136,7 @@ fun RustWriter.unitTest(
     @Language("Rust", prefix = "fn test() {", suffix = "}") test: String,
     name: String? = null
 ) {
-    val testName = name ?: safeName("test_")
+    val testName = name ?: safeName("test")
     raw("#[test]")
     rustBlock("fn $testName()") {
         writeWithNoFormatting(test)
@@ -165,7 +166,7 @@ fun TestWriterDelegator.compileAndTest() {
             model = stubModel
         )
     )
-    "cargo test".runCommand(baseDir)
+    "cargo test".runCommand(baseDir, mapOf("RUSTFLAGS" to "-A dead_code"))
 }
 
 // TODO: unify these test helpers a bit
