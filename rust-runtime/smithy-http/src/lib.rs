@@ -9,6 +9,7 @@ pub mod endpoint;
 pub mod label;
 pub mod middleware;
 pub mod operation;
+pub mod retry;
 mod pin_util;
 pub mod property_bag;
 pub mod query;
