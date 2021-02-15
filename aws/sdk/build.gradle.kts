@@ -179,7 +179,7 @@ tasks.register<Exec>("cargoTest") {
 tasks.register<Exec>("cargoDocs") {
     workingDir(sdkOutputDir)
     // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+    environment("RUSTDOCFLAGS", "-D warnings")
     commandLine("cargo", "doc", "--no-deps")
     dependsOn("assemble")
 }

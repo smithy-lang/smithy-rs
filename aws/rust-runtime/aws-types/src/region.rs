@@ -28,6 +28,12 @@ impl Region {
     }
 }
 
+impl From<&str> for Region {
+    fn from(region: &str) -> Self {
+        Region(Arc::new(region.to_string()))
+    }
+}
+
 /// Provide a [`Region`](Region) to use with AWS requests
 ///
 /// For most cases [`default_provider`](default_provider) will be the best option, implementing
