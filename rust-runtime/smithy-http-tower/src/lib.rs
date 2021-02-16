@@ -96,7 +96,7 @@ mod tests {
         });
 
         let mut svc = ServiceBuilder::new()
-            .layer(ParseResponseLayer::<TestParseResponse>::new())
+            .layer(ParseResponseLayer::<TestParseResponse, ()>::new())
             .layer(MapRequestLayer::for_mapper(AddHeader))
             .layer(DispatchLayer)
             .service(http_layer);
