@@ -5,7 +5,7 @@
 
 use crate::signer::{OperationSigningConfig, RequestConfig, SigV4Signer, SigningError};
 use aws_auth::{Credentials, CredentialsError, CredentialsProvider};
-use aws_types::{SigningRegion, SigningService};
+use aws_types::{SigningService};
 use smithy_http::middleware::MapRequest;
 use smithy_http::operation::Request;
 use smithy_http::property_bag::PropertyBag;
@@ -39,6 +39,7 @@ impl SigV4SigningStage {
 }
 
 use thiserror::Error;
+use aws_types::region::SigningRegion;
 
 #[derive(Debug, Error)]
 pub enum SigningStageError {
@@ -80,7 +81,7 @@ fn signing_config(
             .get::<SystemTime>()
             .copied()
             .unwrap_or_else(SystemTime::now),
-        region: region.into(),
+        region,
         service: signing_service,
     };
     Ok((operation_config, request_config, creds))
@@ -129,6 +130,7 @@ mod test {
     use std::convert::Infallible;
     use std::sync::Arc;
     use std::time::{Duration, UNIX_EPOCH};
+    use aws_types::region::Region;
 
     // check that the endpoint middleware followed by signing middleware produce the expected result
     #[test]
