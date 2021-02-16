@@ -20,18 +20,36 @@ type BoxError = Box<dyn Error + Send + Sync>;
 pub type SdkError<E> = smithy_http::result::SdkError<E, hyper::Body>;
 pub type SdkSuccess<T> = smithy_http::result::SdkSuccess<T, hyper::Body>;
 
+/// AWS Service Client
+///
+/// Hyper-based AWS Service Client. Most customers will want to construct a client with
+/// [`Client::https()`](Client::https). For testing & other more advanced use cases, a custom
+/// connector may be used via [`Client::new(connector)`](Client::new).
+///
+/// The internal connector must implement the following trait bound to be used to dispatch requests:
+/// ```rust,ignore
+///    S: Service<http::Request<SdkBody>, Response = http::Response<hyper::Body>>
+///        + Send
+///        + Clone
+///        + 'static,
+///    S::Error: Into<BoxError> + Send + Sync + 'static,
+///    S::Future: Send + 'static,
+/// ```
+
 pub struct Client<S> {
     inner: S,
 }
 
 impl<S> Client<S> {
+    /// Construct a new `Client` with a custom connector
     pub fn new(connector: S) -> Self {
         Client { inner: connector }
     }
 }
 
 impl Client<hyper::Client<HttpsConnector<HttpConnector>, SdkBody>> {
-    pub fn default() -> Self {
+    /// Construct an `https` based client
+    pub fn https() -> Self {
         let https = HttpsConnector::new();
         let client = HyperClient::builder().build::<_, SdkBody>(https);
         Client { inner: client }
@@ -58,6 +76,10 @@ where
         self.call_raw(input).await.map(|res| res.parsed)
     }
 
+    /// Dispatch this request to the network
+    ///
+    /// The returned result contains the raw HTTP response which can be useful for debugging or implementing
+    /// unsupported features.
     pub async fn call_raw<O, R, E, Retry>(
         &self,
         input: Operation<O, Retry>,
@@ -84,6 +106,6 @@ mod tests {
 
     #[test]
     fn construct_default_client() {
-        let _ = Client::default();
+        let _ = Client::https();
     }
 }

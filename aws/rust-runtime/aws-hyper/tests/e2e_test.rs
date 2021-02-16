@@ -42,8 +42,8 @@ fn test_operation() -> Operation<TestOperationParser, ()> {
     let req = operation::Request::new(http::Request::new(SdkBody::from("request body")))
         .augment(|req, mut conf| {
             set_endpoint_resolver(
-                Arc::new(DefaultAwsEndpointResolver::for_service("test-service")),
                 &mut conf,
+                Arc::new(DefaultAwsEndpointResolver::for_service("test-service")),
             );
             aws_auth::set_provider(
                 &mut conf,
