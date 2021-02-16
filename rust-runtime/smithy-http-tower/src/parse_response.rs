@@ -21,18 +21,18 @@ use tower::{BoxError, Layer, Service};
 /// services that operate on [`operation::Request`](operation::Request) and services that operate
 /// on [`http::Request`](http::Request).
 #[derive(Clone)]
-pub struct ParseResponseService<S, O> {
+pub struct ParseResponseService<S, O, R> {
     inner: S,
-    _output_type: PhantomData<O>,
+    _output_type: PhantomData<(O, R)>,
 }
 
 #[derive(Default)]
-pub struct ParseResponseLayer<O> {
-    _output_type: PhantomData<O>,
+pub struct ParseResponseLayer<O, R> {
+    _output_type: PhantomData<(O, R)>,
 }
 
 /// `ParseResponseLayer` dispatches [`Operation`](smithy_http::operation::Operation)s and parses them.
-impl<O> ParseResponseLayer<O> {
+impl<O, R> ParseResponseLayer<O, R> {
     pub fn new() -> Self {
         ParseResponseLayer {
             _output_type: Default::default(),
@@ -40,11 +40,11 @@ impl<O> ParseResponseLayer<O> {
     }
 }
 
-impl<S, O> Layer<S> for ParseResponseLayer<O>
+impl<S, O, R> Layer<S> for ParseResponseLayer<O, R>
 where
     S: Service<operation::Request>,
 {
-    type Service = ParseResponseService<S, O>;
+    type Service = ParseResponseService<S, O, R>;
 
     fn layer(&self, inner: S) -> Self::Service {
         ParseResponseService {
@@ -65,7 +65,7 @@ type BoxedResultFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>>>>;
 /// `E`: The error path return of the response parser
 /// `B`: The HTTP Body type returned by the inner service
 /// `R`: The type of the retry policy
-impl<S, O, T, E, B, R> tower::Service<operation::Operation<O, R>> for ParseResponseService<S, O>
+impl<S, O, T, E, B, R> tower::Service<operation::Operation<O, R>> for ParseResponseService<S, O, R>
 where
     S: Service<operation::Request, Response = http::Response<B>, Error = SendOperationError>,
     S::Future: 'static,

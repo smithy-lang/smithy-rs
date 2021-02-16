@@ -5,7 +5,6 @@
 
 use crate::signer::{OperationSigningConfig, RequestConfig, SigV4Signer, SigningError};
 use aws_auth::{Credentials, CredentialsError, CredentialsProvider};
-use aws_types::{SigningRegion, SigningService};
 use smithy_http::middleware::MapRequest;
 use smithy_http::operation::Request;
 use smithy_http::property_bag::PropertyBag;
@@ -38,6 +37,8 @@ impl SigV4SigningStage {
     }
 }
 
+use aws_types::region::SigningRegion;
+use aws_types::SigningService;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -121,6 +122,7 @@ mod test {
     use crate::signer::{OperationSigningConfig, SigV4Signer};
     use aws_auth::CredentialsProvider;
     use aws_endpoint::{set_endpoint_resolver, AwsEndpointStage, DefaultAwsEndpointResolver};
+    use aws_types::region::Region;
     use aws_types::Region;
     use http::header::AUTHORIZATION;
     use smithy_http::body::SdkBody;
