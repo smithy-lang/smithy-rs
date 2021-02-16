@@ -221,12 +221,12 @@ tasks.register<Exec>("cargoClippy") {
     dependsOn("assemble")
 }
 
-tasks.register<CompileExampleTask>("runExample") {
+tasks.register<RunExampleTask>("runExample") {
     dependsOn("assemble")
     outputDir = sdkOutputDir
 }
 
-open class CompileExampleTask @javax.inject.Inject constructor() : Exec() {
+open class RunExampleTask @javax.inject.Inject constructor() : Exec() {
     @Option(option = "example", description = "Example to run")
     var example: String? = null
     set(value) {
