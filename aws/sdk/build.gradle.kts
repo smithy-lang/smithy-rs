@@ -19,7 +19,6 @@ plugins {
 val smithyVersion: String by project
 
 val sdkOutputDir = buildDir.resolve("aws-sdk")
-val awsServices = discoverServices()
 // TODO: smithy-http should be removed
 val runtimeModules = listOf("smithy-types", "smithy-http")
 val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types")
@@ -40,6 +39,13 @@ dependencies {
 
 data class AwsService(val service: String, val module: String, val modelFile: File, val extraConfig: String? = null)
 
+val awsServices: Provider<List<AwsService>> = project.providers.provider { discoverServices() }
+
+/**
+ * Discovers services from the `models` directory
+ *
+ * Do not invoke this function directly. Use the `awsServices` provider.
+ */
 fun discoverServices(): List<AwsService> {
     val models = project.file("models")
     return fileTree(models).map { file ->
@@ -88,18 +94,31 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
     doFirst {
-        projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices))
+        projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices.get()))
     }
 }
 
 task("relocateServices") {
     description = "relocate AWS services to their final destination"
     doLast {
-        awsServices.forEach {
+        awsServices.get().forEach {
             copy {
                 from("$buildDir/smithyprojections/sdk/${it.module}/rust-codegen")
                 into(sdkOutputDir.resolve(it.module))
             }
+        }
+    }
+}
+
+task("relocateExamples") {
+    description = "relocate the examples folder & rewrite path dependencies"
+    doLast {
+        copy {
+            from(projectDir)
+            include("examples/**")
+            into(sdkOutputDir)
+            exclude("**/target")
+            filter { line -> line.replace("build/aws-sdk/", "") }
         }
     }
 }
@@ -136,7 +155,11 @@ tasks.register<Copy>("relocateRuntime") {
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {
-    val modules = services.map(AwsService::module) + runtimeModules + awsModules
+    val examples = projectDir.resolve("examples").listFiles { file -> !file.name.startsWith(".") }?.toList()
+        ?.map { "examples/${it.name}" }.orEmpty()
+
+    val modules = services.map(AwsService::module) + runtimeModules + awsModules + examples
+        ?.toList()
     return """
     [workspace]
     members = [
@@ -147,12 +170,18 @@ fun generateCargoWorkspace(services: List<AwsService>): String {
 task("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
-        sdkOutputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices))
+        sdkOutputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices.get()))
     }
 }
 
 task("finalizeSdk") {
-    finalizedBy("relocateServices", "relocateRuntime", "relocateAwsRuntime", "generateCargoWorkspace")
+    finalizedBy(
+        "relocateServices",
+        "relocateRuntime",
+        "relocateAwsRuntime",
+        "relocateExamples",
+        "generateCargoWorkspace"
+    )
 }
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
@@ -190,6 +219,31 @@ tasks.register<Exec>("cargoClippy") {
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "clippy")
     dependsOn("assemble")
+}
+
+tasks.register<CompileExampleTask>("runExample") {
+    dependsOn("assemble")
+    outputDir = sdkOutputDir
+}
+
+open class CompileExampleTask @javax.inject.Inject constructor() : Exec() {
+    @Option(option = "example", description = "Example to run")
+    var example: String? = null
+    set(value) {
+        workingDir = workingDir.resolve(value!!)
+        if (!workingDir.exists()) {
+            throw kotlin.Exception("Example directory ${workingDir} does not exist")
+        }
+        field = value
+    }
+
+    @Input
+    var outputDir: File? = null
+        set(value) {
+            workingDir = value!!.resolve("examples")
+            commandLine = listOf("cargo", "run")
+            field = value
+        }
 }
 
 tasks["test"].finalizedBy("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs")
