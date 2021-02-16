@@ -18,6 +18,8 @@ bytes = "1"
 http-body = "0.4.0"
 smithy-http = { path = "../../../rust-runtime/smithy-http" }
 smithy-http-tower = { path = "../../../rust-runtime/smithy-http-tower" }
+# rt feature improves support for reaping stale connections
+tokio = { version = "1", features = ["rt"]}
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
