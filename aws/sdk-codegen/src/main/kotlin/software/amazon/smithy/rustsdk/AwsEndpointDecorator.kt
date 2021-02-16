@@ -16,6 +16,8 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
@@ -31,7 +33,10 @@ class AwsEndpointDecorator : RustCodegenDecorator {
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + EndpointConfigCustomization(protocolConfig.runtimeConfig, protocolConfig.serviceShape)
+        return baseCustomizations + EndpointConfigCustomization(
+            protocolConfig.runtimeConfig,
+            protocolConfig.serviceShape
+        )
     }
 
     override fun operationCustomizations(
@@ -41,14 +46,25 @@ class AwsEndpointDecorator : RustCodegenDecorator {
     ): List<OperationCustomization> {
         return baseCustomizations + EndpointResolverFeature(protocolConfig.runtimeConfig, operation)
     }
+
+    override fun libRsCustomizations(
+        protocolConfig: ProtocolConfig,
+        baseCustomizations: List<LibRsCustomization>
+    ): List<LibRsCustomization> {
+        return baseCustomizations + PubUseEndpoint(protocolConfig.runtimeConfig)
+    }
 }
 
-class EndpointConfigCustomization(private val runtimeConfig: RuntimeConfig, serviceShape: ServiceShape) : ConfigCustomization() {
+class EndpointConfigCustomization(private val runtimeConfig: RuntimeConfig, serviceShape: ServiceShape) :
+    ConfigCustomization() {
     private val endpointPrefix = serviceShape.expectTrait(ServiceTrait::class.java).endpointPrefix
     private val resolveAwsEndpoint = runtimeConfig.awsEndpointDependency().asType().copy(name = "ResolveAwsEndpoint")
     override fun section(section: ServiceConfig): Writable = writable {
         when (section) {
-            is ServiceConfig.ConfigStruct -> rust("pub endpoint_resolver: ::std::sync::Arc<dyn #T>,", resolveAwsEndpoint)
+            is ServiceConfig.ConfigStruct -> rust(
+                "pub endpoint_resolver: ::std::sync::Arc<dyn #T>,",
+                resolveAwsEndpoint
+            )
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
                 rust("endpoint_resolver: Option<::std::sync::Arc<dyn #T>>,", resolveAwsEndpoint)
@@ -88,6 +104,19 @@ class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private 
                 #T::set_endpoint_resolver(&mut ${section.request}.config_mut(), ${section.config}.endpoint_resolver.clone());
                 """,
                     runtimeConfig.awsEndpointDependency().asType()
+                )
+            }
+        }
+    }
+}
+
+class PubUseEndpoint(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
+    override fun section(section: LibRsSection): Writable {
+        return when (section) {
+            is LibRsSection.Body -> writable {
+                rust(
+                    "pub use #T::endpoint::Endpoint;",
+                    CargoDependency.SmithyHttp(runtimeConfig).asType()
                 )
             }
         }

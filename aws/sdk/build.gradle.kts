@@ -19,9 +19,8 @@ plugins {
 val smithyVersion: String by project
 
 val sdkOutputDir = buildDir.resolve("aws-sdk")
-// TODO: smithy-http should be removed
-val runtimeModules = listOf("smithy-types", "smithy-http")
-val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types")
+val runtimeModules = listOf("smithy-types", "smithy-http", "smithy-http-tower")
+val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types", "aws-hyper", "aws-sig-auth")
 
 buildscript {
     val smithyVersion: String by project
@@ -232,7 +231,7 @@ open class RunExampleTask @javax.inject.Inject constructor() : Exec() {
     set(value) {
         workingDir = workingDir.resolve(value!!)
         if (!workingDir.exists()) {
-            throw kotlin.Exception("Example directory ${workingDir} does not exist")
+            //throw kotlin.Exception("Example directory ${workingDir} does not exist")
         }
         field = value
     }

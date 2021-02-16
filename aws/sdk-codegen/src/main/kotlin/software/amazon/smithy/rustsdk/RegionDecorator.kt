@@ -14,6 +14,8 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
@@ -64,6 +66,13 @@ class RegionDecorator : RustCodegenDecorator {
     ): List<OperationCustomization> {
         return baseCustomizations + RegionConfigPlugin()
     }
+
+    override fun libRsCustomizations(
+        protocolConfig: ProtocolConfig,
+        baseCustomizations: List<LibRsCustomization>
+    ): List<LibRsCustomization> {
+        return baseCustomizations + PubUseRegion(protocolConfig.runtimeConfig)
+    }
 }
 
 class RegionProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
@@ -95,7 +104,7 @@ class RegionProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization()
     }
 }
 
-class RegionConfigPlugin() : OperationCustomization() {
+class RegionConfigPlugin : OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         return when (section) {
             OperationSection.ImplBlock -> emptySection
@@ -109,6 +118,14 @@ class RegionConfigPlugin() : OperationCustomization() {
                 """
                 )
             }
+        }
+    }
+}
+
+class PubUseRegion(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
+    override fun section(section: LibRsSection): Writable {
+        return when (section) {
+            is LibRsSection.Body -> writable { rust("pub use #T::Region;", region(runtimeConfig)) }
         }
     }
 }
