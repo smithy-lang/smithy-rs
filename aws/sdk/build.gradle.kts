@@ -225,18 +225,16 @@ tasks.register<RunExampleTask>("runExample") {
     outputDir = sdkOutputDir
 }
 
+// TODO: validate that the example exists. Otherwise this fails with a hiden error.
 open class RunExampleTask @javax.inject.Inject constructor() : Exec() {
     @Option(option = "example", description = "Example to run")
     var example: String? = null
     set(value) {
         workingDir = workingDir.resolve(value!!)
-        if (!workingDir.exists()) {
-            //throw kotlin.Exception("Example directory ${workingDir} does not exist")
-        }
         field = value
     }
 
-    @Input
+    @org.gradle.api.tasks.InputDirectory
     var outputDir: File? = null
         set(value) {
             workingDir = value!!.resolve("examples")
