@@ -18,7 +18,7 @@ pub struct ValidateRequest {
     pub actual: http::Request<SdkBody>,
 }
 
-/// TestConnection for use with a [`aws_hyper::Client`](aws_hyper::Client)
+/// TestConnection for use with a [`aws_hyper::Client`](crate::Client)
 ///
 /// A basic test connection. It will:
 /// - Response to requests with a preloaded series of responses

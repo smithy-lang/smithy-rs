@@ -74,7 +74,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val service = settings.getService(model)
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
-        writers.finalize(settings)
+        writers.finalize(settings, codegenDecorator.libRsCustomizations(protocolConfig, listOf()))
         try {
             "cargo fmt".runCommand(fileManifest.baseDir)
         } catch (_: CommandFailed) {

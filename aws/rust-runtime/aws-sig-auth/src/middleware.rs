@@ -123,7 +123,6 @@ mod test {
     use aws_auth::CredentialsProvider;
     use aws_endpoint::{set_endpoint_resolver, AwsEndpointStage, DefaultAwsEndpointResolver};
     use aws_types::region::Region;
-    use aws_types::Region;
     use http::header::AUTHORIZATION;
     use smithy_http::body::SdkBody;
     use smithy_http::middleware::MapRequest;
