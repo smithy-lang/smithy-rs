@@ -71,7 +71,7 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                       },
                       "service": "${it.service}",
                       "module": "${it.module}",
-                      "moduleVersion": "0.0.1",
+                      "moduleVersion": "0.0.2",
                       "build": {
                         "rootProject": true
                       }
