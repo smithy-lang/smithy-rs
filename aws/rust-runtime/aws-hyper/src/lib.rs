@@ -71,7 +71,7 @@ where
     /// access the raw response use `call_raw`.
     pub async fn call<O, T, E, Retry>(&self, input: Operation<O, Retry>) -> Result<T, SdkError<E>>
     where
-        O: ParseHttpResponse<hyper::Body, Output = Result<T, E>> + Send + Clone + 'static,
+        O: ParseHttpResponse<hyper::Body, Output = Result<T, E>> + Send + 'static,
     {
         self.call_raw(input).await.map(|res| res.parsed)
     }
@@ -85,7 +85,7 @@ where
         input: Operation<O, Retry>,
     ) -> Result<SdkSuccess<R>, SdkError<E>>
     where
-        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + Clone + 'static,
+        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + 'static,
     {
         let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
         let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);

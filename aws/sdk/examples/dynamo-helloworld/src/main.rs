@@ -7,16 +7,16 @@ use std::error::Error;
 
 
 use env_logger::Env;
-use smithy_http::endpoint::Endpoint;
-use aws_types::region::Region;
+use dynamodb::{Endpoint, Region, Credentials};
+use dynamodb::operation::ListTables;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init_from_env(Env::default().default_filter_or("info"));
-    let _config = dynamodb::Config::builder()
+    let config = dynamodb::Config::builder()
         .region(Region::from("us-east-1"))
         // To load credentials from environment variables, delete this line
-        .credentials_provider(aws_auth::Credentials::from_keys(
+        .credentials_provider(Credentials::from_keys(
             "<fill me in2>",
             "<fill me in>",
             None
@@ -26,6 +26,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
             "http://localhost:8000",
         )))
         .build();
+    let client = aws_hyper::Client::https();
+
+    let op = ListTables::builder().build(&config);
+    // Currently this fails, pending the merge of https://github.com/awslabs/smithy-rs/pull/202
+    let tables = client.call(op).await?;
+    println!("Current DynamoDB tables: {:?}", tables);
     Ok(())
-    // WIP: Pending merge of `aws-hyper` PR
 }

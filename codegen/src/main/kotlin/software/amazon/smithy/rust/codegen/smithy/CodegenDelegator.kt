@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsGenerator
 
 private fun CodegenWriterDelegator<RustWriter>.includedModules(): List<String> = this.writers.values.mapNotNull { it.module() }
@@ -27,7 +28,7 @@ private val PublicModules = setOf("error", "operation", "model", "input", "outpu
  * - inlining inline dependencies that have been used
  * - generating (and writing) a Cargo.toml based on the settings & the required dependencies
  */
-fun CodegenWriterDelegator<RustWriter>.finalize(settings: RustSettings) {
+fun CodegenWriterDelegator<RustWriter>.finalize(settings: RustSettings, libRsCustomizations: List<LibRsCustomization>) {
     val loadDependencies = { this.dependencies.map { dep -> RustDependency.fromSymbolDependency(dep) } }
     val inlineDependencies = loadDependencies().filterIsInstance<InlineDependency>().distinctBy { it.key() }
     inlineDependencies.forEach { dep ->
@@ -57,7 +58,7 @@ fun CodegenWriterDelegator<RustWriter>.finalize(settings: RustSettings) {
         val modules = includedModules.map { moduleName ->
             RustModule.default(moduleName, PublicModules.contains(moduleName))
         }
-        LibRsGenerator(settings.moduleDescription, modules).render(writer)
+        LibRsGenerator(settings.moduleDescription, modules, libRsCustomizations).render(writer)
     }
     flushWriters()
 }
