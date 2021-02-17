@@ -1,4 +1,5 @@
 pub mod region;
+pub mod build_metadata;
 
 use std::borrow::Cow;
 
