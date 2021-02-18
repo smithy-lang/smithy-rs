@@ -10,7 +10,7 @@ use aws_hyper::Client;
 use aws_sig_auth::signer::OperationSigningConfig;
 use aws_types::region::Region;
 use bytes::Bytes;
-use http::header::AUTHORIZATION;
+use http::header::{AUTHORIZATION, USER_AGENT};
 use http::{Response, Uri};
 use smithy_http::body::SdkBody;
 use smithy_http::operation;
@@ -19,6 +19,7 @@ use smithy_http::response::ParseHttpResponse;
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
+use aws_http::user_agent::{AwsUserAgent, ApiMetadata};
 
 #[derive(Clone)]
 struct TestOperationParser;
@@ -52,6 +53,7 @@ fn test_operation() -> Operation<TestOperationParser, ()> {
             conf.insert(Region::new("test-region"));
             conf.insert(OperationSigningConfig::default_config());
             conf.insert(UNIX_EPOCH + Duration::from_secs(1613414417));
+            conf.insert(AwsUserAgent::for_tests());
             Result::<_, Infallible>::Ok(req)
         })
         .unwrap();
@@ -61,6 +63,8 @@ fn test_operation() -> Operation<TestOperationParser, ()> {
 #[tokio::test]
 async fn e2e_test() {
     let expected_req = http::Request::builder()
+        .header(USER_AGENT, "aws-sdk-rust/0.123.test os/windows/XPSP3 rust/1.50.0")
+        .header("x-amz-user-agent", "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 rust/1.50.0")
         .header(AUTHORIZATION, "AWS4-HMAC-SHA256 Credential=access_key/20210215/test-region/test-service/aws4_request, SignedHeaders=, Signature=e8a49c07c540558c4b53a5dcc61cbfb27003381fd8437fca0b3dddcdc703ec44")
         .header("x-amz-date", "20210215T184017Z")
         .uri(Uri::from_static("https://test-region.test-service.amazonaws.com/"))

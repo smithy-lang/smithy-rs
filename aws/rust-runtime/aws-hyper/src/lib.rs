@@ -14,6 +14,7 @@ use smithy_http_tower::map_request::MapRequestLayer;
 use smithy_http_tower::parse_response::ParseResponseLayer;
 use std::error::Error;
 use tower::{Service, ServiceBuilder, ServiceExt};
+use aws_http::user_agent::UserAgentStage;
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
@@ -89,11 +90,14 @@ where
     {
         let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
         let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);
+        let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new());
         let inner = self.inner.clone();
         let mut svc = ServiceBuilder::new()
             .layer(ParseResponseLayer::<O, Retry>::new())
             .layer(endpoint_resolver)
             .layer(signer)
+            // Apply the user agent _after signing_. We should not sign the user-agent header
+            .layer(user_agent)
             .layer(DispatchLayer::new())
             .service(inner);
         svc.ready_and().await?.call(input).await
