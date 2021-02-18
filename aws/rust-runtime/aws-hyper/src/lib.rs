@@ -1,6 +1,7 @@
 pub mod test_connection;
 
 use aws_endpoint::AwsEndpointStage;
+use aws_http::user_agent::UserAgentStage;
 use aws_sig_auth::middleware::SigV4SigningStage;
 use aws_sig_auth::signer::SigV4Signer;
 use hyper::client::HttpConnector;
@@ -14,7 +15,6 @@ use smithy_http_tower::map_request::MapRequestLayer;
 use smithy_http_tower::parse_response::ParseResponseLayer;
 use std::error::Error;
 use tower::{Service, ServiceBuilder, ServiceExt};
-use aws_http::user_agent::UserAgentStage;
 
 type BoxError = Box<dyn Error + Send + Sync>;
 

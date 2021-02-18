@@ -5,6 +5,7 @@
 
 use aws_auth::Credentials;
 use aws_endpoint::{set_endpoint_resolver, DefaultAwsEndpointResolver};
+use aws_http::user_agent::AwsUserAgent;
 use aws_hyper::test_connection::{TestConnection, ValidateRequest};
 use aws_hyper::Client;
 use aws_sig_auth::signer::OperationSigningConfig;
@@ -19,7 +20,6 @@ use smithy_http::response::ParseHttpResponse;
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
-use aws_http::user_agent::{AwsUserAgent, ApiMetadata};
 
 #[derive(Clone)]
 struct TestOperationParser;
