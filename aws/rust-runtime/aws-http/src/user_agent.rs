@@ -3,17 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::build_metadata::{OsFamily, BUILD_METADATA, BuildMetadata};
+use aws_types::build_metadata::{BuildMetadata, OsFamily, BUILD_METADATA};
 use http::header::{HeaderName, InvalidHeaderValue, USER_AGENT};
 use http::HeaderValue;
 use smithy_http::middleware::MapRequest;
 use smithy_http::operation::Request;
+use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
-use std::borrow::Cow;
 
+/// AWS User Agent
+///
+/// Ths struct should be inserted into the [`PropertyBag`](smithy_http::operation::Request::config)
+/// during operation construction. [`UserAgentStage`](UserAgentStage) reads `AwsUserAgent`
+/// from the property bag and sets the `User-Agent` and `x-amz-user-agent` headers.
 pub struct AwsUserAgent {
     sdk_metadata: SdkMetadata,
     api_metadata: ApiMetadata,
@@ -23,6 +28,11 @@ pub struct AwsUserAgent {
 }
 
 impl AwsUserAgent {
+    /// Load a User Agent configuration from the environment
+    ///
+    /// This utilizes [`BUILD_METADATA`](aws_types::build_metadata::BUILD_METADATA) from `aws_types`
+    /// to capture the Rust version & target platform. `ApiMetadata` provides
+    /// the version & name of the specific service.
     pub fn new_from_environment(api_metadata: ApiMetadata) -> Self {
         let build_metadata = &BUILD_METADATA;
         let sdk_metadata = SdkMetadata {
@@ -46,27 +56,29 @@ impl AwsUserAgent {
         }
     }
 
-    /// For test purposes, construct an environment independent User Agent
+    /// For test purposes, construct an environment-independent User Agent
+    ///
+    /// Without this, running CI on a different platform would produce different user agent strings
     pub fn for_tests() -> Self {
         Self {
             sdk_metadata: SdkMetadata {
                 name: "rust",
-                version: "0.123.test"
+                version: "0.123.test",
             },
             api_metadata: ApiMetadata {
                 service_id: "test-service".into(),
-                version: "0.123"
+                version: "0.123",
             },
             os_metadata: OsMetadata {
                 os_family: &OsFamily::Windows,
-                version: Some("XPSP3".to_string())
+                version: Some("XPSP3".to_string()),
             },
             language_metadata: LanguageMetadata {
                 lang: "rust",
                 version: "1.50.0",
-                extras: vec![]
+                extras: vec![],
             },
-            exec_env_metadata: None
+            exec_env_metadata: None,
         }
     }
 
@@ -89,7 +101,7 @@ impl AwsUserAgent {
         */
         let mut ua_value = String::new();
         use std::fmt::Write;
-        // unwrap calls should never fail—string formatting will always succeed.
+        // unwrap calls should never fail because string formatting will always succeed.
         write!(ua_value, "{} ", &self.sdk_metadata).unwrap();
         write!(ua_value, "{} ", &self.api_metadata).unwrap();
         write!(ua_value, "{} ", &self.os_metadata).unwrap();
@@ -124,6 +136,7 @@ pub struct SdkMetadata {
     name: &'static str,
     version: &'static str,
 }
+
 impl Display for SdkMetadata {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "aws-sdk-{}/{}", self.name, self.version)
@@ -140,10 +153,11 @@ impl ApiMetadata {
     pub const fn new(service_id: &'static str, version: &'static str) -> Self {
         Self {
             service_id: Cow::Borrowed(service_id),
-            version
+            version,
         }
     }
 }
+
 impl Display for ApiMetadata {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "api/{}/{}", self.service_id, self.version)
@@ -154,10 +168,12 @@ struct AdditionalMetadata {
     key: String,
     value: String,
 }
+
 struct OsMetadata {
     os_family: &'static OsFamily,
     version: Option<String>,
 }
+
 impl Display for OsMetadata {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let os_family = match self.os_family {
@@ -243,13 +259,13 @@ impl MapRequest for UserAgentStage {
 
 #[cfg(test)]
 mod test {
+    use crate::user_agent::X_AMZ_USER_AGENT;
     use crate::user_agent::{ApiMetadata, AwsUserAgent, UserAgentStage};
     use aws_types::build_metadata::OsFamily;
+    use http::header::USER_AGENT;
+    use smithy_http::body::SdkBody;
     use smithy_http::middleware::MapRequest;
     use smithy_http::operation;
-    use smithy_http::body::SdkBody;
-    use http::header::USER_AGENT;
-    use crate::user_agent::X_AMZ_USER_AGENT;
 
     #[test]
     fn generate_a_valid_ua() {
@@ -274,13 +290,23 @@ mod test {
     fn ua_stage_adds_headers() {
         let stage = UserAgentStage::new();
         let req = operation::Request::new(http::Request::new(SdkBody::from("some body")));
-        stage.apply(req).expect_err("adding UA should fail without a UA set");
+        stage
+            .apply(req)
+            .expect_err("adding UA should fail without a UA set");
         let mut req = operation::Request::new(http::Request::new(SdkBody::from("some body")));
-        req.config_mut().insert(AwsUserAgent::new_from_environment(ApiMetadata { service_id: "dynamodb".into(), version: "0.123"}));
+        req.config_mut()
+            .insert(AwsUserAgent::new_from_environment(ApiMetadata {
+                service_id: "dynamodb".into(),
+                version: "0.123",
+            }));
         let req = stage.apply(req).expect("setting user agent should succeed");
         let (req, _) = req.into_parts();
-        req.headers().get(USER_AGENT).expect("UA header should be set");
-        req.headers().get(&*X_AMZ_USER_AGENT).expect("UA header should be set");
+        req.headers()
+            .get(USER_AGENT)
+            .expect("UA header should be set");
+        req.headers()
+            .get(&*X_AMZ_USER_AGENT)
+            .expect("UA header should be set");
     }
 }
 
