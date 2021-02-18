@@ -22,6 +22,9 @@ import software.amazon.smithy.rust.codegen.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.util.dq
 
+/**
+ * Inserts a UserAgent configuration into the operation
+ */
 class UserAgentDecorator : RustCodegenDecorator {
     override val name: String = "UserAgent"
     override val order: Byte = 10
@@ -44,9 +47,13 @@ class UserAgentDecorator : RustCodegenDecorator {
     }
 }
 
+/**
+ * Adds a static `API_METADATA` variable to the crate root containing the serviceId & the version of the crate for this individual service
+ */
 class ApiVersion(private val runtimeConfig: RuntimeConfig, serviceTrait: ServiceTrait) : LibRsCustomization() {
     private val serviceId = serviceTrait.sdkId.toLowerCase().replace(" ", "")
     override fun section(section: LibRsSection): Writable = when (section) {
+        // PKG_VERSION comes from CrateVersionGenerator
         is LibRsSection.Body -> writable { rust("static API_METADATA: #1T::ApiMetadata = #1T::ApiMetadata::new(${serviceId.dq()}, PKG_VERSION);", runtimeConfig.userAgentModule()) }
     }
 }
