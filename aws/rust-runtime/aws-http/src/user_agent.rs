@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::build_metadata::{BuildMetadata, OsFamily, BUILD_METADATA};
+use aws_types::build_metadata::{OsFamily, BUILD_METADATA};
 use http::header::{HeaderName, InvalidHeaderValue, USER_AGENT};
 use http::HeaderValue;
 use smithy_http::middleware::MapRequest;
@@ -30,7 +30,7 @@ pub struct AwsUserAgent {
 impl AwsUserAgent {
     /// Load a User Agent configuration from the environment
     ///
-    /// This utilizes [`BUILD_METADATA`](aws_types::build_metadata::BUILD_METADATA) from `aws_types`
+    /// This utilizes [`BUILD_METADATA`](static@aws_types::build_metadata::BUILD_METADATA) from `aws_types`
     /// to capture the Rust version & target platform. `ApiMetadata` provides
     /// the version & name of the specific service.
     pub fn new_from_environment(api_metadata: ApiMetadata) -> Self {
