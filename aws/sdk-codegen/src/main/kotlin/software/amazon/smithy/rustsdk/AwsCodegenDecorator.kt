@@ -11,7 +11,8 @@ val DECORATORS = listOf(
     CredentialsProviderDecorator(),
     RegionDecorator(),
     AwsEndpointDecorator(),
-    UserAgentDecorator()
+    UserAgentDecorator(),
+    SigV4SigningDecorator()
 )
 
 class AwsCodegenDecorator : CombinedCodegenDecorator(DECORATORS) {
