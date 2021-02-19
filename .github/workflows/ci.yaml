@@ -1,0 +1,163 @@
+on: [push]
+
+name: CI
+
+env:
+  rust_version: 1.50.0
+  java_version: 9
+
+jobs:
+  style:
+    name: Kotlin style checks
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.java_version }}
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - name: ktlint
+      run: ./gradlew ktlint
+  unit-tests:
+    name: Codegen unit tests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.java_version }}
+    - name: test
+      run: ./gradlew :codegen:test
+  integration-tests:
+    name: Codegen integration tests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - uses: actions/cache@v2
+      name: Cargo Cache
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.java_version }}
+    - name: integration-tests
+      run: ./gradlew :codegen-test:test
+    - uses: actions/upload-artifact@v2
+      name: Upload Codegen Output for inspection
+        # Always upload the output even if the tests failed
+      if: ${{ always() }}
+      with:
+        name: codegen-output
+        path: |
+          codegen-test/build/smithyprojections/codegen-test/*/rust-codegen/
+          codegen-test/build/smithyprojections/codegen-test/Cargo.toml
+  runtime-tests:
+    name: Rust runtime tests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+    - name: execute runtime tests
+      run: ./rust-runtime/test.sh
+
+  generate-sdk:
+    name: Generate an AWS SDK
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - uses: actions/cache@v2
+      name: Cargo Cache
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.java_version }}
+    - name: Generate the SDK
+      run: ./gradlew :aws:sdk:assemble
+      # docs are not included in the artifact; this step validates that they can be generated
+    - name: Generate docs
+      run: ./gradlew :aws:sdk:cargoDocs
+    - name: Run tests
+      run: ./gradlew :aws:sdk:cargoTest
+    - name: Get current date
+      id: date
+      run: echo "name=${GITHUB_REF##*/}-$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+    - uses: actions/upload-artifact@v2
+      name: Upload SDK Artifact
+        # Always upload the output even if the tests failed
+      if: ${{ always() }}
+      with:
+        name: aws-sdk-${{ env.name }}-${{ github.sha }}
+        path: |
+          aws/sdk/build/aws-sdk/
+          !aws/sdk/build/aws-sdk/target
