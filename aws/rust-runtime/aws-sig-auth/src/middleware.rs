@@ -81,7 +81,7 @@ fn signing_config(
             .get::<SystemTime>()
             .copied()
             .unwrap_or_else(SystemTime::now),
-        region: region.into(),
+        region,
         service: signing_service,
     };
     Ok((operation_config, request_config, creds))
