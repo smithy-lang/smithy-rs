@@ -5,10 +5,10 @@
 
 use std::error::Error;
 
-
+use dynamodb::operation::{CreateTable, ListTables};
+use dynamodb::{Credentials, Endpoint, Region};
 use env_logger::Env;
-use dynamodb::{Endpoint, Region, Credentials};
-use dynamodb::operation::ListTables;
+use dynamodb::model::{KeySchemaElement, KeyType, ProvisionedThroughput, AttributeDefinition, ScalarAttributeType};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -19,7 +19,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .credentials_provider(Credentials::from_keys(
             "<fill me in2>",
             "<fill me in>",
-            None
+            None,
         ))
         // To use real DynamoDB, delete this line:
         .endpoint_resolver(Endpoint::immutable(http::Uri::from_static(
@@ -32,5 +32,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Currently this fails, pending the merge of https://github.com/awslabs/smithy-rs/pull/202
     let tables = client.call(op).await?;
     println!("Current DynamoDB tables: {:?}", tables);
+
+    let new_table = client
+        .call(
+            CreateTable::builder()
+                .table_name("test-table")
+                .key_schema(vec![KeySchemaElement::builder().attribute_name("k").key_type(KeyType::Hash).build()])
+                .attribute_definitions(vec![AttributeDefinition::builder().attribute_name("k").attribute_type(ScalarAttributeType::S).build()])
+                .provisioned_throughput(ProvisionedThroughput::builder().write_capacity_units(10).read_capacity_units(10).build())
+                .build(&config),
+        )
+        .await?;
+    println!("new table: {:#?}", &new_table.table_description.unwrap().table_arn.unwrap());
     Ok(())
 }
