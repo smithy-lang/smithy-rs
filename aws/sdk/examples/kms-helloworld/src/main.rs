@@ -1,10 +1,11 @@
 use kms::operation::GenerateRandom;
 use kms::Region;
-use env_logger::Env;
+use tracing_subscriber::fmt::SubscriberBuilder;
+use tracing_subscriber::fmt::format::FmtSpan;
 
 #[tokio::main]
 async fn main() {
-    env_logger::init_from_env(Env::default().default_filter_or("info"));
+    SubscriberBuilder::default().with_env_filter("info").with_span_events(FmtSpan::CLOSE).init();
     let config = kms::Config::builder()
         // region can also be loaded from AWS_DEFAULT_REGION, just remove this line.
         .region(Region::from("us-east-1"))

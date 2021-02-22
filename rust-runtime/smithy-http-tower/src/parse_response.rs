@@ -9,11 +9,15 @@ use smithy_http::middleware::load_response;
 use smithy_http::operation;
 use smithy_http::operation::Operation;
 use smithy_http::response::ParseHttpResponse;
+use smithy_http::result::SdkError;
+use std::error::Error;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tower::{BoxError, Layer, Service};
+use tracing::field::display;
+use tracing::{field, info_span, debug_span, Instrument};
 
 /// `ParseResponseService` dispatches [`Operation`](smithy_http::operation::Operation)s and parses them.
 ///
@@ -72,6 +76,7 @@ where
     B: http_body::Body + Unpin + From<Bytes> + 'static,
     B::Error: Into<BoxError>,
     O: ParseHttpResponse<B, Output = Result<T, E>> + 'static,
+    E: Error,
 {
     type Response = smithy_http::result::SdkSuccess<T, B>;
     type Error = smithy_http::result::SdkError<E, B>;
@@ -82,14 +87,52 @@ where
     }
 
     fn call(&mut self, req: Operation<O, R>) -> Self::Future {
-        let (req, handler) = req.into_request_response();
+        let (req, parts) = req.into_request_response();
+        let handler = parts.response_handler;
+        // send_operation records the full request-response lifecycle.
+        // NOTE: For operations that stream output, only the setup is captured in this span.
+        let span = info_span!(
+            "send_operation",
+            operation = field::Empty,
+            service = field::Empty,
+            status = field::Empty,
+            message = field::Empty
+        );
+        let inner_span = span.clone();
+        if let Some(metadata) = parts.metadata {
+            span.record("operation", &metadata.name());
+            span.record("service", &metadata.service());
+        }
         let resp = self.inner.call(req);
         let fut = async move {
-            match resp.await {
+            let resp = match resp.await {
                 Err(e) => Err(e.into()),
-                Ok(resp) => load_response(resp, &handler).await,
-            }
-        };
+                Ok(resp) => {
+                    // load_response contains reading the body as far as is required & parsing the response
+                    let response_span = debug_span!(
+                        "load_response",
+                    );
+                    load_response(resp, &handler).instrument(response_span).await
+                },
+            };
+            match &resp {
+                Ok(_) => inner_span.record("status", &"ok"),
+                Err(SdkError::ServiceError { err, .. }) => inner_span
+                    .record("status", &"service_err")
+                    .record("message", &display(&err)),
+                Err(SdkError::ResponseError { err, .. }) => inner_span
+                    .record("status", &"response_err")
+                    .record("message", &display(&err)),
+                Err(SdkError::DispatchFailure(err)) => inner_span
+                    .record("status", &"dispatch_failure")
+                    .record("message", &display(err)),
+                Err(SdkError::ConstructionFailure(err)) => inner_span
+                    .record("status", &"construction_failure")
+                    .record("message", &display(err)),
+            };
+            resp
+        }
+        .instrument(span);
         Box::pin(fut)
     }
 }

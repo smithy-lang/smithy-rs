@@ -1,17 +1,54 @@
 use crate::body::SdkBody;
 use crate::property_bag::PropertyBag;
+use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
 use std::rc::Rc;
 
+pub struct Metadata {
+    operation: Cow<'static, str>,
+    service: Cow<'static, str>,
+}
+
+impl Metadata {
+    pub fn name(&self) -> &str {
+        &self.operation
+    }
+
+    pub fn service(&self) -> &str {
+        &self.service
+    }
+
+    pub fn new(
+        operation: impl Into<Cow<'static, str>>,
+        service: impl Into<Cow<'static, str>>,
+    ) -> Self {
+        Metadata {
+            operation: operation.into(),
+            service: service.into(),
+        }
+    }
+}
+
+#[non_exhaustive]
+pub struct Parts<H, R> {
+    pub response_handler: H,
+    pub retry_policy: R,
+    pub metadata: Option<Metadata>,
+}
+
 pub struct Operation<H, R> {
     request: Request,
-    response_handler: H,
-    _retry_policy: R,
+    parts: Parts<H, R>,
 }
 
 impl<H, R> Operation<H, R> {
-    pub fn into_request_response(self) -> (Request, H) {
-        (self.request, self.response_handler)
+    pub fn into_request_response(self) -> (Request, Parts<H, R>) {
+        (self.request, self.parts)
+    }
+
+    pub fn with_metadata(mut self, metadata: Metadata) -> Self {
+        self.parts.metadata = Some(metadata);
+        self
     }
 }
 
@@ -19,8 +56,11 @@ impl<H> Operation<H, ()> {
     pub fn new(request: Request, response_handler: H) -> Self {
         Operation {
             request,
-            response_handler,
-            _retry_policy: (),
+            parts: Parts {
+                response_handler,
+                retry_policy: (),
+                metadata: None,
+            },
         }
     }
 }
