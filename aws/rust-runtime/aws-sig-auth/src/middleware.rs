@@ -183,6 +183,6 @@ mod test {
             .headers()
             .get(AUTHORIZATION)
             .expect("auth header must be present");
-        assert_eq!(auth_header, "AWS4-HMAC-SHA256 Credential=AKIAfoo/20210120/us-east-1/kinesis/aws4_request, SignedHeaders=, Signature=bf3af0f70e58cb7f70cc545f1b2e83293b3e9860880bf8aef3fae0f3de324427");
+        assert_eq!(auth_header, "AWS4-HMAC-SHA256 Credential=AKIAfoo/20210120/us-east-1/kinesis/aws4_request, SignedHeaders=host, Signature=c59f1b9040fe229bf924254d9ad71adaf0495db2ccda5eb6b1565529cdc2c120");
     }
 }

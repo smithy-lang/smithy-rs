@@ -10,7 +10,7 @@ use aws_hyper::Client;
 use aws_sig_auth::signer::OperationSigningConfig;
 use aws_types::region::Region;
 use bytes::Bytes;
-use http::header::AUTHORIZATION;
+use http::header::{AUTHORIZATION, HOST};
 use http::{Response, Uri};
 use smithy_http::body::SdkBody;
 use smithy_http::operation;
@@ -61,9 +61,10 @@ fn test_operation() -> Operation<TestOperationParser, ()> {
 #[tokio::test]
 async fn e2e_test() {
     let expected_req = http::Request::builder()
-        .header(AUTHORIZATION, "AWS4-HMAC-SHA256 Credential=access_key/20210215/test-region/test-service/aws4_request, SignedHeaders=, Signature=e8a49c07c540558c4b53a5dcc61cbfb27003381fd8437fca0b3dddcdc703ec44")
+        .header(HOST, "test-service.test-region.amazonaws.com")
+        .header(AUTHORIZATION, "AWS4-HMAC-SHA256 Credential=access_key/20210215/test-region/test-service/aws4_request, SignedHeaders=host, Signature=b4bccc6f03b22e88b9e52a60314d4629c5d159a7cc2de25b1d687b3e5e480d2c")
         .header("x-amz-date", "20210215T184017Z")
-        .uri(Uri::from_static("https://test-region.test-service.amazonaws.com/"))
+        .uri(Uri::from_static("https://test-service.test-region.amazonaws.com/"))
         .body(SdkBody::from("request body")).unwrap();
     let events = vec![(
         expected_req,
