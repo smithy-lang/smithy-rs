@@ -13,6 +13,7 @@ use dynamodb::operation::ListTables;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init_from_env(Env::default().default_filter_or("info"));
+    println!("DynamoDB client version: {}", dynamodb::PKG_VERSION);
     let config = dynamodb::Config::builder()
         .region(Region::from("us-east-1"))
         // To load credentials from environment variables, delete this line

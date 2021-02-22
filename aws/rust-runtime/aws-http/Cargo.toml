@@ -1,5 +1,5 @@
 [package]
-name = "aws-types"
+name = "aws-http"
 version = "0.1.0"
 authors = ["Russell Cohen <rcoh@amazon.com>"]
 edition = "2018"
@@ -7,7 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+aws-types = { path = "../aws-types" }
+smithy-http = { path = "../../../rust-runtime/smithy-http" }
+thiserror = "1"
+http = "0.2.3"
 lazy_static = "1"
-
-[build-dependencies]
-rustc_version = "0.3.3"
