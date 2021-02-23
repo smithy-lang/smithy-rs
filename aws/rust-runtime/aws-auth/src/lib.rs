@@ -39,7 +39,7 @@ impl Debug for Credentials {
     }
 }
 
-const STATIC_CREDENTIALS: &'static str = "static";
+const STATIC_CREDENTIALS: &str = "Static";
 impl Credentials {
     pub fn from_keys(
         access_key_id: impl Into<String>,

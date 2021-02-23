@@ -53,6 +53,7 @@ pub fn default_provider() -> impl ProvideRegion {
 }
 
 #[non_exhaustive]
+#[derive(Default)]
 pub struct EnvironmentProvider;
 
 impl EnvironmentProvider {
