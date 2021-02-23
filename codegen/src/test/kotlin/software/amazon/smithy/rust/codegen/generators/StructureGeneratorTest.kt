@@ -43,6 +43,7 @@ class StructureGeneratorTest {
         }
 
         @error("server")
+        @retryable
         structure MyError {
             message: String
         }
@@ -87,7 +88,7 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate structures with public fields`() {
-        val provider: SymbolProvider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
         writer.withModule("model") {
             val innerGenerator = StructureGenerator(model, provider, this, inner)
@@ -115,11 +116,16 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate error structures`() {
-        val provider: SymbolProvider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model)
         val writer = RustWriter.forModule("error")
         val generator = StructureGenerator(model, provider, writer, error)
         generator.render()
-        writer.compileAndTest()
+        writer.compileAndTest(
+            """
+            let err = MyError { message: None };
+            assert_eq!(err.retryable_error_kind(), smithy_types::retry::ErrorKind::ServerError);
+        """
+        )
     }
 
     @Test
@@ -158,7 +164,7 @@ class StructureGeneratorTest {
 
            nested2: Inner
         }""".asSmithyModel()
-        val provider: SymbolProvider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
         writer.docs("module docs")
         writer
