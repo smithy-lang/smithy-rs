@@ -110,7 +110,7 @@ class StructureGeneratorTest {
         writer.compileAndTest(
             """
             let err = MyError { message: None };
-            assert_eq!(err.error_kind(), smithy_types::retry::ErrorKind::ServerError);
+            assert_eq!(err.retryable_error_kind(), smithy_types::retry::ErrorKind::ServerError);
         """
         )
     }

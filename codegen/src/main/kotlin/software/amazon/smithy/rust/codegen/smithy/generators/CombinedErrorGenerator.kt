@@ -94,7 +94,7 @@ class CombinedErrorGenerator(
                     when (it) {
                         is VariantMatch.Modeled -> writable {
                             if (it.shape.hasTrait(RetryableTrait::class.java)) {
-                                rust("Some(_inner.error_kind())")
+                                rust("Some(_inner.retryable_error_kind())")
                             } else {
                                 rust("None")
                             }
