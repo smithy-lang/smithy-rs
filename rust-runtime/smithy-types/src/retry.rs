@@ -36,11 +36,11 @@ pub enum ErrorKind {
 }
 
 pub trait ProvideErrorKind {
-    /// Returns the `ErrorKind`.
+    /// Returns the `ErrorKind` when the error is modeled as retryable
     ///
     /// If the error kind cannot be determined (eg. the error is unmodeled at the error kind depends
     /// on an HTTP status code, return `None`.
-    fn error_kind(&self) -> Option<ErrorKind>;
+    fn retryable_error_kind(&self) -> Option<ErrorKind>;
 
     /// Returns the `code` for this error if one exists
     fn code(&self) -> Option<&str>;

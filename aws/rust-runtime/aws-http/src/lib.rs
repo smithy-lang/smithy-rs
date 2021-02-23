@@ -58,7 +58,7 @@ impl ClassifyResponse for AwsErrorRetryPolicy {
         {
             return RetryKind::Explicit(Duration::from_millis(retry_after_delay));
         }
-        if let Some(kind) = err.error_kind() {
+        if let Some(kind) = err.retryable_error_kind() {
             return RetryKind::Error(kind);
         };
         if let Some(code) = err.code() {
@@ -93,7 +93,7 @@ mod test {
     }
 
     impl ProvideErrorKind for UnmodeledError {
-        fn error_kind(&self) -> Option<ErrorKind> {
+        fn retryable_error_kind(&self) -> Option<ErrorKind> {
             None
         }
 
@@ -103,7 +103,7 @@ mod test {
     }
 
     impl ProvideErrorKind for CodedError {
-        fn error_kind(&self) -> Option<ErrorKind> {
+        fn retryable_error_kind(&self) -> Option<ErrorKind> {
             None
         }
 
@@ -176,7 +176,7 @@ mod test {
         struct ModeledRetries;
         let test_response = http::Response::new("OK");
         impl ProvideErrorKind for ModeledRetries {
-            fn error_kind(&self) -> Option<ErrorKind> {
+            fn retryable_error_kind(&self) -> Option<ErrorKind> {
                 Some(ErrorKind::ClientError)
             }
 

@@ -71,7 +71,7 @@ class ErrorGenerator(
         writer.rustBlock("impl ${symbol.name}") {
             val retryKindWriteable = shape.modeledRetryKind(error)?.writable(symbolProvider.config().runtimeConfig)
             if (retryKindWriteable != null) {
-                rustBlock("pub fn error_kind(&self) -> #T", errorKindT) {
+                rustBlock("pub fn retryable_error_kind(&self) -> #T", errorKindT) {
                     retryKindWriteable(this)
                 }
             }

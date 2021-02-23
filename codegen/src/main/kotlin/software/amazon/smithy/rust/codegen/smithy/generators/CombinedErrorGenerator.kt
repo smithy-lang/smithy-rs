@@ -89,7 +89,7 @@ class CombinedErrorGenerator(
                 rust("${symbol.name}::code(self)")
             }
 
-            rustBlock("fn error_kind(&self) -> Option<#T>", errorKindT) {
+            rustBlock("fn retryable_error_kind(&self) -> Option<#T>", errorKindT) {
                 delegateToVariants {
                     when (it) {
                         is VariantMatch.Modeled -> writable {
@@ -99,7 +99,7 @@ class CombinedErrorGenerator(
                                 rust("None")
                             }
                         }
-                        is VariantMatch.Generic -> writable { rust("_inner.error_kind()") }
+                        is VariantMatch.Generic -> writable { rust("_inner.retryable_error_kind()") }
                         is VariantMatch.Unhandled -> writable { rust("None") }
                     }
                 }

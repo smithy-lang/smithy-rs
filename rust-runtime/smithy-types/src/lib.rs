@@ -75,7 +75,7 @@ impl Error {
 }
 
 impl ProvideErrorKind for Error {
-    fn error_kind(&self) -> Option<ErrorKind> {
+    fn retryable_error_kind(&self) -> Option<ErrorKind> {
         None
     }
 
