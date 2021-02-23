@@ -19,10 +19,8 @@ plugins {
 val smithyVersion: String by project
 
 val sdkOutputDir = buildDir.resolve("aws-sdk")
-val awsServices = discoverServices()
-// TODO: smithy-http should be removed
-val runtimeModules = listOf("smithy-types", "smithy-http")
-val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types", "aws-http")
+val runtimeModules = listOf("smithy-types", "smithy-http", "smithy-http-tower")
+val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types", "aws-hyper", "aws-sig-auth", "aws-http")
 
 buildscript {
     val smithyVersion: String by project
@@ -40,6 +38,13 @@ dependencies {
 
 data class AwsService(val service: String, val module: String, val modelFile: File, val extraConfig: String? = null)
 
+val awsServices: Provider<List<AwsService>> = project.providers.provider { discoverServices() }
+
+/**
+ * Discovers services from the `models` directory
+ *
+ * Do not invoke this function directly. Use the `awsServices` provider.
+ */
 fun discoverServices(): List<AwsService> {
     val models = project.file("models")
     return fileTree(models).map { file ->
@@ -66,7 +71,7 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                       },
                       "service": "${it.service}",
                       "module": "${it.module}",
-                      "moduleVersion": "0.0.1",
+                      "moduleVersion": "0.0.2",
                       "build": {
                         "rootProject": true
                       }
@@ -88,18 +93,32 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
     doFirst {
-        projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices))
+        projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices.get()))
     }
 }
 
 task("relocateServices") {
     description = "relocate AWS services to their final destination"
     doLast {
-        awsServices.forEach {
+        awsServices.get().forEach {
             copy {
                 from("$buildDir/smithyprojections/sdk/${it.module}/rust-codegen")
                 into(sdkOutputDir.resolve(it.module))
             }
+        }
+    }
+    outputs.upToDateWhen { false }
+}
+
+task("relocateExamples") {
+    description = "relocate the examples folder & rewrite path dependencies"
+    doLast {
+        copy {
+            from(projectDir)
+            include("examples/**")
+            into(sdkOutputDir)
+            exclude("**/target")
+            filter { line -> line.replace("build/aws-sdk/", "") }
         }
     }
 }
@@ -133,10 +152,15 @@ tasks.register<Copy>("relocateRuntime") {
         exclude("**/Cargo.lock")
     }
     into(sdkOutputDir)
+    outputs.upToDateWhen { false }
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {
-    val modules = services.map(AwsService::module) + runtimeModules + awsModules
+    val examples = projectDir.resolve("examples").listFiles { file -> !file.name.startsWith(".") }?.toList()
+        ?.map { "examples/${it.name}" }.orEmpty()
+
+    val modules = services.map(AwsService::module) + runtimeModules + awsModules + examples
+        ?.toList()
     return """
     [workspace]
     members = [
@@ -147,12 +171,18 @@ fun generateCargoWorkspace(services: List<AwsService>): String {
 task("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
-        sdkOutputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices))
+        sdkOutputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices.get()))
     }
 }
 
 task("finalizeSdk") {
-    finalizedBy("relocateServices", "relocateRuntime", "relocateAwsRuntime", "generateCargoWorkspace")
+    finalizedBy(
+        "relocateServices",
+        "relocateRuntime",
+        "relocateAwsRuntime",
+        "relocateExamples",
+        "generateCargoWorkspace"
+    )
 }
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
@@ -179,7 +209,7 @@ tasks.register<Exec>("cargoTest") {
 tasks.register<Exec>("cargoDocs") {
     workingDir(sdkOutputDir)
     // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+    environment("RUSTDOCFLAGS", "-D warnings")
     commandLine("cargo", "doc", "--no-deps")
     dependsOn("assemble")
 }
@@ -190,6 +220,29 @@ tasks.register<Exec>("cargoClippy") {
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "clippy")
     dependsOn("assemble")
+}
+
+tasks.register<RunExampleTask>("runExample") {
+    dependsOn("assemble")
+    outputDir = sdkOutputDir
+}
+
+// TODO: validate that the example exists. Otherwise this fails with a hiden error.
+open class RunExampleTask @javax.inject.Inject constructor() : Exec() {
+    @Option(option = "example", description = "Example to run")
+    var example: String? = null
+    set(value) {
+        workingDir = workingDir.resolve(value!!)
+        field = value
+    }
+
+    @org.gradle.api.tasks.InputDirectory
+    var outputDir: File? = null
+        set(value) {
+            workingDir = value!!.resolve("examples")
+            commandLine = listOf("cargo", "run")
+            field = value
+        }
 }
 
 tasks["test"].finalizedBy("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs")

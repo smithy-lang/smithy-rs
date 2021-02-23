@@ -1,3 +1,4 @@
+pub mod user_agent;
 use smithy_http::retry::ClassifyResponse;
 use smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
 use std::time::Duration;

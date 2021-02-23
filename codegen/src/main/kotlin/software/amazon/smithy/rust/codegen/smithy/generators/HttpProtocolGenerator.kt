@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -28,7 +29,8 @@ data class ProtocolConfig(
     val symbolProvider: RustSymbolProvider,
     val runtimeConfig: RuntimeConfig,
     val serviceShape: ServiceShape,
-    val protocol: ShapeId
+    val protocol: ShapeId,
+    val moduleName: String
 )
 
 interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
@@ -43,14 +45,17 @@ interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
  * a body.
  */
 abstract class HttpProtocolGenerator(
-    protocolConfig: ProtocolConfig
+    private val protocolConfig: ProtocolConfig
 ) {
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
     fun renderOperation(operationWriter: RustWriter, inputWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
+        if (operationShape.hasTrait(EndpointTrait::class.java)) {
+            TODO("https://github.com/awslabs/smithy-rs/issues/197")
+        }
         val inputShape = operationShape.inputShape(model)
         val inputSymbol = symbolProvider.toSymbol(inputShape)
-        val builderGenerator = OperationInputBuilderGenerator(model, symbolProvider, operationShape, customizations)
+        val builderGenerator = OperationInputBuilderGenerator(model, symbolProvider, operationShape, protocolConfig.moduleName, customizations)
         builderGenerator.render(inputWriter)
         // impl OperationInputShape { ... }
         inputWriter.implBlock(inputShape, symbolProvider) {

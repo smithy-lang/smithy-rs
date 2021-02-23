@@ -147,6 +147,8 @@ jobs:
       # docs are not included in the artifact; this step validates that they can be generated
     - name: Generate docs
       run: ./gradlew :aws:sdk:cargoDocs
+    - name: Run tests
+      run: ./gradlew :aws:sdk:cargoTest
     - name: Get current date
       id: date
       run: echo "name=${GITHUB_REF##*/}-$(date +'%Y-%m-%d')" >> $GITHUB_ENV

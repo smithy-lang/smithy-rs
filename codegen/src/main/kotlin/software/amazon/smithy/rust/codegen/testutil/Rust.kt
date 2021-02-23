@@ -162,10 +162,11 @@ fun TestWriterDelegator.compileAndTest() {
             runtimeConfig = TestRuntimeConfig,
             codegenConfig = CodegenConfig(),
             build = BuildSettings.Default(),
-            model = stubModel
-        )
+            model = stubModel,
+        ),
+        libRsCustomizations = listOf()
     )
-    "cargo test".runCommand(baseDir)
+    "cargo test".runCommand(baseDir, mapOf("RUSTFLAGS" to "-A dead_code"))
 }
 
 // TODO: unify these test helpers a bit

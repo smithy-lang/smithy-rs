@@ -4,7 +4,8 @@
  */
 
 use aws_auth::Credentials;
-use aws_types::{SigningRegion, SigningService};
+use aws_types::region::SigningRegion;
+use aws_types::SigningService;
 use std::error::Error;
 use std::time::SystemTime;
 
@@ -119,13 +120,5 @@ impl SigV4Signer {
         }
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
     }
 }

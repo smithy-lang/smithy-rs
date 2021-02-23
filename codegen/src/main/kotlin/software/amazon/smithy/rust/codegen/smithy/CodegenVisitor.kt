@@ -18,6 +18,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.CrateVersionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ModelBuilderGenerator
@@ -58,7 +59,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val baseProvider = RustCodegenPlugin.BaseSymbolProvider(model, symbolVisitorConfig)
         symbolProvider = codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
-        protocolConfig = ProtocolConfig(model, symbolProvider, settings.runtimeConfig, service, protocol)
+        protocolConfig = ProtocolConfig(model, symbolProvider, settings.runtimeConfig, service, protocol, settings.moduleName)
         writers = CodegenWriterDelegator(
             context.fileManifest,
             symbolProvider,
@@ -74,7 +75,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val service = settings.getService(model)
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
-        writers.finalize(settings)
+        // TODO: if we end up with a lot of these on-by-default customizations, we may want to refactor them somewhere
+        writers.finalize(settings, codegenDecorator.libRsCustomizations(protocolConfig, listOf(CrateVersionGenerator())))
         try {
             "cargo fmt".runCommand(fileManifest.baseDir)
         } catch (_: CommandFailed) {

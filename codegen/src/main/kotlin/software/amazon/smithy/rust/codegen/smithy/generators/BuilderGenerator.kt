@@ -63,6 +63,7 @@ class OperationInputBuilderGenerator(
     model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val shape: OperationShape,
+    private val serviceName: String,
     private val features: List<OperationCustomization>,
 ) : BuilderGenerator(model, symbolProvider, shape.inputShape(model)) {
     override fun buildFn(implBlockWriter: RustWriter) {
@@ -90,12 +91,12 @@ class OperationInputBuilderGenerator(
                 features.forEach { it.section(OperationSection.Feature("request", "_config"))(this) }
                 rust(
                     """
-                    #T::new(
+                    #1T::Operation::new(
                         request,
                         op
-                    )
+                    ).with_metadata(#1T::Metadata::new(${shape.id.name.dq()}, ${serviceName.dq()}))
                 """,
-                    operationT
+                    operationModule
                 )
             }
         }

@@ -42,7 +42,13 @@ fun stubCustomization(name: String): ConfigCustomization {
  * This test is not comprehensive, but it ensures that your customization generates Rust code that compiles and correctly
  * composes with other customizations.
  * */
-fun validateConfigCustomizations(vararg customization: ConfigCustomization) {
+fun validateConfigCustomizations(vararg customization: ConfigCustomization): TestWriterDelegator {
+    val project = stubConfigProject(*customization)
+    project.compileAndTest()
+    return project
+}
+
+fun stubConfigProject(vararg customization: ConfigCustomization): TestWriterDelegator {
     val customizations = listOf(stubCustomization("a")) + customization.toList() + stubCustomization("b")
     val generator = ServiceConfigGenerator(customizations = customizations.toList())
     val project = TestWorkspace.testProject()
@@ -56,5 +62,5 @@ fun validateConfigCustomizations(vararg customization: ConfigCustomization) {
         """
         )
     }
-    project.compileAndTest()
+    return project
 }

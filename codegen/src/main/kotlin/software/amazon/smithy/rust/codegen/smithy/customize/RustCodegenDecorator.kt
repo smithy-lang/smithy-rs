@@ -9,6 +9,7 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
@@ -45,6 +46,11 @@ interface RustCodegenDecorator {
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> = baseCustomizations
 
+    fun libRsCustomizations(
+        protocolConfig: ProtocolConfig,
+        baseCustomizations: List<LibRsCustomization>
+    ): List<LibRsCustomization> = baseCustomizations
+
     fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap = currentProtocols
 
     fun symbolProvider(baseProvider: RustSymbolProvider): RustSymbolProvider = baseProvider
@@ -78,6 +84,18 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
     ): List<OperationCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator, customizations ->
             decorator.operationCustomizations(protocolConfig, operation, customizations)
+        }
+    }
+
+    override fun libRsCustomizations(
+        protocolConfig: ProtocolConfig,
+        baseCustomizations: List<LibRsCustomization>
+    ): List<LibRsCustomization> {
+        return orderedDecorators.foldRight(baseCustomizations) { decorator, customizations ->
+            decorator.libRsCustomizations(
+                protocolConfig,
+                customizations
+            )
         }
     }
 
