@@ -105,6 +105,11 @@ task("relocateServices") {
                 from("$buildDir/smithyprojections/sdk/${it.module}/rust-codegen")
                 into(sdkOutputDir.resolve(it.module))
             }
+
+            copy {
+                from(projectDir.resolve("integration-tests/${it.module}/tests"))
+                into(sdkOutputDir.resolve(it.module).resolve("tests"))
+            }
         }
     }
     outputs.upToDateWhen { false }
