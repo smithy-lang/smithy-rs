@@ -20,15 +20,28 @@ use smithy_http::response::ParseHttpResponse;
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
+use std::error::Error;
+use std::fmt::{Display, Formatter};
+use std::fmt;
 
 #[derive(Clone)]
 struct TestOperationParser;
+
+#[derive(Debug)]
+struct OperationError;
+impl Display for OperationError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl Error for OperationError {}
 
 impl<B> ParseHttpResponse<B> for TestOperationParser
 where
     B: http_body::Body,
 {
-    type Output = Result<String, String>;
+    type Output = Result<String, OperationError>;
 
     fn parse_unloaded(&self, _response: &mut Response<B>) -> Option<Self::Output> {
         Some(Ok("Hello!".to_string()))

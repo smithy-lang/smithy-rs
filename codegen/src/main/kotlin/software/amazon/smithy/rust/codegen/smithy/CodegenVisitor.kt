@@ -59,7 +59,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val baseProvider = RustCodegenPlugin.BaseSymbolProvider(model, symbolVisitorConfig)
         symbolProvider = codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
-        protocolConfig = ProtocolConfig(model, symbolProvider, settings.runtimeConfig, service, protocol)
+        protocolConfig = ProtocolConfig(model, symbolProvider, settings.runtimeConfig, service, protocol, settings.moduleName)
         writers = CodegenWriterDelegator(
             context.fileManifest,
             symbolProvider,

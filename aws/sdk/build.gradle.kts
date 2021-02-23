@@ -107,6 +107,7 @@ task("relocateServices") {
             }
         }
     }
+    outputs.upToDateWhen { false }
 }
 
 task("relocateExamples") {
@@ -151,6 +152,7 @@ tasks.register<Copy>("relocateRuntime") {
         exclude("**/Cargo.lock")
     }
     into(sdkOutputDir)
+    outputs.upToDateWhen { false }
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {
