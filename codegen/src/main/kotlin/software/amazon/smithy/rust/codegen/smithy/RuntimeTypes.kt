@@ -53,6 +53,10 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
     // TODO: refactor to be RuntimeTypeProvider a la Symbol provider that packages the `RuntimeConfig` state.
     companion object {
 
+
+        fun errorKind(runtimeConfig: RuntimeConfig) = RuntimeType("ErrorKind", dependency = CargoDependency.SmithyTypes(runtimeConfig), namespace = "${runtimeConfig.cratePrefix}_types::retry")
+        fun provideErrorKind(runtimeConfig: RuntimeConfig) = RuntimeType("ProvideErrorKind", dependency = CargoDependency.SmithyTypes(runtimeConfig), namespace = "${runtimeConfig.cratePrefix}_types::retry")
+
         val From = RuntimeType("From", dependency = null, namespace = "std::convert")
         val AsRef = RuntimeType("AsRef", dependency = null, namespace = "std::convert")
         fun StdFmt(member: String) = RuntimeType("fmt::$member", dependency = null, namespace = "std")
