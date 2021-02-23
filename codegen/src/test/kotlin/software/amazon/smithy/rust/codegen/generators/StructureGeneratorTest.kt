@@ -47,10 +47,16 @@ class StructureGeneratorTest {
             message: String
         }
 
+        @sensitive
+        string SecretKey
+
         structure Credentials {
             username: String,
             @sensitive
-            password: String
+            password: String,
+
+            // test that sensitive can be applied directly to a member or to the shape
+            secretKey: SecretKey
         }
         """.asSmithyModel()
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
@@ -124,8 +130,12 @@ class StructureGeneratorTest {
         generator.render()
         writer.unitTest(
             """
-            let creds = Credentials { username: Some("not_redacted".to_owned()), password: Some("redacted".to_owned()) };
-            assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\" }");
+            let creds = Credentials {
+                username: Some("not_redacted".to_owned()),
+                password: Some("don't leak me".to_owned()),
+                secret_key: Some("don't leak me".to_owned())
+            };
+            assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
         """
         )
         writer.compileAndTest()
