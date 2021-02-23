@@ -4,10 +4,12 @@
  */
 
 pub mod instant;
+pub mod retry;
 
 use std::collections::HashMap;
 
 pub use crate::instant::Instant;
+use crate::retry::{ErrorKind, ProvideErrorKind};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
@@ -72,17 +74,27 @@ impl Error {
     }
 }
 
+impl ProvideErrorKind for Error {
+    fn retryable_error_kind(&self) -> Option<ErrorKind> {
+        None
+    }
+
+    fn code(&self) -> Option<&str> {
+        Error::code(self)
+    }
+}
+
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Smithy Error")?;
+        let mut fmt = f.debug_struct("Error");
         if let Some(code) = &self.code {
-            write!(f, " code={}", code)?;
+            fmt.field("code", code);
         }
         if let Some(message) = &self.message {
-            write!(f, " message={}", message)?;
+            fmt.field("message", message);
         }
         if let Some(req_id) = &self.request_id {
-            write!(f, " request_id={}", req_id)?;
+            fmt.field("request_id", req_id);
         }
         Ok(())
     }

@@ -24,12 +24,12 @@ internal class CombinedErrorGeneratorTest {
         }
 
         @error("client")
+        @retryable
         structure InvalidGreeting {
             message: String,
         }
 
         @error("server")
-        @tags(["client-only"])
         structure FooError {}
 
         @error("server")
@@ -43,14 +43,18 @@ internal class CombinedErrorGeneratorTest {
         listOf("FooError", "ComplexError", "InvalidGreeting").forEach {
             model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, writer)
         }
+
         val generator = CombinedErrorGenerator(model, testSymbolProvider(model), model.lookup("error#Greeting"))
         generator.render(writer)
+
         writer.compileAndTest(
             """
             let error = GreetingError::InvalidGreeting(InvalidGreeting::builder().message("an error").build());
             assert_eq!(format!("{}", error), "InvalidGreeting: an error");
             assert_eq!(error.message(), Some("an error"));
             assert_eq!(error.code(), Some("InvalidGreeting"));
+            use smithy_types::retry::ProvideErrorKind;
+            assert_eq!(error.retryable_error_kind(), Some(smithy_types::retry::ErrorKind::ClientError));
 
 
             // unhandled variants properly delegate message

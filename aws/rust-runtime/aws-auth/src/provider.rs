@@ -29,11 +29,17 @@ impl EnvironmentVariableCredentialsProvider {
     }
 }
 
+impl Default for EnvironmentVariableCredentialsProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn var(key: &str) -> Result<String, VarError> {
     std::env::var(key)
 }
 
-const ENV_PROVIDER: &'static str = "EnvironmentVariable";
+const ENV_PROVIDER: &str = "EnvironmentVariable";
 
 impl ProvideCredentials for EnvironmentVariableCredentialsProvider {
     fn credentials(&self) -> Result<Credentials, CredentialsError> {
