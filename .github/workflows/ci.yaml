@@ -144,10 +144,7 @@ jobs:
         java-version: ${{ env.java_version }}
     - name: Generate the SDK
       run: ./gradlew :aws:sdk:assemble
-      # docs are not included in the artifact; this step validates that they can be generated
-    - name: Generate docs
-      run: ./gradlew :aws:sdk:cargoDocs
-    - name: Run tests & compile
+    - name: Run tests, generate docs
       run: ./gradlew :aws:sdk:build
     - name: Get current date
       id: date
