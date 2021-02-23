@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.generators
 import io.kotest.matchers.string.shouldContainInOrder
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.SymbolProvider
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Custom
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
@@ -47,10 +46,17 @@ class StructureGeneratorTest {
         structure MyError {
             message: String
         }
+
+        structure Credentials {
+            username: String,
+            @sensitive
+            password: String
+        }
         """.asSmithyModel()
-        val struct = model.expectShape(ShapeId.from("com.test#MyStruct"), StructureShape::class.java)
-        val inner = model.expectShape(ShapeId.from("com.test#Inner"), StructureShape::class.java)
-        val error = model.expectShape(ShapeId.from("com.test#MyError"), StructureShape::class.java)
+        val struct = model.lookup<StructureShape>("com.test#MyStruct")
+        val inner = model.lookup<StructureShape>("com.test#Inner")
+        val credentials = model.lookup<StructureShape>("com.test#Credentials")
+        val error = model.lookup<StructureShape>("com.test#MyError")
     }
 
     @Test
@@ -107,6 +113,21 @@ class StructureGeneratorTest {
         val writer = RustWriter.forModule("error")
         val generator = StructureGenerator(model, provider, writer, error)
         generator.render()
+        writer.compileAndTest()
+    }
+
+    @Test
+    fun `generate a custom debug implementation when the sensitive trait is present`() {
+        val provider: SymbolProvider = testSymbolProvider(model)
+        val writer = RustWriter.forModule("lib")
+        val generator = StructureGenerator(model, provider, writer, credentials)
+        generator.render()
+        writer.unitTest(
+            """
+            let creds = Credentials { username: Some("not_redacted".to_owned()), password: Some("redacted".to_owned()) };
+            assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\" }");
+        """
+        )
         writer.compileAndTest()
     }
 

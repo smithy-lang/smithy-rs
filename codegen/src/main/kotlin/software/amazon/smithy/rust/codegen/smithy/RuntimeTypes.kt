@@ -56,12 +56,15 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         // val Blob = RuntimeType("Blob", RustDependency.IO_CORE, "blob")
         val From = RuntimeType("From", dependency = null, namespace = "std::convert")
         val AsRef = RuntimeType("AsRef", dependency = null, namespace = "std::convert")
-        fun StdFmt(member: String) = RuntimeType("fmt::$member", dependency = null, namespace = "std")
+        fun StdFmt(member: String?) = RuntimeType(member, dependency = null, namespace = "std::fmt")
         fun Std(member: String) = RuntimeType(member, dependency = null, namespace = "std")
         val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
         val HashSet = RuntimeType(RustType.SetType, dependency = null, namespace = "std::collections")
         val HashMap = RuntimeType("HashMap", dependency = null, namespace = "std::collections")
         val ByteSlab = RuntimeType("Vec<u8>", dependency = null, namespace = "std::vec")
+        val Debug = StdFmt("Debug")
+        val PartialEq = Std("cmp::PartialEq")
+        val Clone = Std("clone::Clone")
 
         fun Instant(runtimeConfig: RuntimeConfig) =
             RuntimeType("Instant", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.cratePrefix}_types")
