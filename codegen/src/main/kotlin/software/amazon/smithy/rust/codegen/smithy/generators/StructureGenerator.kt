@@ -83,7 +83,7 @@ class StructureGenerator(
     /** Render a custom debug implementation
      * When [SensitiveTrait] support is required, render a custom debug implementation to redact sensitive data
      */
-    private fun renderCustomDebugImpl() {
+    private fun renderDebugImpl() {
         writer.rustBlock("impl ${lifetimeDeclaration()} #T for $name ${lifetimeDeclaration()}", RuntimeType.Debug) {
             writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.StdFmt(null)) {
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
@@ -104,13 +104,8 @@ class StructureGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
-        val needsCustomDebug = containerMeta.derives.derives.contains(RuntimeType.Debug) && shape.hasSensitiveMember(model)
-        if (needsCustomDebug) {
-            val withoutDebug = containerMeta.derives.copy(derives = containerMeta.derives.derives - RuntimeType.Debug)
-            containerMeta.copy(derives = withoutDebug).render(writer)
-        } else {
-            containerMeta.render(writer)
-        }
+        val withoutDebug = containerMeta.derives.copy(derives = containerMeta.derives.derives - RuntimeType.Debug)
+        containerMeta.copy(derives = withoutDebug).render(writer)
 
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
             members.forEach { member ->
@@ -121,8 +116,6 @@ class StructureGenerator(
             }
         }
 
-        if (needsCustomDebug) {
-            renderCustomDebugImpl()
-        }
+        renderDebugImpl()
     }
 }

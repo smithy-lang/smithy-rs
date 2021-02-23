@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.generators
 
 import io.kotest.matchers.string.shouldContainInOrder
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Custom
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
@@ -130,7 +129,7 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate a custom debug implementation when the sensitive trait is present`() {
-        val provider: SymbolProvider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model)
         val writer = RustWriter.forModule("lib")
         val generator = StructureGenerator(model, provider, writer, credentials)
         generator.render()
