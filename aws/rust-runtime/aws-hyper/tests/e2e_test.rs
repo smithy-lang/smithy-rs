@@ -6,29 +6,33 @@
 use aws_auth::Credentials;
 use aws_endpoint::{set_endpoint_resolver, DefaultAwsEndpointResolver};
 use aws_http::user_agent::AwsUserAgent;
+use aws_http::AwsErrorRetryPolicy;
 use aws_hyper::test_connection::{TestConnection, ValidateRequest};
-use aws_hyper::Client;
+use aws_hyper::{Client, RetryConfig, SdkError};
 use aws_sig_auth::signer::OperationSigningConfig;
 use aws_types::region::Region;
 use bytes::Bytes;
-use http::header::{AUTHORIZATION, USER_AGENT, HOST};
+use http::header::{AUTHORIZATION, HOST, USER_AGENT};
 use http::{Response, Uri};
 use smithy_http::body::SdkBody;
 use smithy_http::operation;
 use smithy_http::operation::Operation;
 use smithy_http::response::ParseHttpResponse;
+use smithy_types::retry::{ErrorKind, ProvideErrorKind};
 use std::convert::Infallible;
+use std::error::Error;
+use std::fmt;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
-use std::error::Error;
-use std::fmt::{Display, Formatter};
-use std::fmt;
+use tokio::time::Instant;
 
 #[derive(Clone)]
 struct TestOperationParser;
 
 #[derive(Debug)]
 struct OperationError;
+
 impl Display for OperationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
@@ -37,6 +41,16 @@ impl Display for OperationError {
 
 impl Error for OperationError {}
 
+impl ProvideErrorKind for OperationError {
+    fn retryable_error_kind(&self) -> Option<ErrorKind> {
+        Some(ErrorKind::ThrottlingError)
+    }
+
+    fn code(&self) -> Option<&str> {
+        None
+    }
+}
+
 impl<B> ParseHttpResponse<B> for TestOperationParser
 where
     B: http_body::Body,
@@ -44,7 +58,11 @@ where
     type Output = Result<String, OperationError>;
 
     fn parse_unloaded(&self, _response: &mut Response<B>) -> Option<Self::Output> {
-        Some(Ok("Hello!".to_string()))
+        if _response.status().is_success() {
+            Some(Ok("Hello!".to_string()))
+        } else {
+            Some(Err(OperationError))
+        }
     }
 
     fn parse_loaded(&self, _response: &Response<Bytes>) -> Self::Output {
@@ -52,7 +70,7 @@ where
     }
 }
 
-fn test_operation() -> Operation<TestOperationParser, ()> {
+fn test_operation() -> Operation<TestOperationParser, AwsErrorRetryPolicy> {
     let req = operation::Request::new(http::Request::new(SdkBody::from("request body")))
         .augment(|req, mut conf| {
             set_endpoint_resolver(
@@ -70,7 +88,7 @@ fn test_operation() -> Operation<TestOperationParser, ()> {
             Result::<_, Infallible>::Ok(req)
         })
         .unwrap();
-    Operation::new(req, TestOperationParser)
+    Operation::new(req, TestOperationParser).with_retry_policy(AwsErrorRetryPolicy::new())
 }
 
 #[tokio::test]
@@ -101,4 +119,87 @@ async fn e2e_test() {
     assert_eq!(actual.headers(), expected.headers());
     assert_eq!(actual.body().bytes(), expected.body().bytes());
     assert_eq!(actual.uri(), expected.uri());
+}
+
+#[tokio::test]
+async fn retry_test() {
+    fn req() -> http::Request<SdkBody> {
+        http::Request::builder()
+            .body(SdkBody::from("request body"))
+            .unwrap()
+    }
+
+    fn ok() -> http::Response<&'static str> {
+        http::Response::builder()
+            .status(200)
+            .body("response body")
+            .unwrap()
+    }
+
+    fn err() -> http::Response<&'static str> {
+        http::Response::builder()
+            .status(500)
+            .body("response body")
+            .unwrap()
+    }
+    // 1 failing response followed by 1 succesful response
+    let events = vec![
+        // First operation
+        (req(), err()),
+        (req(), err()),
+        (req(), ok()),
+        // Second operation
+        (req(), err()),
+        (req(), ok()),
+        // Third operation will fail, only errors
+        (req(), err()),
+        (req(), err()),
+        (req(), err()),
+        (req(), err()),
+        (req(), err()),
+        (req(), err()),
+        (req(), err()),
+    ];
+    let conn = TestConnection::new(events);
+    let retry_config = RetryConfig::default().with_static_base(|| 1_f64);
+    let client = Client::new(conn.clone()).with_retry_config(retry_config);
+    // TODO: figure out how to assert passage of time
+    tokio::time::pause();
+    let initial = tokio::time::Instant::now();
+    let resp = client
+        .call(test_operation())
+        .await
+        .expect("successful operation");
+    assert_time_passed(initial, Duration::from_secs(3));
+    assert_eq!(resp, "Hello!");
+    // 3 requests should have been made, 2 failing & one success
+    assert_eq!(conn.requests().len(), 3);
+
+    let initial = tokio::time::Instant::now();
+    client
+        .call(test_operation())
+        .await
+        .expect("successful operation");
+    assert_time_passed(initial, Duration::from_secs(1));
+    assert_eq!(conn.requests().len(), 5);
+    let initial = tokio::time::Instant::now();
+    let err = client
+        .call(test_operation())
+        .await
+        .expect_err("all responses failed");
+    // three more tries followed by failure
+    assert_eq!(conn.requests().len(), 8);
+    assert!(matches!(err, SdkError::ServiceError { .. }));
+    assert_time_passed(initial, Duration::from_secs(3));
+}
+
+/// Validate that time has passed with a 5ms tolerance
+///
+/// This is to account for some non-determinism in the Tokio timer
+fn assert_time_passed(initial: Instant, passed: Duration) {
+    let now = tokio::time::Instant::now();
+    let delta = now - initial;
+    if (delta.as_millis() as i128 - passed.as_millis() as i128).abs() > 5 {
+        assert_eq!(delta, passed)
+    }
 }

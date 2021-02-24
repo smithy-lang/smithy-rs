@@ -107,8 +107,7 @@ class RegionProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization()
 class RegionConfigPlugin : OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         return when (section) {
-            OperationSection.ImplBlock -> emptySection
-            is OperationSection.Feature -> writable {
+            is OperationSection.MutateRequest -> writable {
                 // Allow the region to be late-inserted via another method
                 rust(
                     """
@@ -118,6 +117,7 @@ class RegionConfigPlugin : OperationCustomization() {
                 """
                 )
             }
+            else -> emptySection
         }
     }
 }

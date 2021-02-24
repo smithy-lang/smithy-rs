@@ -97,8 +97,7 @@ class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private 
     OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         return when (section) {
-            OperationSection.ImplBlock -> emptySection
-            is OperationSection.Feature -> writable {
+            is OperationSection.MutateRequest -> writable {
                 rust(
                     """
                 #T::set_endpoint_resolver(&mut ${section.request}.config_mut(), ${section.config}.endpoint_resolver.clone());
@@ -106,6 +105,7 @@ class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private 
                     runtimeConfig.awsEndpointDependency().asType()
                 )
             }
+            else -> emptySection
         }
     }
 }

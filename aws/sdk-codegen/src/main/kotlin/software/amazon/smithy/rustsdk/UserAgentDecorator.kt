@@ -63,7 +63,7 @@ fun RuntimeConfig.userAgentModule() = awsHttp().asType().copy(name = "user_agent
 
 class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
-        is OperationSection.Feature -> writable {
+        is OperationSection.MutateRequest -> writable {
             rust(
                 """
                 ${section.request}.config_mut().insert(#T::AwsUserAgent::new_from_environment(crate::API_METADATA.clone()));
@@ -71,6 +71,6 @@ class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : OperationCust
                 runtimeConfig.userAgentModule()
             )
         }
-        OperationSection.ImplBlock -> emptySection
+        else -> emptySection
     }
 }

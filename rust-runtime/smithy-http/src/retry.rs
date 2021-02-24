@@ -7,10 +7,14 @@
 //!
 //! For protocol agnostic retries, see `smithy_types::Retry`.
 
-use smithy_types::retry::{ProvideErrorKind, RetryKind};
+use smithy_types::retry::RetryKind;
 
-pub trait ClassifyResponse {
-    fn classify<E, B>(&self, e: E, response: &http::Response<B>) -> RetryKind
-    where
-        E: ProvideErrorKind;
+pub trait ClassifyResponse<T, E>: Clone {
+    fn classify(&self, response: Result<&T, &E>) -> RetryKind;
+}
+
+impl<T, E> ClassifyResponse<T, E> for () {
+    fn classify(&self, _: Result<&T, &E>) -> RetryKind {
+        RetryKind::NotRetryable
+    }
 }

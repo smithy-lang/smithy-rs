@@ -68,15 +68,17 @@ class OperationInputBuilderGenerator(
 ) : BuilderGenerator(model, symbolProvider, shape.inputShape(model)) {
     override fun buildFn(implBlockWriter: RustWriter) {
         val fallibleBuilder = StructureGenerator.fallibleBuilder(shape.inputShape(model), symbolProvider)
-        val retryType = "()"
-        val returnType = "#T<#{T}, $retryType>".letIf(fallibleBuilder) { "Result<$it, String>" }
         val outputSymbol = symbolProvider.toSymbol(shape)
         val operationT = RuntimeType.operation(symbolProvider.config().runtimeConfig)
         val operationModule = RuntimeType.operationModule(symbolProvider.config().runtimeConfig)
         val sdkBody = RuntimeType.sdkBody(symbolProvider.config().runtimeConfig)
+        val retryType = features.mapNotNull { it.retryType() }.firstOrNull()?.let { implBlockWriter.format(it) } ?: "()"
+        val returnType = with(implBlockWriter) {
+            "${format(operationT)}<${format(outputSymbol)}, $retryType>".letIf(fallibleBuilder) { "Result<$it, String>" }
+        }
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
-        implBlockWriter.rustBlock("pub fn build(self, _config: &#T::Config) -> $returnType", RuntimeType.Config, operationT, outputSymbol) {
+        implBlockWriter.rustBlock("pub fn build(self, _config: &#T::Config) -> $returnType", RuntimeType.Config) {
             conditionalBlock("Ok({", "})", conditional = fallibleBuilder) {
                 withBlock("let op = #T::new(", ");", outputSymbol) {
                     coreBuilder(this)
@@ -88,16 +90,18 @@ class OperationInputBuilderGenerator(
                 """,
                     operationModule, sdkBody
                 )
-                features.forEach { it.section(OperationSection.Feature("request", "_config"))(this) }
+                features.forEach { it.section(OperationSection.MutateRequest("request", "_config"))(this) }
                 rust(
                     """
-                    #1T::Operation::new(
+                    let op = #1T::Operation::new(
                         request,
                         op
-                    ).with_metadata(#1T::Metadata::new(${shape.id.name.dq()}, ${serviceName.dq()}))
+                    ).with_metadata(#1T::Metadata::new(${shape.id.name.dq()}, ${serviceName.dq()}));
                 """,
-                    operationModule
+                    operationModule,
                 )
+                features.forEach { it.section(OperationSection.FinalizeOperation("op", "_config"))(this) }
+                rust("op")
             }
         }
     }

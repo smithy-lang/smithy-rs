@@ -9,3 +9,6 @@ edition = "2018"
 
 [dependencies]
 kms = { path = "../../build/aws-sdk/kms" }
+smithy-http = { path = "../../build/aws-sdk/smithy-http" }
+smithy-types = { path = "../../build/aws-sdk/smithy-types" }
+http = "0.2.3"

@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.EndpointTrait
+import software.amazon.smithy.rust.codegen.rustlang.Derives
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -58,6 +59,7 @@ abstract class HttpProtocolGenerator(
         val builderGenerator = OperationInputBuilderGenerator(model, symbolProvider, operationShape, protocolConfig.moduleName, customizations)
         builderGenerator.render(inputWriter)
         // impl OperationInputShape { ... }
+
         inputWriter.implBlock(inputShape, symbolProvider) {
             toHttpRequestImpl(this, operationShape, inputShape)
             val shapeId = inputShape.expectTrait(SyntheticInputTrait::class.java).body
@@ -79,6 +81,7 @@ abstract class HttpProtocolGenerator(
         }
         val operationName = symbolProvider.toSymbol(operationShape).name
         operationWriter.documentShape(operationShape, model)
+        Derives(setOf(RuntimeType.Clone)).render(operationWriter)
         operationWriter.rustBlock("pub struct $operationName") {
             write("input: #T", inputSymbol)
         }
