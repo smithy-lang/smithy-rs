@@ -71,7 +71,7 @@ pub struct RequestConfig<'a> {
     pub service: &'a SigningService,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct SigV4Signer {
     // In the future, the SigV4Signer will use the CRT signer. This will require constructing
     // and holding an instance of the signer, so prevent people from constructing a SigV4Signer without
