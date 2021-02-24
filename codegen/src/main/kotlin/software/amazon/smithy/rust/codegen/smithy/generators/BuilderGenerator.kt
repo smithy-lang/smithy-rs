@@ -78,6 +78,8 @@ class OperationInputBuilderGenerator(
         }
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
+        // For codegen simplicity, allow `let x = ...; x`
+        implBlockWriter.rust("##[allow(clippy::let_and_return)]")
         implBlockWriter.rustBlock("pub fn build(self, _config: &#T::Config) -> $returnType", RuntimeType.Config) {
             conditionalBlock("Ok({", "})", conditional = fallibleBuilder) {
                 withBlock("let op = #T::new(", ");", outputSymbol) {
