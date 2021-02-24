@@ -7,8 +7,6 @@ package software.amazon.smithy.rust.codegen.generators
 
 import io.kotest.matchers.string.shouldContainInOrder
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.codegen.core.SymbolProvider
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Custom
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
@@ -44,13 +42,27 @@ class StructureGeneratorTest {
         }
 
         @error("server")
+        @retryable
         structure MyError {
             message: String
         }
+
+        @sensitive
+        string SecretKey
+
+        structure Credentials {
+            username: String,
+            @sensitive
+            password: String,
+
+            // test that sensitive can be applied directly to a member or to the shape
+            secretKey: SecretKey
+        }
         """.asSmithyModel()
-        val struct = model.expectShape(ShapeId.from("com.test#MyStruct"), StructureShape::class.java)
-        val inner = model.expectShape(ShapeId.from("com.test#Inner"), StructureShape::class.java)
-        val error = model.expectShape(ShapeId.from("com.test#MyError"), StructureShape::class.java)
+        val struct = model.lookup<StructureShape>("com.test#MyStruct")
+        val inner = model.lookup<StructureShape>("com.test#Inner")
+        val credentials = model.lookup<StructureShape>("com.test#Credentials")
+        val error = model.lookup<StructureShape>("com.test#MyError")
     }
 
     @Test
@@ -75,7 +87,7 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate structures with public fields`() {
-        val provider: SymbolProvider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
         writer.withModule("model") {
             val innerGenerator = StructureGenerator(model, provider, this, inner)
@@ -103,10 +115,34 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate error structures`() {
-        val provider: SymbolProvider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model)
         val writer = RustWriter.forModule("error")
         val generator = StructureGenerator(model, provider, writer, error)
         generator.render()
+        writer.compileAndTest(
+            """
+            let err = MyError { message: None };
+            assert_eq!(err.retryable_error_kind(), smithy_types::retry::ErrorKind::ServerError);
+        """
+        )
+    }
+
+    @Test
+    fun `generate a custom debug implementation when the sensitive trait is present`() {
+        val provider = testSymbolProvider(model)
+        val writer = RustWriter.forModule("lib")
+        val generator = StructureGenerator(model, provider, writer, credentials)
+        generator.render()
+        writer.unitTest(
+            """
+            let creds = Credentials {
+                username: Some("not_redacted".to_owned()),
+                password: Some("don't leak me".to_owned()),
+                secret_key: Some("don't leak me".to_owned())
+            };
+            assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
+        """
+        )
         writer.compileAndTest()
     }
 
@@ -127,7 +163,7 @@ class StructureGeneratorTest {
 
            nested2: Inner
         }""".asSmithyModel()
-        val provider: SymbolProvider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
         writer.docs("module docs")
         writer

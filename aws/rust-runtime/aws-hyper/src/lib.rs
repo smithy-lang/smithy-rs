@@ -1,6 +1,7 @@
 pub mod test_connection;
 
 use aws_endpoint::AwsEndpointStage;
+use aws_http::user_agent::UserAgentStage;
 use aws_sig_auth::middleware::SigV4SigningStage;
 use aws_sig_auth::signer::SigV4Signer;
 use hyper::client::HttpConnector;
@@ -72,6 +73,7 @@ where
     pub async fn call<O, T, E, Retry>(&self, input: Operation<O, Retry>) -> Result<T, SdkError<E>>
     where
         O: ParseHttpResponse<hyper::Body, Output = Result<T, E>> + Send + 'static,
+        E: Error,
     {
         self.call_raw(input).await.map(|res| res.parsed)
     }
@@ -86,14 +88,18 @@ where
     ) -> Result<SdkSuccess<R>, SdkError<E>>
     where
         O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + 'static,
+        E: Error,
     {
         let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
         let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);
+        let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new());
         let inner = self.inner.clone();
         let mut svc = ServiceBuilder::new()
             .layer(ParseResponseLayer::<O, Retry>::new())
             .layer(endpoint_resolver)
             .layer(signer)
+            // Apply the user agent _after signing_. We should not sign the user-agent header
+            .layer(user_agent)
             .layer(DispatchLayer::new())
             .service(inner);
         svc.ready_and().await?.call(input).await

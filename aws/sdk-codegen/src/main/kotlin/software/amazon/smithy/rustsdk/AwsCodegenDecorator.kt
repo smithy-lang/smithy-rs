@@ -11,6 +11,7 @@ val DECORATORS = listOf(
     CredentialsProviderDecorator(),
     RegionDecorator(),
     AwsEndpointDecorator(),
+    UserAgentDecorator(),
     SigV4SigningDecorator()
 )
 

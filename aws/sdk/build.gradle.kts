@@ -20,7 +20,7 @@ val smithyVersion: String by project
 
 val sdkOutputDir = buildDir.resolve("aws-sdk")
 val runtimeModules = listOf("smithy-types", "smithy-http", "smithy-http-tower")
-val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types", "aws-hyper", "aws-sig-auth")
+val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types", "aws-hyper", "aws-sig-auth", "aws-http")
 
 buildscript {
     val smithyVersion: String by project
@@ -71,7 +71,7 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                       },
                       "service": "${it.service}",
                       "module": "${it.module}",
-                      "moduleVersion": "0.0.1",
+                      "moduleVersion": "0.0.2",
                       "build": {
                         "rootProject": true
                       }
@@ -105,8 +105,14 @@ task("relocateServices") {
                 from("$buildDir/smithyprojections/sdk/${it.module}/rust-codegen")
                 into(sdkOutputDir.resolve(it.module))
             }
+
+            copy {
+                from(projectDir.resolve("integration-tests/${it.module}/tests"))
+                into(sdkOutputDir.resolve(it.module).resolve("tests"))
+            }
         }
     }
+    outputs.upToDateWhen { false }
 }
 
 task("relocateExamples") {
@@ -151,6 +157,7 @@ tasks.register<Copy>("relocateRuntime") {
         exclude("**/Cargo.lock")
     }
     into(sdkOutputDir)
+    outputs.upToDateWhen { false }
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {

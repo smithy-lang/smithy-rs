@@ -29,7 +29,8 @@ data class ProtocolConfig(
     val symbolProvider: RustSymbolProvider,
     val runtimeConfig: RuntimeConfig,
     val serviceShape: ServiceShape,
-    val protocol: ShapeId
+    val protocol: ShapeId,
+    val moduleName: String
 )
 
 interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
@@ -44,7 +45,7 @@ interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
  * a body.
  */
 abstract class HttpProtocolGenerator(
-    protocolConfig: ProtocolConfig
+    private val protocolConfig: ProtocolConfig
 ) {
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
@@ -54,7 +55,7 @@ abstract class HttpProtocolGenerator(
         }
         val inputShape = operationShape.inputShape(model)
         val inputSymbol = symbolProvider.toSymbol(inputShape)
-        val builderGenerator = OperationInputBuilderGenerator(model, symbolProvider, operationShape, customizations)
+        val builderGenerator = OperationInputBuilderGenerator(model, symbolProvider, operationShape, protocolConfig.moduleName, customizations)
         builderGenerator.render(inputWriter)
         // impl OperationInputShape { ... }
         inputWriter.implBlock(inputShape, symbolProvider) {
