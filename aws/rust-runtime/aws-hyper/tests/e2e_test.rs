@@ -161,7 +161,7 @@ async fn retry_test() {
         (req(), err()),
     ];
     let conn = TestConnection::new(events);
-    let retry_config = RetryConfig::default().with_static_base(|| 1_f64);
+    let retry_config = RetryConfig::default().with_base(|| 1_f64);
     let client = Client::new(conn.clone()).with_retry_config(retry_config);
     tokio::time::pause();
     let initial = tokio::time::Instant::now();

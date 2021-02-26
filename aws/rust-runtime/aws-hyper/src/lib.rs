@@ -2,7 +2,7 @@ mod retry;
 pub mod test_connection;
 pub use retry::RetryConfig;
 
-use crate::retry::RetryCtx;
+use crate::retry::StandardRetryStrategy;
 use aws_endpoint::AwsEndpointStage;
 use aws_http::user_agent::UserAgentStage;
 use aws_sig_auth::middleware::SigV4SigningStage;
@@ -19,7 +19,6 @@ use smithy_http_tower::map_request::MapRequestLayer;
 use smithy_http_tower::parse_response::ParseResponseLayer;
 use smithy_types::retry::ProvideErrorKind;
 use std::error::Error;
-use std::sync::{Arc, Mutex};
 use tower::{Service, ServiceBuilder, ServiceExt};
 
 type BoxError = Box<dyn Error + Send + Sync>;
@@ -45,21 +44,20 @@ pub type SdkSuccess<T> = smithy_http::result::SdkSuccess<T, hyper::Body>;
 
 pub struct Client<S> {
     inner: S,
-    retry_ctx: Arc<Mutex<RetryCtx>>,
+    retry_strategy: StandardRetryStrategy,
 }
 
 impl<S> Client<S> {
     /// Construct a new `Client` with a custom connector
     pub fn new(connector: S) -> Self {
-        let retry_ctx = Arc::new(Mutex::new(RetryCtx::new(RetryConfig::default())));
         Client {
             inner: connector,
-            retry_ctx,
+            retry_strategy: StandardRetryStrategy::new(RetryConfig::default()),
         }
     }
 
     pub fn with_retry_config(mut self, retry_config: RetryConfig) -> Self {
-        self.retry_ctx = Arc::new(Mutex::new(RetryCtx::new(retry_config)));
+        self.retry_strategy.with_config(retry_config);
         self
     }
 }
@@ -69,10 +67,9 @@ impl Client<hyper::Client<HttpsConnector<HttpConnector>, SdkBody>> {
     pub fn https() -> Self {
         let https = HttpsConnector::new();
         let client = HyperClient::builder().build::<_, SdkBody>(https);
-        let retry_ctx = Arc::new(Mutex::new(RetryCtx::new(RetryConfig::default())));
         Client {
             inner: client,
-            retry_ctx,
+            retry_strategy: StandardRetryStrategy::new(RetryConfig::default()),
         }
     }
 }
@@ -117,7 +114,8 @@ where
         let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new());
         let inner = self.inner.clone();
         let mut svc = ServiceBuilder::new()
-            .retry(retry::StandardRetryStrategy::new(self.retry_ctx.clone()))
+            // Create a new request-scoped policy
+            .retry(self.retry_strategy.new_policy())
             .layer(ParseResponseLayer::<O, Retry>::new())
             .layer(endpoint_resolver)
             .layer(signer)

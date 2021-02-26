@@ -8,6 +8,13 @@
 //! The actual retry policy implementation will likely be replaced
 //! with the CRT implementation once the bindings exist. This
 //! implementation is intended to be _correct_ but not especially long lasting.
+//!
+//! Components:
+//! - [`StandardRetryStrategy`](crate::retry::StandardRetryStrategy): Top level manager, intended
+//! to be associated with a [`Client`](crate::Client)
+//! - [`StandardRetryPolicy`](crate::retry::StandardRetryPolicy): A request-scoped retry policy,
+//! backed by request-local state and shared state contained within [`StandardRetryStrategy`](crate::retry::StandardRetryStrategy)
+//! - [`RetryConfig`](crate::retry::RetryConfig): Static configuration (max retries, max backoff etc.)
 
 use crate::{SdkError, SdkSuccess};
 use smithy_http::operation;
@@ -16,9 +23,14 @@ use smithy_http::retry::ClassifyResponse;
 use smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+/// Retry Policy Configuration
+///
+/// Without specific use cases, users should generally rely on the default values set by `[RetryConfig::default]`(RetryConfig::default).`
+///
+/// Currently these fields are private and no setters provided. As needed, this configuration will become user-modifiable in the future..
 #[derive(Clone)]
 pub struct RetryConfig {
     initial_retry_tokens: usize,
@@ -31,8 +43,15 @@ pub struct RetryConfig {
 }
 
 impl RetryConfig {
-    /// For deterministic tests, enable using a static base instead of random base for exponential backoff
-    pub fn with_static_base(mut self, base: fn() -> f64) -> Self {
+    /// Override `b` in the exponential backoff computation
+    ///
+    /// By default, `base` is a randomly generated value between 0 and 1. In tests, it can
+    /// be helpful to override this:
+    /// ```rust
+    /// use aws_hyper::RetryConfig;
+    /// let conf = RetryConfig::default().with_base(||1_f64);
+    /// ```
+    pub fn with_base(mut self, base: fn() -> f64) -> Self {
         self.base = base;
         self
     }
@@ -59,107 +78,160 @@ const RETRY_COST: usize = 5;
 
 /// StandardRetryStrategy
 ///
-/// `ctx` captures cross-request retry state, whereas `attempts` captures retry state local to this
-/// request
-#[derive(Clone)]
-pub(crate) struct StandardRetryStrategy {
-    attempts: u32,
-    ctx: Arc<Mutex<RetryCtx>>,
+/// An implementation of the `Standard` AWS retry strategy. A `Strategy` is scoped to a client.
+/// For an individual request, call [`StandardRetryStrategy::new_policy()`](StandardRetryStrategy::new_policy)
+pub struct StandardRetryStrategy {
+    config: RetryConfig,
+    shared_state: CrossRequestRetryState,
 }
 
 impl StandardRetryStrategy {
-    pub fn new(ctx: Arc<Mutex<RetryCtx>>) -> Self {
-        Self { attempts: 0, ctx }
-    }
-
-    #[allow(dead_code)]
-    pub fn ctx(&self) -> MutexGuard<'_, RetryCtx> {
-        self.ctx.lock().unwrap()
-    }
-
-    pub fn do_retry(&self, retry_kind: Result<(), ErrorKind>) -> Option<(Self, Duration)> {
-        let mut ctx = self.ctx.lock().unwrap();
-        let can_retry = match retry_kind {
-            Ok(_) => {
-                ctx.retry_quota_release();
-                return None;
-            }
-            Err(e) => {
-                if self.attempts == ctx.config.max_retries - 1 {
-                    return None;
-                }
-                ctx.get_retry_quota(e)
-            }
-        };
-        if !can_retry {
-            return None;
-        };
-        let b = (ctx.config.base)();
-        let r: i32 = 2;
-        let backoff = b * (r.pow(self.attempts) as f64);
-        let backoff = Duration::from_secs_f64(backoff).min(ctx.config.max_backoff);
-        let mut next = self.clone();
-        next.attempts += 1;
-        Some((next, backoff))
-    }
-}
-
-pub(crate) struct RetryCtx {
-    retry_quota: usize,
-    last_retry: Option<usize>,
-    config: RetryConfig,
-}
-
-impl RetryCtx {
     pub fn new(config: RetryConfig) -> Self {
-        RetryCtx {
-            retry_quota: config.initial_retry_tokens,
-            last_retry: None,
+        Self {
+            shared_state: CrossRequestRetryState::new(config.initial_retry_tokens),
             config,
         }
     }
 
-    fn retry_quota_release(&mut self) {
-        self.retry_quota += self.last_retry.unwrap_or(self.config.no_retry_increment);
+    pub fn with_config(&mut self, config: RetryConfig) {
+        self.config = config;
     }
 
-    fn get_retry_quota(&mut self, err: ErrorKind) -> bool {
-        let retry_cost = if err == ErrorKind::TransientError {
-            self.config.timeout_retry_cost
-        } else {
-            self.config.retry_cost
-        };
-        if retry_cost > self.retry_quota {
-            false
-        } else {
-            self.last_retry = Some(retry_cost);
-            self.retry_quota -= retry_cost;
-            true
+    pub(crate) fn new_policy(&self) -> StandardRetryPolicy {
+        StandardRetryPolicy {
+            local: RequestLocalRetryState::new(),
+            shared: self.shared_state.clone(),
+            config: self.config.clone(),
         }
-    }
-
-    #[cfg(test)]
-    fn with_base_provider(mut self, base: fn() -> f64) -> Self {
-        self.config.base = base;
-        self
     }
 }
 
-struct UnknownError;
 
-impl ProvideErrorKind for UnknownError {
-    fn retryable_error_kind(&self) -> Option<ErrorKind> {
-        None
+#[derive(Default, Clone)]
+struct RequestLocalRetryState {
+    attempts: u32,
+    last_quota_usage: Option<usize>,
+}
+
+impl RequestLocalRetryState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+/* TODO in followup PR:
+/// RetryPartition represents a scope for cross request retry state
+///
+/// For example, a retry partition could be the id of a service. This would give each service a separate retry budget.
+struct RetryPartition(Cow<'static, str>); */
+
+/// Shared state between multiple requests to the same client.
+#[derive(Clone)]
+struct CrossRequestRetryState {
+    quota_available: Arc<Mutex<usize>>,
+}
+
+// clippy is upset that we didn't use AtomicUsize here, but doing so makes the code
+// significantly more complicated for negligible benefit.
+#[allow(clippy::mutex_atomic)]
+impl CrossRequestRetryState {
+    pub fn new(initial_quota: usize) -> Self {
+        Self {
+
+            quota_available:
+            Arc::new(Mutex::new(initial_quota)),
+        }
     }
 
-    fn code(&self) -> Option<&str> {
-        None
+    fn quota_release(&self, value: Option<usize>, config: &RetryConfig) {
+        let mut quota = self.quota_available.lock().unwrap();
+        *quota += value.unwrap_or(config.no_retry_increment);
+    }
+
+    /// Attempt to acquire retry quota for `ErrorKind`
+    ///
+    /// If quota is available, the amount of quota consumed is returned
+    /// If no quota is available, `None` is returned.
+    fn quota_acquire(&self, err: &ErrorKind, config: &RetryConfig) -> Option<usize> {
+        let mut quota = self.quota_available.lock().unwrap();
+        let retry_cost = if err == &ErrorKind::TransientError {
+            config.timeout_retry_cost
+        } else {
+            config.retry_cost
+        };
+        if retry_cost > *quota {
+            None
+        } else {
+            *quota -= retry_cost;
+            Some(retry_cost)
+        }
+    }
+}
+
+/// StandardRetryPolicy
+///
+/// This RetryPolicy implements the `Standard` strategy described in the AWS SDK retry standard.
+/// It is intended to be used as a [Tower Retry Policy](tower::retry::Policy) for use in tower-based
+/// middleware stacks.
+#[derive(Clone)]
+pub(crate) struct StandardRetryPolicy {
+    local: RequestLocalRetryState,
+    shared: CrossRequestRetryState,
+    config: RetryConfig,
+}
+
+#[cfg(test)]
+impl StandardRetryPolicy {
+    fn retry_quota(&self) -> usize {
+        *self.shared.quota_available.lock().unwrap()
+    }
+}
+
+impl StandardRetryPolicy {
+    /// Determine the correct response given `retry_kind`
+    ///
+    /// If a retry is specified, this function returns `(next, backoff_duration)`
+    /// If no retry is specified, this function returns None
+    pub fn attempt_retry(&self, retry_kind: Result<(), ErrorKind>) -> Option<(Self, Duration)> {
+        let quota_used = match retry_kind {
+            Ok(_) => {
+                self.shared
+                    .quota_release(self.local.last_quota_usage, &self.config);
+                return None;
+            }
+            Err(e) => {
+                if self.local.attempts == self.config.max_retries - 1 {
+                    return None;
+                }
+                self.shared.quota_acquire(&e, &self.config)?
+            }
+        };
+        /*
+        From the retry spec:
+            b = random number within the range of: 0 <= b <= 1
+            r = 2
+            t_i = min(br^i, MAX_BACKOFF);
+         */
+        let r: i32 = 2;
+        let b = (self.config.base)();
+        let backoff = b * (r.pow(self.local.attempts) as f64);
+        let backoff = Duration::from_secs_f64(backoff).min(self.config.max_backoff);
+        let next = StandardRetryPolicy {
+            local: RequestLocalRetryState {
+                attempts: self.local.attempts + 1,
+                last_quota_usage: Some(quota_used),
+            },
+            shared: self.shared.clone(),
+            config: self.config.clone(),
+        };
+
+        Some((next, backoff))
     }
 }
 
 impl<Handler, R, T, E>
     tower::retry::Policy<operation::Operation<Handler, R>, SdkSuccess<T>, SdkError<E>>
-    for StandardRetryStrategy
+    for StandardRetryPolicy
 where
     E: ProvideErrorKind,
     Handler: Clone,
@@ -177,7 +249,7 @@ where
         let (next, fut) = match retry {
             RetryKind::Explicit(dur) => (self.clone(), dur),
             RetryKind::NotRetryable => return None,
-            RetryKind::Error(err) => self.do_retry(Err(err))?,
+            RetryKind::Error(err) => self.attempt_retry(Err(err))?,
             _ => return None,
         };
         let fut = async move {
@@ -194,139 +266,137 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::retry::{RetryConfig, RetryCtx, StandardRetryStrategy};
+    use crate::retry::{
+        RetryConfig, StandardRetryStrategy,
+    };
     use smithy_types::retry::ErrorKind;
-    use std::sync::{Arc, Mutex};
     use std::time::Duration;
+
+    fn test_config() -> RetryConfig {
+        RetryConfig::default().with_base(|| 1_f64)
+    }
 
     #[test]
     fn eventual_success() {
-        let ctx = RetryCtx::new(RetryConfig::default()).with_base_provider(|| 1_f64);
-        let ctx = Arc::new(Mutex::new(ctx));
-        let strategy = StandardRetryStrategy::new(ctx.clone());
-        let (strategy, dur) = strategy
-            .do_retry(Err(ErrorKind::ServerError))
+        let policy = StandardRetryStrategy::new(test_config()).new_policy();
+        let (policy, dur) = policy
+            .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(1));
-        assert_eq!(strategy.ctx().retry_quota, 495);
+        assert_eq!(policy.retry_quota(), 495);
 
-        let (strategy, dur) = strategy
-            .do_retry(Err(ErrorKind::ServerError))
+        let (policy, dur) = policy
+            .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(2));
-        assert_eq!(strategy.ctx().retry_quota, 490);
+        assert_eq!(policy.retry_quota(), 490);
 
-        let no_retry = strategy.do_retry(Ok(()));
+        let no_retry = policy.attempt_retry(Ok(()));
         assert!(no_retry.is_none());
-        assert_eq!(strategy.ctx().retry_quota, 495);
+        assert_eq!(policy.retry_quota(), 495);
     }
 
     #[test]
     fn no_more_attempts() {
-        let ctx = RetryCtx::new(RetryConfig::default()).with_base_provider(|| 1_f64);
-        let ctx = Arc::new(Mutex::new(ctx));
-        let strategy = StandardRetryStrategy::new(ctx.clone());
-        let (strategy, dur) = strategy
-            .do_retry(Err(ErrorKind::ServerError))
+        let policy = StandardRetryStrategy::new(test_config()).new_policy();
+        let (policy, dur) = policy
+            .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(1));
-        assert_eq!(strategy.ctx().retry_quota, 495);
+        assert_eq!(policy.retry_quota(), 495);
 
-        let (strategy, dur) = strategy
-            .do_retry(Err(ErrorKind::ServerError))
+        let (policy, dur) = policy
+            .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(2));
-        assert_eq!(strategy.ctx().retry_quota, 490);
+        assert_eq!(policy.retry_quota(), 490);
 
-        let no_retry = strategy.do_retry(Err(ErrorKind::ServerError));
+        let no_retry = policy.attempt_retry(Err(ErrorKind::ServerError));
         assert!(no_retry.is_none());
-        assert_eq!(strategy.ctx().retry_quota, 490);
+        assert_eq!(policy.retry_quota(), 490);
     }
 
     #[test]
     fn no_quota() {
-        let mut conf = RetryConfig::default();
+        let mut conf = test_config();
         conf.initial_retry_tokens = 5;
-        let ctx = RetryCtx::new(conf).with_base_provider(|| 1_f64);
-        let strategy = StandardRetryStrategy::new(Arc::new(Mutex::new(ctx)));
-        let (strategy, dur) = strategy
-            .do_retry(Err(ErrorKind::ServerError))
+        let policy = StandardRetryStrategy::new(conf).new_policy();
+        let (policy, dur) = policy
+            .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(1));
-        assert_eq!(strategy.ctx().retry_quota, 0);
-        let no_retry = strategy.do_retry(Err(ErrorKind::ServerError));
+        assert_eq!(policy.retry_quota(), 0);
+        let no_retry = policy.attempt_retry(Err(ErrorKind::ServerError));
         assert!(no_retry.is_none());
-        assert_eq!(strategy.ctx().retry_quota, 0);
+        assert_eq!(policy.retry_quota(), 0);
     }
 
     #[test]
     fn backoff_timing() {
-        let mut conf = RetryConfig::default();
+        let mut conf = test_config();
         conf.max_retries = 5;
-        let ctx = RetryCtx::new(conf).with_base_provider(|| 1_f64);
-        let strategy = StandardRetryStrategy::new(Arc::new(Mutex::new(ctx)));
-        let (strategy, dur) = strategy
-            .do_retry(Err(ErrorKind::ServerError))
+        let policy = StandardRetryStrategy::new(conf).new_policy();
+        let (policy, dur) = policy
+            .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(1));
-        assert_eq!(strategy.ctx().retry_quota, 495);
+        assert_eq!(policy.retry_quota(), 495);
 
-        let (strategy, dur) = strategy
-            .do_retry(Err(ErrorKind::ServerError))
+        let (policy, dur) = policy
+            .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(2));
-        assert_eq!(strategy.ctx().retry_quota, 490);
+        assert_eq!(policy.retry_quota(), 490);
 
-        let (strategy, dur) = strategy
-            .do_retry(Err(ErrorKind::ServerError))
+        let (policy, dur) = policy
+            .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(4));
-        assert_eq!(strategy.ctx().retry_quota, 485);
+        assert_eq!(policy.retry_quota(), 485);
 
-        let (strategy, dur) = strategy
-            .do_retry(Err(ErrorKind::ServerError))
+        let (policy, dur) = policy
+            .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(8));
-        assert_eq!(strategy.ctx().retry_quota, 480);
+        assert_eq!(policy.retry_quota(), 480);
 
-        let no_retry = strategy.do_retry(Err(ErrorKind::ServerError));
+        let no_retry = policy.attempt_retry(Err(ErrorKind::ServerError));
         assert!(no_retry.is_none());
-        assert_eq!(strategy.ctx().retry_quota, 480);
+        assert_eq!(policy.retry_quota(), 480);
     }
 
     #[test]
     fn max_backoff_time() {
-        let mut conf = RetryConfig::default();
+        let mut conf = test_config();
         conf.max_retries = 5;
         conf.max_backoff = Duration::from_secs(3);
-        let ctx = RetryCtx::new(conf).with_base_provider(|| 1_f64);
-        let strategy = StandardRetryStrategy::new(Arc::new(Mutex::new(ctx)));
-        let (strategy, dur) = strategy
-            .do_retry(Err(ErrorKind::ServerError))
+        let policy = StandardRetryStrategy::new(conf).new_policy();
+        let (policy, dur) = policy
+            .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(1));
-        assert_eq!(strategy.ctx().retry_quota, 495);
+        assert_eq!(policy.retry_quota(), 495);
 
-        let (strategy, dur) = strategy
-            .do_retry(Err(ErrorKind::ServerError))
+        let (policy, dur) = policy
+            .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(2));
-        assert_eq!(strategy.ctx().retry_quota, 490);
+        assert_eq!(policy.retry_quota(), 490);
 
-        let (strategy, dur) = strategy
-            .do_retry(Err(ErrorKind::ServerError))
+        let (policy, dur) = policy
+            .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(3));
-        assert_eq!(strategy.ctx().retry_quota, 485);
+        assert_eq!(policy.retry_quota(), 485);
 
-        let (strategy, dur) = strategy
-            .do_retry(Err(ErrorKind::ServerError))
+        let (policy, dur) = policy
+            .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(3));
-        assert_eq!(strategy.ctx().retry_quota, 480);
+        assert_eq!(policy.retry_quota(), 480);
 
-        let no_retry = strategy.do_retry(Err(ErrorKind::ServerError));
+        let no_retry = policy.attempt_retry(Err(ErrorKind::ServerError));
         assert!(no_retry.is_none());
-        assert_eq!(strategy.ctx().retry_quota, 480);
+        assert_eq!(policy.retry_quota(), 480);
     }
 }
