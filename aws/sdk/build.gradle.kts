@@ -215,7 +215,7 @@ tasks.register<Exec>("cargoDocs") {
     workingDir(sdkOutputDir)
     // disallow warnings
     environment("RUSTDOCFLAGS", "-D warnings")
-    commandLine("cargo", "doc", "--no-deps")
+    commandLine("cargo", "doc", "--no-deps", "--document-private-items")
     dependsOn("assemble")
 }
 

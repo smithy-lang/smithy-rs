@@ -2,7 +2,7 @@ mod retry;
 pub mod test_connection;
 pub use retry::RetryConfig;
 
-use crate::retry::StandardRetryStrategy;
+use crate::retry::RetryHandlerFactory;
 use aws_endpoint::AwsEndpointStage;
 use aws_http::user_agent::UserAgentStage;
 use aws_sig_auth::middleware::SigV4SigningStage;
@@ -44,7 +44,7 @@ pub type SdkSuccess<T> = smithy_http::result::SdkSuccess<T, hyper::Body>;
 
 pub struct Client<S> {
     inner: S,
-    retry_strategy: StandardRetryStrategy,
+    retry_strategy: RetryHandlerFactory,
 }
 
 impl<S> Client<S> {
@@ -52,7 +52,7 @@ impl<S> Client<S> {
     pub fn new(connector: S) -> Self {
         Client {
             inner: connector,
-            retry_strategy: StandardRetryStrategy::new(RetryConfig::default()),
+            retry_strategy: RetryHandlerFactory::new(RetryConfig::default()),
         }
     }
 
@@ -69,7 +69,7 @@ impl Client<hyper::Client<HttpsConnector<HttpConnector>, SdkBody>> {
         let client = HyperClient::builder().build::<_, SdkBody>(https);
         Client {
             inner: client,
-            retry_strategy: StandardRetryStrategy::new(RetryConfig::default()),
+            retry_strategy: RetryHandlerFactory::new(RetryConfig::default()),
         }
     }
 }
@@ -115,7 +115,7 @@ where
         let inner = self.inner.clone();
         let mut svc = ServiceBuilder::new()
             // Create a new request-scoped policy
-            .retry(self.retry_strategy.new_policy())
+            .retry(self.retry_strategy.new_handler())
             .layer(ParseResponseLayer::<O, Retry>::new())
             .layer(endpoint_resolver)
             .layer(signer)

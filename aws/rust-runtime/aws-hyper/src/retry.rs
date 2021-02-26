@@ -10,10 +10,11 @@
 //! implementation is intended to be _correct_ but not especially long lasting.
 //!
 //! Components:
-//! - [`StandardRetryStrategy`](crate::retry::StandardRetryStrategy): Top level manager, intended
-//! to be associated with a [`Client`](crate::Client)
-//! - [`StandardRetryPolicy`](crate::retry::StandardRetryPolicy): A request-scoped retry policy,
-//! backed by request-local state and shared state contained within [`StandardRetryStrategy`](crate::retry::StandardRetryStrategy)
+//! - [`RetryHandlerFactory`](crate::retry::RetryHandlerFactory): Top level manager, intended
+//! to be associated with a [`Client`](crate::Client). Its sole purpose in life is to create a RetryHandler
+//! for individual requests.
+//! - [`RetryHandler`](crate::retry::RetryHandler): A request-scoped retry policy,
+//! backed by request-local state and shared state contained within [`RetryHandlerFactory`](crate::retry::RetryHandlerFactory)
 //! - [`RetryConfig`](crate::retry::RetryConfig): Static configuration (max retries, max backoff etc.)
 
 use crate::{SdkError, SdkSuccess};
@@ -76,16 +77,21 @@ const MAX_RETRIES: u32 = 3;
 const INITIAL_RETRY_TOKENS: usize = 500;
 const RETRY_COST: usize = 5;
 
-/// StandardRetryStrategy
+/// Manage retries for a service
 ///
-/// An implementation of the `Standard` AWS retry strategy. A `Strategy` is scoped to a client.
-/// For an individual request, call [`StandardRetryStrategy::new_policy()`](StandardRetryStrategy::new_policy)
-pub struct StandardRetryStrategy {
+/// An implementation of the `standard` AWS retry strategy as specified in the SEP. A `Strategy` is scoped to a client.
+/// For an individual request, call [`RetryHandlerFactory::new_handler()`](RetryHandlerFactory::new_handler)
+///
+/// In the future, adding support for the adaptive retry strategy will be added by adding a `TokenBucket` to
+/// `CrossRequestRetryState`
+/// Its main functionality is via `new_handler` which creates a `RetryHandler` to manage the retry for
+/// an individual request.
+pub struct RetryHandlerFactory {
     config: RetryConfig,
     shared_state: CrossRequestRetryState,
 }
 
-impl StandardRetryStrategy {
+impl RetryHandlerFactory {
     pub fn new(config: RetryConfig) -> Self {
         Self {
             shared_state: CrossRequestRetryState::new(config.initial_retry_tokens),
@@ -97,8 +103,8 @@ impl StandardRetryStrategy {
         self.config = config;
     }
 
-    pub(crate) fn new_policy(&self) -> StandardRetryPolicy {
-        StandardRetryPolicy {
+    pub(crate) fn new_handler(&self) -> RetryHandler {
+        RetryHandler {
             local: RequestLocalRetryState::new(),
             shared: self.shared_state.clone(),
             config: self.config.clone(),
@@ -137,7 +143,6 @@ struct CrossRequestRetryState {
 impl CrossRequestRetryState {
     pub fn new(initial_quota: usize) -> Self {
         Self {
-
             quota_available:
             Arc::new(Mutex::new(initial_quota)),
         }
@@ -168,26 +173,26 @@ impl CrossRequestRetryState {
     }
 }
 
-/// StandardRetryPolicy
+/// RetryHandler
 ///
-/// This RetryPolicy implements the `Standard` strategy described in the AWS SDK retry standard.
+/// Implement retries for an individual request.
 /// It is intended to be used as a [Tower Retry Policy](tower::retry::Policy) for use in tower-based
 /// middleware stacks.
 #[derive(Clone)]
-pub(crate) struct StandardRetryPolicy {
+pub(crate) struct RetryHandler {
     local: RequestLocalRetryState,
     shared: CrossRequestRetryState,
     config: RetryConfig,
 }
 
 #[cfg(test)]
-impl StandardRetryPolicy {
+impl RetryHandler {
     fn retry_quota(&self) -> usize {
         *self.shared.quota_available.lock().unwrap()
     }
 }
 
-impl StandardRetryPolicy {
+impl RetryHandler {
     /// Determine the correct response given `retry_kind`
     ///
     /// If a retry is specified, this function returns `(next, backoff_duration)`
@@ -216,7 +221,7 @@ impl StandardRetryPolicy {
         let b = (self.config.base)();
         let backoff = b * (r.pow(self.local.attempts) as f64);
         let backoff = Duration::from_secs_f64(backoff).min(self.config.max_backoff);
-        let next = StandardRetryPolicy {
+        let next = RetryHandler {
             local: RequestLocalRetryState {
                 attempts: self.local.attempts + 1,
                 last_quota_usage: Some(quota_used),
@@ -231,7 +236,7 @@ impl StandardRetryPolicy {
 
 impl<Handler, R, T, E>
     tower::retry::Policy<operation::Operation<Handler, R>, SdkSuccess<T>, SdkError<E>>
-    for StandardRetryPolicy
+    for RetryHandler
 where
     E: ProvideErrorKind,
     Handler: Clone,
@@ -267,7 +272,7 @@ where
 #[cfg(test)]
 mod test {
     use crate::retry::{
-        RetryConfig, StandardRetryStrategy,
+        RetryConfig, RetryHandlerFactory,
     };
     use smithy_types::retry::ErrorKind;
     use std::time::Duration;
@@ -278,7 +283,7 @@ mod test {
 
     #[test]
     fn eventual_success() {
-        let policy = StandardRetryStrategy::new(test_config()).new_policy();
+        let policy = RetryHandlerFactory::new(test_config()).new_handler();
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
@@ -298,7 +303,7 @@ mod test {
 
     #[test]
     fn no_more_attempts() {
-        let policy = StandardRetryStrategy::new(test_config()).new_policy();
+        let policy = RetryHandlerFactory::new(test_config()).new_handler();
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
@@ -320,7 +325,7 @@ mod test {
     fn no_quota() {
         let mut conf = test_config();
         conf.initial_retry_tokens = 5;
-        let policy = StandardRetryStrategy::new(conf).new_policy();
+        let policy = RetryHandlerFactory::new(conf).new_handler();
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
@@ -335,7 +340,7 @@ mod test {
     fn backoff_timing() {
         let mut conf = test_config();
         conf.max_retries = 5;
-        let policy = StandardRetryStrategy::new(conf).new_policy();
+        let policy = RetryHandlerFactory::new(conf).new_handler();
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
@@ -370,7 +375,7 @@ mod test {
         let mut conf = test_config();
         conf.max_retries = 5;
         conf.max_backoff = Duration::from_secs(3);
-        let policy = StandardRetryStrategy::new(conf).new_policy();
+        let policy = RetryHandlerFactory::new(conf).new_handler();
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
