@@ -1,5 +1,8 @@
+mod retry;
 pub mod test_connection;
+pub use retry::RetryConfig;
 
+use crate::retry::RetryHandlerFactory;
 use aws_endpoint::AwsEndpointStage;
 use aws_http::user_agent::UserAgentStage;
 use aws_sig_auth::middleware::SigV4SigningStage;
@@ -10,9 +13,11 @@ use hyper_tls::HttpsConnector;
 use smithy_http::body::SdkBody;
 use smithy_http::operation::Operation;
 use smithy_http::response::ParseHttpResponse;
+use smithy_http::retry::ClassifyResponse;
 use smithy_http_tower::dispatch::DispatchLayer;
 use smithy_http_tower::map_request::MapRequestLayer;
 use smithy_http_tower::parse_response::ParseResponseLayer;
+use smithy_types::retry::ProvideErrorKind;
 use std::error::Error;
 use tower::{Service, ServiceBuilder, ServiceExt};
 
@@ -39,12 +44,21 @@ pub type SdkSuccess<T> = smithy_http::result::SdkSuccess<T, hyper::Body>;
 
 pub struct Client<S> {
     inner: S,
+    retry_strategy: RetryHandlerFactory,
 }
 
 impl<S> Client<S> {
     /// Construct a new `Client` with a custom connector
     pub fn new(connector: S) -> Self {
-        Client { inner: connector }
+        Client {
+            inner: connector,
+            retry_strategy: RetryHandlerFactory::new(RetryConfig::default()),
+        }
+    }
+
+    pub fn with_retry_config(mut self, retry_config: RetryConfig) -> Self {
+        self.retry_strategy.with_config(retry_config);
+        self
     }
 }
 
@@ -53,7 +67,10 @@ impl Client<hyper::Client<HttpsConnector<HttpConnector>, SdkBody>> {
     pub fn https() -> Self {
         let https = HttpsConnector::new();
         let client = HyperClient::builder().build::<_, SdkBody>(https);
-        Client { inner: client }
+        Client {
+            inner: client,
+            retry_strategy: RetryHandlerFactory::new(RetryConfig::default()),
+        }
     }
 }
 
@@ -72,8 +89,9 @@ where
     /// access the raw response use `call_raw`.
     pub async fn call<O, T, E, Retry>(&self, input: Operation<O, Retry>) -> Result<T, SdkError<E>>
     where
-        O: ParseHttpResponse<hyper::Body, Output = Result<T, E>> + Send + 'static,
-        E: Error,
+        O: ParseHttpResponse<hyper::Body, Output = Result<T, E>> + Send + Clone + 'static,
+        E: Error + ProvideErrorKind,
+        Retry: ClassifyResponse<SdkSuccess<T>, SdkError<E>>,
     {
         self.call_raw(input).await.map(|res| res.parsed)
     }
@@ -87,14 +105,17 @@ where
         input: Operation<O, Retry>,
     ) -> Result<SdkSuccess<R>, SdkError<E>>
     where
-        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + 'static,
-        E: Error,
+        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + Clone + 'static,
+        E: Error + ProvideErrorKind,
+        Retry: ClassifyResponse<SdkSuccess<R>, SdkError<E>>,
     {
         let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
         let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);
         let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new());
         let inner = self.inner.clone();
         let mut svc = ServiceBuilder::new()
+            // Create a new request-scoped policy
+            .retry(self.retry_strategy.new_handler())
             .layer(ParseResponseLayer::<O, Retry>::new())
             .layer(endpoint_resolver)
             .layer(signer)
