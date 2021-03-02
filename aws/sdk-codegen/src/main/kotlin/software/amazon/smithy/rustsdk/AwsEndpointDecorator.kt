@@ -62,7 +62,7 @@ class EndpointConfigCustomization(private val runtimeConfig: RuntimeConfig, serv
     override fun section(section: ServiceConfig): Writable = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rust(
-                "pub endpoint_resolver: ::std::sync::Arc<dyn #T>,",
+                "pub (crate) endpoint_resolver: ::std::sync::Arc<dyn #T>,",
                 resolveAwsEndpoint
             )
             is ServiceConfig.ConfigImpl -> emptySection
