@@ -17,7 +17,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use tower::{BoxError, Layer, Service};
 use tracing::field::display;
-use tracing::{field, info_span, debug_span, Instrument};
+use tracing::{debug_span, field, info_span, Instrument};
 
 /// `ParseResponseService` dispatches [`Operation`](smithy_http::operation::Operation)s and parses them.
 ///
@@ -109,11 +109,11 @@ where
                 Err(e) => Err(e.into()),
                 Ok(resp) => {
                     // load_response contains reading the body as far as is required & parsing the response
-                    let response_span = debug_span!(
-                        "load_response",
-                    );
-                    load_response(resp, &handler).instrument(response_span).await
-                },
+                    let response_span = debug_span!("load_response",);
+                    load_response(resp, &handler)
+                        .instrument(response_span)
+                        .await
+                }
             };
             match &resp {
                 Ok(_) => inner_span.record("status", &"ok"),

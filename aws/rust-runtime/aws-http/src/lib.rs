@@ -1,4 +1,6 @@
 pub mod user_agent;
+
+use smithy_http::result::SdkError;
 use smithy_http::retry::ClassifyResponse;
 use smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
 use std::time::Duration;
@@ -11,6 +13,7 @@ use std::time::Duration;
 /// 3. The code is checked against a predetermined list of throttling errors & transient error codes
 /// 4. The status code is checked against a predetermined list of status codes
 #[non_exhaustive]
+#[derive(Clone)]
 pub struct AwsErrorRetryPolicy;
 
 const TRANSIENT_ERROR_STATUS_CODES: [u16; 2] = [400, 408];
@@ -45,11 +48,16 @@ impl Default for AwsErrorRetryPolicy {
     }
 }
 
-impl ClassifyResponse for AwsErrorRetryPolicy {
-    fn classify<E, B>(&self, err: E, response: &http::Response<B>) -> RetryKind
-        where
-            E: ProvideErrorKind,
-    {
+impl<T, E, B> ClassifyResponse<T, SdkError<E, B>> for AwsErrorRetryPolicy
+where
+    E: ProvideErrorKind,
+{
+    fn classify(&self, err: Result<&T, &SdkError<E, B>>) -> RetryKind {
+        let (err, response) = match err {
+            Ok(_) => return RetryKind::NotRetryable,
+            Err(SdkError::ServiceError { err, raw }) => (err, raw),
+            Err(_) => return RetryKind::NotRetryable,
+        };
         if let Some(retry_after_delay) = response
             .headers()
             .get("x-amz-retry-after")
@@ -69,9 +77,7 @@ impl ClassifyResponse for AwsErrorRetryPolicy {
                 return RetryKind::Error(ErrorKind::TransientError);
             }
         };
-        if TRANSIENT_ERROR_STATUS_CODES
-            .contains(&response.status().as_u16())
-        {
+        if TRANSIENT_ERROR_STATUS_CODES.contains(&response.status().as_u16()) {
             return RetryKind::Error(ErrorKind::TransientError);
         };
         // TODO: is IDPCommunicationError modeled yet?
@@ -82,6 +88,7 @@ impl ClassifyResponse for AwsErrorRetryPolicy {
 #[cfg(test)]
 mod test {
     use crate::AwsErrorRetryPolicy;
+    use smithy_http::result::{SdkError, SdkSuccess};
     use smithy_http::retry::ClassifyResponse;
     use smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
     use std::time::Duration;
@@ -112,12 +119,16 @@ mod test {
         }
     }
 
+    fn make_err<E, B>(err: E, raw: http::Response<B>) -> Result<SdkSuccess<(), B>, SdkError<E, B>> {
+        Err(SdkError::ServiceError { err, raw })
+    }
+
     #[test]
     fn not_an_error() {
         let policy = AwsErrorRetryPolicy::new();
         let test_response = http::Response::new("OK");
         assert_eq!(
-            policy.classify(UnmodeledError, &test_response),
+            policy.classify(make_err(UnmodeledError, test_response).as_ref()),
             RetryKind::NotRetryable
         );
     }
@@ -130,7 +141,7 @@ mod test {
             .body("error!")
             .unwrap();
         assert_eq!(
-            policy.classify(UnmodeledError, &test_resp),
+            policy.classify(make_err(UnmodeledError, test_resp).as_ref()),
             RetryKind::Error(ErrorKind::TransientError)
         );
     }
@@ -141,16 +152,20 @@ mod test {
         let policy = AwsErrorRetryPolicy::new();
 
         assert_eq!(
-            policy.classify(CodedError { code: "Throttling" }, &test_response),
+            policy.classify(make_err(CodedError { code: "Throttling" }, test_response).as_ref()),
             RetryKind::Error(ErrorKind::ThrottlingError)
         );
 
+        let test_response = http::Response::new("OK");
         assert_eq!(
             policy.classify(
-                CodedError {
-                    code: "RequestTimeout"
-                },
-                &test_response,
+                make_err(
+                    CodedError {
+                        code: "RequestTimeout"
+                    },
+                    test_response
+                )
+                .as_ref()
             ),
             RetryKind::Error(ErrorKind::TransientError)
         )
@@ -166,7 +181,7 @@ mod test {
         let test_response = http::Response::new("OK");
         let policy = AwsErrorRetryPolicy::new();
         assert_eq!(
-            policy.classify(err, &test_response),
+            policy.classify(make_err(err, test_response).as_ref()),
             RetryKind::Error(ErrorKind::ThrottlingError)
         );
     }
@@ -189,7 +204,7 @@ mod test {
         let policy = AwsErrorRetryPolicy::new();
 
         assert_eq!(
-            policy.classify(ModeledRetries, &test_response),
+            policy.classify(make_err(ModeledRetries, test_response).as_ref()),
             RetryKind::Error(ErrorKind::ClientError)
         );
     }
@@ -203,7 +218,7 @@ mod test {
             .unwrap();
 
         assert_eq!(
-            policy.classify(UnmodeledError, &test_response),
+            policy.classify(make_err(UnmodeledError, test_response).as_ref()),
             RetryKind::Explicit(Duration::from_millis(5000))
         );
     }

@@ -90,7 +90,7 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
 class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         return when (section) {
-            is OperationSection.Feature -> writable {
+            is OperationSection.MutateRequest -> writable {
                 rust(
                     """
                 #T(&mut ${section.request}.config_mut(), ${section.config}.credentials_provider.clone());

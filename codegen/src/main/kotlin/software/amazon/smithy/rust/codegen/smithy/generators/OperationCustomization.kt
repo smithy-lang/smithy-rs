@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
 
@@ -18,7 +19,11 @@ sealed class OperationSection(name: String) : Section(name) {
      * [config]: Name of the variable holding the service config.
      *
      * */
-    data class Feature(val request: String, val config: String) : OperationSection("Feature")
+    data class MutateRequest(val request: String, val config: String) : OperationSection("Feature")
+
+    data class FinalizeOperation(val operation: String, val config: String) : OperationSection("Finalize")
 }
 
-typealias OperationCustomization = NamedSectionGenerator<OperationSection>
+abstract class OperationCustomization : NamedSectionGenerator<OperationSection>() {
+    open fun retryType(): RuntimeType? = null
+}
