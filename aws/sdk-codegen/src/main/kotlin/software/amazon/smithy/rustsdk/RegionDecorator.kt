@@ -28,10 +28,10 @@ pub struct Config {
     pub region: Option<::aws_types::region::Region>,
 }
 #[derive(Default)]
-pub struct ConfigBuilder {
+pub struct Builder {
     region: Option<::aws_types::region::Region>,
 }
-impl ConfigBuilder {
+impl Builder {
     pub fn region(mut self, region_provider: impl ::aws_types::region::ProvideRegion) -> Self {
         self.region = region_provider.region();
         self

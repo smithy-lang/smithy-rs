@@ -47,16 +47,16 @@ pub struct Config {
     pub(crate) make_token: Box<dyn crate::idempotency_token::MakeIdempotencyToken>,
 }
 impl Config {
-    pub fn builder() -> ConfigBuilder {
-        ConfigBuilder::default()
+    pub fn builder() -> Builder {
+        Builder::default()
     }
 }
 #[derive(Default)]
-pub struct ConfigBuilder {
+pub struct Builder {
     #[allow(dead_code)]
     make_token: Option<Box<dyn crate::idempotency_token::MakeIdempotencyToken>>,
 }
-impl ConfigBuilder {
+impl Builder {
     pub fn new() -> Self {
         Self::default()
     }
