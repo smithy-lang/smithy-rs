@@ -47,8 +47,8 @@ impl Default for AwsErrorRetryPolicy {
 
 impl ClassifyResponse for AwsErrorRetryPolicy {
     fn classify<E, B>(&self, err: E, response: &http::Response<B>) -> RetryKind
-        where
-            E: ProvideErrorKind,
+    where
+        E: ProvideErrorKind,
     {
         if let Some(retry_after_delay) = response
             .headers()
@@ -69,9 +69,7 @@ impl ClassifyResponse for AwsErrorRetryPolicy {
                 return RetryKind::Error(ErrorKind::TransientError);
             }
         };
-        if TRANSIENT_ERROR_STATUS_CODES
-            .contains(&response.status().as_u16())
-        {
+        if TRANSIENT_ERROR_STATUS_CODES.contains(&response.status().as_u16()) {
             return RetryKind::Error(ErrorKind::TransientError);
         };
         // TODO: is IDPCommunicationError modeled yet?

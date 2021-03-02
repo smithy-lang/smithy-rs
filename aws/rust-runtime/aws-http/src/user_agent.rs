@@ -198,7 +198,8 @@ struct LanguageMetadata {
 }
 impl Display for LanguageMetadata {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}/{}", self.lang, self.version)?;
+        // language-metadata    = "lang/" language "/" version *(RWS additional-metadata)
+        write!(f, "lang/{}/{}", self.lang, self.version)?;
         for extra in &self.extras {
             write!(f, " md/{}/{}", &extra.key, &extra.value)?;
         }
@@ -281,9 +282,12 @@ mod test {
         ua.os_metadata.version = Some("1.15".to_string());
         assert_eq!(
             ua.aws_ua_header(),
-            "aws-sdk-rust/0.1 api/dynamodb/123 os/macos/1.15 rust/1.50.0"
+            "aws-sdk-rust/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0"
         );
-        assert_eq!(ua.ua_header(), "aws-sdk-rust/0.1 os/macos/1.15 rust/1.50.0");
+        assert_eq!(
+            ua.ua_header(),
+            "aws-sdk-rust/0.1 os/macos/1.15 lang/rust/1.50.0"
+        );
     }
 
     #[test]
