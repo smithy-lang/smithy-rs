@@ -123,7 +123,7 @@ where
             .layer(user_agent)
             .layer(DispatchLayer::new())
             .service(inner);
-        svc.ready_and().await?.call(input).await
+        svc.ready().await?.call(input).await
     }
 }
 

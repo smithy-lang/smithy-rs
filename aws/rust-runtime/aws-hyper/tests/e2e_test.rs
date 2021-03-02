@@ -94,8 +94,8 @@ fn test_operation() -> Operation<TestOperationParser, AwsErrorRetryPolicy> {
 #[tokio::test]
 async fn e2e_test() {
     let expected_req = http::Request::builder()
-        .header(USER_AGENT, "aws-sdk-rust/0.123.test os/windows/XPSP3 rust/1.50.0")
-        .header("x-amz-user-agent", "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 rust/1.50.0")
+        .header(USER_AGENT, "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0")
+        .header("x-amz-user-agent", "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0")
         .header(HOST, "test-service.test-region.amazonaws.com")
         .header(AUTHORIZATION, "AWS4-HMAC-SHA256 Credential=access_key/20210215/test-region/test-service/aws4_request, SignedHeaders=host, Signature=b4bccc6f03b22e88b9e52a60314d4629c5d159a7cc2de25b1d687b3e5e480d2c")
         .header("x-amz-date", "20210215T184017Z")
