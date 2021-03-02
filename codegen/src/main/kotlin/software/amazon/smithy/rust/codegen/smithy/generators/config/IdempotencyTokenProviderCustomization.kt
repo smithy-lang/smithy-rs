@@ -12,23 +12,23 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 
 /**
- * Add a `token_provider` field to Service config. See below for the resulting generated code.
+ * Add a `make_token` field to Service config. See below for the resulting generated code.
  */
 class IdempotencyTokenProviderCustomization : NamedSectionGenerator<ServiceConfig>() {
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             is ServiceConfig.ConfigStruct -> writable {
-                rust("pub (crate) token_provider: Box<dyn #T::ProvideIdempotencyToken>,", RuntimeType.IdempotencyToken)
+                rust("pub (crate) make_token: Box<dyn #T::MakeIdempotencyToken>,", RuntimeType.IdempotencyToken)
             }
             ServiceConfig.ConfigImpl -> emptySection
             ServiceConfig.BuilderStruct -> writable {
-                rust("token_provider: Option<Box<dyn #T::ProvideIdempotencyToken>>,", RuntimeType.IdempotencyToken)
+                rust("make_token: Option<Box<dyn #T::MakeIdempotencyToken>>,", RuntimeType.IdempotencyToken)
             }
             ServiceConfig.BuilderImpl -> writable {
                 rust(
                     """
-            pub fn token_provider(mut self, token_provider: impl #T::ProvideIdempotencyToken + 'static) -> Self {
-                self.token_provider = Some(Box::new(token_provider));
+            pub fn make_token(mut self, make_token: impl #T::MakeIdempotencyToken + 'static) -> Self {
+                self.make_token = Some(Box::new(make_token));
                 self
             }
             """,
@@ -36,7 +36,7 @@ class IdempotencyTokenProviderCustomization : NamedSectionGenerator<ServiceConfi
                 )
             }
             ServiceConfig.BuilderBuild -> writable {
-                rust("token_provider: self.token_provider.unwrap_or_else(|| Box::new(#T::default_provider())),", RuntimeType.IdempotencyToken)
+                rust("make_token: self.make_token.unwrap_or_else(|| Box::new(#T::default_provider())),", RuntimeType.IdempotencyToken)
             }
         }
     }
@@ -44,7 +44,7 @@ class IdempotencyTokenProviderCustomization : NamedSectionGenerator<ServiceConfi
 
 /* Generated Code
 pub struct Config {
-    pub(crate) token_provider: Box<dyn crate::idempotency_token::ProvideIdempotencyToken>,
+    pub(crate) make_token: Box<dyn crate::idempotency_token::MakeIdempotencyToken>,
 }
 impl Config {
     pub fn builder() -> ConfigBuilder {
@@ -54,25 +54,25 @@ impl Config {
 #[derive(Default)]
 pub struct ConfigBuilder {
     #[allow(dead_code)]
-    token_provider: Option<Box<dyn crate::idempotency_token::ProvideIdempotencyToken>>,
+    make_token: Option<Box<dyn crate::idempotency_token::MakeIdempotencyToken>>,
 }
 impl ConfigBuilder {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn token_provider(
+    pub fn make_token(
         mut self,
-        token_provider: impl crate::idempotency_token::ProvideIdempotencyToken + 'static,
+        make_token: impl crate::idempotency_token::MakeIdempotencyToken + 'static,
     ) -> Self {
-        self.token_provider = Some(Box::new(token_provider));
+        self.make_token = Some(Box::new(make_token));
         self
     }
 
     pub fn build(self) -> Config {
         Config {
-            token_provider: self
-            .token_provider
+            make_token: self
+            .make_token
             .unwrap_or_else(|| Box::new(crate::idempotency_token::default_provider())),
         }
     }
