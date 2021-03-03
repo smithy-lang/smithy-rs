@@ -24,7 +24,7 @@ dependencies {
 
 data class CodegenTest(val service: String, val module: String, val extraConfig: String? = null)
 
-val CodgenTests = listOf(
+val CodegenTests = listOf(
     CodegenTest("com.amazonaws.dynamodb#DynamoDB_20120810", "dynamo"),
     CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
     CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
@@ -77,7 +77,7 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
     doFirst {
-        projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(CodgenTests))
+        projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(CodegenTests))
     }
 }
 
@@ -93,7 +93,7 @@ fun generateCargoWorkspace(tests: List<CodegenTest>): String {
 task("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
-        buildDir.resolve("smithyprojections/codegen-test/Cargo.toml").writeText(generateCargoWorkspace(CodgenTests))
+        buildDir.resolve("smithyprojections/codegen-test/Cargo.toml").writeText(generateCargoWorkspace(CodegenTests))
     }
 }
 
