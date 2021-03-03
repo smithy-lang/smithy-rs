@@ -30,7 +30,7 @@ pub enum ProtocolTestFailure {
     MissingHeader { expected: String },
     #[error("Header `{forbidden}` was forbidden but found: `{found}`")]
     ForbiddenHeader { forbidden: String, found: String },
-    #[error("body did not match. Hint:\n{hint}")]
+    #[error("body did not match. Hint:\n{hint}. Expected:\n `{expected}`\n Actual: \n`{found}")]
     BodyDidNotMatch {
         expected: String,
         found: String,
