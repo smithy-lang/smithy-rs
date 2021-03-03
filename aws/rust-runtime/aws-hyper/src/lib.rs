@@ -24,7 +24,7 @@ use tower::{Service, ServiceBuilder, ServiceExt};
 use crate::conn::Standard;
 
 type BoxError = Box<dyn Error + Send + Sync>;
-type StandardClient = Client<conn::Standard>;
+pub type StandardClient = Client<conn::Standard>;
 
 pub type SdkError<E> = smithy_http::result::SdkError<E, hyper::Body>;
 pub type SdkSuccess<T> = smithy_http::result::SdkSuccess<T, hyper::Body>;
