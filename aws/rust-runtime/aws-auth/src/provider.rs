@@ -42,7 +42,7 @@ fn var(key: &str) -> Result<String, VarError> {
 const ENV_PROVIDER: &str = "EnvironmentVariable";
 
 impl ProvideCredentials for EnvironmentVariableCredentialsProvider {
-    fn credentials(&self) -> Result<Credentials, CredentialsError> {
+    fn provide_credentials(&self) -> Result<Credentials, CredentialsError> {
         let access_key = (self.env)("AWS_ACCESS_KEY_ID").map_err(to_cred_error)?;
         let secret_key = (self.env)("AWS_SECRET_ACCESS_KEY")
             .or_else(|_| (self.env)("SECRET_ACCESS_KEY"))
@@ -78,7 +78,7 @@ mod test {
         env.insert("AWS_SECRET_ACCESS_KEY".to_owned(), "secret".to_owned());
 
         let provider = EnvironmentVariableCredentialsProvider::for_map(env);
-        let creds = provider.credentials().expect("valid credentials");
+        let creds = provider.provide_credentials().expect("valid credentials");
         assert_eq!(creds.session_token, None);
         assert_eq!(creds.access_key_id, "access");
         assert_eq!(creds.secret_access_key, "secret");
@@ -92,7 +92,7 @@ mod test {
         env.insert("AWS_SESSION_TOKEN".to_owned(), "token".to_owned());
 
         let provider = EnvironmentVariableCredentialsProvider::for_map(env);
-        let creds = provider.credentials().expect("valid credentials");
+        let creds = provider.provide_credentials().expect("valid credentials");
         assert_eq!(creds.session_token.unwrap(), "token");
         assert_eq!(creds.access_key_id, "access");
         assert_eq!(creds.secret_access_key, "secret");
@@ -106,7 +106,7 @@ mod test {
         env.insert("AWS_SESSION_TOKEN".to_owned(), "token".to_owned());
 
         let provider = EnvironmentVariableCredentialsProvider::for_map(env);
-        let creds = provider.credentials().expect("valid credentials");
+        let creds = provider.provide_credentials().expect("valid credentials");
         assert_eq!(creds.session_token.unwrap(), "token");
         assert_eq!(creds.access_key_id, "access");
         assert_eq!(creds.secret_access_key, "secret");
@@ -116,7 +116,7 @@ mod test {
     fn missing() {
         let env = HashMap::new();
         let provider = EnvironmentVariableCredentialsProvider::for_map(env);
-        let err = provider.credentials().expect_err("no credentials defined");
+        let err = provider.provide_credentials().expect_err("no credentials defined");
         match err {
             CredentialsError::Unhandled(_) => panic!("wrong error type"),
             _ => (),
@@ -127,6 +127,6 @@ mod test {
     fn real_environment() {
         let provider = EnvironmentVariableCredentialsProvider::new();
         // we don't know what's in the env, just make sure it doesn't crash.
-        let _ = provider.credentials();
+        let _ = provider.provide_credentials();
     }
 }

@@ -181,7 +181,7 @@ class BasicAwsJsonGenerator(
     override fun toBodyImpl(implBlockWriter: RustWriter, inputShape: StructureShape, inputBody: StructureShape?) {
         if (inputBody == null) {
             bodyBuilderFun(implBlockWriter) {
-                write("vec![]")
+                write("\"{}\".to_string().into()")
             }
             return
         }
