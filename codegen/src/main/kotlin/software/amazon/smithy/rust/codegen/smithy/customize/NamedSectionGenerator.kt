@@ -33,7 +33,7 @@ abstract class Section(val name: String)
  * ```rust
  * struct Config {
  *    /* section:ConfigStruct */
- *    token_provider: TokenProvider
+ *    make_token: TokenProvider
  *    /* endsection:ConfigStruct */
  * }
  * ```

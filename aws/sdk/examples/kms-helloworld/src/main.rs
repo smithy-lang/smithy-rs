@@ -8,7 +8,7 @@ async fn main() {
     SubscriberBuilder::default().with_env_filter("info").with_span_events(FmtSpan::CLOSE).init();
     let config = kms::Config::builder()
         // region can also be loaded from AWS_DEFAULT_REGION, just remove this line.
-        .region(Region::from("us-east-1"))
+        .region(Region::new("us-east-1"))
         // creds loaded from environment variables, or they can be hard coded.
         // Other credential providers not currently supported
         .build();

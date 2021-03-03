@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use std::sync::Arc;
+use std::borrow::Cow;
 
 /// The region to send requests to.
 ///
@@ -14,23 +14,21 @@ use std::sync::Arc;
 /// See http://docs.aws.amazon.com/general/latest/gr/rande.html for
 /// information on AWS regions.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Region(Arc<String>);
+pub struct Region(
+    // Regions are almost always known statically. However, as an escape hatch for when they
+    // are not, allow for an owned region
+    Cow<'static, str>
+);
 
 impl AsRef<str> for Region {
     fn as_ref(&self) -> &str {
-        self.0.as_str()
+        &self.0
     }
 }
 
 impl Region {
-    pub fn new(region: impl Into<String>) -> Self {
-        Self(Arc::new(region.into()))
-    }
-}
-
-impl From<&str> for Region {
-    fn from(region: &str) -> Self {
-        Region(Arc::new(region.to_string()))
+    pub fn new(region: impl Into<Cow<'static, str>>) -> Self {
+        Self(region.into())
     }
 }
 
@@ -72,11 +70,11 @@ impl ProvideRegion for EnvironmentProvider {
 ///
 /// Generally, user code will not need to interact with `SigningRegion`. See `[Region](crate::Region)`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SigningRegion(Arc<String>);
+pub struct SigningRegion(Cow<'static, str>);
 
 impl AsRef<str> for SigningRegion {
     fn as_ref(&self) -> &str {
-        self.0.as_str()
+        &self.0
     }
 }
 

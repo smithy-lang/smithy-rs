@@ -112,7 +112,6 @@ impl RetryHandlerFactory {
     }
 }
 
-
 #[derive(Default, Clone)]
 struct RequestLocalRetryState {
     attempts: u32,
@@ -143,8 +142,7 @@ struct CrossRequestRetryState {
 impl CrossRequestRetryState {
     pub fn new(initial_quota: usize) -> Self {
         Self {
-            quota_available:
-            Arc::new(Mutex::new(initial_quota)),
+            quota_available: Arc::new(Mutex::new(initial_quota)),
         }
     }
 
@@ -271,9 +269,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::retry::{
-        RetryConfig, RetryHandlerFactory,
-    };
+    use crate::retry::{RetryConfig, RetryHandlerFactory};
     use smithy_types::retry::ErrorKind;
     use std::time::Duration;
 
