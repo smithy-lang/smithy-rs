@@ -10,6 +10,7 @@ import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.protocoltests.traits.AppliesTo
 import software.amazon.smithy.protocoltests.traits.HttpMessageTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
@@ -66,9 +67,9 @@ class HttpProtocolTestGenerator(
 
     fun render() {
         val requestTests = operationShape.getTrait(HttpRequestTestsTrait::class.java)
-            .orNull()?.testCases.orEmpty().map { TestCase.RequestTest(it) }
+            .orNull()?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.RequestTest(it) }
         val responseTests = operationShape.getTrait(HttpResponseTestsTrait::class.java)
-            .orNull()?.testCases.orEmpty().map { TestCase.ResponseTest(it, outputShape) }
+            .orNull()?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.ResponseTest(it, outputShape) }
 
         val errorTests = operationIndex.getErrors(operationShape).flatMap { error ->
             val testCases = error.getTrait(HttpResponseTestsTrait::class.java).orNull()?.testCases.orEmpty()
@@ -159,6 +160,9 @@ class HttpProtocolTestGenerator(
                     assert_eq!(http_request.uri().path(), ${uri.dq()});
                 """
             )
+            resolvedHost.orNull()?.also { host ->
+                rust("""assert_eq!(http_request.uri().host().expect("host should be set"), ${host.dq()});""")
+            }
         }
         checkQueryParams(this, httpRequestTestCase.queryParams)
         checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
@@ -167,7 +171,10 @@ class HttpProtocolTestGenerator(
         checkForbidHeaders(this, httpRequestTestCase.forbidHeaders)
         checkRequiredHeaders(this, httpRequestTestCase.requireHeaders)
         if (protocolSupport.requestBodySerialization) {
-            checkBody(this, httpRequestTestCase.body.orElse(""), httpRequestTestCase.bodyMediaType.orElse(null))
+            // "If no request body is defined, then no assertions are made about the body of the message."
+            httpRequestTestCase.body.orNull()?.let { body ->
+                checkBody(this, body, httpRequestTestCase.bodyMediaType.orNull())
+            }
         }
 
         // Explicitly warn if the test case defined parameters that we aren't doing anything with
@@ -362,7 +369,17 @@ class HttpProtocolTestGenerator(
             ),
 
             // Document deserialization:
-            FailingTest(AwsJson11, "PutAndGetInlineDocumentsInput", Action.Response)
+            FailingTest(AwsJson11, "PutAndGetInlineDocumentsInput", Action.Response),
+
+            // Endpoint trait https://github.com/awslabs/smithy-rs/issues/197
+            // This will also require running operations through the endpoint middleware (or moving endpoint middleware
+            // into operation construction
+            FailingTest(JsonRpc10, "AwsJson10EndpointTrait", Action.Request),
+            FailingTest(JsonRpc10, "AwsJson10EndpointTraitWithHostLabel", Action.Request),
+            FailingTest(AwsJson11, "AwsJson11EndpointTrait", Action.Request),
+            FailingTest(AwsJson11, "AwsJson11EndpointTraitWithHostLabel", Action.Request),
+            FailingTest(RestJson, "RestJsonEndpointTrait", Action.Request),
+            FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request)
         )
         private val RunOnly: Set<String>? = null
 
