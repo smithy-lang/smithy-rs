@@ -1,5 +1,7 @@
 mod retry;
 pub mod test_connection;
+pub mod conn;
+
 pub use retry::RetryConfig;
 
 use crate::retry::RetryHandlerFactory;
@@ -7,7 +9,6 @@ use aws_endpoint::AwsEndpointStage;
 use aws_http::user_agent::UserAgentStage;
 use aws_sig_auth::middleware::SigV4SigningStage;
 use aws_sig_auth::signer::SigV4Signer;
-use hyper::client::HttpConnector;
 use hyper::Client as HyperClient;
 use hyper_tls::HttpsConnector;
 use smithy_http::body::SdkBody;
@@ -20,8 +21,10 @@ use smithy_http_tower::parse_response::ParseResponseLayer;
 use smithy_types::retry::ProvideErrorKind;
 use std::error::Error;
 use tower::{Service, ServiceBuilder, ServiceExt};
+use crate::conn::Standard;
 
 type BoxError = Box<dyn Error + Send + Sync>;
+type StandardClient = Client<conn::Standard>;
 
 pub type SdkError<E> = smithy_http::result::SdkError<E, hyper::Body>;
 pub type SdkSuccess<T> = smithy_http::result::SdkSuccess<T, hyper::Body>;
@@ -62,13 +65,13 @@ impl<S> Client<S> {
     }
 }
 
-impl Client<hyper::Client<HttpsConnector<HttpConnector>, SdkBody>> {
+impl Client<Standard> {
     /// Construct an `https` based client
-    pub fn https() -> Self {
+    pub fn https() -> StandardClient {
         let https = HttpsConnector::new();
         let client = HyperClient::builder().build::<_, SdkBody>(https);
         Client {
-            inner: client,
+            inner: Standard::Https(client),
             retry_strategy: RetryHandlerFactory::new(RetryConfig::default()),
         }
     }
