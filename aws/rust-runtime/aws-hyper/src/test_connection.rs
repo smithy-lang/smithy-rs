@@ -50,7 +50,7 @@ impl<B> Clone for TestConnection<B> {
     fn clone(&self) -> Self {
         TestConnection {
             data: self.data.clone(),
-            requests: self.requests.clone()
+            requests: self.requests.clone(),
         }
     }
 }

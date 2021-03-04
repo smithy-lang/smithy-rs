@@ -1,9 +1,10 @@
+pub mod conn;
 mod retry;
 pub mod test_connection;
-pub mod conn;
 
 pub use retry::RetryConfig;
 
+use crate::conn::Standard;
 use crate::retry::RetryHandlerFactory;
 use aws_endpoint::AwsEndpointStage;
 use aws_http::user_agent::UserAgentStage;
@@ -20,8 +21,9 @@ use smithy_http_tower::map_request::MapRequestLayer;
 use smithy_http_tower::parse_response::ParseResponseLayer;
 use smithy_types::retry::ProvideErrorKind;
 use std::error::Error;
+use std::fmt;
+use std::fmt::{Debug, Formatter};
 use tower::{Service, ServiceBuilder, ServiceExt};
-use crate::conn::Standard;
 
 type BoxError = Box<dyn Error + Send + Sync>;
 pub type StandardClient = Client<conn::Standard>;
@@ -44,10 +46,17 @@ pub type SdkSuccess<T> = smithy_http::result::SdkSuccess<T, hyper::Body>;
 ///    S::Error: Into<BoxError> + Send + Sync + 'static,
 ///    S::Future: Send + 'static,
 /// ```
-
 pub struct Client<S> {
     inner: S,
-    retry_strategy: RetryHandlerFactory,
+    retry_handler: RetryHandlerFactory,
+}
+
+impl<S> Debug for Client<S> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut formatter = f.debug_struct("Client");
+        formatter.field("retry_handler", &self.retry_handler);
+        formatter.finish()
+    }
 }
 
 impl<S> Client<S> {
@@ -55,12 +64,12 @@ impl<S> Client<S> {
     pub fn new(connector: S) -> Self {
         Client {
             inner: connector,
-            retry_strategy: RetryHandlerFactory::new(RetryConfig::default()),
+            retry_handler: RetryHandlerFactory::new(RetryConfig::default()),
         }
     }
 
     pub fn with_retry_config(mut self, retry_config: RetryConfig) -> Self {
-        self.retry_strategy.with_config(retry_config);
+        self.retry_handler.with_config(retry_config);
         self
     }
 }
@@ -72,7 +81,7 @@ impl Client<Standard> {
         let client = HyperClient::builder().build::<_, SdkBody>(https);
         Client {
             inner: Standard::Https(client),
-            retry_strategy: RetryHandlerFactory::new(RetryConfig::default()),
+            retry_handler: RetryHandlerFactory::new(RetryConfig::default()),
         }
     }
 }
@@ -118,7 +127,7 @@ where
         let inner = self.inner.clone();
         let mut svc = ServiceBuilder::new()
             // Create a new request-scoped policy
-            .retry(self.retry_strategy.new_handler())
+            .retry(self.retry_handler.new_handler())
             .layer(ParseResponseLayer::<O, Retry>::new())
             .layer(endpoint_resolver)
             .layer(signer)
@@ -137,5 +146,13 @@ mod tests {
     #[test]
     fn construct_default_client() {
         let _ = Client::https();
+    }
+
+    #[test]
+    fn client_debug_includes_retry_info() {
+        let client = Client::https();
+        let s = format!("{:?}", client);
+        assert!(s.contains("RetryConfig"));
+        assert!(s.contains("quota_available"));
     }
 }
