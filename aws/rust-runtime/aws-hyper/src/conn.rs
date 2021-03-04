@@ -110,10 +110,6 @@ where
     }
 }
 
-pub trait HttpServiceClone {
-    fn clone_box(&self) -> Box<dyn HttpService>;
-}
-
 impl tower::Service<http::Request<SdkBody>> for Standard {
     type Response = http::Response<hyper::Body>;
     type Error = BoxError;
@@ -136,6 +132,7 @@ impl tower::Service<http::Request<SdkBody>> for Standard {
     }
 }
 
+/// Future returned by `Standard` when used as a tower::Service
 #[pin_project::pin_project(project = FutProj)]
 pub enum StandardFuture {
     Https(#[pin] ResponseFuture),
