@@ -17,6 +17,9 @@ use std::time::{Duration, UNIX_EPOCH};
 // like https://github.com/davidbarsky/sigv4/blob/master/aws-sigv4/src/lib.rs#L283-L315 to store
 // the requests/responses externally
 
+// NOTE: The credentials in this file are real, but they are expiring STS credentials with a minimum (15 minute) expiry
+// and have long-since expired.
+
 #[tokio::test]
 async fn generate_random() {
     let creds = Credentials::from_keys("ASIAR6OFQKMAEQYT56O5", "HmWca4XpftIbSxvSrnrELgWzOk3IfjzDKtFBhDby", Some("IQoJb3JpZ2luX2VjENb//////////wEaCXVzLWVhc3QtMSJHMEUCIQDmkZeDxs+Yaad2Azm1ju0CpuIIuV1sh3SWJlwjCMZndAIgLgqKhABROA25aC1SSxkLU2WYZr9x1p+NP2lGuXC1sCwqmQII7///////////ARAAGgwxMzQwOTUwNjU4NTYiDLPObEvLEoyOGG0FNirtAY1yN/hBDvwspxamWo4RROGczfXEgqPOih6h2S9mKhjS5KzYriAxXlwqLGOcgmJmraPhV5PAWmkRvZx+mVPzgy8j/F19ys9HgIG6oMfRYBXG78/19aCdHfgJa6bwjWDRnsXxhOq3wdFDzoWX8sLjsMsbyKkbXmMKSg5OLhuAogBxAEE9ifErTqi8qNozuSZmGe45yySyJqUhIHkkwysocq5lc/BkJZWB8g0cLLkcBhoTjGWgp2MENqbVkK4ca8yuM2TWa9HquN15gYaALy+tp3OqPNc6a6DQdYbiIAIFxwtUkVz6MDSv0TxzDB0LyjDa7YiCBjqdAbDuwjL16uKCsF5U+dno+swkV9BpmVrUOmq7iPo4jGE0wL8vIRJgUkyZ4nb+mkJwM/KqmYBwFkcBqQmERKunL7Pjh3l6Jm4edoW+PIg3IJ2juEPUZ+LJXQr+e7DaiV7U54gBYH663ZcSvZ/LNo3VDRDaKndQbXgCgozG/T7Va3QXzRouWQuscO+WqXnO32OObvqJCtEhgoSgynK4I3o=".to_string()));
