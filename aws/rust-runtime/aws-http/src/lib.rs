@@ -16,7 +16,7 @@ use std::time::Duration;
 #[derive(Clone)]
 pub struct AwsErrorRetryPolicy;
 
-const TRANSIENT_ERROR_STATUS_CODES: [u16; 4] = [500, 502, 503, 504];
+const TRANSIENT_ERROR_STATUS_CODES: &[u16] = &[500, 502, 503, 504];
 const THROTTLING_ERRORS: &[&str] = &[
     "Throttling",
     "ThrottlingException",
@@ -137,12 +137,25 @@ mod test {
     fn classify_by_response_status() {
         let policy = AwsErrorRetryPolicy::new();
         let test_resp = http::Response::builder()
-            .status(408)
+            .status(500)
             .body("error!")
             .unwrap();
         assert_eq!(
             policy.classify(make_err(UnmodeledError, test_resp).as_ref()),
             RetryKind::Error(ErrorKind::TransientError)
+        );
+    }
+
+    #[test]
+    fn classify_by_response_status_not_retryable() {
+        let policy = AwsErrorRetryPolicy::new();
+        let test_resp = http::Response::builder()
+            .status(408)
+            .body("error!")
+            .unwrap();
+        assert_eq!(
+            policy.classify(make_err(UnmodeledError, test_resp).as_ref()),
+            RetryKind::NotRetryable
         );
     }
 
