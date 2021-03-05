@@ -27,7 +27,7 @@ impl ValidateRequest {
                 let actual_header = actual
                     .headers()
                     .get(name)
-                    .expect(&format!("Header {:?} missing", name));
+                    .unwrap_or_else(||panic!("Header {:?} missing", name));
                 assert_eq!(actual_header, value, "Header mismatch for {:?}", name);
             }
         }
