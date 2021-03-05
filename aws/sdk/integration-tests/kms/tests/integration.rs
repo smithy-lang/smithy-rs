@@ -17,9 +17,6 @@ use std::time::{Duration, UNIX_EPOCH};
 // like https://github.com/davidbarsky/sigv4/blob/master/aws-sigv4/src/lib.rs#L283-L315 to store
 // the requests/responses externally
 
-// NOTE: The credentials in this file are real, but they are expiring STS credentials with a minimum (15 minute) expiry
-// and have long-since expired.
-
 #[tokio::test]
 async fn generate_random() {
     let creds = Credentials::from_keys("ANOTREAL", "notrealrnrELgWzOk3IfjzDKtFBhDby", Some("notarealsessiontoken".to_string()));
