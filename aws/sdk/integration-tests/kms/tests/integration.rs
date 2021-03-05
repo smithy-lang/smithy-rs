@@ -13,6 +13,9 @@ use kms::{Config, Region};
 use smithy_http::body::SdkBody;
 use std::time::{Duration, UNIX_EPOCH};
 
+// TODO: having the full HTTP requests right in the code is a bit gross, consider something
+// like https://github.com/davidbarsky/sigv4/blob/master/aws-sigv4/src/lib.rs#L283-L315 to store
+// the requests/responses externally
 
 #[tokio::test]
 async fn generate_random() {
