@@ -7,7 +7,7 @@ use aws_auth::Credentials;
 use aws_endpoint::{set_endpoint_resolver, DefaultAwsEndpointResolver};
 use aws_http::user_agent::AwsUserAgent;
 use aws_http::AwsErrorRetryPolicy;
-use aws_hyper::test_connection::{TestConnection};
+use aws_hyper::test_connection::TestConnection;
 use aws_hyper::{Client, RetryConfig, SdkError};
 use aws_sig_auth::signer::OperationSigningConfig;
 use aws_types::region::Region;

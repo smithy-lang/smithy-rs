@@ -260,7 +260,8 @@ where
         let fut = async move {
             tokio::time::sleep(dur).await;
             next
-        }.instrument(tracing::info_span!("retry", kind = &debug(retry)));
+        }
+        .instrument(tracing::info_span!("retry", kind = &debug(retry)));
         Some(Box::pin(fut))
     }
 

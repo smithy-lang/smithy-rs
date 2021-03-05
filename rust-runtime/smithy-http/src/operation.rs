@@ -2,8 +2,8 @@ use crate::body::SdkBody;
 use crate::property_bag::PropertyBag;
 use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
-use std::rc::Rc;
 use std::ops::DerefMut;
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct Metadata {
@@ -52,7 +52,7 @@ impl<H, R> Operation<H, R> {
         Self { request, parts }
     }
 
-    pub fn config_mut(&mut self) -> impl DerefMut<Target=PropertyBag> + '_ {
+    pub fn config_mut(&mut self) -> impl DerefMut<Target = PropertyBag> + '_ {
         self.request.config_mut()
     }
 
@@ -77,9 +77,9 @@ impl<H, R> Operation<H, R> {
     }
 
     pub fn try_clone(&self) -> Option<Self>
-        where
-            H: Clone,
-            R: Clone,
+    where
+        H: Clone,
+        R: Clone,
     {
         let request = self.request.try_clone()?;
         Some(Self {
