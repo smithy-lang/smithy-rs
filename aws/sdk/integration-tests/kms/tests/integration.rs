@@ -19,21 +19,28 @@ use std::time::{Duration, UNIX_EPOCH};
 
 #[tokio::test]
 async fn generate_random() {
-    let creds = Credentials::from_keys("ANOTREAL", "notrealrnrELgWzOk3IfjzDKtFBhDby", Some("notarealsessiontoken".to_string()));
-    let conn = TestConnection::new(vec![(http::Request::builder()
-                                             .header("content-type", "application/x-amz-json-1.1")
-                                             .header("x-amz-target", "TrentService.GenerateRandom")
-                                             .header("content-length", "20")
-                                             .header("host", "kms.us-east-1.amazonaws.com")
-                                             .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210305/us-east-1/kms/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-target, Signature=750c6333c96dcbe4c4c11a9af8483ff68ac40e0e8ba8244772d981aab3cda703")
-                                             .header("x-amz-date", "20210305T134922Z")
-                                             .header("x-amz-security-token", "notarealsessiontoken")
-                                             .header("user-agent", "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0")
-                                             .header("x-amz-user-agent", "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0")
-                                             .uri(Uri::from_static("https://kms.us-east-1.amazonaws.com/"))
-                                             .body(SdkBody::from(r#"{"NumberOfBytes":64}"#)).unwrap(), http::Response::builder()
-                                             .status(http::StatusCode::from_u16(200).unwrap())
-                                             .body(r#"{"Plaintext":"6CG0fbzzhg5G2VcFCPmJMJ8Njv3voYCgrGlp3+BZe7eDweCXgiyDH9BnkKvLmS7gQhnYDUlyES3fZVGwv5+CxA=="}"#).unwrap())]);
+    let creds = Credentials::from_keys(
+        "ANOTREAL",
+        "notrealrnrELgWzOk3IfjzDKtFBhDby",
+        Some("notarealsessiontoken".to_string()),
+    );
+    let conn = TestConnection::new(vec![(
+        http::Request::builder()
+            .header("content-type", "application/x-amz-json-1.1")
+            .header("x-amz-target", "TrentService.GenerateRandom")
+            .header("content-length", "20")
+            .header("host", "kms.us-east-1.amazonaws.com")
+            .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210305/us-east-1/kms/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-target, Signature=750c6333c96dcbe4c4c11a9af8483ff68ac40e0e8ba8244772d981aab3cda703")
+            .header("x-amz-date", "20210305T134922Z")
+            .header("x-amz-security-token", "notarealsessiontoken")
+            .header("user-agent", "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0")
+            .header("x-amz-user-agent", "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0")
+            .uri(Uri::from_static("https://kms.us-east-1.amazonaws.com/"))
+            .body(SdkBody::from(r#"{"NumberOfBytes":64}"#)).unwrap(),
+        http::Response::builder()
+            .status(http::StatusCode::from_u16(200).unwrap())
+            .body(r#"{"Plaintext":"6CG0fbzzhg5G2VcFCPmJMJ8Njv3voYCgrGlp3+BZe7eDweCXgiyDH9BnkKvLmS7gQhnYDUlyES3fZVGwv5+CxA=="}"#).unwrap())
+    ]);
     let client = Client::new(conn.clone());
     let conf = Config::builder()
         .region(Region::new("us-east-1"))
@@ -62,12 +69,18 @@ async fn generate_random() {
 
 #[tokio::test]
 async fn generate_random_malformed_response() {
-    let creds = Credentials::from_keys("ANOTREAL", "notrealrnrELgWzOk3IfjzDKtFBhDby", Some("notarealsessiontoken".to_string()));
-    let conn = TestConnection::new(vec![(http::Request::builder()
-                                             .body(SdkBody::from(r#"{"NumberOfBytes":64}"#)).unwrap(), http::Response::builder()
-                                             .status(http::StatusCode::from_u16(200).unwrap())
-                                             // last `}` replaced with a space
-                                             .body(r#"{"Plaintext":"6CG0fbzzhg5G2VcFCPmJMJ8Njv3voYCgrGlp3+BZe7eDweCXgiyDH9BnkKvLmS7gQhnYDUlyES3fZVGwv5+CxA==" "#).unwrap())]);
+    let creds = Credentials::from_keys(
+        "ANOTREAL",
+        "notrealrnrELgWzOk3IfjzDKtFBhDby",
+        Some("notarealsessiontoken".to_string()),
+    );
+    let conn = TestConnection::new(vec![(
+        http::Request::builder().body(SdkBody::from(r#"{"NumberOfBytes":64}"#)).unwrap(),
+        http::Response::builder()
+            .status(http::StatusCode::from_u16(200).unwrap())
+            // last `}` replaced with a space, invalid JSON
+            .body(r#"{"Plaintext":"6CG0fbzzhg5G2VcFCPmJMJ8Njv3voYCgrGlp3+BZe7eDweCXgiyDH9BnkKvLmS7gQhnYDUlyES3fZVGwv5+CxA==" "#).unwrap())
+    ]);
     let client = Client::new(conn.clone());
     let conf = Config::builder()
         .region(Region::new("us-east-1"))
@@ -78,34 +91,40 @@ async fn generate_random_malformed_response() {
 }
 
 #[tokio::test]
-async fn generate_random_modeled_error() {
-    let creds = Credentials::from_keys("ANOTREAL", "notrealrnrELgWzOk3IfjzDKtFBhDby", Some("notarealsessiontoken".to_string()));
+async fn generate_random_keystore_not_found() {
+    let creds = Credentials::from_keys(
+        "ANOTREAL",
+        "notrealrnrELgWzOk3IfjzDKtFBhDby",
+        Some("notarealsessiontoken".to_string()),
+    );
     let conf = Config::builder()
         .region(Region::new("us-east-1"))
         .credentials_provider(creds)
         .build();
-    let conn = TestConnection::new(vec![(http::Request::builder()
-                                             .header("content-type", "application/x-amz-json-1.1")
-                                             .header("x-amz-target", "TrentService.GenerateRandom")
-                                             .header("content-length", "56")
-                                             .header("host", "kms.us-east-1.amazonaws.com")
-                                             .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210305/us-east-1/kms/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-target, Signature=4ca5cde61676c0ee49fde9ba3c886967e8af16461b6aafdfaee18033eb4ac7a5")
-                                             .header("x-amz-date", "20210305T144724Z")
-                                             .header("x-amz-security-token", "notarealsessiontoken")
-                                             .header("user-agent", "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0")
-                                             .header("x-amz-user-agent", "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0")
-                                             .uri(Uri::from_static("https://kms.us-east-1.amazonaws.com/"))
-                                             .body(SdkBody::from(r#"{"NumberOfBytes":64,"CustomKeyStoreId":"does not exist"}"#)).unwrap(), http::Response::builder()
-                                             .status(http::StatusCode::from_u16(400).unwrap())
-        .header("x-amzn-requestid", "bfe81a0a-9a08-4e71-9910-cdb5ab6ea3b6")
-        .header("cache-control", "no-cache, no-store, must-revalidate, private")
-        .header("expires", "0")
-        .header("pragma", "no-cache")
-        .header("date", "Fri, 05 Mar 2021 15:01:40 GMT")
-        .header("content-type", "application/x-amz-json-1.1")
-        .header("content-length", "44")
-
-        .body(r#"{"__type":"CustomKeyStoreNotFoundException"}"#).unwrap()), ]);
+    let conn = TestConnection::new(vec![(
+        http::Request::builder()
+            .header("content-type", "application/x-amz-json-1.1")
+            .header("x-amz-target", "TrentService.GenerateRandom")
+            .header("content-length", "56")
+            .header("host", "kms.us-east-1.amazonaws.com")
+            .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210305/us-east-1/kms/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-target, Signature=4ca5cde61676c0ee49fde9ba3c886967e8af16461b6aafdfaee18033eb4ac7a5")
+            .header("x-amz-date", "20210305T144724Z")
+            .header("x-amz-security-token", "notarealsessiontoken")
+            .header("user-agent", "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0")
+            .header("x-amz-user-agent", "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0")
+            .uri(Uri::from_static("https://kms.us-east-1.amazonaws.com/"))
+            .body(SdkBody::from(r#"{"NumberOfBytes":64,"CustomKeyStoreId":"does not exist"}"#)).unwrap(),
+        http::Response::builder()
+            .status(http::StatusCode::from_u16(400).unwrap())
+            .header("x-amzn-requestid", "bfe81a0a-9a08-4e71-9910-cdb5ab6ea3b6")
+            .header("cache-control", "no-cache, no-store, must-revalidate, private")
+            .header("expires", "0")
+            .header("pragma", "no-cache")
+            .header("date", "Fri, 05 Mar 2021 15:01:40 GMT")
+            .header("content-type", "application/x-amz-json-1.1")
+            .header("content-length", "44")
+            .body(r#"{"__type":"CustomKeyStoreNotFoundException"}"#).unwrap())
+    ]);
 
     let mut op = GenerateRandom::builder()
         .number_of_bytes(64)
