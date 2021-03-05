@@ -3,23 +3,25 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_auth::{Credentials, CredentialsProvider};
+use aws_auth::Credentials;
 use aws_http::user_agent::AwsUserAgent;
-use aws_hyper::test_connection::{TestConnection, ValidateRequest};
+use aws_hyper::test_connection::TestConnection;
 use aws_hyper::Client;
-use http::header::{HOST, USER_AGENT};
 use http::Uri;
 use kms::operation::GenerateRandom;
-use kms::{Blob, Config, Region};
+use kms::{Config, Region};
 use smithy_http::body::SdkBody;
-use smithy_http::operation::{Operation, Request};
-use std::convert::Infallible;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tracing_subscriber::fmt::format::FmtSpan;
-use tracing_subscriber::fmt::SubscriberBuilder;
+use std::time::{Duration, UNIX_EPOCH};
 
+#[cfg(feature = "gen_tests")]
 #[tokio::test]
 async fn generate_random_it() {
+    use http::header::{HOST, USER_AGENT};
+    use smithy_http::operation::{Operation, Request};
+    use std::convert::Infallible;
+    use std::time::SystemTime;
+    use tracing_subscriber::fmt::format::FmtSpan;
+    use tracing_subscriber::fmt::SubscriberBuilder;
     SubscriberBuilder::default()
         .with_env_filter("debug")
         .with_span_events(FmtSpan::CLOSE)

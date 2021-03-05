@@ -7,7 +7,7 @@ use aws_auth::Credentials;
 use aws_endpoint::{set_endpoint_resolver, DefaultAwsEndpointResolver};
 use aws_http::user_agent::AwsUserAgent;
 use aws_http::AwsErrorRetryPolicy;
-use aws_hyper::test_connection::{TestConnection, ValidateRequest};
+use aws_hyper::test_connection::{TestConnection};
 use aws_hyper::{Client, RetryConfig, SdkError};
 use aws_sig_auth::signer::OperationSigningConfig;
 use aws_types::region::Region;
@@ -115,11 +115,7 @@ async fn e2e_test() {
     assert_eq!(resp, "Hello!");
 
     assert_eq!(conn.requests().len(), 1);
-    let ValidateRequest { expected, actual } = &conn.requests()[0];
-    assert_eq!(actual.headers(), expected.headers());
-    let act_str = std::str::from_utf8(actual.body().bytes().un);
-    assert_eq!(actual.body().bytes(), expected.body().bytes());
-    assert_eq!(actual.uri(), expected.uri());
+    conn.requests()[0].assert_matches(vec![]);
 }
 
 #[tokio::test]

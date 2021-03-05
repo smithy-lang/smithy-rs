@@ -8,7 +8,6 @@ use smithy_http::body::SdkBody;
 use std::future::{Future, Ready};
 use std::ops::Deref;
 use std::pin::Pin;
-use std::process::Output;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use tower::{BoxError, Service};
@@ -125,8 +124,8 @@ fn write_req(req: &http::Request<SdkBody>) -> String {
         )
             .unwrap();
     }
-    write!(&mut o, ".uri(Uri::from_static(\"{}\"))\n", req.uri().to_string());
-    write!(&mut o, ".body(SdkBody::from(r#\"{}\"#)).unwrap()", std::str::from_utf8(req.body().bytes().unwrap()).unwrap());
+    write!(&mut o, ".uri(Uri::from_static(\"{}\"))\n", req.uri().to_string()).unwrap();
+    write!(&mut o, ".body(SdkBody::from(r#\"{}\"#)).unwrap()", std::str::from_utf8(req.body().bytes().unwrap()).unwrap()).unwrap();
     o
 }
 
@@ -142,8 +141,8 @@ fn write_resp(resp: &http::Response<Bytes>) -> String {
         )
             .unwrap();
     }
-    write!(&mut o, ".status(http::StatusCode::from_u16({}).unwrap())\n", resp.status().as_u16());
-    write!(&mut o, ".body(r#\"{}\"#).unwrap()", std::str::from_utf8(resp.body()).unwrap());
+    write!(&mut o, ".status(http::StatusCode::from_u16({}).unwrap())\n", resp.status().as_u16()).unwrap();
+    write!(&mut o, ".body(r#\"{}\"#).unwrap()", std::str::from_utf8(resp.body()).unwrap()).unwrap();
     o
 }
 
@@ -163,9 +162,9 @@ impl<S> RecordingConnection<S> {
             .uri(Uri::from_static("https://test-service.test-region.amazonaws.com/"))
             .body(SdkBody::from("request body")).unwrap();
                 */
-            write!(&mut o, "({}, {}),", write_req(req), write_resp(resp));
+            write!(&mut o, "({}, {}),", write_req(req), write_resp(resp)).unwrap();
         }
-        write!(&mut o, "]);");
+        write!(&mut o, "]);").unwrap();
         o
     }
 }

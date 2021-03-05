@@ -6,6 +6,7 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.writable
@@ -16,7 +17,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.letIf
 
-val TestedServices = setOf("dynamodb")
+val TestedServices = setOf("kms")
 
 class IntegrationTestDecorator : RustCodegenDecorator {
     override val name: String = "IntegrationTest"
@@ -34,9 +35,11 @@ class AwsHyperDevDep(private val runtimeConfig: RuntimeConfig) : LibRsCustomizat
     override fun section(section: LibRsSection) = when (section) {
         LibRsSection.Body -> writable {
             addDependency(runtimeConfig.awsHyper().copy(scope = DependencyScope.Dev))
+            addDependency(Tokio)
         }
         else -> emptySection
     }
 }
 
+val Tokio = CargoDependency("tokio", CratesIo("1"), features = listOf("macros"), scope = DependencyScope.Dev)
 fun RuntimeConfig.awsHyper() = CargoDependency("aws-hyper", Local(relativePath))
