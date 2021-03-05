@@ -257,11 +257,13 @@ where
             RetryKind::Error(err) => self.attempt_retry(Err(err))?,
             _ => return None,
         };
+
         let fut = async move {
             tokio::time::sleep(dur).await;
             next
-        }.instrument(tracing::info_span!("retry", kind = &debug(retry)));
-    Some(Box::pin(fut))
+        }
+        .instrument(tracing::info_span!("retry", kind = &debug(retry)));
+        Some(Box::pin(fut))
     }
 
     fn clone_request(&self, req: &Operation<Handler, R>) -> Option<Operation<Handler, R>> {
