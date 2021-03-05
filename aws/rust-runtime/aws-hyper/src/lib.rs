@@ -3,6 +3,7 @@ pub mod test_connection;
 pub use retry::RetryConfig;
 
 use crate::retry::RetryHandlerFactory;
+use crate::test_connection::RecordingConnection;
 use aws_endpoint::AwsEndpointStage;
 use aws_http::user_agent::UserAgentStage;
 use aws_sig_auth::middleware::SigV4SigningStage;
@@ -56,9 +57,28 @@ impl<S> Client<S> {
         }
     }
 
+    pub fn conn(&self) -> &S {
+        &self.inner
+    }
+
     pub fn with_retry_config(mut self, retry_config: RetryConfig) -> Self {
         self.retry_strategy.with_config(retry_config);
         self
+    }
+}
+
+impl Client<RecordingConnection<hyper::Client<HttpsConnector<HttpConnector>, SdkBody>>> {
+    pub fn recording() -> Self {
+        let https = HttpsConnector::new();
+        let client = HyperClient::builder().build::<_, SdkBody>(https);
+        let client = RecordingConnection {
+            inner: client,
+            data: Default::default(),
+        };
+        Client {
+            inner: client,
+            retry_strategy: RetryHandlerFactory::new(RetryConfig::default()),
+        }
     }
 }
 

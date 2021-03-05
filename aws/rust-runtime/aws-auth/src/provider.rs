@@ -116,7 +116,9 @@ mod test {
     fn missing() {
         let env = HashMap::new();
         let provider = EnvironmentVariableCredentialsProvider::for_map(env);
-        let err = provider.provide_credentials().expect_err("no credentials defined");
+        let err = provider
+            .provide_credentials()
+            .expect_err("no credentials defined");
         match err {
             CredentialsError::Unhandled(_) => panic!("wrong error type"),
             _ => (),

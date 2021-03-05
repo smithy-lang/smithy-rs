@@ -117,6 +117,7 @@ async fn e2e_test() {
     assert_eq!(conn.requests().len(), 1);
     let ValidateRequest { expected, actual } = &conn.requests()[0];
     assert_eq!(actual.headers(), expected.headers());
+    let act_str = std::str::from_utf8(actual.body().bytes().un);
     assert_eq!(actual.body().bytes(), expected.body().bytes());
     assert_eq!(actual.uri(), expected.uri());
 }

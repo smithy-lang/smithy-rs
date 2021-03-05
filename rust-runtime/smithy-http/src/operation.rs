@@ -3,6 +3,7 @@ use crate::property_bag::PropertyBag;
 use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
 use std::rc::Rc;
+use std::ops::DerefMut;
 
 #[derive(Clone)]
 pub struct Metadata {
@@ -47,6 +48,13 @@ impl<H, R> Operation<H, R> {
     pub fn into_request_response(self) -> (Request, Parts<H, R>) {
         (self.request, self.parts)
     }
+    pub fn from_parts(request: Request, parts: Parts<H, R>) -> Self {
+        Self { request, parts }
+    }
+
+    pub fn config_mut(&mut self) -> impl DerefMut<Target=PropertyBag> + '_ {
+        self.request.config_mut()
+    }
 
     pub fn with_metadata(mut self, metadata: Metadata) -> Self {
         self.parts.metadata = Some(metadata);
@@ -69,9 +77,9 @@ impl<H, R> Operation<H, R> {
     }
 
     pub fn try_clone(&self) -> Option<Self>
-    where
-        H: Clone,
-        R: Clone,
+        where
+            H: Clone,
+            R: Clone,
     {
         let request = self.request.try_clone()?;
         Some(Self {

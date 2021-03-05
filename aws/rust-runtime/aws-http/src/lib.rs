@@ -16,7 +16,7 @@ use std::time::Duration;
 #[derive(Clone)]
 pub struct AwsErrorRetryPolicy;
 
-const TRANSIENT_ERROR_STATUS_CODES: [u16; 2] = [400, 408];
+const TRANSIENT_ERROR_STATUS_CODES: [u16; 4] = [500, 502, 503, 504];
 const THROTTLING_ERRORS: &[&str] = &[
     "Throttling",
     "ThrottlingException",
