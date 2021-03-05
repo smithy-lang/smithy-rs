@@ -26,6 +26,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tracing::Instrument;
 
 /// Retry Policy Configuration
 ///
@@ -250,17 +251,17 @@ where
     ) -> Option<Self::Future> {
         let policy = req.retry_policy();
         let retry = policy.classify(result);
-        let (next, fut) = match retry {
+        let (next, dur) = match retry {
             RetryKind::Explicit(dur) => (self.clone(), dur),
             RetryKind::NotRetryable => return None,
             RetryKind::Error(err) => self.attempt_retry(Err(err))?,
             _ => return None,
         };
         let fut = async move {
-            tokio::time::sleep(fut).await;
+            tokio::time::sleep(dur).await;
             next
-        };
-        Some(Box::pin(fut))
+        }.instrument(tracing::info_span!("retry", kind = &debug(retry)));
+    Some(Box::pin(fut))
     }
 
     fn clone_request(&self, req: &Operation<Handler, R>) -> Option<Operation<Handler, R>> {
