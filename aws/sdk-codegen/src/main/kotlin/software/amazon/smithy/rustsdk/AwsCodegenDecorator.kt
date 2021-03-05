@@ -13,7 +13,8 @@ val DECORATORS = listOf(
     AwsEndpointDecorator(),
     UserAgentDecorator(),
     SigV4SigningDecorator(),
-    RetryPolicyDecorator()
+    RetryPolicyDecorator(),
+    IntegrationTestDecorator()
 )
 
 class AwsCodegenDecorator : CombinedCodegenDecorator(DECORATORS) {

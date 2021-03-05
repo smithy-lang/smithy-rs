@@ -17,7 +17,7 @@ use std::borrow::Cow;
 pub struct Region(
     // Regions are almost always known statically. However, as an escape hatch for when they
     // are not, allow for an owned region
-    Cow<'static, str>
+    Cow<'static, str>,
 );
 
 impl AsRef<str> for Region {
