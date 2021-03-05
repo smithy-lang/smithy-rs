@@ -56,10 +56,6 @@ impl<S> Client<S> {
         }
     }
 
-    pub fn conn(&self) -> &S {
-        &self.inner
-    }
-
     pub fn with_retry_config(mut self, retry_config: RetryConfig) -> Self {
         self.retry_strategy.with_config(retry_config);
         self
