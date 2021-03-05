@@ -13,57 +13,6 @@ use kms::{Config, Region};
 use smithy_http::body::SdkBody;
 use std::time::{Duration, UNIX_EPOCH};
 
-#[cfg(feature = "gen_tests")]
-#[tokio::test]
-async fn generate_random_it() {
-    use http::header::{HOST, USER_AGENT};
-    use smithy_http::operation::{Operation, Request};
-    use std::convert::Infallible;
-    use std::time::SystemTime;
-    use tracing_subscriber::fmt::format::FmtSpan;
-    use tracing_subscriber::fmt::SubscriberBuilder;
-    SubscriberBuilder::default()
-        .with_env_filter("debug")
-        .with_span_events(FmtSpan::CLOSE)
-        .init();
-    let client = aws_hyper::Client::recording();
-    let config = kms::Config::builder()
-        .region(Region::new("us-east-1"))
-        .build();
-    let now = SystemTime::now();
-    let (req, parts) = GenerateRandom::builder()
-        .number_of_bytes(64)
-        .custom_key_store_id("does not exist")
-        .build(&config)
-        .into_request_response();
-    let req = req
-        .augment(|req, conf| Result::<http::Request<_>, Infallible>::Ok(req))
-        .unwrap();
-    let mut operation = Operation::from_parts(req, parts);
-    operation.config_mut().insert(AwsUserAgent::for_tests());
-    operation.config_mut().insert(now);
-    let creds = operation
-        .config_mut()
-        .get::<CredentialsProvider>()
-        .unwrap()
-        .provide_credentials()
-        .unwrap();
-    println!(
-        "Credentials::from_keys(\"{}\", \"{}\", {:?}.to_string());",
-        creds.access_key_id(),
-        creds.secret_access_key(),
-        creds.session_token()
-    );
-
-    let data = client
-        .call(operation)
-        .await
-        .expect_err("failed to generate random data");
-    println!("{:?}", data);
-    println!("{}", client.conn().dump());
-    println!("{:?}", now);
-    assert!(false);
-}
 
 #[tokio::test]
 async fn generate_random() {
