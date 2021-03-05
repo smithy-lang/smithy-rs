@@ -10,8 +10,6 @@ use aws_endpoint::AwsEndpointStage;
 use aws_http::user_agent::UserAgentStage;
 use aws_sig_auth::middleware::SigV4SigningStage;
 use aws_sig_auth::signer::SigV4Signer;
-use hyper::Client as HyperClient;
-use hyper_tls::HttpsConnector;
 use smithy_http::body::SdkBody;
 use smithy_http::operation::Operation;
 use smithy_http::response::ParseHttpResponse;
@@ -77,10 +75,8 @@ impl<S> Client<S> {
 impl Client<Standard> {
     /// Construct an `https` based client
     pub fn https() -> StandardClient {
-        let https = HttpsConnector::new();
-        let client = HyperClient::builder().build::<_, SdkBody>(https);
         Client {
-            inner: Standard::Https(client),
+            inner: Standard::https(),
             retry_handler: RetryHandlerFactory::new(RetryConfig::default()),
         }
     }

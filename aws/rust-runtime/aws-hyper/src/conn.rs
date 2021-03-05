@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::test_connection::TestConnection;
 use crate::BoxError;
 use http::Request;
 use hyper::client::{HttpConnector, ResponseFuture};
@@ -15,6 +14,26 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use tower::Service;
 
+#[derive(Clone)]
+pub struct Standard(Connector);
+
+impl Standard {
+    /// An https connection
+    pub fn https() -> Self {
+        let https = HttpsConnector::new();
+        Self(Connector::Https(hyper::Client::builder().build::<_, SdkBody>(https)))
+    }
+
+    /// A connection based on the provided `Box<dyn HttpService>`
+    ///
+    /// Generally, `https()` should be used instead. This constructor is intended to support
+    /// using things like [`TestConnection`](crate::test_connection::TestConnection) or alternative
+    /// http implementations.
+    pub fn new(connector: Box<dyn HttpService>) -> Self {
+        Self(Connector::Dyn(connector))
+    }
+}
+
 /// An Http connection type for most use cases
 ///
 /// This supports three options:
@@ -23,18 +42,11 @@ use tower::Service;
 /// 3. Any implementation of the `HttpService` trait
 ///
 /// This is designed to be used with [`aws_hyper::Client`](crate::Client) as a connector.
-pub enum Standard {
+enum Connector {
     /// An Https Connection
     ///
     /// This is the correct connection for use cases talking to real AWS services.
     Https(hyper::Client<HttpsConnector<HttpConnector>, SdkBody>),
-
-    /// A Test connection
-    ///
-    /// When testing code that uses the SDK, the variant enables using a `TestConnection` object
-    /// in place of a real hyper HTTP client
-    // Note: this variant may be removed in favor of having `TestConnection` be used via Dyn<Box<...>>
-    Test(TestConnection<hyper::Body>),
 
     /// A generic escape hatch
     ///
@@ -43,12 +55,11 @@ pub enum Standard {
     Dyn(Box<dyn HttpService>),
 }
 
-impl Clone for Standard {
+impl Clone for Connector {
     fn clone(&self) -> Self {
         match self {
-            Standard::Https(client) => Standard::Https(client.clone()),
-            Standard::Test(test_conn) => Standard::Test(test_conn.clone()),
-            Standard::Dyn(box_conn) => Standard::Dyn(box_conn.clone()),
+            Connector::Https(client) => Connector::Https(client.clone()),
+            Connector::Dyn(box_conn) => Connector::Dyn(box_conn.clone()),
         }
     }
 }
@@ -116,18 +127,16 @@ impl tower::Service<http::Request<SdkBody>> for Standard {
     type Future = StandardFuture;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        match self {
-            Standard::Https(https) => Service::poll_ready(https, cx).map_err(|err| err.into()),
-            Standard::Dyn(conn) => conn.poll_ready(cx),
-            Standard::Test(_) => Poll::Ready(Result::Ok(())),
+        match &mut self.0 {
+            Connector::Https(https) => Service::poll_ready(https, cx).map_err(|err| err.into()),
+            Connector::Dyn(conn) => conn.poll_ready(cx),
         }
     }
 
     fn call(&mut self, req: http::Request<SdkBody>) -> Self::Future {
-        match self {
-            Standard::Https(https) => StandardFuture::Https(Service::call(https, req)),
-            Standard::Dyn(conn) => StandardFuture::Dyn(conn.call(req)),
-            Standard::Test(conn) => StandardFuture::TestConn(Service::call(conn, req)),
+        match &mut self.0 {
+            Connector::Https(https) => StandardFuture::Https(Service::call(https, req)),
+            Connector::Dyn(conn) => StandardFuture::Dyn(conn.call(req)),
         }
     }
 }
