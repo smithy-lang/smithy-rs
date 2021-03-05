@@ -22,15 +22,15 @@ use std::time::{Duration, UNIX_EPOCH};
 
 #[tokio::test]
 async fn generate_random() {
-    let creds = Credentials::from_keys("ASIAR6OFQKMAEQYT56O5", "HmWca4XpftIbSxvSrnrELgWzOk3IfjzDKtFBhDby", Some("IQoJb3JpZ2luX2VjENb//////////wEaCXVzLWVhc3QtMSJHMEUCIQDmkZeDxs+Yaad2Azm1ju0CpuIIuV1sh3SWJlwjCMZndAIgLgqKhABROA25aC1SSxkLU2WYZr9x1p+NP2lGuXC1sCwqmQII7///////////ARAAGgwxMzQwOTUwNjU4NTYiDLPObEvLEoyOGG0FNirtAY1yN/hBDvwspxamWo4RROGczfXEgqPOih6h2S9mKhjS5KzYriAxXlwqLGOcgmJmraPhV5PAWmkRvZx+mVPzgy8j/F19ys9HgIG6oMfRYBXG78/19aCdHfgJa6bwjWDRnsXxhOq3wdFDzoWX8sLjsMsbyKkbXmMKSg5OLhuAogBxAEE9ifErTqi8qNozuSZmGe45yySyJqUhIHkkwysocq5lc/BkJZWB8g0cLLkcBhoTjGWgp2MENqbVkK4ca8yuM2TWa9HquN15gYaALy+tp3OqPNc6a6DQdYbiIAIFxwtUkVz6MDSv0TxzDB0LyjDa7YiCBjqdAbDuwjL16uKCsF5U+dno+swkV9BpmVrUOmq7iPo4jGE0wL8vIRJgUkyZ4nb+mkJwM/KqmYBwFkcBqQmERKunL7Pjh3l6Jm4edoW+PIg3IJ2juEPUZ+LJXQr+e7DaiV7U54gBYH663ZcSvZ/LNo3VDRDaKndQbXgCgozG/T7Va3QXzRouWQuscO+WqXnO32OObvqJCtEhgoSgynK4I3o=".to_string()));
+    let creds = Credentials::from_keys("ANOTREAL", "notrealrnrELgWzOk3IfjzDKtFBhDby", Some("notarealsessiontoken".to_string()));
     let conn = TestConnection::new(vec![(http::Request::builder()
                                              .header("content-type", "application/x-amz-json-1.1")
                                              .header("x-amz-target", "TrentService.GenerateRandom")
                                              .header("content-length", "20")
                                              .header("host", "kms.us-east-1.amazonaws.com")
-                                             .header("authorization", "AWS4-HMAC-SHA256 Credential=ASIAR6OFQKMAEQYT56O5/20210305/us-east-1/kms/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-target, Signature=f17e7972b4364b48118a7adfe0188f3a0be2d941f2f4b44d69ae50cb3d4aec9f")
+                                             .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210305/us-east-1/kms/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-target, Signature=750c6333c96dcbe4c4c11a9af8483ff68ac40e0e8ba8244772d981aab3cda703")
                                              .header("x-amz-date", "20210305T134922Z")
-                                             .header("x-amz-security-token", "IQoJb3JpZ2luX2VjENb//////////wEaCXVzLWVhc3QtMSJHMEUCIQDmkZeDxs+Yaad2Azm1ju0CpuIIuV1sh3SWJlwjCMZndAIgLgqKhABROA25aC1SSxkLU2WYZr9x1p+NP2lGuXC1sCwqmQII7///////////ARAAGgwxMzQwOTUwNjU4NTYiDLPObEvLEoyOGG0FNirtAY1yN/hBDvwspxamWo4RROGczfXEgqPOih6h2S9mKhjS5KzYriAxXlwqLGOcgmJmraPhV5PAWmkRvZx+mVPzgy8j/F19ys9HgIG6oMfRYBXG78/19aCdHfgJa6bwjWDRnsXxhOq3wdFDzoWX8sLjsMsbyKkbXmMKSg5OLhuAogBxAEE9ifErTqi8qNozuSZmGe45yySyJqUhIHkkwysocq5lc/BkJZWB8g0cLLkcBhoTjGWgp2MENqbVkK4ca8yuM2TWa9HquN15gYaALy+tp3OqPNc6a6DQdYbiIAIFxwtUkVz6MDSv0TxzDB0LyjDa7YiCBjqdAbDuwjL16uKCsF5U+dno+swkV9BpmVrUOmq7iPo4jGE0wL8vIRJgUkyZ4nb+mkJwM/KqmYBwFkcBqQmERKunL7Pjh3l6Jm4edoW+PIg3IJ2juEPUZ+LJXQr+e7DaiV7U54gBYH663ZcSvZ/LNo3VDRDaKndQbXgCgozG/T7Va3QXzRouWQuscO+WqXnO32OObvqJCtEhgoSgynK4I3o=")
+                                             .header("x-amz-security-token", "notarealsessiontoken")
                                              .header("user-agent", "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0")
                                              .header("x-amz-user-agent", "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0")
                                              .uri(Uri::from_static("https://kms.us-east-1.amazonaws.com/"))
@@ -65,7 +65,7 @@ async fn generate_random() {
 
 #[tokio::test]
 async fn generate_random_malformed_response() {
-    let creds = Credentials::from_keys("ASIAR6OFQKMAEQYT56O5", "HmWca4XpftIbSxvSrnrELgWzOk3IfjzDKtFBhDby", Some("IQoJb3JpZ2luX2VjENb//////////wEaCXVzLWVhc3QtMSJHMEUCIQDmkZeDxs+Yaad2Azm1ju0CpuIIuV1sh3SWJlwjCMZndAIgLgqKhABROA25aC1SSxkLU2WYZr9x1p+NP2lGuXC1sCwqmQII7///////////ARAAGgwxMzQwOTUwNjU4NTYiDLPObEvLEoyOGG0FNirtAY1yN/hBDvwspxamWo4RROGczfXEgqPOih6h2S9mKhjS5KzYriAxXlwqLGOcgmJmraPhV5PAWmkRvZx+mVPzgy8j/F19ys9HgIG6oMfRYBXG78/19aCdHfgJa6bwjWDRnsXxhOq3wdFDzoWX8sLjsMsbyKkbXmMKSg5OLhuAogBxAEE9ifErTqi8qNozuSZmGe45yySyJqUhIHkkwysocq5lc/BkJZWB8g0cLLkcBhoTjGWgp2MENqbVkK4ca8yuM2TWa9HquN15gYaALy+tp3OqPNc6a6DQdYbiIAIFxwtUkVz6MDSv0TxzDB0LyjDa7YiCBjqdAbDuwjL16uKCsF5U+dno+swkV9BpmVrUOmq7iPo4jGE0wL8vIRJgUkyZ4nb+mkJwM/KqmYBwFkcBqQmERKunL7Pjh3l6Jm4edoW+PIg3IJ2juEPUZ+LJXQr+e7DaiV7U54gBYH663ZcSvZ/LNo3VDRDaKndQbXgCgozG/T7Va3QXzRouWQuscO+WqXnO32OObvqJCtEhgoSgynK4I3o=".to_string()));
+    let creds = Credentials::from_keys("ANOTREAL", "notrealrnrELgWzOk3IfjzDKtFBhDby", Some("notarealsessiontoken".to_string()));
     let conn = TestConnection::new(vec![(http::Request::builder()
                                              .body(SdkBody::from(r#"{"NumberOfBytes":64}"#)).unwrap(), http::Response::builder()
                                              .status(http::StatusCode::from_u16(200).unwrap())
@@ -82,7 +82,7 @@ async fn generate_random_malformed_response() {
 
 #[tokio::test]
 async fn generate_random_modeled_error() {
-    let creds = Credentials::from_keys("ASIAR6OFQKMAMJXWLKNQ", "EQbTFlITTVAl8fUrt6NTi4qzbRxZ/hJ+IfhUpOcl", Some("IQoJb3JpZ2luX2VjENf//////////wEaCXVzLWVhc3QtMSJHMEUCIBvpF2yl2cS53T78jOuUYusCbyF5f0yeycLM/jNIepmAAiEAgcP3U5+tllSU97srwAkDo/ZIR/VRiO7ge5fHesOxCFYqmQII8P//////////ARAAGgwxMzQwOTUwNjU4NTYiDIlrWao5Iuo8u0Vw8CrtAQAvKFS0MMzbXejI15szeish9YAuEfM6KvYMmv+mkqhcSqdu6/4lM+WK+uOWB7/6dI6sWC5aGzF2nCOjIxMkeixxbUkyrGXnPxtdsZQDcU9+Mt+36rf93nMSn99UBM8zjw2hNbYQoxWpA4HtOIIFYo1NDW45CuGoZHvXf2x4YSd/REyd4+0Zu/UH+Q1F0abFFdh+p/tMfIW2lXoquUQhOMNTiVt5r34vAJXl0pbYGzo1NzRcrj39u7f2GI0AwuBirRvwJS7BqMM81YhW2HAFZeTQchF/El22NjRfLUmXszEd9mlpMcSzf8JyUR3kczDziImCBjqdAXQRDFtwOlZA8xpgDb8d6FFBswFCeCL1ceTG0QaQOeMxxUn4XMccEUG/73V7PlaPtvSFVuKA1ISCnVwaYJdGQOZzgUsBnb+FO5aoWcQxgkyEcGsJb+06fZGw/W8PwrR58LXPZKD+hjsdKU2Pg/qK9DAlmm/UK0F1Er/R9UgMgriWQqk9qeefEn27irvq23SosSu/R+Zh61WePtsHzbM=".to_string()));
+    let creds = Credentials::from_keys("ANOTREAL", "notrealrnrELgWzOk3IfjzDKtFBhDby", Some("notarealsessiontoken".to_string()));
     let conf = Config::builder()
         .region(Region::new("us-east-1"))
         .credentials_provider(creds)
@@ -92,9 +92,9 @@ async fn generate_random_modeled_error() {
                                              .header("x-amz-target", "TrentService.GenerateRandom")
                                              .header("content-length", "56")
                                              .header("host", "kms.us-east-1.amazonaws.com")
-                                             .header("authorization", "AWS4-HMAC-SHA256 Credential=ASIAR6OFQKMAMJXWLKNQ/20210305/us-east-1/kms/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-target, Signature=4fef0ab83318dcaaad40f46993f8446bcab89ce12c9cae429783496b8cee29c1")
+                                             .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210305/us-east-1/kms/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-target, Signature=4ca5cde61676c0ee49fde9ba3c886967e8af16461b6aafdfaee18033eb4ac7a5")
                                              .header("x-amz-date", "20210305T144724Z")
-                                             .header("x-amz-security-token", "IQoJb3JpZ2luX2VjENf//////////wEaCXVzLWVhc3QtMSJHMEUCIBvpF2yl2cS53T78jOuUYusCbyF5f0yeycLM/jNIepmAAiEAgcP3U5+tllSU97srwAkDo/ZIR/VRiO7ge5fHesOxCFYqmQII8P//////////ARAAGgwxMzQwOTUwNjU4NTYiDIlrWao5Iuo8u0Vw8CrtAQAvKFS0MMzbXejI15szeish9YAuEfM6KvYMmv+mkqhcSqdu6/4lM+WK+uOWB7/6dI6sWC5aGzF2nCOjIxMkeixxbUkyrGXnPxtdsZQDcU9+Mt+36rf93nMSn99UBM8zjw2hNbYQoxWpA4HtOIIFYo1NDW45CuGoZHvXf2x4YSd/REyd4+0Zu/UH+Q1F0abFFdh+p/tMfIW2lXoquUQhOMNTiVt5r34vAJXl0pbYGzo1NzRcrj39u7f2GI0AwuBirRvwJS7BqMM81YhW2HAFZeTQchF/El22NjRfLUmXszEd9mlpMcSzf8JyUR3kczDziImCBjqdAXQRDFtwOlZA8xpgDb8d6FFBswFCeCL1ceTG0QaQOeMxxUn4XMccEUG/73V7PlaPtvSFVuKA1ISCnVwaYJdGQOZzgUsBnb+FO5aoWcQxgkyEcGsJb+06fZGw/W8PwrR58LXPZKD+hjsdKU2Pg/qK9DAlmm/UK0F1Er/R9UgMgriWQqk9qeefEn27irvq23SosSu/R+Zh61WePtsHzbM=")
+                                             .header("x-amz-security-token", "notarealsessiontoken")
                                              .header("user-agent", "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0")
                                              .header("x-amz-user-agent", "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0")
                                              .uri(Uri::from_static("https://kms.us-east-1.amazonaws.com/"))
