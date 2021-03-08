@@ -35,14 +35,19 @@ class EndpointTraitBindings(
      * Render the `EndpointPrefix` struct. [input] refers to the symbol referring to the input of this operation.
      */
     fun render(writer: RustWriter, input: String) {
-        writer.withBlock(
-            "#T::endpoint::EndpointPrefix::new(format!(${endpointTrait.prefixFormatString()}, ",
-            "))",
-            smithyHttp
-        ) {
-            endpointTrait.hostPrefix.labels.forEach { label ->
-                val member = inputShape.getMember(label.content).get()
-                rust("${label.content} = $input.${symbolProvider.toMemberName(member)}, ")
+        if (endpointTrait.hostPrefix.labels.isEmpty()) {
+            // if there are no labels, we don't need string formatting
+            writer.rust("#T::endpoint::EndpointPrefix::new(${endpointTrait.prefixFormatString()})", smithyHttp)
+        } else {
+            writer.withBlock(
+                "#T::endpoint::EndpointPrefix::new(format!(${endpointTrait.prefixFormatString()}, ",
+                "))",
+                smithyHttp
+            ) {
+                endpointTrait.hostPrefix.labels.forEach { label ->
+                    val member = inputShape.getMember(label.content).get()
+                    rust("${label.content} = $input.${symbolProvider.toMemberName(member)}, ")
+                }
             }
         }
     }
