@@ -181,7 +181,7 @@ where
         &self,
         response: Result<&SdkSuccess<DescribeTableOutput>, &SdkError<DescribeTableError>>,
     ) -> RetryKind {
-        match self.inner.classify(response.clone()) {
+        match self.inner.classify(response) {
             RetryKind::NotRetryable => (),
             other => return other,
         };
