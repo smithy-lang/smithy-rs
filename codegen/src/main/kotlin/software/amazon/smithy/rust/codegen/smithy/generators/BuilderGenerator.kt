@@ -9,7 +9,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
@@ -21,7 +20,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.Default
-import software.amazon.smithy.rust.codegen.smithy.EndpointTraitBindings
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.defaultValue
@@ -65,20 +63,24 @@ class OperationInputBuilderGenerator(
     model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val shape: OperationShape,
+    private val serviceName: String,
     private val features: List<OperationCustomization>,
 ) : BuilderGenerator(model, symbolProvider, shape.inputShape(model)) {
     override fun buildFn(implBlockWriter: RustWriter) {
-        val fallibleBuilder = StructureGenerator.fallibleBuilder(shape.inputShape(model), symbolProvider) || shape.hasTrait(EndpointTrait::class.java)
-        val retryType = "()"
-        // TODO: This should be a modeled error type
-        val returnType = "#T<#{T}, $retryType>".letIf(fallibleBuilder) { "Result<$it, String>" }
+        val fallibleBuilder = StructureGenerator.fallibleBuilder(shape.inputShape(model), symbolProvider)
         val outputSymbol = symbolProvider.toSymbol(shape)
         val operationT = RuntimeType.operation(symbolProvider.config().runtimeConfig)
         val operationModule = RuntimeType.operationModule(symbolProvider.config().runtimeConfig)
         val sdkBody = RuntimeType.sdkBody(symbolProvider.config().runtimeConfig)
+        val retryType = features.mapNotNull { it.retryType() }.firstOrNull()?.let { implBlockWriter.format(it) } ?: "()"
+        val returnType = with(implBlockWriter) {
+            "${format(operationT)}<${format(outputSymbol)}, $retryType>".letIf(fallibleBuilder) { "Result<$it, String>" }
+        }
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
-        implBlockWriter.rustBlock("pub fn build(self, _config: &#T::Config) -> $returnType", RuntimeType.Config, operationT, outputSymbol) {
+        // For codegen simplicity, allow `let x = ...; x`
+        implBlockWriter.rust("##[allow(clippy::let_and_return)]")
+        implBlockWriter.rustBlock("pub fn build(self, _config: &#T::Config) -> $returnType", RuntimeType.Config) {
             conditionalBlock("Ok({", "})", conditional = fallibleBuilder) {
                 withBlock("let op = #T::new(", ");", outputSymbol) {
                     coreBuilder(this)
@@ -90,23 +92,18 @@ class OperationInputBuilderGenerator(
                 """,
                     operationModule, sdkBody
                 )
-                shape.getTrait(EndpointTrait::class.java).map { epTrait ->
-                    val endpointTraitBindings = EndpointTraitBindings(model, symbolProvider, shape, epTrait)
-                    withBlock("let endpoint_prefix = ", ".map_err(|_|\"Invalid endpoint prefix\")?;") {
-                        endpointTraitBindings.render(this, "&op")
-                    }
-                    rust("request.config_mut().insert(endpoint_prefix);")
-                }
-                features.forEach { it.section(OperationSection.Feature("request", "_config"))(this) }
+                features.forEach { it.section(OperationSection.MutateRequest("request", "_config"))(this) }
                 rust(
                     """
-                    #T::new(
+                    let op = #1T::Operation::new(
                         request,
                         op
-                    )
+                    ).with_metadata(#1T::Metadata::new(${shape.id.name.dq()}, ${serviceName.dq()}));
                 """,
-                    operationT
+                    operationModule,
                 )
+                features.forEach { it.section(OperationSection.FinalizeOperation("op", "_config"))(this) }
+                rust("op")
             }
         }
     }

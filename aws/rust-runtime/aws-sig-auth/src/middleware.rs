@@ -5,7 +5,6 @@
 
 use crate::signer::{OperationSigningConfig, RequestConfig, SigV4Signer, SigningError};
 use aws_auth::{Credentials, CredentialsError, CredentialsProvider};
-use aws_types::{SigningRegion, SigningService};
 use smithy_http::middleware::MapRequest;
 use smithy_http::operation::Request;
 use smithy_http::property_bag::PropertyBag;
@@ -38,6 +37,8 @@ impl SigV4SigningStage {
     }
 }
 
+use aws_types::region::SigningRegion;
+use aws_types::SigningService;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -68,7 +69,7 @@ fn signing_config(
     let cred_provider = config
         .get::<CredentialsProvider>()
         .ok_or(SigningStageError::MissingCredentialsProvider)?;
-    let creds = cred_provider.credentials()?;
+    let creds = cred_provider.provide_credentials()?;
     let region = config
         .get::<SigningRegion>()
         .ok_or(SigningStageError::MissingSigningRegion)?;
@@ -80,7 +81,7 @@ fn signing_config(
             .get::<SystemTime>()
             .copied()
             .unwrap_or_else(SystemTime::now),
-        region: region.into(),
+        region,
         service: signing_service,
     };
     Ok((operation_config, request_config, creds))
@@ -121,7 +122,7 @@ mod test {
     use crate::signer::{OperationSigningConfig, SigV4Signer};
     use aws_auth::CredentialsProvider;
     use aws_endpoint::{set_endpoint_resolver, AwsEndpointStage, DefaultAwsEndpointResolver};
-    use aws_types::Region;
+    use aws_types::region::Region;
     use http::header::AUTHORIZATION;
     use smithy_http::body::SdkBody;
     use smithy_http::middleware::MapRequest;
@@ -182,6 +183,6 @@ mod test {
             .headers()
             .get(AUTHORIZATION)
             .expect("auth header must be present");
-        assert_eq!(auth_header, "AWS4-HMAC-SHA256 Credential=AKIAfoo/20210120/us-east-1/kinesis/aws4_request, SignedHeaders=, Signature=bf3af0f70e58cb7f70cc545f1b2e83293b3e9860880bf8aef3fae0f3de324427");
+        assert_eq!(auth_header, "AWS4-HMAC-SHA256 Credential=AKIAfoo/20210120/us-east-1/kinesis/aws4_request, SignedHeaders=host, Signature=c59f1b9040fe229bf924254d9ad71adaf0495db2ccda5eb6b1565529cdc2c120");
     }
 }

@@ -3,7 +3,7 @@ on: [push]
 name: CI
 
 env:
-  rust_version: 1.49.0
+  rust_version: 1.50.0
   java_version: 9
 
 jobs:
@@ -55,6 +55,8 @@ jobs:
         java-version: ${{ env.java_version }}
     - name: test
       run: ./gradlew :codegen:test
+    - name: aws tests
+      run: ./gradlew :aws:sdk-codegen:test
   integration-tests:
     name: Codegen integration tests
     runs-on: ubuntu-latest
@@ -144,9 +146,8 @@ jobs:
         java-version: ${{ env.java_version }}
     - name: Generate the SDK
       run: ./gradlew :aws:sdk:assemble
-      # docs are not included in the artifact; this step validates that they can be generated
-    - name: Generate docs
-      run: ./gradlew :aws:sdk:cargoDocs
+    - name: Run tests, generate docs
+      run: ./gradlew :aws:sdk:build
     - name: Get current date
       id: date
       run: echo "name=${GITHUB_REF##*/}-$(date +'%Y-%m-%d')" >> $GITHUB_ENV

@@ -14,6 +14,8 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
@@ -26,10 +28,10 @@ pub struct Config {
     pub region: Option<::aws_types::region::Region>,
 }
 #[derive(Default)]
-pub struct ConfigBuilder {
+pub struct Builder {
     region: Option<::aws_types::region::Region>,
 }
-impl ConfigBuilder {
+impl Builder {
     pub fn region(mut self, region_provider: impl ::aws_types::region::ProvideRegion) -> Self {
         self.region = region_provider.region();
         self
@@ -64,6 +66,13 @@ class RegionDecorator : RustCodegenDecorator {
     ): List<OperationCustomization> {
         return baseCustomizations + RegionConfigPlugin()
     }
+
+    override fun libRsCustomizations(
+        protocolConfig: ProtocolConfig,
+        baseCustomizations: List<LibRsCustomization>
+    ): List<LibRsCustomization> {
+        return baseCustomizations + PubUseRegion(protocolConfig.runtimeConfig)
+    }
 }
 
 class RegionProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
@@ -95,11 +104,10 @@ class RegionProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization()
     }
 }
 
-class RegionConfigPlugin() : OperationCustomization() {
+class RegionConfigPlugin : OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         return when (section) {
-            OperationSection.ImplBlock -> emptySection
-            is OperationSection.Feature -> writable {
+            is OperationSection.MutateRequest -> writable {
                 // Allow the region to be late-inserted via another method
                 rust(
                     """
@@ -109,6 +117,15 @@ class RegionConfigPlugin() : OperationCustomization() {
                 """
                 )
             }
+            else -> emptySection
+        }
+    }
+}
+
+class PubUseRegion(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
+    override fun section(section: LibRsSection): Writable {
+        return when (section) {
+            is LibRsSection.Body -> writable { rust("pub use #T::Region;", region(runtimeConfig)) }
         }
     }
 }

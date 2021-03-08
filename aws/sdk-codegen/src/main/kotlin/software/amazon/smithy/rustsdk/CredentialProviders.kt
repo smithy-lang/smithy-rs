@@ -9,12 +9,15 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
@@ -38,6 +41,13 @@ class CredentialsProviderDecorator : RustCodegenDecorator {
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
         return baseCustomizations + CredentialsProviderFeature(protocolConfig.runtimeConfig)
+    }
+
+    override fun libRsCustomizations(
+        protocolConfig: ProtocolConfig,
+        baseCustomizations: List<LibRsCustomization>
+    ): List<LibRsCustomization> {
+        return baseCustomizations + PubUseCredentials(protocolConfig.runtimeConfig)
     }
 }
 
@@ -80,7 +90,7 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
 class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         return when (section) {
-            is OperationSection.Feature -> writable {
+            is OperationSection.MutateRequest -> writable {
                 rust(
                     """
                 #T(&mut ${section.request}.config_mut(), ${section.config}.credentials_provider.clone());
@@ -89,6 +99,14 @@ class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : Ope
                 )
             }
             else -> emptySection
+        }
+    }
+}
+
+class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
+    override fun section(section: LibRsSection): Writable {
+        return when (section) {
+            is LibRsSection.Body -> writable { rust("pub use #T::Credentials;", awsAuth(runtimeConfig).asType()) }
         }
     }
 }

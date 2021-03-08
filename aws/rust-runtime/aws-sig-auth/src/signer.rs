@@ -4,7 +4,8 @@
  */
 
 use aws_auth::Credentials;
-use aws_types::{SigningRegion, SigningService};
+use aws_types::region::SigningRegion;
+use aws_types::SigningService;
 use std::error::Error;
 use std::time::SystemTime;
 
@@ -70,7 +71,7 @@ pub struct RequestConfig<'a> {
     pub service: &'a SigningService,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct SigV4Signer {
     // In the future, the SigV4Signer will use the CRT signer. This will require constructing
     // and holding an instance of the signer, so prevent people from constructing a SigV4Signer without
@@ -119,13 +120,5 @@ impl SigV4Signer {
         }
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
     }
 }

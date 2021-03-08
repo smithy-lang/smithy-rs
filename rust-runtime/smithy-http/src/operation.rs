@@ -1,17 +1,91 @@
 use crate::body::SdkBody;
 use crate::property_bag::PropertyBag;
+use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
+use std::ops::DerefMut;
 use std::rc::Rc;
+
+#[derive(Clone)]
+pub struct Metadata {
+    operation: Cow<'static, str>,
+    service: Cow<'static, str>,
+}
+
+impl Metadata {
+    pub fn name(&self) -> &str {
+        &self.operation
+    }
+
+    pub fn service(&self) -> &str {
+        &self.service
+    }
+
+    pub fn new(
+        operation: impl Into<Cow<'static, str>>,
+        service: impl Into<Cow<'static, str>>,
+    ) -> Self {
+        Metadata {
+            operation: operation.into(),
+            service: service.into(),
+        }
+    }
+}
+
+#[non_exhaustive]
+#[derive(Clone)]
+pub struct Parts<H, R> {
+    pub response_handler: H,
+    pub retry_policy: R,
+    pub metadata: Option<Metadata>,
+}
 
 pub struct Operation<H, R> {
     request: Request,
-    response_handler: H,
-    _retry_policy: R,
+    parts: Parts<H, R>,
 }
 
 impl<H, R> Operation<H, R> {
-    pub fn into_request_response(self) -> (Request, H) {
-        (self.request, self.response_handler)
+    pub fn into_request_response(self) -> (Request, Parts<H, R>) {
+        (self.request, self.parts)
+    }
+    pub fn from_parts(request: Request, parts: Parts<H, R>) -> Self {
+        Self { request, parts }
+    }
+
+    pub fn config_mut(&mut self) -> impl DerefMut<Target = PropertyBag> + '_ {
+        self.request.config_mut()
+    }
+
+    pub fn with_metadata(mut self, metadata: Metadata) -> Self {
+        self.parts.metadata = Some(metadata);
+        self
+    }
+
+    pub fn with_retry_policy<R2>(self, retry_policy: R2) -> Operation<H, R2> {
+        Operation {
+            request: self.request,
+            parts: Parts {
+                response_handler: self.parts.response_handler,
+                retry_policy,
+                metadata: self.parts.metadata,
+            },
+        }
+    }
+
+    pub fn retry_policy(&self) -> &R {
+        &self.parts.retry_policy
+    }
+
+    pub fn try_clone(&self) -> Option<Self>
+    where
+        H: Clone,
+        R: Clone,
+    {
+        let request = self.request.try_clone()?;
+        Some(Self {
+            request,
+            parts: self.parts.clone(),
+        })
     }
 }
 
@@ -19,8 +93,11 @@ impl<H> Operation<H, ()> {
     pub fn new(request: Request, response_handler: H) -> Self {
         Operation {
             request,
-            response_handler,
-            _retry_policy: (),
+            parts: Parts {
+                response_handler,
+                retry_policy: (),
+                metadata: None,
+            },
         }
     }
 }

@@ -39,7 +39,7 @@ impl Debug for Credentials {
     }
 }
 
-const STATIC_CREDENTIALS: &'static str = "static";
+const STATIC_CREDENTIALS: &str = "Static";
 impl Credentials {
     pub fn from_keys(
         access_key_id: impl Into<String>,
@@ -103,7 +103,7 @@ pub type CredentialsProvider = Arc<dyn ProvideCredentials>;
 ///
 /// Pending future design iteration, an async credentials provider may be introduced.
 pub trait ProvideCredentials: Send + Sync {
-    fn credentials(&self) -> Result<Credentials, CredentialsError>;
+    fn provide_credentials(&self) -> Result<Credentials, CredentialsError>;
 }
 
 pub fn default_provider() -> impl ProvideCredentials {
@@ -112,7 +112,7 @@ pub fn default_provider() -> impl ProvideCredentials {
 }
 
 impl ProvideCredentials for Credentials {
-    fn credentials(&self) -> Result<Credentials, CredentialsError> {
+    fn provide_credentials(&self) -> Result<Credentials, CredentialsError> {
         Ok(self.clone())
     }
 }

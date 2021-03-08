@@ -11,9 +11,10 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
 
-sealed class DependencyScope
-object Dev : DependencyScope()
-object Compile : DependencyScope()
+sealed class DependencyScope {
+    object Dev : DependencyScope()
+    object Compile : DependencyScope()
+}
 
 sealed class DependencyLocation
 data class CratesIo(val version: String) : DependencyLocation()
@@ -111,7 +112,7 @@ fun CargoDependency.asType(): RuntimeType =
 data class CargoDependency(
     override val name: String,
     private val location: DependencyLocation,
-    val scope: DependencyScope = Compile,
+    val scope: DependencyScope = DependencyScope.Compile,
     private val features: List<String> = listOf()
 ) : RustDependency(name) {
 
@@ -171,7 +172,7 @@ data class CargoDependency(
         )
 
         fun ProtocolTestHelpers(runtimeConfig: RuntimeConfig) = CargoDependency(
-            "protocol-test-helpers", Local(runtimeConfig.relativePath), scope = Dev
+            "protocol-test-helpers", Local(runtimeConfig.relativePath), scope = DependencyScope.Dev
         )
 
         val SerdeJson: CargoDependency =

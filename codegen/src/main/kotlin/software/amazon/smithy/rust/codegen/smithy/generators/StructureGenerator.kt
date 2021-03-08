@@ -11,14 +11,19 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.util.dq
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: RustWriter.() -> Unit) {
     rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
@@ -26,13 +31,17 @@ fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, 
     }
 }
 
+fun StructureShape.hasSensitiveMember(model: Model) =
+    this.members().any { it.getMemberTrait(model, SensitiveTrait::class.java).isPresent }
+
 class StructureGenerator(
     val model: Model,
-    private val symbolProvider: SymbolProvider,
+    private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape
 ) {
     private val members: List<MemberShape> = shape.allMembers.values.toList()
+    private val name = symbolProvider.toSymbol(shape).name
 
     fun render() {
         renderStructure()
@@ -71,13 +80,34 @@ class StructureGenerator(
         } else ""
     }
 
+    /** Render a custom debug implementation
+     * When [SensitiveTrait] support is required, render a custom debug implementation to redact sensitive data
+     */
+    private fun renderDebugImpl() {
+        writer.rustBlock("impl ${lifetimeDeclaration()} #T for $name ${lifetimeDeclaration()}", RuntimeType.Debug) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.StdFmt(null)) {
+                rust("""let mut formatter = f.debug_struct(${name.dq()});""")
+                members.forEach { member ->
+                    val memberName = symbolProvider.toMemberName(member)
+                    if (member.getMemberTrait(model, SensitiveTrait::class.java).isPresent) {
+                        rust("""formatter.field(${memberName.dq()}, &"*** Sensitive Data Redacted ***");""")
+                    } else {
+                        rust("formatter.field(${memberName.dq()}, &self.$memberName);")
+                    }
+                }
+                rust("formatter.finish()")
+            }
+        }
+    }
+
     private fun renderStructure() {
         val symbol = symbolProvider.toSymbol(shape)
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
-        containerMeta.render(writer)
+        val withoutDebug = containerMeta.derives.copy(derives = containerMeta.derives.derives - RuntimeType.Debug)
+        containerMeta.copy(derives = withoutDebug).render(writer)
 
-        writer.rustBlock("struct ${symbol.name} ${lifetimeDeclaration()}") {
+        writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
                 writer.documentShape(member, model)
@@ -85,5 +115,7 @@ class StructureGenerator(
                 write("$memberName: #T,", symbolProvider.toSymbol(member))
             }
         }
+
+        renderDebugImpl()
     }
 }

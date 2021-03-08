@@ -4,13 +4,10 @@
  */
 
 use std::error::Error;
-use std::fmt::Debug;
+use std::fmt;
+use std::fmt::{Debug, Display, Formatter};
 
 type BoxError = Box<dyn Error + Send + Sync>;
-
-/// Body type when a response is returned. Currently, the only use case is introspecting errors
-/// so it is simply `Debug`. This is an area of potential design iteration.
-// pub type Body = Pin<Box<dyn http_body::Body<Data = Bytes, Error=Box<dyn Error>> + Send + Sync>>;
 
 /// Successful Sdk Result
 ///
@@ -55,5 +52,30 @@ pub enum SdkError<E, B> {
     },
 
     /// An error response was received from the service
-    ServiceError { raw: http::Response<B>, err: E },
+    ServiceError { err: E, raw: http::Response<B> },
+}
+
+impl<E, B> Display for SdkError<E, B>
+where
+    E: Error,
+    B: Debug,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl<E, B> Error for SdkError<E, B>
+where
+    E: Error + 'static,
+    B: Debug,
+{
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            SdkError::ConstructionFailure(err)
+            | SdkError::DispatchFailure(err)
+            | SdkError::ResponseError { err, .. } => Some(err.as_ref()),
+            SdkError::ServiceError { err, .. } => Some(err),
+        }
+    }
 }

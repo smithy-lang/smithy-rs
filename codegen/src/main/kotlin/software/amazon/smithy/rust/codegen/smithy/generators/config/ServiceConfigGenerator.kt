@@ -112,7 +112,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         writer.rustBlock("impl Config") {
             rustTemplate(
                 """
-                pub fn builder() -> ConfigBuilder { ConfigBuilder::default() }
+                pub fn builder() -> Builder { Builder::default() }
             """
             )
             customizations.forEach {
@@ -121,12 +121,12 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         }
 
         writer.raw("#[derive(Default)]")
-        writer.rustBlock("pub struct ConfigBuilder") {
+        writer.rustBlock("pub struct Builder") {
             customizations.forEach {
                 it.section(ServiceConfig.BuilderStruct)(this)
             }
         }
-        writer.rustBlock("impl ConfigBuilder") {
+        writer.rustBlock("impl Builder") {
             rustTemplate("pub fn new() -> Self { Self::default() }")
             customizations.forEach {
                 it.section(ServiceConfig.BuilderImpl)(this)

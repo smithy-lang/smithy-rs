@@ -43,3 +43,6 @@ gradle-app.setting
 
 # MacOS
 .DS_Store
+
+# Rust build artifacts
+target/
