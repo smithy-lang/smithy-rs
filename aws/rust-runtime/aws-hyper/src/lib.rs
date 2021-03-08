@@ -1,15 +1,15 @@
+pub mod conn;
 mod retry;
 pub mod test_connection;
+
 pub use retry::RetryConfig;
 
+use crate::conn::Standard;
 use crate::retry::RetryHandlerFactory;
 use aws_endpoint::AwsEndpointStage;
 use aws_http::user_agent::UserAgentStage;
 use aws_sig_auth::middleware::SigV4SigningStage;
 use aws_sig_auth::signer::SigV4Signer;
-use hyper::client::HttpConnector;
-use hyper::Client as HyperClient;
-use hyper_tls::HttpsConnector;
 use smithy_http::body::SdkBody;
 use smithy_http::operation::Operation;
 use smithy_http::response::ParseHttpResponse;
@@ -19,9 +19,12 @@ use smithy_http_tower::map_request::MapRequestLayer;
 use smithy_http_tower::parse_response::ParseResponseLayer;
 use smithy_types::retry::ProvideErrorKind;
 use std::error::Error;
+use std::fmt;
+use std::fmt::{Debug, Formatter};
 use tower::{Service, ServiceBuilder, ServiceExt};
 
 type BoxError = Box<dyn Error + Send + Sync>;
+pub type StandardClient = Client<conn::Standard>;
 
 pub type SdkError<E> = smithy_http::result::SdkError<E, hyper::Body>;
 pub type SdkSuccess<T> = smithy_http::result::SdkSuccess<T, hyper::Body>;
@@ -41,10 +44,17 @@ pub type SdkSuccess<T> = smithy_http::result::SdkSuccess<T, hyper::Body>;
 ///    S::Error: Into<BoxError> + Send + Sync + 'static,
 ///    S::Future: Send + 'static,
 /// ```
-
 pub struct Client<S> {
     inner: S,
-    retry_strategy: RetryHandlerFactory,
+    retry_handler: RetryHandlerFactory,
+}
+
+impl<S> Debug for Client<S> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut formatter = f.debug_struct("Client");
+        formatter.field("retry_handler", &self.retry_handler);
+        formatter.finish()
+    }
 }
 
 impl<S> Client<S> {
@@ -52,24 +62,22 @@ impl<S> Client<S> {
     pub fn new(connector: S) -> Self {
         Client {
             inner: connector,
-            retry_strategy: RetryHandlerFactory::new(RetryConfig::default()),
+            retry_handler: RetryHandlerFactory::new(RetryConfig::default()),
         }
     }
 
     pub fn with_retry_config(mut self, retry_config: RetryConfig) -> Self {
-        self.retry_strategy.with_config(retry_config);
+        self.retry_handler.with_config(retry_config);
         self
     }
 }
 
-impl Client<hyper::Client<HttpsConnector<HttpConnector>, SdkBody>> {
+impl Client<Standard> {
     /// Construct an `https` based client
-    pub fn https() -> Self {
-        let https = HttpsConnector::new();
-        let client = HyperClient::builder().build::<_, SdkBody>(https);
+    pub fn https() -> StandardClient {
         Client {
-            inner: client,
-            retry_strategy: RetryHandlerFactory::new(RetryConfig::default()),
+            inner: Standard::https(),
+            retry_handler: RetryHandlerFactory::new(RetryConfig::default()),
         }
     }
 }
@@ -115,7 +123,7 @@ where
         let inner = self.inner.clone();
         let mut svc = ServiceBuilder::new()
             // Create a new request-scoped policy
-            .retry(self.retry_strategy.new_handler())
+            .retry(self.retry_handler.new_handler())
             .layer(ParseResponseLayer::<O, Retry>::new())
             .layer(endpoint_resolver)
             .layer(signer)
@@ -134,5 +142,13 @@ mod tests {
     #[test]
     fn construct_default_client() {
         let _ = Client::https();
+    }
+
+    #[test]
+    fn client_debug_includes_retry_info() {
+        let client = Client::https();
+        let s = format!("{:?}", client);
+        assert!(s.contains("RetryConfig"));
+        assert!(s.contains("quota_available"));
     }
 }
