@@ -68,7 +68,7 @@ async fn main() {
     };
     for item in data {
         client
-            .call(add_item(table_name, item.clone()).build(&conf))
+            .call(add_item(table_name, item).build(&conf))
             .await
             .expect("failed to insert item");
     }
