@@ -42,6 +42,7 @@ impl Standard {
 /// 3. Any implementation of the `HttpService` trait
 ///
 /// This is designed to be used with [`aws_hyper::Client`](crate::Client) as a connector.
+#[derive(Clone)]
 enum Connector {
     /// An Https Connection
     ///
@@ -53,15 +54,6 @@ enum Connector {
     /// This enables using any implementation of the HttpService trait. This allows using a totally
     /// separate HTTP stack or your own custom `TestConnection`.
     Dyn(Box<dyn HttpService>),
-}
-
-impl Clone for Connector {
-    fn clone(&self) -> Self {
-        match self {
-            Connector::Https(client) => Connector::Https(client.clone()),
-            Connector::Dyn(box_conn) => Connector::Dyn(box_conn.clone()),
-        }
-    }
 }
 
 impl Clone for Box<dyn HttpService> {
