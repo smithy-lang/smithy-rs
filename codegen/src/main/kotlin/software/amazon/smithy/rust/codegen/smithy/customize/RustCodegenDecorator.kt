@@ -121,7 +121,7 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
                         logger.info("Adding Codegen Decorator: ${it.javaClass.name}")
                     }
                 }.toList()
-            return CombinedCodegenDecorator(decorators)
+            return CombinedCodegenDecorator(decorators + BaseCustomizations())
         }
     }
 }

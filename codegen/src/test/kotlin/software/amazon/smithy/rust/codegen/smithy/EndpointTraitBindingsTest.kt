@@ -74,7 +74,7 @@ internal class EndpointTraitBindingsTest {
                 """
                 let inp = GetStatusInput { foo: "test_value".to_string() };
                 let prefix = inp.endpoint_prefix();
-                assert_eq!(prefix.prefix(), "test_value.data");
+                assert_eq!(prefix.as_str(), "test_value.data");
             """
             )
         }
@@ -108,13 +108,18 @@ internal class EndpointTraitBindingsTest {
         }
         """.asSmithyModel()
         val (ctx, testDir) = generatePluginContext(model, "com.example#TestService")
-        val visitor = CodegenVisitor(ctx, CombinedCodegenDecorator(listOf()))
+        val visitor = CodegenVisitor(ctx, CombinedCodegenDecorator.fromClasspath(ctx))
         visitor.writers.useFileWriter("src/tests.rs", "crate") {
             it.unitTest(
                 """
                 let conf = crate::Config::builder().build();
-                let inp = crate::operation::SayHello::builder().greeting("hey there!").build().expect("valid");
-                assert_eq!(inp.config(), "");
+                crate::operation::SayHello::builder().greeting("hey there!").build(&conf).expect_err("no spaces or exclamation points in ep prefixes");
+                let op = crate::operation::SayHello::builder().greeting("hello").build(&conf).expect("hello is a valid prefix");
+                let op_conf = op.config();
+                let prefix = op_conf.get::<smithy_http::endpoint::EndpointPrefix>()
+                    .expect("prefix should be in config")
+                    .as_str();
+                assert_eq!(prefix, "test123.hello.");
 
             """
             )

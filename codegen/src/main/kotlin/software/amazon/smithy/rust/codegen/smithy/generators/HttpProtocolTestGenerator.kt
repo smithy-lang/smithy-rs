@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.protocoltests.traits.AppliesTo
 import software.amazon.smithy.protocoltests.traits.HttpMessageTestCase
@@ -16,9 +17,11 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Custom
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -151,9 +154,23 @@ class HttpProtocolTestGenerator(
     ) {
         writeInline("let input =")
         instantiator.render(this, inputShape, httpRequestTestCase.params)
+        if (operationShape.hasTrait(EndpointTrait::class.java)) {
+            write(".unwrap()")
+        }
         write(";")
-        write("let (http_request, _) = input.into_request_response().0.into_parts();")
+        write("##[allow(unused_mut)]")
+        write("let (mut http_request, parts) = input.into_request_response().0.into_parts();")
         with(httpRequestTestCase) {
+            host.orNull()?.also { host ->
+                val withScheme = "http://$host"
+                rust(
+                    """
+                    let ep = #T::endpoint::Endpoint::mutable(#T::Uri::from_static(${withScheme.dq()}));
+                    ep.set_endpoint(http_request.uri_mut(), parts.as_ref().borrow().get());
+                """,
+                    CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType(), CargoDependency.Http.asType()
+                )
+            }
             write(
                 """
                     assert_eq!(http_request.method(), ${method.dq()});
@@ -370,16 +387,6 @@ class HttpProtocolTestGenerator(
 
             // Document deserialization:
             FailingTest(AwsJson11, "PutAndGetInlineDocumentsInput", Action.Response),
-
-            // Endpoint trait https://github.com/awslabs/smithy-rs/issues/197
-            // This will also require running operations through the endpoint middleware (or moving endpoint middleware
-            // into operation construction
-            FailingTest(JsonRpc10, "AwsJson10EndpointTrait", Action.Request),
-            FailingTest(JsonRpc10, "AwsJson10EndpointTraitWithHostLabel", Action.Request),
-            FailingTest(AwsJson11, "AwsJson11EndpointTrait", Action.Request),
-            FailingTest(AwsJson11, "AwsJson11EndpointTraitWithHostLabel", Action.Request),
-            FailingTest(RestJson, "RestJsonEndpointTrait", Action.Request),
-            FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request)
         )
         private val RunOnly: Set<String>? = null
 

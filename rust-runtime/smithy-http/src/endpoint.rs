@@ -26,7 +26,7 @@ impl EndpointPrefix {
         Ok(EndpointPrefix(prefix))
     }
 
-    pub fn prefix(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         &self.0
     }
 }
@@ -36,10 +36,6 @@ impl EndpointPrefix {
 pub enum InvalidEndpoint {
     EndpointMustHaveAuthority,
 }
-
-// user gives: Endpoint Provider. Give endpoint. Is this endpoint extensible?
-// where endpoint discovery starts from.
-// endpoints can mutate a request, potentially with a
 
 impl Endpoint {
     /// Create a new endpoint from a URI

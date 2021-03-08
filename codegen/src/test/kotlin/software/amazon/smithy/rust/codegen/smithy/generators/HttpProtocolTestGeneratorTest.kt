@@ -50,6 +50,7 @@ class HttpProtocolTestGeneratorTest {
                     "name": "Teddy",
                     "query": "Hello there"
                 },
+                host: "example.com",
                 method: "POST",
                 uri: "/",
                 queryParams: [

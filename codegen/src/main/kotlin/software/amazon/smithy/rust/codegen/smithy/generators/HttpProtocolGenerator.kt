@@ -80,9 +80,9 @@ abstract class HttpProtocolGenerator(
         }
         val operationName = symbolProvider.toSymbol(operationShape).name
         operationWriter.documentShape(operationShape, model)
-        Derives(setOf(RuntimeType.Clone)).render(operationWriter)
+        Derives(setOf(RuntimeType.Clone, RuntimeType.Debug)).render(operationWriter)
         operationWriter.rustBlock("pub struct $operationName") {
-            write("input: #T", inputSymbol)
+            write("pub(crate) input: #T", inputSymbol)
         }
         operationWriter.implBlock(operationShape, symbolProvider) {
             builderGenerator.renderConvenienceMethod(this)

@@ -24,9 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
 
 fun HttpTrait.uriFormatString(): String {
-    val base = uri.rustFormatString("/", "/")
-    // TODO: support query literals
-    return base.dq()
+    return uri.rustFormatString("/", "/")
 }
 
 fun SmithyPattern.rustFormatString(prefix: String, separator: String): String {

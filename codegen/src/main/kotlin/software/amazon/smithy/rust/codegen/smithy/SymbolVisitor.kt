@@ -41,6 +41,7 @@ import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -141,7 +142,7 @@ class SymbolVisitor(
         // If a field has the httpLabel or hostLabel trait and we are generating
         // an Input shape, then the field is _not optional_.
         val httpLabeledInput =
-            container.hasTrait(SyntheticInputTrait::class.java) && (
+            (container.hasTrait(SyntheticInputTrait::class.java) || container.hasTrait(InputBodyTrait::class.java)) && (
                 member.hasTrait(HttpLabelTrait::class.java) || member.hasTrait(
                     HostLabelTrait::class.java
                 )

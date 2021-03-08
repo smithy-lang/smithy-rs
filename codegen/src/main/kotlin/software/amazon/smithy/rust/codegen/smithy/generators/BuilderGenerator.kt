@@ -9,6 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
@@ -67,7 +68,10 @@ class OperationInputBuilderGenerator(
     private val features: List<OperationCustomization>,
 ) : BuilderGenerator(model, symbolProvider, shape.inputShape(model)) {
     override fun buildFn(implBlockWriter: RustWriter) {
-        val fallibleBuilder = StructureGenerator.fallibleBuilder(shape.inputShape(model), symbolProvider)
+        val fallibleBuilder =
+            StructureGenerator.fallibleBuilder(shape.inputShape(model), symbolProvider) || shape.hasTrait(
+                EndpointTrait::class.java
+            )
         val outputSymbol = symbolProvider.toSymbol(shape)
         val operationT = RuntimeType.operation(symbolProvider.config().runtimeConfig)
         val operationModule = RuntimeType.operationModule(symbolProvider.config().runtimeConfig)

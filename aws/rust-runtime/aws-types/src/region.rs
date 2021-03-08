@@ -32,6 +32,12 @@ impl Region {
     }
 }
 
+impl ProvideRegion for &'static str {
+    fn region(&self) -> Option<Region> {
+        Some(Region::new(*self))
+    }
+}
+
 impl From<&'static str> for Region {
     fn from(region: &'static str) -> Self {
         Region(Cow::Borrowed(region))
