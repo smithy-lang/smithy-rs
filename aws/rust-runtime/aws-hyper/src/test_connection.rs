@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use http::header::HeaderName;
 use http::Request;
 use smithy_http::body::SdkBody;
 use std::future::Ready;
@@ -16,6 +17,28 @@ type ConnectVec<B> = Vec<(http::Request<SdkBody>, http::Response<B>)>;
 pub struct ValidateRequest {
     pub expected: http::Request<SdkBody>,
     pub actual: http::Request<SdkBody>,
+}
+
+impl ValidateRequest {
+    pub fn assert_matches(&self, ignore_headers: Vec<HeaderName>) {
+        let (actual, expected) = (&self.actual, &self.expected);
+        for (name, value) in expected.headers() {
+            if !ignore_headers.contains(name) {
+                let actual_header = actual
+                    .headers()
+                    .get(name)
+                    .unwrap_or_else(||panic!("Header {:?} missing", name));
+                assert_eq!(actual_header, value, "Header mismatch for {:?}", name);
+            }
+        }
+        let actual_str = std::str::from_utf8(actual.body().bytes().unwrap_or(&[]));
+        let expected_str = std::str::from_utf8(expected.body().bytes().unwrap_or(&[]));
+        match (actual_str, expected_str) {
+            (Ok(actual), Ok(expected)) => assert_eq!(actual, expected),
+            _ => assert_eq!(actual.body().bytes(), expected.body().bytes()),
+        };
+        assert_eq!(actual.uri(), expected.uri());
+    }
 }
 
 /// TestConnection for use with a [`aws_hyper::Client`](crate::Client)
