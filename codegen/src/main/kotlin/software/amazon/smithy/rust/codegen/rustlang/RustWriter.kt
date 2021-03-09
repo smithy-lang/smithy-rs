@@ -310,6 +310,11 @@ class RustWriter private constructor(
         }
     }
 
+    fun addDepsRecursively(symbol: Symbol) {
+        addDependency(symbol)
+        symbol.references.forEach { addDepsRecursively(it.symbol) }
+    }
+
     /**
      * Generate RustDoc links, eg. [`Abc`](crate::module::Abc)
      */
@@ -331,7 +336,7 @@ class RustWriter private constructor(
                     t.fullyQualifiedName()
                 }
                 is Symbol -> {
-                    addImport(t, null)
+                    addDepsRecursively(t)
                     t.rustType().render(fullyQualified = true)
                 }
                 else -> throw CodegenException("Invalid type provided to RustSymbolFormatter")

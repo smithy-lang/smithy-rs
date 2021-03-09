@@ -34,20 +34,15 @@ data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: S
 data class RuntimeType(val name: String?, val dependency: RustDependency?, val namespace: String) {
     fun toSymbol(): Symbol {
         val builder = Symbol.builder().name(name).namespace(namespace, "::")
-            .rustType(RustType.Opaque(name ?: ""))
+            .rustType(RustType.Opaque(name ?: "", namespace = namespace))
 
         dependency?.run { builder.addDependency(this) }
         return builder.build()
     }
 
     fun fullyQualifiedName(): String {
-        val prefix = if (namespace.startsWith("crate")) {
-            ""
-        } else {
-            "::"
-        }
         val postFix = name?.let { "::$name" } ?: ""
-        return "$prefix$namespace$postFix"
+        return "$namespace$postFix"
     }
 
     // TODO: refactor to be RuntimeTypeProvider a la Symbol provider that packages the `RuntimeConfig` state.
