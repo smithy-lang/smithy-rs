@@ -54,9 +54,9 @@ internal class CustomSerializerGeneratorTest {
     @Test
     fun `generate correct function names`() {
         val serializerBuilder = CustomSerializerGenerator(provider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
-        serializerBuilder.serializerFor(model.lookup("test#S\$timestamp"))!!.name shouldBe "stdoptionoptioninstant_epoch_seconds_ser"
-        serializerBuilder.serializerFor(model.lookup("test#S\$blob"))!!.name shouldBe "stdoptionoptionblob_ser"
-        serializerBuilder.deserializerFor(model.lookup("test#S\$blob"))!!.name shouldBe "stdoptionoptionblob_deser"
+        serializerBuilder.serializerFor(model.lookup("test#S\$timestamp"))!!.name shouldBe "stdoptionoptionsmithytypesinstant_epoch_seconds_ser"
+        serializerBuilder.serializerFor(model.lookup("test#S\$blob"))!!.name shouldBe "stdoptionoptionsmithytypesblob_ser"
+        serializerBuilder.deserializerFor(model.lookup("test#S\$blob"))!!.name shouldBe "stdoptionoptionsmithytypesblob_deser"
         serializerBuilder.deserializerFor(model.lookup("test#S\$string")) shouldBe null
     }
 
