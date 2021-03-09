@@ -54,6 +54,7 @@ impl ValidateRequest {
 /// - Response to requests with a preloaded series of responses
 /// - Record requests for future examination
 ///
+/// The generic parameter `B` is the type of the response body.
 /// For more complex use cases, see [Tower Test](https://docs.rs/tower-test/0.4.0/tower_test/)
 /// Usage example:
 /// ```rust
@@ -69,10 +70,19 @@ impl ValidateRequest {
 /// let conn = TestConnection::new(events);
 /// let client = aws_hyper::Client::new(conn);
 /// ```
-#[derive(Clone)]
 pub struct TestConnection<B> {
     data: Arc<Mutex<ConnectVec<B>>>,
     requests: Arc<Mutex<Vec<ValidateRequest>>>,
+}
+
+// Need a clone impl that ignores `B`
+impl<B> Clone for TestConnection<B> {
+    fn clone(&self) -> Self {
+        TestConnection {
+            data: self.data.clone(),
+            requests: self.requests.clone(),
+        }
+    }
 }
 
 impl<B> TestConnection<B> {

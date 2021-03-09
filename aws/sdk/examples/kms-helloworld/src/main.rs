@@ -2,6 +2,7 @@ use kms::operation::GenerateRandom;
 use kms::Region;
 use tracing_subscriber::fmt::SubscriberBuilder;
 use tracing_subscriber::fmt::format::FmtSpan;
+use aws_hyper::StandardClient;
 
 #[tokio::main]
 async fn main() {
@@ -12,7 +13,7 @@ async fn main() {
         // creds loaded from environment variables, or they can be hard coded.
         // Other credential providers not currently supported
         .build();
-    let client = aws_hyper::Client::https();
+    let client: StandardClient = aws_hyper::Client::https();
     let data = client
         .call(GenerateRandom::builder().number_of_bytes(64).build(&config))
         .await

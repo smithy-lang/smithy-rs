@@ -25,6 +25,8 @@ smithy-types = { path = "../../../rust-runtime/smithy-types" }
 smithy-http-tower = { path = "../../../rust-runtime/smithy-http-tower" }
 fastrand = "1.4.0"
 tokio = { version = "1", features = ["time"] }
+
+pin-project = "1"
 tracing = "0.1.25"
 
 protocol-test-helpers = { path = "../../../rust-runtime/protocol-test-helpers", optional = true }
