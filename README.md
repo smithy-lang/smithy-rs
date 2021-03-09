@@ -11,7 +11,7 @@ The nightly SDK build can be found under `Actions -> CI (take latest run) -> Art
 installation instructions on your platform. Minimum supported Rust version is the latest released Rust version, although older versions may work.
 
 ## Run tests
-```./tesh.sh```
+```./test.sh```
 
 This will run all the unit tests, codegen example models & Dynamo DB, validate that the generated code compiles, and run any tests targeting the generated code.
 
