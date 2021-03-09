@@ -5552,28 +5552,70 @@ impl ItemCollectionMetrics {
     ::std::cmp::PartialEq,
 )]
 pub enum AttributeValue {
+    /// <p>An attribute of type Binary.  For example:</p>
+    /// <p>
+    /// <code>"B": "dGhpcyB0ZXh0IGlzIGJhc2U2NC1lbmNvZGVk"</code>
+    /// </p>
     #[serde(rename = "B")]
     #[serde(serialize_with = "crate::serde_util::blob_ser")]
     #[serde(deserialize_with = "crate::serde_util::blob_deser")]
     B(Blob),
+    /// <p>An attribute of type Boolean.  For example:</p>
+    /// <p>
+    /// <code>"BOOL": true</code>
+    /// </p>
     #[serde(rename = "BOOL")]
     Bool(bool),
+    /// <p>An attribute of type Binary Set.  For example:</p>
+    /// <p>
+    /// <code>"BS": ["U3Vubnk=", "UmFpbnk=", "U25vd3k="]</code>
+    /// </p>
     #[serde(rename = "BS")]
     #[serde(serialize_with = "crate::serde_util::stdvecvecblob_ser")]
     #[serde(deserialize_with = "crate::serde_util::stdvecvecblob_deser")]
     Bs(::std::vec::Vec<Blob>),
+    /// <p>An attribute of type List.  For example:</p>
+    /// <p>
+    /// <code>"L": [ {"S": "Cookies"} , {"S": "Coffee"}, {"N", "3.14159"}]</code>
+    /// </p>
     #[serde(rename = "L")]
     L(::std::vec::Vec<AttributeValue>),
+    /// <p>An attribute of type Map.  For example:</p>
+    /// <p>
+    /// <code>"M": {"Name": {"S": "Joe"}, "Age": {"N": "35"}}</code>
+    /// </p>
     #[serde(rename = "M")]
     M(::std::collections::HashMap<::std::string::String, AttributeValue>),
+    /// <p>An attribute of type Number.  For example:</p>
+    /// <p>
+    /// <code>"N": "123.45"</code>
+    /// </p>
+    /// <p>Numbers are sent across the network to DynamoDB as strings, to maximize compatibility across languages and libraries. However, DynamoDB treats them as number type attributes for mathematical operations.</p>
     #[serde(rename = "N")]
     N(::std::string::String),
+    /// <p>An attribute of type Number Set.  For example:</p>
+    /// <p>
+    /// <code>"NS": ["42.2", "-19", "7.5", "3.14"]</code>
+    /// </p>
+    /// <p>Numbers are sent across the network to DynamoDB as strings, to maximize compatibility across languages and libraries. However, DynamoDB treats them as number type attributes for mathematical operations.</p>
     #[serde(rename = "NS")]
     Ns(::std::vec::Vec<::std::string::String>),
+    /// <p>An attribute of type Null.  For example:</p>
+    /// <p>
+    /// <code>"NULL": true</code>
+    /// </p>
     #[serde(rename = "NULL")]
     Null(bool),
+    /// <p>An attribute of type  String. For example:</p>
+    /// <p>
+    /// <code>"S": "Hello"</code>
+    /// </p>
     #[serde(rename = "S")]
     S(::std::string::String),
+    /// <p>An attribute of type String Set.  For example:</p>
+    /// <p>
+    /// <code>"SS": ["Giraffe", "Hippo" ,"Zebra"]</code>
+    /// </p>
     #[serde(rename = "SS")]
     Ss(::std::vec::Vec<::std::string::String>),
 }

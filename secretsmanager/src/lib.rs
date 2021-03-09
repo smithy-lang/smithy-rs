@@ -53,7 +53,7 @@ pub use config::Config;
 
 mod aws_json_errors;
 mod blob_serde;
-mod config;
+pub mod config;
 pub mod error;
 mod idempotency_token;
 pub mod input;

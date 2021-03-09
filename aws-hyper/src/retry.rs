@@ -26,13 +26,14 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tracing::Instrument;
 
 /// Retry Policy Configuration
 ///
 /// Without specific use cases, users should generally rely on the default values set by `[RetryConfig::default]`(RetryConfig::default).`
 ///
 /// Currently these fields are private and no setters provided. As needed, this configuration will become user-modifiable in the future..
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RetryConfig {
     initial_retry_tokens: usize,
     retry_cost: usize,
@@ -86,6 +87,7 @@ const RETRY_COST: usize = 5;
 /// `CrossRequestRetryState`
 /// Its main functionality is via `new_handler` which creates a `RetryHandler` to manage the retry for
 /// an individual request.
+#[derive(Debug)]
 pub struct RetryHandlerFactory {
     config: RetryConfig,
     shared_state: CrossRequestRetryState,
@@ -112,7 +114,6 @@ impl RetryHandlerFactory {
     }
 }
 
-
 #[derive(Default, Clone)]
 struct RequestLocalRetryState {
     attempts: u32,
@@ -132,7 +133,7 @@ impl RequestLocalRetryState {
 struct RetryPartition(Cow<'static, str>); */
 
 /// Shared state between multiple requests to the same client.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct CrossRequestRetryState {
     quota_available: Arc<Mutex<usize>>,
 }
@@ -143,8 +144,7 @@ struct CrossRequestRetryState {
 impl CrossRequestRetryState {
     pub fn new(initial_quota: usize) -> Self {
         Self {
-            quota_available:
-            Arc::new(Mutex::new(initial_quota)),
+            quota_available: Arc::new(Mutex::new(initial_quota)),
         }
     }
 
@@ -251,16 +251,18 @@ where
     ) -> Option<Self::Future> {
         let policy = req.retry_policy();
         let retry = policy.classify(result);
-        let (next, fut) = match retry {
+        let (next, dur) = match retry {
             RetryKind::Explicit(dur) => (self.clone(), dur),
             RetryKind::NotRetryable => return None,
             RetryKind::Error(err) => self.attempt_retry(Err(err))?,
             _ => return None,
         };
+
         let fut = async move {
-            tokio::time::sleep(fut).await;
+            tokio::time::sleep(dur).await;
             next
-        };
+        }
+        .instrument(tracing::info_span!("retry", kind = &debug(retry)));
         Some(Box::pin(fut))
     }
 
@@ -271,9 +273,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::retry::{
-        RetryConfig, RetryHandlerFactory,
-    };
+    use crate::retry::{RetryConfig, RetryHandlerFactory};
     use smithy_types::retry::ErrorKind;
     use std::time::Duration;
 

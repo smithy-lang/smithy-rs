@@ -340,7 +340,7 @@ pub mod create_secret_input {
                 secret_binary: self.secret_binary,
                 client_request_token: self
                     .client_request_token
-                    .or_else(|| Some(_config.token_provider.token())),
+                    .or_else(|| Some(_config.make_token.make_idempotency_token())),
             });
 
             #[allow(unused_mut)]
@@ -1821,7 +1821,7 @@ pub mod put_secret_value_input {
             let op = PutSecretValue::new(PutSecretValueInput {
                 client_request_token: self
                     .client_request_token
-                    .or_else(|| Some(_config.token_provider.token())),
+                    .or_else(|| Some(_config.make_token.make_idempotency_token())),
                 secret_id: self.secret_id,
                 secret_string: self.secret_string,
                 secret_binary: self.secret_binary,
@@ -2102,7 +2102,7 @@ pub mod rotate_secret_input {
                 secret_id: self.secret_id,
                 client_request_token: self
                     .client_request_token
-                    .or_else(|| Some(_config.token_provider.token())),
+                    .or_else(|| Some(_config.make_token.make_idempotency_token())),
                 rotation_rules: self.rotation_rules,
                 rotation_lambda_arn: self.rotation_lambda_arn,
             });
@@ -2591,7 +2591,7 @@ pub mod update_secret_input {
                 description: self.description,
                 client_request_token: self
                     .client_request_token
-                    .or_else(|| Some(_config.token_provider.token())),
+                    .or_else(|| Some(_config.make_token.make_idempotency_token())),
                 secret_binary: self.secret_binary,
             });
 

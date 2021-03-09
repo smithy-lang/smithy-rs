@@ -2,6 +2,7 @@ use crate::body::SdkBody;
 use crate::property_bag::PropertyBag;
 use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
+use std::ops::DerefMut;
 use std::rc::Rc;
 
 #[derive(Clone)]
@@ -46,6 +47,13 @@ pub struct Operation<H, R> {
 impl<H, R> Operation<H, R> {
     pub fn into_request_response(self) -> (Request, Parts<H, R>) {
         (self.request, self.parts)
+    }
+    pub fn from_parts(request: Request, parts: Parts<H, R>) -> Self {
+        Self { request, parts }
+    }
+
+    pub fn config_mut(&mut self) -> impl DerefMut<Target = PropertyBag> + '_ {
+        self.request.config_mut()
     }
 
     pub fn with_metadata(mut self, metadata: Metadata) -> Self {

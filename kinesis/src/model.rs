@@ -75,24 +75,47 @@ impl<'de> ::serde::Deserialize<'de> for ScalingType {
     ::std::cmp::PartialEq,
 )]
 pub enum SubscribeToShardEventStream {
+    /// <p>The processing of the request failed because of an unknown error, exception, or
+    /// failure.</p>
     #[serde(rename = "InternalFailureException")]
     InternalFailureException(InternalFailureError),
+    /// <p>The ciphertext references a key that doesn't exist or that you don't have access
+    /// to.</p>
     #[serde(rename = "KMSAccessDeniedException")]
     KmsAccessDeniedException(KMSAccessDeniedError),
+    /// <p>The request was rejected because the specified customer master key (CMK) isn't
+    /// enabled.</p>
     #[serde(rename = "KMSDisabledException")]
     KmsDisabledException(KMSDisabledError),
+    /// <p>The request was rejected because the state of the specified resource isn't valid
+    /// for this request. For more information, see <a href="https://docs.aws.amazon.com/kms/latest/developerguide/key-state.html">How Key State Affects Use of a
+    /// Customer Master Key</a> in the <i>AWS Key Management Service Developer
+    /// Guide</i>.</p>
     #[serde(rename = "KMSInvalidStateException")]
     KmsInvalidStateException(KMSInvalidStateError),
+    /// <p>The request was rejected because the specified entity or resource can't be
+    /// found.</p>
     #[serde(rename = "KMSNotFoundException")]
     KmsNotFoundException(KMSNotFoundError),
+    /// <p>The AWS access key ID needs a subscription for the service.</p>
     #[serde(rename = "KMSOptInRequired")]
     KmsOptInRequired(KMSOptInRequired),
+    /// <p>The request was denied due to request throttling. For more information about
+    /// throttling, see <a href="https://docs.aws.amazon.com/kms/latest/developerguide/limits.html#requests-per-second">Limits</a> in
+    /// the <i>AWS Key Management Service Developer Guide</i>.</p>
     #[serde(rename = "KMSThrottlingException")]
     KmsThrottlingException(KMSThrottlingError),
+    /// <p>The resource is not available for this operation. For successful operation, the
+    /// resource must be in the <code>ACTIVE</code> state.</p>
     #[serde(rename = "ResourceInUseException")]
     ResourceInUseException(ResourceInUseError),
+    /// <p>The requested resource could not be found. The stream might not be specified
+    /// correctly.</p>
     #[serde(rename = "ResourceNotFoundException")]
     ResourceNotFoundException(ResourceNotFoundError),
+    /// <p>After you call <a>SubscribeToShard</a>, Kinesis Data Streams sends events
+    /// of this type to your consumer. For an example of how to handle these events, see <a href="/streams/latest/dev/building-enhanced-consumers-api.html">Enhanced Fan-Out
+    /// Using the Kinesis Data Streams API</a>.</p>
     #[serde(rename = "SubscribeToShardEvent")]
     SubscribeToShardEvent(SubscribeToShardEvent),
 }

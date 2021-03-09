@@ -701,7 +701,7 @@ impl DescribeLimitsInput {
             .header("X-Amz-Target", "Kinesis_20131202.DescribeLimits")
     }
     pub fn build_body(&self) -> ::std::vec::Vec<u8> {
-        vec![]
+        "{}".to_string().into()
     }
     pub fn assemble(
         builder: ::http::request::Builder,

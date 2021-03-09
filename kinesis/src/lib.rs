@@ -8,7 +8,7 @@ pub use config::Config;
 
 mod aws_json_errors;
 mod blob_serde;
-mod config;
+pub mod config;
 pub mod error;
 pub mod input;
 mod instant_epoch;
