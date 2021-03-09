@@ -24,13 +24,13 @@ impl Standard {
         Self(Connector::Https(hyper::Client::builder().build::<_, SdkBody>(https)))
     }
 
-    /// A connection based on the provided `Box<dyn HttpService>`
+    /// A connection based on the provided `impl HttpService`
     ///
-    /// Generally, `https()` should be used instead. This constructor is intended to support
+    /// Generally, [`Standard::https()`](Standard::https) should be used. This constructor is intended to support
     /// using things like [`TestConnection`](crate::test_connection::TestConnection) or alternative
     /// http implementations.
-    pub fn new(connector: Box<dyn HttpService>) -> Self {
-        Self(Connector::Dyn(connector))
+    pub fn new(connector: impl HttpService + 'static) -> Self {
+        Self(Connector::Dyn(Box::new(connector)))
     }
 }
 
