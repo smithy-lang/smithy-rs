@@ -81,12 +81,12 @@ class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvi
 
     override fun enumMeta(stringShape: StringShape): RustMetadata {
         return containerDefault.withDerives(
-            RuntimeType.Std("hash::Hash")
+            RuntimeType.std.member("hash::Hash")
         ).withDerives( // enums can be eq because they can only contain strings
-            RuntimeType.Std("cmp::Eq"),
+            RuntimeType.std.member("cmp::Eq"),
             // enums can be Ord because they can only contain strings
-            RuntimeType.Std("cmp::PartialOrd"),
-            RuntimeType.Std("cmp::Ord")
+            RuntimeType.std.member("cmp::PartialOrd"),
+            RuntimeType.std.member("cmp::Ord")
         )
     }
 
