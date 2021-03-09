@@ -1,5 +1,6 @@
 pub mod conn;
 mod retry;
+#[cfg(feature = "test-util")]
 pub mod test_connection;
 
 pub use retry::RetryConfig;
