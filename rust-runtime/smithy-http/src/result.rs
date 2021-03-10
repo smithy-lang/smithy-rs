@@ -10,15 +10,6 @@ use crate::middleware::ResponseBody;
 
 type BoxError = Box<dyn Error + Send + Sync>;
 /// Successful Sdk Result
-///
-/// Typically, transport implementations will type alias (or entirely wrap / transform) this type
-/// plugging in a concrete body implementation, eg:
-/// ```rust
-/// # mod hyper {
-/// #    pub struct Body;
-/// # }
-/// type SdkSuccess<O> = smithy_http::result::SdkSuccess<O, hyper::Body>;
-/// ```
 #[derive(Debug)]
 pub struct SdkSuccess<O> {
     pub raw: http::Response<ResponseBody>,
@@ -26,15 +17,6 @@ pub struct SdkSuccess<O> {
 }
 
 /// Failing Sdk Result
-///
-/// Typically, transport implementations will type alias (or entirely wrap / transform) this type
-/// by specifying a concrete body implementation:
-/// ```rust
-/// # mod hyper {
-/// #    pub struct Body;
-/// # }
-/// type SdkError<E> = smithy_http::result::SdkError<E, hyper::Body>;
-/// ```
 #[derive(Debug)]
 pub enum SdkError<E> {
     /// The request failed during construction. It was not dispatched over the network.

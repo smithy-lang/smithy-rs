@@ -32,7 +32,7 @@ fn errors_are_retryable() {
     let op = CreateAlias::builder().build(&conf);
     let err = Result::<SdkSuccess<CreateAliasOutput>, SdkError<CreateAliasError>>::Err(
         SdkError::ServiceError {
-            raw: http::Response::builder().body(ResponseBody::from("resp")).unwrap(),
+            raw: http::Response::builder().body(ResponseBody::from_static("resp")).unwrap(),
             err,
         },
     );

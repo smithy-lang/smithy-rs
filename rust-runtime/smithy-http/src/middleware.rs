@@ -16,15 +16,35 @@ use bytes::{Buf, Bytes};
 use http_body::Body;
 use std::error::Error;
 
+/// Body for debugging purposes
+///
+/// When receiving data from the AWS services, it is often helpful to be able to see the response
+/// body that a service generated. When the SDK has fully buffered the body into memory, this
+/// facilitates straightforward debugging of the response.
+///
+/// Take care when calling the debug implementation to avoid printing responses from sensitive operations.
 #[derive(Debug)]
 pub struct ResponseBody(Inner);
 
 impl ResponseBody {
-    pub fn from_static(s: &'static str) {
+    /// Load a response body from a static string
+    pub fn from_static(s: &'static str) -> Self {
         ResponseBody(Inner::Bytes(Bytes::from_static(s.as_bytes())))
+    }
+
+    /// Returns the raw bytes of this response
+    ///
+    /// When the response has been buffered into memory, the bytes are returned
+    /// If the response is streaming or errored during the read process, `None` is returned.
+    pub fn bytes(&self) -> Option<&[u8]> {
+        match &self.0 {
+            Inner::Bytes(bytes) => Some(&bytes),
+            _ => None
+        }
     }
 }
 
+/// Private ResponseBody internals
 #[derive(Debug)]
 enum Inner {
     Bytes(bytes::Bytes),

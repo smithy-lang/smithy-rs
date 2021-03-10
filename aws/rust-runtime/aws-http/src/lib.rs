@@ -121,7 +121,7 @@ mod test {
     }
 
     fn make_err<E>(err: E, raw: http::Response<&'static str>) -> Result<SdkSuccess<()>, SdkError<E>> {
-        Err(SdkError::ServiceError { err, raw: raw.map(|b|ResponseBody::from(b)) })
+        Err(SdkError::ServiceError { err, raw: raw.map(|b|ResponseBody::from_static(b)) })
     }
 
     #[test]
