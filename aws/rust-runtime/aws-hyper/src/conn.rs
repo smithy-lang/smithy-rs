@@ -21,7 +21,9 @@ impl Standard {
     /// An https connection
     pub fn https() -> Self {
         let https = HttpsConnector::new();
-        Self(Connector::Https(hyper::Client::builder().build::<_, SdkBody>(https)))
+        Self(Connector::Https(
+            hyper::Client::builder().build::<_, SdkBody>(https),
+        ))
     }
 
     /// A connection based on the provided `impl HttpService`
