@@ -19,8 +19,8 @@ use std::error::Error;
 #[derive(Debug)]
 pub struct ResponseBody(Inner);
 
-impl From<&'static str> for ResponseBody {
-    fn from(s: &'static str) -> Self {
+impl ResponseBody {
+    pub fn from_static(s: &'static str) {
         ResponseBody(Inner::Bytes(Bytes::from_static(s.as_bytes())))
     }
 }
