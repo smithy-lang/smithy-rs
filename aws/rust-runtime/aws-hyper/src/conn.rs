@@ -26,13 +26,13 @@ impl Standard {
         ))
     }
 
-    /// A connection based on the provided `Box<dyn HttpService>`
+    /// A connection based on the provided `impl HttpService`
     ///
-    /// Generally, `https()` should be used instead. This constructor is intended to support
+    /// Generally, [`Standard::https()`](Standard::https) should be used. This constructor is intended to support
     /// using things like [`TestConnection`](crate::test_connection::TestConnection) or alternative
     /// http implementations.
-    pub fn new(connector: Box<dyn HttpService>) -> Self {
-        Self(Connector::Dyn(connector))
+    pub fn new(connector: impl HttpService + 'static) -> Self {
+        Self(Connector::Dyn(Box::new(connector)))
     }
 }
 
@@ -64,7 +64,7 @@ impl Clone for Box<dyn HttpService> {
     }
 }
 
-pub trait HttpService: Send {
+pub trait HttpService: Send + Sync {
     /// Return whether this service is ready to accept a request
     ///
     /// See [`Service::poll_ready`](tower::Service::poll_ready)
@@ -92,6 +92,7 @@ impl<S> HttpService for S
 where
     S: Service<http::Request<SdkBody>, Response = http::Response<hyper::Body>>
         + Send
+        + Sync
         + Clone
         + 'static,
     S::Error: Into<BoxError> + Send + Sync + 'static,

@@ -138,11 +138,19 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::Client;
+    use crate::{Client, conn};
+    use crate::test_connection::TestConnection;
 
     #[test]
     fn construct_default_client() {
         let _ = Client::https();
+    }
+
+    #[test]
+    fn construct_test_client() {
+        let test_conn = TestConnection::<String>::new(vec![]);
+        let client = Client::new(conn::Standard::new(test_conn));
+        is_send_sync(client);
     }
 
     #[test]
@@ -151,5 +159,13 @@ mod tests {
         let s = format!("{:?}", client);
         assert!(s.contains("RetryConfig"));
         assert!(s.contains("quota_available"));
+    }
+
+    fn is_send_sync<T: Send + Sync>(_: T) {}
+
+    #[test]
+    fn client_is_send_sync() {
+        let c = Client::https();
+        is_send_sync(c);
     }
 }
