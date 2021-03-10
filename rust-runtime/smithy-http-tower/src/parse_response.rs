@@ -72,7 +72,7 @@ impl<S, O, T, E, B, R> tower::Service<operation::Operation<O, R>> for ParseRespo
 where
     S: Service<operation::Request, Response = http::Response<B>, Error = SendOperationError>,
     S::Future: 'static,
-    B: http_body::Body + Unpin + 'static,
+    B: http_body::Body + 'static,
     B::Error: Into<BoxError>,
     O: ParseHttpResponse<B, Output = Result<T, E>> + 'static,
     E: Error,
