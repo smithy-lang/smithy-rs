@@ -13,6 +13,7 @@ use crate::pin_mut;
 use crate::response::ParseHttpResponse;
 use crate::result::{SdkError, SdkSuccess};
 use bytes::{Buf, Bytes};
+use http::Response;
 use http_body::Body;
 use std::error::Error;
 
@@ -39,7 +40,7 @@ impl ResponseBody {
     pub fn bytes(&self) -> Option<&[u8]> {
         match &self.0 {
             Inner::Bytes(bytes) => Some(&bytes),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -51,7 +52,6 @@ enum Inner {
     Streaming,
     Err,
 }
-
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
@@ -111,27 +111,34 @@ pub async fn load_response<B, T, E, O>(
     handler: &O,
 ) -> Result<SdkSuccess<T>, SdkError<E>>
 where
-    B: http_body::Body + Unpin,
+    B: http_body::Body,
     B::Error: Into<BoxError>,
     O: ParseHttpResponse<B, Output = Result<T, E>>,
 {
     if let Some(parsed_response) = handler.parse_unloaded(&mut response) {
-        return sdk_result(parsed_response, response.map(|_|ResponseBody(Inner::Streaming)));
+        return sdk_result(
+            parsed_response,
+            response.map(|_| ResponseBody(Inner::Streaming)),
+        );
     }
+    let (parts, body) = response.into_parts();
 
-    let body = match read_body(response.body_mut()).await {
+    let body = match read_body(body).await {
         Ok(body) => body,
         Err(e) => {
             return Err(SdkError::ResponseError {
-                raw: response.map(|_|ResponseBody(Inner::Err)),
+                raw: Response::from_parts(parts, ResponseBody(Inner::Err)),
                 err: e.into(),
             });
         }
     };
 
-    let response = response.map(|_| Bytes::from(body));
+    let response = Response::from_parts(parts, Bytes::from(body));
     let parsed = handler.parse_loaded(&response);
-    sdk_result(parsed, response.map(|body|ResponseBody(Inner::Bytes(body))))
+    sdk_result(
+        parsed,
+        response.map(|body| ResponseBody(Inner::Bytes(body))),
+    )
 }
 
 async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
