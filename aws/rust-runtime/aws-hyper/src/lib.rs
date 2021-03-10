@@ -14,6 +14,7 @@ use aws_sig_auth::signer::SigV4Signer;
 use smithy_http::body::SdkBody;
 use smithy_http::operation::Operation;
 use smithy_http::response::ParseHttpResponse;
+pub use smithy_http::result::{SdkError, SdkSuccess};
 use smithy_http::retry::ClassifyResponse;
 use smithy_http_tower::dispatch::DispatchLayer;
 use smithy_http_tower::map_request::MapRequestLayer;
@@ -23,7 +24,6 @@ use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 use tower::{Service, ServiceBuilder, ServiceExt};
-pub use smithy_http::result::{SdkError, SdkSuccess};
 
 type BoxError = Box<dyn Error + Send + Sync>;
 pub type StandardClient = Client<conn::Standard>;
@@ -136,8 +136,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{Client, conn};
     use crate::test_connection::TestConnection;
+    use crate::{conn, Client};
 
     #[test]
     fn construct_default_client() {

@@ -88,11 +88,11 @@ where
 #[cfg(test)]
 mod test {
     use crate::AwsErrorRetryPolicy;
+    use smithy_http::middleware::ResponseBody;
     use smithy_http::result::{SdkError, SdkSuccess};
     use smithy_http::retry::ClassifyResponse;
     use smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
     use std::time::Duration;
-    use smithy_http::middleware::ResponseBody;
 
     struct UnmodeledError;
 
@@ -120,8 +120,14 @@ mod test {
         }
     }
 
-    fn make_err<E>(err: E, raw: http::Response<&'static str>) -> Result<SdkSuccess<()>, SdkError<E>> {
-        Err(SdkError::ServiceError { err, raw: raw.map(|b|ResponseBody::from_static(b)) })
+    fn make_err<E>(
+        err: E,
+        raw: http::Response<&'static str>,
+    ) -> Result<SdkSuccess<()>, SdkError<E>> {
+        Err(SdkError::ServiceError {
+            err,
+            raw: raw.map(|b| ResponseBody::from_static(b)),
+        })
     }
 
     #[test]

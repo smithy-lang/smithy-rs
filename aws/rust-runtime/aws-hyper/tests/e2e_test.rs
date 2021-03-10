@@ -7,6 +7,7 @@ use aws_auth::Credentials;
 use aws_endpoint::{set_endpoint_resolver, DefaultAwsEndpointResolver};
 use aws_http::user_agent::AwsUserAgent;
 use aws_http::AwsErrorRetryPolicy;
+use aws_hyper::test_connection::TestConnection;
 use aws_hyper::{Client, RetryConfig};
 use aws_sig_auth::signer::OperationSigningConfig;
 use aws_types::region::Region;
@@ -17,6 +18,7 @@ use smithy_http::body::SdkBody;
 use smithy_http::operation;
 use smithy_http::operation::Operation;
 use smithy_http::response::ParseHttpResponse;
+use smithy_http::result::SdkError;
 use smithy_types::retry::{ErrorKind, ProvideErrorKind};
 use std::convert::Infallible;
 use std::error::Error;
@@ -25,8 +27,6 @@ use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 use tokio::time::Instant;
-use aws_hyper::test_connection::TestConnection;
-use smithy_http::result::SdkError;
 
 #[derive(Clone)]
 struct TestOperationParser;
