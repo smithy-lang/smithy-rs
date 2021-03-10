@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use crate::middleware::ResponseBody;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
-use crate::middleware::ResponseBody;
 
 type BoxError = Box<dyn Error + Send + Sync>;
 /// Successful Sdk Result
@@ -34,7 +34,10 @@ pub enum SdkError<E> {
     },
 
     /// An error response was received from the service
-    ServiceError { err: E, raw: http::Response<ResponseBody> },
+    ServiceError {
+        err: E,
+        raw: http::Response<ResponseBody>,
+    },
 }
 
 impl<E> Display for SdkError<E>
