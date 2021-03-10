@@ -78,8 +78,8 @@ where
     O: ParseHttpResponse<B, Output = Result<T, E>> + 'static,
     E: Error,
 {
-    type Response = smithy_http::result::SdkSuccess<T, B>;
-    type Error = smithy_http::result::SdkError<E, B>;
+    type Response = smithy_http::result::SdkSuccess<T>;
+    type Error = smithy_http::result::SdkError<E>;
     type Future = BoxedResultFuture<Self::Response, Self::Error>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {

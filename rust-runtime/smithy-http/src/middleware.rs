@@ -16,6 +16,23 @@ use bytes::{Buf, Bytes};
 use http_body::Body;
 use std::error::Error;
 
+#[derive(Debug)]
+pub struct ResponseBody(Inner);
+
+impl From<&'static str> for ResponseBody {
+    fn from(s: &'static str) -> Self {
+        ResponseBody(Inner::Bytes(Bytes::from_static(s.as_bytes())))
+    }
+}
+
+#[derive(Debug)]
+enum Inner {
+    Bytes(bytes::Bytes),
+    Streaming,
+    Err,
+}
+
+
 type BoxError = Box<dyn Error + Send + Sync>;
 
 /// [`MapRequest`] defines a synchronous middleware that transforms an [`operation::Request`].
@@ -72,22 +89,21 @@ pub trait MapRequest {
 pub async fn load_response<B, T, E, O>(
     mut response: http::Response<B>,
     handler: &O,
-) -> Result<SdkSuccess<T, B>, SdkError<E, B>>
+) -> Result<SdkSuccess<T>, SdkError<E>>
 where
     B: http_body::Body + Unpin,
-    B: From<Bytes> + 'static,
     B::Error: Into<BoxError>,
     O: ParseHttpResponse<B, Output = Result<T, E>>,
 {
     if let Some(parsed_response) = handler.parse_unloaded(&mut response) {
-        return sdk_result(parsed_response, response);
+        return sdk_result(parsed_response, response.map(|_|ResponseBody(Inner::Streaming)));
     }
 
     let body = match read_body(response.body_mut()).await {
         Ok(body) => body,
         Err(e) => {
             return Err(SdkError::ResponseError {
-                raw: response,
+                raw: response.map(|_|ResponseBody(Inner::Err)),
                 err: e.into(),
             });
         }
@@ -95,7 +111,7 @@ where
 
     let response = response.map(|_| Bytes::from(body));
     let parsed = handler.parse_loaded(&response);
-    sdk_result(parsed, response.map(B::from))
+    sdk_result(parsed, response.map(|body|ResponseBody(Inner::Bytes(body))))
 }
 
 async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
@@ -112,10 +128,10 @@ async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
 }
 
 /// Convert a `Result<T, E>` into an `SdkResult` that includes the raw HTTP response
-fn sdk_result<T, E, B>(
+fn sdk_result<T, E>(
     parsed: Result<T, E>,
-    raw: http::Response<B>,
-) -> Result<SdkSuccess<T, B>, SdkError<E, B>> {
+    raw: http::Response<ResponseBody>,
+) -> Result<SdkSuccess<T>, SdkError<E>> {
     match parsed {
         Ok(parsed) => Ok(SdkSuccess { raw, parsed }),
         Err(err) => Err(SdkError::ServiceError { raw, err }),

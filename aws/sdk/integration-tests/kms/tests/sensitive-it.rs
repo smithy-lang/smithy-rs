@@ -10,6 +10,7 @@ use kms::Blob;
 use smithy_http::result::{SdkError, SdkSuccess};
 use smithy_http::retry::ClassifyResponse;
 use smithy_types::retry::{ErrorKind, RetryKind};
+use smithy_http::middleware::ResponseBody;
 
 #[test]
 fn validate_sensitive_trait() {
@@ -29,9 +30,9 @@ fn errors_are_retryable() {
     let conf = kms::Config::builder().build();
 
     let op = CreateAlias::builder().build(&conf);
-    let err = Result::<SdkSuccess<CreateAliasOutput, &str>, SdkError<CreateAliasError, &str>>::Err(
+    let err = Result::<SdkSuccess<CreateAliasOutput>, SdkError<CreateAliasError>>::Err(
         SdkError::ServiceError {
-            raw: http::Response::builder().body("resp").unwrap(),
+            raw: http::Response::builder().body(ResponseBody::from("resp")).unwrap(),
             err,
         },
     );

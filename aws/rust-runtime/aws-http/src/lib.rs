@@ -48,11 +48,11 @@ impl Default for AwsErrorRetryPolicy {
     }
 }
 
-impl<T, E, B> ClassifyResponse<T, SdkError<E, B>> for AwsErrorRetryPolicy
+impl<T, E> ClassifyResponse<T, SdkError<E>> for AwsErrorRetryPolicy
 where
     E: ProvideErrorKind,
 {
-    fn classify(&self, err: Result<&T, &SdkError<E, B>>) -> RetryKind {
+    fn classify(&self, err: Result<&T, &SdkError<E>>) -> RetryKind {
         let (err, response) = match err {
             Ok(_) => return RetryKind::NotRetryable,
             Err(SdkError::ServiceError { err, raw }) => (err, raw),
@@ -92,6 +92,7 @@ mod test {
     use smithy_http::retry::ClassifyResponse;
     use smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
     use std::time::Duration;
+    use smithy_http::middleware::ResponseBody;
 
     struct UnmodeledError;
 
@@ -119,8 +120,8 @@ mod test {
         }
     }
 
-    fn make_err<E, B>(err: E, raw: http::Response<B>) -> Result<SdkSuccess<(), B>, SdkError<E, B>> {
-        Err(SdkError::ServiceError { err, raw })
+    fn make_err<E>(err: E, raw: http::Response<&'static str>) -> Result<SdkSuccess<()>, SdkError<E>> {
+        Err(SdkError::ServiceError { err, raw: raw.map(|b|ResponseBody::from(b)) })
     }
 
     #[test]

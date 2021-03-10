@@ -23,12 +23,10 @@ use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 use tower::{Service, ServiceBuilder, ServiceExt};
+pub use smithy_http::result::{SdkError, SdkSuccess};
 
 type BoxError = Box<dyn Error + Send + Sync>;
 pub type StandardClient = Client<conn::Standard>;
-
-pub type SdkError<E> = smithy_http::result::SdkError<E, hyper::Body>;
-pub type SdkSuccess<T> = smithy_http::result::SdkSuccess<T, hyper::Body>;
 
 /// AWS Service Client
 ///
