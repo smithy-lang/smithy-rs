@@ -69,7 +69,7 @@ fn signing_config(
     let cred_provider = config
         .get::<CredentialsProvider>()
         .ok_or(SigningStageError::MissingCredentialsProvider)?;
-    let creds = cred_provider.credentials()?;
+    let creds = cred_provider.provide_credentials()?;
     let region = config
         .get::<SigningRegion>()
         .ok_or(SigningStageError::MissingSigningRegion)?;

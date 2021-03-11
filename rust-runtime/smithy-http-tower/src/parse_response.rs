@@ -4,7 +4,6 @@
  */
 
 use crate::SendOperationError;
-use bytes::Bytes;
 use smithy_http::middleware::load_response;
 use smithy_http::operation;
 use smithy_http::operation::Operation;
@@ -17,7 +16,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use tower::{BoxError, Layer, Service};
 use tracing::field::display;
-use tracing::{field, info_span, debug_span, Instrument};
+use tracing::{debug_span, field, info_span, Instrument};
 
 /// `ParseResponseService` dispatches [`Operation`](smithy_http::operation::Operation)s and parses them.
 ///
@@ -73,13 +72,13 @@ impl<S, O, T, E, B, R> tower::Service<operation::Operation<O, R>> for ParseRespo
 where
     S: Service<operation::Request, Response = http::Response<B>, Error = SendOperationError>,
     S::Future: 'static,
-    B: http_body::Body + Unpin + From<Bytes> + 'static,
+    B: http_body::Body + 'static,
     B::Error: Into<BoxError>,
     O: ParseHttpResponse<B, Output = Result<T, E>> + 'static,
     E: Error,
 {
-    type Response = smithy_http::result::SdkSuccess<T, B>;
-    type Error = smithy_http::result::SdkError<E, B>;
+    type Response = smithy_http::result::SdkSuccess<T>;
+    type Error = smithy_http::result::SdkError<E>;
     type Future = BoxedResultFuture<Self::Response, Self::Error>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -109,11 +108,11 @@ where
                 Err(e) => Err(e.into()),
                 Ok(resp) => {
                     // load_response contains reading the body as far as is required & parsing the response
-                    let response_span = debug_span!(
-                        "load_response",
-                    );
-                    load_response(resp, &handler).instrument(response_span).await
-                },
+                    let response_span = debug_span!("load_response",);
+                    load_response(resp, &handler)
+                        .instrument(response_span)
+                        .await
+                }
             };
             match &resp {
                 Ok(_) => inner_span.record("status", &"ok"),

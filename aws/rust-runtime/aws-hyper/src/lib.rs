@@ -1,25 +1,32 @@
+pub mod conn;
+mod retry;
+#[cfg(feature = "test-util")]
 pub mod test_connection;
 
+pub use retry::RetryConfig;
+
+use crate::conn::Standard;
+use crate::retry::RetryHandlerFactory;
 use aws_endpoint::AwsEndpointStage;
 use aws_http::user_agent::UserAgentStage;
 use aws_sig_auth::middleware::SigV4SigningStage;
 use aws_sig_auth::signer::SigV4Signer;
-use hyper::client::HttpConnector;
-use hyper::Client as HyperClient;
-use hyper_tls::HttpsConnector;
 use smithy_http::body::SdkBody;
 use smithy_http::operation::Operation;
 use smithy_http::response::ParseHttpResponse;
+pub use smithy_http::result::{SdkError, SdkSuccess};
+use smithy_http::retry::ClassifyResponse;
 use smithy_http_tower::dispatch::DispatchLayer;
 use smithy_http_tower::map_request::MapRequestLayer;
 use smithy_http_tower::parse_response::ParseResponseLayer;
+use smithy_types::retry::ProvideErrorKind;
 use std::error::Error;
+use std::fmt;
+use std::fmt::{Debug, Formatter};
 use tower::{Service, ServiceBuilder, ServiceExt};
 
 type BoxError = Box<dyn Error + Send + Sync>;
-
-pub type SdkError<E> = smithy_http::result::SdkError<E, hyper::Body>;
-pub type SdkSuccess<T> = smithy_http::result::SdkSuccess<T, hyper::Body>;
+pub type StandardClient = Client<conn::Standard>;
 
 /// AWS Service Client
 ///
@@ -36,24 +43,41 @@ pub type SdkSuccess<T> = smithy_http::result::SdkSuccess<T, hyper::Body>;
 ///    S::Error: Into<BoxError> + Send + Sync + 'static,
 ///    S::Future: Send + 'static,
 /// ```
-
 pub struct Client<S> {
     inner: S,
+    retry_handler: RetryHandlerFactory,
+}
+
+impl<S> Debug for Client<S> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut formatter = f.debug_struct("Client");
+        formatter.field("retry_handler", &self.retry_handler);
+        formatter.finish()
+    }
 }
 
 impl<S> Client<S> {
     /// Construct a new `Client` with a custom connector
     pub fn new(connector: S) -> Self {
-        Client { inner: connector }
+        Client {
+            inner: connector,
+            retry_handler: RetryHandlerFactory::new(RetryConfig::default()),
+        }
+    }
+
+    pub fn with_retry_config(mut self, retry_config: RetryConfig) -> Self {
+        self.retry_handler.with_config(retry_config);
+        self
     }
 }
 
-impl Client<hyper::Client<HttpsConnector<HttpConnector>, SdkBody>> {
+impl Client<Standard> {
     /// Construct an `https` based client
-    pub fn https() -> Self {
-        let https = HttpsConnector::new();
-        let client = HyperClient::builder().build::<_, SdkBody>(https);
-        Client { inner: client }
+    pub fn https() -> StandardClient {
+        Client {
+            inner: Standard::https(),
+            retry_handler: RetryHandlerFactory::new(RetryConfig::default()),
+        }
     }
 }
 
@@ -72,8 +96,9 @@ where
     /// access the raw response use `call_raw`.
     pub async fn call<O, T, E, Retry>(&self, input: Operation<O, Retry>) -> Result<T, SdkError<E>>
     where
-        O: ParseHttpResponse<hyper::Body, Output = Result<T, E>> + Send + 'static,
-        E: Error,
+        O: ParseHttpResponse<hyper::Body, Output = Result<T, E>> + Send + Clone + 'static,
+        E: Error + ProvideErrorKind,
+        Retry: ClassifyResponse<SdkSuccess<T>, SdkError<E>>,
     {
         self.call_raw(input).await.map(|res| res.parsed)
     }
@@ -87,14 +112,17 @@ where
         input: Operation<O, Retry>,
     ) -> Result<SdkSuccess<R>, SdkError<E>>
     where
-        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + 'static,
-        E: Error,
+        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + Clone + 'static,
+        E: Error + ProvideErrorKind,
+        Retry: ClassifyResponse<SdkSuccess<R>, SdkError<E>>,
     {
         let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
         let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);
         let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new());
         let inner = self.inner.clone();
         let mut svc = ServiceBuilder::new()
+            // Create a new request-scoped policy
+            .retry(self.retry_handler.new_handler())
             .layer(ParseResponseLayer::<O, Retry>::new())
             .layer(endpoint_resolver)
             .layer(signer)
@@ -108,10 +136,34 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::Client;
+    use crate::test_connection::TestConnection;
+    use crate::{conn, Client};
 
     #[test]
     fn construct_default_client() {
         let _ = Client::https();
+    }
+
+    #[test]
+    fn construct_test_client() {
+        let test_conn = TestConnection::<String>::new(vec![]);
+        let client = Client::new(conn::Standard::new(test_conn));
+        is_send_sync(client);
+    }
+
+    #[test]
+    fn client_debug_includes_retry_info() {
+        let client = Client::https();
+        let s = format!("{:?}", client);
+        assert!(s.contains("RetryConfig"));
+        assert!(s.contains("quota_available"));
+    }
+
+    fn is_send_sync<T: Send + Sync>(_: T) {}
+
+    #[test]
+    fn client_is_send_sync() {
+        let c = Client::https();
+        is_send_sync(c);
     }
 }

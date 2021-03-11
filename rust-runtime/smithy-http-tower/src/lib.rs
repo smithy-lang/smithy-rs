@@ -33,7 +33,7 @@ pub enum SendOperationError {
 }
 
 /// Convert a `SendOperationError` into an `SdkError`
-impl<E, B> From<SendOperationError> for SdkError<E, B> {
+impl<E> From<SendOperationError> for SdkError<E> {
     fn from(err: SendOperationError) -> Self {
         match err {
             SendOperationError::RequestDispatchError(e) => {

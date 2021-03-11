@@ -19,7 +19,7 @@ plugins {
 val smithyVersion: String by project
 
 val sdkOutputDir = buildDir.resolve("aws-sdk")
-val runtimeModules = listOf("smithy-types", "smithy-http", "smithy-http-tower")
+val runtimeModules = listOf("smithy-types", "smithy-http", "smithy-http-tower", "protocol-test-helpers")
 val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types", "aws-hyper", "aws-sig-auth", "aws-http")
 
 buildscript {
@@ -215,7 +215,7 @@ tasks.register<Exec>("cargoDocs") {
     workingDir(sdkOutputDir)
     // disallow warnings
     environment("RUSTDOCFLAGS", "-D warnings")
-    commandLine("cargo", "doc", "--no-deps")
+    commandLine("cargo", "doc", "--no-deps", "--document-private-items")
     dependsOn("assemble")
 }
 

@@ -250,7 +250,7 @@ class Instantiator(
                     RuntimeType.Config
                 )
                 if (shape.allMembers.values.any { it.hasTrait(IdempotencyTokenTrait::class.java) }) {
-                    rust(".token_provider(\"00000000-0000-4000-8000-000000000000\")")
+                    rust(".make_token(\"00000000-0000-4000-8000-000000000000\")")
                 }
                 rust(".build();")
             } else {

@@ -82,7 +82,7 @@ class SigV4SigningFeature(private val runtimeConfig: RuntimeConfig) :
     OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         return when (section) {
-            is OperationSection.Feature -> writable {
+            is OperationSection.MutateRequest -> writable {
                 // TODO: this needs to be customized for individual operations, not just `default_config()`
                 rustTemplate(
                     """

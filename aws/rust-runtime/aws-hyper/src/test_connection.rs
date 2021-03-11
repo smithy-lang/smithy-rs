@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use http::header::{HeaderName, CONTENT_TYPE};
 use http::Request;
+use protocol_test_helpers::{assert_ok, validate_body, MediaType};
 use smithy_http::body::SdkBody;
 use std::future::Ready;
 use std::ops::Deref;
@@ -18,12 +20,45 @@ pub struct ValidateRequest {
     pub actual: http::Request<SdkBody>,
 }
 
+impl ValidateRequest {
+    pub fn assert_matches(&self, ignore_headers: Vec<HeaderName>) {
+        let (actual, expected) = (&self.actual, &self.expected);
+        for (name, value) in expected.headers() {
+            if !ignore_headers.contains(name) {
+                let actual_header = actual
+                    .headers()
+                    .get(name)
+                    .unwrap_or_else(|| panic!("Header {:?} missing", name));
+                assert_eq!(actual_header, value, "Header mismatch for {:?}", name);
+            }
+        }
+        let actual_str = std::str::from_utf8(actual.body().bytes().unwrap_or(&[]));
+        let expected_str = std::str::from_utf8(expected.body().bytes().unwrap_or(&[]));
+        let media_type = if actual
+            .headers()
+            .get(CONTENT_TYPE)
+            .map(|v| v.to_str().unwrap().contains("json"))
+            .unwrap_or(false)
+        {
+            MediaType::Json
+        } else {
+            MediaType::Other("unknown".to_string())
+        };
+        match (actual_str, expected_str) {
+            (Ok(actual), Ok(expected)) => assert_ok(validate_body(actual, expected, media_type)),
+            _ => assert_eq!(actual.body().bytes(), expected.body().bytes()),
+        };
+        assert_eq!(actual.uri(), expected.uri());
+    }
+}
+
 /// TestConnection for use with a [`aws_hyper::Client`](crate::Client)
 ///
 /// A basic test connection. It will:
 /// - Response to requests with a preloaded series of responses
 /// - Record requests for future examination
 ///
+/// The generic parameter `B` is the type of the response body.
 /// For more complex use cases, see [Tower Test](https://docs.rs/tower-test/0.4.0/tower_test/)
 /// Usage example:
 /// ```rust
@@ -39,10 +74,19 @@ pub struct ValidateRequest {
 /// let conn = TestConnection::new(events);
 /// let client = aws_hyper::Client::new(conn);
 /// ```
-#[derive(Clone)]
 pub struct TestConnection<B> {
     data: Arc<Mutex<ConnectVec<B>>>,
     requests: Arc<Mutex<Vec<ValidateRequest>>>,
+}
+
+// Need a clone impl that ignores `B`
+impl<B> Clone for TestConnection<B> {
+    fn clone(&self) -> Self {
+        TestConnection {
+            data: self.data.clone(),
+            requests: self.requests.clone(),
+        }
+    }
 }
 
 impl<B> TestConnection<B> {

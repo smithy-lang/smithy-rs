@@ -19,7 +19,7 @@ class IdempotencyTokenSymbolProvider(private val base: RustSymbolProvider) : Wra
         check(shape is MemberShape)
         return initial.toBuilder().setDefault(
             Default.Custom {
-                write("_config.token_provider.token()")
+                write("_config.make_token.make_idempotency_token()")
             }
         ).build()
     }

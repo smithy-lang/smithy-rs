@@ -21,7 +21,7 @@ private fun CodegenWriterDelegator<RustWriter>.includedModules(): List<String> =
 /**
  * Allowlist of modules that will be exposed publicly in generated crates
  */
-private val PublicModules = setOf("error", "operation", "model", "input", "output")
+private val PublicModules = setOf("error", "operation", "model", "input", "output", "config")
 
 /**
  * Finalize all the writers by:
@@ -44,6 +44,13 @@ fun CodegenWriterDelegator<RustWriter>.finalize(settings: RustSettings, libRsCus
             }
         }
     }
+    this.useFileWriter("src/lib.rs", "crate::lib") { writer ->
+        val includedModules = this.includedModules().toSet().filter { it != "lib" }
+        val modules = includedModules.map { moduleName ->
+            RustModule.default(moduleName, PublicModules.contains(moduleName))
+        }
+        LibRsGenerator(settings.moduleDescription, modules, libRsCustomizations).render(writer)
+    }
     val cargoDependencies = loadDependencies().filterIsInstance<CargoDependency>().distinct()
     this.useFileWriter("Cargo.toml") {
         val cargoToml = CargoTomlGenerator(
@@ -52,13 +59,6 @@ fun CodegenWriterDelegator<RustWriter>.finalize(settings: RustSettings, libRsCus
             cargoDependencies,
         )
         cargoToml.render()
-    }
-    this.useFileWriter("src/lib.rs", "crate::lib") { writer ->
-        val includedModules = this.includedModules().toSet().filter { it != "lib" }
-        val modules = includedModules.map { moduleName ->
-            RustModule.default(moduleName, PublicModules.contains(moduleName))
-        }
-        LibRsGenerator(settings.moduleDescription, modules, libRsCustomizations).render(writer)
     }
     flushWriters()
 }

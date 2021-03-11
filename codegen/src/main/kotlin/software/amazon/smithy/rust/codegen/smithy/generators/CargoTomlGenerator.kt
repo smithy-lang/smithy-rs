@@ -7,12 +7,15 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 
 import com.moandjiezana.toml.TomlWriter
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Compile
-import software.amazon.smithy.rust.codegen.rustlang.Dev
+import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.utils.CodeWriter
 
-class CargoTomlGenerator(private val settings: RustSettings, private val writer: CodeWriter, private val dependencies: List<CargoDependency>) {
+class CargoTomlGenerator(
+    private val settings: RustSettings,
+    private val writer: CodeWriter,
+    private val dependencies: List<CargoDependency>
+) {
     fun render() {
         val cargoToml = mapOf(
             "package" to mapOf(
@@ -22,8 +25,10 @@ class CargoTomlGenerator(private val settings: RustSettings, private val writer:
                 "authors" to settings.moduleAuthors,
                 "edition" to "2018"
             ),
-            "dependencies" to dependencies.filter { it.scope == Compile }.map { it.name to it.toMap() }.toMap(),
-            "dev-dependencies" to dependencies.filter { it.scope == Dev }.map { it.name to it.toMap() }.toMap()
+            "dependencies" to dependencies.filter { it.scope == DependencyScope.Compile }.map { it.name to it.toMap() }
+                .toMap(),
+            "dev-dependencies" to dependencies.filter { it.scope == DependencyScope.Dev }.map { it.name to it.toMap() }
+                .toMap()
         )
         writer.writeWithNoFormatting(TomlWriter().write(cargoToml))
     }
