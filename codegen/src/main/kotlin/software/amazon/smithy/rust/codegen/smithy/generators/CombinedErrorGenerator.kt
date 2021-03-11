@@ -50,6 +50,8 @@ class CombinedErrorGenerator(
 ) {
 
     private val operationIndex = OperationIndex.of(model)
+    private val runtimeConfig = symbolProvider.config().runtimeConfig
+    private val genericError = RuntimeType.GenericError(symbolProvider.config().runtimeConfig)
     fun render(writer: RustWriter) {
         val errors = operationIndex.getErrors(operation)
         val symbol = operation.errorSymbol(symbolProvider)
@@ -58,15 +60,26 @@ class CombinedErrorGenerator(
             additionalAttributes = listOf(Attribute.NonExhaustive),
             public = true
         )
+
         meta.render(writer)
-        writer.rustBlock("enum ${symbol.name}") {
+        writer.rustBlock("struct ${symbol.name}") {
+            rust(
+                """
+                pub kind: ${symbol.name}Kind,
+                pub (crate) meta: #T
+            """,
+                RuntimeType.GenericError(runtimeConfig)
+            )
+        }
+        meta.render(writer)
+        writer.rustBlock("enum ${symbol.name}Kind") {
             errors.forEach { errorVariant ->
                 val errorSymbol = symbolProvider.toSymbol(errorVariant)
                 write("${errorSymbol.name}(#T),", errorSymbol)
             }
             rust(
                 """
-                /// An unexpected error, eg. invalid JSON returned by the service
+                /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
                 Unhandled(Box<dyn #T>),
             """,
                 RuntimeType.StdError
@@ -107,19 +120,41 @@ class CombinedErrorGenerator(
         }
 
         writer.rustBlock("impl ${symbol.name}") {
+            writer.rustBlock("pub fn new(kind: ${symbol.name}Kind, meta: #T) -> Self", genericError) {
+                rust("Self { kind, meta }")
+            }
             writer.rustBlock("pub fn unhandled<E: Into<Box<dyn #T>>>(err: E) -> Self", RuntimeType.StdError) {
-                write("${symbol.name}::Unhandled(err.into())")
+                rust(
+                    """
+                    Self {
+                        kind: ${symbol.name}Kind::Unhandled(err.into()),
+                        meta: Default::default()
+                    }
+
+                """
+                )
+            }
+
+            writer.rustBlock("pub fn generic(err: #T) -> Self", genericError) {
+                rust(
+                    """
+                    Self {
+                        meta: err.clone(),
+                        kind: ${symbol.name}Kind::Unhandled(err.into()),
+                    }
+
+                """
+                )
             }
 
             // Consider if this should actually be `Option<Cow<&str>>`. This would enable us to use display as implemented
             // by std::Error to generate a message in that case.
             writer.rustBlock("pub fn message(&self) -> Option<&str>") {
-                delegateToVariants {
-                    when (it) {
-                        is VariantMatch.Generic, is VariantMatch.Modeled -> writable { rust("_inner.message()") }
-                        else -> writable { rust("None") }
-                    }
-                }
+                rust("self.meta.message.as_deref()")
+            }
+
+            writer.rustBlock("pub fn request_id(&self) -> Option<&str>") {
+                rust("self.meta.request_id.as_deref()")
             }
 
             writer.rustBlock("pub fn code(&self) -> Option<&str>") {
@@ -177,17 +212,16 @@ class CombinedErrorGenerator(
     ) {
         val errors = operationIndex.getErrors(operation)
         val symbol = operation.errorSymbol(symbolProvider)
-        val genericError = RuntimeType.GenericError(symbolProvider.config().runtimeConfig)
-        rustBlock("match self") {
+        rustBlock("match &self.kind") {
             errors.forEach {
                 val errorSymbol = symbolProvider.toSymbol(it)
-                rust("""${symbol.name}::${errorSymbol.name}(_inner) => """)
+                rust("""${symbol.name}Kind::${errorSymbol.name}(_inner) => """)
                 handler(VariantMatch.Modeled(errorSymbol, it))(this)
                 write(",")
             }
             val genericHandler = handler(VariantMatch.Generic)
             val unhandledHandler = handler(VariantMatch.Unhandled)
-            rustBlock("${symbol.name}::Unhandled(_inner) =>") {
+            rustBlock("${symbol.name}Kind::Unhandled(_inner) =>") {
                 if (genericHandler != unhandledHandler) {
                     rustBlock("match _inner.downcast_ref::<#T>()", genericError) {
                         rustBlock("Some(_inner) => ") {

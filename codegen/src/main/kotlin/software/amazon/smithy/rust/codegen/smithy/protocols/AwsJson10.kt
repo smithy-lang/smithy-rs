@@ -239,7 +239,7 @@ class BasicAwsJsonGenerator(
                         parseErrorVariants(operationShape, errorSymbol)
                     }
                 } else {
-                    write("return Err(#T::unhandled(generic))", errorSymbol)
+                    write("return Err(#T::generic(generic))", errorSymbol)
                 }
             }
             // let body: OperationOutputBody = serde_json::from_slice(response.body()...);
@@ -282,7 +282,7 @@ class BasicAwsJsonGenerator(
             rustBlock("${error.name.dq()} => match #T(body)", RuntimeType.SerdeJson("from_value")) {
                 val variantName = symbolProvider.toSymbol(model.expectShape(error)).name
                 write(
-                    "Ok(body) => #T::$variantName(body),",
+                    "Ok(body) => #1T { kind: #1TKind::$variantName(body), meta: generic },",
                     errorSymbol
                 )
                 write("Err(e) => #T::unhandled(e)", errorSymbol)

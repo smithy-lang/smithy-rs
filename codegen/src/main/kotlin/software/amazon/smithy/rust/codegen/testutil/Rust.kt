@@ -197,13 +197,13 @@ fun RustWriter.compileAndTest(
         val output = this.toString()
             .compileAndTest(deps.toSet(), module = module, main = main, strict = clippy)
         if (expectFailure) {
-            println(this.toString())
+            // println(this.toString())
         }
         return output
     } catch (e: CommandFailed) {
         // When the test fails, print the code for convenience
         if (!expectFailure) {
-            println(this.toString())
+            // println(this.toString())
         }
         throw e
     }

@@ -6,11 +6,12 @@
 use aws_auth::Credentials;
 use aws_http::user_agent::AwsUserAgent;
 use aws_hyper::test_connection::TestConnection;
-use aws_hyper::Client;
+use aws_hyper::{Client, SdkError};
 use http::Uri;
+use kms::error::GenerateRandomErrorKind;
 use kms::operation::GenerateRandom;
-use smithy_http::body::SdkBody;
 use kms::{Config, Region};
+use smithy_http::body::SdkBody;
 use std::time::{Duration, UNIX_EPOCH};
 
 // TODO: having the full HTTP requests right in the code is a bit gross, consider something
@@ -137,13 +138,17 @@ async fn generate_random_keystore_not_found() {
     let client = Client::new(conn.clone());
     let err = client.call(op).await.expect_err("key store doesn't exist");
     let inner = match err {
-        aws_hyper::SdkError::ServiceError {
-            err: kms::error::GenerateRandomError::CustomKeyStoreNotFoundError(e),
-            ..
-        } => e,
+        SdkError::ServiceError { err, .. } => err,
         other => panic!("Incorrect error received: {:}", other),
     };
-    assert_eq!(inner.message, None);
+    assert!(matches!(
+        inner.kind,
+        GenerateRandomErrorKind::CustomKeyStoreNotFoundError(_)
+    ));
+    assert_eq!(
+        inner.request_id(),
+        Some("bfe81a0a-9a08-4e71-9910-cdb5ab6ea3b6")
+    );
     assert_eq!(conn.requests().len(), 1);
     for validate_request in conn.requests().iter() {
         validate_request.assert_matches(vec![]);
