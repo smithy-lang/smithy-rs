@@ -1,3 +1,4 @@
+use aws_hyper::conn::Standard;
 use aws_hyper::SdkError;
 use dynamodb::error::ListTablesError;
 use dynamodb::input::{list_tables_input, ListTablesInput};
@@ -13,7 +14,6 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use tower::{BoxError, Service};
-use aws_hyper::conn::Standard;
 
 pub struct DynamoDb {
     conn: Arc<aws_hyper::Client<Standard>>,
@@ -23,7 +23,7 @@ pub struct DynamoDb {
 pub struct ListTablesFluentBuilder {
     inner: list_tables_input::Builder,
     conf: Arc<dynamodb::Config>,
-    conn: Arc<aws_hyper::Client<Standard>>
+    conn: Arc<aws_hyper::Client<Standard>>,
 }
 
 impl ListTablesFluentBuilder {
@@ -31,7 +31,7 @@ impl ListTablesFluentBuilder {
         ListTablesFluentBuilder {
             conf,
             conn,
-            inner: Default::default()
+            inner: Default::default(),
         }
     }
     /// <p>The first table name that this operation will evaluate. Use the value that was returned for
@@ -54,16 +54,14 @@ impl ListTablesFluentBuilder {
 }
 
 impl DynamoDb {
-    pub fn list_tables(
-        &self,
-    ) -> ListTablesFluentBuilder {
+    pub fn list_tables(&self) -> ListTablesFluentBuilder {
         ListTablesFluentBuilder::new(self.conf.clone(), self.conn.clone())
     }
 
     pub fn from_env() -> Self {
         DynamoDb {
             conf: Arc::new(Config::builder().build()),
-            conn: Arc::new(aws_hyper::Client::https())
+            conn: Arc::new(aws_hyper::Client::https()),
         }
     }
 }
@@ -80,7 +78,8 @@ mod tests {
             .list_tables()
             .limit(10)
             .exclusive_start_table_name("start_table")
-            .execute().await;
+            .execute()
+            .await;
         println!("{:#?}", tables);
     }
 }
