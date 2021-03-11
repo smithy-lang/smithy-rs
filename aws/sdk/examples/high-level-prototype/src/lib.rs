@@ -13,66 +13,57 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use tower::{BoxError, Service};
+use aws_hyper::conn::Standard;
 
 pub struct DynamoDb {
-    conn: aws_hyper::Client<HttpService>,
-    conf: dynamodb::Config,
+    conn: Arc<aws_hyper::Client<Standard>>,
+    conf: Arc<dynamodb::Config>,
 }
 
-#[derive(Clone)]
-struct HttpService(Arc<Mutex<dyn HttpServiceT>>);
-
-trait HttpServiceT: Send + Sync {
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), BoxError>>;
-    fn call(
-        &mut self,
-        req: http::Request<SdkBody>,
-    ) -> Pin<Box<dyn Future<Output = Result<http::Response<hyper::Body>, BoxError>> + Send>>;
+pub struct ListTablesFluentBuilder {
+    inner: list_tables_input::Builder,
+    conf: Arc<dynamodb::Config>,
+    conn: Arc<aws_hyper::Client<Standard>>
 }
 
-impl HttpServiceT for hyper::Client<HttpsConnector<HttpConnector>, SdkBody> {
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), BoxError>> {
-        Service::poll_ready(self, cx).map_err(|e| e.into())
+impl ListTablesFluentBuilder {
+    fn new(conf: Arc<dynamodb::Config>, conn: Arc<aws_hyper::Client<Standard>>) -> Self {
+        ListTablesFluentBuilder {
+            conf,
+            conn,
+            inner: Default::default()
+        }
+    }
+    /// <p>The first table name that this operation will evaluate. Use the value that was returned for
+    /// <code>LastEvaluatedTableName</code> in a previous operation, so that you can obtain the next page
+    /// of results.</p>
+    pub fn exclusive_start_table_name(mut self, inp: impl Into<::std::string::String>) -> Self {
+        self.inner = self.inner.exclusive_start_table_name(inp);
+        self
+    }
+    /// <p>A maximum number of table names to return. If this parameter is not specified, the limit is 100.</p>
+    pub fn limit(mut self, inp: i32) -> Self {
+        self.inner = self.inner.limit(inp);
+        self
     }
 
-    fn call(
-        &mut self,
-        req: http::Request<SdkBody>,
-    ) -> Pin<Box<dyn Future<Output = Result<http::Response<hyper::Body>, BoxError>> + Send>> {
-        let inner = Service::call(self, req);
-        let fut = async move { inner.await.map_err(|err| err.into()) };
-        Box::pin(fut)
-    }
-}
-
-impl tower::Service<http::Request<SdkBody>> for HttpService {
-    type Response = http::Response<hyper::Body>;
-    type Error = BoxError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.0.lock().unwrap().poll_ready(cx)
-    }
-
-    fn call(&mut self, req: http::Request<SdkBody>) -> Self::Future {
-        self.0.lock().unwrap().call(req)
+    pub async fn execute(self) -> Result<ListTablesOutput, SdkError<ListTablesError>> {
+        let op = self.inner.build(&self.conf);
+        self.conn.call(op).await
     }
 }
 
 impl DynamoDb {
-    pub async fn list_tables(
+    pub fn list_tables(
         &self,
-        op: list_tables_input::Builder,
-    ) -> Result<ListTablesOutput, SdkError<ListTablesError>> {
-        self.conn.call(op.build(&self.conf)).await
+    ) -> ListTablesFluentBuilder {
+        ListTablesFluentBuilder::new(self.conf.clone(), self.conn.clone())
     }
 
     pub fn from_env() -> Self {
-        let https = HttpsConnector::new();
-        let client = hyper::Client::builder().build::<_, SdkBody>(https);
         DynamoDb {
-            conf: Config::builder().build(),
-            conn: aws_hyper::Client::new(HttpService(Arc::new(Mutex::new(client)))),
+            conf: Arc::new(Config::builder().build()),
+            conn: Arc::new(aws_hyper::Client::https())
         }
     }
 }
@@ -86,9 +77,10 @@ mod tests {
     async fn list_tables() {
         let client = DynamoDb::from_env();
         let tables = client
-            .list_tables(ListTables::builder())
-            .await
-            .expect("list tables should succeed");
+            .list_tables()
+            .limit(10)
+            .exclusive_start_table_name("start_table")
+            .execute().await;
         println!("{:#?}", tables);
     }
 }
