@@ -1,19 +1,19 @@
 use aws_hyper::conn::Standard;
 use aws_hyper::SdkError;
 use dynamodb::error::ListTablesError;
-use dynamodb::input::{list_tables_input, ListTablesInput};
-use dynamodb::operation::ListTables;
+use dynamodb::input::{list_tables_input};
+
 use dynamodb::output::ListTablesOutput;
 use dynamodb::Config;
-use http::Request;
-use hyper::client::HttpConnector;
-use hyper_tls::HttpsConnector;
-use smithy_http::body::SdkBody;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll};
-use tower::{BoxError, Service};
+
+
+
+
+
+
+use std::sync::{Arc};
+
+use tower::{Service};
 
 pub struct DynamoDb {
     conn: Arc<aws_hyper::Client<Standard>>,
@@ -69,7 +69,7 @@ impl DynamoDb {
 #[cfg(test)]
 mod tests {
     use crate::DynamoDb;
-    use dynamodb::operation::ListTables;
+
 
     #[tokio::test]
     async fn list_tables() {
