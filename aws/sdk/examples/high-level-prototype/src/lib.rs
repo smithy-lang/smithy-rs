@@ -2,13 +2,16 @@ pub mod hl;
 
 #[cfg(test)]
 mod tests {
-    use dynamodb::model::{AttributeDefinition, ScalarAttributeType, KeySchemaElement, KeyType, ProvisionedThroughput};
     use crate::hl::DynamoDb;
+    use dynamodb::model::{
+        AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType,
+    };
 
     #[tokio::test]
     async fn list_tables() {
         let client = DynamoDb::from_env();
-        let new_table = client.create_table()
+        let new_table = client
+            .create_table()
             .table_name("my-fancy-new-table")
             .key_schema(vec![
                 KeySchemaElement::builder()
@@ -35,7 +38,9 @@ mod tests {
                     .read_capacity_units(10)
                     .write_capacity_units(10)
                     .build(),
-            ).execute().await;
+            )
+            .execute()
+            .await;
 
         eprintln!("Created a new table: {:?}", new_table);
         let tables = client

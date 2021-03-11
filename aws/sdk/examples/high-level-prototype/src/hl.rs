@@ -5,14 +5,17 @@
 
 use aws_hyper::conn::Standard;
 use aws_hyper::SdkError;
-use dynamodb::error::{ListTablesError, CreateTableError};
-use dynamodb::input::{list_tables_input, create_table_input};
+use dynamodb::error::{CreateTableError, ListTablesError};
+use dynamodb::input::{create_table_input, list_tables_input};
 
-use dynamodb::output::{ListTablesOutput, CreateTableOutput};
+use dynamodb::output::{CreateTableOutput, ListTablesOutput};
 use dynamodb::Config;
 
+use dynamodb::model::{
+    AttributeDefinition, BillingMode, GlobalSecondaryIndex, KeySchemaElement, LocalSecondaryIndex,
+    ProvisionedThroughput, SSESpecification, StreamSpecification, Tag,
+};
 use std::sync::Arc;
-use dynamodb::model::{AttributeDefinition, KeySchemaElement, LocalSecondaryIndex, GlobalSecondaryIndex, BillingMode, ProvisionedThroughput, StreamSpecification, SSESpecification, Tag};
 
 struct Handle {
     conn: aws_hyper::Client<Standard>,
@@ -20,14 +23,13 @@ struct Handle {
 }
 
 pub struct DynamoDb {
-    handle: Arc<Handle>
+    handle: Arc<Handle>,
 }
 
 pub struct ListTablesFluentBuilder {
     inner: list_tables_input::Builder,
-    ddb: Arc<Handle>
+    ddb: Arc<Handle>,
 }
-
 
 impl ListTablesFluentBuilder {
     fn new(handler: Arc<Handle>) -> Self {
@@ -57,7 +59,7 @@ impl ListTablesFluentBuilder {
 
 pub struct CreateTableFluentBuilder {
     inner: create_table_input::Builder,
-    ddb: Arc<Handle>
+    ddb: Arc<Handle>,
 }
 
 impl CreateTableFluentBuilder {
@@ -181,10 +183,7 @@ impl CreateTableFluentBuilder {
     /// </ul>
     /// </li>
     /// </ul>
-    pub fn local_secondary_indexes(
-        mut self,
-        inp: ::std::vec::Vec<LocalSecondaryIndex>,
-    ) -> Self {
+    pub fn local_secondary_indexes(mut self, inp: ::std::vec::Vec<LocalSecondaryIndex>) -> Self {
         self.inner = self.inner.local_secondary_indexes(inp);
         self
     }
@@ -243,10 +242,7 @@ impl CreateTableFluentBuilder {
     /// consisting of read and write capacity units.</p>
     /// </li>
     /// </ul>
-    pub fn global_secondary_indexes(
-        mut self,
-        inp: ::std::vec::Vec<GlobalSecondaryIndex>,
-    ) -> Self {
+    pub fn global_secondary_indexes(mut self, inp: ::std::vec::Vec<GlobalSecondaryIndex>) -> Self {
         self.inner = self.inner.global_secondary_indexes(inp);
         self
     }
@@ -346,10 +342,10 @@ impl DynamoDb {
 
     pub fn from_env() -> Self {
         DynamoDb {
-            handle: Arc::new(Handle{
+            handle: Arc::new(Handle {
                 conf: Config::builder().build(),
-                conn: aws_hyper::Client::https()
-            })
+                conn: aws_hyper::Client::https(),
+            }),
         }
     }
 }
