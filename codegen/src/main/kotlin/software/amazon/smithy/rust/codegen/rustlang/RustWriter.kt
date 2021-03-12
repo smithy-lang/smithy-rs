@@ -102,7 +102,12 @@ fun <T : CodeWriter> T.rustTemplate(
 /*
  * Writes a Rust-style block, demarcated by curly braces
  */
-fun <T : CodeWriter> T.rustBlock(header: String, vararg args: Any, block: T.() -> Unit): T {
+fun <T : CodeWriter> T.rustBlock(
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}")
+    header: String,
+    vararg args: Any,
+    block: T.() -> Unit
+): T {
     openBlock("$header {", *args)
     block(this)
     closeBlock("}")

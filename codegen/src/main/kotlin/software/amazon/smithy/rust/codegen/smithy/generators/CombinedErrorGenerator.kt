@@ -103,19 +103,18 @@ class CombinedErrorGenerator(
             }
 
             rustBlock("fn retryable_error_kind(&self) -> Option<#T>", errorKindT) {
-                delegateToVariants {
-                    when (it) {
-                        is VariantMatch.Modeled -> writable {
-                            if (it.shape.hasTrait(RetryableTrait::class.java)) {
-                                rust("Some(_inner.retryable_error_kind())")
-                            } else {
-                                rust("None")
-                            }
+                val retryableVariants = errors.filter { it.hasTrait(RetryableTrait::class.java) }
+                if (retryableVariants.isEmpty()) {
+                    rust("None")
+                } else {
+                    rustBlock("match &self.kind") {
+                        retryableVariants.forEach {
+                            val errorSymbol = symbolProvider.toSymbol(it)
+                            rust("""${symbol.name}Kind::${errorSymbol.name}(inner) => Some(inner.retryable_error_kind()),""")
                         }
-                        is VariantMatch.Unhandled -> writable { rust("None") }
+                        rust("_ => None")
                     }
                 }
-                rust(".or_else(||self.meta.retryable_error_kind())")
             }
         }
 
