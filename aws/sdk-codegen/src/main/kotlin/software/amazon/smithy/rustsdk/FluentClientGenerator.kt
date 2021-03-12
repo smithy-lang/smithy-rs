@@ -67,7 +67,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             rustTemplate(
                 """
                 pub fn from_env() -> Self {
-                    Self::from_conf_conn(crate::Config::builder.build(), #{aws_hyper}::conn::Standard::https())
+                    Self::from_conf_conn(crate::Config::builder().build(), #{aws_hyper}::conn::Standard::https())
                 }
 
                 pub fn from_conf_conn(conf: crate::Config, conn: #{aws_hyper}::conn::Standard) -> Self {
@@ -97,7 +97,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                 rust(
                     """
                 pub struct $name {
-                    handle: super::Handle,
+                    handle: std::sync::Arc<super::Handle>,
                     inner: #T
                 }""",
                     input.builderSymbol(symbolProvider)
@@ -106,12 +106,13 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                 rustBlock("impl $name") {
                     rustTemplate(
                         """
-                    pub(crate) fn new(handle: std::sync::Arc<super::Handle>) {
+                    pub(crate) fn new(handle: std::sync::Arc<super::Handle>) -> Self {
                         Self { handle, inner: Default::default() }
                     }
+
                     pub async fn execute(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>> {
                         let op = self.inner.build(&self.handle.conf);
-                        self.handle.conn.call(op).await
+                        self.handle.client.call(op).await
                     }
                     """,
                         "ok" to symbolProvider.toSymbol(operation.outputShape(model)),
