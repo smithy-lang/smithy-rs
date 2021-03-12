@@ -36,7 +36,7 @@ sealed class RustType {
 
     object String : RustType() {
         override val name: kotlin.String = "String"
-        override val namespace = "::std::string"
+        override val namespace = "std::string"
     }
 
     data class Float(val precision: Int) : RustType() {
@@ -54,13 +54,23 @@ sealed class RustType {
     data class HashMap(val key: RustType, override val member: RustType) : RustType(), Container {
         // TODO: assert that underneath, the member is a String
         override val name: kotlin.String = "HashMap"
-        override val namespace = "::std::collections"
+        override val namespace = "std::collections"
+
+        companion object {
+            val RuntimeType = RuntimeType("HashMap", dependency = null, namespace = "std::collections")
+        }
     }
 
     data class HashSet(override val member: RustType) : RustType(), Container {
         // TODO: assert that underneath, the member is a String
-        override val name: kotlin.String = SetType
-        override val namespace = SetNamespace
+        override val name: kotlin.String = Type
+        override val namespace = Namespace
+
+        companion object {
+            const val Type = "BTreeSet"
+            const val Namespace = "std::collections"
+            val RuntimeType = RuntimeType(name = Type, namespace = Namespace, dependency = null)
+        }
     }
 
     data class Reference(val lifetime: kotlin.String?, override val member: RustType) : RustType(), Container {
@@ -69,12 +79,12 @@ sealed class RustType {
 
     data class Option(override val member: RustType) : RustType(), Container {
         override val name: kotlin.String = "Option"
-        override val namespace = "::std::option"
+        override val namespace = "std::option"
     }
 
     data class Box(override val member: RustType) : RustType(), Container {
         override val name: kotlin.String = "Box"
-        override val namespace = "::std::boxed"
+        override val namespace = "std::boxed"
     }
 
     data class Dyn(override val member: RustType) : RustType(), Container {
@@ -84,15 +94,10 @@ sealed class RustType {
 
     data class Vec(override val member: RustType) : RustType(), Container {
         override val name: kotlin.String = "Vec"
-        override val namespace = "::std::vec"
+        override val namespace = "std::vec"
     }
 
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
-
-    companion object {
-        const val SetType = "BTreeSet"
-        const val SetNamespace = "::std::collections"
-    }
 }
 
 fun RustType.render(fullyQualified: Boolean): String {

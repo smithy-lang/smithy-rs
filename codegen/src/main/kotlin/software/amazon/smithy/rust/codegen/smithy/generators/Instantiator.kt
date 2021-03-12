@@ -128,7 +128,7 @@ class Instantiator(
         if (symbolProvider.toSymbol(shape).rustType() is RustType.HashSet) {
             if (!data.isEmpty) {
                 writer.rustBlock("") {
-                    write("let mut ret = #T::new();", RuntimeType.HashSet)
+                    write("let mut ret = #T::new();", RustType.HashSet.RuntimeType)
                     data.forEach { v ->
                         withBlock("ret.insert(", ");") {
                             renderMember(this, shape.member, v)
@@ -137,7 +137,7 @@ class Instantiator(
                     write("ret")
                 }
             } else {
-                writer.write("#T::new()", RuntimeType.HashSet)
+                writer.write("#T::new()", RustType.HashSet.RuntimeType)
             }
         } else {
             renderList(writer, shape, data)
@@ -160,7 +160,7 @@ class Instantiator(
     ) {
         if (data.members.isNotEmpty()) {
             writer.rustBlock("") {
-                write("let mut ret = #T::new();", RuntimeType.HashMap)
+                write("let mut ret = #T::new();", RustType.HashMap.RuntimeType)
                 data.members.forEach { (k, v) ->
                     withBlock("ret.insert(${k.value.dq()}.to_string(),", ");") {
                         renderMember(this, shape.value, v)
@@ -169,7 +169,7 @@ class Instantiator(
                 write("ret")
             }
         } else {
-            writer.write("#T::new()", RuntimeType.HashMap)
+            writer.write("#T::new()", RustType.HashMap.RuntimeType)
         }
     }
 

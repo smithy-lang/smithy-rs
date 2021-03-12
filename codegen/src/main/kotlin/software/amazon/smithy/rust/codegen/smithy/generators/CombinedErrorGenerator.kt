@@ -54,7 +54,7 @@ class CombinedErrorGenerator(
         val errors = operationIndex.getErrors(operation)
         val symbol = operation.errorSymbol(symbolProvider)
         val meta = RustMetadata(
-            derives = Derives(setOf(RuntimeType.StdFmt("Debug"))),
+            derives = Derives(setOf(RuntimeType.Debug)),
             additionalAttributes = listOf(Attribute.NonExhaustive),
             public = true
         )
@@ -72,7 +72,7 @@ class CombinedErrorGenerator(
                 RuntimeType.StdError
             )
         }
-        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.StdFmt("Display")) {
+        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.stdfmt.member("Display")) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 delegateToVariants {
                     writable { rust("_inner.fmt(f)") }
