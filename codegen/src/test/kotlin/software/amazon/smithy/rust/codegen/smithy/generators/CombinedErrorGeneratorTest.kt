@@ -20,7 +20,7 @@ internal class CombinedErrorGeneratorTest {
         val model = """
         namespace error
         operation Greeting {
-            errors: [InvalidGreeting, ComplexError, FooError]
+            errors: [InvalidGreeting, ComplexError, FooException]
         }
 
         @error("client")
@@ -30,7 +30,7 @@ internal class CombinedErrorGeneratorTest {
         }
 
         @error("server")
-        structure FooError {}
+        structure FooException {}
 
         @error("server")
         structure ComplexError {
@@ -40,7 +40,7 @@ internal class CombinedErrorGeneratorTest {
         """.asSmithyModel()
         val symbolProvider = testSymbolProvider(model)
         val writer = RustWriter.forModule("error")
-        listOf("FooError", "ComplexError", "InvalidGreeting").forEach {
+        listOf("FooException", "ComplexError", "InvalidGreeting").forEach {
             model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, writer)
         }
 
@@ -50,7 +50,7 @@ internal class CombinedErrorGeneratorTest {
         writer.compileAndTest(
             """
             let kind = GreetingErrorKind::InvalidGreeting(InvalidGreeting::builder().message("an error").build());
-            let error = GreetingError { kind, meta: smithy_types::Error { code: None, message: Some("an error".to_string()), request_id: None }};
+            let error = GreetingError::new(kind, smithy_types::Error { code: Some("InvalidGreeting".to_string()), message: Some("an error".to_string()), request_id: None });
             assert_eq!(format!("{}", error), "InvalidGreeting: an error");
             assert_eq!(error.message(), Some("an error"));
             assert_eq!(error.code(), Some("InvalidGreeting"));
@@ -69,6 +69,10 @@ internal class CombinedErrorGeneratorTest {
             let error = GreetingError::unhandled("some other error");
             assert_eq!(error.message(), None);
             assert_eq!(error.code(), None);
+
+            // indicate the original name in the display output
+            let error = FooError::builder().build();
+            assert_eq!(format!("{}", error), "FooError [FooException]")
         """
         )
     }

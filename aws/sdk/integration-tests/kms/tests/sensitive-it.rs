@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use kms::error::{CreateAliasError, CreateAliasErrorKind, LimitExceededError};
 use kms::operation::CreateAlias;
-use kms::output::{CreateAliasOutput, GenerateRandomOutput};
+use kms::output::GenerateRandomOutput;
 use kms::Blob;
 use smithy_http::middleware::ResponseBody;
-use smithy_http::result::{SdkError, SdkSuccess};
+use smithy_http::result::SdkError;
 use smithy_http::retry::ClassifyResponse;
 use smithy_types::retry::{ErrorKind, RetryKind};
 
@@ -23,22 +22,22 @@ fn validate_sensitive_trait() {
     );
 }
 
+/// Parse a semi-real response body and assert that the correct retry status is returned
 #[test]
 fn errors_are_retryable() {
-    let kind = CreateAliasErrorKind::LimitExceededError(LimitExceededError::builder().build());
-    let err = CreateAliasError::new(kind, Default::default());
-    assert_eq!(err.code(), Some("LimitExceededException"));
     let conf = kms::Config::builder().build();
-
-    let op = CreateAlias::builder().build(&conf);
-    let err = Result::<SdkSuccess<CreateAliasOutput>, SdkError<CreateAliasError>>::Err(
-        SdkError::ServiceError {
-            raw: http::Response::builder()
-                .body(ResponseBody::from_static("resp"))
-                .unwrap(),
-            err,
-        },
-    );
-    let retry_kind = op.retry_policy().classify(err.as_ref());
+    let (_, parts) = CreateAlias::builder().build(&conf).into_request_response();
+    let http_response = http::Response::builder()
+        .status(400)
+        .body(r#"{ "code": "LimitExceededException" }"#)
+        .unwrap();
+    let err = parts
+        .response_handler
+        .parse_response(&http_response)
+        .map_err(|e| SdkError::ServiceError {
+            err: e,
+            raw: http_response.map(ResponseBody::from_static),
+        });
+    let retry_kind = parts.retry_policy.classify(err.as_ref());
     assert_eq!(retry_kind, RetryKind::Error(ErrorKind::ThrottlingError));
 }

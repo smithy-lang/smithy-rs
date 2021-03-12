@@ -112,10 +112,10 @@ class CombinedErrorGenerator(
                                 rust("None")
                             }
                         }
-                        is VariantMatch.Generic -> writable { rust("_inner.retryable_error_kind()") }
                         is VariantMatch.Unhandled -> writable { rust("None") }
                     }
                 }
+                rust(".or_else(||self.meta.retryable_error_kind())")
             }
         }
 
@@ -158,13 +158,7 @@ class CombinedErrorGenerator(
             }
 
             writer.rustBlock("pub fn code(&self) -> Option<&str>") {
-                delegateToVariants {
-                    when (it) {
-                        is VariantMatch.Unhandled -> writable { rust("None") }
-                        is VariantMatch.Modeled -> writable { rust("Some(_inner.code())") }
-                        is VariantMatch.Generic -> writable { rust("_inner.code()") }
-                    }
-                }
+                rust("self.meta.code.as_deref()")
             }
         }
 
@@ -174,7 +168,7 @@ class CombinedErrorGenerator(
                     writable {
                         when (it) {
                             is VariantMatch.Unhandled -> rust("Some(_inner.as_ref())")
-                            is VariantMatch.Generic, is VariantMatch.Modeled -> rust("Some(_inner)")
+                            is VariantMatch.Modeled -> rust("Some(_inner)")
                         }
                     }
                 }
@@ -184,7 +178,6 @@ class CombinedErrorGenerator(
 
     sealed class VariantMatch(name: String) : Section(name) {
         object Unhandled : VariantMatch("Unhandled")
-        object Generic : VariantMatch("Generic")
         data class Modeled(val symbol: Symbol, val shape: Shape) : VariantMatch("Modeled")
     }
 
@@ -195,10 +188,7 @@ class CombinedErrorGenerator(
      *    GreetingWithErrorsError::InvalidGreeting(_inner) => inner.fmt(f),
      *    GreetingWithErrorsError::ComplexError(_inner) => inner.fmt(f),
      *    GreetingWithErrorsError::FooError(_inner) => inner.fmt(f),
-     *    GreetingWithErrorsError::Unhandled(_inner) => match inner.downcast_ref::<::smithy_types::Error>() {
-     *      Some(_inner) => inner.message(),
-     *      None => None,
-     *    }
+     *    GreetingWithErrorsError::Unhandled(_inner) => _inner.fmt(f),
      *  }
      *  ```
      *
@@ -219,22 +209,9 @@ class CombinedErrorGenerator(
                 handler(VariantMatch.Modeled(errorSymbol, it))(this)
                 write(",")
             }
-            val genericHandler = handler(VariantMatch.Generic)
             val unhandledHandler = handler(VariantMatch.Unhandled)
             rustBlock("${symbol.name}Kind::Unhandled(_inner) =>") {
-                if (genericHandler != unhandledHandler) {
-                    rustBlock("match _inner.downcast_ref::<#T>()", genericError) {
-                        rustBlock("Some(_inner) => ") {
-                            genericHandler(this)
-                        }
-                        rustBlock("None => ") {
-                            unhandledHandler(this)
-                        }
-                    }
-                } else {
-                    // If the handlers are the same, skip the downcast
-                    genericHandler(this)
-                }
+                unhandledHandler(this)
             }
         }
     }
