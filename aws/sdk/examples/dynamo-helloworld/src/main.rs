@@ -8,9 +8,6 @@ use std::error::Error;
 use dynamodb::model::{
     AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType,
 };
-use dynamodb::operation::{CreateTable, ListTables};
-use dynamodb::{Credentials, Endpoint, Region};
-use env_logger::Env;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
