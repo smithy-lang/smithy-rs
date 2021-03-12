@@ -5,11 +5,13 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
-import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.Cfg
+import software.amazon.smithy.rust.codegen.rustlang.Feature
+import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -19,34 +21,36 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
+import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.smithy.withModule
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-class FluentClientDecorator() : RustCodegenDecorator {
+class FluentClientDecorator : RustCodegenDecorator {
     override val name: String = "FluentClient"
     override val order: Byte = 0
 
-    override fun extras(protocolConfig: ProtocolConfig, project: CodegenWriterDelegator<RustWriter>) {
-        project.withModule("fluent") {
-            FluentClientGenerator(protocolConfig).render(this)
+    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
+        val module = RustMetadata(additionalAttributes = listOf(Cfg("fluent")), public = true)
+        rustCrate.withModule(RustModule("fluent", module)) { writer ->
+            FluentClientGenerator(protocolConfig).render(writer)
         }
+        rustCrate.addFeature(Feature("fluent", true, listOf(protocolConfig.runtimeConfig.awsHyper().name)))
     }
 }
 
 class FluentClientGenerator(protocolConfig: ProtocolConfig) {
     private val serviceShape = protocolConfig.serviceShape
-    private val operationIndex = OperationIndex.of(protocolConfig.model)
-    val operations = TopDownIndex.of(protocolConfig.model).getContainedOperations(serviceShape).sortedBy { it.id }
+    private val operations =
+        TopDownIndex.of(protocolConfig.model).getContainedOperations(serviceShape).sortedBy { it.id }
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
-    private val hyperDep = protocolConfig.runtimeConfig.awsHyper()
+    private val hyperDep = protocolConfig.runtimeConfig.awsHyper().copy(optional = true)
     private val runtimeConfig = protocolConfig.runtimeConfig
 
     fun render(writer: RustWriter) {

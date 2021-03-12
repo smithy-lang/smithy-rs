@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.testutil
 
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
@@ -52,7 +53,7 @@ fun stubConfigProject(vararg customization: ConfigCustomization): TestWriterDele
     val customizations = listOf(stubCustomization("a")) + customization.toList() + stubCustomization("b")
     val generator = ServiceConfigGenerator(customizations = customizations.toList())
     val project = TestWorkspace.testProject()
-    project.useFileWriter("src/config.rs", "crate::config") {
+    project.withModule(RustModule.default("config", public = true)) {
         generator.render(it)
         it.unitTest(
             """

@@ -6,10 +6,10 @@
 package software.amazon.smithy.rust.codegen.smithy.customize
 
 import software.amazon.smithy.build.PluginContext
-import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
@@ -37,6 +37,8 @@ interface RustCodegenDecorator {
      */
     val order: Byte
 
+    fun modules(protocolConfig: ProtocolConfig): List<RustModule> = listOf()
+
     fun configCustomizations(
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<ConfigCustomization>
@@ -53,7 +55,7 @@ interface RustCodegenDecorator {
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> = baseCustomizations
 
-    fun extras(protocolConfig: ProtocolConfig, project: CodegenWriterDelegator<RustWriter>) {}
+    fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {}
 
     fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap = currentProtocols
 
@@ -79,6 +81,10 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
         return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator, customizations ->
             decorator.configCustomizations(protocolConfig, customizations)
         }
+    }
+
+    override fun modules(protocolConfig: ProtocolConfig): List<RustModule> {
+        return orderedDecorators.flatMap { it.modules(protocolConfig) }
     }
 
     override fun operationCustomizations(
@@ -113,8 +119,8 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
         return orderedDecorators.foldRight(baseProvider) { decorator, provider -> decorator.symbolProvider(provider) }
     }
 
-    override fun extras(protocolConfig: ProtocolConfig, project: CodegenWriterDelegator<RustWriter>) {
-        return orderedDecorators.forEach { it.extras(protocolConfig, project) }
+    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
+        return orderedDecorators.forEach { it.extras(protocolConfig, rustCrate) }
     }
 
     companion object {

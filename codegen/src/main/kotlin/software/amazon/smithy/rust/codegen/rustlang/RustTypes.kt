@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.rustlang
 
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.util.dq
 
 /**
  * A hierarchy of types handled by Smithy codegen
@@ -200,6 +201,12 @@ sealed class Attribute {
          */
         val NonExhaustive = Custom("non_exhaustive")
         val AllowUnused = Custom("allow(dead_code)")
+    }
+}
+
+data class Cfg(val feature: String) : Attribute() {
+    override fun render(writer: RustWriter) {
+        writer.rust("##[cfg(feature = ${feature.dq()})]")
     }
 }
 
