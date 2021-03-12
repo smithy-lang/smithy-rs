@@ -83,11 +83,12 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val service = settings.getService(model)
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
-        // TODO: if we end up with a lot of these on-by-default customizations, we may want to refactor them somewhere
+        codegenDecorator.extras(protocolConfig, writers)
         writers.finalize(
             settings,
             codegenDecorator.libRsCustomizations(
                 protocolConfig,
+                // TODO: if we end up with a lot of these on-by-default customizations, we may want to refactor them somewhere
                 listOf(CrateVersionGenerator(), SmithyTypesPubUseGenerator(protocolConfig.runtimeConfig))
             )
         )

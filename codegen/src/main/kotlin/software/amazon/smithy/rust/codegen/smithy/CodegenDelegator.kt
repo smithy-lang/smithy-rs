@@ -21,7 +21,7 @@ private fun CodegenWriterDelegator<RustWriter>.includedModules(): List<String> =
 /**
  * Allowlist of modules that will be exposed publicly in generated crates
  */
-private val PublicModules = setOf("error", "operation", "model", "input", "output", "config")
+private val PublicModules = setOf("error", "operation", "model", "input", "output", "config", "fluent")
 
 /**
  * Finalize all the writers by:
