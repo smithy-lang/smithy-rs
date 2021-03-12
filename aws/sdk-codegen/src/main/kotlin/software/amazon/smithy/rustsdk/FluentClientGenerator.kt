@@ -52,7 +52,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
-            struct Handle {
+            pub(crate) struct Handle {
                 client: #{aws_hyper}::Client<#{aws_hyper}::conn::Standard>,
                 conf: crate::Config
             }
