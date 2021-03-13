@@ -10,6 +10,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.util.toPascalCase
@@ -33,6 +34,7 @@ class UnionGenerator(
         writer.rustBlock("enum ${symbol.name}") {
             sortedMembers.forEach { member ->
                 val memberSymbol = symbolProvider.toSymbol(member)
+                documentShape(member, model)
                 memberSymbol.expectRustMetadata().renderAttributes(this)
                 write("${member.memberName.toPascalCase()}(#T),", symbolProvider.toSymbol(member))
             }

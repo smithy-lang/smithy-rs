@@ -53,14 +53,22 @@ mod test {
     fn default_token_generator_smoke_test() {
         // smoke test to make sure the default token generator produces a token-like object
         use crate::idempotency_token::MakeIdempotencyToken;
-        assert_eq!(idempotency_token::default_provider().make_idempotency_token().len(), 36);
+        assert_eq!(
+            idempotency_token::default_provider()
+                .make_idempotency_token()
+                .len(),
+            36
+        );
     }
 
     #[test]
     fn token_generator() {
         let provider = Mutex::new(fastrand::Rng::with_seed(123));
         use crate::idempotency_token::MakeIdempotencyToken;
-        assert_eq!(provider.make_idempotency_token(), "b4021a03-ae07-4db5-fc1b-38bf919691f8");
+        assert_eq!(
+            provider.make_idempotency_token(),
+            "b4021a03-ae07-4db5-fc1b-38bf919691f8"
+        );
     }
 
     fn assert_valid(uuid: String) {

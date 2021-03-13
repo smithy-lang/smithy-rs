@@ -9,8 +9,8 @@ use aws_hyper::test_connection::TestConnection;
 use aws_hyper::Client;
 use http::Uri;
 use kms::operation::GenerateRandom;
-use kms::{Config, Region};
 use smithy_http::body::SdkBody;
+use kms::{Config, Region};
 use std::time::{Duration, UNIX_EPOCH};
 
 // TODO: having the full HTTP requests right in the code is a bit gross, consider something
