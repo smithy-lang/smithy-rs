@@ -114,7 +114,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         Self { handle, inner: Default::default() }
                     }
 
-                    pub async fn execute(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>> {
+                    pub async fn send(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>> {
                         let op = self.inner.build(&self.handle.conf);
                         self.handle.client.call(op).await
                     }

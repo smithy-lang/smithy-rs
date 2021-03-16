@@ -12,7 +12,7 @@ use dynamodb::model::{
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let client = dynamodb::fluent::Client::from_env();
-    let tables = client.list_tables().execute().await?;
+    let tables = client.list_tables().send().await?;
 
     println!("Current DynamoDB tables: {:?}", tables);
 
@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .read_capacity_units(10)
                 .build(),
         )
-        .execute()
+        .send()
         .await?;
     println!(
         "new table: {:#?}",
