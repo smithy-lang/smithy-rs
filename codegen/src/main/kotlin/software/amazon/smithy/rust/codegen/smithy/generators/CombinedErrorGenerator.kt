@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.RetryableTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.rustlang.Derives
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
@@ -54,7 +53,7 @@ class CombinedErrorGenerator(
         val errors = operationIndex.getErrors(operation)
         val symbol = operation.errorSymbol(symbolProvider)
         val meta = RustMetadata(
-            derives = Derives(setOf(RuntimeType.Debug)),
+            derives = Attribute.Derives(setOf(RuntimeType.Debug)),
             additionalAttributes = listOf(Attribute.NonExhaustive),
             public = true
         )

@@ -106,6 +106,8 @@ class InlineDependency(
 fun CargoDependency.asType(): RuntimeType =
     RuntimeType(null, dependency = this, namespace = this.name.replace("-", "_"))
 
+data class Feature(val name: String, val default: Boolean, val deps: List<String>)
+
 /**
  * A dependency on an internal or external Cargo Crate
  */
@@ -113,6 +115,7 @@ data class CargoDependency(
     override val name: String,
     private val location: DependencyLocation,
     val scope: DependencyScope = DependencyScope.Compile,
+    val optional: Boolean = false,
     private val features: List<String> = listOf()
 ) : RustDependency(name) {
 

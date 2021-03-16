@@ -10,7 +10,6 @@ import org.intellij.lang.annotations.Language
 import software.amazon.smithy.build.FileManifest
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.Shape
@@ -22,6 +21,8 @@ import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.BuildSettings
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
+import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
+import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
@@ -143,7 +144,7 @@ fun RustWriter.unitTest(
 }
 
 class TestWriterDelegator(fileManifest: FileManifest, symbolProvider: RustSymbolProvider) :
-    CodegenWriterDelegator<RustWriter>(fileManifest, symbolProvider, RustWriter.Factory) {
+    RustCrate(fileManifest, symbolProvider, DefaultPublicModules) {
     val baseDir: Path = fileManifest.baseDir
 }
 
