@@ -41,11 +41,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
     }
 
     fun member(member: String): RuntimeType {
-        val newName = if (name == null) {
-            member
-        } else {
-            "$name::$member"
-        }
+        val newName = name?.let { "$name::$member" } ?: member
         return copy(name = newName)
     }
 
