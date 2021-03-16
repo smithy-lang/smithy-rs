@@ -140,6 +140,9 @@ data class CargoDependency(
                 attribs["features"] = this
             }
         }
+        if (optional) {
+            attribs["optional"] = true
+        }
         return attribs
     }
 
