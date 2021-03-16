@@ -7,8 +7,8 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Cfg
 import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
@@ -36,7 +36,7 @@ class FluentClientDecorator : RustCodegenDecorator {
     override val order: Byte = 0
 
     override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
-        val module = RustMetadata(additionalAttributes = listOf(Cfg("fluent")), public = true)
+        val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("fluent")), public = true)
         rustCrate.withModule(RustModule("fluent", module)) { writer ->
             FluentClientGenerator(protocolConfig).render(writer)
         }
