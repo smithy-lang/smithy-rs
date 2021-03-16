@@ -111,7 +111,7 @@ class HttpProtocolTestGeneratorTest {
     private fun generateService(
         httpRequestBuilder: String,
         body: String = "${correctBody.dq()}.to_string().into()",
-        correctResponse: String = """Ok(SayHelloOutput::builder().value("hey there!").build())"""
+        correctResponse: String = """Ok(crate::output::SayHelloOutput::builder().value("hey there!").build())"""
     ): Path {
 
         // A stubbed test protocol to do enable testing intentionally broken protocols
@@ -204,7 +204,7 @@ class HttpProtocolTestGeneratorTest {
                     .header("X-Greeting", "Hi")
                     .method("POST")
                 """,
-            correctResponse = "Ok(SayHelloOutput::builder().build())"
+            correctResponse = "Ok(crate::output::SayHelloOutput::builder().build())"
         )
         val err = assertThrows<CommandFailed> {
             "cargo test".runCommand(path)

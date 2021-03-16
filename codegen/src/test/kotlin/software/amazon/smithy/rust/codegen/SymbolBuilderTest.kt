@@ -163,8 +163,8 @@ class SymbolBuilderTest {
 
         val provider: SymbolProvider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
-        setSymbol.rustType().render(false) shouldBe "${RustType.SetType}<String>"
-        setSymbol.referenceClosure().map { it.name } shouldBe listOf(RustType.SetType, "String")
+        setSymbol.rustType().render(false) shouldBe "${RustType.HashSet.Type}<String>"
+        setSymbol.referenceClosure().map { it.name } shouldBe listOf(RustType.HashSet.Type, "String")
     }
 
     @Test
