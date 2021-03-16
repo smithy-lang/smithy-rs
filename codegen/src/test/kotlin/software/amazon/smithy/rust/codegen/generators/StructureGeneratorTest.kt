@@ -8,7 +8,7 @@ package software.amazon.smithy.rust.codegen.generators
 import io.kotest.matchers.string.shouldContainInOrder
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.rustlang.Custom
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.docs
@@ -170,7 +170,7 @@ class StructureGeneratorTest {
             .withModule(
                 "model",
                 // By attaching this lint, any missing documentation becomes a compiler erorr
-                RustMetadata(additionalAttributes = listOf(Custom("deny(missing_docs)")), public = true)
+                RustMetadata(additionalAttributes = listOf(Attribute.Custom("deny(missing_docs)")), public = true)
             ) {
                 StructureGenerator(model, provider, this, model.lookup("com.test#Inner")).render()
                 StructureGenerator(model, provider, this, model.lookup("com.test#MyStruct")).render()

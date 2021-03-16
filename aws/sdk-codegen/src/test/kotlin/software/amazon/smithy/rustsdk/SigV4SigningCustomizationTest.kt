@@ -15,7 +15,7 @@ internal class SigV4SigningCustomizationTest {
     @Test
     fun `generates a valid config`() {
         val project = stubConfigProject(SigV4SigningConfig(SigV4Trait.builder().name("test-service").build()))
-        project.useFileWriter("src/lib.rs", "crate") {
+        project.lib {
             it.unitTest(
                 """
             let conf = crate::config::Config::builder().build();

@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -40,18 +39,19 @@ class ServiceGenerator(
                     HttpProtocolTestGenerator(config, protocolSupport, operation, operationWriter).render()
                 }
             }
-            rustCrate.withModule(RustModule("error", RustMetadata(public = true))) { writer ->
+            rustCrate.withModule(RustModule.Error) { writer ->
                 CombinedErrorGenerator(config.model, config.symbolProvider, operation).render(writer)
             }
         }
         renderBodies(operations)
 
-        rustCrate.withModule(RustModule("config", RustMetadata(public = true))) { writer ->
+        rustCrate.withModule(RustModule.Config) { writer ->
             ServiceConfigGenerator.withBaseBehavior(
                 config,
                 extraCustomizations = decorator.configCustomizations(config, listOf())
             ).render(writer)
         }
+
         rustCrate.lib {
             it.write("pub use config::Config;")
         }

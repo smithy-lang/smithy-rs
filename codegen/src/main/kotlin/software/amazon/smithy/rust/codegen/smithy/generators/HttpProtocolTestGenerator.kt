@@ -16,7 +16,7 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
-import software.amazon.smithy.rust.codegen.rustlang.Custom
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.escape
@@ -82,8 +82,8 @@ class HttpProtocolTestGenerator(
             val moduleMeta = RustMetadata(
                 public = false,
                 additionalAttributes = listOf(
-                    Custom("cfg(test)"),
-                    Custom("allow(unreachable_code, unused_variables)")
+                    Attribute.Cfg("test"),
+                    Attribute.Custom("allow(unreachable_code, unused_variables)")
                 )
             )
             writer.withModule(testModuleName, moduleMeta) {

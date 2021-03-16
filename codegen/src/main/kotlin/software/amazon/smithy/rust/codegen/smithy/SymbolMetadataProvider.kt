@@ -13,8 +13,8 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.Attribute.Companion.NonExhaustive
-import software.amazon.smithy.rust.codegen.rustlang.Derives
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 
 /**
@@ -62,7 +62,7 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
 
 class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvider(base) {
     private val containerDefault = RustMetadata(
-        Derives(defaultDerives.toSet()),
+        Attribute.Derives(defaultDerives.toSet()),
         additionalAttributes = listOf(NonExhaustive),
         public = true
     )

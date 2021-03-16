@@ -53,7 +53,7 @@ fun stubConfigProject(vararg customization: ConfigCustomization): TestWriterDele
     val customizations = listOf(stubCustomization("a")) + customization.toList() + stubCustomization("b")
     val generator = ServiceConfigGenerator(customizations = customizations.toList())
     val project = TestWorkspace.testProject()
-    project.withModule(RustModule.default("config", public = true)) {
+    project.withModule(RustModule.Config) {
         generator.render(it)
         it.unitTest(
             """

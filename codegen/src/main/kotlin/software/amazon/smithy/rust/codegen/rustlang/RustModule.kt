@@ -21,5 +21,8 @@ data class RustModule(val name: String, val rustMetadata: RustMetadata) {
             }*/
             return RustModule(name, RustMetadata(public = public))
         }
+
+        val Config = default("config", public = true)
+        val Error = default("error", public = true)
     }
 }
