@@ -129,6 +129,7 @@ impl<B: Into<hyper::Body>> tower::Service<http::Request<SdkBody>> for TestConnec
 #[cfg(test)]
 mod tests {
     use crate::test_connection::TestConnection;
+    use crate::{conn, Client};
     use smithy_http::body::SdkBody;
     use tower::BoxError;
 
@@ -144,5 +145,14 @@ mod tests {
             TestConnection::<String>::new(vec![])
         }
         let _ = check();
+    }
+
+    fn is_send_sync<T: Send + Sync>(_: T) {}
+
+    #[test]
+    fn construct_test_client() {
+        let test_conn = TestConnection::<String>::new(vec![]);
+        let client = Client::new(conn::Standard::new(test_conn));
+        is_send_sync(client);
     }
 }
