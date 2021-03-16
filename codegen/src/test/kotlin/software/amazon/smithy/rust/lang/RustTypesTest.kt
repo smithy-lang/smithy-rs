@@ -15,6 +15,6 @@ class RustTypesTest {
     fun `types render properly`() {
         val type = RustType.Box(RustType.Option(RustType.Reference("a", RustType.Vec(RustType.String))))
         type.render(false) shouldBe "Box<Option<&'a Vec<String>>>"
-        type.render(true) shouldBe "::std::boxed::Box<::std::option::Option<&'a ::std::vec::Vec<::std::string::String>>>"
+        type.render(true) shouldBe "std::boxed::Box<std::option::Option<&'a std::vec::Vec<std::string::String>>>"
     }
 }

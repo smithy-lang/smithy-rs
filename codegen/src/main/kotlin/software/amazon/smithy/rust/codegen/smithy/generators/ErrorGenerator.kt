@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.StdError
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.StdFmt
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.stdfmt
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.orNull
@@ -83,7 +83,7 @@ class ErrorGenerator(
             )
         }
 
-        writer.rustBlock("impl #T for ${symbol.name}", StdFmt("Display")) {
+        writer.rustBlock("impl #T for ${symbol.name}", stdfmt.member("Display")) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 write("write!(f, ${symbol.name.dq()})?;")
                 messageShape.map {
