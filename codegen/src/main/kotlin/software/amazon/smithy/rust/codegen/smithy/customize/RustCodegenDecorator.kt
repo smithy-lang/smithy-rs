@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.smithy.customize
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
@@ -36,8 +35,6 @@ interface RustCodegenDecorator {
      * Enable a deterministic ordering to be applied, with the lowest numbered integrations being applied first
      */
     val order: Byte
-
-    fun modules(protocolConfig: ProtocolConfig): List<RustModule> = listOf()
 
     fun configCustomizations(
         protocolConfig: ProtocolConfig,
@@ -81,10 +78,6 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
         return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator, customizations ->
             decorator.configCustomizations(protocolConfig, customizations)
         }
-    }
-
-    override fun modules(protocolConfig: ProtocolConfig): List<RustModule> {
-        return orderedDecorators.flatMap { it.modules(protocolConfig) }
     }
 
     override fun operationCustomizations(
