@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -110,7 +111,7 @@ class CombinedErrorGenerator(
                     rustBlock("match &self.kind") {
                         retryableVariants.forEach {
                             val errorSymbol = symbolProvider.toSymbol(it)
-                            rust("""${symbol.name}Kind::${errorSymbol.name}(inner) => Some(inner.retryable_error_kind()),""")
+                            rust("${symbol.name}Kind::${errorSymbol.name}(inner) => Some(inner.retryable_error_kind()),")
                         }
                         rust("_ => None")
                     }
@@ -118,48 +119,44 @@ class CombinedErrorGenerator(
             }
         }
 
-        writer.rustBlock("impl ${symbol.name}") {
-            writer.rustBlock("pub fn new(kind: ${symbol.name}Kind, meta: #T) -> Self", genericError) {
-                rust("Self { kind, meta }")
-            }
-            writer.rustBlock("pub fn unhandled<E: Into<Box<dyn #T>>>(err: E) -> Self", RuntimeType.StdError) {
-                rust(
-                    """
+        writer.rustTemplate(
+            """
+            impl ${symbol.name} {
+                pub fn new(kind: ${symbol.name}Kind, meta: #{generic_error}) -> Self {
+                    Self { kind, meta }
+                }
+
+                pub fn unhandled(err: impl Into<Box<dyn #{std_error}>>) -> Self {
                     Self {
                         kind: ${symbol.name}Kind::Unhandled(err.into()),
                         meta: Default::default()
                     }
+                }
 
-                """
-                )
-            }
-
-            writer.rustBlock("pub fn generic(err: #T) -> Self", genericError) {
-                rust(
-                    """
+                pub fn generic(err: #{generic_error}) -> Self {
                     Self {
                         meta: err.clone(),
                         kind: ${symbol.name}Kind::Unhandled(err.into()),
                     }
-
-                """
-                )
-            }
+                }
 
             // Consider if this should actually be `Option<Cow<&str>>`. This would enable us to use display as implemented
             // by std::Error to generate a message in that case.
-            writer.rustBlock("pub fn message(&self) -> Option<&str>") {
-                rust("self.meta.message.as_deref()")
+            pub fn message(&self) -> Option<&str> {
+                self.meta.message.as_deref()
             }
 
-            writer.rustBlock("pub fn request_id(&self) -> Option<&str>") {
-                rust("self.meta.request_id.as_deref()")
+            pub fn request_id(&self) -> Option<&str> {
+                self.meta.request_id.as_deref()
             }
 
-            writer.rustBlock("pub fn code(&self) -> Option<&str>") {
-                rust("self.meta.code.as_deref()")
+            pub fn code(&self) -> Option<&str> {
+                self.meta.code.as_deref()
             }
         }
+        """,
+            "generic_error" to genericError, "std_error" to RuntimeType.StdError
+        )
 
         writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.StdError) {
             rustBlock("fn source(&self) -> Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
