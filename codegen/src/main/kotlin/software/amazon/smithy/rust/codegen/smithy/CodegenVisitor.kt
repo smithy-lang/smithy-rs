@@ -81,6 +81,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val service = settings.getService(model)
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
+        codegenDecorator.extras(protocolConfig, rustCrate)
         // TODO: if we end up with a lot of these on-by-default customizations, we may want to refactor them somewhere
         rustCrate.finalize(
             settings,

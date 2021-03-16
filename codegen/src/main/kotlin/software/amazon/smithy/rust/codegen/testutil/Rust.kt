@@ -165,7 +165,7 @@ fun TestWriterDelegator.compileAndTest() {
             build = BuildSettings.Default(),
             model = stubModel,
         ),
-        libRsCustomizations = listOf()
+        libRsCustomizations = listOf(),
     )
     "cargo test".runCommand(baseDir, mapOf("RUSTFLAGS" to "-A dead_code"))
 }

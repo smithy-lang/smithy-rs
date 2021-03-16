@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.customize
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
@@ -50,6 +51,8 @@ interface RustCodegenDecorator {
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> = baseCustomizations
+
+    fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {}
 
     fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap = currentProtocols
 
@@ -107,6 +110,10 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
 
     override fun symbolProvider(baseProvider: RustSymbolProvider): RustSymbolProvider {
         return orderedDecorators.foldRight(baseProvider) { decorator, provider -> decorator.symbolProvider(provider) }
+    }
+
+    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
+        return orderedDecorators.forEach { it.extras(protocolConfig, rustCrate) }
     }
 
     companion object {
