@@ -188,33 +188,39 @@ fun RustWriter.compileAndTest(
 ): String {
     // TODO: if there are no dependencies, we can be a bit quicker
     val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<CargoDependency>()
+    val module = if (this.namespace.contains("::")) {
+        this.namespace.split("::")[1]
+    } else {
+        "lib"
+    }
+    val tempDir = this.toString()
+        .intoCrate(deps.toSet(), module = module, main = main, strict = clippy)
+    val mainRs = tempDir.resolve("src/main.rs")
+    val testModule = tempDir.resolve("src/$module.rs")
     try {
-        val module = if (this.namespace.contains("::")) {
-            this.namespace.split("::")[1]
+        val testOutput = if ((mainRs.readText() + testModule.readText()).contains("#[test]")) {
+            "cargo test".runCommand(tempDir.toPath())
         } else {
-            "lib"
+            "cargo check".runCommand(tempDir.toPath())
         }
-        val output = this.toString()
-            .compileAndTest(deps.toSet(), module = module, main = main, strict = clippy)
         if (expectFailure) {
-            // println(this.toString())
+            println("Test sources for debugging: file://${testModule.absolutePath}")
         }
-        return output
+        return testOutput
     } catch (e: CommandFailed) {
-        // When the test fails, print the code for convenience
         if (!expectFailure) {
-            // println(this.toString())
+            println("Test sources for debugging: file://${testModule.absolutePath}")
         }
         throw e
     }
 }
 
-fun String.compileAndTest(
+private fun String.intoCrate(
     deps: Set<CargoDependency>,
     module: String? = null,
     main: String = "",
     strict: Boolean = false
-): String {
+): File {
     this.shouldParseAsRust()
     val tempDir = TestWorkspace.subproject()
     // TODO: unify this with CargoTomlGenerator
@@ -250,15 +256,7 @@ fun String.compileAndTest(
         pub fn main() {}
         """.trimIndent()
     )
-    val testOutput = if ((mainRs.readText() + testModule.readText()).contains("#[test]")) {
-        "cargo test".runCommand(tempDir.toPath())
-    } else {
-        "cargo check".runCommand(tempDir.toPath())
-    }
-    if (strict) {
-        "cargo clippy -- -D warnings".runCommand(tempDir.toPath())
-    }
-    return testOutput
+    return tempDir
 }
 
 fun String.shouldCompile(): File {
