@@ -229,7 +229,8 @@ class HttpProtocolTestGenerator(
         if (expectedShape.hasTrait(ErrorTrait::class.java)) {
             val errorSymbol = operationShape.errorSymbol(protocolConfig.symbolProvider)
             val errorVariant = protocolConfig.symbolProvider.toSymbol(expectedShape).name
-            rustBlock("if let Err(#T::$errorVariant(actual_error)) = parsed", errorSymbol) {
+            rust("""let parsed = parsed.expect_err("should be error response");""")
+            rustBlock("if let #TKind::$errorVariant(actual_error) = parsed.kind", errorSymbol) {
                 write("assert_eq!(expected_output, actual_error);")
             }
             rustBlock("else") {

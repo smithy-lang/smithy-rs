@@ -136,19 +136,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::test_connection::TestConnection;
-    use crate::{conn, Client};
+    use crate::Client;
 
     #[test]
     fn construct_default_client() {
         let _ = Client::https();
-    }
-
-    #[test]
-    fn construct_test_client() {
-        let test_conn = TestConnection::<String>::new(vec![]);
-        let client = Client::new(conn::Standard::new(test_conn));
-        is_send_sync(client);
     }
 
     #[test]
