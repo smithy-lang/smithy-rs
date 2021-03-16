@@ -48,7 +48,7 @@ internal class EndpointConfigCustomizationTest {
     @Test
     fun `write an endpoint into the config`() {
         val project = stubConfigProject(EndpointConfigCustomization(TestRuntimeConfig, model.lookup("test#TestService")))
-        project.useFileWriter("src/lib.rs", "crate") {
+        project.lib {
             it.addDependency(awsTypes(TestRuntimeConfig))
             it.addDependency(CargoDependency.Http)
             it.unitTest(
