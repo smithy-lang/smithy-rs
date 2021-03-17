@@ -102,7 +102,12 @@ fun <T : CodeWriter> T.rustTemplate(
 /*
  * Writes a Rust-style block, demarcated by curly braces
  */
-fun <T : CodeWriter> T.rustBlock(header: String, vararg args: Any, block: T.() -> Unit): T {
+fun <T : CodeWriter> T.rustBlock(
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}")
+    header: String,
+    vararg args: Any,
+    block: T.() -> Unit
+): T {
     openBlock("$header {", *args)
     block(this)
     closeBlock("}")
@@ -310,6 +315,11 @@ class RustWriter private constructor(
         }
     }
 
+    fun addDepsRecursively(symbol: Symbol) {
+        addDependency(symbol)
+        symbol.references.forEach { addDepsRecursively(it.symbol) }
+    }
+
     /**
      * Generate RustDoc links, eg. [`Abc`](crate::module::Abc)
      */
@@ -331,7 +341,7 @@ class RustWriter private constructor(
                     t.fullyQualifiedName()
                 }
                 is Symbol -> {
-                    addImport(t, null)
+                    addDepsRecursively(t)
                     t.rustType().render(fullyQualified = true)
                 }
                 else -> throw CodegenException("Invalid type provided to RustSymbolFormatter")

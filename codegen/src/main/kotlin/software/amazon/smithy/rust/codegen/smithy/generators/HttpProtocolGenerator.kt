@@ -10,7 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.rustlang.Derives
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -80,7 +80,7 @@ abstract class HttpProtocolGenerator(
         }
         val operationName = symbolProvider.toSymbol(operationShape).name
         operationWriter.documentShape(operationShape, model)
-        Derives(setOf(RuntimeType.Clone, RuntimeType.Debug)).render(operationWriter)
+        Attribute.Derives(setOf(RuntimeType.Clone, RuntimeType.Debug)).render(operationWriter)
         operationWriter.rustBlock("pub struct $operationName") {
             write("pub(crate) input: #T", inputSymbol)
         }

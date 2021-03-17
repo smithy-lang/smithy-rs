@@ -166,7 +166,7 @@ class HttpTraitBindingGenerator(
             "${label.content} = ${labelFmtFun(model.expectShape(member.target), member, label)}"
         }
         val combinedArgs = listOf(formatString, *args.toTypedArray())
-        writer.addImport(RuntimeType.StdFmt("Write").toSymbol(), null)
+        writer.addImport(RuntimeType.stdfmt.member("Write").toSymbol(), null)
         writer.rustBlock("fn uri_base(&self, output: &mut String)") {
             write("write!(output, ${combinedArgs.joinToString(", ")}).expect(\"formatting should succeed\")")
         }

@@ -17,8 +17,8 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Custom
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -85,8 +85,8 @@ class HttpProtocolTestGenerator(
             val moduleMeta = RustMetadata(
                 public = false,
                 additionalAttributes = listOf(
-                    Custom("cfg(test)"),
-                    Custom("allow(unreachable_code, unused_variables)")
+                    Attribute.Cfg("test"),
+                    Attribute.Custom("allow(unreachable_code, unused_variables)")
                 )
             )
             writer.withModule(testModuleName, moduleMeta) {
@@ -246,7 +246,8 @@ class HttpProtocolTestGenerator(
         if (expectedShape.hasTrait(ErrorTrait::class.java)) {
             val errorSymbol = operationShape.errorSymbol(protocolConfig.symbolProvider)
             val errorVariant = protocolConfig.symbolProvider.toSymbol(expectedShape).name
-            rustBlock("if let Err(#T::$errorVariant(actual_error)) = parsed", errorSymbol) {
+            rust("""let parsed = parsed.expect_err("should be error response");""")
+            rustBlock("if let #TKind::$errorVariant(actual_error) = parsed.kind", errorSymbol) {
                 write("assert_eq!(expected_output, actual_error);")
             }
             rustBlock("else") {

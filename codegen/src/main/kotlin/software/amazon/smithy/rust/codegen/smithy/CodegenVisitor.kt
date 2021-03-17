@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.build.PluginContext
-import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -16,7 +15,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
@@ -41,7 +39,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private val settings = RustSettings.from(context.model, context.settings)
 
     private val symbolProvider: RustSymbolProvider
-    val writers: CodegenWriterDelegator<RustWriter>
+    private val rustCrate: RustCrate
     private val fileManifest = context.fileManifest
     private val model: Model
     private val protocolConfig: ProtocolConfig
@@ -66,10 +64,10 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
 
         protocolConfig =
             ProtocolConfig(model, symbolProvider, settings.runtimeConfig, service, protocol, settings.moduleName)
-        writers = CodegenWriterDelegator(
+        rustCrate = RustCrate(
             context.fileManifest,
             symbolProvider,
-            RustWriter.Factory
+            DefaultPublicModules
         )
         httpGenerator = protocolGenerator.buildProtocolGenerator(protocolConfig)
     }
@@ -81,7 +79,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val service = settings.getService(model)
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
-        writers.finalize(
+        codegenDecorator.extras(protocolConfig, rustCrate)
+        rustCrate.finalize(
             settings,
             codegenDecorator.libRsCustomizations(
                 protocolConfig,
@@ -101,7 +100,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
 
     override fun structureShape(shape: StructureShape) {
         logger.fine("generating a structure...")
-        writers.useShapeWriter(shape) { writer ->
+        rustCrate.useShapeWriter(shape) { writer ->
             StructureGenerator(model, symbolProvider, writer, shape).render()
             if (!shape.hasTrait(SyntheticInputTrait::class.java)) {
                 val builderGenerator = ModelBuilderGenerator(protocolConfig.model, protocolConfig.symbolProvider, shape)
@@ -115,19 +114,19 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
 
     override fun stringShape(shape: StringShape) {
         shape.getTrait(EnumTrait::class.java).map { enum ->
-            writers.useShapeWriter(shape) { writer ->
+            rustCrate.useShapeWriter(shape) { writer ->
                 EnumGenerator(symbolProvider, writer, shape, enum).render()
             }
         }
     }
 
     override fun unionShape(shape: UnionShape) {
-        writers.useShapeWriter(shape) {
+        rustCrate.useShapeWriter(shape) {
             UnionGenerator(model, symbolProvider, it, shape).render()
         }
     }
 
     override fun serviceShape(shape: ServiceShape) {
-        ServiceGenerator(writers, httpGenerator, protocolGenerator.support(), protocolConfig, codegenDecorator).render()
+        ServiceGenerator(rustCrate, httpGenerator, protocolGenerator.support(), protocolConfig, codegenDecorator).render()
     }
 }

@@ -6,6 +6,10 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+test-util = ["protocol-test-helpers"]
+default = ["test-util"]
+
 [dependencies]
 hyper = { version = "0.14.2", features = ["client", "http1", "http2", "tcp", "runtime"] }
 tower = { version = "0.4.6", features = ["util", "retry"] }
@@ -21,10 +25,18 @@ smithy-http = { path = "../../../rust-runtime/smithy-http" }
 smithy-types = { path = "../../../rust-runtime/smithy-types" }
 smithy-http-tower = { path = "../../../rust-runtime/smithy-http-tower" }
 fastrand = "1.4.0"
-tokio = { version = "1", features = ["time"]}
+tokio = { version = "1", features = ["time"] }
+
+pin-project = "1"
 tracing = "0.1.25"
+
+protocol-test-helpers = { path = "../../../rust-runtime/protocol-test-helpers", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
 tower-test = "0.4.0"
 aws-types = { path = "../aws-types" }
+
+[[test]]
+name = "e2e_test"
+required-features = ["test-util"]

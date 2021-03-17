@@ -5,11 +5,11 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
-import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 
 class ServiceGenerator(
-    private val writers: CodegenWriterDelegator<RustWriter>,
+    private val rustCrate: RustCrate,
     private val protocolGenerator: HttpProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
     private val config: ProtocolConfig,
@@ -28,8 +28,8 @@ class ServiceGenerator(
     fun render() {
         val operations = index.getContainedOperations(config.serviceShape).sortedBy { it.id }
         operations.map { operation ->
-            writers.useShapeWriter(operation) { operationWriter ->
-                writers.useShapeWriter(operation.inputShape(config.model)) { inputWriter ->
+            rustCrate.useShapeWriter(operation) { operationWriter ->
+                rustCrate.useShapeWriter(operation.inputShape(config.model)) { inputWriter ->
                     protocolGenerator.renderOperation(
                         operationWriter,
                         inputWriter,
@@ -39,20 +39,20 @@ class ServiceGenerator(
                     HttpProtocolTestGenerator(config, protocolSupport, operation, operationWriter).render()
                 }
             }
-            val sym = operation.errorSymbol(config.symbolProvider)
-            writers.useFileWriter("src/error.rs", sym.namespace) { writer ->
+            rustCrate.withModule(RustModule.Error) { writer ->
                 CombinedErrorGenerator(config.model, config.symbolProvider, operation).render(writer)
             }
         }
         renderBodies(operations)
 
-        writers.useFileWriter("src/config.rs", "crate::config") { writer ->
+        rustCrate.withModule(RustModule.Config) { writer ->
             ServiceConfigGenerator.withBaseBehavior(
                 config,
                 extraCustomizations = decorator.configCustomizations(config, listOf())
             ).render(writer)
         }
-        writers.useFileWriter("src/lib.rs", "crate::lib") {
+
+        rustCrate.lib {
             it.write("pub use config::Config;")
         }
     }
@@ -74,7 +74,7 @@ class ServiceGenerator(
         }
         (inputBodies + outputBodies).map { body ->
             // The body symbol controls its location, usually in the serializer module
-            writers.useShapeWriter(body) { writer ->
+            rustCrate.useShapeWriter(body) { writer ->
                 with(config) {
                     // Generate a body via the structure generator
                     StructureGenerator(model, symbolProvider, writer, body).render()

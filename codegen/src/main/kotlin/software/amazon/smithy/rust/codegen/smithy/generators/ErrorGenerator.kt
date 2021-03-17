@@ -17,22 +17,28 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.StdError
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.StdFmt
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.stdfmt
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.orNull
 
 sealed class ErrorKind {
     abstract fun writable(runtimeConfig: RuntimeConfig): Writable
+
     object Throttling : ErrorKind() {
-        override fun writable(runtimeConfig: RuntimeConfig) = writable { rust("#T::ThrottlingError", RuntimeType.errorKind(runtimeConfig)) }
+        override fun writable(runtimeConfig: RuntimeConfig) =
+            writable { rust("#T::ThrottlingError", RuntimeType.errorKind(runtimeConfig)) }
     }
+
     object Client : ErrorKind() {
-        override fun writable(runtimeConfig: RuntimeConfig) = writable { rust("#T::ClientError", RuntimeType.errorKind(runtimeConfig)) }
+        override fun writable(runtimeConfig: RuntimeConfig) =
+            writable { rust("#T::ClientError", RuntimeType.errorKind(runtimeConfig)) }
     }
 
     object Server : ErrorKind() {
-        override fun writable(runtimeConfig: RuntimeConfig) = writable { rust("#T::ServerError", RuntimeType.errorKind(runtimeConfig)) }
+        override fun writable(runtimeConfig: RuntimeConfig) =
+            writable { rust("#T::ServerError", RuntimeType.errorKind(runtimeConfig)) }
     }
 }
 
@@ -77,15 +83,18 @@ class ErrorGenerator(
             }
             rust(
                 """
-            pub fn code(&self) -> &str { ${shape.id.name.dq()} }
             pub fn message(&self) -> Option<&str> { $message }
                 """
             )
         }
 
-        writer.rustBlock("impl #T for ${symbol.name}", StdFmt("Display")) {
+        writer.rustBlock("impl #T for ${symbol.name}", stdfmt.member("Display")) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
-                write("write!(f, ${symbol.name.dq()})?;")
+                // If the error id and the Rust name don't match, print the actual error id for easy debugging
+                val errorDesc = symbol.name.letIf(symbol.name != shape.id.name) { symbolName ->
+                    "$symbolName [${shape.id.name}]"
+                }
+                write("write!(f, ${errorDesc.dq()})?;")
                 messageShape.map {
                     ifSet(it, symbolProvider.toSymbol(it), "&self.message") { field ->
                         write("""write!(f, ": {}", $field)?;""")
@@ -94,7 +103,6 @@ class ErrorGenerator(
                 write("Ok(())")
             }
         }
-
         writer.write("impl #T for ${symbol.name} {}", StdError)
     }
 }

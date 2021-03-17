@@ -33,7 +33,7 @@ use tracing::Instrument;
 /// Without specific use cases, users should generally rely on the default values set by `[RetryConfig::default]`(RetryConfig::default).`
 ///
 /// Currently these fields are private and no setters provided. As needed, this configuration will become user-modifiable in the future..
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RetryConfig {
     initial_retry_tokens: usize,
     retry_cost: usize,
@@ -87,6 +87,7 @@ const RETRY_COST: usize = 5;
 /// `CrossRequestRetryState`
 /// Its main functionality is via `new_handler` which creates a `RetryHandler` to manage the retry for
 /// an individual request.
+#[derive(Debug)]
 pub struct RetryHandlerFactory {
     config: RetryConfig,
     shared_state: CrossRequestRetryState,
@@ -132,7 +133,7 @@ impl RequestLocalRetryState {
 struct RetryPartition(Cow<'static, str>); */
 
 /// Shared state between multiple requests to the same client.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct CrossRequestRetryState {
     quota_available: Arc<Mutex<usize>>,
 }

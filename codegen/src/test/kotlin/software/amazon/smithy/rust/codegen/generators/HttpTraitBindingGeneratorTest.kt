@@ -124,7 +124,7 @@ class HttpTraitBindingGeneratorTest {
         renderOperation(writer)
         writer.compileAndTest(
             """
-            let ts = Instant::from_epoch_seconds(10123125);
+            let ts = smithy_types::Instant::from_epoch_seconds(10123125);
             let inp = PutObjectInput::builder()
                 .bucket_name("somebucket/ok")
                 .key(ts.clone())
@@ -148,7 +148,7 @@ class HttpTraitBindingGeneratorTest {
         renderOperation(writer)
         writer.compileAndTest(
             """
-            let ts = Instant::from_epoch_seconds(10123125);
+            let ts = smithy_types::Instant::from_epoch_seconds(10123125);
             let inp = PutObjectInput::builder()
                 .bucket_name("somebucket/ok")
                 .key(ts.clone())
@@ -169,7 +169,7 @@ class HttpTraitBindingGeneratorTest {
         renderOperation(writer)
         writer.compileAndTest(
             """
-            let ts = Instant::from_epoch_seconds(10123125);
+            let ts = smithy_types::Instant::from_epoch_seconds(10123125);
             let inp = PutObjectInput::builder()
                 .bucket_name("buk")
                 .date_header_list(vec![ts.clone()])

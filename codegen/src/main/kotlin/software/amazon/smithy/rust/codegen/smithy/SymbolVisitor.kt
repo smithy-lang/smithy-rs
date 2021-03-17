@@ -112,9 +112,14 @@ fun Symbol.makeRustBoxed(): Symbol {
     }
 }
 
-fun Symbol.Builder.locatedIn(symbolLocation: SymbolLocation): Symbol.Builder =
-    this.definitionFile("src/${symbolLocation.filename}")
+fun Symbol.Builder.locatedIn(symbolLocation: SymbolLocation): Symbol.Builder {
+    val currentRustType = this.build().rustType()
+    check(currentRustType is RustType.Opaque) { "Only Opaque can have their namespace updated" }
+    val newRustType = currentRustType.copy(namespace = "crate::${symbolLocation.namespace}")
+    return this.definitionFile("src/${symbolLocation.filename}")
         .namespace("crate::${symbolLocation.namespace}", "::")
+        .rustType(newRustType)
+}
 
 interface RustSymbolProvider : SymbolProvider {
     fun config(): SymbolVisitorConfig

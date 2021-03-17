@@ -10,7 +10,6 @@ import org.intellij.lang.annotations.Language
 import software.amazon.smithy.build.FileManifest
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.Shape
@@ -22,6 +21,8 @@ import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.BuildSettings
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
+import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
+import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
@@ -144,7 +145,7 @@ fun RustWriter.unitTest(
 }
 
 class TestWriterDelegator(fileManifest: FileManifest, symbolProvider: RustSymbolProvider) :
-    CodegenWriterDelegator<RustWriter>(fileManifest, symbolProvider, RustWriter.Factory) {
+    RustCrate(fileManifest, symbolProvider, DefaultPublicModules) {
     val baseDir: Path = fileManifest.baseDir
 }
 
@@ -165,7 +166,7 @@ fun TestWriterDelegator.compileAndTest() {
             build = BuildSettings.Default(),
             model = stubModel,
         ),
-        libRsCustomizations = listOf()
+        libRsCustomizations = listOf(),
     )
     "cargo test".runCommand(baseDir, mapOf("RUSTFLAGS" to "-A dead_code"))
 }
@@ -189,33 +190,39 @@ fun RustWriter.compileAndTest(
 ): String {
     // TODO: if there are no dependencies, we can be a bit quicker
     val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<CargoDependency>()
+    val module = if (this.namespace.contains("::")) {
+        this.namespace.split("::")[1]
+    } else {
+        "lib"
+    }
+    val tempDir = this.toString()
+        .intoCrate(deps.toSet(), module = module, main = main, strict = clippy)
+    val mainRs = tempDir.resolve("src/main.rs")
+    val testModule = tempDir.resolve("src/$module.rs")
     try {
-        val module = if (this.namespace.contains("::")) {
-            this.namespace.split("::")[1]
+        val testOutput = if ((mainRs.readText() + testModule.readText()).contains("#[test]")) {
+            "cargo test".runCommand(tempDir.toPath())
         } else {
-            "lib"
+            "cargo check".runCommand(tempDir.toPath())
         }
-        val output = this.toString()
-            .compileAndTest(deps.toSet(), module = module, main = main, strict = clippy)
         if (expectFailure) {
-            println(this.toString())
+            println("Test sources for debugging: file://${testModule.absolutePath}")
         }
-        return output
+        return testOutput
     } catch (e: CommandFailed) {
-        // When the test fails, print the code for convenience
         if (!expectFailure) {
-            println(this.toString())
+            println("Test sources for debugging: file://${testModule.absolutePath}")
         }
         throw e
     }
 }
 
-fun String.compileAndTest(
+private fun String.intoCrate(
     deps: Set<CargoDependency>,
     module: String? = null,
     main: String = "",
     strict: Boolean = false
-): String {
+): File {
     this.shouldParseAsRust()
     val tempDir = TestWorkspace.subproject()
     // TODO: unify this with CargoTomlGenerator
@@ -251,15 +258,7 @@ fun String.compileAndTest(
         pub fn main() {}
         """.trimIndent()
     )
-    val testOutput = if ((mainRs.readText() + testModule.readText()).contains("#[test]")) {
-        "cargo test".runCommand(tempDir.toPath())
-    } else {
-        "cargo check".runCommand(tempDir.toPath())
-    }
-    if (strict) {
-        "cargo clippy -- -D warnings".runCommand(tempDir.toPath())
-    }
-    return testOutput
+    return tempDir
 }
 
 fun String.shouldCompile(): File {

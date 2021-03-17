@@ -9,9 +9,12 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -56,7 +59,7 @@ internal class EndpointTraitBindingsTest {
             operationShape.expectTrait(EndpointTrait::class.java)
         )
         val project = TestWorkspace.testProject()
-        project.useFileWriter("src/test.rs", "crate::test") {
+        project.withModule(RustModule.default("test", false)) {
             it.rust(
                 """
                 struct GetStatusInput {
@@ -65,7 +68,10 @@ internal class EndpointTraitBindingsTest {
             """
             )
             it.implBlock(model.lookup("test#GetStatusInput"), sym) {
-                it.rustBlock("fn endpoint_prefix(&self) -> #T::endpoint::EndpointPrefix", TestRuntimeConfig.smithyHttp()) {
+                it.rustBlock(
+                    "fn endpoint_prefix(&self) -> #T::endpoint::EndpointPrefix",
+                    TestRuntimeConfig.smithyHttp()
+                ) {
                     endpointBindingGenerator.render(this, "self")
                     rust(".unwrap()")
                 }
@@ -108,10 +114,13 @@ internal class EndpointTraitBindingsTest {
         }
         """.asSmithyModel()
         val (ctx, testDir) = generatePluginContext(model, "com.example#TestService")
-        val visitor = CodegenVisitor(ctx, CombinedCodegenDecorator.fromClasspath(ctx))
-        visitor.writers.useFileWriter("src/tests.rs", "crate") {
-            it.unitTest(
-                """
+        val testDecorator = object : RustCodegenDecorator {
+            override val name: String = "Test"
+            override val order: Byte = 0
+            override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
+                rustCrate.withModule(RustModule.default("test", public = false)) {
+                    it.unitTest(
+                        """
                 let conf = crate::Config::builder().build();
                 crate::operation::SayHello::builder().greeting("hey there!").build(&conf).expect_err("no spaces or exclamation points in ep prefixes");
                 let op = crate::operation::SayHello::builder().greeting("hello").build(&conf).expect("hello is a valid prefix");
@@ -122,8 +131,11 @@ internal class EndpointTraitBindingsTest {
                 assert_eq!(prefix, "test123.hello.");
 
             """
-            )
+                    )
+                }
+            }
         }
+        val visitor = CodegenVisitor(ctx, CombinedCodegenDecorator.fromClasspath(ctx).withDecorator(testDecorator))
         visitor.execute()
         "cargo test".runCommand(testDir)
     }

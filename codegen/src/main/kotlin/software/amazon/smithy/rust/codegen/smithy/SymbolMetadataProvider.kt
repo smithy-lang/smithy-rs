@@ -13,8 +13,8 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.Attribute.Companion.NonExhaustive
-import software.amazon.smithy.rust.codegen.rustlang.Derives
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 
 /**
@@ -62,7 +62,7 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
 
 class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvider(base) {
     private val containerDefault = RustMetadata(
-        Derives(defaultDerives.toSet()),
+        Attribute.Derives(defaultDerives.toSet()),
         additionalAttributes = listOf(NonExhaustive),
         public = true
     )
@@ -81,12 +81,12 @@ class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvi
 
     override fun enumMeta(stringShape: StringShape): RustMetadata {
         return containerDefault.withDerives(
-            RuntimeType.Std("hash::Hash")
+            RuntimeType.std.member("hash::Hash")
         ).withDerives( // enums can be eq because they can only contain strings
-            RuntimeType.Std("cmp::Eq"),
+            RuntimeType.std.member("cmp::Eq"),
             // enums can be Ord because they can only contain strings
-            RuntimeType.Std("cmp::PartialOrd"),
-            RuntimeType.Std("cmp::Ord")
+            RuntimeType.std.member("cmp::PartialOrd"),
+            RuntimeType.std.member("cmp::Ord")
         )
     }
 
