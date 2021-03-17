@@ -172,16 +172,22 @@ class HttpTraitBindingGenerator(
 
     /**
      * When needed, generate a function to build a query string
+     *
+     * This function builds up a `Vec` of key-value pairs which are eventually passed to `smithy_http::query::write` for
+     * formatting.
      */
     private fun uriQuery(writer: RustWriter): Boolean {
         // Don't bother generating the function if we aren't going to make a query string
-        val queryParams = index.getRequestBindings(shape, HttpBinding.Location.QUERY)
-        if (queryParams.isEmpty() && httpTrait.uri.queryLiterals.isEmpty()) {
+        val dynamicParams = index.getRequestBindings(shape, HttpBinding.Location.QUERY)
+        val literalParams = httpTrait.uri.queryLiterals
+        if (dynamicParams.isEmpty() && literalParams.isEmpty()) {
             return false
         }
         writer.rustBlock("fn uri_query(&self, output: &mut String)") {
             write("let mut params = Vec::new();")
-            httpTrait.uri.queryLiterals.forEach { (k, v) ->
+            literalParams.forEach { (k, v) ->
+                // When `v` is an empty string, no value should be set.
+                // this generates a query string like `?k=v&xyz`
                 val literalValue = if (v.isEmpty()) {
                     "None"
                 } else {
@@ -190,7 +196,7 @@ class HttpTraitBindingGenerator(
                 rust("params.push((${k.dq()}, $literalValue));")
             }
 
-            queryParams.forEach { param ->
+            dynamicParams.forEach { param ->
                 val memberShape = param.member
                 val memberSymbol = symbolProvider.toSymbol(memberShape)
                 val memberName = symbolProvider.toMemberName(memberShape)
