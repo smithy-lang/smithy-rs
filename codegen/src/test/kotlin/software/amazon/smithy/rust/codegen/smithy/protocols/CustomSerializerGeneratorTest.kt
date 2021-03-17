@@ -74,7 +74,7 @@ internal class CustomSerializerGeneratorTest {
 
     private fun checkSymbol(symbol: RuntimeType) {
         val writer = TestWorkspace.testProject(provider)
-        writer.useFileWriter("src/lib.rs", "crate::lib") {
+        writer.lib {
             it.rust(
                 """
                     fn foo() {

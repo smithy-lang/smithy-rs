@@ -14,7 +14,6 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.rustlang.Custom
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
@@ -52,24 +51,24 @@ class JsonSerializerSymbolProvider(
         val serdeConfig = serdeRequired(model.expectShape(memberShape.container))
         val attribs = mutableListOf<Attribute>()
         if (serdeConfig.serialize || serdeConfig.deserialize) {
-            attribs.add(Custom("serde(rename = ${memberShape.serializedName().dq()})"))
+            attribs.add(Attribute.Custom("serde(rename = ${memberShape.serializedName().dq()})"))
         }
         if (serdeConfig.serialize) {
             if (base.toSymbol(memberShape).rustType().stripOuter<RustType.Reference>() is RustType.Option) {
-                attribs.add(Custom("serde(skip_serializing_if = \"Option::is_none\")"))
+                attribs.add(Attribute.Custom("serde(skip_serializing_if = \"Option::is_none\")"))
             }
             serializerBuilder.serializerFor(memberShape)?.also {
-                attribs.add(Custom("serde(serialize_with = ${it.fullyQualifiedName().dq()})", listOf(it)))
+                attribs.add(Attribute.Custom("serde(serialize_with = ${it.fullyQualifiedName().dq()})", listOf(it)))
             }
         }
         if (serdeConfig.deserialize) {
             serializerBuilder.deserializerFor(memberShape)?.also {
-                attribs.add(Custom("serde(deserialize_with = ${it.fullyQualifiedName().dq()})", listOf(it)))
+                attribs.add(Attribute.Custom("serde(deserialize_with = ${it.fullyQualifiedName().dq()})", listOf(it)))
             }
             if (model.expectShape(memberShape.container) is StructureShape && base.toSymbol(memberShape)
                 .isOptional()
             ) {
-                attribs.add(Custom("serde(default)"))
+                attribs.add(Attribute.Custom("serde(default)"))
             }
         }
         return currentMeta.copy(additionalAttributes = currentMeta.additionalAttributes + attribs)

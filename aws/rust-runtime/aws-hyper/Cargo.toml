@@ -36,3 +36,7 @@ protocol-test-helpers = { path = "../../../rust-runtime/protocol-test-helpers", 
 tokio = { version = "1", features = ["full", "test-util"] }
 tower-test = "0.4.0"
 aws-types = { path = "../aws-types" }
+
+[[test]]
+name = "e2e_test"
+required-features = ["test-util"]
