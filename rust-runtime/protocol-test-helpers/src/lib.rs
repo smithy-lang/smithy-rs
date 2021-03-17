@@ -251,7 +251,7 @@ fn validate_json_body(actual: &str, expected: &str) -> Result<(), ProtocolTestFa
     let actual_json: serde_json::Value =
         serde_json::from_str(actual).map_err(|e| ProtocolTestFailure::InvalidBodyFormat {
             expected: "json".to_owned(),
-            found: e.to_string(),
+            found: e.to_string() + actual,
         })?;
     let expected_json: serde_json::Value =
         serde_json::from_str(expected).expect("expected value must be valid JSON");

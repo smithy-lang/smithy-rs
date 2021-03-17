@@ -129,7 +129,8 @@ class HttpProtocolTestGeneratorTest {
             override fun toBodyImpl(
                 implBlockWriter: RustWriter,
                 inputShape: StructureShape,
-                inputBody: StructureShape?
+                inputBody: StructureShape?,
+                operationShape: OperationShape
             ) {
                 bodyBuilderFun(implBlockWriter) {
                     writeWithNoFormatting(body)
