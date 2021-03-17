@@ -30,7 +30,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.smithy.transformers.StructureModifier
 import software.amazon.smithy.rust.codegen.util.dq
 
 class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
@@ -38,31 +37,33 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
         protocolConfig: ProtocolConfig
     ): AwsRestJsonGenerator = AwsRestJsonGenerator(protocolConfig)
 
-    override fun transformModel(model: Model): Model {
-        // TODO: AWSRestJson determines the body from HTTP traits
-        val awsJsonInputBody: StructureModifier = { operation, input ->
-            if (input == null) {
-                null
-            } else {
-                val bindingIndex = HttpBindingIndex.of(model)
-                val bindings: MutableMap<String, HttpBinding> = bindingIndex.getRequestBindings(operation)
-                if (bindings.values.map { it.location }.contains(HttpBinding.Location.PAYLOAD)) {
-                    null
-                } else {
-                    val currentMembers = input.members()
-                    val bodyMembers = currentMembers.filter { member ->
-                        bindings[member.memberName]?.location == HttpBinding.Location.DOCUMENT
-                    }
-                    if (bodyMembers.isNotEmpty()) {
-                        input.toBuilder().members(bodyMembers).build()
-                    } else {
-                        null
-                    }
-                }
-            }
+    /** Create a synthetic awsJsonInputBody if specified
+     * A body is created iff no member of [input] is targeted with the `PAYLOAD` trait. If a member is targeted with
+     * the payload trait, we don't need to create an input body.
+     */
+    private fun awsJsonInputBody(model: Model, operation: OperationShape, input: StructureShape?): StructureShape? {
+        if (input == null) {
+            return null
         }
+        val bindingIndex = HttpBindingIndex.of(model)
+        val bindings: MutableMap<String, HttpBinding> = bindingIndex.getRequestBindings(operation)
+        if (bindings.values.map { it.location }.contains(HttpBinding.Location.PAYLOAD)) {
+            return null
+        }
+        val currentMembers = input.members()
+        val bodyMembers = currentMembers.filter { member ->
+            bindings[member.memberName]?.location == HttpBinding.Location.DOCUMENT
+        }
+        return if (bodyMembers.isNotEmpty()) {
+            input.toBuilder().members(bodyMembers).build()
+        } else {
+            null
+        }
+    }
+
+    override fun transformModel(model: Model): Model {
         return OperationNormalizer(model).transformModel(
-            inputBodyFactory = awsJsonInputBody,
+            inputBodyFactory = { op, input -> awsJsonInputBody(model, op, input) },
             outputBodyFactory = OperationNormalizer.NoBody
         )
     }
@@ -107,53 +108,10 @@ class AwsRestJsonGenerator(
         }
     }
 
-    override fun toBodyImpl(
+    private fun serializeViaSyntheticBody(
         implBlockWriter: RustWriter,
-        inputShape: StructureShape,
-        inputBody: StructureShape?,
-        operationShape: OperationShape
+        inputBody: StructureShape
     ) {
-        if (inputBody == null) {
-            val bindings = httpIndex.getRequestBindings(operationShape).toList()
-            val payload: Pair<String, HttpBinding>? =
-                bindings.firstOrNull { (_, binding) -> binding.location == HttpBinding.Location.PAYLOAD }
-            val payloadSerde = payload?.let { (memberName, _) ->
-                val member =
-                    inputShape.getMember(memberName).orElseThrow { throw CodegenException("member should exist") }
-                val rustMemberName = symbolProvider.toMemberName(member)
-                when (model.expectShape(member.target)) {
-                    is StringShape -> writable { rust("&self.$rustMemberName.into()") }
-                    is BlobShape -> writable {
-                        rust(
-                            """ {
-                        let slice = self.$rustMemberName.as_ref().map(|blob|blob.as_ref()).unwrap_or_default();
-                        slice.into()
-                        }
-                    """
-                        )
-                    }
-                    is StructureShape, is UnionShape -> writable {
-                        rust(
-                            """#T(&self.$rustMemberName).expect("serialization should succeed")""",
-                            RuntimeType.SerdeJson("to_vec")
-                        )
-                    }
-                    is DocumentShape -> writable {
-                        rustTemplate(
-                            """#{to_vec}(&#{doc_json}::SerDoc(&self.$rustMemberName)).expect("serialization should succeed")""",
-                            "to_vec" to RuntimeType.SerdeJson("to_vec"),
-                            "doc_json" to RuntimeType.DocJson
-                        )
-                    }
-                    else -> writable { rust("\"not ready yet\".to_string().into()") }
-                }
-                // body is null, no payload set, so this is empty
-            } ?: writable { rust("vec![]") }
-            bodyBuilderFun(implBlockWriter) {
-                payloadSerde(this)
-            }
-            return
-        }
         val bodySymbol = protocolConfig.symbolProvider.toSymbol(inputBody)
         implBlockWriter.rustBlock("fn body(&self) -> #T", bodySymbol) {
             rustBlock("#T", bodySymbol) {
@@ -165,6 +123,62 @@ class AwsRestJsonGenerator(
         }
         bodyBuilderFun(implBlockWriter) {
             write("""#T(&self.body()).expect("serialization should succeed")""", RuntimeType.SerdeJson("to_vec"))
+        }
+    }
+
+    override fun toBodyImpl(
+        implBlockWriter: RustWriter,
+        inputShape: StructureShape,
+        inputBody: StructureShape?,
+        operationShape: OperationShape
+    ) {
+        // If we created a synthetic input body, serialize that
+        if (inputBody != null) {
+            return serializeViaSyntheticBody(implBlockWriter, inputBody)
+        }
+
+        // Otherwise, we need to serialize via the HTTP payload trait
+        val bindings = httpIndex.getRequestBindings(operationShape).toList()
+        val payload: Pair<String, HttpBinding>? =
+            bindings.firstOrNull { (_, binding) -> binding.location == HttpBinding.Location.PAYLOAD }
+        val payloadSerde = payload?.let { (payloadMemberName, _) ->
+            val member =
+                inputShape.getMember(payloadMemberName).orElseThrow { throw CodegenException("member should exist") }
+            val rustMemberName = "self.${symbolProvider.toMemberName(member)}"
+            val serdeToVec = RuntimeType.SerdeJson("to_vec")
+            when (model.expectShape(member.target)) {
+                // Write the raw string to the payload
+                is StringShape -> writable { rust("$rustMemberName.into()") }
+                is BlobShape -> writable {
+                    // Write the raw blob to the payload
+                    rust(
+                        """ {
+                        let slice = $rustMemberName.as_ref().map(|blob|blob.as_ref()).unwrap_or_default();
+                        slice.into()
+                        }
+                    """
+                    )
+                }
+                is StructureShape, is UnionShape -> writable {
+                    // JSON serialize the structure or union targetted
+                    rust(
+                        """#T(&$rustMemberName).expect("serialization should succeed")""",
+                        serdeToVec
+                    )
+                }
+                is DocumentShape -> writable {
+                    rustTemplate(
+                        """#{to_vec}(&#{doc_json}::SerDoc(&$rustMemberName)).expect("serialization should succeed")""",
+                        "to_vec" to serdeToVec,
+                        "doc_json" to RuntimeType.DocJson
+                    )
+                }
+                else -> TODO("Unexpected payload target type")
+            }
+            // body is null, no payload set, so this is empty
+        } ?: writable { rust("vec![]") }
+        bodyBuilderFun(implBlockWriter) {
+            payloadSerde(this)
         }
     }
 
