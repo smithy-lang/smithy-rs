@@ -8,6 +8,7 @@ edition = "2018"
 
 [features]
 test-util = ["protocol-test-helpers"]
+default = ["test-util"]
 
 [dependencies]
 hyper = { version = "0.14.2", features = ["client", "http1", "http2", "tcp", "runtime"] }
@@ -35,3 +36,7 @@ protocol-test-helpers = { path = "../protocol-test-helpers", optional = true }
 tokio = { version = "1", features = ["full", "test-util"] }
 tower-test = "0.4.0"
 aws-types = { path = "../aws-types" }
+
+[[test]]
+name = "e2e_test"
+required-features = ["test-util"]

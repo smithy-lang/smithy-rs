@@ -2,9 +2,9 @@
 
 pub struct Config {
     pub(crate) make_token: Box<dyn crate::idempotency_token::MakeIdempotencyToken>,
-    pub(crate) endpoint_resolver: ::std::sync::Arc<dyn ::aws_endpoint::ResolveAwsEndpoint>,
-    pub(crate) region: Option<::aws_types::region::Region>,
-    pub(crate) credentials_provider: std::sync::Arc<dyn ::aws_auth::ProvideCredentials>,
+    pub(crate) endpoint_resolver: ::std::sync::Arc<dyn aws_endpoint::ResolveAwsEndpoint>,
+    pub(crate) region: Option<aws_types::region::Region>,
+    pub(crate) credentials_provider: std::sync::Arc<dyn aws_auth::ProvideCredentials>,
 }
 impl Config {
     pub fn builder() -> Builder {
@@ -22,9 +22,9 @@ impl Config {
 #[derive(Default)]
 pub struct Builder {
     make_token: Option<Box<dyn crate::idempotency_token::MakeIdempotencyToken>>,
-    endpoint_resolver: Option<::std::sync::Arc<dyn ::aws_endpoint::ResolveAwsEndpoint>>,
-    region: Option<::aws_types::region::Region>,
-    credentials_provider: Option<std::sync::Arc<dyn ::aws_auth::ProvideCredentials>>,
+    endpoint_resolver: Option<::std::sync::Arc<dyn aws_endpoint::ResolveAwsEndpoint>>,
+    region: Option<aws_types::region::Region>,
+    credentials_provider: Option<std::sync::Arc<dyn aws_auth::ProvideCredentials>>,
 }
 impl Builder {
     pub fn new() -> Self {
@@ -41,13 +41,13 @@ impl Builder {
 
     pub fn endpoint_resolver(
         mut self,
-        endpoint_resolver: impl ::aws_endpoint::ResolveAwsEndpoint + 'static,
+        endpoint_resolver: impl aws_endpoint::ResolveAwsEndpoint + 'static,
     ) -> Self {
         self.endpoint_resolver = Some(::std::sync::Arc::new(endpoint_resolver));
         self
     }
 
-    pub fn region(mut self, region_provider: impl ::aws_types::region::ProvideRegion) -> Self {
+    pub fn region(mut self, region_provider: impl aws_types::region::ProvideRegion) -> Self {
         self.region = region_provider.region();
         self
     }
@@ -56,7 +56,7 @@ impl Builder {
 
     pub fn credentials_provider(
         mut self,
-        credentials_provider: impl ::aws_auth::ProvideCredentials + 'static,
+        credentials_provider: impl aws_auth::ProvideCredentials + 'static,
     ) -> Self {
         self.credentials_provider = Some(std::sync::Arc::new(credentials_provider));
         self
@@ -68,18 +68,18 @@ impl Builder {
                 .make_token
                 .unwrap_or_else(|| Box::new(crate::idempotency_token::default_provider())),
             endpoint_resolver: self.endpoint_resolver.unwrap_or_else(|| {
-                ::std::sync::Arc::new(::aws_endpoint::DefaultAwsEndpointResolver::for_service(
+                ::std::sync::Arc::new(aws_endpoint::DefaultAwsEndpointResolver::for_service(
                     "secretsmanager",
                 ))
             }),
             region: {
-                use ::aws_types::region::ProvideRegion;
+                use aws_types::region::ProvideRegion;
                 self.region
-                    .or_else(|| ::aws_types::region::default_provider().region())
+                    .or_else(|| aws_types::region::default_provider().region())
             },
             credentials_provider: self
                 .credentials_provider
-                .unwrap_or_else(|| std::sync::Arc::new(::aws_auth::default_provider())),
+                .unwrap_or_else(|| std::sync::Arc::new(aws_auth::default_provider())),
         }
     }
 }

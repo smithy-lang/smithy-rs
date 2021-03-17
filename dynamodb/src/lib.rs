@@ -22,6 +22,8 @@ mod aws_json_errors;
 mod blob_serde;
 pub mod config;
 pub mod error;
+#[cfg(feature = "fluent")]
+pub mod fluent;
 mod idempotency_token;
 pub mod input;
 mod instant_epoch;
@@ -31,9 +33,9 @@ pub mod output;
 mod serde_util;
 mod serializer;
 pub static PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
-pub use ::smithy_types::Blob;
-static API_METADATA: ::aws_http::user_agent::ApiMetadata =
-    ::aws_http::user_agent::ApiMetadata::new("dynamodb", PKG_VERSION);
-pub use ::aws_auth::Credentials;
-pub use ::aws_types::region::Region;
-pub use ::smithy_http::endpoint::Endpoint;
+pub use smithy_types::Blob;
+static API_METADATA: aws_http::user_agent::ApiMetadata =
+    aws_http::user_agent::ApiMetadata::new("dynamodb", PKG_VERSION);
+pub use aws_auth::Credentials;
+pub use aws_types::region::Region;
+pub use smithy_http::endpoint::Endpoint;

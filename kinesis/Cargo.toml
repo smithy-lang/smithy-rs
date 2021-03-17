@@ -18,10 +18,14 @@ path = "..//smithy-types"
 [dependencies.serde]
 version = "1"
 features = ["derive"]
-[dependencies.aws-http]
-path = "..//aws-http"
+[dependencies.aws-hyper]
+path = "..//aws-hyper"
+features = ["test-util"]
+optional = true
 [dependencies.smithy-http]
 path = "..//smithy-http"
+[dependencies.aws-http]
+path = "..//aws-http"
 [dependencies.aws-sig-auth]
 path = "..//aws-sig-auth"
 [dependencies.http]
@@ -31,5 +35,8 @@ version = "1"
 features = ["float_roundtrip"]
 [dependencies.bytes]
 version = "1"
+[features]
+fluent = ["aws-hyper"]
+default = ["fluent"]
 
 
