@@ -18,6 +18,7 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -175,11 +176,19 @@ class HttpTraitBindingGenerator(
     private fun uriQuery(writer: RustWriter): Boolean {
         // Don't bother generating the function if we aren't going to make a query string
         val queryParams = index.getRequestBindings(shape, HttpBinding.Location.QUERY)
-        if (queryParams.isEmpty()) {
+        if (queryParams.isEmpty() && httpTrait.uri.queryLiterals.isEmpty()) {
             return false
         }
         writer.rustBlock("fn uri_query(&self, output: &mut String)") {
             write("let mut params = Vec::new();")
+            httpTrait.uri.queryLiterals.forEach { (k, v) ->
+                val literalValue = if (v.isEmpty()) {
+                    "None"
+                } else {
+                    "Some(${v.dq()}.to_string())"
+                }
+                rust("params.push((${k.dq()}, $literalValue));")
+            }
 
             queryParams.forEach { param ->
                 val memberShape = param.member
@@ -190,13 +199,13 @@ class HttpTraitBindingGenerator(
                     ListForEach(outerTarget, field) { innerField, targetId ->
                         val target = model.expectShape(targetId)
                         write(
-                            "params.push((${param.locationName.dq()}, ${
+                            "params.push((${param.locationName.dq()}, Some(${
                             paramFmtFun(
                                 target,
                                 memberShape,
                                 innerField
                             )
-                            }));"
+                            })));"
                         )
                     }
                 }

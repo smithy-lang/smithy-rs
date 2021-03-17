@@ -77,13 +77,15 @@ fn url_encode(c: char, buff: &mut String) {
     }
 }
 
-pub fn write(inp: Vec<(&str, String)>, out: &mut String) {
+pub fn write(inp: Vec<(&str, Option<String>)>, out: &mut String) {
     let mut prefix = '?';
     for (k, v) in inp {
         out.push(prefix);
         out.push_str(k);
-        out.push('=');
-        out.push_str(&v);
+        if let Some(v) = v {
+            out.push('=');
+            out.push_str(&v);
+        }
         prefix = '&';
     }
 }
