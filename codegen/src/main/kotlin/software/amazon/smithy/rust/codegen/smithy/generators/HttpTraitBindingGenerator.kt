@@ -173,8 +173,18 @@ class HttpTraitBindingGenerator(
     /**
      * When needed, generate a function to build a query string
      *
-     * This function builds up a `Vec` of key-value pairs which are eventually passed to `smithy_http::query::write` for
-     * formatting.
+     * This function uses smithy_http::query::Query to append params to a query string:
+     * ```rust
+     *    fn uri_query(&self, mut output: &mut String) {
+     *      let mut query = smithy_http::query::Query::new(&mut output);
+     *      if let Some(inner_89) = &self.null_value {
+     *          query.push_kv("Null", &smithy_http::query::fmt_string(&inner_89));
+     *      }
+     *      if let Some(inner_90) = &self.empty_string {
+     *          query.push_kv("Empty", &smithy_http::query::fmt_string(&inner_90));
+     *      }
+     *    }
+     *  ```
      */
     private fun uriQuery(writer: RustWriter): Boolean {
         // Don't bother generating the function if we aren't going to make a query string
@@ -184,7 +194,7 @@ class HttpTraitBindingGenerator(
             return false
         }
         writer.rustBlock("fn uri_query(&self, mut output: &mut String)") {
-            write("let mut query = #T::new(&mut output);", RuntimeType.QueryFormat(runtimeConfig, "Query"))
+            write("let mut query = #T::new(&mut output);", RuntimeType.QueryFormat(runtimeConfig, "Writer"))
             literalParams.forEach { (k, v) ->
                 // When `v` is an empty string, no value should be set.
                 // this generates a query string like `?k=v&xyz`

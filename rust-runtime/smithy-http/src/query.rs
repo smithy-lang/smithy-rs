@@ -80,21 +80,21 @@ fn url_encode(c: char, buff: &mut String) {
 /// Simple abstraction to enable appending params to a string as query params
 ///
 /// ```rust
-/// use smithy_http::query::Query;
+/// use smithy_http::query::Writer;
 /// let mut s = String::from("www.example.com");
-/// let mut q = Query::new(&mut s);
+/// let mut q = Writer::new(&mut s);
 /// q.push_kv("key", "value");
 /// q.push_v("another_value");
 /// assert_eq!(s, "www.example.com?key=value&another_value");
 /// ```
-pub struct Query<'a> {
+pub struct Writer<'a> {
     out: &'a mut String,
     prefix: char,
 }
 
-impl<'a> Query<'a> {
+impl<'a> Writer<'a> {
     pub fn new(out: &'a mut String) -> Self {
-        Query { out, prefix: '?' }
+        Writer { out, prefix: '?' }
     }
 
     pub fn push_kv(&mut self, k: &str, v: &str) {
