@@ -77,16 +77,37 @@ fn url_encode(c: char, buff: &mut String) {
     }
 }
 
-pub fn write(inp: Vec<(&str, Option<String>)>, out: &mut String) {
-    let mut prefix = '?';
-    for (k, v) in inp {
-        out.push(prefix);
-        out.push_str(k);
-        if let Some(v) = v {
-            out.push('=');
-            out.push_str(&v);
-        }
-        prefix = '&';
+/// Simple abstraction to enable appending params to a string as query params
+///
+/// ```rust
+/// use smithy_http::query::Query;
+/// let mut s = String::from("www.example.com");
+/// let mut q = Query::new(&mut s);
+/// q.push_kv("key", "value");
+/// q.push_v("another_value");
+/// assert_eq!(s, "www.example.com?key=value&another_value");
+/// ```
+pub struct Query<'a> {
+    out: &'a mut String,
+    prefix: char,
+}
+
+impl<'a> Query<'a> {
+    pub fn new(out: &'a mut String) -> Self {
+        Query { out, prefix: '?' }
+    }
+
+    pub fn push_kv(&mut self, k: &str, v: &str) {
+        self.out.push(self.prefix);
+        self.out.push_str(k);
+        self.out.push('=');
+        self.out.push_str(v);
+        self.prefix = '&';
+    }
+
+    pub fn push_v(&mut self, v: &str) {
+        self.out.push(self.prefix);
+        self.out.push_str(v);
     }
 }
 

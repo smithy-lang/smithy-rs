@@ -183,17 +183,16 @@ class HttpTraitBindingGenerator(
         if (dynamicParams.isEmpty() && literalParams.isEmpty()) {
             return false
         }
-        writer.rustBlock("fn uri_query(&self, output: &mut String)") {
-            write("let mut params = Vec::new();")
+        writer.rustBlock("fn uri_query(&self, mut output: &mut String)") {
+            write("let mut query = #T::new(&mut output);", RuntimeType.QueryFormat(runtimeConfig, "Query"))
             literalParams.forEach { (k, v) ->
                 // When `v` is an empty string, no value should be set.
                 // this generates a query string like `?k=v&xyz`
-                val literalValue = if (v.isEmpty()) {
-                    "None"
+                if (v.isEmpty()) {
+                    rust("query.push_v(${k.dq()});")
                 } else {
-                    "Some(${v.dq()}.to_string())"
+                    rust("query.push_kv(${k.dq()}, ${v.dq()});")
                 }
-                rust("params.push((${k.dq()}, $literalValue));")
             }
 
             dynamicParams.forEach { param ->
@@ -204,19 +203,18 @@ class HttpTraitBindingGenerator(
                 ifSet(outerTarget, memberSymbol, "&self.$memberName") { field ->
                     ListForEach(outerTarget, field) { innerField, targetId ->
                         val target = model.expectShape(targetId)
-                        write(
-                            "params.push((${param.locationName.dq()}, Some(${
+                        rust(
+                            "query.push_kv(${param.locationName.dq()}, &${
                             paramFmtFun(
                                 target,
                                 memberShape,
                                 innerField
                             )
-                            })));"
+                            });"
                         )
                     }
                 }
             }
-            write("#T(params, output)", RuntimeType.QueryFormat(runtimeConfig, "write"))
         }
         return true
     }
