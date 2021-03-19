@@ -10,6 +10,8 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.pattern.SmithyPattern
+import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
@@ -18,7 +20,9 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
@@ -60,6 +64,7 @@ class HttpTraitBindingGenerator(
     // TODO: make defaultTimestampFormat configurable
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
     private val index = HttpBindingIndex.of(model)
+    private val buildError = runtimeConfig.operationBuildError()
 
     /**
      * Generates `update_http_builder` and all necessary dependency functions into the impl block provided by
@@ -70,8 +75,9 @@ class HttpTraitBindingGenerator(
         val hasHeaders = addHeaders(implBlockWriter)
         val hasQuery = uriQuery(implBlockWriter)
         implBlockWriter.rustBlock(
-            "fn update_http_builder(&self, builder: #1T) -> #1T",
-            RuntimeType.HttpRequestBuilder
+            "fn update_http_builder(&self, builder: #1T) -> Result<#1T, #2T>",
+            RuntimeType.HttpRequestBuilder,
+            buildError
         ) {
             write("let mut uri = String::new();")
             write("self.uri_base(&mut uri);")
@@ -79,9 +85,9 @@ class HttpTraitBindingGenerator(
                 write("self.uri_query(&mut uri);")
             }
             if (hasHeaders) {
-                write("let builder = self.add_headers(builder);")
+                write("let builder = self.add_headers(builder)?;")
             }
-            write("builder.method(${httpTrait.method.dq()}).uri(uri)")
+            write("Ok(builder.method(${httpTrait.method.dq()}).uri(uri))")
         }
     }
 
@@ -93,33 +99,95 @@ class HttpTraitBindingGenerator(
      */
     private fun addHeaders(writer: RustWriter): Boolean {
         val headers = index.getRequestBindings(shape, HttpBinding.Location.HEADER)
-        if (headers.isEmpty()) {
+        val prefixHeaders = index.getRequestBindings(
+            shape,
+            HttpBinding.Location.PREFIX_HEADERS
+        )
+        val buildErrorT = runtimeConfig.operationBuildError()
+
+        if (headers.isEmpty() && prefixHeaders.isEmpty()) {
             return false
         }
         writer.rustBlock(
-            "fn add_headers(&self, mut builder: #1T) -> #1T",
-            RuntimeType.HttpRequestBuilder
+            "fn add_headers(&self, mut builder: #1T) -> Result<#1T, #2T>",
+            RuntimeType.HttpRequestBuilder,
+            buildErrorT
         ) {
-            headers.forEach { httpBinding ->
-                val memberShape = httpBinding.member
-                val memberType = model.expectShape(memberShape.target)
-                val memberSymbol = symbolProvider.toSymbol(memberShape)
-                val memberName = symbolProvider.toMemberName(memberShape)
-                ifSet(memberType, memberSymbol, "&self.$memberName") { field ->
-                    ListForEach(memberType, field) { innerField, targetId ->
-                        val innerMemberType = model.expectShape(targetId)
-                        val formatted = headerFmtFun(innerMemberType, memberShape, innerField)
-                        val safeName = safeName("formatted")
-                        write("let $safeName = $formatted;")
-                        rustBlock("if !$safeName.is_empty()") {
-                            write("builder = builder.header(${httpBinding.locationName.dq()}, $formatted);")
-                        }
-                    }
-                }
+            headers.forEach { httpBinding -> renderHeaders(httpBinding) }
+            prefixHeaders.forEach { httpBinding ->
+                renderPrefixHeaders(httpBinding)
             }
-            write("builder")
+            rust("Ok(builder)")
         }
         return true
+    }
+
+    private fun RustWriter.renderPrefixHeaders(httpBinding: HttpBinding) {
+        val memberShape = httpBinding.member
+        val memberType = model.expectShape(memberShape.target)
+        val memberSymbol = symbolProvider.toSymbol(memberShape)
+        val memberName = symbolProvider.toMemberName(memberShape)
+        val target = when (memberType) {
+            is CollectionShape -> model.expectShape(memberType.member.target)
+            is MapShape -> model.expectShape(memberType.value.target)
+            else -> TODO("unexpected member for prefix headers: $memberType")
+        }
+        ifSet(memberType, memberSymbol, "&self.$memberName") { field ->
+            rustTemplate(
+                """
+                for (k, v) in $field {
+                    use std::str::FromStr;
+                    let header_name = http::header::HeaderName::from_str(&format!("{}{}", ${httpBinding.locationName.dq()}, &k)).map_err(|err| {
+                        #{build_error}::InvalidField { field: ${memberName.dq()}, details: format!("`{}` cannot be used as a header name: {}", k, err)}
+                    })?;
+                    use std::convert::TryFrom;
+                    let header_value = ${headerFmtFun(target, memberShape, "v")};
+                    let header_value = http::header::HeaderValue::try_from(header_value).map_err(|err| {
+                        #{build_error}::InvalidField {
+                            field: ${memberName.dq()},
+                            details: format!("`{}` cannot be used as a header value: {}", ${redactIfNecessary(memberShape, model,"v")}, err)}
+                    })?;
+                    builder = builder.header(header_name, header_value);
+                }
+
+            """,
+                "build_error" to runtimeConfig.operationBuildError()
+            )
+        }
+    }
+
+    private fun RustWriter.renderHeaders(httpBinding: HttpBinding) {
+        val memberShape = httpBinding.member
+        val memberType = model.expectShape(memberShape.target)
+        val memberSymbol = symbolProvider.toSymbol(memberShape)
+        val memberName = symbolProvider.toMemberName(memberShape)
+        ifSet(memberType, memberSymbol, "&self.$memberName") { field ->
+            ListForEach(memberType, field) { innerField, targetId ->
+                val innerMemberType = model.expectShape(targetId)
+                val formatted = headerFmtFun(innerMemberType, memberShape, innerField)
+                val safeName = safeName("formatted")
+                write("let $safeName = $formatted;")
+                rustBlock("if !$safeName.is_empty()") {
+                    rustTemplate(
+                        """
+                        use std::convert::TryFrom;
+                        let header_value = $safeName;
+                        let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
+                            #{build_error}::InvalidField { field: ${memberName.dq()}, details: format!("`{}` cannot be used as a header value: {}", &${
+                        redactIfNecessary(
+                            memberShape,
+                            model,
+                            "header_value"
+                        )
+                        }, err)}
+                        })?;
+                        builder = builder.header(${httpBinding.locationName.dq()}, header_value);
+                    """,
+                        "build_error" to runtimeConfig.operationBuildError()
+                    )
+                }
+            }
+        }
     }
 
     /**
@@ -128,12 +196,13 @@ class HttpTraitBindingGenerator(
     private fun headerFmtFun(target: Shape, member: MemberShape, targetName: String): String {
         return when {
             target.isStringShape -> {
-                val func = if (target.hasTrait(MediaTypeTrait::class.java)) {
-                    writer.format(RuntimeType.Base64Encode(runtimeConfig))
+                /*val func = */ if (target.hasTrait(MediaTypeTrait::class.java)) {
+                    val func = writer.format(RuntimeType.Base64Encode(runtimeConfig))
+                    "$func(&${writer.useAs(target, targetName)})"
                 } else {
-                    writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_string"))
+                    writer.useAs(target, targetName)
+                    // writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_string"))
                 }
-                "$func(&${writer.useAs(target, targetName)})"
             }
             target.isTimestampShape -> {
                 val timestampFormat =

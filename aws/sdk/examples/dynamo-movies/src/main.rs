@@ -6,6 +6,7 @@
 use aws_http::AwsErrorRetryPolicy;
 use aws_hyper::{SdkError, SdkSuccess};
 use dynamodb::error::DescribeTableError;
+use dynamodb::fluent::Client;
 use dynamodb::input::{
     create_table_input, put_item_input, query_input, DescribeTableInput, ListTablesInput,
     PutItemInput, QueryInput,
@@ -23,6 +24,7 @@ use smithy_http::retry::ClassifyResponse;
 use smithy_types::retry::RetryKind;
 use std::collections::HashMap;
 use std::time::Duration;
+use dynamodb::fluent::fluent_builders::Query;
 
 /// A partial reimplementation of https://docs.amazonaws.cn/en_us/amazondynamodb/latest/developerguide/GettingStarted.Ruby.html
 /// in Rust
@@ -34,13 +36,16 @@ use std::time::Duration;
 #[tokio::main]
 async fn main() {
     let table_name = "dynamo-movies-example";
-    let client = aws_hyper::Client::https();
     let conf = dynamodb::Config::builder()
         .region(Region::new("us-east-1"))
         .build();
+    let conn = aws_hyper::conn::Standard::https();
+    let client = dynamodb::fluent::Client::from_conf_conn(conf, conn);
+    let raw_client = aws_hyper::Client::https();
 
     let table_exists = client
-        .call(ListTablesInput::builder().build(&conf))
+        .list_tables()
+        .send()
         .await
         .expect("should succeed")
         .table_names
@@ -49,13 +54,13 @@ async fn main() {
         .contains(&table_name.to_string());
 
     if !table_exists {
-        client
-            .call(create_table(table_name).build(&conf))
+        create_table(&client, table_name)
+            .send()
             .await
             .expect("failed to create table");
     }
 
-    client
+    raw_client
         .call(wait_for_ready_table(table_name, &conf))
         .await
         .expect("table should become ready");
@@ -66,21 +71,23 @@ async fn main() {
         Value::Array(inner) => inner,
         data => panic!("data must be an array, got: {:?}", data),
     };
-    for item in data {
+    for value in data {
         client
-            .call(add_item(table_name, item).build(&conf))
+            .put_item()
+            .table_name(table_name)
+            .item(parse_item(value))
+            .send()
             .await
             .expect("failed to insert item");
     }
-    let films_2222 = client
-        .call(movies_in_year(table_name, 2222).build(&conf))
+    let films_2222 =
+        movies_in_year(&client, table_name, 2222).send()
         .await
         .expect("query should succeed");
     // this isn't back to the future, there are no movies from 2022
     assert_eq!(films_2222.count, 0);
 
-    let films_2013 = client
-        .call(movies_in_year(table_name, 2013).build(&conf))
+    let films_2013 = movies_in_year(&client, table_name, 2013).send()
         .await
         .expect("query should succeed");
     assert_eq!(films_2013.count, 2);
@@ -99,8 +106,12 @@ async fn main() {
     );
 }
 
-fn create_table(table_name: &str) -> create_table_input::Builder {
-    CreateTable::builder()
+fn create_table(
+    client: &Client,
+    table_name: &str,
+) -> dynamodb::fluent::fluent_builders::CreateTable {
+    client
+        .create_table()
         .table_name(table_name)
         .key_schema(vec![
             KeySchemaElement::builder()
@@ -130,6 +141,13 @@ fn create_table(table_name: &str) -> create_table_input::Builder {
         )
 }
 
+fn parse_item(value: Value) -> HashMap<String, AttributeValue> {
+    match value_to_item(value) {
+        AttributeValue::M(map) => map,
+        other => panic!("can only insert top level values, got {:?}", other),
+    }
+}
+
 fn value_to_item(value: Value) -> AttributeValue {
     match value {
         Value::Null => AttributeValue::Null(true),
@@ -143,23 +161,12 @@ fn value_to_item(value: Value) -> AttributeValue {
     }
 }
 
-fn add_item(table_name: impl Into<String>, item: Value) -> put_item_input::Builder {
-    let attribute_value = match value_to_item(item) {
-        AttributeValue::M(map) => map,
-        other => panic!("can only insert top level values, got {:?}", other),
-    };
-
-    PutItemInput::builder()
-        .table_name(table_name)
-        .item(attribute_value)
-}
-
-fn movies_in_year(table_name: &str, year: u16) -> query_input::Builder {
+fn movies_in_year(client: &Client, table_name: &str, year: u16) -> Query {
     let mut expr_attrib_names = HashMap::new();
     expr_attrib_names.insert("#yr".to_string(), "year".to_string());
     let mut expr_attrib_values = HashMap::new();
     expr_attrib_values.insert(":yyyy".to_string(), AttributeValue::N(year.to_string()));
-    QueryInput::builder()
+    client.query()
         .table_name(table_name)
         .key_condition_expression("#yr = :yyyy")
         .expression_attribute_names(expr_attrib_names)
@@ -214,7 +221,7 @@ fn wait_for_ready_table(
 ) -> Operation<DescribeTable, WaitForReadyTable<AwsErrorRetryPolicy>> {
     let operation = DescribeTableInput::builder()
         .table_name(table_name)
-        .build(&conf);
+        .build(&conf).expect("valid input");
     let waiting_policy = WaitForReadyTable {
         inner: operation.retry_policy().clone(),
     };

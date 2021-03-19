@@ -115,7 +115,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                     }
 
                     pub async fn send(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>> {
-                        let op = self.inner.build(&self.handle.conf);
+                        let op = self.inner.build(&self.handle.conf).map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
                         self.handle.client.call(op).await
                     }
                     """,

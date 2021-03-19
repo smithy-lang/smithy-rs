@@ -49,6 +49,7 @@ abstract class HttpProtocolGenerator(
 ) {
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
+    private val buildErrorT = protocolConfig.runtimeConfig.operationBuildError()
     fun renderOperation(operationWriter: RustWriter, inputWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
         /* if (operationShape.hasTrait(EndpointTrait::class.java)) {
             TODO("https://github.com/awslabs/smithy-rs/issues/197")
@@ -88,9 +89,9 @@ abstract class HttpProtocolGenerator(
             builderGenerator.renderConvenienceMethod(this)
 
             rustBlock(
-                "pub fn build_http_request(&self) -> #T<Vec<u8>>", RuntimeType.Http("request::Request")
+                "pub fn build_http_request(&self) -> Result<#T<Vec<u8>>, #T>", RuntimeType.Http("request::Request"), buildErrorT
             ) {
-                write("#T::assemble(self.input.request_builder_base(), self.input.build_body())", inputSymbol)
+                write("Ok(#T::assemble(self.input.request_builder_base()?, self.input.build_body()))", inputSymbol)
             }
 
             fromResponseImpl(this, operationShape)
@@ -115,8 +116,8 @@ abstract class HttpProtocolGenerator(
 
     protected fun httpBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
         implBlockWriter.rustBlock(
-            "pub fn request_builder_base(&self) -> #T",
-            RuntimeType.HttpRequestBuilder
+            "pub fn request_builder_base(&self) -> Result<#T, #T>",
+            RuntimeType.HttpRequestBuilder, buildErrorT
         ) {
             f(this)
         }

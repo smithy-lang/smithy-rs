@@ -271,7 +271,8 @@ class Instantiator(
             } else {
                 writer.write(".build()")
             }
-            if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
+            // All operation builders are fallible
+            if (StructureGenerator.fallibleBuilder(shape, symbolProvider) || isSyntheticInput) {
                 writer.write(".unwrap()")
             }
         }

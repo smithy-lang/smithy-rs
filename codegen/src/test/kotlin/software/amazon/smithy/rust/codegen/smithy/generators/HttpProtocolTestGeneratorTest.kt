@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -142,8 +143,9 @@ class HttpProtocolTestGeneratorTest {
                 inputShape: StructureShape
             ) {
                 httpBuilderFun(implBlockWriter) {
-                    write("#T::new()", RuntimeType.HttpRequestBuilder)
-                    writeWithNoFormatting(httpRequestBuilder)
+                    withBlock("Ok(#T::new()", ")", RuntimeType.HttpRequestBuilder) {
+                        writeWithNoFormatting(httpRequestBuilder)
+                    }
                 }
             }
         }

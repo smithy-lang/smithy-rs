@@ -169,10 +169,12 @@ class BasicAwsJsonGenerator(
             write("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
             rust(
                 """
-                builder
-                   .method("POST")
-                   .header("Content-Type", "application/x-amz-json-${awsJsonVersion.value}")
-                   .header("X-Amz-Target", "${protocolConfig.serviceShape.id.name}.${operationShape.id.name}")
+                Ok(
+                    builder
+                       .method("POST")
+                       .header("Content-Type", "application/x-amz-json-${awsJsonVersion.value}")
+                       .header("X-Amz-Target", "${protocolConfig.serviceShape.id.name}.${operationShape.id.name}")
+               )
                """
             )
         }
