@@ -19,6 +19,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -74,6 +75,7 @@ class HttpTraitBindingGenerator(
         uriBase(implBlockWriter)
         val hasHeaders = addHeaders(implBlockWriter)
         val hasQuery = uriQuery(implBlockWriter)
+        Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
         implBlockWriter.rustBlock(
             "fn update_http_builder(&self, builder: #1T) -> Result<#1T, #2T>",
             RuntimeType.HttpRequestBuilder,
