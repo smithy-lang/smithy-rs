@@ -27,6 +27,8 @@ data class CodegenTest(val service: String, val module: String, val extraConfig:
 val CodegenTests = listOf(
     CodegenTest("com.amazonaws.dynamodb#DynamoDB_20120810", "dynamo"),
     CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
+    CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
+    CodegenTest("com.amazonaws.lambda#AWSGirApiService", "lambda"),
     CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
     CodegenTest(
         "aws.protocoltests.json#JsonProtocol",
