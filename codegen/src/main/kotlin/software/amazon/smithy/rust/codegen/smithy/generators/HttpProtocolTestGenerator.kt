@@ -216,13 +216,14 @@ class HttpProtocolTestGenerator(
         write(";")
         write("let http_response = #T::new()", RuntimeType.HttpResponseBuilder)
         testCase.headers.forEach { (key, value) ->
-            writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
+            writeWithNoFormatting("  .header(${key.dq()}, ${value.dq()})")
         }
+        // This weird formatting to work around a bug in cargo fmt where it fails to format this line and
+        // then fails to format the entire project
         rust(
-            """
-                .status(${testCase.code})
-                .body(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"})
-                .unwrap();
+            """ .status(${testCase.code})
+  .body(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"})
+  .unwrap();
             """
         )
         write("let parsed = #T::from_response(&http_response);", operationSymbol)

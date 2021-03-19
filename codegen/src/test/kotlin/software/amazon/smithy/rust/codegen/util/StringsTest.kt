@@ -18,4 +18,10 @@ internal class StringsTest {
            "{\"nested\": \"{\\\"nested\\\": 5}\"}\"}"
         """.trimIndent().trim()
     }
+
+    @Test
+    fun removeLiteralNewlines() {
+        val s = "a\nb"
+        s.dq() shouldBe """"a\nb""""
+    }
 }

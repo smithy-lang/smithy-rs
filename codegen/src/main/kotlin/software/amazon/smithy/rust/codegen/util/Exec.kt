@@ -9,7 +9,7 @@ import software.amazon.smithy.rust.codegen.smithy.letIf
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
-class CommandFailed(output: String) : Exception("Command Failed\n$output")
+class CommandFailed(val output: String) : Exception("Command Failed\n$output")
 
 fun String.runCommand(workdir: Path? = null, environment: Map<String, String> = mapOf()): String {
     val parts = this.split("\\s".toRegex())

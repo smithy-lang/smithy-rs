@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.codegen.util
 
 import software.amazon.smithy.utils.CaseUtils
 
-fun String.doubleQuote(): String = "\"${this.slashEscape('\\').slashEscape('"')}\""
+fun String.doubleQuote(): String = "\"${this.slashEscape('\\').slashEscape('"').replace("\n", "\\n")}\""
 fun String.slashEscape(char: Char) = this.replace(char.toString(), """\$char""")
 
 /**
