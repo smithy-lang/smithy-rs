@@ -6,16 +6,14 @@
 use aws_http::AwsErrorRetryPolicy;
 use aws_hyper::{SdkError, SdkSuccess};
 use dynamodb::error::DescribeTableError;
+use dynamodb::fluent::fluent_builders::Query;
 use dynamodb::fluent::Client;
-use dynamodb::input::{
-    create_table_input, put_item_input, query_input, DescribeTableInput, ListTablesInput,
-    PutItemInput, QueryInput,
-};
+use dynamodb::input::DescribeTableInput;
 use dynamodb::model::{
     AttributeDefinition, AttributeValue, KeySchemaElement, KeyType, ProvisionedThroughput,
     ScalarAttributeType, TableStatus,
 };
-use dynamodb::operation::{CreateTable, DescribeTable};
+use dynamodb::operation::DescribeTable;
 use dynamodb::output::DescribeTableOutput;
 use dynamodb::{Config, Region};
 use serde_json::Value;
@@ -24,7 +22,6 @@ use smithy_http::retry::ClassifyResponse;
 use smithy_types::retry::RetryKind;
 use std::collections::HashMap;
 use std::time::Duration;
-use dynamodb::fluent::fluent_builders::Query;
 
 /// A partial reimplementation of https://docs.amazonaws.cn/en_us/amazondynamodb/latest/developerguide/GettingStarted.Ruby.html
 /// in Rust
@@ -61,7 +58,7 @@ async fn main() {
     }
 
     raw_client
-        .call(wait_for_ready_table(table_name, &conf))
+        .call(wait_for_ready_table(table_name, client.conf()))
         .await
         .expect("table should become ready");
 
@@ -80,14 +77,15 @@ async fn main() {
             .await
             .expect("failed to insert item");
     }
-    let films_2222 =
-        movies_in_year(&client, table_name, 2222).send()
+    let films_2222 = movies_in_year(&client, table_name, 2222)
+        .send()
         .await
         .expect("query should succeed");
     // this isn't back to the future, there are no movies from 2022
     assert_eq!(films_2222.count, 0);
 
-    let films_2013 = movies_in_year(&client, table_name, 2013).send()
+    let films_2013 = movies_in_year(&client, table_name, 2013)
+        .send()
         .await
         .expect("query should succeed");
     assert_eq!(films_2013.count, 2);
@@ -166,7 +164,8 @@ fn movies_in_year(client: &Client, table_name: &str, year: u16) -> Query {
     expr_attrib_names.insert("#yr".to_string(), "year".to_string());
     let mut expr_attrib_values = HashMap::new();
     expr_attrib_values.insert(":yyyy".to_string(), AttributeValue::N(year.to_string()));
-    client.query()
+    client
+        .query()
         .table_name(table_name)
         .key_condition_expression("#yr = :yyyy")
         .expression_attribute_names(expr_attrib_names)
@@ -221,7 +220,8 @@ fn wait_for_ready_table(
 ) -> Operation<DescribeTable, WaitForReadyTable<AwsErrorRetryPolicy>> {
     let operation = DescribeTableInput::builder()
         .table_name(table_name)
-        .build(&conf).expect("valid input");
+        .build(&conf)
+        .expect("valid input");
     let waiting_policy = WaitForReadyTable {
         inner: operation.retry_policy().clone(),
     };

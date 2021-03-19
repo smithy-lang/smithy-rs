@@ -79,6 +79,10 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                     Self { handle: std::sync::Arc::new(Handle { conf, client })}
                 }
 
+                pub fn conf(&self) -> &crate::Config {
+                    &self.handle.conf
+                }
+
             """,
                 "aws_hyper" to hyperDep.asType()
             )
