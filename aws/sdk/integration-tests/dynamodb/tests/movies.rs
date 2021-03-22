@@ -16,41 +16,45 @@ use dynamodb::model::{
 };
 use dynamodb::operation::{CreateTable, DescribeTable};
 use dynamodb::output::DescribeTableOutput;
-use dynamodb::{Config, Region, Credentials};
+use dynamodb::{Config, Credentials, Region};
+use http::header::{HeaderName, AUTHORIZATION};
 use http::Uri;
 use serde_json::Value;
-use smithy_http::operation::Operation;
 use smithy_http::body::SdkBody;
+use smithy_http::operation::Operation;
 use smithy_http::retry::ClassifyResponse;
 use smithy_types::retry::RetryKind;
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::Instant;
-use http::header::{AUTHORIZATION, HeaderName};
 
 fn create_table(table_name: &str) -> create_table_input::Builder {
     CreateTable::builder()
         .table_name(table_name)
-        .key_schema(vec![
+        .key_schema(
             KeySchemaElement::builder()
                 .attribute_name("year")
                 .key_type(KeyType::Hash)
                 .build(),
+        )
+        .key_schema(
             KeySchemaElement::builder()
                 .attribute_name("title")
                 .key_type(KeyType::Range)
                 .build(),
-        ])
-        .attribute_definitions(vec![
+        )
+        .attribute_definitions(
             AttributeDefinition::builder()
                 .attribute_name("year")
                 .attribute_type(ScalarAttributeType::N)
                 .build(),
+        )
+        .attribute_definitions(
             AttributeDefinition::builder()
                 .attribute_name("title")
                 .attribute_type(ScalarAttributeType::S)
                 .build(),
-        ])
+        )
         .provisioned_throughput(
             ProvisionedThroughput::builder()
                 .read_capacity_units(10)
@@ -150,7 +154,6 @@ fn wait_for_ready_table(
     operation.with_retry_policy(waiting_policy)
 }
 
-
 /// Validate that time has passed with a 5ms tolerance
 ///
 /// This is to account for some non-determinism in the Tokio timer
@@ -216,8 +219,19 @@ async fn movies_it() {
         .await
         .expect("query should succeed");
     assert_eq!(films_2013.count, 2);
-    let titles: Vec<AttributeValue> = films_2013.items.unwrap().into_iter().map(|mut row|row.remove("title").expect("row should have title")).collect();
-    assert_eq!(titles, vec![AttributeValue::S("Rush".to_string()), AttributeValue::S("Turn It Down, Or Else!".to_string())]);
+    let titles: Vec<AttributeValue> = films_2013
+        .items
+        .unwrap()
+        .into_iter()
+        .map(|mut row| row.remove("title").expect("row should have title"))
+        .collect();
+    assert_eq!(
+        titles,
+        vec![
+            AttributeValue::S("Rush".to_string()),
+            AttributeValue::S("Turn It Down, Or Else!".to_string())
+        ]
+    );
 
     for req in conn.requests().iter() {
         req.assert_matches(vec![AUTHORIZATION, HeaderName::from_static("x-amz-date")]);

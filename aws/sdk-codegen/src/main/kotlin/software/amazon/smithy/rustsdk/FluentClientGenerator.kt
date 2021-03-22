@@ -129,19 +129,45 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         val memberSymbol = symbolProvider.toSymbol(member)
                         val outerType = memberSymbol.rustType()
                         val coreType = outerType.stripOuter<RustType.Option>()
-                        val signature = when (coreType) {
-                            is RustType.String,
-                            is RustType.Box -> "(mut self, inp: impl Into<${coreType.render(true)}>) -> Self"
-                            else -> "(mut self, inp: ${coreType.render(true)}) -> Self"
-                        }
-                        documentShape(member, model)
-                        rustBlock("pub fn $memberName$signature") {
-                            write("self.inner = self.inner.$memberName(inp);")
-                            write("self")
+                        if (coreType is RustType.Vec) {
+                            renderVecHelpers(member, memberName, coreType.member)
+                        } else {
+                            val signature = when (coreType) {
+                                is RustType.String,
+                                is RustType.Box -> "(mut self, inp: impl Into<${coreType.render(true)}>) -> Self"
+                                else -> "(mut self, inp: ${coreType.render(true)}) -> Self"
+                            }
+                            documentShape(member, model)
+                            rustBlock("pub fn $memberName$signature") {
+                                write("self.inner = self.inner.$memberName(inp);")
+                                write("self")
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+
+    private fun RustWriter.renderVecHelpers(member: MemberShape, memberName: String, coreType: RustType) {
+        documentShape(member, model)
+        rustBlock("pub fn set_$memberName(mut self, inp: Vec<${coreType.render(true)}>) -> Self") {
+            rust(
+                """
+                self.inner = self.inner.set_$memberName(inp);
+                self
+            """
+            )
+        }
+
+        documentShape(member, model)
+        rustBlock("pub fn $memberName(mut self, inp: ${coreType.render(true)}) -> Self") {
+            rust(
+                """
+                self.inner = self.inner.$memberName(inp);
+                self
+            """
+            )
         }
     }
 }

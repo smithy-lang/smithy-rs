@@ -102,26 +102,30 @@ async fn main() {
 fn create_table(table_name: &str) -> create_table_input::Builder {
     CreateTable::builder()
         .table_name(table_name)
-        .key_schema(vec![
+        .key_schema(
             KeySchemaElement::builder()
                 .attribute_name("year")
                 .key_type(KeyType::Hash)
                 .build(),
+        )
+        .key_schema(
             KeySchemaElement::builder()
                 .attribute_name("title")
                 .key_type(KeyType::Range)
                 .build(),
-        ])
-        .attribute_definitions(vec![
+        )
+        .attribute_definitions(
             AttributeDefinition::builder()
                 .attribute_name("year")
                 .attribute_type(ScalarAttributeType::N)
                 .build(),
+        )
+        .attribute_definitions(
             AttributeDefinition::builder()
                 .attribute_name("title")
                 .attribute_type(ScalarAttributeType::S)
                 .build(),
-        ])
+        )
         .provisioned_throughput(
             ProvisionedThroughput::builder()
                 .read_capacity_units(10)

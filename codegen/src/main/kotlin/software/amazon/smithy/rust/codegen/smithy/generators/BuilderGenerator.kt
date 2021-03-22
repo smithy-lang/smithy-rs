@@ -160,24 +160,49 @@ abstract class BuilderGenerator(
 
         writer.rustBlock("impl $builderName") {
             members.forEach { member ->
-                val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional
                 val memberSymbol = symbolProvider.toSymbol(member)
                 val outerType = memberSymbol.rustType()
                 val coreType = outerType.stripOuter<RustType.Option>()
-                val signature = when (coreType) {
-                    is RustType.String,
-                    is RustType.Box -> "(mut self, inp: impl Into<${coreType.render(true)}>) -> Self"
-                    else -> "(mut self, inp: ${coreType.render(true)}) -> Self"
-                }
-                writer.documentShape(member, model)
-                writer.rustBlock("pub fn $memberName$signature") {
-                    write("self.$memberName = Some(${builderConverter(coreType)});")
-                    write("self")
+                val memberName = symbolProvider.toMemberName(member)
+                if (coreType is RustType.Vec) {
+                    renderVecHelpers(memberName, coreType.member)
+                } else {
+                    val signature = when (coreType) {
+                        is RustType.String,
+                        is RustType.Box -> "(mut self, inp: impl Into<${coreType.render(true)}>) -> Self"
+                        else -> "(mut self, inp: ${coreType.render(true)}) -> Self"
+                    }
+                    writer.documentShape(member, model)
+                    writer.rustBlock("pub fn $memberName$signature") {
+                        write("self.$memberName = Some(${builderConverter(coreType)});")
+                        write("self")
+                    }
                 }
             }
-
             buildFn(this)
+        }
+    }
+
+    private fun RustWriter.renderVecHelpers(memberName: String, coreType: RustType) {
+        rustBlock("pub fn set_$memberName(mut self, inp: Vec<${coreType.render(true)}>) -> Self") {
+            rust(
+                """
+                self.$memberName = Some(inp);
+                self
+            """
+            )
+        }
+
+        rustBlock("pub fn $memberName(mut self, inp: ${coreType.render(true)}) -> Self") {
+            rust(
+                """
+                let mut v = self.$memberName.unwrap_or_default();
+                v.push(inp);
+                self.$memberName = Some(v);
+                self
+            """
+            )
         }
     }
 
