@@ -128,7 +128,7 @@ class HttpTraitBindingGeneratorTest {
             let inp = PutObjectInput::builder()
                 .bucket_name("somebucket/ok")
                 .key(ts.clone())
-                .extras(vec![0,1,2,44])
+                .set_extras(vec![0,1,2,44])
                 .some_value("svq!!%&")
                 .build().expect("build should succeed");
             let mut o = String::new();
@@ -172,10 +172,10 @@ class HttpTraitBindingGeneratorTest {
             let ts = smithy_types::Instant::from_epoch_seconds(10123125);
             let inp = PutObjectInput::builder()
                 .bucket_name("buk")
-                .date_header_list(vec![ts.clone()])
-                .int_list(vec![0,1,44])
+                .set_date_header_list(vec![ts.clone()])
+                .set_int_list(vec![0,1,44])
                 .key(ts.clone())
-                .extras(vec![0,1])
+                .set_extras(vec![0,1])
                 .some_value("qp")
                 .media_type("base64encodethis")
                 .build().unwrap();
