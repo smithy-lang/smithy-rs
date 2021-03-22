@@ -5,8 +5,12 @@
 
 package software.amazon.smithy.rust.codegen.smithy
 
+import software.amazon.smithy.build.FileManifest
+import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
@@ -15,58 +19,90 @@ import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsGenerator
 
-private fun CodegenWriterDelegator<RustWriter>.includedModules(): List<String> = this.writers.values.mapNotNull { it.module() }
+open class RustCrate(
+    fileManifest: FileManifest,
+    symbolProvider: SymbolProvider,
+    baseModules: Map<String, RustModule>
+) {
+    private val inner = CodegenWriterDelegator(fileManifest, symbolProvider, RustWriter.Factory)
+    private val modules: MutableMap<String, RustModule> = baseModules.toMutableMap()
+    private val features: MutableSet<Feature> = mutableSetOf()
+    fun useShapeWriter(shape: Shape, f: (RustWriter) -> Unit) {
+        inner.useShapeWriter(shape, f)
+    }
+
+    fun lib(moduleWriter: (RustWriter) -> Unit) {
+        inner.useFileWriter("src/lib.rs", "crate", moduleWriter)
+    }
+
+    fun addFeature(feature: Feature) = this.features.add(feature)
+
+    fun finalize(settings: RustSettings, libRsCustomizations: List<LibRsCustomization>) {
+        injectInlineDependencies()
+        val modules = inner.writers.values.mapNotNull { it.module() }.filter { it != "lib" }
+            .map { modules[it] ?: RustModule.default(it, false) }
+        inner.finalize(settings, libRsCustomizations, modules, this.features.toList())
+    }
+
+    private fun injectInlineDependencies() {
+        val unloadedDepdencies = {
+            this
+                .inner.dependencies
+                .map { dep -> RustDependency.fromSymbolDependency(dep) }
+                .filterIsInstance<InlineDependency>().distinctBy { it.key() }
+                .filter { !modules.contains(it.module) }
+        }
+        while (unloadedDepdencies().isNotEmpty()) {
+            unloadedDepdencies().forEach { dep ->
+                this.withModule(RustModule.default(dep.module, false)) {
+                    dep.renderer(it)
+                }
+            }
+        }
+    }
+
+    fun withModule(
+        module: RustModule,
+        moduleWriter: (RustWriter) -> Unit
+    ): RustCrate {
+        val moduleName = module.name
+        modules[moduleName] = module
+        inner.useFileWriter("src/$moduleName.rs", "crate::$moduleName", moduleWriter)
+        return this
+    }
+}
 
 // TODO: this should _probably_ be configurable via RustSettings; 2h
 /**
  * Allowlist of modules that will be exposed publicly in generated crates
  */
-private val PublicModules = setOf("error", "operation", "model", "input", "output", "config")
+val DefaultPublicModules =
+    setOf("error", "operation", "model", "input", "output", "config").map { it to RustModule.default(it, true) }.toMap()
 
 /**
  * Finalize all the writers by:
  * - inlining inline dependencies that have been used
  * - generating (and writing) a Cargo.toml based on the settings & the required dependencies
  */
-fun CodegenWriterDelegator<RustWriter>.finalize(settings: RustSettings, libRsCustomizations: List<LibRsCustomization>) {
-    val loadDependencies = { this.dependencies.map { dep -> RustDependency.fromSymbolDependency(dep) } }
-    val inlineDependencies = loadDependencies().filterIsInstance<InlineDependency>().distinctBy { it.key() }
-    inlineDependencies.forEach { dep ->
-        this.useFileWriter("src/${dep.module}.rs", "crate::${dep.module}") {
-            dep.renderer(it)
-        }
-    }
-    val newDeps = loadDependencies().filterIsInstance<InlineDependency>().distinctBy { it.key() }
-    newDeps.forEach { dep ->
-        if (!this.writers.containsKey("src/${dep.module}.rs")) {
-            this.useFileWriter("src/${dep.module}.rs", "crate::${dep.module}") {
-                dep.renderer(it)
-            }
-        }
-    }
+fun CodegenWriterDelegator<RustWriter>.finalize(
+    settings: RustSettings,
+    libRsCustomizations: List<LibRsCustomization>,
+    modules: List<RustModule>,
+    features: List<Feature>
+) {
     this.useFileWriter("src/lib.rs", "crate::lib") { writer ->
-        val includedModules = this.includedModules().toSet().filter { it != "lib" }
-        val modules = includedModules.map { moduleName ->
-            RustModule.default(moduleName, PublicModules.contains(moduleName))
-        }
         LibRsGenerator(settings.moduleDescription, modules, libRsCustomizations).render(writer)
     }
-    val cargoDependencies = loadDependencies().filterIsInstance<CargoDependency>().distinct()
+    val cargoDependencies =
+        this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<CargoDependency>().distinct()
     this.useFileWriter("Cargo.toml") {
         val cargoToml = CargoTomlGenerator(
             settings,
             it,
             cargoDependencies,
+            features
         )
         cargoToml.render()
     }
     flushWriters()
-}
-
-fun CodegenWriterDelegator<RustWriter>.withModule(
-    moduleName: String,
-    moduleWriter: RustWriter.() -> Unit
-): CodegenWriterDelegator<RustWriter> {
-    this.useFileWriter("src/$moduleName.rs", "crate::$moduleName", moduleWriter)
-    return this
 }
