@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.expectMember
 
 fun HttpTrait.uriFormatString(): String {
     val base = uri.segments.joinToString("/", prefix = "/") {
@@ -159,7 +160,7 @@ class HttpTraitBindingGenerator(
     private fun uriBase(writer: RustWriter) {
         val formatString = httpTrait.uriFormatString()
         val args = httpTrait.uri.labels.map { label ->
-            val member = inputShape.getMember(label.content).get()
+            val member = inputShape.expectMember(label.content)
             "${label.content} = ${labelFmtFun(model.expectShape(member.target), member, label)}"
         }
         val combinedArgs = listOf(formatString, *args.toTypedArray())

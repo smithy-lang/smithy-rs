@@ -37,6 +37,10 @@ val CodegenTests = listOf(
         "rest_json"
     ),
     CodegenTest(
+        "aws.protocoltests.restjson#RestJsonExtras",
+        "rest_json_extas"
+    ),
+    CodegenTest(
         "crate#Config",
         "naming_test", """
             , "codegen": { "renameErrors": false }

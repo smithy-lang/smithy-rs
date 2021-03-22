@@ -144,7 +144,7 @@ abstract class HttpProtocolGenerator(
     protected fun fromResponseFun(
         implBlockWriter: RustWriter,
         operationShape: OperationShape,
-        f: RustWriter.() -> Unit
+        block: RustWriter.() -> Unit
     ) {
         implBlockWriter.rustBlock(
             "fn from_response(response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
@@ -152,7 +152,7 @@ abstract class HttpProtocolGenerator(
             symbolProvider.toSymbol(operationShape.outputShape(model)),
             operationShape.errorSymbol(symbolProvider)
         ) {
-            f(this)
+            block(this)
         }
     }
 

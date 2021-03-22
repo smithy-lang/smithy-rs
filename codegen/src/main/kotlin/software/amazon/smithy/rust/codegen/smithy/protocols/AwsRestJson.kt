@@ -5,16 +5,17 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -29,8 +30,10 @@ import software.amazon.smithy.rust.codegen.smithy.generators.HttpTraitBindingGen
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.expectMember
 
 class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
     override fun buildProtocolGenerator(
@@ -47,13 +50,10 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
         }
         val bindingIndex = HttpBindingIndex.of(model)
         val bindings: MutableMap<String, HttpBinding> = bindingIndex.getRequestBindings(operation)
-        if (bindings.values.map { it.location }.contains(HttpBinding.Location.PAYLOAD)) {
-            return null
-        }
-        val currentMembers = input.members()
-        val bodyMembers = currentMembers.filter { member ->
+        val bodyMembers = input.members().filter { member ->
             bindings[member.memberName]?.location == HttpBinding.Location.DOCUMENT
         }
+
         return if (bodyMembers.isNotEmpty()) {
             input.toBuilder().members(bodyMembers).build()
         } else {
@@ -142,43 +142,60 @@ class AwsRestJsonGenerator(
         val payload: Pair<String, HttpBinding>? =
             bindings.firstOrNull { (_, binding) -> binding.location == HttpBinding.Location.PAYLOAD }
         val payloadSerde = payload?.let { (payloadMemberName, _) ->
-            val member =
-                inputShape.getMember(payloadMemberName).orElseThrow { throw CodegenException("member should exist") }
+            val member = inputShape.expectMember(payloadMemberName)
             val rustMemberName = "self.${symbolProvider.toMemberName(member)}"
-            val serdeToVec = RuntimeType.SerdeJson("to_vec")
-            when (model.expectShape(member.target)) {
-                // Write the raw string to the payload
-                is StringShape -> writable { rust("$rustMemberName.into()") }
-                is BlobShape -> writable {
-                    // Write the raw blob to the payload
+            val targetShape = model.expectShape(member.target)
+            writable {
+                val payloadName = safeName()
+                rust("let $payloadName = &$rustMemberName;")
+                // If this targets a member & the member is None, return an empty vec
+                if (symbolProvider.toSymbol(member).isOptional()) {
                     rust(
-                        """ {
-                        let slice = $rustMemberName.as_ref().map(|blob|blob.as_ref()).unwrap_or_default();
-                        slice.into()
-                        }
-                    """
+                        """
+                        let $payloadName = match $payloadName.as_ref() {
+                            Some(t) => t,
+                            None => return vec![]
+                        };"""
                     )
                 }
-                is StructureShape, is UnionShape -> writable {
-                    // JSON serialize the structure or union targetted
-                    rust(
-                        """#T(&$rustMemberName).expect("serialization should succeed")""",
-                        serdeToVec
-                    )
-                }
-                is DocumentShape -> writable {
-                    rustTemplate(
-                        """#{to_vec}(&#{doc_json}::SerDoc(&$rustMemberName)).expect("serialization should succeed")""",
-                        "to_vec" to serdeToVec,
-                        "doc_json" to RuntimeType.DocJson
-                    )
-                }
-                else -> TODO("Unexpected payload target type")
+                renderPayload(targetShape, payloadName)
             }
             // body is null, no payload set, so this is empty
         } ?: writable { rust("vec![]") }
         bodyBuilderFun(implBlockWriter) {
             payloadSerde(this)
+        }
+    }
+
+    private fun RustWriter.renderPayload(
+        targetShape: Shape,
+        payloadName: String,
+    ) {
+        val serdeToVec = RuntimeType.SerdeJson("to_vec")
+        when (targetShape) {
+            // Write the raw string to the payload
+            is StringShape ->
+                if (targetShape.hasTrait(EnumTrait::class.java)) {
+                    rust("$payloadName.as_str().into()")
+                } else {
+                    rust("""$payloadName.to_string().into()""")
+                }
+            is BlobShape ->
+                // Write the raw blob to the payload
+                rust("$payloadName.as_ref().into()")
+            is StructureShape, is UnionShape ->
+                // JSON serialize the structure or union targetted
+                rust(
+                    """#T(&$payloadName).expect("serialization should succeed")""",
+                    serdeToVec
+                )
+            is DocumentShape ->
+                rustTemplate(
+                    """#{to_vec}(&#{doc_json}::SerDoc(&$payloadName)).expect("serialization should succeed")""",
+                    "to_vec" to serdeToVec,
+                    "doc_json" to RuntimeType.DocJson
+                )
+            else -> TODO("Unexpected payload target type")
         }
     }
 
