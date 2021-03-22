@@ -40,6 +40,8 @@ import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
+import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -231,6 +233,7 @@ class SymbolVisitor(
         val isError = shape.hasTrait(ErrorTrait::class.java)
         val isInput = shape.hasTrait(SyntheticInputTrait::class.java)
         val isOutput = shape.hasTrait(SyntheticOutputTrait::class.java)
+        val isBody = shape.hasTrait(InputBodyTrait::class.java) || shape.hasTrait(OutputBodyTrait::class.java)
         val name = StringUtils.capitalize(shape.id.name).letIf(isError && config.codegenConfig.renameExceptions) {
             // TODO: Do we want to do this?
             // https://github.com/awslabs/smithy-rs/issues/77
@@ -241,6 +244,7 @@ class SymbolVisitor(
             isError -> builder.locatedIn(Errors)
             isInput -> builder.locatedIn(Inputs)
             isOutput -> builder.locatedIn(Outputs)
+            isBody -> builder.locatedIn(Serializers)
             else -> builder.locatedIn(Models)
         }.build()
     }
