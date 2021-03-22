@@ -355,11 +355,6 @@ class HttpProtocolTestGenerator(
         val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
         val RestJson = "aws.protocoltests.restjson#RestJson"
         private val ExpectFail = setOf(
-            // Query literals: https://github.com/awslabs/smithy-rs/issues/36
-            FailingTest(RestJson, "RestJsonConstantQueryString", Action.Request),
-            FailingTest(RestJson, "RestJsonConstantAndVariableQueryStringMissingOneValue", Action.Request),
-            FailingTest(RestJson, "RestJsonConstantAndVariableQueryStringAllValues", Action.Request),
-
             // Misc:
 
             // https://github.com/awslabs/smithy-rs/issues/35
