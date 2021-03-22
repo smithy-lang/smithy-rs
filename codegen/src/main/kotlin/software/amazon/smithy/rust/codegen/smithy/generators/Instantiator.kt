@@ -41,6 +41,7 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 /**
@@ -187,7 +188,7 @@ class Instantiator(
         check(data.members.size == 1)
         val variant = data.members.iterator().next()
         val memberName = variant.key.value
-        val member = shape.getMember(memberName).get()
+        val member = shape.expectMember(memberName)
             .let { model.expectShape(it.target) }
         // TODO: refactor this detail into UnionGenerator
         writer.write("#T::${memberName.toPascalCase()}", unionSymbol)
@@ -279,8 +280,7 @@ class Instantiator(
     }
 
     private fun getMember(shape: StructureShape, key: StringNode): Pair<MemberShape, Shape> {
-        val memberShape = shape.getMember(key.value)
-            .orElseThrow { IllegalArgumentException("$shape did not have member ${key.value}") }
+        val memberShape = shape.expectMember(key.value)
         return memberShape to model.expectShape(memberShape.target)
     }
 }

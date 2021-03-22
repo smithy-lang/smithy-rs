@@ -172,7 +172,7 @@ class HttpProtocolTestGenerator(
         checkRequiredHeaders(this, httpRequestTestCase.requireHeaders)
         if (protocolSupport.requestBodySerialization) {
             // "If no request body is defined, then no assertions are made about the body of the message."
-            httpRequestTestCase.body.orNull()?.let { body ->
+            httpRequestTestCase.body.orNull()?.also { body ->
                 checkBody(this, body, httpRequestTestCase.bodyMediaType.orNull())
             }
         }
@@ -253,7 +253,7 @@ class HttpProtocolTestGenerator(
         rustWriter.write("""let body = http_request.body().bytes().expect("body should be strict");""")
         if (body == "") {
             rustWriter.write("// No body")
-            rustWriter.write("assert!(&body.is_empty());")
+            rustWriter.write("assert_eq!(std::str::from_utf8(body).unwrap(), ${"".dq()});")
         } else {
             // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
             assertOk(rustWriter) {
@@ -355,11 +355,6 @@ class HttpProtocolTestGenerator(
         val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
         val RestJson = "aws.protocoltests.restjson#RestJson"
         private val ExpectFail = setOf(
-            // Query literals: https://github.com/awslabs/smithy-rs/issues/36
-            FailingTest(RestJson, "RestJsonConstantQueryString", Action.Request),
-            FailingTest(RestJson, "RestJsonConstantAndVariableQueryStringMissingOneValue", Action.Request),
-            FailingTest(RestJson, "RestJsonConstantAndVariableQueryStringAllValues", Action.Request),
-
             // Misc:
 
             // https://github.com/awslabs/smithy-rs/issues/35
@@ -388,7 +383,9 @@ class HttpProtocolTestGenerator(
         // or because they are flaky
         private val DisableTests = setOf(
             // This test is flaky because of set ordering serialization https://github.com/awslabs/smithy-rs/issues/37
-            "AwsJson11Enums"
+            "AwsJson11Enums",
+            "RestJsonJsonEnums",
+            "RestJsonLists"
         )
     }
 }

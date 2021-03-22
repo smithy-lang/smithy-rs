@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.expectMember
 
 fun HttpTrait.uriFormatString(): String {
     val base = uri.segments.joinToString("/", prefix = "/") {
@@ -230,7 +231,7 @@ class HttpTraitBindingGenerator(
     private fun uriBase(writer: RustWriter) {
         val formatString = httpTrait.uriFormatString()
         val args = httpTrait.uri.labels.map { label ->
-            val member = inputShape.getMember(label.content).get()
+            val member = inputShape.expectMember(label.content)
             "${label.content} = ${labelFmtFun(model.expectShape(member.target), member, label)}"
         }
         val combinedArgs = listOf(formatString, *args.toTypedArray())
@@ -242,17 +243,40 @@ class HttpTraitBindingGenerator(
 
     /**
      * When needed, generate a function to build a query string
+     *
+     * This function uses smithy_http::query::Query to append params to a query string:
+     * ```rust
+     *    fn uri_query(&self, mut output: &mut String) {
+     *      let mut query = smithy_http::query::Query::new(&mut output);
+     *      if let Some(inner_89) = &self.null_value {
+     *          query.push_kv("Null", &smithy_http::query::fmt_string(&inner_89));
+     *      }
+     *      if let Some(inner_90) = &self.empty_string {
+     *          query.push_kv("Empty", &smithy_http::query::fmt_string(&inner_90));
+     *      }
+     *    }
+     *  ```
      */
     private fun uriQuery(writer: RustWriter): Boolean {
         // Don't bother generating the function if we aren't going to make a query string
-        val queryParams = index.getRequestBindings(shape, HttpBinding.Location.QUERY)
-        if (queryParams.isEmpty()) {
+        val dynamicParams = index.getRequestBindings(shape, HttpBinding.Location.QUERY)
+        val literalParams = httpTrait.uri.queryLiterals
+        if (dynamicParams.isEmpty() && literalParams.isEmpty()) {
             return false
         }
-        writer.rustBlock("fn uri_query(&self, output: &mut String)") {
-            write("let mut params = Vec::new();")
+        writer.rustBlock("fn uri_query(&self, mut output: &mut String)") {
+            write("let mut query = #T::new(&mut output);", RuntimeType.QueryFormat(runtimeConfig, "Writer"))
+            literalParams.forEach { (k, v) ->
+                // When `v` is an empty string, no value should be set.
+                // this generates a query string like `?k=v&xyz`
+                if (v.isEmpty()) {
+                    rust("query.push_v(${k.dq()});")
+                } else {
+                    rust("query.push_kv(${k.dq()}, ${v.dq()});")
+                }
+            }
 
-            queryParams.forEach { param ->
+            dynamicParams.forEach { param ->
                 val memberShape = param.member
                 val memberSymbol = symbolProvider.toSymbol(memberShape)
                 val memberName = symbolProvider.toMemberName(memberShape)
@@ -260,19 +284,18 @@ class HttpTraitBindingGenerator(
                 ifSet(outerTarget, memberSymbol, "&self.$memberName") { field ->
                     ListForEach(outerTarget, field) { innerField, targetId ->
                         val target = model.expectShape(targetId)
-                        write(
-                            "params.push((${param.locationName.dq()}, ${
+                        rust(
+                            "query.push_kv(${param.locationName.dq()}, &${
                             paramFmtFun(
                                 target,
                                 memberShape,
                                 innerField
                             )
-                            }));"
+                            });"
                         )
                     }
                 }
             }
-            write("#T(params, output)", RuntimeType.QueryFormat(runtimeConfig, "write"))
         }
         return true
     }

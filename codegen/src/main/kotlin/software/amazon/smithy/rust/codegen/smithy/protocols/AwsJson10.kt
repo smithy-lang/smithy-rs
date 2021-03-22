@@ -56,7 +56,7 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
         protocolConfig: ProtocolConfig
     ): BasicAwsJsonGenerator = BasicAwsJsonGenerator(protocolConfig, version)
 
-    private val shapeIfHasMembers: StructureModifier = { shape: StructureShape? ->
+    private val shapeIfHasMembers: StructureModifier = { _, shape: StructureShape? ->
         if (shape?.members().isNullOrEmpty()) {
             null
         } else {
@@ -180,7 +180,12 @@ class BasicAwsJsonGenerator(
         }
     }
 
-    override fun toBodyImpl(implBlockWriter: RustWriter, inputShape: StructureShape, inputBody: StructureShape?) {
+    override fun toBodyImpl(
+        implBlockWriter: RustWriter,
+        inputShape: StructureShape,
+        inputBody: StructureShape?,
+        operationShape: OperationShape
+    ) {
         if (inputBody == null) {
             bodyBuilderFun(implBlockWriter) {
                 write("\"{}\".to_string().into()")

@@ -50,13 +50,24 @@ abstract class HttpProtocolGenerator(
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
     private val buildErrorT = protocolConfig.runtimeConfig.operationBuildError()
-    fun renderOperation(operationWriter: RustWriter, inputWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
+    fun renderOperation(
+        operationWriter: RustWriter,
+        inputWriter: RustWriter,
+        operationShape: OperationShape,
+        customizations: List<OperationCustomization>
+    ) {
         /* if (operationShape.hasTrait(EndpointTrait::class.java)) {
             TODO("https://github.com/awslabs/smithy-rs/issues/197")
         } */
         val inputShape = operationShape.inputShape(model)
         val inputSymbol = symbolProvider.toSymbol(inputShape)
-        val builderGenerator = OperationInputBuilderGenerator(model, symbolProvider, operationShape, protocolConfig.moduleName, customizations)
+        val builderGenerator = OperationInputBuilderGenerator(
+            model,
+            symbolProvider,
+            operationShape,
+            protocolConfig.moduleName,
+            customizations
+        )
         builderGenerator.render(inputWriter)
         // impl OperationInputShape { ... }
 
@@ -64,7 +75,7 @@ abstract class HttpProtocolGenerator(
             toHttpRequestImpl(this, operationShape, inputShape)
             val shapeId = inputShape.expectTrait(SyntheticInputTrait::class.java).body
             val body = shapeId?.let { model.expectShape(it, StructureShape::class.java) }
-            toBodyImpl(this, inputShape, body)
+            toBodyImpl(this, inputShape, body, operationShape)
             // TODO: streaming shapes need special support
             rustBlock(
                 "pub fn assemble(builder: #1T, body: #3T) -> #2T<#3T>",
@@ -131,14 +142,18 @@ abstract class HttpProtocolGenerator(
         }
     }
 
-    protected fun fromResponseFun(implBlockWriter: RustWriter, operationShape: OperationShape, f: RustWriter.() -> Unit) {
+    protected fun fromResponseFun(
+        implBlockWriter: RustWriter,
+        operationShape: OperationShape,
+        block: RustWriter.() -> Unit
+    ) {
         implBlockWriter.rustBlock(
             "fn from_response(response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
             RuntimeType.Http("response::Response"),
             symbolProvider.toSymbol(operationShape.outputShape(model)),
             operationShape.errorSymbol(symbolProvider)
         ) {
-            f(this)
+            block(this)
         }
     }
 
@@ -151,12 +166,21 @@ abstract class HttpProtocolGenerator(
      *
      * Your implementation MUST call [bodyBuilderFun] to create the public method.
      */
-    abstract fun toBodyImpl(implBlockWriter: RustWriter, inputShape: StructureShape, inputBody: StructureShape?)
+    abstract fun toBodyImpl(
+        implBlockWriter: RustWriter,
+        inputShape: StructureShape,
+        inputBody: StructureShape?,
+        operationShape: OperationShape
+    )
 
     /**
      * Add necessary methods to the impl block for the input shape.
      *
      * Your implementation MUST call [httpBuilderFun] to create the public method.
      */
-    abstract fun toHttpRequestImpl(implBlockWriter: RustWriter, operationShape: OperationShape, inputShape: StructureShape)
+    abstract fun toHttpRequestImpl(
+        implBlockWriter: RustWriter,
+        operationShape: OperationShape,
+        inputShape: StructureShape
+    )
 }

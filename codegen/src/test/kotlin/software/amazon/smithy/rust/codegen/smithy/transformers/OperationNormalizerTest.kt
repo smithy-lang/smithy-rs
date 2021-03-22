@@ -112,10 +112,10 @@ internal class OperationNormalizerTest {
 
         val sut = OperationNormalizer(model)
         val modified = sut.transformModel(
-            inputBodyFactory = { input ->
+            inputBodyFactory = { _, input ->
                 input?.toBuilder()?.members(input.members().filter { it.memberName != "drop" })?.build()
             },
-            outputBodyFactory = { it?.toBuilder()?.members(emptyList())?.build() }
+            outputBodyFactory = { _, output -> output?.toBuilder()?.members(emptyList())?.build() }
         )
         val operation = modified.lookup<OperationShape>("smithy.test#MyOp")
         operation.input.isPresent shouldBe true
