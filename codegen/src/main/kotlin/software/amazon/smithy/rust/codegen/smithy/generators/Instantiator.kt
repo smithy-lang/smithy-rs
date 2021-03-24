@@ -38,7 +38,6 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
-import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
@@ -126,23 +125,7 @@ class Instantiator(
     }
 
     private fun renderSet(writer: RustWriter, shape: SetShape, data: ArrayNode) {
-        if (symbolProvider.toSymbol(shape).rustType() is RustType.HashSet) {
-            if (!data.isEmpty) {
-                writer.rustBlock("") {
-                    write("let mut ret = #T::new();", RustType.HashSet.RuntimeType)
-                    data.forEach { v ->
-                        withBlock("ret.push(", ");") {
-                            renderMember(this, shape.member, v)
-                        }
-                    }
-                    write("ret")
-                }
-            } else {
-                writer.write("#T::new()", RustType.HashSet.RuntimeType)
-            }
-        } else {
-            renderList(writer, shape, data)
-        }
+        renderList(writer, shape, data)
     }
 
     /**
