@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
@@ -141,5 +142,18 @@ class EnumGenerator(
                 }
             }
         }
+
+        writer.rust(
+            """
+            impl std::str::FromStr for $enumName {
+                type Err = std::convert::Infallible;
+
+                fn from_str(s: &str) -> Result<Self, Self::Err> {
+                    Ok($enumName::from(s))
+                }
+            }
+
+        """
+        )
     }
 }

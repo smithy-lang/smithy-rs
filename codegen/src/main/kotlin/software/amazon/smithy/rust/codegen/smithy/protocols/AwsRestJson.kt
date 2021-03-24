@@ -26,10 +26,11 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.HttpTraitBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.generators.http.RequestBindingGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.util.dq
@@ -97,6 +98,10 @@ class AwsRestJsonGenerator(
     }
 
     override fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape) {
+        val httpBindingGenerator = ResponseBindingGenerator(protocolConfig, operationShape)
+
+        httpBindingGenerator.renderUpdateOutputBuilder(implBlockWriter)
+
         fromResponseFun(implBlockWriter, operationShape) {
             // avoid non-usage warnings
             rust(
@@ -211,7 +216,7 @@ class AwsRestJsonGenerator(
     ) {
         val httpTrait = operationShape.expectTrait(HttpTrait::class.java)
 
-        val httpBindingGenerator = HttpTraitBindingGenerator(
+        val httpBindingGenerator = RequestBindingGenerator(
             model,
             symbolProvider,
             runtimeConfig,
