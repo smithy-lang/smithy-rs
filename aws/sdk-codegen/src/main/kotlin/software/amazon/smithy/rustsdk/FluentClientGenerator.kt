@@ -79,6 +79,10 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                     Self { handle: std::sync::Arc::new(Handle { conf, client })}
                 }
 
+                pub fn conf(&self) -> &crate::Config {
+                    &self.handle.conf
+                }
+
             """,
                 "aws_hyper" to hyperDep.asType()
             )
@@ -115,7 +119,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                     }
 
                     pub async fn send(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>> {
-                        let op = self.inner.build(&self.handle.conf);
+                        let op = self.inner.build(&self.handle.conf).map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
                         self.handle.client.call(op).await
                     }
                     """,

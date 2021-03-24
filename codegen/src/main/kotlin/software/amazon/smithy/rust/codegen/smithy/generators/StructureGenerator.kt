@@ -31,8 +31,13 @@ fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, 
     }
 }
 
-fun StructureShape.hasSensitiveMember(model: Model) =
-    this.members().any { it.getMemberTrait(model, SensitiveTrait::class.java).isPresent }
+fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): String {
+    return if (member.getMemberTrait(model, SensitiveTrait::class.java).isPresent) {
+        "*** Sensitive Data Redacted ***".dq()
+    } else {
+        safeToPrint
+    }
+}
 
 class StructureGenerator(
     val model: Model,
@@ -89,11 +94,9 @@ class StructureGenerator(
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
-                    if (member.getMemberTrait(model, SensitiveTrait::class.java).isPresent) {
-                        rust("""formatter.field(${memberName.dq()}, &"*** Sensitive Data Redacted ***");""")
-                    } else {
-                        rust("formatter.field(${memberName.dq()}, &self.$memberName);")
-                    }
+                    rust(
+                        "formatter.field(${memberName.dq()}, &${redactIfNecessary(member, model, "self.$memberName")});",
+                    )
                 }
                 rust("formatter.finish()")
             }

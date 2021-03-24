@@ -4,6 +4,7 @@ use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
 use std::ops::DerefMut;
 use std::rc::Rc;
+use thiserror::Error;
 
 #[derive(Clone)]
 pub struct Metadata {
@@ -37,6 +38,26 @@ pub struct Parts<H, R> {
     pub response_handler: H,
     pub retry_policy: R,
     pub metadata: Option<Metadata>,
+}
+
+/// An error occured attempting to build an `Operation` from an input
+///
+/// These are almost always due to user error caused by limitations of specific fields due to
+/// protocol serialization (eg. fields that can only be a subset ASCII because they are serialized
+/// as the name of an HTTP header)
+#[non_exhaustive]
+#[derive(Debug, Error)]
+pub enum BuildError {
+    #[error("Invalid field in input: {field} (Details: {details})")]
+    InvalidField {
+        field: &'static str,
+        details: String,
+    },
+    #[error("{field} was missing. {details}")]
+    MissingField {
+        field: &'static str,
+        details: &'static str,
+    },
 }
 
 pub struct Operation<H, R> {
