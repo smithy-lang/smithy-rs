@@ -47,7 +47,7 @@ async fn generate_random() {
         .region(Region::new("us-east-1"))
         .credentials_provider(creds)
         .build();
-    let mut op = GenerateRandom::builder().number_of_bytes(64).build(&conf);
+    let mut op = GenerateRandom::builder().number_of_bytes(64).build(&conf).expect("valid operation");
     op.config_mut()
         .insert(UNIX_EPOCH + Duration::from_secs(1614952162));
     op.config_mut().insert(AwsUserAgent::for_tests());
@@ -87,7 +87,7 @@ async fn generate_random_malformed_response() {
         .region(Region::new("us-east-1"))
         .credentials_provider(creds)
         .build();
-    let op = GenerateRandom::builder().number_of_bytes(64).build(&conf);
+    let op = GenerateRandom::builder().number_of_bytes(64).build(&conf).expect("valid operation");
     client.call(op).await.expect_err("response was malformed");
 }
 
@@ -130,7 +130,7 @@ async fn generate_random_keystore_not_found() {
     let mut op = GenerateRandom::builder()
         .number_of_bytes(64)
         .custom_key_store_id("does not exist")
-        .build(&conf);
+        .build(&conf).expect("valid operation");
 
     op.config_mut()
         .insert(UNIX_EPOCH + Duration::from_secs(1614955644));

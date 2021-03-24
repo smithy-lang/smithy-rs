@@ -355,15 +355,6 @@ class HttpProtocolTestGenerator(
         val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
         val RestJson = "aws.protocoltests.restjson#RestJson"
         private val ExpectFail = setOf(
-            // Misc:
-
-            // https://github.com/awslabs/smithy-rs/issues/35
-            FailingTest(
-                RestJson,
-                "RestJsonHttpPrefixHeadersArePresent",
-                Action.Request
-            ),
-
             // Document deserialization:
             FailingTest(AwsJson11, "PutAndGetInlineDocumentsInput", Action.Response),
 

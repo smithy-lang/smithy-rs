@@ -26,7 +26,7 @@ fn validate_sensitive_trait() {
 #[test]
 fn errors_are_retryable() {
     let conf = kms::Config::builder().build();
-    let (_, parts) = CreateAlias::builder().build(&conf).into_request_response();
+    let (_, parts) = CreateAlias::builder().build(&conf).expect("valid request").into_request_response();
     let http_response = http::Response::builder()
         .status(400)
         .body(r#"{ "code": "LimitExceededException" }"#)

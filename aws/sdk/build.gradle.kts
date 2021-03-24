@@ -164,8 +164,7 @@ fun generateCargoWorkspace(services: List<AwsService>): String {
     val examples = projectDir.resolve("examples").listFiles { file -> !file.name.startsWith(".") }?.toList()
         ?.map { "examples/${it.name}" }.orEmpty()
 
-    val modules = services.map(AwsService::module) + runtimeModules + awsModules + examples
-        ?.toList()
+    val modules = services.map(AwsService::module) + runtimeModules + awsModules + examples.toList()
     return """
     [workspace]
     members = [
