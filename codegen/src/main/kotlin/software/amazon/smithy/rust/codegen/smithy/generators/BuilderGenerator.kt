@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq

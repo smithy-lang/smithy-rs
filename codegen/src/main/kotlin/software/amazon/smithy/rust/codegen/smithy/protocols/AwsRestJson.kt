@@ -103,7 +103,7 @@ class AwsRestJsonGenerator(
         // TODO: Implement parsing traits for AwsRestJson
     }
 
-    private fun RustWriter.deserializeBody(
+    private fun RustWriter.deserializeDocumentBody(
         optionalBody: StructureShape?,
         errorSymbol: RuntimeType,
         outputBuilder: String,
@@ -131,53 +131,68 @@ class AwsRestJsonGenerator(
             // avoid non-usage warnings
             Attribute.AllowUnusedMut.render(this)
             rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
-            deserializeBody(bodyShape, errorSymbol, "output")
-
-            val payload = httpIndex.getResponseBindings(operationShape, HttpBinding.Location.PAYLOAD).firstOrNull()
-            payload?.also { binding ->
-                val member = outputShape.expectMember(binding.memberName)
-                val targetShape = model.expectShape(member.target)
-                rust("let body = response.body().as_ref();")
-                when (targetShape) {
-                    is StructureShape, is UnionShape ->
-                        rustTemplate(
-                            """
-                                let body: #{body} = #{from_slice}(body).map_err(#{error_symbol}::unhandled)?;
-                                output = output.${member.setterName()}(body);
-                                """,
-                            "body" to symbolProvider.toSymbol(member),
-                            "from_slice" to RuntimeType.SerdeJson("from_slice"),
-                            "error_symbol" to errorSymbol
-                        )
-                    is StringShape -> {
-                        rustTemplate(
-                            "let body_str = std::str::from_utf8(&body).map_err(#{error_symbol}::unhandled)?;",
-                            "error_symbol" to errorSymbol
-                        )
-                        rustBlock("if !body_str.is_empty()") {
-                            if (targetShape.hasTrait(EnumTrait::class.java)) {
-                                rust(
-                                    "output = output.${member.setterName()}(Some(#T::from(body_str)));",
-                                    symbolProvider.toSymbol(targetShape)
-                                )
-                            } else {
-                                rust("output = output.${member.setterName()}(Some(body_str.to_string()));")
-                            }
-                        }
-                    }
-                    is BlobShape -> rust(
-                        "output = output.${member.setterName()}(Some(#T::new(body)));",
-                        RuntimeType.Blob(runtimeConfig)
-                    )
-                    is DocumentShape -> rust("let _ = body;")
-                }
-            }
+            deserializeDocumentBody(bodyShape, errorSymbol, "output")
+            deserializePayloadBody(operationShape, outputShape, errorSymbol)
+            deserializeCode(operationShape)
 
             val err = if (StructureGenerator.fallibleBuilder(outputShape, symbolProvider)) {
                 ".map_err(|s|${format(errorSymbol)}::unhandled(s))?"
             } else ""
             rust("let _ = response;")
             rust("Ok(output.build()$err)")
+        }
+    }
+
+    private fun RustWriter.deserializeCode(operationShape: OperationShape) {
+        val code = httpIndex.getResponseBindings(operationShape, HttpBinding.Location.RESPONSE_CODE)
+        code.forEach { binding ->
+            rust("output = output.${binding.member.setterName()}(Some(response.status().as_u16() as _));")
+        }
+    }
+
+    private fun RustWriter.deserializePayloadBody(
+        operationShape: OperationShape,
+        outputShape: StructureShape,
+        errorSymbol: RuntimeType
+    ) {
+        val payload = httpIndex.getResponseBindings(operationShape, HttpBinding.Location.PAYLOAD).firstOrNull()
+        payload?.also { binding ->
+            val member = outputShape.expectMember(binding.memberName)
+            val targetShape = model.expectShape(member.target)
+            rust("let body = response.body().as_ref();")
+            when (targetShape) {
+                is StructureShape, is UnionShape ->
+                    rustTemplate(
+                        """
+                                    let body: #{body} = #{from_slice}(body).map_err(#{error_symbol}::unhandled)?;
+                                    output = output.${member.setterName()}(body);
+                                    """,
+                        "body" to symbolProvider.toSymbol(member),
+                        "from_slice" to RuntimeType.SerdeJson("from_slice"),
+                        "error_symbol" to errorSymbol
+                    )
+                is StringShape -> {
+                    rustTemplate(
+                        "let body_str = std::str::from_utf8(&body).map_err(#{error_symbol}::unhandled)?;",
+                        "error_symbol" to errorSymbol
+                    )
+                    rustBlock("if !body_str.is_empty()") {
+                        if (targetShape.hasTrait(EnumTrait::class.java)) {
+                            rust(
+                                "output = output.${member.setterName()}(Some(#T::from(body_str)));",
+                                symbolProvider.toSymbol(targetShape)
+                            )
+                        } else {
+                            rust("output = output.${member.setterName()}(Some(body_str.to_string()));")
+                        }
+                    }
+                }
+                is BlobShape -> rust(
+                    "output = output.${member.setterName()}(Some(#T::new(body)));",
+                    RuntimeType.Blob(runtimeConfig)
+                )
+                is DocumentShape -> rust("let _ = body;")
+            }
         }
     }
 
