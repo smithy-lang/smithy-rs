@@ -131,7 +131,7 @@ class Instantiator(
                 writer.rustBlock("") {
                     write("let mut ret = #T::new();", RustType.HashSet.RuntimeType)
                     data.forEach { v ->
-                        withBlock("ret.insert(", ");") {
+                        withBlock("ret.push(", ");") {
                             renderMember(this, shape.member, v)
                         }
                     }
