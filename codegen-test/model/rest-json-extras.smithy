@@ -27,7 +27,8 @@ service RestJsonExtras {
     }
 ])
 operation EnumPayload {
-    input: EnumPayloadInput
+    input: EnumPayloadInput,
+    output: EnumPayloadInput
 }
 
 structure EnumPayloadInput {
@@ -50,7 +51,8 @@ string StringEnum
     }
 ])
 operation StringPayload {
-    input: StringPayloadInput
+    input: StringPayloadInput,
+    output: StringPayloadInput
 }
 
 structure StringPayloadInput {

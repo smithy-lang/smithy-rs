@@ -109,6 +109,9 @@ class OperationInputBuilderGenerator(
     }
 }
 
+/** setter names will never hit a reserved word and therefore never need escaping */
+fun MemberShape.setterName(): String = "set_${this.memberName.toSnakeCase()}"
+
 abstract class BuilderGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,
@@ -174,6 +177,13 @@ abstract class BuilderGenerator(
                 writer.rustBlock("pub fn $memberName$signature") {
                     write("self.$memberName = Some(${builderConverter(coreType)});")
                     write("self")
+                }
+
+                writer.rustBlock("pub fn ${member.setterName()}(mut self, inp: ${outerType.render(true)}) -> Self") {
+                    val v = "inp".letIf(outerType !is RustType.Option) {
+                        "Some($it)"
+                    }
+                    rust("self.$memberName = $v; self")
                 }
             }
 
