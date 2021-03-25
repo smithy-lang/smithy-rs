@@ -147,6 +147,7 @@ abstract class HttpProtocolGenerator(
         operationShape: OperationShape,
         block: RustWriter.() -> Unit
     ) {
+        Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
         implBlockWriter.rustBlock(
             "fn from_response(response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
             RuntimeType.Http("response::Response"),

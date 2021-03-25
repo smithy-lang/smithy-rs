@@ -51,8 +51,7 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
     ): AwsRestJsonGenerator = AwsRestJsonGenerator(protocolConfig)
 
     /** Create a synthetic awsJsonInputBody if specified
-     * A body is created iff no member of [input] is targeted with the `PAYLOAD` trait. If a member is targeted with
-     * the payload trait, we don't need to create an input body.
+     * A body is created if any member of [shape] is bound to the `DOCUMENT` section of the `bindings.
      */
     private fun restJsonBody(shape: StructureShape?, bindings: Map<String, HttpBinding>): StructureShape? {
         if (shape == null) {
@@ -144,7 +143,7 @@ class AwsRestJsonGenerator(
                 val parsedValue = parseFunctions[member.memberName]
                     ?: throw CodegenException("No parser defined for $member!. This is a bug")
                 // can delete when we don't have `todo!()` here anymore
-                Attribute.Custom("allow(unreachable_code)").render(this)
+                Attribute.Custom("allow(unreachable_code, clippy::diverging_sub_expression)").render(this)
                 rust("{ output = output.${member.setterName()}($parsedValue); }")
             }
 

@@ -171,7 +171,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                 rust(
                     """
                 Ok(if !$parsedValue.is_empty() {
-                    Some($parsedValue.into())
+                    Some($parsedValue)
                 } else {
                     None
                 })
