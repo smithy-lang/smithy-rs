@@ -27,13 +27,14 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.HttpTraitBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.http.RequestBindingGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
@@ -127,13 +128,21 @@ class AwsRestJsonGenerator(
         val bodyId = outputShape.expectTrait(SyntheticOutputTrait::class.java).body
         val bodyShape = bodyId?.let { model.expectShape(bodyId, StructureShape::class.java) }
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val httpBindingGenerator = ResponseBindingGenerator(protocolConfig, operationShape)
+
+        val needsHeaders = httpBindingGenerator.renderUpdateOutputBuilder(implBlockWriter)
+
         fromResponseFun(implBlockWriter, operationShape) {
             // avoid non-usage warnings
             Attribute.AllowUnusedMut.render(this)
             rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
+            if (needsHeaders) {
+                rust("output = Self::update_output(output, response.headers()).map_err(#T::unhandled)?;", errorSymbol)
+            }
             deserializeDocumentBody(bodyShape, errorSymbol, "output")
             deserializePayloadBody(operationShape, outputShape, errorSymbol)
             deserializeCode(operationShape)
+            rust("")
 
             val err = if (StructureGenerator.fallibleBuilder(outputShape, symbolProvider)) {
                 ".map_err(|s|${format(errorSymbol)}::unhandled(s))?"
@@ -160,38 +169,41 @@ class AwsRestJsonGenerator(
             val member = outputShape.expectMember(binding.memberName)
             val targetShape = model.expectShape(member.target)
             rust("let body = response.body().as_ref();")
-            when (targetShape) {
-                is StructureShape, is UnionShape ->
-                    rustTemplate(
-                        """
+            rustBlock("if !body.is_empty()") {
+                when (targetShape) {
+                    is StructureShape, is UnionShape ->
+                        rustTemplate(
+                            """
                                     let body: #{body} = #{from_slice}(body).map_err(#{error_symbol}::unhandled)?;
                                     output = output.${member.setterName()}(body);
                                     """,
-                        "body" to symbolProvider.toSymbol(member),
-                        "from_slice" to RuntimeType.SerdeJson("from_slice"),
-                        "error_symbol" to errorSymbol
-                    )
-                is StringShape -> {
-                    rustTemplate(
-                        "let body_str = std::str::from_utf8(&body).map_err(#{error_symbol}::unhandled)?;",
-                        "error_symbol" to errorSymbol
-                    )
-                    rustBlock("if !body_str.is_empty()") {
-                        if (targetShape.hasTrait(EnumTrait::class.java)) {
-                            rust(
-                                "output = output.${member.setterName()}(Some(#T::from(body_str)));",
-                                symbolProvider.toSymbol(targetShape)
-                            )
-                        } else {
-                            rust("output = output.${member.setterName()}(Some(body_str.to_string()));")
+                            "body" to symbolProvider.toSymbol(member),
+                            "from_slice" to RuntimeType.SerdeJson("from_slice"),
+                            "error_symbol" to errorSymbol
+                        )
+                    is StringShape -> {
+                        rustTemplate(
+                            "let body_str = std::str::from_utf8(&body).map_err(#{error_symbol}::unhandled)?;",
+                            "error_symbol" to errorSymbol
+                        )
+                        rustBlock("if !body_str.is_empty()") {
+                            if (targetShape.hasTrait(EnumTrait::class.java)) {
+                                rust(
+                                    "output = output.${member.setterName()}(Some(#T::from(body_str)));",
+                                    symbolProvider.toSymbol(targetShape)
+                                )
+                            } else {
+                                rust("output = output.${member.setterName()}(Some(body_str.to_string()));")
+                            }
                         }
                     }
+                    is BlobShape -> rust(
+                        "output = output.${member.setterName()}(Some(#T::new(body)));",
+                        RuntimeType.Blob(runtimeConfig)
+                    )
+                    is DocumentShape -> rust("let _ = body;")
+                    else -> TODO("unexpected shape: $targetShape")
                 }
-                is BlobShape -> rust(
-                    "output = output.${member.setterName()}(Some(#T::new(body)));",
-                    RuntimeType.Blob(runtimeConfig)
-                )
-                is DocumentShape -> rust("let _ = body;")
             }
         }
     }
@@ -299,7 +311,7 @@ class AwsRestJsonGenerator(
     ) {
         val httpTrait = operationShape.expectTrait(HttpTrait::class.java)
 
-        val httpBindingGenerator = HttpTraitBindingGenerator(
+        val httpBindingGenerator = RequestBindingGenerator(
             model,
             symbolProvider,
             runtimeConfig,

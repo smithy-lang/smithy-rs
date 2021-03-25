@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.generators
+package software.amazon.smithy.rust.codegen.smithy.generators.http
 
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
@@ -26,6 +25,10 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
+import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 
@@ -54,9 +57,9 @@ fun HttpTrait.uriFormatString(): String {
  * TODO: httpPrefixHeaders; 4h
  * TODO: Deserialization of all fields; 1w
  */
-class HttpTraitBindingGenerator(
+class RequestBindingGenerator(
     val model: Model,
-    private val symbolProvider: SymbolProvider,
+    private val symbolProvider: RustSymbolProvider,
     private val runtimeConfig: RuntimeConfig,
     private val writer: RustWriter,
     private val shape: OperationShape,
@@ -67,6 +70,7 @@ class HttpTraitBindingGenerator(
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
     private val index = HttpBindingIndex.of(model)
     private val buildError = runtimeConfig.operationBuildError()
+    private val instant = RuntimeType.Instant(runtimeConfig).toSymbol().rustType()
 
     /**
      * Generates `update_http_builder` and all necessary dependency functions into the impl block provided by
