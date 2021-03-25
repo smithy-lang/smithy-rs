@@ -369,7 +369,10 @@ class HttpProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request),
 
             FailingTest(RestJson, "HttpPrefixHeadersResponse", Action.Response),
-            FailingTest(RestJson, "HttpPrefixHeadersArePresent", Action.Response),
+            FailingTest(RestJson, "RestJsonHttpPrefixHeadersArePresent", Action.Response),
+            FailingTest(RestJson, "InlineDocumentOutput", Action.Response),
+            FailingTest(RestJson, "InlineDocumentOutputAsPayload", Action.Response),
+            FailingTest(RestJson, "InlineDocumentAsPayloadInputOutput", Action.Response)
 
         )
         private val RunOnly: Set<String>? = null

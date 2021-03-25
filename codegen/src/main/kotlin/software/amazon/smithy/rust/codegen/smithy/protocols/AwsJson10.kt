@@ -24,12 +24,14 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.Serializers
 import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.generators.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.locatedIn
+import software.amazon.smithy.rust.codegen.smithy.meta
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
@@ -110,9 +112,15 @@ class SyntheticBodySymbolProvider(private val model: Model, private val base: Ru
     override fun toSymbol(shape: Shape): Symbol {
         val initialSymbol = base.toSymbol(shape)
         val override = when (shape) {
-            is StructureShape -> if (shape.hasTrait(InputBodyTrait::class.java) || shape.hasTrait(OutputBodyTrait::class.java)) {
-                initialSymbol.toBuilder().locatedIn(Serializers).build()
-            } else null
+            is StructureShape -> when {
+                shape.hasTrait(InputBodyTrait::class.java) ->
+                    initialSymbol.toBuilder().locatedIn(Serializers).build()
+                shape.hasTrait(OutputBodyTrait::class.java) ->
+                    initialSymbol.toBuilder().locatedIn(Serializers).meta(
+                        initialSymbol.expectRustMetadata().withDerives(RuntimeType("Default", null, "std::default"))
+                    ).build()
+                else -> null
+            }
             is MemberShape -> {
                 val container = model.expectShape(shape.container)
                 if (container.hasTrait(InputBodyTrait::class.java)) {

@@ -6,14 +6,14 @@
 package software.amazon.smithy.rust.codegen.generators.http
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.knowledge.HttpBinding
+import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
-import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -75,13 +75,12 @@ class ResponseBindingGeneratorTest {
     private fun RustWriter.renderOperation() {
         operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
         rustBlock("impl PutObjectOutput") {
-            ResponseBindingGenerator(
-                testProtocolConfig, operationShape
-            ).renderUpdateOutputBuilder(this)
-            val builderSymbol = operationShape.outputShape(model).builderSymbol(symbolProvider)
-            rustBlock("pub fn parse_http_response<B>(resp: &#T<B>) -> #T", RuntimeType.http.member("Response"), builderSymbol) {
-                write("let builder = #T::default();", builderSymbol)
-                write("Self::update_output(builder, resp.headers()).unwrap()")
+            val bindings = HttpBindingIndex.of(model).getResponseBindings(operationShape, HttpBinding.Location.HEADER)
+            bindings.forEach { binding ->
+
+                ResponseBindingGenerator(
+                    testProtocolConfig, operationShape
+                ).generateDeserializeHeaderFn(binding, this)
             }
         }
     }
@@ -100,10 +99,9 @@ class ResponseBindingGeneratorTest {
                     .header("X-Dates", "Mon, 16 Dec 2019 23:48:18 GMT")
                     .header("X-Dates", "Mon, 16 Dec 2019 23:48:18 GMT,Tue, 17 Dec 2019 23:48:18 GMT")
                     .body(()).expect("valid request");
-                let output = PutObjectOutput::parse_http_response(&resp).build();
-                assert_eq!(output.int_list.unwrap(), vec![1,2,3,4,5,6]);
-                assert_eq!(output.media_type.unwrap(), "smithy-rs");
-                assert_eq!(output.date_header_list.unwrap().len(), 3);
+                assert_eq!(PutObjectOutput::parse_from_header_int_list(&resp.headers()).unwrap(), Some(vec![1,2,3,4,5,6]));
+                assert_eq!(PutObjectOutput::parse_from_header_media_type(&resp.headers()).expect("valid").unwrap(), "smithy-rs");
+                assert_eq!(PutObjectOutput::parse_from_header_date_header_list(&resp.headers()).unwrap().unwrap().len(), 3);
             """
             )
         }
