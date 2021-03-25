@@ -355,9 +355,6 @@ class HttpProtocolTestGenerator(
         val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
         val RestJson = "aws.protocoltests.restjson#RestJson"
         private val ExpectFail = setOf(
-            // Document deserialization:
-            FailingTest(AwsJson11, "PutAndGetInlineDocumentsInput", Action.Response),
-
             // Endpoint trait https://github.com/awslabs/smithy-rs/issues/197
             // This will also require running operations through the endpoint middleware (or moving endpoint middleware
             // into operation construction

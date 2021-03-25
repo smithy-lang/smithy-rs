@@ -126,11 +126,7 @@ class CustomSerializerGenerator(
         val fnName = serializerName(rustType, memberShape, "deser")
         return RuntimeType.forInlineFun(fnName, "serde_util") { writer ->
             deserializeFn(writer, fnName, symbol) {
-                if (rustType.contains(document)) {
-                    write("todo!()")
-                } else {
-                    deserializer(rustType, memberShape)
-                }
+                deserializer(rustType, memberShape)
             }
         }
     }
@@ -272,7 +268,7 @@ class CustomSerializerGenerator(
             document -> writable {
                 when (serdeDirection) {
                     SerdeDirection.Serialize -> write("#T::SerDoc", RuntimeType.DocJson)
-                    SerdeDirection.Deserialize -> TODO("doc deserialization is not supported")
+                    SerdeDirection.Deserialize -> write("#T::DeserDoc", RuntimeType.DocJson)
                 }
             }
             is RustType.Container -> writable { serdeContainerType(realType, memberShape) }
