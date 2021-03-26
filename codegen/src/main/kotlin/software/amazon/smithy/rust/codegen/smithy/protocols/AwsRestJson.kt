@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
@@ -26,6 +27,7 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -83,7 +85,7 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
         return ProtocolSupport(
             requestBodySerialization = true,
             responseDeserialization = true,
-            errorDeserialization = false
+            errorDeserialization = true
         )
     }
 
@@ -109,6 +111,7 @@ class AwsRestJsonGenerator(
 
     override fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape) {
         val outputShape = operationShape.outputShape(model)
+        val httpTrait = operationShape.expectTrait(HttpTrait::class.java)
         val bodyId = outputShape.expectTrait(SyntheticOutputTrait::class.java).body
         val bodyShape = bodyId?.let { model.expectShape(bodyId, StructureShape::class.java) }
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
@@ -118,42 +121,130 @@ class AwsRestJsonGenerator(
         // 1. Code generate "parse_xyz" methods for each field
         // 2. Code generate a parse_response method which utilizes the parse_xyz methods to set fields on a builder
         val parseFunctions: Map<String, String> =
-            renderParseFunctions(operationShape, httpBindingGenerator, implBlockWriter, bodyShape)
+            renderParseFunctions(
+                operationShape.outputShape(model),
+                httpIndex.getResponseBindings(operationShape),
+                errorSymbol,
+                httpBindingGenerator,
+                implBlockWriter,
+                bodyShape
+            )
+
+        val errorParsers: Map<ShapeId, Map<String, String>> = operationShape.errors.map { shapeId ->
+            val errorShape = model.expectShape(shapeId, StructureShape::class.java)
+            shapeId to renderParseFunctions(
+                errorShape,
+                httpIndex.getResponseBindings(errorShape),
+                errorSymbol,
+                httpBindingGenerator,
+                implBlockWriter,
+                errorShape
+            )
+        }.toMap()
+
+        val jsonErrors = RuntimeType.awsJsonErrors(runtimeConfig)
 
         fromResponseFun(implBlockWriter, operationShape) {
-            // avoid non-usage warnings
-            Attribute.AllowUnusedMut.render(this)
-            rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
-            rust("let _ = response;")
-            if (bodyShape != null) {
+            rustBlock("if #T::is_error(&response) && response.status().as_u16() != ${httpTrait.code}", jsonErrors) {
                 rustTemplate(
                     """
-                let body_slice = response.body().as_ref();
-
-                let parsed_body: #{body} = if body_slice.is_empty() {
-                    #{body}::default()
-                } else {
-                    #{from_slice}(response.body().as_ref()).map_err(#{err_symbol}::unhandled)?
-                };
-            """,
-                    "body" to symbolProvider.toSymbol(bodyShape),
-                    "from_slice" to RuntimeType.SerdeJson("from_slice"),
-                    "err_symbol" to errorSymbol
+                    let body = #{sj}::from_slice(response.body().as_ref())
+                        .unwrap_or_else(|_|#{sj}::json!({}));
+                    let generic = #{aws_json_errors}::parse_generic_error(&response, &body);
+                    """,
+                    "aws_json_errors" to jsonErrors, "sj" to RuntimeType.SJ
                 )
-            }
-            outputShape.members().forEach { member ->
-                val parsedValue = parseFunctions[member.memberName]
-                    ?: throw CodegenException("No parser defined for $member!. This is a bug")
-                // can delete when we don't have `todo!()` here anymore
-                Attribute.Custom("allow(unreachable_code, clippy::diverging_sub_expression)").render(this)
-                rust("{ output = output.${member.setterName()}($parsedValue); }")
-            }
+                if (operationShape.errors.isNotEmpty()) {
+                    rustTemplate(
+                        """
 
-            val err = if (StructureGenerator.fallibleBuilder(outputShape, symbolProvider)) {
-                ".map_err(|s|${format(errorSymbol)}::unhandled(s))?"
-            } else ""
-            rust("Ok(output.build()$err)")
+                    let error_code = match generic.code() {
+                        Some(code) => code,
+                        None => return Err(#{error_symbol}::unhandled(generic))
+                    };""",
+                        "error_symbol" to errorSymbol
+                    )
+                    withBlock("return Err(match error_code {", "})") {
+                        // approx:
+                        /*
+                            match error_code {
+                                "Code1" => deserialize<Code1>(body),
+                                "Code2" => deserialize<Code2>(body)
+                            }
+                         */
+                        parseErrorVariants(operationShape, errorSymbol, errorParsers)
+                    }
+                } else {
+                    write("return Err(#T::generic(generic))", errorSymbol)
+                }
+            }
+            // avoid non-usage warnings
+            withBlock("Ok({", "})") {
+                renderShapeParser(outputShape, bodyShape, errorSymbol, parseFunctions)
+            }
         }
+    }
+
+    private fun RustWriter.renderShapeParser(
+        outputShape: StructureShape,
+        bodyShape: StructureShape?,
+        errorSymbol: RuntimeType,
+        parseFunctions: Map<String, String>
+    ) {
+        Attribute.AllowUnusedMut.render(this)
+        rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
+        rust("let _ = response;")
+        if (bodyShape != null && parseFunctions.isNotEmpty()) {
+            rustTemplate(
+                """
+                    let body_slice = response.body().as_ref();
+
+                    let parsed_body: #{body} = if body_slice.is_empty() {
+                        #{from_slice}(b"{}").map_err(#{err_symbol}::unhandled)?
+                    } else {
+                        #{from_slice}(response.body().as_ref()).map_err(#{err_symbol}::unhandled)?
+                    };
+                """,
+                "body" to symbolProvider.toSymbol(bodyShape),
+                "from_slice" to RuntimeType.SerdeJson("from_slice"),
+                "err_symbol" to errorSymbol
+            )
+        }
+        outputShape.members().forEach { member ->
+            val parsedValue = parseFunctions[member.memberName]
+                ?: throw CodegenException("No parser defined for $member!. This is a bug")
+            // can delete when we don't have `todo!()` here anymore
+            Attribute.Custom("allow(unreachable_code, clippy::diverging_sub_expression)").render(this)
+            rust("{ output = output.${member.setterName()}($parsedValue); }")
+        }
+
+        val err = if (StructureGenerator.fallibleBuilder(outputShape, symbolProvider)) {
+            ".map_err(|s|${format(errorSymbol)}::unhandled(s))?"
+        } else ""
+        rust("output.build()$err")
+    }
+
+    private fun RustWriter.parseErrorVariants(
+        operationShape: OperationShape,
+        errorSymbol: RuntimeType,
+        errorParsers: Map<ShapeId, Map<String, String>>
+    ) {
+        operationShape.errors.forEach { error ->
+            val variantName = symbolProvider.toSymbol(model.expectShape(error)).name
+            val parser = errorParsers[error.toShapeId()] ?: throw CodegenException("Parser must be defined")
+            val shape = model.expectShape(error, StructureShape::class.java)
+            withBlock(
+                """${error.name.dq()} => #1T {
+                meta: generic,
+                kind: #1TKind::$variantName({""",
+                "})" +
+                    "},",
+                errorSymbol
+            ) {
+                this.renderShapeParser(shape, shape, errorSymbol, parser)
+            }
+        }
+        write("_ => #T::unhandled(generic)", errorSymbol)
     }
 
     /**
@@ -162,15 +253,14 @@ class AwsRestJsonGenerator(
      * Returns a map with key = memberName, value = parsedValue
      */
     private fun renderParseFunctions(
-        operationShape: OperationShape,
+        shape: Shape,
+        bindings: Map<String, HttpBinding>,
+        errorSymbol: RuntimeType,
         httpBindingGenerator: ResponseBindingGenerator,
         implBlockWriter: RustWriter,
         bodyShape: StructureShape?
     ): Map<String, String> {
-        val bindings = httpIndex.getResponseBindings(operationShape)
-        val outputShape = operationShape.outputShape(model)
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
-        return outputShape.members().map { member ->
+        return shape.members().map { member ->
             val binding = bindings[member.memberName] ?: throw CodegenException("Binding should be defined")
             member.memberName to when (binding.location) {
                 HttpBinding.Location.HEADER -> {

@@ -344,7 +344,7 @@ class RustWriter private constructor(
                     addDepsRecursively(t)
                     t.rustType().render(fullyQualified = true)
                 }
-                else -> throw CodegenException("Invalid type provided to RustSymbolFormatter")
+                else -> throw CodegenException("Invalid type provided to RustSymbolFormatter: $t")
             }
         }
     }
