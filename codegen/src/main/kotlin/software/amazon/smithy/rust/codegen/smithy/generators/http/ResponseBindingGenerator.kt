@@ -75,13 +75,16 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         binding: HttpBinding,
         errorT: RuntimeType,
         rustWriter: RustWriter,
-        structuredHandler: RustWriter.(String) -> Unit
+        // Deserialize a single structure or union member marked as a payload
+        structuredHandler: RustWriter.(String) -> Unit,
+        // Deserialize a document type marked as a payload
+        docHandler: RustWriter.(String) -> Unit
     ): String {
         check(binding.location == HttpBinding.Location.PAYLOAD)
         val outputT = symbolProvider.toSymbol(binding.member)
         val fnName = "parse_from_payload_${binding.memberName.toSnakeCase()}"
         rustWriter.rustBlock("fn $fnName(body: &[u8]) -> Result<#T, #T>", outputT, errorT) {
-            deserializePayloadBody(binding, errorT, structuredHandler)
+            deserializePayloadBody(binding, errorT, structuredHandler = structuredHandler, docShapeHandler = docHandler)
         }
         return fnName
     }
@@ -89,7 +92,8 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
     private fun RustWriter.deserializePayloadBody(
         binding: HttpBinding,
         errorSymbol: RuntimeType,
-        structuredHandler: RustWriter.(String) -> Unit
+        structuredHandler: RustWriter.(String) -> Unit,
+        docShapeHandler: RustWriter.(String) -> Unit
     ) {
         val member = binding.member
         val targetShape = model.expectShape(member.target)
@@ -116,7 +120,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                     "Ok(#T::new(body))",
                     RuntimeType.Blob(runtimeConfig)
                 )
-                is DocumentShape -> rust("""unimplemented!()""")
+                is DocumentShape -> this.docShapeHandler("body")
                 else -> TODO("unexpected shape: $targetShape")
             }
         }

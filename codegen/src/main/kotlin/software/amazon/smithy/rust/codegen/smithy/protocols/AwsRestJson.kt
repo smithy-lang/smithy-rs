@@ -20,7 +20,9 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -189,13 +191,26 @@ class AwsRestJsonGenerator(
                     "parsed_body.${symbolProvider.toMemberName(member)}"
                 }
                 HttpBinding.Location.PAYLOAD -> {
+                    val docShapeHandler: RustWriter.(String) -> Unit = { body ->
+                        rustTemplate(
+                            """
+                            #{serde_json}::from_slice::<#{doc_json}::DeserDoc>($body).map(|d|d.0).map_err(#{error_symbol}::unhandled)
+                        """,
+                            "doc_json" to RuntimeType.DocJson,
+                            "serde_json" to CargoDependency.SerdeJson.asType(),
+                            "error_symbol" to errorSymbol
+                        )
+                    }
+                    val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
+                        rust("#T($body).map_err(#T::unhandled)", RuntimeType.SerdeJson("from_slice"), errorSymbol)
+                    }
                     val fnName = httpBindingGenerator.generateDeserializePayloadFn(
                         binding,
                         errorSymbol,
-                        implBlockWriter
-                    ) { body ->
-                        rust("#T($body).map_err(#T::unhandled)", RuntimeType.SerdeJson("from_slice"), errorSymbol)
-                    }
+                        implBlockWriter,
+                        docHandler = docShapeHandler,
+                        structuredHandler = structureShapeHandler
+                    )
                     "Self::$fnName(response.body().as_ref())?"
                 }
                 HttpBinding.Location.RESPONSE_CODE -> "Some(response.status().as_u16() as _)"
