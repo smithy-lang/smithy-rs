@@ -179,9 +179,8 @@ class AwsRestJsonGenerator(
                     val fnName = httpBindingGenerator.generateDeserializeHeaderFn(binding)
                     rust(
                         """
-                        #T(
-                            response.headers().get_all(${binding.locationName.dq()}).iter()
-                        ).map_err(|_|${implBlockWriter.format(errorSymbol)}::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
+                        #T(response.headers())
+                            .map_err(|_|${implBlockWriter.format(errorSymbol)}::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
                         """,
                         fnName
                     )

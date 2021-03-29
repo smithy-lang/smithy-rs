@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
@@ -78,9 +79,11 @@ class ResponseBindingGeneratorTest {
             val bindings = HttpBindingIndex.of(model).getResponseBindings(operationShape, HttpBinding.Location.HEADER)
             bindings.forEach { binding ->
 
-                ResponseBindingGenerator(
+                val runtimeType = ResponseBindingGenerator(
                     testProtocolConfig, operationShape
                 ).generateDeserializeHeaderFn(binding)
+                // little hack to force these functions to be generated
+                rust("// use #T;", runtimeType)
             }
         }
     }
@@ -92,6 +95,7 @@ class ResponseBindingGeneratorTest {
             it.renderOperation()
             it.unitTest(
                 """
+                use crate::http_serde;
                 let resp = http::Response::builder()
                     .header("X-Ints", "1,2,3")
                     .header("X-Ints", "4,5,6")
@@ -99,9 +103,9 @@ class ResponseBindingGeneratorTest {
                     .header("X-Dates", "Mon, 16 Dec 2019 23:48:18 GMT")
                     .header("X-Dates", "Mon, 16 Dec 2019 23:48:18 GMT,Tue, 17 Dec 2019 23:48:18 GMT")
                     .body(()).expect("valid request");
-                assert_eq!(PutObjectOutput::parse_from_header_int_list(&resp.headers()).unwrap(), Some(vec![1,2,3,4,5,6]));
-                assert_eq!(PutObjectOutput::parse_from_header_media_type(&resp.headers()).expect("valid").unwrap(), "smithy-rs");
-                assert_eq!(PutObjectOutput::parse_from_header_date_header_list(&resp.headers()).unwrap().unwrap().len(), 3);
+                assert_eq!(http_serde::deser_header_put_object_int_list(resp.headers()).unwrap(), Some(vec![1,2,3,4,5,6]));
+                assert_eq!(http_serde::deser_header_put_object_media_type(resp.headers()).expect("valid").unwrap(), "smithy-rs");
+                assert_eq!(http_serde::deser_header_put_object_date_header_list(resp.headers()).unwrap().unwrap().len(), 3);
             """
             )
         }

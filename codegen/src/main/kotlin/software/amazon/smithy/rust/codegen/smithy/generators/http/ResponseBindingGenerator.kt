@@ -63,11 +63,12 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         val fnName = "deser_header_${operationShape.id.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
         return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
             writer.rustBlock(
-                "pub fn $fnName(headers: #T::header::ValueIter<http::HeaderValue>) -> Result<#T, #T::ParseError>",
+                "pub fn $fnName(header_map: &#T::HeaderMap) -> Result<#T, #T::ParseError>",
                 RuntimeType.http,
                 outputT,
                 headerUtil
             ) {
+                rust("let headers = header_map.get_all(${binding.locationName.dq()}).iter();")
                 deserializeFromHeader(model.expectShape(binding.member.target), binding.member)
             }
         }
