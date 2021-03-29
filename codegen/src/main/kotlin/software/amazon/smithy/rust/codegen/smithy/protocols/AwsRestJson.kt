@@ -146,9 +146,7 @@ class AwsRestJsonGenerator(
             outputShape.members().forEach { member ->
                 val parsedValue = parseFunctions[member.memberName]
                     ?: throw CodegenException("No parser defined for $member!. This is a bug")
-                // can delete when we don't have `todo!()` here anymore
-                Attribute.Custom("allow(unreachable_code, clippy::diverging_sub_expression)").render(this)
-                withBlock("{ output = output.${member.setterName()}(", ") };") {
+                withBlock("output = output.${member.setterName()}(", ");") {
                     parsedValue(this)
                 }
             }

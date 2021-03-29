@@ -92,7 +92,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         }
         return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
             writer.rustBlock(
-                "pub fn $fnName<'a>(header_map: &#T::HeaderMap) -> Result<#T, #T::ParseError>",
+                "pub fn $fnName(header_map: &#T::HeaderMap) -> Result<#T, #T::ParseError>",
                 RuntimeType.http,
                 outputT,
                 headerUtil
@@ -104,7 +104,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                         let values = header_map.get_all(header_name);
                         #T(values.iter()).map(|v| (key.to_string(), v.unwrap()))
                     }).collect();
-                    out.map(|t|Some(t))
+                    out.map(Some)
                 """,
                     headerUtil, inner
                 )
