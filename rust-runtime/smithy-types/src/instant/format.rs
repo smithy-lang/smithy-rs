@@ -144,6 +144,26 @@ pub mod http_date {
         parse_imf_fixdate(x)
     }
 
+    pub fn read(s: &str) -> Result<(Instant, &str), DateParseError> {
+        if !s.is_ascii() {
+            return Err(DateParseError::Invalid("Date must be valid ascii"));
+        }
+        let (first_date, rest) = match find_subsequence(s.as_bytes(), b" GMT") {
+            // split_at is correct because we asserted that this date is only valid ASCII so the byte index is
+            // the same as the char index
+            Some(idx) => s.split_at(idx),
+            None => return Err(DateParseError::Invalid("Date did not end in GMT")),
+        };
+        Ok((parse(first_date)?, rest))
+    }
+
+    fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+        haystack
+            .windows(needle.len())
+            .position(|window| window == needle)
+            .map(|idx| idx + needle.len())
+    }
+
     fn parse_imf_fixdate(s: &[u8]) -> Result<Instant, DateParseError> {
         // Example: `Sun, 06 Nov 1994 08:49:37 GMT`
         if s.len() < 29
@@ -289,14 +309,27 @@ mod test {
         );
     }
 
+    #[test]
+    fn read_date() {
+        let fractional = "Mon, 16 Dec 2019 23:48:18.123 GMT,some more stuff";
+        let ts = 1576540098;
+        let expected = Instant::from_fractional_seconds(ts, 0.123);
+        let (actual, rest) = http_date::read(fractional).expect("valid");
+        assert_eq!(rest, ",some more stuff");
+        assert_eq!(expected, actual);
+        http_date::read(rest).expect_err("invalid date");
+    }
+
     #[track_caller]
     fn check_roundtrip(epoch_secs: i64, subsecond_nanos: u32) {
         let instant = Instant::from_secs_and_nanos(epoch_secs, subsecond_nanos);
         let formatted = http_date::format(&instant);
         let parsed = http_date::parse(&formatted);
+        let read = http_date::read(&formatted);
         match parsed {
             Err(failure) => panic!("Date failed to parse {:?}", failure),
             Ok(date) => {
+                assert!(read.is_ok());
                 if date.subsecond_nanos != subsecond_nanos {
                     assert_eq!(http_date::format(&instant), formatted);
                 } else {
@@ -328,6 +361,19 @@ mod test {
         let date = "1985-04-12T23:20:50Z";
         let expected = Instant::from_secs_and_nanos(482196050, 0);
         assert_eq!(iso_8601::parse(date), Ok(expected));
+    }
+
+    #[test]
+    fn read_iso_date_comma_split() {
+        let date = "1985-04-12T23:20:50Z,1985-04-12T23:20:51Z";
+        let (e1, date) = iso_8601::read(date).expect("should succeed");
+        let (e2, date2) = iso_8601::read(&date[1..]).expect("should succeed");
+        assert_eq!(date2, "");
+        assert_eq!(date, ",1985-04-12T23:20:51Z");
+        let expected = Instant::from_secs_and_nanos(482196050, 0);
+        assert_eq!(e1, expected);
+        let expected = Instant::from_secs_and_nanos(482196051, 0);
+        assert_eq!(e2, expected);
     }
 
     proptest! {
@@ -364,5 +410,12 @@ pub mod iso_8601 {
             utc_date.timestamp(),
             utc_date.timestamp_subsec_nanos(),
         ))
+    }
+
+    /// Read 1 ISO8601 date from &str and return the remaining str
+    pub fn read(s: &str) -> Result<(Instant, &str), DateParseError> {
+        let delim = s.find('Z').map(|idx| idx + 1).unwrap_or_else(|| s.len());
+        let (head, rest) = s.split_at(delim);
+        Ok((parse(dbg!(head))?, &rest))
     }
 }

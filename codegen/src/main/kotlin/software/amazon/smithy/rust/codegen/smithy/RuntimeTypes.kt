@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import java.util.Optional
 
 data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: String = "../") {
@@ -125,6 +126,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
                 func, CargoDependency.ProtocolTestHelpers(runtimeConfig), "protocol_test_helpers"
             )
 
+        val http = CargoDependency.Http.asType()
         fun Http(path: String): RuntimeType =
             RuntimeType(name = path, dependency = CargoDependency.Http, namespace = "http")
 

@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
@@ -18,7 +19,10 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -26,14 +30,22 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.HttpTraitBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.http.RequestBindingGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
+import software.amazon.smithy.rust.codegen.util.outputShape
+import java.util.logging.Logger
 
 class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
     override fun buildProtocolGenerator(
@@ -41,30 +53,28 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
     ): AwsRestJsonGenerator = AwsRestJsonGenerator(protocolConfig)
 
     /** Create a synthetic awsJsonInputBody if specified
-     * A body is created iff no member of [input] is targeted with the `PAYLOAD` trait. If a member is targeted with
-     * the payload trait, we don't need to create an input body.
+     * A body is created if any member of [shape] is bound to the `DOCUMENT` section of the `bindings.
      */
-    private fun awsJsonInputBody(model: Model, operation: OperationShape, input: StructureShape?): StructureShape? {
-        if (input == null) {
+    private fun restJsonBody(shape: StructureShape?, bindings: Map<String, HttpBinding>): StructureShape? {
+        if (shape == null) {
             return null
         }
-        val bindingIndex = HttpBindingIndex.of(model)
-        val bindings: MutableMap<String, HttpBinding> = bindingIndex.getRequestBindings(operation)
-        val bodyMembers = input.members().filter { member ->
+        val bodyMembers = shape.members().filter { member ->
             bindings[member.memberName]?.location == HttpBinding.Location.DOCUMENT
         }
 
         return if (bodyMembers.isNotEmpty()) {
-            input.toBuilder().members(bodyMembers).build()
+            shape.toBuilder().members(bodyMembers).build()
         } else {
             null
         }
     }
 
     override fun transformModel(model: Model): Model {
+        val httpIndex = HttpBindingIndex.of(model)
         return OperationNormalizer(model).transformModel(
-            inputBodyFactory = { op, input -> awsJsonInputBody(model, op, input) },
-            outputBodyFactory = OperationNormalizer.NoBody
+            inputBodyFactory = { op, input -> restJsonBody(input, httpIndex.getRequestBindings(op)) },
+            outputBodyFactory = { op, output -> restJsonBody(output, httpIndex.getResponseBindings(op)) },
         )
     }
 
@@ -72,7 +82,7 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
         // TODO: Support body for RestJson
         return ProtocolSupport(
             requestBodySerialization = true,
-            responseDeserialization = false,
+            responseDeserialization = true,
             errorDeserialization = false
         )
     }
@@ -90,6 +100,7 @@ class AwsRestJsonGenerator(
     private val protocolConfig: ProtocolConfig
 ) : HttpProtocolGenerator(protocolConfig) {
     // restJson1 requires all operations to use the HTTP trait
+    private val logger = Logger.getLogger(javaClass.name)
 
     private val model = protocolConfig.model
     override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
@@ -97,15 +108,118 @@ class AwsRestJsonGenerator(
     }
 
     override fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape) {
+        val outputShape = operationShape.outputShape(model)
+        val bodyId = outputShape.expectTrait(SyntheticOutputTrait::class.java).body
+        val bodyShape = bodyId?.let { model.expectShape(bodyId, StructureShape::class.java) }
+        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val httpBindingGenerator = ResponseBindingGenerator(protocolConfig, operationShape)
+
+        // Parsing the response works in two phases:
+        // 1. Code generate "parse_xyz" methods for each field
+        // 2. Code generate a parse_response method which utilizes the parse_xyz methods to set fields on a builder
+        val parseFunctions: Map<String, String> =
+            renderParseFunctions(operationShape, httpBindingGenerator, implBlockWriter, bodyShape)
+
         fromResponseFun(implBlockWriter, operationShape) {
             // avoid non-usage warnings
-            rust(
-                """
-                let _ = response;
-                todo!()
-            """
-            )
+            Attribute.AllowUnusedMut.render(this)
+            rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
+            rust("let _ = response;")
+            if (bodyShape != null) {
+                rustTemplate(
+                    """
+                let body_slice = response.body().as_ref();
+
+                let parsed_body: #{body} = if body_slice.is_empty() {
+                    #{body}::default()
+                } else {
+                    #{from_slice}(response.body().as_ref()).map_err(#{err_symbol}::unhandled)?
+                };
+            """,
+                    "body" to symbolProvider.toSymbol(bodyShape),
+                    "from_slice" to RuntimeType.SerdeJson("from_slice"),
+                    "err_symbol" to errorSymbol
+                )
+            }
+            outputShape.members().forEach { member ->
+                val parsedValue = parseFunctions[member.memberName]
+                    ?: throw CodegenException("No parser defined for $member!. This is a bug")
+                // can delete when we don't have `todo!()` here anymore
+                Attribute.Custom("allow(unreachable_code, clippy::diverging_sub_expression)").render(this)
+                rust("{ output = output.${member.setterName()}($parsedValue); }")
+            }
+
+            val err = if (StructureGenerator.fallibleBuilder(outputShape, symbolProvider)) {
+                ".map_err(|s|${format(errorSymbol)}::unhandled(s))?"
+            } else ""
+            rust("Ok(output.build()$err)")
         }
+    }
+
+    /**
+     * Generate a parser & a parsed value converter for each output member of `operationShape`
+     *
+     * Returns a map with key = memberName, value = parsedValue
+     */
+    private fun renderParseFunctions(
+        operationShape: OperationShape,
+        httpBindingGenerator: ResponseBindingGenerator,
+        implBlockWriter: RustWriter,
+        bodyShape: StructureShape?
+    ): Map<String, String> {
+        val bindings = httpIndex.getResponseBindings(operationShape)
+        val outputShape = operationShape.outputShape(model)
+        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        return outputShape.members().map { member ->
+            val binding = bindings[member.memberName] ?: throw CodegenException("Binding should be defined")
+            member.memberName to when (binding.location) {
+                HttpBinding.Location.HEADER -> {
+                    val fnName = httpBindingGenerator.generateDeserializeHeaderFn(binding, implBlockWriter)
+                    """
+                        Self::$fnName(
+                            response.headers()
+                        ).map_err(|_|${implBlockWriter.format(errorSymbol)}::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
+                        """
+                }
+                HttpBinding.Location.DOCUMENT -> {
+                    check(bodyShape != null) {
+                        "$bodyShape was null but a member specified document bindings. This is a bug."
+                    }
+                    // When there is a subset of fields present as the body of the response, we will create a variable
+                    // named `parsed_body`. Copy the field from parsed_body into the builder
+
+                    "parsed_body.${symbolProvider.toMemberName(member)}"
+                }
+                HttpBinding.Location.PAYLOAD -> {
+                    val docShapeHandler: RustWriter.(String) -> Unit = { body ->
+                        rustTemplate(
+                            """
+                            #{serde_json}::from_slice::<#{doc_json}::DeserDoc>($body).map(|d|d.0).map_err(#{error_symbol}::unhandled)
+                        """,
+                            "doc_json" to RuntimeType.DocJson,
+                            "serde_json" to CargoDependency.SerdeJson.asType(),
+                            "error_symbol" to errorSymbol
+                        )
+                    }
+                    val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
+                        rust("#T($body).map_err(#T::unhandled)", RuntimeType.SerdeJson("from_slice"), errorSymbol)
+                    }
+                    val fnName = httpBindingGenerator.generateDeserializePayloadFn(
+                        binding,
+                        errorSymbol,
+                        implBlockWriter,
+                        docHandler = docShapeHandler,
+                        structuredHandler = structureShapeHandler
+                    )
+                    "Self::$fnName(response.body().as_ref())?"
+                }
+                HttpBinding.Location.RESPONSE_CODE -> "Some(response.status().as_u16() as _)"
+                else -> {
+                    logger.warning("Unhandled response binding type: ${binding.location}")
+                    "todo!()"
+                }
+            }
+        }.toMap()
     }
 
     private fun serializeViaSyntheticBody(
@@ -211,7 +325,7 @@ class AwsRestJsonGenerator(
     ) {
         val httpTrait = operationShape.expectTrait(HttpTrait::class.java)
 
-        val httpBindingGenerator = HttpTraitBindingGenerator(
+        val httpBindingGenerator = RequestBindingGenerator(
             model,
             symbolProvider,
             runtimeConfig,
