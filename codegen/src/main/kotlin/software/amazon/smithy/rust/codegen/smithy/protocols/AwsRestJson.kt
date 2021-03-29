@@ -233,7 +233,7 @@ class AwsRestJsonGenerator(
                 }
                 else -> {
                     logger.warning("Unhandled response binding type: ${binding.location}")
-                    writable("todo!()")
+                    TODO("Unexpected binding location: ${binding.location}")
                 }
             }
         }.toMap()
