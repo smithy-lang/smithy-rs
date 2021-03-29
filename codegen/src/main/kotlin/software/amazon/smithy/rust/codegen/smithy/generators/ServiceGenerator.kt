@@ -51,10 +51,6 @@ class ServiceGenerator(
                 extraCustomizations = decorator.configCustomizations(config, listOf())
             ).render(writer)
         }
-
-        rustCrate.lib {
-            it.write("pub use config::Config;")
-        }
     }
 
     private fun renderBodies(operations: List<OperationShape>) {

@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 class SmithyTypesPubUseGenerator(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection) = writable {
         when (section) {
-            LibRsSection.Body -> rust("pub use #T;", RuntimeType.Blob(runtimeConfig))
+            LibRsSection.Body -> rust("pub use #T; pub use config::Config;", RuntimeType.Blob(runtimeConfig))
         }
     }
 }
