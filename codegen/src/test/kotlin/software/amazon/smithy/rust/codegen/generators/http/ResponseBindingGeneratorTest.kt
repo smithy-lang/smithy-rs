@@ -80,7 +80,7 @@ class ResponseBindingGeneratorTest {
 
                 ResponseBindingGenerator(
                     testProtocolConfig, operationShape
-                ).generateDeserializeHeaderFn(binding, this)
+                ).generateDeserializeHeaderFn(binding)
             }
         }
     }

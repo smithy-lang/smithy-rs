@@ -29,7 +29,7 @@ impl Error for ParseError {}
 ///
 /// This is separate from `read_many` below because we need to invoke `Instant::read` to take advantage
 /// of comma-aware parsing
-pub fn many_dates<'a>(
+pub fn many_dates(
     values: ValueIter<HeaderValue>,
     format: Format,
 ) -> Result<Vec<Instant>, ParseError> {
@@ -57,9 +57,7 @@ pub fn headers_for_prefix<'a>(
 }
 
 /// Read many comma / header delimited values from HTTP headers for `FromStr` types
-pub fn read_many<T>(
-    values: ValueIter<HeaderValue>,
-) -> Result<Vec<T>, ParseError>
+pub fn read_many<T>(values: ValueIter<HeaderValue>) -> Result<Vec<T>, ParseError>
 where
     T: FromStr,
 {
@@ -117,10 +115,10 @@ mod test {
             .body(())
             .unwrap();
         assert_eq!(
-            read_many::<bool>(test_request.headers().get_all("X-Bool-Multi").iter()).expect("valid"),
+            read_many::<bool>(test_request.headers().get_all("X-Bool-Multi").iter())
+                .expect("valid"),
             vec![true, false, true]
         );
-
 
         assert_eq!(
             read_many::<bool>(test_request.headers().get_all("X-Bool").iter()).unwrap(),
@@ -130,7 +128,8 @@ mod test {
             read_many::<bool>(test_request.headers().get_all("X-Bool-Single").iter()).unwrap(),
             vec![true, false, true, true]
         );
-        read_many::<bool>(test_request.headers().get_all("X-Bool-Invalid").iter()).expect_err("invalid");
+        read_many::<bool>(test_request.headers().get_all("X-Bool-Invalid").iter())
+            .expect_err("invalid");
     }
 
     #[test]
@@ -148,7 +147,6 @@ mod test {
             vec![123, 456, 789]
         );
 
-
         assert_eq!(
             read_many::<u16>(test_request.headers().get_all("X-Num").iter()).unwrap(),
             vec![777]
@@ -157,7 +155,8 @@ mod test {
             read_many::<u16>(test_request.headers().get_all("X-Num-Single").iter()).unwrap(),
             vec![1, 2, 3, 4, 5]
         );
-        read_many::<u16>(test_request.headers().get_all("X-Num-Invalid").iter()).expect_err("invalid");
+        read_many::<u16>(test_request.headers().get_all("X-Num-Invalid").iter())
+            .expect_err("invalid");
     }
 
     #[test]
@@ -173,8 +172,7 @@ mod test {
             headers_for_prefix(test_request.headers(), "X-Prefix-")
                 .map(|(key, header_name)| {
                     let values = test_request.headers().get_all(header_name);
-                    read_many(values.iter())
-                        .map(|v| (key.to_string(), v))
+                    read_many(values.iter()).map(|v| (key.to_string(), v))
                 })
                 .collect();
         let resp = resp.expect("valid");
