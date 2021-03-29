@@ -22,10 +22,12 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -117,7 +119,7 @@ class AwsRestJsonGenerator(
         // Parsing the response works in two phases:
         // 1. Code generate "parse_xyz" methods for each field
         // 2. Code generate a parse_response method which utilizes the parse_xyz methods to set fields on a builder
-        val parseFunctions: Map<String, String> =
+        val parseFunctions: Map<String, Writable> =
             renderParseFunctions(operationShape, httpBindingGenerator, implBlockWriter, bodyShape)
 
         fromResponseFun(implBlockWriter, operationShape) {
@@ -146,7 +148,9 @@ class AwsRestJsonGenerator(
                     ?: throw CodegenException("No parser defined for $member!. This is a bug")
                 // can delete when we don't have `todo!()` here anymore
                 Attribute.Custom("allow(unreachable_code, clippy::diverging_sub_expression)").render(this)
-                rust("{ output = output.${member.setterName()}($parsedValue); }")
+                withBlock("{ output = output.${member.setterName()}(", ") };") {
+                    parsedValue(this)
+                }
             }
 
             val err = if (StructureGenerator.fallibleBuilder(outputShape, symbolProvider)) {
@@ -166,20 +170,23 @@ class AwsRestJsonGenerator(
         httpBindingGenerator: ResponseBindingGenerator,
         implBlockWriter: RustWriter,
         bodyShape: StructureShape?
-    ): Map<String, String> {
+    ): Map<String, Writable> {
         val bindings = httpIndex.getResponseBindings(operationShape)
         val outputShape = operationShape.outputShape(model)
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         return outputShape.members().map { member ->
             val binding = bindings[member.memberName] ?: throw CodegenException("Binding should be defined")
             member.memberName to when (binding.location) {
-                HttpBinding.Location.HEADER -> {
-                    val fnName = httpBindingGenerator.generateDeserializeHeaderFn(binding, implBlockWriter)
-                    """
-                        Self::$fnName(
-                            response.headers()
-                        ).map_err(|_|${implBlockWriter.format(errorSymbol)}::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
+                HttpBinding.Location.HEADER -> writable {
+                    val fnName = httpBindingGenerator.generateDeserializeHeaderFn(binding)
+                    rust(
                         """
+                        #T(
+                            response.headers().get_all(${binding.locationName.dq()}).iter()
+                        ).map_err(|_|${implBlockWriter.format(errorSymbol)}::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
+                        """,
+                        fnName
+                    )
                 }
                 HttpBinding.Location.DOCUMENT -> {
                     check(bodyShape != null) {
@@ -188,7 +195,7 @@ class AwsRestJsonGenerator(
                     // When there is a subset of fields present as the body of the response, we will create a variable
                     // named `parsed_body`. Copy the field from parsed_body into the builder
 
-                    "parsed_body.${symbolProvider.toMemberName(member)}"
+                    writable { rust("parsed_body.${symbolProvider.toMemberName(member)}") }
                 }
                 HttpBinding.Location.PAYLOAD -> {
                     val docShapeHandler: RustWriter.(String) -> Unit = { body ->
@@ -204,19 +211,32 @@ class AwsRestJsonGenerator(
                     val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
                         rust("#T($body).map_err(#T::unhandled)", RuntimeType.SerdeJson("from_slice"), errorSymbol)
                     }
-                    val fnName = httpBindingGenerator.generateDeserializePayloadFn(
+                    val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
                         binding,
                         errorSymbol,
-                        implBlockWriter,
                         docHandler = docShapeHandler,
                         structuredHandler = structureShapeHandler
                     )
-                    "Self::$fnName(response.body().as_ref())?"
+                    writable { rust("#T(response.body().as_ref())?", deserializer) }
                 }
-                HttpBinding.Location.RESPONSE_CODE -> "Some(response.status().as_u16() as _)"
+                HttpBinding.Location.RESPONSE_CODE -> writable("Some(response.status().as_u16() as _)")
+                HttpBinding.Location.PREFIX_HEADERS -> {
+                    val sym = httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)
+                    writable {
+                        rustTemplate(
+                            """
+                        #{deser}(response.headers())
+                             .map_err(|_|
+                                #{err}::unhandled("Failed to parse ${member.memberName} from prefix header `${binding.locationName}")
+                             )?
+                        """,
+                            "deser" to sym, "err" to errorSymbol
+                        )
+                    }
+                }
                 else -> {
                     logger.warning("Unhandled response binding type: ${binding.location}")
-                    "todo!()"
+                    writable("todo!()")
                 }
             }
         }.toMap()

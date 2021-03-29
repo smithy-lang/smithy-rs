@@ -416,6 +416,6 @@ pub mod iso_8601 {
     pub fn read(s: &str) -> Result<(Instant, &str), DateParseError> {
         let delim = s.find('Z').map(|idx| idx + 1).unwrap_or_else(|| s.len());
         let (head, rest) = s.split_at(delim);
-        Ok((parse(dbg!(head))?, &rest))
+        Ok((parse(head)?, &rest))
     }
 }

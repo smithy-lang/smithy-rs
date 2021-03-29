@@ -10,7 +10,10 @@ import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.DocumentShape
+import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
@@ -54,18 +57,59 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
      * }
      * ```
      */
-    fun generateDeserializeHeaderFn(binding: HttpBinding, writer: RustWriter): String {
+    fun generateDeserializeHeaderFn(binding: HttpBinding): RuntimeType {
+        check(binding.location == HttpBinding.Location.HEADER)
         val outputT = symbolProvider.toSymbol(binding.member)
-        val fnName = "parse_from_header_${binding.memberName.toSnakeCase()}"
-        writer.rustBlock(
-            "fn $fnName(headers: &#T::HeaderMap) -> Result<#T, #T::ParseError>",
-            RuntimeType.http,
-            outputT,
-            headerUtil
-        ) {
-            deserializeFromHeader(binding)
+        val fnName = "deser_header_${operationShape.id.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
+        return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
+            writer.rustBlock(
+                "pub fn $fnName(headers: #T::header::ValueIter<http::HeaderValue>) -> Result<#T, #T::ParseError>",
+                RuntimeType.http,
+                outputT,
+                headerUtil
+            ) {
+                deserializeFromHeader(model.expectShape(binding.member.target), binding.member)
+            }
         }
-        return fnName
+    }
+
+    fun generateDeserializePrefixHeaderFn(binding: HttpBinding): RuntimeType {
+        check(binding.location == HttpBinding.Location.PREFIX_HEADERS)
+        val outputT = symbolProvider.toSymbol(binding.member)
+        check(outputT.rustType().stripOuter<RustType.Option>() is RustType.HashMap) { outputT.rustType() }
+        val target = model.expectShape(binding.member.target)
+        check(target is MapShape)
+        val fnName = "deser_prefix_header_${operationShape.id.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
+        val inner = RuntimeType.forInlineFun("${fnName}_inner", "http_serde_inner") {
+            it.rustBlock(
+                "pub fn ${fnName}_inner(headers: #T::header::ValueIter<http::HeaderValue>) -> Result<Option<#T>, #T::ParseError>",
+                RuntimeType.http,
+                symbolProvider.toSymbol(model.expectShape(target.value.target)),
+                headerUtil
+            ) {
+                deserializeFromHeader(model.expectShape(target.value.target), binding.member)
+            }
+        }
+        return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
+            writer.rustBlock(
+                "pub fn $fnName<'a>(header_map: &#T::HeaderMap) -> Result<#T, #T::ParseError>",
+                RuntimeType.http,
+                outputT,
+                headerUtil
+            ) {
+                rust(
+                    """
+                    let headers = #T::headers_for_prefix(&header_map, ${binding.locationName.dq()});
+                    let out: Result<_, _> = headers.map(|(key, header_name)| {
+                        let values = header_map.get_all(header_name);
+                        #T(values.iter()).map(|v| (key.to_string(), v.unwrap()))
+                    }).collect();
+                    out.map(|t|Some(t))
+                """,
+                    headerUtil, inner
+                )
+            }
+        }
     }
 
     /**
@@ -74,19 +118,24 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
     fun generateDeserializePayloadFn(
         binding: HttpBinding,
         errorT: RuntimeType,
-        rustWriter: RustWriter,
         // Deserialize a single structure or union member marked as a payload
         structuredHandler: RustWriter.(String) -> Unit,
         // Deserialize a document type marked as a payload
         docHandler: RustWriter.(String) -> Unit
-    ): String {
+    ): RuntimeType {
         check(binding.location == HttpBinding.Location.PAYLOAD)
         val outputT = symbolProvider.toSymbol(binding.member)
-        val fnName = "parse_from_payload_${binding.memberName.toSnakeCase()}"
-        rustWriter.rustBlock("fn $fnName(body: &[u8]) -> Result<#T, #T>", outputT, errorT) {
-            deserializePayloadBody(binding, errorT, structuredHandler = structuredHandler, docShapeHandler = docHandler)
+        val fnName = "deser_payload_${operationShape.id.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
+        return RuntimeType.forInlineFun(fnName, "http_serde") { rustWriter ->
+            rustWriter.rustBlock("pub fn $fnName(body: &[u8]) -> Result<#T, #T>", outputT, errorT) {
+                deserializePayloadBody(
+                    binding,
+                    errorT,
+                    structuredHandler = structuredHandler,
+                    docShapeHandler = docHandler
+                )
+            }
         }
-        return fnName
     }
 
     private fun RustWriter.deserializePayloadBody(
@@ -129,9 +178,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
     /** Parse a value from a header
      * This function produces an expression which produces the precise output type required by the output shape
      */
-    private fun RustWriter.deserializeFromHeader(binding: HttpBinding) {
-        check(binding.location == HttpBinding.Location.HEADER)
-        val targetType = model.expectShape(binding.member.target)
+    private fun RustWriter.deserializeFromHeader(targetType: Shape, memberShape: MemberShape) {
         val rustType = symbolProvider.toSymbol(targetType).rustType().stripOuter<RustType.Option>()
         val (coreType, coreShape) = if (targetType is CollectionShape) {
             rustType.stripOuter<RustType.Container>() to model.expectShape(targetType.member.target)
@@ -142,19 +189,19 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         if (coreType == instant) {
             val timestampFormat =
                 index.determineTimestampFormat(
-                    binding.member,
+                    memberShape,
                     HttpBinding.Location.HEADER,
                     defaultTimestampFormat
                 )
             val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
             rust(
-                "let $parsedValue: Vec<${coreType.render(true)}> = #T::many_dates(&headers, ${binding.locationName.dq()}, #T)?;",
+                "let $parsedValue: Vec<${coreType.render(true)}> = #T::many_dates(headers, #T)?;",
                 headerUtil,
                 timestampFormatType
             )
         } else {
             rust(
-                "let $parsedValue: Vec<${coreType.render(true)}> = #T::read_many(&headers, ${binding.locationName.dq()})?;",
+                "let $parsedValue: Vec<${coreType.render(true)}> = #T::read_many(headers)?;",
                 headerUtil
             )
             if (coreShape.hasTrait(MediaTypeTrait::class.java)) {
