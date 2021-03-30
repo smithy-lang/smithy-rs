@@ -209,6 +209,37 @@ class AwsRestJsonGenerator(
                 "from_slice" to RuntimeType.SerdeJson("from_slice"),
                 "err_symbol" to errorSymbol
             )
+            Attribute.AllowUnusedMut.render(this)
+            rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
+            rust("let _ = response;")
+            if (bodyShape != null) {
+                rustTemplate(
+                    """
+                let body_slice = response.body().as_ref();
+
+                let parsed_body: #{body} = if body_slice.is_empty() {
+                    #{body}::default()
+                } else {
+                    #{from_slice}(response.body().as_ref()).map_err(#{err_symbol}::unhandled)?
+                };
+            """,
+                    "body" to symbolProvider.toSymbol(bodyShape),
+                    "from_slice" to RuntimeType.SerdeJson("from_slice"),
+                    "err_symbol" to errorSymbol
+                )
+            }
+            outputShape.members().forEach { member ->
+                val parsedValue = parseFunctions[member.memberName]
+                    ?: throw CodegenException("No parser defined for $member!. This is a bug")
+                // can delete when we don't have `todo!()` here anymore
+                Attribute.Custom("allow(unreachable_code, clippy::diverging_sub_expression)").render(this)
+                rust("{ output = output.${member.setterName()}($parsedValue); }")
+            }
+
+            val err = if (StructureGenerator.fallibleBuilder(outputShape, symbolProvider)) {
+                ".map_err(|s|${format(errorSymbol)}::unhandled(s))?"
+            } else ""
+            rust("Ok(output.build()$err)")
         }
         outputShape.members().forEach { member ->
             val parsedValue = parseFunctions[member.memberName]
@@ -261,6 +292,72 @@ class AwsRestJsonGenerator(
         bodyShape: StructureShape?
     ): Map<String, String> {
         return shape.members().map { member ->
+            val binding = bindings[member.memberName] ?: throw CodegenException("Binding should be defined")
+            member.memberName to when (binding.location) {
+                HttpBinding.Location.HEADER -> {
+                    val fnName = httpBindingGenerator.generateDeserializeHeaderFn(binding, implBlockWriter)
+                    """
+                        Self::$fnName(
+                            response.headers()
+                        ).map_err(|_|${implBlockWriter.format(errorSymbol)}::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
+                        """
+                }
+                HttpBinding.Location.DOCUMENT -> {
+                    check(bodyShape != null) {
+                        "$bodyShape was null but a member specified document bindings. This is a bug."
+                    }
+                    // When there is a subset of fields present as the body of the response, we will create a variable
+                    // named `parsed_body`. Copy the field from parsed_body into the builder
+
+                    "parsed_body.${symbolProvider.toMemberName(member)}"
+                }
+                HttpBinding.Location.PAYLOAD -> {
+                    val docShapeHandler: RustWriter.(String) -> Unit = { body ->
+                        rustTemplate(
+                            """
+                            #{serde_json}::from_slice::<#{doc_json}::DeserDoc>($body).map(|d|d.0).map_err(#{error_symbol}::unhandled)
+                        """,
+                            "doc_json" to RuntimeType.DocJson,
+                            "serde_json" to CargoDependency.SerdeJson.asType(),
+                            "error_symbol" to errorSymbol
+                        )
+                    }
+                    val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
+                        rust("#T($body).map_err(#T::unhandled)", RuntimeType.SerdeJson("from_slice"), errorSymbol)
+                    }
+                    val fnName = httpBindingGenerator.generateDeserializePayloadFn(
+                        binding,
+                        errorSymbol,
+                        implBlockWriter,
+                        docHandler = docShapeHandler,
+                        structuredHandler = structureShapeHandler
+                    )
+                    "Self::$fnName(response.body().as_ref())?"
+                }
+                HttpBinding.Location.RESPONSE_CODE -> "Some(response.status().as_u16() as _)"
+                else -> {
+                    logger.warning("Unhandled response binding type: ${binding.location}")
+                    "todo!()"
+                }
+            }
+        }.toMap()
+    }
+
+    /**
+     * Generate a parser & a parsed value converter for each output member of `operationShape`
+     *
+     * Returns a map with key = memberName, value = parsedValue
+     */
+    private fun renderParseFunctions(
+        operationShape: OperationShape,
+        httpBindingGenerator: ResponseBindingGenerator,
+        implBlockWriter: RustWriter,
+        bodyShape: StructureShape?
+    ): Map<String, String> {
+        val bindings = httpIndex.getResponseBindings(operationShape)
+        val outputShape = operationShape.outputShape(model)
+        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        return outputShape.members().map { member ->
             val binding = bindings[member.memberName] ?: throw CodegenException("Binding should be defined")
             member.memberName to when (binding.location) {
                 HttpBinding.Location.HEADER -> {
