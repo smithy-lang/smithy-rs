@@ -300,6 +300,6 @@ class BasicAwsJsonGenerator(
                 write("Err(e) => #T::unhandled(e)", errorSymbol)
             }
         }
-        write("_ => #T::unhandled(generic)", errorSymbol)
+        write("_ => #T::generic(generic)", errorSymbol)
     }
 }

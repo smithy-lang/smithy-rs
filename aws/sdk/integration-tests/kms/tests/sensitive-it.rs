@@ -41,3 +41,22 @@ fn errors_are_retryable() {
     let retry_kind = parts.retry_policy.classify(err.as_ref());
     assert_eq!(retry_kind, RetryKind::Error(ErrorKind::ThrottlingError));
 }
+
+#[test]
+fn unmodeled_errors_are_retryable() {
+    let conf = kms::Config::builder().build();
+    let (_, parts) = CreateAlias::builder().build(&conf).expect("valid request").into_request_response();
+    let http_response = http::Response::builder()
+        .status(400)
+        .body(r#"{ "code": "ThrottlingException" }"#)
+        .unwrap();
+    let err = parts
+        .response_handler
+        .parse_response(&http_response)
+        .map_err(|e| SdkError::ServiceError {
+            err: e,
+            raw: http_response.map(ResponseBody::from_static),
+        });
+    let retry_kind = parts.retry_policy.classify(err.as_ref());
+    assert_eq!(retry_kind, RetryKind::Error(ErrorKind::ThrottlingError));
+}
