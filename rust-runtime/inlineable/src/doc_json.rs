@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
+use serde::de::{Error, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use smithy_types::{Document, Number};
-use serde::de::{Visitor, Error, SeqAccess, MapAccess};
-use std::fmt::Formatter;
-use std::fmt;
 use std::collections::HashMap;
+use std::fmt;
+use std::fmt::Formatter;
 
 #[allow(unused)]
 pub fn json_to_doc(json: Value) -> Document {
@@ -57,74 +57,117 @@ impl<'de> Visitor<'de> for DocVisitor {
         write!(formatter, "Expecting a JSON-like document")
     }
 
-    fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E> where
-        E: Error, {
+    fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         Ok(Document::Bool(v))
     }
 
-    fn visit_i8<E>(self, v: i8) -> Result<Self::Value, E> where
-        E: Error, {
-        Ok(Document::Number(serde_num_to_num(&serde_json::Number::from(v))))
+    fn visit_i8<E>(self, v: i8) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        Ok(Document::Number(serde_num_to_num(
+            &serde_json::Number::from(v),
+        )))
     }
 
-    fn visit_i16<E>(self, v: i16) -> Result<Self::Value, E> where
-        E: Error, {
-        Ok(Document::Number(serde_num_to_num(&serde_json::Number::from(v))))
+    fn visit_i16<E>(self, v: i16) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        Ok(Document::Number(serde_num_to_num(
+            &serde_json::Number::from(v),
+        )))
     }
 
-    fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E> where
-        E: Error, {
-        Ok(Document::Number(serde_num_to_num(&serde_json::Number::from(v))))
+    fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        Ok(Document::Number(serde_num_to_num(
+            &serde_json::Number::from(v),
+        )))
     }
 
-    fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E> where
-        E: Error, {
-        Ok(Document::Number(serde_num_to_num(&serde_json::Number::from(v))))
+    fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        Ok(Document::Number(serde_num_to_num(
+            &serde_json::Number::from(v),
+        )))
     }
 
-    fn visit_u8<E>(self, v: u8) -> Result<Self::Value, E> where
-        E: Error, {
-        Ok(Document::Number(serde_num_to_num(&serde_json::Number::from(v))))
+    fn visit_u8<E>(self, v: u8) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        Ok(Document::Number(serde_num_to_num(
+            &serde_json::Number::from(v),
+        )))
     }
 
-    fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E> where
-        E: Error, {
-        Ok(Document::Number(serde_num_to_num(&serde_json::Number::from(v))))
+    fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        Ok(Document::Number(serde_num_to_num(
+            &serde_json::Number::from(v),
+        )))
     }
 
-    fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E> where
-        E: Error, {
-        Ok(Document::Number(serde_num_to_num(&serde_json::Number::from(v))))
+    fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        Ok(Document::Number(serde_num_to_num(
+            &serde_json::Number::from(v),
+        )))
     }
 
-    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E> where
-        E: Error, {
-        Ok(Document::Number(serde_num_to_num(&serde_json::Number::from(v))))
+    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        Ok(Document::Number(serde_num_to_num(
+            &serde_json::Number::from(v),
+        )))
     }
 
-    fn visit_f32<E>(self, v: f32) -> Result<Self::Value, E> where
-        E: Error, {
+    fn visit_f32<E>(self, v: f32) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         Ok(Document::Number(Number::Float(v as _)))
     }
 
-    fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E> where
-        E: Error, {
+    fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         Ok(Document::Number(Number::Float(v as _)))
     }
 
-    fn visit_char<E>(self, v: char) -> Result<Self::Value, E> where
-        E: Error, {
+    fn visit_char<E>(self, v: char) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         Ok(Document::String(v.to_string()))
     }
 
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> where
-        E: Error, {
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
         Ok(Document::String(v.to_string()))
-
     }
 
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, <A as SeqAccess<'de>>::Error> where
-        A: SeqAccess<'de>, {
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, <A as SeqAccess<'de>>::Error>
+    where
+        A: SeqAccess<'de>,
+    {
         let mut out: Vec<Document> = vec![];
         while let Some(next) = seq.next_element::<DeserDoc>()? {
             out.push(next.0);
@@ -132,8 +175,10 @@ impl<'de> Visitor<'de> for DocVisitor {
         Ok(Document::Array(out))
     }
 
-    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, <A as MapAccess<'de>>::Error> where
-        A: MapAccess<'de>, {
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, <A as MapAccess<'de>>::Error>
+    where
+        A: MapAccess<'de>,
+    {
         let mut out: HashMap<String, Document> = HashMap::new();
         while let Some((k, v)) = map.next_entry::<String, DeserDoc>()? {
             out.insert(k, v.0);
@@ -144,8 +189,8 @@ impl<'de> Visitor<'de> for DocVisitor {
 
 impl<'de> Deserialize<'de> for DeserDoc {
     fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
-        where
-            D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         Ok(DeserDoc(deserializer.deserialize_any(DocVisitor)?))
     }
