@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
@@ -117,32 +116,7 @@ class AwsRestJsonGenerator(
         val bodyShape = bodyId?.let { model.expectShape(bodyId, StructureShape::class.java) }
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         val httpBindingGenerator = ResponseBindingGenerator(protocolConfig, operationShape)
-
-        // Parsing the response works in two phases:
-        // 1. Code generate "parse_xyz" methods for each field
-        // 2. Code generate a parse_response method which utilizes the parse_xyz methods to set fields on a builder
-        val errorParsers: Map<ShapeId, Map<String, Writable>> = operationShape.errors.map { shapeId ->
-            val errorShape = model.expectShape(shapeId, StructureShape::class.java)
-            shapeId to renderParseFunctions(
-                errorShape,
-                httpIndex.getResponseBindings(errorShape),
-                operationShape,
-                httpBindingGenerator,
-                implBlockWriter,
-                errorShape
-            )
-        }.toMap()
-
         val jsonErrors = RuntimeType.awsJsonErrors(runtimeConfig)
-        val parseFunctions: Map<String, Writable> =
-            renderParseFunctions(
-                operationShape.outputShape(model),
-                httpIndex.getResponseBindings(operationShape),
-                operationShape,
-                httpBindingGenerator,
-                implBlockWriter,
-                bodyShape
-            )
 
         fromResponseFun(implBlockWriter, operationShape) {
             rustBlock("if #T::is_error(&response) && response.status().as_u16() != ${httpTrait.code}", jsonErrors) {
@@ -172,24 +146,34 @@ class AwsRestJsonGenerator(
                                 "Code2" => deserialize<Code2>(body)
                             }
                          */
-                        parseErrorVariants(operationShape, errorSymbol, errorParsers)
+                        parseErrorVariants(operationShape, errorSymbol)
                     }
                 } else {
                     write("return Err(#T::generic(generic))", errorSymbol)
                 }
             }
             withBlock("Ok({", "})") {
-                renderShapeParser(outputShape, bodyShape, errorSymbol, parseFunctions)
+                renderShapeParser(operationShape, outputShape, bodyShape, httpIndex.getResponseBindings(operationShape), httpBindingGenerator, errorSymbol)
             }
         }
     }
 
     private fun RustWriter.renderShapeParser(
+        operationShape: OperationShape,
         outputShape: StructureShape,
         bodyShape: StructureShape?,
+        bindings: Map<String, HttpBinding>,
+        httpBindingGenerator: ResponseBindingGenerator,
         errorSymbol: RuntimeType,
-        parseFunctions: Map<String, Writable>
     ) {
+        val parseFunctions = renderParseFunctions(
+            outputShape = outputShape,
+            bindings = bindings,
+            operationShape = operationShape,
+            httpBindingGenerator = httpBindingGenerator,
+            implBlockWriter = this,
+            bodyShape = bodyShape
+        )
         Attribute.AllowUnusedMut.render(this)
         rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
         rust("let _ = response;")
@@ -226,24 +210,26 @@ class AwsRestJsonGenerator(
     private fun RustWriter.parseErrorVariants(
         operationShape: OperationShape,
         errorSymbol: RuntimeType,
-        errorParsers: Map<ShapeId, Map<String, Writable>>
     ) {
         operationShape.errors.forEach { error ->
             val variantName = symbolProvider.toSymbol(model.expectShape(error)).name
-            val parser = errorParsers[error.toShapeId()] ?: throw CodegenException("Parser must be defined")
             val shape = model.expectShape(error, StructureShape::class.java)
             withBlock(
-                """${error.name.dq()} => #1T {
-                meta: generic,
-                kind: #1TKind::$variantName({""",
-                "})" +
-                    "},",
+                "${error.name.dq()} => #1T { meta: generic, kind: #1TKind::$variantName({",
+                "})},",
                 errorSymbol
             ) {
-                this.renderShapeParser(shape, shape, errorSymbol, parser)
+                this.renderShapeParser(
+                    operationShape = operationShape,
+                    outputShape = shape,
+                    bindings = httpIndex.getResponseBindings(shape),
+                    bodyShape = shape,
+                    httpBindingGenerator = ResponseBindingGenerator(protocolConfig, operationShape),
+                    errorSymbol = errorSymbol
+                )
             }
         }
-        write("_ => #T::unhandled(generic)", errorSymbol)
+        write("_ => #T::generic(generic)", errorSymbol)
     }
 
     /**
