@@ -105,7 +105,23 @@ class AwsRestJsonGenerator(
 
     private val model = protocolConfig.model
     override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
-        // TODO: Implement parsing traits for AwsRestJson
+        val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
+        val operationName = symbolProvider.toSymbol(operationShape).name
+        operationWriter.rustTemplate(
+            """
+            impl #{parse_strict} for $operationName {
+                type Output = Result<#{output}, #{error}>;
+                fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
+                    self.parse_response(response)
+                }
+            }
+        """,
+            "parse_strict" to RuntimeType.parseStrict(symbolProvider.config().runtimeConfig),
+            "output" to outputSymbol,
+            "error" to operationShape.errorSymbol(symbolProvider),
+            "response" to RuntimeType.Http("Response"),
+            "bytes" to RuntimeType.Bytes
+        )
     }
 
     override fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape) {
@@ -114,7 +130,6 @@ class AwsRestJsonGenerator(
         val bodyId = outputShape.expectTrait(SyntheticOutputTrait::class.java).body
         val bodyShape = bodyId?.let { model.expectShape(bodyId, StructureShape::class.java) }
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
-        val httpBindingGenerator = ResponseBindingGenerator(protocolConfig, operationShape)
         val jsonErrors = RuntimeType.awsJsonErrors(runtimeConfig)
 
         fromResponseFun(implBlockWriter, operationShape) {
@@ -157,23 +172,29 @@ class AwsRestJsonGenerator(
                     outputShape,
                     bodyShape,
                     httpIndex.getResponseBindings(operationShape),
-                    httpBindingGenerator,
                     errorSymbol
                 )
             }
         }
     }
 
+    /**
+     * Generate a parser for [outputShape] given [bindings].
+     *
+     * The generated code is an expression with a return type of Result<[outputShape], [errorSymbol]> and can be
+     * used for either error shapes or output shapes.
+     */
     private fun RustWriter.renderShapeParser(
         operationShape: OperationShape,
         outputShape: StructureShape,
         bodyShape: StructureShape?,
         bindings: Map<String, HttpBinding>,
-        httpBindingGenerator: ResponseBindingGenerator,
         errorSymbol: RuntimeType,
     ) {
+        val httpBindingGenerator = ResponseBindingGenerator(protocolConfig, operationShape)
         Attribute.AllowUnusedMut.render(this)
         rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
+        // avoid non-usage warnings for response
         rust("let _ = response;")
         if (bodyShape != null && bindings.isNotEmpty()) {
             rustTemplate(
@@ -181,6 +202,9 @@ class AwsRestJsonGenerator(
                     let body_slice = response.body().as_ref();
 
                     let parsed_body: #{body} = if body_slice.is_empty() {
+                        // To enable JSON parsing to succeed, replace an empty body
+                        // with an empty JSON body. If a member was required, it will fail slightly later
+                        // during the operation construction phase.
                         #{from_slice}(b"{}").map_err(#{err_symbol}::unhandled)?
                     } else {
                         #{from_slice}(response.body().as_ref()).map_err(#{err_symbol}::unhandled)?
@@ -192,11 +216,10 @@ class AwsRestJsonGenerator(
             )
         }
         outputShape.members().forEach { member ->
-            val parsedValue = renderParseFunctions(
+            val parsedValue = renderBindingParser(
                 bindings[member.memberName]!!,
                 operationShape,
                 httpBindingGenerator,
-                this,
                 bodyShape
             )
             withBlock("output = output.${member.setterName()}(", ");") {
@@ -222,12 +245,11 @@ class AwsRestJsonGenerator(
                 "})},",
                 errorSymbol
             ) {
-                this.renderShapeParser(
+                renderShapeParser(
                     operationShape = operationShape,
                     outputShape = shape,
                     bindings = httpIndex.getResponseBindings(shape),
                     bodyShape = shape,
-                    httpBindingGenerator = ResponseBindingGenerator(protocolConfig, operationShape),
                     errorSymbol = errorSymbol
                 )
             }
@@ -240,11 +262,10 @@ class AwsRestJsonGenerator(
      *
      * Returns a map with key = memberName, value = parsedValue
      */
-    private fun renderParseFunctions(
+    private fun renderBindingParser(
         binding: HttpBinding,
         operationShape: OperationShape,
         httpBindingGenerator: ResponseBindingGenerator,
-        implBlockWriter: RustWriter,
         bodyShape: StructureShape?
     ): Writable {
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
@@ -255,9 +276,9 @@ class AwsRestJsonGenerator(
                 rust(
                     """
                         #T(response.headers())
-                            .map_err(|_|${implBlockWriter.format(errorSymbol)}::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
+                            .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
                         """,
-                    fnName
+                    fnName, errorSymbol
                 )
             }
             HttpBinding.Location.DOCUMENT -> {
