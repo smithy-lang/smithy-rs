@@ -91,7 +91,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
             )
         )
         try {
-            "cargo fmt".runCommand(fileManifest.baseDir, timeout = 5)
+            "cargo fmt".runCommand(fileManifest.baseDir, timeout = 10)
         } catch (_: CommandFailed) {
             logger.warning("Generated output did not parse [${service.id}]")
         }
