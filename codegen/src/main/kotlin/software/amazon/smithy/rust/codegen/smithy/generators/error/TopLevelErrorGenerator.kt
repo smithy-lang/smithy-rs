@@ -65,7 +65,6 @@ class TopLevelErrorGenerator(protocolConfig: ProtocolConfig, private val operati
         }
     }
 
-
     private fun RustWriter.renderImplFrom(
         operationShape: OperationShape,
     ) {
