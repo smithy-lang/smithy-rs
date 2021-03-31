@@ -26,7 +26,7 @@ fun String.runCommand(workdir: Path? = null, environment: Map<String, String> = 
 
     try {
         proc.waitFor(timeout, TimeUnit.SECONDS)
-    } catch(_: IllegalThreadStateException) {
+    } catch (_: IllegalThreadStateException) {
         throw CommandFailed("Timeout")
     }
     val stdErr = proc.errorStream.bufferedReader().readText()
