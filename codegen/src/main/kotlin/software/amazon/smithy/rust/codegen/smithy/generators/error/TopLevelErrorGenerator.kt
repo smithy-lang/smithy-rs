@@ -45,32 +45,51 @@ class TopLevelErrorGenerator(protocolConfig: ProtocolConfig, private val operati
     private val sdkError = CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType().member("result::SdkError")
     fun render(crate: RustCrate) {
         crate.withModule(RustModule.default("error_meta", false)) { writer ->
-            renderDefinition(writer)
+            writer.renderDefinition()
+            writer.renderImplDisplay()
+            // Every operation error can be converted into service::Error
             operations.forEach { operationShape ->
-                val operationError = operationShape.errorSymbol(symbolProvider)
-                writer.rustBlock("impl From<#T<#T>> for Error", sdkError, operationError) {
-                    rustBlock("fn from(err: #T<#T>) -> Self", sdkError, operationError) {
-                        rustBlock("match err") {
-                            val operationErrors = operationShape.errors.map { model.expectShape(it) }
-                            rustBlock("#T::ServiceError { err, ..} => match err.kind", sdkError) {
-                                operationErrors.forEach { errorShape ->
-                                    val errSymbol = symbolProvider.toSymbol(errorShape)
-                                    rust("#TKind::${errSymbol.name}(inner) => Error::${errSymbol.name}(inner),", operationError)
-                                }
-                                rust("#TKind::Unhandled(inner) => Error::Unhandled(inner),", operationError)
-                            }
-                            rust("_ => Error::Unhandled(err.into()),")
-                        }
-                    }
-                }
+                writer.renderImplFrom(operationShape)
             }
+            writer.rust("impl #T for Error {}", RuntimeType.StdError)
         }
         crate.lib { it.rust("pub use error_meta::Error;") }
     }
 
-    private fun renderDefinition(writer: RustWriter) {
-        RustMetadata(additionalAttributes = listOf(Attribute.NonExhaustive), public = true).withDerives(RuntimeType.Debug).render(writer)
-        writer.rustBlock("enum Error") {
+    private fun RustWriter.renderImplDisplay() {
+        rustBlock("impl std::fmt::Display for Error") {
+            rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
+                // For now, just delegate to the debug implementation
+                rust("""write!(f, "{:?}", &self)""")
+            }
+        }
+    }
+
+
+    private fun RustWriter.renderImplFrom(
+        operationShape: OperationShape,
+    ) {
+        val operationError = operationShape.errorSymbol(symbolProvider)
+        rustBlock("impl From<#T<#T>> for Error", sdkError, operationError) {
+            rustBlock("fn from(err: #T<#T>) -> Self", sdkError, operationError) {
+                rustBlock("match err") {
+                    val operationErrors = operationShape.errors.map { model.expectShape(it) }
+                    rustBlock("#T::ServiceError { err, ..} => match err.kind", sdkError) {
+                        operationErrors.forEach { errorShape ->
+                            val errSymbol = symbolProvider.toSymbol(errorShape)
+                            rust("#TKind::${errSymbol.name}(inner) => Error::${errSymbol.name}(inner),", operationError)
+                        }
+                        rust("#TKind::Unhandled(inner) => Error::Unhandled(inner),", operationError)
+                    }
+                    rust("_ => Error::Unhandled(err.into()),")
+                }
+            }
+        }
+    }
+
+    private fun RustWriter.renderDefinition() {
+        RustMetadata(additionalAttributes = listOf(Attribute.NonExhaustive), public = true).withDerives(RuntimeType.Debug).render(this)
+        rustBlock("enum Error") {
             allErrors.forEach { error ->
                 val sym = symbolProvider.toSymbol(error)
                 rust("${sym.name}(#T),", sym)
