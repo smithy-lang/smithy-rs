@@ -13,7 +13,7 @@ use smithy.test#httpResponseTests
 @restJson1
 service RestJsonExtras {
     version: "2019-12-16",
-    operations: [EnumPayload, StringPayload, PrimitiveIntHeader]
+    operations: [EnumPayload, StringPayload, PrimitiveIntHeader, EnumQuery]
 }
 
 @http(uri: "/EnumPayload", method: "POST")
@@ -81,4 +81,24 @@ structure PrimitiveIntHeaderInput {
     @httpHeader("x-field")
     @required
     field: PrimitiveInt
+}
+
+@http(uri: "/foo/{enum}", method: "GET")
+@httpRequestTests([
+    {
+        id: "EnumQueryRequest",
+        uri: "/foo/enumvalue",
+        params: { enum: "enumvalue" },
+        method: "GET",
+        protocol: "aws.protocols#restJson1"
+    }
+])
+operation EnumQuery {
+    input: EnumQueryInput
+}
+
+structure EnumQueryInput {
+    @httpLabel
+    @required
+    enum: StringEnum
 }

@@ -45,6 +45,11 @@ class EnumGenerator(
             writer.insertTrailingNewline()
             // impl Blah { pub fn as_str(&self) -> &str
             implBlock()
+            writer.rustBlock("impl AsRef<str> for $enumName") {
+                writer.rustBlock("fn as_ref(&self) -> &str") {
+                    rust("self.as_str()")
+                }
+            }
         } else {
             renderUnamedEnum()
         }
@@ -66,6 +71,7 @@ class EnumGenerator(
                 }
             }
         }
+
 
         writer.rustBlock("impl <T> #T<T> for $enumName where T: #T<str>", RuntimeType.From, RuntimeType.AsRef) {
             writer.rustBlock("fn from(s: T) -> Self") {
@@ -132,9 +138,9 @@ class EnumGenerator(
     }
 
     private fun renderFromStr() {
-        writer.rustBlock("impl <T> #T<T> for $enumName where T: #T<str>", RuntimeType.From, RuntimeType.AsRef) {
-            writer.rustBlock("fn from(s: T) -> Self") {
-                writer.rustBlock("match s.as_ref()") {
+        writer.rustBlock("impl #T<&str> for $enumName", RuntimeType.From) {
+            writer.rustBlock("fn from(s: &str) -> Self") {
+                writer.rustBlock("match s") {
                     sortedMembers.forEach { member ->
                         write(""""${member.value}" => $enumName::${member.derivedName()},""")
                     }

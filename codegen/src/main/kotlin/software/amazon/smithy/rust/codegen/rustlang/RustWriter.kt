@@ -309,14 +309,6 @@ class RustWriter private constructor(
             return formatter.apply(r, "")
         }
 
-    fun useAs(target: Shape, base: String): String {
-        return if (target.hasTrait(EnumTrait::class.java)) {
-            "$base.as_str()"
-        } else {
-            base
-        }
-    }
-
     fun addDepsRecursively(symbol: Symbol) {
         addDependency(symbol)
         symbol.references.forEach { addDepsRecursively(it.symbol) }
