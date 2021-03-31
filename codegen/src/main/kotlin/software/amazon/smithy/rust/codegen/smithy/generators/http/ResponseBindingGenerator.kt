@@ -181,6 +181,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
      */
     private fun RustWriter.deserializeFromHeader(targetType: Shape, memberShape: MemberShape) {
         val rustType = symbolProvider.toSymbol(targetType).rustType().stripOuter<RustType.Option>()
+        val fieldRequired = symbolProvider.toSymbol(memberShape).rustType() !is RustType.Option
         val (coreType, coreShape) = if (targetType is CollectionShape) {
             rustType.stripOuter<RustType.Container>() to model.expectShape(targetType.member.target)
         } else {
@@ -240,8 +241,9 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                 """
                 )
             else ->
-                rustTemplate(
-                    """
+                if (!fieldRequired) {
+                    rustTemplate(
+                        """
                     if $parsedValue.len() > 1 {
                         Err(#{header_util}::ParseError)
                     } else {
@@ -249,8 +251,22 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                         Ok($parsedValue.pop())
                     }
                 """,
-                    "header_util" to headerUtil
-                )
+                        "header_util" to headerUtil
+                    )
+
+                } else {
+                    rustTemplate(
+                        """
+                    if $parsedValue.len() > 1 {
+                        Err(#{header_util}::ParseError)
+                    } else {
+                        let mut $parsedValue = $parsedValue;
+                        $parsedValue.pop().ok_or(#{header_util}::ParseError)
+                    }
+                """,
+                        "header_util" to headerUtil
+                    )
+                }
         }
     }
 }

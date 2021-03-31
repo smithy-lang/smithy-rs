@@ -5,6 +5,7 @@ namespace aws.protocoltests.restjson
 use aws.protocols#restJson1
 use aws.api#service
 use smithy.test#httpRequestTests
+use smithy.test#httpResponseTests
 
 
 /// A REST JSON service that sends JSON requests and responses.
@@ -12,7 +13,7 @@ use smithy.test#httpRequestTests
 @restJson1
 service RestJsonExtras {
     version: "2019-12-16",
-    operations: [EnumPayload, StringPayload]
+    operations: [EnumPayload, StringPayload, PrimitiveIntHeader]
 }
 
 @http(uri: "/EnumPayload", method: "POST")
@@ -58,4 +59,26 @@ operation StringPayload {
 structure StringPayloadInput {
     @httpPayload
     payload: String
+}
+
+@httpResponseTests([
+    {
+        id: "DeserPrimitiveHeader",
+        protocol: "aws.protocols#restJson1",
+        code: 200,
+        headers: { "x-field": "123" },
+        params: { field: 123 }
+    }
+])
+@http(uri: "/primitive", method: "POST")
+operation PrimitiveIntHeader {
+    output: PrimitiveIntHeaderInput
+}
+
+integer PrimitiveInt
+
+structure PrimitiveIntHeaderInput {
+    @httpHeader("x-field")
+    @required
+    field: PrimitiveInt
 }
