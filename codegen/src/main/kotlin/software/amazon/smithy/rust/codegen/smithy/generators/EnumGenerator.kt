@@ -72,7 +72,6 @@ class EnumGenerator(
             }
         }
 
-
         writer.rustBlock("impl <T> #T<T> for $enumName where T: #T<str>", RuntimeType.From, RuntimeType.AsRef) {
             writer.rustBlock("fn from(s: T) -> Self") {
                 write("$enumName(s.as_ref().to_owned())")

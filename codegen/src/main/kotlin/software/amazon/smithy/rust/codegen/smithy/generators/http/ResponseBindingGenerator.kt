@@ -253,7 +253,6 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                 """,
                         "header_util" to headerUtil
                     )
-
                 } else {
                     rustTemplate(
                         """
