@@ -24,7 +24,11 @@ fun String.runCommand(workdir: Path? = null, environment: Map<String, String> = 
     environment.forEach { (k, v) -> env[k] = v }
     val proc = builder.start()
 
-    proc.waitFor(timeout, TimeUnit.SECONDS)
+    try {
+        proc.waitFor(timeout, TimeUnit.SECONDS)
+    } catch(_: IllegalThreadStateException) {
+        throw CommandFailed("Timeout")
+    }
     val stdErr = proc.errorStream.bufferedReader().readText()
     val stdOut = proc.inputStream.bufferedReader().readText()
     val output = "$stdErr\n$stdOut"
