@@ -146,7 +146,6 @@ class BasicAwsJsonGenerator(
 ) : HttpProtocolGenerator(protocolConfig) {
     private val model = protocolConfig.model
     override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
-        // All AWS JSON protocols do NOT support streaming shapes
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
         val operationName = symbolProvider.toSymbol(operationShape).name
         operationWriter.rustTemplate(
@@ -223,8 +222,6 @@ class BasicAwsJsonGenerator(
         val jsonErrors = RuntimeType.awsJsonErrors(protocolConfig.runtimeConfig)
         fromResponseFun(implBlockWriter, operationShape) {
             rustBlock("if #T::is_error(&response)", jsonErrors) {
-                // TODO: experiment with refactoring this segment into `error_code.rs`. Currently it isn't
-                // to avoid the need to double deserialize the body.
                 rustTemplate(
                     """
                     let body = #{sj}::from_slice(response.body().as_ref())

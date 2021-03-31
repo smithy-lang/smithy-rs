@@ -168,6 +168,8 @@ typealias Writable = RustWriter.() -> Unit
  */
 fun writable(w: Writable): Writable = w
 
+fun writable(w: String): Writable = writable { rust(w) }
+
 class RustWriter private constructor(
     private val filename: String,
     val namespace: String,
@@ -344,7 +346,7 @@ class RustWriter private constructor(
                     addDepsRecursively(t)
                     t.rustType().render(fullyQualified = true)
                 }
-                else -> throw CodegenException("Invalid type provided to RustSymbolFormatter")
+                else -> throw CodegenException("Invalid type provided to RustSymbolFormatter: $t")
             }
         }
     }
