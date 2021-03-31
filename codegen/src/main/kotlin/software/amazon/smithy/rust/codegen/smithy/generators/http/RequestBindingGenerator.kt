@@ -203,12 +203,11 @@ class RequestBindingGenerator(
     private fun headerFmtFun(target: Shape, member: MemberShape, targetName: String): String {
         return when {
             target.isStringShape -> {
-                /*val func = */ if (target.hasTrait(MediaTypeTrait::class.java)) {
+                if (target.hasTrait(MediaTypeTrait::class.java)) {
                     val func = writer.format(RuntimeType.Base64Encode(runtimeConfig))
-                    "$func(&${writer.useAs(target, targetName)})"
+                    "$func(&$targetName)"
                 } else {
-                    writer.useAs(target, targetName)
-                    // writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_string"))
+                    "AsRef::<str>::as_ref($targetName)"
                 }
             }
             target.isTimestampShape -> {
@@ -311,7 +310,7 @@ class RequestBindingGenerator(
         return when {
             target.isStringShape -> {
                 val func = writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_string"))
-                "$func(&${writer.useAs(target, targetName)})"
+                "$func(&$targetName)"
             }
             target.isTimestampShape -> {
                 val timestampFormat =
