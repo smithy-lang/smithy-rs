@@ -8,7 +8,6 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -58,7 +57,7 @@ class ApiVersion(private val runtimeConfig: RuntimeConfig, serviceTrait: Service
     }
 }
 
-fun RuntimeConfig.awsHttp(): CargoDependency = CargoDependency("aws-http", Local(this.relativePath))
+fun RuntimeConfig.awsHttp(): CargoDependency = awsRuntimeDependency("aws-http")
 fun RuntimeConfig.userAgentModule() = awsHttp().asType().copy(name = "user_agent")
 
 class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {

@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.stubConfigProject
@@ -35,21 +34,21 @@ internal class EndpointConfigCustomizationTest {
 
     @Test
     fun `generates valid code`() {
-        validateConfigCustomizations(EndpointConfigCustomization(TestRuntimeConfig, model.lookup("test#TestService")))
+        validateConfigCustomizations(EndpointConfigCustomization(AwsTestRuntimeConfig, model.lookup("test#TestService")))
     }
 
     @Test
     fun `generates valid code when no endpoint prefix is provided`() {
         val serviceShape = model.lookup<ServiceShape>("test#NoEndpointPrefix")
-        validateConfigCustomizations(EndpointConfigCustomization(TestRuntimeConfig, serviceShape))
+        validateConfigCustomizations(EndpointConfigCustomization(AwsTestRuntimeConfig, serviceShape))
         serviceShape.expectTrait(ServiceTrait::class.java).endpointPrefix shouldBe "noendpointprefix"
     }
 
     @Test
     fun `write an endpoint into the config`() {
-        val project = stubConfigProject(EndpointConfigCustomization(TestRuntimeConfig, model.lookup("test#TestService")))
+        val project = stubConfigProject(EndpointConfigCustomization(AwsTestRuntimeConfig, model.lookup("test#TestService")))
         project.lib {
-            it.addDependency(awsTypes(TestRuntimeConfig))
+            it.addDependency(awsTypes(AwsTestRuntimeConfig))
             it.addDependency(CargoDependency.Http)
             it.unitTest(
                 """
