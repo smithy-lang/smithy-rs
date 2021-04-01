@@ -14,11 +14,10 @@ async fn main() -> Result<(), Box<dyn Error>>{
         for voice in voices.voices.unwrap_or_default() {
             println!("I can speak as: {} ({:?}) in these languages: {:?}", voice.name.unwrap(), voice.gender.unwrap(), voice.language_name.unwrap());
         }
-        if voices.next_token == None {
-            break
-        } else {
-            tok = voices.next_token;
-        }
+        tok = match voices.next_token() {
+            Some(next) => next,
+            None => break,
+        };
     }
     Ok(())
 }
