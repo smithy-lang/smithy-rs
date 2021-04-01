@@ -6,8 +6,6 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
@@ -133,4 +131,4 @@ class PubUseRegion(private val runtimeConfig: RuntimeConfig) : LibRsCustomizatio
 fun region(runtimeConfig: RuntimeConfig) =
     RuntimeType("region", awsTypes(runtimeConfig), "aws_types")
 
-fun awsTypes(runtimeConfig: RuntimeConfig) = CargoDependency("aws-types", Local(runtimeConfig.relativePath))
+fun awsTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-types")
