@@ -33,8 +33,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
             .iter()
             .filter(|voice| voice
                 .supported_engines
-                .as_ref()
-                .map(|v| v.as_slice())
+                .as_deref()
                 .unwrap_or_default()
                 .contains(&Engine::Neural))
             .map(|voice| voice.id.as_ref().unwrap())
