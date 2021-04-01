@@ -9,7 +9,6 @@ import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -91,7 +90,7 @@ class EndpointConfigCustomization(private val runtimeConfig: RuntimeConfig, serv
 }
 
 // This is an experiment in a slightly different way to create runtime types. All code MAY be refactored to use this pattern
-fun RuntimeConfig.awsEndpointDependency() = CargoDependency("aws-endpoint", Local(this.relativePath))
+fun RuntimeConfig.awsEndpointDependency() = awsRuntimeDependency("aws-endpoint")
 
 class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private val operationShape: OperationShape) :
     OperationCustomization() {
