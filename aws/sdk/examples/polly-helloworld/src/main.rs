@@ -4,7 +4,7 @@ use std::error::Error;
 async fn main() -> Result<(), Box<dyn Error>>{
     let client = polly::fluent::Client::from_env();
     let mut tok = None;
-    // manually paginate
+    // Below is an an example of how pagination can be implemented manually.
     loop {
         let mut req = client.describe_voices();
         if let Some(tok) = tok {
