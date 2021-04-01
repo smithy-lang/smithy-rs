@@ -6,8 +6,6 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.docs
@@ -111,7 +109,7 @@ class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
     }
 }
 
-fun awsAuth(runtimeConfig: RuntimeConfig) = CargoDependency("aws-auth", Local(runtimeConfig.relativePath))
+fun awsAuth(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-auth")
 fun credentialsProvider(runtimeConfig: RuntimeConfig) = RuntimeType("ProvideCredentials", awsAuth(runtimeConfig), "aws_auth")
 fun defaultProvider(runtimeConfig: RuntimeConfig) = RuntimeType("default_provider", awsAuth(runtimeConfig), "aws_auth")
 fun setProvider(runtimeConfig: RuntimeConfig) = RuntimeType("set_provider", awsAuth(runtimeConfig), "aws_auth")

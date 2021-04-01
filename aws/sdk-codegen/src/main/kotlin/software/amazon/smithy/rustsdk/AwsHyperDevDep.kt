@@ -8,7 +8,6 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
-import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -42,4 +41,4 @@ class AwsHyperDevDep(private val runtimeConfig: RuntimeConfig) : LibRsCustomizat
 }
 
 val Tokio = CargoDependency("tokio", CratesIo("1"), features = listOf("macros", "test-util"), scope = DependencyScope.Dev)
-fun RuntimeConfig.awsHyper() = CargoDependency("aws-hyper", Local(relativePath), features = listOf("test-util"))
+fun RuntimeConfig.awsHyper() = awsRuntimeDependency("aws-hyper", features = listOf("test-util"))
