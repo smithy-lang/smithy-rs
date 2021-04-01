@@ -17,7 +17,6 @@ import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DocumentationTrait
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -308,14 +307,6 @@ class RustWriter private constructor(
         String {
             return formatter.apply(r, "")
         }
-
-    fun useAs(target: Shape, base: String): String {
-        return if (target.hasTrait(EnumTrait::class.java)) {
-            "$base.as_str()"
-        } else {
-            base
-        }
-    }
 
     fun addDepsRecursively(symbol: Symbol) {
         addDependency(symbol)
