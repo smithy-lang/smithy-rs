@@ -6,6 +6,7 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayCustomizationDecorator
 
 val DECORATORS = listOf(
     CredentialsProviderDecorator(),
@@ -15,7 +16,8 @@ val DECORATORS = listOf(
     SigV4SigningDecorator(),
     RetryPolicyDecorator(),
     IntegrationTestDecorator(),
-    FluentClientDecorator()
+    FluentClientDecorator(),
+    ApiGatewayCustomizationDecorator()
 )
 
 class AwsCodegenDecorator : CombinedCodegenDecorator(DECORATORS) {

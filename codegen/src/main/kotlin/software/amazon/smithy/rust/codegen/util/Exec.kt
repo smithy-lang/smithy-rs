@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 
 class CommandFailed(output: String) : Exception("Command Failed\n$output")
 
-fun String.runCommand(workdir: Path? = null, environment: Map<String, String> = mapOf()): String {
+fun String.runCommand(workdir: Path? = null, environment: Map<String, String> = mapOf(), timeout: Long = 3600): String {
     val parts = this.split("\\s".toRegex())
     val builder = ProcessBuilder(*parts.toTypedArray())
         .redirectOutput(ProcessBuilder.Redirect.PIPE)
@@ -23,13 +23,16 @@ fun String.runCommand(workdir: Path? = null, environment: Map<String, String> = 
     val env = builder.environment()
     environment.forEach { (k, v) -> env[k] = v }
     val proc = builder.start()
-
-    proc.waitFor(60, TimeUnit.MINUTES)
+    proc.waitFor(timeout, TimeUnit.SECONDS)
     val stdErr = proc.errorStream.bufferedReader().readText()
     val stdOut = proc.inputStream.bufferedReader().readText()
     val output = "$stdErr\n$stdOut"
-    return when (proc.exitValue()) {
-        0 -> output
-        else -> throw CommandFailed("Command Failed\n$output")
+    try {
+        return when (proc.exitValue()) {
+            0 -> output
+            else -> throw CommandFailed("Command Failed\n$output")
+        }
+    } catch (_: IllegalThreadStateException) {
+        throw CommandFailed("Timeout")
     }
 }

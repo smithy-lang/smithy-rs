@@ -16,7 +16,7 @@ val smithyVersion: String by project
 
 
 dependencies {
-    implementation(project(":codegen"))
+    implementation(project(":aws:sdk-codegen"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
@@ -25,27 +25,7 @@ dependencies {
 data class CodegenTest(val service: String, val module: String, val extraConfig: String? = null)
 
 val CodegenTests = listOf(
-    CodegenTest("com.amazonaws.dynamodb#DynamoDB_20120810", "dynamo"),
-    CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
-    CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
-    CodegenTest(
-        "aws.protocoltests.json#JsonProtocol",
-        "json_rpc11"
-    ),
-    CodegenTest(
-        "aws.protocoltests.restjson#RestJson",
-        "rest_json"
-    ),
-    CodegenTest(
-        "aws.protocoltests.restjson#RestJsonExtras",
-        "rest_json_extas"
-    ),
-    CodegenTest(
-        "crate#Config",
-        "naming_test", """
-            , "codegen": { "renameErrors": false }
-        """.trimIndent()
-    )
+    CodegenTest("com.amazonaws.apigateway#BackplaneControlService", "apigateway")
 )
 
 fun generateSmithyBuild(tests: List<CodegenTest>): String {
@@ -97,7 +77,7 @@ fun generateCargoWorkspace(tests: List<CodegenTest>): String {
 task("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
-        buildDir.resolve("smithyprojections/codegen-test/Cargo.toml").writeText(generateCargoWorkspace(CodegenTests))
+        buildDir.resolve("smithyprojections/sdk-codegen-test/Cargo.toml").writeText(generateCargoWorkspace(CodegenTests))
     }
 }
 
@@ -106,7 +86,7 @@ tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 
 tasks.register<Exec>("cargoCheck") {
-    workingDir("build/smithyprojections/codegen-test/")
+    workingDir("build/smithyprojections/sdk-codegen-test/")
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "check")
@@ -114,7 +94,7 @@ tasks.register<Exec>("cargoCheck") {
 }
 
 tasks.register<Exec>("cargoTest") {
-    workingDir("build/smithyprojections/codegen-test/")
+    workingDir("build/smithyprojections/sdk-codegen-test/")
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "test")
@@ -122,7 +102,7 @@ tasks.register<Exec>("cargoTest") {
 }
 
 tasks.register<Exec>("cargoDocs") {
-    workingDir("build/smithyprojections/codegen-test/")
+    workingDir("build/smithyprojections/sdk-codegen-test/")
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "doc", "--no-deps")
@@ -130,7 +110,7 @@ tasks.register<Exec>("cargoDocs") {
 }
 
 tasks.register<Exec>("cargoClippy") {
-    workingDir("build/smithyprojections/codegen-test/")
+    workingDir("build/smithyprojections/sdk-codegen-test/")
     // disallow warnings
     commandLine("cargo", "clippy", "--", "-D", "warnings", "-Aclippy::upper_case_acronyms", "-Aclippy::large-enum-variant")
     dependsOn("assemble")

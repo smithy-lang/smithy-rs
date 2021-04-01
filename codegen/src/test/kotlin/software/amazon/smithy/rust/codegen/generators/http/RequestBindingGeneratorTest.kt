@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.generators
+package software.amazon.smithy.rust.codegen.generators.http
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
@@ -14,9 +14,9 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.HttpTraitBindingGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.http.RequestBindingGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.http.uriFormatString
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
-import software.amazon.smithy.rust.codegen.smithy.generators.uriFormatString
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -25,7 +25,7 @@ import software.amazon.smithy.rust.codegen.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.util.dq
 
-class HttpTraitBindingGeneratorTest {
+class RequestBindingGeneratorTest {
     private val baseModel = """
             namespace smithy.example
 
@@ -113,7 +113,7 @@ class HttpTraitBindingGeneratorTest {
         inputShape.renderWithModelBuilder(model, symbolProvider, writer)
         val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
         writer.rustBlock("impl PutObjectInput") {
-            HttpTraitBindingGenerator(
+            RequestBindingGenerator(
                 model,
                 symbolProvider,
                 TestRuntimeConfig, writer, operationShape, inputShape, httpTrait

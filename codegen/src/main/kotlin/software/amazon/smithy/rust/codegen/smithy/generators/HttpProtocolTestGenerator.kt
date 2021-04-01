@@ -363,7 +363,7 @@ class HttpProtocolTestGenerator(
             FailingTest(AwsJson11, "AwsJson11EndpointTrait", Action.Request),
             FailingTest(AwsJson11, "AwsJson11EndpointTraitWithHostLabel", Action.Request),
             FailingTest(RestJson, "RestJsonEndpointTrait", Action.Request),
-            FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request)
+            FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request),
         )
         private val RunOnly: Set<String>? = null
 
