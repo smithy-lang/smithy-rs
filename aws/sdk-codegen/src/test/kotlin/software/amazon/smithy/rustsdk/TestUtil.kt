@@ -10,4 +10,10 @@ import java.io.File
 
 // In aws-sdk-codegen, the working dir when gradle runs tests is actually `./aws`. So, to find the smithy runtime, we need
 // to go up one more level
-val AwsTestRuntimeConfig = TestRuntimeConfig.copy(relativePath = File("../../rust-runtime").absolutePath)
+val AwsTestRuntimeConfig = TestRuntimeConfig.copy(
+    relativePath = run {
+        val path = File("../../rust-runtime")
+        check(path.exists()) { "$path must exist to generate a working SDK" }
+        path.absolutePath
+    }
+)
