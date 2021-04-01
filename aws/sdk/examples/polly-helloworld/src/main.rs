@@ -18,8 +18,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 voice.language_name.unwrap()
             );
         }
-        tok = match voices.next_token() {
-            Some(next) => next,
+        tok = match voices.next_token {
+            Some(next) => Some(next),
             None => break,
         };
     }
