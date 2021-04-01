@@ -26,18 +26,18 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
             None => break,
         };
     }
-
-    println!(
-        "Voices supporting a neural engine: {:?}",
-        voices
-            .iter()
-            .filter(|voice| voice
+    let neural_voices = voices
+        .iter()
+        .filter(|voice| {
+            voice
                 .supported_engines
                 .as_deref()
                 .unwrap_or_default()
-                .contains(&Engine::Neural))
-            .map(|voice| voice.id.as_ref().unwrap())
-            .collect::<Vec<_>>()
-    );
+                .contains(&Engine::Neural)
+        })
+        .map(|voice| voice.id.as_ref().unwrap())
+        .collect::<Vec<_>>();
+
+    println!("Voices supporting a neural engine: {:?}", neural_voices);
     Ok(())
 }
