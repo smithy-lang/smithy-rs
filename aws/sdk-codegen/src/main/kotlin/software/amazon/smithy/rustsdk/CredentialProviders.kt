@@ -73,8 +73,7 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                 self
             }
             """,
-                    credentialsProvider
-
+                    credentialsProvider,
                 )
             }
             ServiceConfig.BuilderBuild -> rust(
@@ -110,6 +109,8 @@ class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
 }
 
 fun awsAuth(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-auth")
-fun credentialsProvider(runtimeConfig: RuntimeConfig) = RuntimeType("ProvideCredentials", awsAuth(runtimeConfig), "aws_auth")
+fun credentialsProvider(runtimeConfig: RuntimeConfig) =
+    RuntimeType("ProvideCredentials", awsAuth(runtimeConfig), "aws_auth")
+
 fun defaultProvider(runtimeConfig: RuntimeConfig) = RuntimeType("default_provider", awsAuth(runtimeConfig), "aws_auth")
 fun setProvider(runtimeConfig: RuntimeConfig) = RuntimeType("set_provider", awsAuth(runtimeConfig), "aws_auth")
