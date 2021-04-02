@@ -10,11 +10,10 @@ use std::process;
 use aws_hyper::SdkError;
 use kms::error::{EncryptError, EncryptErrorKind};
 use kms::fluent::Client;
-use kms::operation::Encrypt;
 use kms::Blob;
 use kms::Region;
-use tracing_subscriber::fmt::format::FmtSpan;
-use tracing_subscriber::fmt::SubscriberBuilder;
+//use tracing_subscriber::fmt::format::FmtSpan;
+//use tracing_subscriber::fmt::SubscriberBuilder;
 
 async fn display_error_hint(client: &Client, err: EncryptError) {
     eprintln!("Error while decrypting: {}", err);
@@ -94,7 +93,10 @@ async fn main() {
             display_error_hint(&client, err).await;
             process::exit(1);
         }
-        Err(other) => panic!(""),
+        Err(other) => {
+            eprintln!("Encryption failure: {}", other);
+            process::exit(1);
+        }
     };
 
     // Did we get an encrypted blob?
