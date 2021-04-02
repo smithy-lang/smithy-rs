@@ -7,11 +7,38 @@ use clap::{App, Arg};
 
 use std::process;
 
+use aws_hyper::SdkError;
+use kms::error::{EncryptError, EncryptErrorKind};
+use kms::fluent::Client;
 use kms::operation::Encrypt;
 use kms::Blob;
 use kms::Region;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
+
+async fn display_error_hint(client: &Client, err: EncryptError) {
+    eprintln!("Error while decrypting: {}", err);
+    match err.kind {
+        EncryptErrorKind::NotFoundError(_) => {
+            let existing_keys = client
+                .list_keys()
+                .send()
+                .await
+                .expect("failure to list keys");
+            let existing_keys = existing_keys
+                .keys
+                .unwrap_or_default()
+                .into_iter()
+                .map(|key| key.key_id.expect("keys must have ids"))
+                .collect::<Vec<_>>();
+            eprintln!(
+                "  hint: Did you create the key first?\n  Existing keys in this region: {:?}",
+                existing_keys
+            )
+        }
+        _ => (),
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -22,6 +49,7 @@ async fn main() {
                 .long("region")
                 .value_name("REGION")
                 .help("Specifies the region")
+                .default_value("us-west-2")
                 .takes_value(true),
         )
         .arg(
@@ -30,7 +58,8 @@ async fn main() {
                 .long("key")
                 .value_name("KEY")
                 .help("Specifies the encryption key")
-                .takes_value(true),
+                .takes_value(true)
+                .required(true),
         )
         .arg(
             Arg::with_name("text")
@@ -38,44 +67,38 @@ async fn main() {
                 .long("text")
                 .value_name("TEXT")
                 .help("Specifies the text to encrypt")
-                .takes_value(true),
+                .takes_value(true)
+                .required(true),
         )
         .get_matches();
 
-    let region = matches.value_of("region").unwrap_or("us-west-2");
-    let key = matches.value_of("key").unwrap_or("");
-    let text = matches.value_of("text").unwrap_or("");
+    let region = matches.value_of("region").expect("clap provides default");
+    let key = matches.value_of("key").expect("marked required in clap");
+    let text = matches.value_of("text").expect("marked required in clap");
 
-    if region == "" || key == "" || text == "" {
-        println!(
-            "You must supply a value for region, key, and text ([-r REGION] -k KEY -t \"TEXT\")"
-        );
-        println!("If REGION is not supplied, defaults to us-west-2");
-
-        process::exit(1);
-    }
-
-    SubscriberBuilder::default()
-        .with_env_filter("info")
-        .with_span_events(FmtSpan::CLOSE)
-        .init();
+    // TODO: (doug): Only enable logging if a `-v` flag is set
+    /* SubscriberBuilder::default()
+       .with_env_filter("info")
+       .with_span_events(FmtSpan::CLOSE)
+       .init();
+    */
     let config = kms::Config::builder().region(Region::from(region)).build();
 
-    let client = aws_hyper::Client::https();
+    let client = kms::fluent::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
     let blob = Blob::new(text.as_bytes());
 
-    let resp = client
-        .call(
-            Encrypt::builder()
-                .key_id(key)
-                .plaintext(blob)
-                .build(&config),
-        )
-        .await
-        .expect("failed to encrypt text");
+    let resp = match client.encrypt().key_id(key).plaintext(blob).send().await {
+        Ok(output) => output,
+        Err(SdkError::ServiceError { err, .. }) => {
+            display_error_hint(&client, err).await;
+            process::exit(1);
+        }
+        Err(other) => panic!(""),
+    };
 
     // Did we get an encrypted blob?
+    // TODO doug: base64 encode this?
     let blob = resp.ciphertext_blob.expect("Could not get encrypted text");
     let bytes = blob.as_ref();
     let len = bytes.len();

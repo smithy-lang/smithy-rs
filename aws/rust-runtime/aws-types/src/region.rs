@@ -27,8 +27,20 @@ impl AsRef<str> for Region {
 }
 
 impl Region {
-    pub fn new(region: impl Into<Cow<'static, str>>) -> Self {
+    pub fn from_cow(region: Cow<'static, str>) -> Self {
         Self(region.into())
+    }
+    pub fn new(region: impl Into<String>) -> Self {
+        Self(Cow::Owned(region.into()))
+    }
+    pub fn from_static(region: &'static str) -> Self {
+        Self(region.into())
+    }
+}
+
+impl<'a> From<&'a str> for Region {
+    fn from(s: &'a str) -> Self {
+        Region::new(s)
     }
 }
 
