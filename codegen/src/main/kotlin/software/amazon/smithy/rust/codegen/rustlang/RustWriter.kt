@@ -17,7 +17,6 @@ import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DocumentationTrait
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -168,6 +167,8 @@ typealias Writable = RustWriter.() -> Unit
  */
 fun writable(w: Writable): Writable = w
 
+fun writable(w: String): Writable = writable { rust(w) }
+
 class RustWriter private constructor(
     private val filename: String,
     val namespace: String,
@@ -307,14 +308,6 @@ class RustWriter private constructor(
             return formatter.apply(r, "")
         }
 
-    fun useAs(target: Shape, base: String): String {
-        return if (target.hasTrait(EnumTrait::class.java)) {
-            "$base.as_str()"
-        } else {
-            base
-        }
-    }
-
     fun addDepsRecursively(symbol: Symbol) {
         addDependency(symbol)
         symbol.references.forEach { addDepsRecursively(it.symbol) }
@@ -344,7 +337,7 @@ class RustWriter private constructor(
                     addDepsRecursively(t)
                     t.rustType().render(fullyQualified = true)
                 }
-                else -> throw CodegenException("Invalid type provided to RustSymbolFormatter")
+                else -> throw CodegenException("Invalid type provided to RustSymbolFormatter: $t")
             }
         }
     }

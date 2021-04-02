@@ -7,8 +7,6 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -100,4 +98,4 @@ class SigV4SigningFeature(private val runtimeConfig: RuntimeConfig) :
     }
 }
 
-fun RuntimeConfig.sigAuth() = CargoDependency("aws-sig-auth", Local(this.relativePath))
+fun RuntimeConfig.sigAuth() = awsRuntimeDependency("aws-sig-auth")

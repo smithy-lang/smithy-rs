@@ -202,6 +202,7 @@ sealed class Attribute {
          */
         val NonExhaustive = Custom("non_exhaustive")
         val AllowUnused = Custom("allow(dead_code)")
+        val AllowUnusedMut = Custom("allow(unused_mut)")
     }
 
     data class Derives(val derives: Set<RuntimeType>) : Attribute() {

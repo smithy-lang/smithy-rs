@@ -4,7 +4,7 @@ name: CI
 
 env:
   rust_version: 1.50.0
-  java_version: 9
+  java_version: 14
 
 jobs:
   style:
@@ -153,8 +153,6 @@ jobs:
       run: echo "name=${GITHUB_REF##*/}-$(date +'%Y-%m-%d')" >> $GITHUB_ENV
     - uses: actions/upload-artifact@v2
       name: Upload SDK Artifact
-        # Always upload the output even if the tests failed
-      if: ${{ always() }}
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
         path: |

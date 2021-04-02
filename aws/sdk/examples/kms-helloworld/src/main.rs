@@ -15,7 +15,7 @@ async fn main() {
         .build();
     let client: StandardClient = aws_hyper::Client::https();
     let data = client
-        .call(GenerateRandom::builder().number_of_bytes(64).build(&config))
+        .call(GenerateRandom::builder().number_of_bytes(64).build(&config).expect("valid operation"))
         .await
         .expect("failed to generate random data");
     println!("{:?}", data);

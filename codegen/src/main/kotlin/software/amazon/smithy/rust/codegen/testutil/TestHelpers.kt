@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.testutil
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
@@ -14,6 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustCodegenPlugin
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ModelBuilderGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.letIf
@@ -21,13 +24,30 @@ import software.amazon.smithy.rust.codegen.util.dq
 import java.io.File
 
 val TestRuntimeConfig = RuntimeConfig(relativePath = File("../rust-runtime/").absolutePath)
-val TestSymbolVisitorConfig = SymbolVisitorConfig(runtimeConfig = TestRuntimeConfig, codegenConfig = CodegenConfig(), handleOptionality = true, handleRustBoxing = true)
-fun testSymbolProvider(model: Model): RustSymbolProvider = RustCodegenPlugin.BaseSymbolProvider(model, TestSymbolVisitorConfig)
+val TestSymbolVisitorConfig = SymbolVisitorConfig(
+    runtimeConfig = TestRuntimeConfig,
+    codegenConfig = CodegenConfig(),
+    handleOptionality = true,
+    handleRustBoxing = true
+)
+
+fun testSymbolProvider(model: Model): RustSymbolProvider =
+    RustCodegenPlugin.BaseSymbolProvider(model, TestSymbolVisitorConfig)
+
+fun testProtocolConfig(model: Model, serviceShape: ServiceShape? = null): ProtocolConfig = ProtocolConfig(
+    model,
+    testSymbolProvider(model),
+    TestRuntimeConfig,
+    serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
+    ShapeId.from("test#Protocol"),
+    "test"
+)
 
 private const val SmithyVersion = "1.0"
 fun String.asSmithyModel(sourceLocation: String? = null): Model {
     val processed = letIf(!this.startsWith("\$version")) { "\$version: ${SmithyVersion.dq()}\n$it" }
-    return Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble().unwrap()
+    return Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble()
+        .unwrap()
 }
 
 /**

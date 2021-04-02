@@ -3,15 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use std::error::Error;
-
 use dynamodb::model::{
     AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType,
 };
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let client = dynamodb::fluent::Client::from_env();
+async fn main() -> Result<(), dynamodb::Error> {
+    let client = dynamodb::Client::from_env();
     let tables = client.list_tables().send().await?;
 
     println!("Current DynamoDB tables: {:?}", tables);

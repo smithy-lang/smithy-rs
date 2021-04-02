@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
@@ -355,18 +356,6 @@ class HttpProtocolTestGenerator(
         val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
         val RestJson = "aws.protocoltests.restjson#RestJson"
         private val ExpectFail = setOf(
-            // Misc:
-
-            // https://github.com/awslabs/smithy-rs/issues/35
-            FailingTest(
-                RestJson,
-                "RestJsonHttpPrefixHeadersArePresent",
-                Action.Request
-            ),
-
-            // Document deserialization:
-            FailingTest(AwsJson11, "PutAndGetInlineDocumentsInput", Action.Response),
-
             // Endpoint trait https://github.com/awslabs/smithy-rs/issues/197
             // This will also require running operations through the endpoint middleware (or moving endpoint middleware
             // into operation construction
@@ -375,7 +364,7 @@ class HttpProtocolTestGenerator(
             FailingTest(AwsJson11, "AwsJson11EndpointTrait", Action.Request),
             FailingTest(AwsJson11, "AwsJson11EndpointTraitWithHostLabel", Action.Request),
             FailingTest(RestJson, "RestJsonEndpointTrait", Action.Request),
-            FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request)
+            FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request),
         )
         private val RunOnly: Set<String>? = null
 

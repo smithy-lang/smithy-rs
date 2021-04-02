@@ -21,11 +21,15 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
+import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.smithy.generators.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -36,11 +40,23 @@ class FluentClientDecorator : RustCodegenDecorator {
     override val order: Byte = 0
 
     override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
-        val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("fluent")), public = true)
-        rustCrate.withModule(RustModule("fluent", module)) { writer ->
+        val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("client")), public = true)
+        rustCrate.withModule(RustModule("client", module)) { writer ->
             FluentClientGenerator(protocolConfig).render(writer)
         }
-        rustCrate.addFeature(Feature("fluent", true, listOf(protocolConfig.runtimeConfig.awsHyper().name)))
+        rustCrate.addFeature(Feature("client", true, listOf(protocolConfig.runtimeConfig.awsHyper().name)))
+    }
+
+    override fun libRsCustomizations(
+        protocolConfig: ProtocolConfig,
+        baseCustomizations: List<LibRsCustomization>
+    ): List<LibRsCustomization> {
+        return baseCustomizations + object : LibRsCustomization() {
+            override fun section(section: LibRsSection) = writable {
+                Attribute.Cfg.feature("client").render(this)
+                rust("pub use client::Client;")
+            }
+        }
     }
 }
 
@@ -79,6 +95,10 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                     Self { handle: std::sync::Arc::new(Handle { conf, client })}
                 }
 
+                pub fn conf(&self) -> &crate::Config {
+                    &self.handle.conf
+                }
+
             """,
                 "aws_hyper" to hyperDep.asType()
             )
@@ -115,7 +135,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                     }
 
                     pub async fn send(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>> {
-                        let op = self.inner.build(&self.handle.conf);
+                        let op = self.inner.build(&self.handle.conf).map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
                         self.handle.client.call(op).await
                     }
                     """,
@@ -139,7 +159,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                             }
                             documentShape(member, model)
                             rustBlock("pub fn $memberName$signature") {
-                                write("self.inner = self.inner.$memberName(inp);")
+                                write("self.inner = self.inner.${member.setterName()}(Some(inp));")
                                 write("self")
                             }
                         }
@@ -151,10 +171,10 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
 
     private fun RustWriter.renderVecHelpers(member: MemberShape, memberName: String, coreType: RustType) {
         documentShape(member, model)
-        rustBlock("pub fn set_$memberName(mut self, inp: Vec<${coreType.render(true)}>) -> Self") {
+        rustBlock("pub fn ${member.setterName()}(mut self, inp: Vec<${coreType.render(true)}>) -> Self") {
             rust(
                 """
-                self.inner = self.inner.set_$memberName(inp);
+                self.inner = self.inner.${member.setterName()}(Some(inp));
                 self
             """
             )

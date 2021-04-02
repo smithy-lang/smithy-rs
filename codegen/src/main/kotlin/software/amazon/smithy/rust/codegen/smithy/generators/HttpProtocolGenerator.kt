@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -49,6 +50,7 @@ abstract class HttpProtocolGenerator(
 ) {
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
+    private val buildErrorT = protocolConfig.runtimeConfig.operationBuildError()
     fun renderOperation(
         operationWriter: RustWriter,
         inputWriter: RustWriter,
@@ -99,9 +101,9 @@ abstract class HttpProtocolGenerator(
             builderGenerator.renderConvenienceMethod(this)
 
             rustBlock(
-                "pub fn build_http_request(&self) -> #T<Vec<u8>>", RuntimeType.Http("request::Request")
+                "pub fn build_http_request(&self) -> Result<#T<Vec<u8>>, #T>", RuntimeType.Http("request::Request"), buildErrorT
             ) {
-                write("#T::assemble(self.input.request_builder_base(), self.input.build_body())", inputSymbol)
+                write("Ok(#T::assemble(self.input.request_builder_base()?, self.input.build_body()))", inputSymbol)
             }
 
             fromResponseImpl(this, operationShape)
@@ -126,8 +128,8 @@ abstract class HttpProtocolGenerator(
 
     protected fun httpBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
         implBlockWriter.rustBlock(
-            "pub fn request_builder_base(&self) -> #T",
-            RuntimeType.HttpRequestBuilder
+            "pub fn request_builder_base(&self) -> Result<#T, #T>",
+            RuntimeType.HttpRequestBuilder, buildErrorT
         ) {
             f(this)
         }
@@ -146,6 +148,7 @@ abstract class HttpProtocolGenerator(
         operationShape: OperationShape,
         block: RustWriter.() -> Unit
     ) {
+        Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
         implBlockWriter.rustBlock(
             "fn from_response(response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
             RuntimeType.Http("response::Response"),

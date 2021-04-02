@@ -143,7 +143,7 @@ class SymbolVisitor(
         // an Input shape, then the field is _not optional_.
         val httpLabeledInput =
             container.hasTrait(SyntheticInputTrait::class.java) && member.hasTrait(HttpLabelTrait::class.java)
-        return if (nullableIndex.isNullable(member) && !httpLabeledInput) {
+        return if (nullableIndex.isNullable(member) && !httpLabeledInput || model.expectShape(member.target).isDocumentShape) {
             symbol.makeOptional()
         } else symbol
     }

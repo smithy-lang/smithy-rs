@@ -31,7 +31,6 @@ buildscript {
 
 dependencies {
     implementation(project(":aws:sdk-codegen"))
-    implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
@@ -164,8 +163,7 @@ fun generateCargoWorkspace(services: List<AwsService>): String {
     val examples = projectDir.resolve("examples").listFiles { file -> !file.name.startsWith(".") }?.toList()
         ?.map { "examples/${it.name}" }.orEmpty()
 
-    val modules = services.map(AwsService::module) + runtimeModules + awsModules + examples
-        ?.toList()
+    val modules = services.map(AwsService::module) + runtimeModules + awsModules + examples.toList()
     return """
     [workspace]
     members = [
@@ -222,8 +220,7 @@ tasks.register<Exec>("cargoDocs") {
 tasks.register<Exec>("cargoClippy") {
     workingDir(sdkOutputDir)
     // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
-    commandLine("cargo", "clippy")
+    commandLine("cargo", "clippy", "--", "-D", "warnings", "-Aclippy::upper_case_acronyms", "-Aclippy::large-enum-variant", "-Aclippy::module-inception")
     dependsOn("assemble")
 }
 
