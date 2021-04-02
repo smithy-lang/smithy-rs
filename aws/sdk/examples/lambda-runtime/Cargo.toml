@@ -1,0 +1,26 @@
+[package]
+name = "my-lambda-function"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dynamodb = { path = "./vendored/aws/sdk/build/aws-sdk/dynamodb", features = ["client"]}
+# dynamodb = { path = "../smithy-rs/aws/sdk/build/smithyprojections/sdk/dynamodb/rust-codegen", features = ["fluent"]}
+aws-hyper = { git = "ssh://git@github.com/awslabs/smithy-rs.git", rev = "v0.5-alpha.cargo" }
+tokio = { version = "1", features = ["full"] }
+
+serde = "1.0.82"
+serde_derive = "1.0.82"
+serde_json = { version = "1.0.33", features = ["raw_value"] }
+simple_logger = "1.6.0"
+
+
+lambda_runtime = "0.3.0"
+
+log = "^0.4"
+
+[[bin]]
+name = "bootstrap"
+path = "src/main.rs"

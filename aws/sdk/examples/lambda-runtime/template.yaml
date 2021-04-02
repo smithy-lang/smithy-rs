@@ -1,0 +1,14 @@
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  HelloRustFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: HelloRust
+      Handler: bootstrap.is.real.handler
+      Runtime: provided.al2
+      MemorySize: 512
+      CodeUri: .
+      Policies:
+      - AmazonDynamoDBFullAccess
+    Metadata:
+      BuildMethod: makefile
