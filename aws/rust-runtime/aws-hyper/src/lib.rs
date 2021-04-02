@@ -96,7 +96,7 @@ where
     /// access the raw response use `call_raw`.
     pub async fn call<O, T, E, Retry>(&self, input: Operation<O, Retry>) -> Result<T, SdkError<E>>
     where
-        O: ParseHttpResponse<hyper::Body, Output = Result<T, E>> + Send + Clone + 'static,
+        O: ParseHttpResponse<hyper::Body, Output = Result<T, E>> + Send + Sync + Clone + 'static,
         E: Error + ProvideErrorKind,
         Retry: ClassifyResponse<SdkSuccess<T>, SdkError<E>>,
     {
@@ -112,7 +112,7 @@ where
         input: Operation<O, Retry>,
     ) -> Result<SdkSuccess<R>, SdkError<E>>
     where
-        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + Clone + 'static,
+        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + Sync + Clone + 'static,
         E: Error + ProvideErrorKind,
         Retry: ClassifyResponse<SdkSuccess<R>, SdkError<E>>,
     {

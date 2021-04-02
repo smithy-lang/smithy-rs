@@ -24,6 +24,7 @@ fn validate_sensitive_trait() {
 }
 
 fn assert_send_sync<T: Send + Sync + 'static>() {}
+fn assert_send_fut<T: Send + 'static>(_: T) {}
 
 #[test]
 fn types_are_send_sync() {
@@ -33,6 +34,7 @@ fn types_are_send_sync() {
     assert_send_sync::<kms::output::CreateAliasOutput>();
     assert_send_sync::<kms::Client>();
     assert_send_sync::<GenerateRandom>();
+    assert_send_fut(kms::Client::from_env().list_keys().send());
 }
 
 /// Parse a semi-real response body and assert that the correct retry status is returned
