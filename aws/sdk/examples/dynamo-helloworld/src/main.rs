@@ -9,7 +9,7 @@ use dynamodb::model::{
 
 #[tokio::main]
 async fn main() -> Result<(), dynamodb::Error> {
-    let client = dynamodb::fluent::Client::from_env();
+    let client = dynamodb::Client::from_env();
     let tables = client.list_tables().send().await?;
 
     println!("Current DynamoDB tables: {:?}", tables);

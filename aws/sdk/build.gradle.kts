@@ -31,7 +31,6 @@ buildscript {
 
 dependencies {
     implementation(project(":aws:sdk-codegen"))
-    implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
@@ -221,7 +220,7 @@ tasks.register<Exec>("cargoDocs") {
 tasks.register<Exec>("cargoClippy") {
     workingDir(sdkOutputDir)
     // disallow warnings
-    commandLine("cargo", "clippy", "--", "-D", "warnings", "-Aclippy::upper_case_acronyms", "-Aclippy::large-enum-variant")
+    commandLine("cargo", "clippy", "--", "-D", "warnings", "-Aclippy::upper_case_acronyms", "-Aclippy::large-enum-variant", "-Aclippy::module-inception")
     dependsOn("assemble")
 }
 

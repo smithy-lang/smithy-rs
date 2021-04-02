@@ -21,8 +21,11 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
+import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
@@ -36,11 +39,23 @@ class FluentClientDecorator : RustCodegenDecorator {
     override val order: Byte = 0
 
     override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
-        val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("fluent")), public = true)
-        rustCrate.withModule(RustModule("fluent", module)) { writer ->
+        val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("client")), public = true)
+        rustCrate.withModule(RustModule("client", module)) { writer ->
             FluentClientGenerator(protocolConfig).render(writer)
         }
-        rustCrate.addFeature(Feature("fluent", true, listOf(protocolConfig.runtimeConfig.awsHyper().name)))
+        rustCrate.addFeature(Feature("client", true, listOf(protocolConfig.runtimeConfig.awsHyper().name)))
+    }
+
+    override fun libRsCustomizations(
+        protocolConfig: ProtocolConfig,
+        baseCustomizations: List<LibRsCustomization>
+    ): List<LibRsCustomization> {
+        return baseCustomizations + object : LibRsCustomization() {
+            override fun section(section: LibRsSection) = writable {
+                Attribute.Cfg.feature("client").render(this)
+                rust("pub use client::Client;")
+            }
+        }
     }
 }
 
