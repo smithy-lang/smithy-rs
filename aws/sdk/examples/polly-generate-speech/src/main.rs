@@ -5,7 +5,7 @@ use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
-    let client = polly::fluent::Client::from_env();
+    let client = polly::Client::from_env();
     let resp = client
         .synthesize_speech()
         .voice_id(VoiceId::Emma)
