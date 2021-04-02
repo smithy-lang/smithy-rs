@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.generators
+package software.amazon.smithy.rust.codegen.smithy.generators.error
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
