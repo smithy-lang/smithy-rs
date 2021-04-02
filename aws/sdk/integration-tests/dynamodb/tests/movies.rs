@@ -95,8 +95,8 @@ fn movies_in_year(table_name: &str, year: u16) -> query_input::Builder {
     QueryInput::builder()
         .table_name(table_name)
         .key_condition_expression("#yr = :yyyy")
-        .expression_attribute_names(expr_attrib_names)
-        .expression_attribute_values(expr_attrib_values)
+        .set_expression_attribute_names(Some(expr_attrib_names))
+        .set_expression_attribute_values(Some(expr_attrib_values))
 }
 
 /// Hand-written waiter to retry every second until the table is out of `Creating` state
