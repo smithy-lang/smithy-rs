@@ -145,7 +145,7 @@ class RequestBindingGeneratorTest {
             let inp = PutObjectInput::builder()
                 .bucket_name("somebucket/ok")
                 .key(ts.clone())
-                .set_extras(vec![0,1,2,44])
+                .set_extras(Some(vec![0,1,2,44]))
                 .some_value("svq!!%&")
                 .build().expect("build should succeed");
             let mut o = String::new();
@@ -188,17 +188,15 @@ class RequestBindingGeneratorTest {
             """
             use std::collections::HashMap;
             let ts = smithy_types::Instant::from_epoch_seconds(10123125);
-            let mut prefix_header = HashMap::new();
-            prefix_header.insert("k".to_string(), "😹".to_string());
             let inp = PutObjectInput::builder()
                 .bucket_name("buk")
-                .set_date_header_list(vec![ts.clone()])
-                .set_int_list(vec![0,1,44])
+                .set_date_header_list(Some(vec![ts.clone()]))
+                .set_int_list(Some(vec![0,1,44]))
                 .key(ts.clone())
-                .set_extras(vec![0,1])
+                .set_extras(Some(vec![0,1]))
                 .some_value("qp")
                 .media_type("base64encodethis")
-                .prefix(prefix_header)
+                .prefix("k".to_string(), "😹".to_string())
                 .build().unwrap();
             let http_request = inp.request_builder_base().expect("valid input").body(()).unwrap();
             assert_eq!(http_request.uri(), "/buk/1970-04-28T03%3A58%3A45Z?paramName=qp&hello=0&hello=1");
@@ -227,12 +225,10 @@ class RequestBindingGeneratorTest {
             """
         use std::collections::HashMap;
         let ts = smithy_types::Instant::from_epoch_seconds(10123125);
-        let mut prefix_header = HashMap::new();
-        prefix_header.insert("😹".to_string(), "😹".to_string());
         let inp = PutObjectInput::builder()
             .bucket_name("buk")
             .key(ts.clone())
-            .prefix(prefix_header)
+            .prefix("😹".to_string(), "😹".to_string())
             .build().unwrap();
         let err = inp.request_builder_base().expect_err("can't make a header out of a cat emoji");
         assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `😹` cannot be used as a header name: invalid HTTP header name)");
@@ -248,12 +244,10 @@ class RequestBindingGeneratorTest {
             """
         use std::collections::HashMap;
         let ts = smithy_types::Instant::from_epoch_seconds(10123125);
-        let mut prefix_header = HashMap::new();
-        prefix_header.insert("valid-key".to_string(), "\n can't put a newline in a header value".to_string());
         let inp = PutObjectInput::builder()
             .bucket_name("buk")
             .key(ts.clone())
-            .prefix(prefix_header)
+            .prefix("valid-key".to_string(), "\n can't put a newline in a header value".to_string())
             .build().unwrap();
         let err = inp.request_builder_base().expect_err("can't make a header with a newline");
         assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `\n can\'t put a newline in a header value` cannot be used as a header value: failed to parse header value)");
