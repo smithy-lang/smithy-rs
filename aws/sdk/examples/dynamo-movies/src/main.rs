@@ -5,8 +5,8 @@
 
 use aws_http::AwsErrorRetryPolicy;
 use aws_hyper::{SdkError, SdkSuccess};
-use dynamodb::error::DescribeTableError;
 use dynamodb::client::fluent_builders::Query;
+use dynamodb::error::DescribeTableError;
 use dynamodb::input::DescribeTableInput;
 use dynamodb::model::{
     AttributeDefinition, AttributeValue, KeySchemaElement, KeyType, ProvisionedThroughput,
@@ -71,7 +71,7 @@ async fn main() {
         client
             .put_item()
             .table_name(table_name)
-            .item(parse_item(value))
+            .set_item(Some(parse_item(value)))
             .send()
             .await
             .expect("failed to insert item");
@@ -171,8 +171,8 @@ fn movies_in_year(client: &dynamodb::Client, table_name: &str, year: u16) -> Que
         .query()
         .table_name(table_name)
         .key_condition_expression("#yr = :yyyy")
-        .expression_attribute_names(expr_attrib_names)
-        .expression_attribute_values(expr_attrib_values)
+        .expression_attribute_names("#yr".to_string(), "year".to_string())
+        .expression_attribute_values(":yyyy".to_string(), AttributeValue::N(year.to_string()))
 }
 
 /// Hand-written waiter to retry every second until the table is out of `Creating` state

@@ -238,9 +238,9 @@ abstract class BuilderGenerator(
         rustBlock("pub fn $memberName(mut self, k: ${coreType.key.render(true)}, v: ${coreType.member.render(true)}) -> Self") {
             rust(
                 """
-                let mut v = self.$memberName.unwrap_or_default();
-                v.insert(k, v);
-                self.$memberName = Some(v);
+                let mut hash_map = self.$memberName.unwrap_or_default();
+                hash_map.insert(k, v);
+                self.$memberName = Some(hash_map);
                 self
             """
             )
