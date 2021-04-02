@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsGenerator
@@ -27,12 +28,14 @@ open class RustCrate(
     private val inner = CodegenWriterDelegator(fileManifest, symbolProvider, RustWriter.Factory)
     private val modules: MutableMap<String, RustModule> = baseModules.toMutableMap()
     private val features: MutableSet<Feature> = mutableSetOf()
+    // Lib.rs is a little special—we need to reorder things at the end
+    private val libRs = mutableListOf<Writable>()
     fun useShapeWriter(shape: Shape, f: (RustWriter) -> Unit) {
         inner.useShapeWriter(shape, f)
     }
 
     fun lib(moduleWriter: (RustWriter) -> Unit) {
-        inner.useFileWriter("src/lib.rs", "crate", moduleWriter)
+        libRs.add(moduleWriter)
     }
 
     fun addFeature(feature: Feature) = this.features.add(feature)
@@ -41,7 +44,7 @@ open class RustCrate(
         injectInlineDependencies()
         val modules = inner.writers.values.mapNotNull { it.module() }.filter { it != "lib" }
             .map { modules[it] ?: RustModule.default(it, false) }
-        inner.finalize(settings, libRsCustomizations, modules, this.features.toList())
+        inner.finalize(settings, libRsCustomizations + libRs, modules, this.features.toList())
     }
 
     private fun injectInlineDependencies() {
