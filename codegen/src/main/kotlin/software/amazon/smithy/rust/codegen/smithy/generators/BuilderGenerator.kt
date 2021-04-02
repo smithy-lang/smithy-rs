@@ -222,11 +222,11 @@ abstract class BuilderGenerator(
     }
 
     private fun RustWriter.renderVecHelper(memberName: String, coreType: RustType.Vec) {
-        rustBlock("pub fn $memberName(mut self, inp: ${coreType.member.render(true)}) -> Self") {
+        rustBlock("pub fn $memberName(mut self, inp: impl Into<${coreType.member.render(true)}>) -> Self") {
             rust(
                 """
                 let mut v = self.$memberName.unwrap_or_default();
-                v.push(inp);
+                v.push(inp.into());
                 self.$memberName = Some(v);
                 self
             """
@@ -235,11 +235,11 @@ abstract class BuilderGenerator(
     }
 
     private fun RustWriter.renderMapHelper(memberName: String, coreType: RustType.HashMap) {
-        rustBlock("pub fn $memberName(mut self, k: ${coreType.key.render(true)}, v: ${coreType.member.render(true)}) -> Self") {
+        rustBlock("pub fn $memberName(mut self, k: impl Into<${coreType.key.render(true)}>, v: impl Into<${coreType.member.render(true)}>) -> Self") {
             rust(
                 """
                 let mut hash_map = self.$memberName.unwrap_or_default();
-                hash_map.insert(k, v);
+                hash_map.insert(k.into(), v.into());
                 self.$memberName = Some(hash_map);
                 self
             """

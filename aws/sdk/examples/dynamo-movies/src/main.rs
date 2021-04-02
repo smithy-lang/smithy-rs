@@ -164,15 +164,15 @@ fn value_to_item(value: Value) -> AttributeValue {
 
 fn movies_in_year(client: &dynamodb::Client, table_name: &str, year: u16) -> Query {
     let mut expr_attrib_names = HashMap::new();
-    expr_attrib_names.insert("#yr".to_string(), "year".to_string());
+    expr_attrib_names.insert("#yr", "year");
     let mut expr_attrib_values = HashMap::new();
-    expr_attrib_values.insert(":yyyy".to_string(), AttributeValue::N(year.to_string()));
+    expr_attrib_values.insert(":yyyy", AttributeValue::N(year.to_string()));
     client
         .query()
         .table_name(table_name)
         .key_condition_expression("#yr = :yyyy")
-        .expression_attribute_names("#yr".to_string(), "year".to_string())
-        .expression_attribute_values(":yyyy".to_string(), AttributeValue::N(year.to_string()))
+        .expression_attribute_names("#yr", "year")
+        .expression_attribute_values(":yyyy", AttributeValue::N(year.to_string()))
 }
 
 /// Hand-written waiter to retry every second until the table is out of `Creating` state

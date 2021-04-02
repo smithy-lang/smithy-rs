@@ -186,7 +186,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
         val k = coreType.key
         val v = coreType.member
 
-        rustBlock("pub fn $memberName(mut self, k: ${k.render()}, v: ${v.render()}) -> Self") {
+        rustBlock("pub fn $memberName(mut self, k: impl Into<${k.render()}>, v: impl Into<${v.render()}>) -> Self") {
             rust(
                 """
                 self.inner = self.inner.$memberName(k, v);
@@ -198,7 +198,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
 
     private fun RustWriter.renderVecHelper(member: MemberShape, memberName: String, coreType: RustType.Vec) {
         documentShape(member, model)
-        rustBlock("pub fn $memberName(mut self, inp: ${coreType.member.render(true)}) -> Self") {
+        rustBlock("pub fn $memberName(mut self, inp: impl Into<${coreType.member.render(true)}>) -> Self") {
             rust(
                 """
                 self.inner = self.inner.$memberName(inp);
