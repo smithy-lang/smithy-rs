@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use kms::operation::CreateAlias;
+use kms::error::CreateAliasError;
+use kms::operation::{CreateAlias, GenerateRandom};
 use kms::output::GenerateRandomOutput;
 use kms::Blob;
 use smithy_http::middleware::ResponseBody;
@@ -22,11 +23,26 @@ fn validate_sensitive_trait() {
     );
 }
 
+fn assert_send_sync<T: Send + Sync + 'static>() {}
+
+#[test]
+fn types_are_send_sync() {
+    assert_send_sync::<kms::Error>();
+    assert_send_sync::<kms::SdkError<CreateAliasError>>();
+    assert_send_sync::<kms::error::CreateAliasError>();
+    assert_send_sync::<kms::output::CreateAliasOutput>();
+    assert_send_sync::<kms::Client>();
+    assert_send_sync::<GenerateRandom>();
+}
+
 /// Parse a semi-real response body and assert that the correct retry status is returned
 #[test]
 fn errors_are_retryable() {
     let conf = kms::Config::builder().build();
-    let (_, parts) = CreateAlias::builder().build(&conf).expect("valid request").into_request_response();
+    let (_, parts) = CreateAlias::builder()
+        .build(&conf)
+        .expect("valid request")
+        .into_request_response();
     let http_response = http::Response::builder()
         .status(400)
         .body(r#"{ "code": "LimitExceededException" }"#)
@@ -45,7 +61,10 @@ fn errors_are_retryable() {
 #[test]
 fn unmodeled_errors_are_retryable() {
     let conf = kms::Config::builder().build();
-    let (_, parts) = CreateAlias::builder().build(&conf).expect("valid request").into_request_response();
+    let (_, parts) = CreateAlias::builder()
+        .build(&conf)
+        .expect("valid request")
+        .into_request_response();
     let http_response = http::Response::builder()
         .status(400)
         .body(r#"{ "code": "ThrottlingException" }"#)
