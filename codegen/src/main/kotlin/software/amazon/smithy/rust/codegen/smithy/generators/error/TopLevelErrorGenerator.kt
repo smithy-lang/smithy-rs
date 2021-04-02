@@ -59,8 +59,12 @@ class TopLevelErrorGenerator(protocolConfig: ProtocolConfig, private val operati
     private fun RustWriter.renderImplDisplay() {
         rustBlock("impl std::fmt::Display for Error") {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
-                // For now, just delegate to the debug implementation
-                rust("""write!(f, "{:?}", &self)""")
+                rustBlock("match self") {
+                    allErrors.forEach {
+                        rust("Error::${symbolProvider.toSymbol(it).name}(inner) => inner.fmt(f),")
+                    }
+                    rust("Error::Unhandled(inner) => inner.fmt(f)")
+                }
             }
         }
     }
@@ -93,7 +97,7 @@ class TopLevelErrorGenerator(protocolConfig: ProtocolConfig, private val operati
                 val sym = symbolProvider.toSymbol(error)
                 rust("${sym.name}(#T),", sym)
             }
-            rust("Unhandled(Box<dyn #T>)", RuntimeType.StdError)
+            rust("Unhandled(Box<dyn #T + Send + Sync + 'static>)", RuntimeType.StdError)
         }
     }
 }
