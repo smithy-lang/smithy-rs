@@ -5,7 +5,9 @@
 
 use clap::{App, Arg};
 
-use std::process;
+use std::env;
+use std::fs::File;
+use std::io::Write;
 
 use aws_hyper::SdkError;
 use kms::error::{EncryptError, EncryptErrorKind};
@@ -81,6 +83,35 @@ async fn main() {
        .with_span_events(FmtSpan::CLOSE)
        .init();
     */
+=======
+        )
+        .arg(
+            Arg::with_name("out")
+                .short("o")
+                .long("out")
+                .value_name("OUT")
+                .help("Specifies the name of the file to store the encrypted text in.")
+                .takes_value(true),
+        )
+        .get_matches();
+
+    // Get value of AWS_DEFAULT_REGION, if set.
+    let default_region;
+    match env::var("AWS_DEFAULT_REGION") {
+        Ok(val) => default_region = val,
+        Err(_e) => default_region = "us-west-2".to_string(),
+    }
+
+    let region = matches.value_of("region").unwrap_or(&*default_region);
+    let key = matches.value_of("key").unwrap_or("");
+    let text = matches.value_of("text").unwrap_or("");
+    let out = matches.value_of("out").unwrap_or("output.txt");
+
+    SubscriberBuilder::default()
+        .with_env_filter("info")
+        .with_span_events(FmtSpan::CLOSE)
+        .init();
+>>>>>>> 2a949eb... Updated KMS examples to use base64 encoding to save/read encrypted bytes
     let config = kms::Config::builder().region(Region::from(region)).build();
 
     let client = kms::fluent::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
@@ -103,18 +134,12 @@ async fn main() {
     // TODO doug: base64 encode this?
     let blob = resp.ciphertext_blob.expect("Could not get encrypted text");
     let bytes = blob.as_ref();
-    let len = bytes.len();
-    let mut i = 0;
 
-    for b in bytes {
-        if i < len - 1 {
-            print!("{},", b);
-        } else {
-            // Don't add a comma after the last item
-            println!("{}", b);
-        }
-        i += 1;
-    }
+    let s = base64::encode(&bytes);
 
-    println!("");
+    let mut ofile = File::create(out).expect("unable to create file");
+    ofile.write_all(s.as_bytes()).expect("unable to write");
+
+    println!("Wrote the following to {}", out);
+    println!("{}", s);
 }

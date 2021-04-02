@@ -5,8 +5,10 @@
 
 use clap::{App, Arg};
 
+extern crate base64;
+
+use std::env;
 use std::fs;
-use std::process;
 use std::str;
 
 use kms::operation::Decrypt;
@@ -32,7 +34,8 @@ async fn main() {
                 .long("key")
                 .value_name("KEY")
                 .help("Specifies the encryption key")
-                .takes_value(true),
+                .takes_value(true)
+                .required(true),
         )
         .arg(
             Arg::with_name("text")
@@ -40,20 +43,21 @@ async fn main() {
                 .long("text")
                 .value_name("TEXT")
                 .help("Specifies file with encrypted text to decrypt")
-                .takes_value(true),
+                .takes_value(true)
+                .required(true),
         )
         .get_matches();
 
-    let region = matches.value_of("region").unwrap_or("us-west-2");
+    // Get value of AWS_DEFAULT_REGION, if set.
+    let default_region;
+    match env::var("AWS_DEFAULT_REGION") {
+        Ok(val) => default_region = val,
+        Err(_e) => default_region = "us-west-2".to_string(),
+    }
+
+    let region = matches.value_of("region").unwrap_or(&*default_region);
     let key = matches.value_of("key").unwrap_or("");
     let text = matches.value_of("text").unwrap_or("");
-
-    if region == "" || key == "" || text == "" {
-        println!("You must supply a value for region, key, and file containing encrypted text ([-r REGION] -k KEY -t TEXT-FILE)");
-        println!("If REGION is omitted, defaults to us-west-2");
-
-        process::exit(1);
-    }
 
     SubscriberBuilder::default()
         .with_env_filter("info")
@@ -63,34 +67,19 @@ async fn main() {
 
     let client = aws_hyper::Client::https();
 
-    // Vector to hold the string parts/u8 values
-    let mut v_bytes: Vec<u8> = Vec::new();
+    // Vector to hold the string once we decode it from base64.
+    let mut my_bytes: Vec<u8> = Vec::new();
 
     // Open text file and get contents as a string
     match fs::read_to_string(text) {
         Ok(input) => {
-            // Split the string into parts by comma
-            let parts = input.split(",");
-            for s in parts {
-                // Trim any trailing line feed
-                let mut my_string = String::from(s);
-
-                let len = my_string.trim_end_matches(&['\r', '\n'][..]).len();
-                my_string.truncate(len);
-
-                match my_string.parse::<u8>() {
-                    Ok(num) => v_bytes.push(num),
-                    Err(e) => {
-                        println!("Got an error parsing '{}'", s);
-                        panic!("{}", e)
-                    }
-                }
-            }
+            // input is a base-64 encoded string, so decode it:
+            my_bytes = base64::decode(input).unwrap();
         }
         Err(_) => println!("Could not parse {} as a string", text),
     }
 
-    let blob = Blob::new(v_bytes);
+    let blob = Blob::new(my_bytes);
 
     let resp = client
         .call(

@@ -9,6 +9,7 @@ description = "Code example of the KMS Encrypt API"
 kms = { path = "../../build/aws-sdk/kms" }
 aws-hyper = { path = "../../build/aws-sdk/aws-hyper" }
 tokio = { version = "1", features = ["full"]}
+base64 = "0.13.0"
 clap = { version = "2.33.3" }
 # optional
 env_logger = "0.8.2"
