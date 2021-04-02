@@ -84,7 +84,7 @@ fn add_item(table_name: impl Into<String>, item: Value) -> put_item_input::Build
 
     PutItemInput::builder()
         .table_name(table_name)
-        .item(attribute_value)
+        .set_item(Some(attribute_value))
 }
 
 fn movies_in_year(table_name: &str, year: u16) -> query_input::Builder {
