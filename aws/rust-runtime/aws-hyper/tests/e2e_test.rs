@@ -92,6 +92,12 @@ fn test_operation() -> Operation<TestOperationParser, AwsErrorRetryPolicy> {
     Operation::new(req, TestOperationParser).with_retry_policy(AwsErrorRetryPolicy::new())
 }
 
+#[test]
+fn test_default_client() {
+    let client = Client::https();
+    let _ = client.call(test_operation());
+}
+
 #[tokio::test]
 async fn e2e_test() {
     let expected_req = http::Request::builder()

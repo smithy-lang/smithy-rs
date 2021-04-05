@@ -5,7 +5,11 @@
 
 use bytes::Bytes;
 use http::{HeaderMap, HeaderValue};
+use http_body::Body;
+use pin_project::pin_project;
 use std::error::Error;
+use std::fmt;
+use std::fmt::{Debug, Formatter};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -20,22 +24,48 @@ type BodyError = Box<dyn Error + Send + Sync>;
 /// TODO: Consider renaming to simply `Body`, although I'm concerned about naming headaches
 /// between hyper::Body and our Body
 /// TODO: Once we add streaming bodies, we will need a custom debug implementation
+#[pin_project]
 #[derive(Debug)]
-pub enum SdkBody {
-    Once(Option<Bytes>),
-    // TODO: tokio::sync::mpsc based streaming body
+pub struct SdkBody(#[pin] Inner);
+
+type BoxBody = http_body::combinators::BoxBody<Bytes, Box<dyn Error + Send + Sync>>;
+
+#[pin_project(project = InnerProj)]
+enum Inner {
+    Once(#[pin] Option<Bytes>),
+    Streaming(#[pin] hyper::Body),
+    Dyn(#[pin] BoxBody),
+}
+
+impl Debug for Inner {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> fmt::Result {
+        todo!()
+    }
 }
 
 impl SdkBody {
-    fn poll_inner(&mut self) -> Poll<Option<Result<Bytes, BodyError>>> {
-        match self {
-            SdkBody::Once(ref mut opt) => {
+    pub fn from_hyper(body: hyper::Body) -> Self {
+        Self(Inner::Streaming(body))
+    }
+
+    pub fn from_dyn(body: BoxBody) -> Self {
+        Self(Inner::Dyn(body))
+    }
+
+    fn poll_inner(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Bytes, BodyError>>> {
+        match self.project().0.project() {
+            InnerProj::Once(ref mut opt) => {
                 let data = opt.take();
                 match data {
                     Some(bytes) => Poll::Ready(Some(Ok(bytes))),
                     None => Poll::Ready(None),
                 }
             }
+            InnerProj::Streaming(body) => body.poll_data(cx).map_err(|e| e.into()),
+            InnerProj::Dyn(box_body) => box_body.poll_data(cx),
         }
     }
 
@@ -44,29 +74,31 @@ impl SdkBody {
     /// If this SdkBody is NOT streaming, this will return the byte slab
     /// If this SdkBody is streaming, this will return `None`
     pub fn bytes(&self) -> Option<&[u8]> {
-        match self {
-            SdkBody::Once(Some(b)) => Some(&b),
-            SdkBody::Once(None) => Some(&[]),
+        match &self.0 {
+            Inner::Once(Some(b)) => Some(&b),
+            Inner::Once(None) => Some(&[]),
             // In the future, streaming variants will return `None`
+            _ => None,
         }
     }
 
     pub fn try_clone(&self) -> Option<Self> {
-        match self {
-            SdkBody::Once(bytes) => Some(SdkBody::Once(bytes.clone())),
+        match &self.0 {
+            Inner::Once(bytes) => Some(SdkBody(Inner::Once(bytes.clone()))),
+            _ => None,
         }
     }
 }
 
 impl From<&str> for SdkBody {
     fn from(s: &str) -> Self {
-        SdkBody::Once(Some(Bytes::copy_from_slice(s.as_bytes())))
+        SdkBody(Inner::Once(Some(Bytes::copy_from_slice(s.as_bytes()))))
     }
 }
 
 impl From<Bytes> for SdkBody {
     fn from(bytes: Bytes) -> Self {
-        SdkBody::Once(Some(bytes))
+        SdkBody(Inner::Once(Some(bytes)))
     }
 }
 
@@ -81,10 +113,10 @@ impl http_body::Body for SdkBody {
     type Error = BodyError;
 
     fn poll_data(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
-        self.poll_inner()
+        self.poll_inner(_cx)
     }
 
     fn poll_trailers(

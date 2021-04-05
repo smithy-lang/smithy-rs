@@ -9,7 +9,7 @@ use hyper::client::{HttpConnector, ResponseFuture};
 use hyper::Response;
 use hyper_tls::HttpsConnector;
 use smithy_http::body::SdkBody;
-use std::future::{Future, Ready};
+use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tower::Service;
@@ -76,7 +76,7 @@ pub trait HttpService: Send + Sync {
     fn call(
         &mut self,
         req: http::Request<SdkBody>,
-    ) -> Pin<Box<dyn Future<Output = Result<http::Response<hyper::Body>, BoxError>> + Send>>;
+    ) -> Pin<Box<dyn Future<Output = Result<http::Response<SdkBody>, BoxError>> + Send>>;
 
     /// Return a Boxed-clone of this service
     ///
@@ -105,9 +105,13 @@ where
     fn call(
         &mut self,
         req: Request<SdkBody>,
-    ) -> Pin<Box<dyn Future<Output = Result<Response<hyper::Body>, BoxError>> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Response<SdkBody>, BoxError>> + Send>> {
         let fut = Service::call(self, req);
-        let fut = async move { fut.await.map_err(|err| err.into()) };
+        let fut = async move {
+            fut.await
+                .map(|res| res.map(|body| SdkBody::from_hyper(body)))
+                .map_err(|err| err.into())
+        };
         Box::pin(fut)
     }
 
@@ -117,7 +121,7 @@ where
 }
 
 impl tower::Service<http::Request<SdkBody>> for Standard {
-    type Response = http::Response<hyper::Body>;
+    type Response = http::Response<SdkBody>;
     type Error = BoxError;
     type Future = StandardFuture;
 
@@ -140,17 +144,18 @@ impl tower::Service<http::Request<SdkBody>> for Standard {
 #[pin_project::pin_project(project = FutProj)]
 pub enum StandardFuture {
     Https(#[pin] ResponseFuture),
-    TestConn(#[pin] Ready<Result<http::Response<hyper::Body>, BoxError>>),
-    Dyn(#[pin] Pin<Box<dyn Future<Output = Result<http::Response<hyper::Body>, BoxError>> + Send>>),
+    Dyn(#[pin] Pin<Box<dyn Future<Output = Result<http::Response<SdkBody>, BoxError>> + Send>>),
 }
 
 impl Future for StandardFuture {
-    type Output = Result<http::Response<hyper::Body>, BoxError>;
+    type Output = Result<http::Response<SdkBody>, BoxError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.project() {
-            FutProj::TestConn(ready_fut) => ready_fut.poll(cx),
-            FutProj::Https(fut) => fut.poll(cx).map_err(|err| err.into()),
+            FutProj::Https(fut) => fut
+                .poll(cx)
+                .map(|resp| resp.map(|res| res.map(|body| SdkBody::from_hyper(body))))
+                .map_err(|err| err.into()),
             FutProj::Dyn(dyn_fut) => dyn_fut.poll(cx),
         }
     }

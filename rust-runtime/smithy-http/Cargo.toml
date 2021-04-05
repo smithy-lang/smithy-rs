@@ -10,6 +10,10 @@ bytes = "1"
 http-body = "0.4.0"
 http = "0.2.3"
 thiserror = "1"
+pin-project = "1"
+
+# We are using hyper for our streaming body implementation, but this is an internal detail.
+hyper = "0.14.5"
 
 [dev-dependencies]
 proptest = "0.10.1"
