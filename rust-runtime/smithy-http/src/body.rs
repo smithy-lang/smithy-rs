@@ -5,7 +5,11 @@
 
 use bytes::Bytes;
 use http::{HeaderMap, HeaderValue};
+use http_body::{Body, SizeHint};
+use pin_project::pin_project;
 use std::error::Error;
+use std::fmt;
+use std::fmt::{Debug, Formatter};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -19,17 +23,39 @@ type BodyError = Box<dyn Error + Send + Sync>;
 ///
 /// TODO: Consider renaming to simply `Body`, although I'm concerned about naming headaches
 /// between hyper::Body and our Body
-/// TODO: Once we add streaming bodies, we will need a custom debug implementation
+#[pin_project]
 #[derive(Debug)]
-pub enum SdkBody {
-    Once(Option<Bytes>),
-    // TODO: tokio::sync::mpsc based streaming body
+pub struct SdkBody(#[pin] Inner);
+
+type BoxBody = http_body::combinators::BoxBody<Bytes, Box<dyn Error + Send + Sync>>;
+
+#[pin_project(project = InnerProj)]
+enum Inner {
+    Once(#[pin] Option<Bytes>),
+    Streaming(#[pin] hyper::Body),
+    Dyn(#[pin] BoxBody),
+}
+
+impl Debug for Inner {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match &self {
+            i @ Inner::Once(_) | i @ Inner::Streaming(_) => i.fmt(f),
+            Inner::Dyn(_) => write!(f, "BoxBody"),
+        }
+    }
 }
 
 impl SdkBody {
-    fn poll_inner(&mut self) -> Poll<Option<Result<Bytes, BodyError>>> {
-        match self {
-            SdkBody::Once(ref mut opt) => {
+    pub fn from_dyn(body: BoxBody) -> Self {
+        Self(Inner::Dyn(body))
+    }
+
+    fn poll_inner(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Bytes, BodyError>>> {
+        match self.project().0.project() {
+            InnerProj::Once(ref mut opt) => {
                 let data = opt.take();
                 match data {
                     Some(bytes) if bytes.is_empty() => Poll::Ready(None),
@@ -37,6 +63,8 @@ impl SdkBody {
                     None => Poll::Ready(None),
                 }
             }
+            InnerProj::Streaming(body) => body.poll_data(cx).map_err(|e| e.into()),
+            InnerProj::Dyn(box_body) => box_body.poll_data(cx),
         }
     }
 
@@ -45,29 +73,36 @@ impl SdkBody {
     /// If this SdkBody is NOT streaming, this will return the byte slab
     /// If this SdkBody is streaming, this will return `None`
     pub fn bytes(&self) -> Option<&[u8]> {
-        match self {
-            SdkBody::Once(Some(b)) => Some(&b),
-            SdkBody::Once(None) => Some(&[]),
-            // In the future, streaming variants will return `None`
+        match &self.0 {
+            Inner::Once(Some(b)) => Some(&b),
+            Inner::Once(None) => Some(&[]),
+            _ => None,
         }
     }
 
     pub fn try_clone(&self) -> Option<Self> {
-        match self {
-            SdkBody::Once(bytes) => Some(SdkBody::Once(bytes.clone())),
+        match &self.0 {
+            Inner::Once(bytes) => Some(SdkBody(Inner::Once(bytes.clone()))),
+            _ => None,
         }
     }
 }
 
 impl From<&str> for SdkBody {
     fn from(s: &str) -> Self {
-        SdkBody::Once(Some(Bytes::copy_from_slice(s.as_bytes())))
+        SdkBody(Inner::Once(Some(Bytes::copy_from_slice(s.as_bytes()))))
     }
 }
 
 impl From<Bytes> for SdkBody {
     fn from(bytes: Bytes) -> Self {
-        SdkBody::Once(Some(bytes))
+        SdkBody(Inner::Once(Some(bytes)))
+    }
+}
+
+impl From<hyper::Body> for SdkBody {
+    fn from(body: hyper::Body) -> Self {
+        SdkBody(Inner::Streaming(body))
     }
 }
 
@@ -82,10 +117,10 @@ impl http_body::Body for SdkBody {
     type Error = BodyError;
 
     fn poll_data(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
-        self.poll_inner()
+        self.poll_inner(_cx)
     }
 
     fn poll_trailers(
@@ -93,5 +128,61 @@ impl http_body::Body for SdkBody {
         _cx: &mut Context<'_>,
     ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
         Poll::Ready(Ok(None))
+    }
+
+    fn is_end_stream(&self) -> bool {
+        match &self.0 {
+            Inner::Once(None) => true,
+            Inner::Once(Some(bytes)) => bytes.is_empty(),
+            Inner::Streaming(hyper_body) => hyper_body.is_end_stream(),
+            Inner::Dyn(box_body) => box_body.is_end_stream(),
+        }
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        match &self.0 {
+            Inner::Once(None) => SizeHint::with_exact(0),
+            Inner::Once(Some(bytes)) => SizeHint::with_exact(bytes.len() as u64),
+            Inner::Streaming(hyper_body) => hyper_body.size_hint(),
+            Inner::Dyn(box_body) => box_body.size_hint(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::body::SdkBody;
+    use http_body::Body;
+    use std::pin::Pin;
+
+    #[test]
+    fn valid_size_hint() {
+        assert_eq!(SdkBody::from("hello").size_hint().exact(), Some(5));
+        assert_eq!(SdkBody::from("").size_hint().exact(), Some(0));
+    }
+
+    #[test]
+    fn valid_eos() {
+        assert_eq!(SdkBody::from("hello").is_end_stream(), false);
+        assert_eq!(SdkBody::from("").is_end_stream(), true);
+    }
+
+    #[tokio::test]
+    async fn http_body_consumes_data() {
+        let mut body = SdkBody::from("hello!");
+        let mut body = Pin::new(&mut body);
+        let data = body.data().await;
+        assert!(data.is_some());
+        let data = body.data().await;
+        assert!(data.is_none());
+    }
+
+    #[tokio::test]
+    async fn empty_body_returns_none() {
+        // Its important to avoid sending empty chunks of data to avoid H2 data frame problems
+        let mut body = SdkBody::from("");
+        let mut body = Pin::new(&mut body);
+        let data = body.data().await;
+        assert!(data.is_none());
     }
 }
