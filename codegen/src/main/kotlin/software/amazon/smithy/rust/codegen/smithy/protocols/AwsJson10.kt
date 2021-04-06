@@ -151,7 +151,7 @@ class BasicAwsJsonGenerator(
         operationWriter.rustTemplate(
             """
             impl #{parse_strict} for $operationName {
-                type Output = Result<#{output}, #{error}>;
+                type Output = std::result::Result<#{output}, #{error}>;
                 fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
                     self.parse_response(response)
                 }

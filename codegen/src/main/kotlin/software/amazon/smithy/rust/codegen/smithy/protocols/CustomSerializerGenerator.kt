@@ -327,7 +327,7 @@ class CustomSerializerGenerator(
         body: RustWriter.() -> Unit
     ) {
         rustWriter.rustBlock(
-            "pub fn $functionName<'de, D>(_deser: D) -> Result<#T, D::Error> where D: #T<'de>",
+            "pub fn $functionName<'de, D>(_deser: D) -> std::result::Result<#T, D::Error> where D: #T<'de>",
             symbol,
             RuntimeType.Deserializer
         ) {

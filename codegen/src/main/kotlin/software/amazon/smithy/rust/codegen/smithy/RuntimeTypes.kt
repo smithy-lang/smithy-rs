@@ -65,6 +65,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             namespace = "${runtimeConfig.cratePrefix}_types::retry"
         )
 
+        val Result = RuntimeType("Result", dependency = null, "std::result")
         val From = RuntimeType("From", dependency = null, namespace = "std::convert")
         val AsRef = RuntimeType("AsRef", dependency = null, namespace = "std::convert")
         val std = RuntimeType(null, dependency = null, namespace = "std")

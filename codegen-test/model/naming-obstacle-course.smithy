@@ -12,7 +12,9 @@ service Config {
     operations: [
        ReservedWordsAsMembers,
        StructureNamePunning,
-       ErrCollisions
+       ErrCollisions,
+       Result,
+       Option
     ]
 }
 
@@ -61,8 +63,9 @@ operation StructureNamePunning {
 structure StructureNamePunningInput {
     regular_string: smithy.api#String,
     punned_string: crate#String,
-    punned_vec: Vec
+    punned_vec: Vec,
 }
+
 
 structure Vec {
     pv_member: Boolean
@@ -78,6 +81,14 @@ operation ErrCollisions {
         CollidingException
         // , ErrCollisionsException
     ]
+}
+
+operation Result {
+    input: Vec
+}
+
+operation Option {
+    input: Vec
 }
 
 @error("client")

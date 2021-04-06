@@ -117,13 +117,13 @@ class EnumGenerator(
         writer.rustTemplate(
             """
                 impl #{serialize} for $enumName {
-                    fn serialize<S>(&self, serializer: S) -> Result<<S as #{serializer}>::Ok, <S as #{serializer}>::Error> where S: #{serializer}{
+                    fn serialize<S>(&self, serializer: S) -> std::result::Result<<S as #{serializer}>::Ok, <S as #{serializer}>::Error> where S: #{serializer}{
                         serializer.serialize_str(self.as_str())
                     }
                 }
 
                 impl<'de> #{deserialize}<'de> for $enumName {
-                    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: #{deserializer}<'de> {
+                    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error> where D: #{deserializer}<'de> {
                         let data = <&str>::deserialize(deserializer)?;
                         Ok(Self::from(data))
                     }
@@ -153,7 +153,7 @@ class EnumGenerator(
             impl std::str::FromStr for $enumName {
                 type Err = std::convert::Infallible;
 
-                fn from_str(s: &str) -> Result<Self, Self::Err> {
+                fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
                     Ok($enumName::from(s))
                 }
             }

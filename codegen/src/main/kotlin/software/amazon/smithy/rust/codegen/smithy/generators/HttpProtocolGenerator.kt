@@ -101,7 +101,7 @@ abstract class HttpProtocolGenerator(
             builderGenerator.renderConvenienceMethod(this)
 
             rustBlock(
-                "pub fn build_http_request(&self) -> Result<#T<Vec<u8>>, #T>", RuntimeType.Http("request::Request"), buildErrorT
+                "pub fn build_http_request(&self) -> std::result::Result<#T<Vec<u8>>, #T>", RuntimeType.Http("request::Request"), buildErrorT
             ) {
                 write("Ok(#T::assemble(self.input.request_builder_base()?, self.input.build_body()))", inputSymbol)
             }
@@ -109,7 +109,7 @@ abstract class HttpProtocolGenerator(
             fromResponseImpl(this, operationShape)
 
             rustBlock(
-                "pub fn parse_response(&self, response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+                "pub fn parse_response(&self, response: &#T<impl AsRef<[u8]>>) -> std::result::Result<#T, #T>",
                 RuntimeType.Http("response::Response"),
                 symbolProvider.toSymbol(operationShape.outputShape(model)),
                 operationShape.errorSymbol(symbolProvider)
@@ -128,7 +128,7 @@ abstract class HttpProtocolGenerator(
 
     protected fun httpBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
         implBlockWriter.rustBlock(
-            "pub fn request_builder_base(&self) -> Result<#T, #T>",
+            "pub fn request_builder_base(&self) -> std::result::Result<#T, #T>",
             RuntimeType.HttpRequestBuilder, buildErrorT
         ) {
             f(this)
@@ -150,7 +150,7 @@ abstract class HttpProtocolGenerator(
     ) {
         Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
         implBlockWriter.rustBlock(
-            "fn from_response(response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+            "fn from_response(response: &#T<impl AsRef<[u8]>>) -> std::result::Result<#T, #T>",
             RuntimeType.Http("response::Response"),
             symbolProvider.toSymbol(operationShape.outputShape(model)),
             operationShape.errorSymbol(symbolProvider)

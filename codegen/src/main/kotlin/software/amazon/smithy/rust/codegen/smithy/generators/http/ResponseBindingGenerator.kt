@@ -63,7 +63,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         val fnName = "deser_header_${operationShape.id.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
         return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
             writer.rustBlock(
-                "pub fn $fnName(header_map: &#T::HeaderMap) -> Result<#T, #T::ParseError>",
+                "pub fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.http,
                 outputT,
                 headerUtil
@@ -83,7 +83,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         val fnName = "deser_prefix_header_${operationShape.id.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
         val inner = RuntimeType.forInlineFun("${fnName}_inner", "http_serde_inner") {
             it.rustBlock(
-                "pub fn ${fnName}_inner(headers: #T::header::ValueIter<http::HeaderValue>) -> Result<Option<#T>, #T::ParseError>",
+                "pub fn ${fnName}_inner(headers: #T::header::ValueIter<http::HeaderValue>) -> std::result::Result<Option<#T>, #T::ParseError>",
                 RuntimeType.http,
                 symbolProvider.toSymbol(model.expectShape(target.value.target)),
                 headerUtil
@@ -93,7 +93,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         }
         return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
             writer.rustBlock(
-                "pub fn $fnName(header_map: &#T::HeaderMap) -> Result<#T, #T::ParseError>",
+                "pub fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.http,
                 outputT,
                 headerUtil
@@ -128,7 +128,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         val outputT = symbolProvider.toSymbol(binding.member)
         val fnName = "deser_payload_${operationShape.id.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
         return RuntimeType.forInlineFun(fnName, "http_serde") { rustWriter ->
-            rustWriter.rustBlock("pub fn $fnName(body: &[u8]) -> Result<#T, #T>", outputT, errorT) {
+            rustWriter.rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorT) {
                 deserializePayloadBody(
                     binding,
                     errorT,

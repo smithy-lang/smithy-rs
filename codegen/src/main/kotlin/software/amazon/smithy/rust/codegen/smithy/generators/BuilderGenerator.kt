@@ -46,7 +46,7 @@ class ModelBuilderGenerator(
     override fun buildFn(implBlockWriter: RustWriter) {
         val fallibleBuilder = StructureGenerator.fallibleBuilder(shape, symbolProvider)
         val returnType = when (fallibleBuilder) {
-            true -> "Result<#T, String>"
+            true -> "std::result::Result<#T, String>"
             false -> "#T"
         }
         val outputSymbol = symbolProvider.toSymbol(shape)
@@ -95,7 +95,7 @@ class OperationInputBuilderGenerator(
         val retryType = features.mapNotNull { it.retryType() }.firstOrNull()?.let { implBlockWriter.format(it) } ?: "()"
 
         val baseReturnType = with(implBlockWriter) { "${format(operationT)}<${format(outputSymbol)}, $retryType>" }
-        val returnType = "Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
+        val returnType = "std::result::Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
         // For codegen simplicity, allow `let x = ...; x`
