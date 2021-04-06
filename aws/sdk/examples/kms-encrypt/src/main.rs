@@ -8,14 +8,15 @@ use clap::{App, Arg};
 use std::env;
 use std::fs::File;
 use std::io::Write;
+use std::process;
 
 use aws_hyper::SdkError;
 use kms::error::{EncryptError, EncryptErrorKind};
-use kms::fluent::Client;
 use kms::Blob;
+use kms::Client;
 use kms::Region;
-//use tracing_subscriber::fmt::format::FmtSpan;
-//use tracing_subscriber::fmt::SubscriberBuilder;
+use tracing_subscriber::fmt::format::FmtSpan;
+use tracing_subscriber::fmt::SubscriberBuilder;
 
 async fn display_error_hint(client: &Client, err: EncryptError) {
     eprintln!("Error while decrypting: {}", err);
@@ -50,7 +51,6 @@ async fn main() {
                 .long("region")
                 .value_name("REGION")
                 .help("Specifies the region")
-                .default_value("us-west-2")
                 .takes_value(true),
         )
         .arg(
@@ -71,20 +71,6 @@ async fn main() {
                 .takes_value(true)
                 .required(true),
         )
-        .get_matches();
-
-    let region = matches.value_of("region").expect("clap provides default");
-    let key = matches.value_of("key").expect("marked required in clap");
-    let text = matches.value_of("text").expect("marked required in clap");
-
-    // TODO: (doug): Only enable logging if a `-v` flag is set
-    /* SubscriberBuilder::default()
-       .with_env_filter("info")
-       .with_span_events(FmtSpan::CLOSE)
-       .init();
-    */
-=======
-        )
         .arg(
             Arg::with_name("out")
                 .short("o")
@@ -93,28 +79,38 @@ async fn main() {
                 .help("Specifies the name of the file to store the encrypted text in.")
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("verbose")
+                .short("v")
+                .long("verbose")
+                .value_name("VERBOSE")
+                .help("Whether to display additional runtime information.")
+                .takes_value(false),
+        )
         .get_matches();
 
     // Get value of AWS_DEFAULT_REGION, if set.
-    let default_region;
-    match env::var("AWS_DEFAULT_REGION") {
-        Ok(val) => default_region = val,
-        Err(_e) => default_region = "us-west-2".to_string(),
-    }
+    let default_region = match env::var("AWS_DEFAULT_REGION") {
+        Ok(val) => val,
+        Err(_e) => "us-west-2".to_string(),
+    };
 
     let region = matches.value_of("region").unwrap_or(&*default_region);
-    let key = matches.value_of("key").unwrap_or("");
-    let text = matches.value_of("text").unwrap_or("");
+    let key = matches.value_of("key").expect("marked required in clap");
+    let text = matches.value_of("text").expect("marked required in clap");
     let out = matches.value_of("out").unwrap_or("output.txt");
+    let verbose = matches.is_present("verbose");
 
-    SubscriberBuilder::default()
-        .with_env_filter("info")
-        .with_span_events(FmtSpan::CLOSE)
-        .init();
->>>>>>> 2a949eb... Updated KMS examples to use base64 encoding to save/read encrypted bytes
+    if verbose {
+        SubscriberBuilder::default()
+            .with_env_filter("info")
+            .with_span_events(FmtSpan::CLOSE)
+            .init();
+    }
+
     let config = kms::Config::builder().region(Region::from(region)).build();
 
-    let client = kms::fluent::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = kms::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
     let blob = Blob::new(text.as_bytes());
 
@@ -131,7 +127,6 @@ async fn main() {
     };
 
     // Did we get an encrypted blob?
-    // TODO doug: base64 encode this?
     let blob = resp.ciphertext_blob.expect("Could not get encrypted text");
     let bytes = blob.as_ref();
 
