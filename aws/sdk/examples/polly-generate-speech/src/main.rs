@@ -1,7 +1,7 @@
 use polly::model::{Engine, OutputFormat, VoiceId};
 use std::error::Error;
 use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
+use tokio_util::io::StreamReader;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
@@ -11,15 +11,12 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         .voice_id(VoiceId::Emma)
         .engine(Engine::Neural)
         .output_format(OutputFormat::Mp3)
-        .text("Hello, I am polly!")
+        .text("Hello, I am polly! I generated this Audio with a neural network based TTS for the AWS SDK.")
         .send()
         .await?;
-    let audio = resp.audio_stream.expect("data should be included");
+    let mut audio = StreamReader::new(resp.audio_stream);
     let mut file = File::create("audio.mp3").await?;
-    file.write_all(audio.as_ref()).await?;
-    println!(
-        "Audio written to audio.mp3 ({} bytes)",
-        audio.as_ref().len()
-    );
+    let bytes_written = tokio::io::copy(&mut audio, &mut file).await?;
+    println!("Audio written to audio.mp3 ({} bytes)", bytes_written);
     Ok(())
 }

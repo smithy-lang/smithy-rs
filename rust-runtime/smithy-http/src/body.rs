@@ -35,6 +35,7 @@ enum Inner {
     Once(#[pin] Option<Bytes>),
     Streaming(#[pin] hyper::Body),
     Dyn(#[pin] BoxBody),
+    // Taken,
 }
 
 impl Debug for Inner {
@@ -50,6 +51,11 @@ impl SdkBody {
 
     pub fn from_dyn(body: BoxBody) -> Self {
         Self(Inner::Dyn(body))
+    }
+
+    pub fn taken() -> Self {
+        // TODO: extra variant
+        SdkBody(Inner::Once(None))
     }
 
     fn poll_inner(

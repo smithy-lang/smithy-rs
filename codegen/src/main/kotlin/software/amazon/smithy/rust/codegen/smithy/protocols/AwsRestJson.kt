@@ -125,7 +125,7 @@ class AwsRestJsonGenerator(
                         if #{json_errors}::is_error(&response) && response.status().as_u16() != ${httpTrait.code} {
                             return None;
                         }
-                        self.parse_response(response)
+                        Some(self.parse_response(response))
                     }
 
                     fn parse_loaded(&self, response: &http::Response<#{bytes}>) -> Self::Output {
@@ -148,7 +148,11 @@ class AwsRestJsonGenerator(
             impl #{parse_strict} for $operationName {
                 type Output = Result<#{output}, #{error}>;
                 fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
-                    self.parse_response(response)
+                     if #{json_errors}::is_error(&response) && response.status().as_u16() != ${httpTrait.code} {
+                        self.parse_error(response)
+                     } else {
+                        self.parse_response(response)
+                     }
                 }
             }
         """,
@@ -156,7 +160,8 @@ class AwsRestJsonGenerator(
                 "output" to outputSymbol,
                 "error" to operationShape.errorSymbol(symbolProvider),
                 "response" to RuntimeType.Http("Response"),
-                "bytes" to RuntimeType.Bytes
+                "bytes" to RuntimeType.Bytes,
+                "json_errors" to RuntimeType.awsJsonErrors(runtimeConfig)
             )
         }
     }
@@ -363,7 +368,7 @@ class AwsRestJsonGenerator(
                     docHandler = docShapeHandler,
                     structuredHandler = structureShapeHandler
                 )
-                writable { rust("#T(response.body().as_ref())?", deserializer) }
+                writable { rust("#T(response.body_mut())?", deserializer) }
             }
             HttpBinding.Location.RESPONSE_CODE -> writable("Some(response.status().as_u16() as _)")
             HttpBinding.Location.PREFIX_HEADERS -> {

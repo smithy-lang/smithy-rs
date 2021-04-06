@@ -5,12 +5,20 @@ use bytes::{Bytes, BytesMut};
 use futures_core::Stream;
 use http_body::Body;
 use pin_project::pin_project;
+use std::error::Error;
 use std::fmt::{Debug, Formatter};
+use std::io::ErrorKind;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 #[pin_project]
 pub struct ByteStream(#[pin] Inner<SdkBody>);
+
+impl PartialEq for ByteStream {
+    fn eq(&self, _other: &Self) -> bool {
+        todo!()
+    }
+}
 
 impl Debug for ByteStream {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -28,11 +36,27 @@ impl ByteStream {
     }
 }
 
+pub struct ByteStreamError(Box<dyn std::error::Error + Send + Sync + 'static>);
+impl Into<Box<dyn std::error::Error + Send + Sync>> for ByteStreamError {
+    fn into(self) -> Box<dyn Error + Send + Sync> {
+        self.0
+    }
+}
+
+impl From<ByteStreamError> for std::io::Error {
+    fn from(e: ByteStreamError) -> Self {
+        std::io::Error::new(ErrorKind::Other, e)
+    }
+}
+
 impl futures_core::stream::Stream for ByteStream {
-    type Item = Result<Bytes, body::Error>;
+    type Item = Result<Bytes, ByteStreamError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.project().0.poll_next(cx)
+        self.project()
+            .0
+            .poll_next(cx)
+            .map_err(|e| ByteStreamError(e.into()))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {

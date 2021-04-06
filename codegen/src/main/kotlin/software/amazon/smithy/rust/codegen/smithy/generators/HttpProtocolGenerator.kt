@@ -108,20 +108,17 @@ abstract class HttpProtocolGenerator(
             }
 
             val outputShape = operationShape.outputShape(model)
-            val responseBodyT = when (outputShape.hasStreamingMember(model)) {
-                true -> operationWriter.format(RuntimeType.sdkBody(protocolConfig.runtimeConfig))
-                false -> "impl AsRef<[u8]>"
-            }
+            val (responseBodyT, mut) = responseBody(operationShape)
 
             fromResponseImpl(this, operationShape)
 
             rustBlock(
-                "pub fn parse_response(&self, response: &#T<$responseBodyT>) -> Result<#T, #T>",
+                "pub fn parse_response(&self, $mut response: &$mut #T<$responseBodyT>) -> Result<#T, #T>",
                 RuntimeType.Http("response::Response"),
                 symbolProvider.toSymbol(operationShape.outputShape(model)),
                 operationShape.errorSymbol(symbolProvider)
             ) {
-                write("Self::from_response(&response)")
+                write("Self::from_response(&$mut response)")
             }
 
             rustBlock("pub fn new(input: #T) -> Self", inputSymbol) {
@@ -150,19 +147,23 @@ abstract class HttpProtocolGenerator(
         }
     }
 
+    private fun RustWriter.responseBody(operationShape: OperationShape): Pair<String, String> {
+        return when (operationShape.outputShape(model).hasStreamingMember(model)) {
+            true -> (this.format(RuntimeType.sdkBody(protocolConfig.runtimeConfig)) to "mut")
+            false -> "impl AsRef<[u8]>" to ""
+        }
+    }
+
     protected fun fromResponseFun(
         implBlockWriter: RustWriter,
         operationShape: OperationShape,
         block: RustWriter.() -> Unit
     ) {
         Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
-        val bodyT = when (operationShape.outputShape(model).hasStreamingMember(model)) {
-            true -> implBlockWriter.format(RuntimeType.sdkBody(protocolConfig.runtimeConfig))
-            false -> "impl AsRef<[u8]>"
-        }
+        val (bodyT, mut) = implBlockWriter.responseBody(operationShape)
 
         implBlockWriter.rustBlock(
-            "fn from_response(response: &#T<$bodyT>) -> Result<#T, #T>",
+            "fn from_response(response: &$mut #T<$bodyT>) -> Result<#T, #T>",
             RuntimeType.Http("response::Response"),
             symbolProvider.toSymbol(operationShape.outputShape(model)),
             operationShape.errorSymbol(symbolProvider)
