@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
+import software.amazon.smithy.model.knowledge.EventStreamIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -29,6 +30,7 @@ class ServiceGenerator(
 
     fun render() {
         val operations = index.getContainedOperations(config.serviceShape).sortedBy { it.id }
+        val eventStreamIndex = EventStreamIndex.of(config.model)
         operations.map { operation ->
             rustCrate.useShapeWriter(operation) { operationWriter ->
                 rustCrate.useShapeWriter(operation.inputShape(config.model)) { inputWriter ->

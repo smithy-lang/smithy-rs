@@ -12,9 +12,12 @@ http = "0.2.3"
 thiserror = "1"
 pin-project = "1"
 
+futures-core = "0.3.13"
+
 # We are using hyper for our streaming body implementation, but this is an internal detail.
 hyper = "0.14.5"
 
 [dev-dependencies]
 proptest = "0.10.1"
 base64 = "0.13.0"
+tokio = { version = "1", features = ["macros", "rt"] }

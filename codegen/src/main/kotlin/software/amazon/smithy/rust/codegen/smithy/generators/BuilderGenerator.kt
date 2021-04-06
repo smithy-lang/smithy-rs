@@ -164,7 +164,7 @@ abstract class BuilderGenerator(
         val symbol = structureSymbol
         writer.docs("A builder for #D", symbol)
         writer.write("##[non_exhaustive]")
-        writer.write("##[derive(Debug, Clone, Default)]")
+        writer.write("##[derive(Debug, Default)]")
         writer.rustBlock("pub struct $builderName") {
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)

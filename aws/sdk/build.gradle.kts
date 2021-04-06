@@ -25,6 +25,7 @@ val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types", "aws-hyper", "a
 buildscript {
     val smithyVersion: String by project
     dependencies {
+        classpath("software.amazon.smithy:smithy-cli:$smithyVersion")
         classpath("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     }
 }
@@ -37,7 +38,7 @@ dependencies {
 
 data class AwsService(val service: String, val module: String, val modelFile: File, val extraConfig: String? = null)
 
-val awsServices: Provider<List<AwsService>> = project.providers.provider { discoverServices() }
+val awsServices: Provider<List<AwsService>> = project.providers.provider { discoverServices().filter { it.module == "polly"} }
 
 /**
  * Discovers services from the `models` directory

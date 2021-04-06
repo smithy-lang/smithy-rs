@@ -19,6 +19,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
+import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
@@ -128,7 +129,12 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         val outputT = symbolProvider.toSymbol(binding.member)
         val fnName = "deser_payload_${operationShape.id.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
         return RuntimeType.forInlineFun(fnName, "http_serde") { rustWriter ->
-            rustWriter.rustBlock("pub fn $fnName(body: &[u8]) -> Result<#T, #T>", outputT, errorT) {
+            val bodyT = if (binding.member.getMemberTrait(model, StreamingTrait::class.java).isPresent) {
+                "&mut ${rustWriter.format(RuntimeType.sdkBody(runtimeConfig))}"
+            } else {
+                "&[u8]"
+            }
+            rustWriter.rustBlock("pub fn $fnName(body: $bodyT) -> Result<#T, #T>", outputT, errorT) {
                 deserializePayloadBody(
                     binding,
                     errorT,
@@ -137,6 +143,16 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                 )
             }
         }
+    }
+
+    private fun RustWriter.deserializeStreamingBody(
+        binding: HttpBinding,
+        errorSymbol: RuntimeType
+    ) {
+        val member = binding.member
+        val targetShape = model.expectShape(member.target)
+        check(targetShape is BlobShape)
+        rust("Ok(#T::new)")
     }
 
     private fun RustWriter.deserializePayloadBody(

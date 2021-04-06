@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.hasStreamingMember
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -106,10 +107,16 @@ abstract class HttpProtocolGenerator(
                 write("Ok(#T::assemble(self.input.request_builder_base()?, self.input.build_body()))", inputSymbol)
             }
 
+            val outputShape = operationShape.outputShape(model)
+            val responseBodyT = when (outputShape.hasStreamingMember(model)) {
+                true -> operationWriter.format(RuntimeType.sdkBody(protocolConfig.runtimeConfig))
+                false -> "impl AsRef<[u8]>"
+            }
+
             fromResponseImpl(this, operationShape)
 
             rustBlock(
-                "pub fn parse_response(&self, response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+                "pub fn parse_response(&self, response: &#T<$responseBodyT>) -> Result<#T, #T>",
                 RuntimeType.Http("response::Response"),
                 symbolProvider.toSymbol(operationShape.outputShape(model)),
                 operationShape.errorSymbol(symbolProvider)
@@ -149,8 +156,13 @@ abstract class HttpProtocolGenerator(
         block: RustWriter.() -> Unit
     ) {
         Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
+        val bodyT = when (operationShape.outputShape(model).hasStreamingMember(model)) {
+            true -> implBlockWriter.format(RuntimeType.sdkBody(protocolConfig.runtimeConfig))
+            false -> "impl AsRef<[u8]>"
+        }
+
         implBlockWriter.rustBlock(
-            "fn from_response(response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+            "fn from_response(response: &#T<$bodyT>) -> Result<#T, #T>",
             RuntimeType.Http("response::Response"),
             symbolProvider.toSymbol(operationShape.outputShape(model)),
             operationShape.errorSymbol(symbolProvider)

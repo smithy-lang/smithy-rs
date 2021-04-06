@@ -179,6 +179,12 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             namespace = "smithy_http::response"
         )
 
+        fun parseResponse(runtimeConfig: RuntimeConfig) = RuntimeType(
+            "ParseHttpResponse",
+            dependency = CargoDependency.SmithyHttp(runtimeConfig),
+            namespace = "smithy_http::response"
+        )
+
         val Bytes = RuntimeType("Bytes", dependency = CargoDependency.Bytes, namespace = "bytes")
         fun BlobSerde(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.blobSerde(runtimeConfig))
 
@@ -190,5 +196,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             dependency = InlineDependency(name, module, listOf(), func),
             namespace = "crate::$module"
         )
+
+        fun byteStream(runtimeConfig: RuntimeConfig): RuntimeType = CargoDependency.SmithyHttp(runtimeConfig).asType().member("ByteStream")
     }
 }
