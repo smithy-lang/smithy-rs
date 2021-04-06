@@ -36,12 +36,15 @@ impl ByteStream {
     }
 }
 
+#[derive(Debug)]
 pub struct ByteStreamError(Box<dyn std::error::Error + Send + Sync + 'static>);
-impl Into<Box<dyn std::error::Error + Send + Sync>> for ByteStreamError {
-    fn into(self) -> Box<dyn Error + Send + Sync> {
-        self.0
+
+impl std::fmt::Display for ByteStreamError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
+impl Error for ByteStreamError {}
 
 impl From<ByteStreamError> for std::io::Error {
     fn from(e: ByteStreamError) -> Self {

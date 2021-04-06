@@ -9,4 +9,4 @@ edition = "2018"
 [dependencies]
 polly = { path = "../../build/aws-sdk/polly"}
 tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0.6.5", features = ["io"] }
+tokio-stream = { version = "0"}
