@@ -2291,7 +2291,7 @@ impl<'a> std::fmt::Debug for VerifyInputBody<'a> {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct CancelKeyDeletionOutputBody {
     /// <p>The Amazon Resource Name (<a href="https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#key-id-key-ARN">key ARN</a>) of the CMK whose deletion is canceled.</p>
     #[serde(rename = "KeyId")]
@@ -2307,7 +2307,7 @@ impl std::fmt::Debug for CancelKeyDeletionOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct CreateCustomKeyStoreOutputBody {
     /// <p>A unique identifier for the new custom key store.</p>
     #[serde(rename = "CustomKeyStoreId")]
@@ -2323,7 +2323,7 @@ impl std::fmt::Debug for CreateCustomKeyStoreOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct CreateGrantOutputBody {
     /// <p>The grant token.</p>
     /// <p>For more information, see <a href="https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#grant_token">Grant Tokens</a> in the
@@ -2348,7 +2348,7 @@ impl std::fmt::Debug for CreateGrantOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct CreateKeyOutputBody {
     /// <p>Metadata associated with the CMK.</p>
     #[serde(rename = "KeyMetadata")]
@@ -2364,7 +2364,7 @@ impl std::fmt::Debug for CreateKeyOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DecryptOutputBody {
     /// <p>The Amazon Resource Name (<a href="https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#key-id-key-ARN">key ARN</a>) of the CMK that was used to decrypt the ciphertext.</p>
     #[serde(rename = "KeyId")]
@@ -2391,7 +2391,7 @@ impl std::fmt::Debug for DecryptOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeCustomKeyStoresOutputBody {
     /// <p>Contains metadata about each custom key store.</p>
     #[serde(rename = "CustomKeyStores")]
@@ -2421,7 +2421,7 @@ impl std::fmt::Debug for DescribeCustomKeyStoresOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeKeyOutputBody {
     /// <p>Metadata associated with the key.</p>
     #[serde(rename = "KeyMetadata")]
@@ -2437,7 +2437,7 @@ impl std::fmt::Debug for DescribeKeyOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct EncryptOutputBody {
     /// <p>The encrypted plaintext. When you use the HTTP API or the AWS CLI, the value is Base64-encoded. Otherwise, it is not Base64-encoded.</p>
     #[serde(rename = "CiphertextBlob")]
@@ -2464,7 +2464,7 @@ impl std::fmt::Debug for EncryptOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct GenerateDataKeyOutputBody {
     /// <p>The encrypted copy of the data key. When you use the HTTP API or the AWS CLI, the value is Base64-encoded. Otherwise, it is not Base64-encoded.</p>
     #[serde(rename = "CiphertextBlob")]
@@ -2493,7 +2493,7 @@ impl std::fmt::Debug for GenerateDataKeyOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct GenerateDataKeyPairOutputBody {
     /// <p>The encrypted copy of the private key. When you use the HTTP API or the AWS CLI, the value is Base64-encoded. Otherwise, it is not Base64-encoded.</p>
     #[serde(rename = "PrivateKeyCiphertextBlob")]
@@ -2535,7 +2535,7 @@ impl std::fmt::Debug for GenerateDataKeyPairOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct GenerateDataKeyPairWithoutPlaintextOutputBody {
     /// <p>The encrypted copy of the private key. When you use the HTTP API or the AWS CLI, the value is Base64-encoded. Otherwise, it is not Base64-encoded.</p>
     #[serde(rename = "PrivateKeyCiphertextBlob")]
@@ -2571,7 +2571,7 @@ impl std::fmt::Debug for GenerateDataKeyPairWithoutPlaintextOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct GenerateDataKeyWithoutPlaintextOutputBody {
     /// <p>The encrypted data key. When you use the HTTP API or the AWS CLI, the value is Base64-encoded. Otherwise, it is not Base64-encoded.</p>
     #[serde(rename = "CiphertextBlob")]
@@ -2593,7 +2593,7 @@ impl std::fmt::Debug for GenerateDataKeyWithoutPlaintextOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct GenerateRandomOutputBody {
     /// <p>The random byte string. When you use the HTTP API or the AWS CLI, the value is Base64-encoded. Otherwise, it is not Base64-encoded.</p>
     #[serde(rename = "Plaintext")]
@@ -2610,7 +2610,7 @@ impl std::fmt::Debug for GenerateRandomOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct GetKeyPolicyOutputBody {
     /// <p>A key policy document in JSON format.</p>
     #[serde(rename = "Policy")]
@@ -2626,7 +2626,7 @@ impl std::fmt::Debug for GetKeyPolicyOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct GetKeyRotationStatusOutputBody {
     /// <p>A Boolean value that specifies whether key rotation is enabled.</p>
     #[serde(rename = "KeyRotationEnabled")]
@@ -2641,7 +2641,7 @@ impl std::fmt::Debug for GetKeyRotationStatusOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct GetParametersForImportOutputBody {
     /// <p>The Amazon Resource Name (<a href="https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#key-id-key-ARN">key ARN</a>) of the CMK to use in a subsequent <a>ImportKeyMaterial</a>
     /// request. This is the same CMK specified in the <code>GetParametersForImport</code>
@@ -2682,7 +2682,7 @@ impl std::fmt::Debug for GetParametersForImportOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct GetPublicKeyOutputBody {
     /// <p>The Amazon Resource Name (<a href="https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#key-id-key-ARN">key ARN</a>) of the asymmetric CMK from which the public key was downloaded.</p>
     #[serde(rename = "KeyId")]
@@ -2737,7 +2737,7 @@ impl std::fmt::Debug for GetPublicKeyOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListAliasesOutputBody {
     /// <p>A list of aliases.</p>
     #[serde(rename = "Aliases")]
@@ -2766,7 +2766,7 @@ impl std::fmt::Debug for ListAliasesOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListGrantsOutputBody {
     /// <p>A list of grants.</p>
     #[serde(rename = "Grants")]
@@ -2795,7 +2795,7 @@ impl std::fmt::Debug for ListGrantsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListKeyPoliciesOutputBody {
     /// <p>A list of key policy names. The only valid value is <code>default</code>.</p>
     #[serde(rename = "PolicyNames")]
@@ -2824,7 +2824,7 @@ impl std::fmt::Debug for ListKeyPoliciesOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListKeysOutputBody {
     /// <p>A list of customer master keys (CMKs).</p>
     #[serde(rename = "Keys")]
@@ -2853,7 +2853,7 @@ impl std::fmt::Debug for ListKeysOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListResourceTagsOutputBody {
     /// <p>A list of tags. Each tag consists of a tag key and a tag value.</p>
     #[serde(rename = "Tags")]
@@ -2883,7 +2883,7 @@ impl std::fmt::Debug for ListResourceTagsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListRetirableGrantsOutputBody {
     /// <p>A list of grants.</p>
     #[serde(rename = "Grants")]
@@ -2912,7 +2912,7 @@ impl std::fmt::Debug for ListRetirableGrantsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ReEncryptOutputBody {
     /// <p>The reencrypted data. When you use the HTTP API or the AWS CLI, the value is Base64-encoded. Otherwise, it is not Base64-encoded.</p>
     #[serde(rename = "CiphertextBlob")]
@@ -2957,7 +2957,7 @@ impl std::fmt::Debug for ReEncryptOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ScheduleKeyDeletionOutputBody {
     /// <p>The Amazon Resource Name (<a href="https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#key-id-key-ARN">key ARN</a>) of the CMK whose deletion is scheduled.</p>
     #[serde(rename = "KeyId")]
@@ -2981,7 +2981,7 @@ impl std::fmt::Debug for ScheduleKeyDeletionOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct SignOutputBody {
     /// <p>The Amazon Resource Name (<a href="https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#key-id-key-ARN">key ARN</a>) of the asymmetric CMK that was used to sign the
     /// message.</p>
@@ -3024,7 +3024,7 @@ impl std::fmt::Debug for SignOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct VerifyOutputBody {
     /// <p>The Amazon Resource Name (<a href="https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#key-id-key-ARN">key ARN</a>) of the asymmetric CMK that was used to verify the signature.</p>
     #[serde(rename = "KeyId")]

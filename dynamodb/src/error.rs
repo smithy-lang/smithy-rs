@@ -13,7 +13,7 @@ pub enum BatchExecuteStatementErrorKind {
     RequestLimitExceeded(crate::error::RequestLimitExceeded),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for BatchExecuteStatementError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -38,7 +38,7 @@ impl BatchExecuteStatementError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: BatchExecuteStatementErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -93,7 +93,7 @@ pub enum BatchGetItemErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for BatchGetItemError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -121,7 +121,7 @@ impl BatchGetItemError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: BatchGetItemErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -180,7 +180,7 @@ pub enum BatchWriteItemErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for BatchWriteItemError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -209,7 +209,7 @@ impl BatchWriteItemError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: BatchWriteItemErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -270,7 +270,7 @@ pub enum CreateBackupErrorKind {
     TableNotFoundError(crate::error::TableNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for CreateBackupError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -300,7 +300,7 @@ impl CreateBackupError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: CreateBackupErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -360,7 +360,7 @@ pub enum CreateGlobalTableErrorKind {
     TableNotFoundError(crate::error::TableNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for CreateGlobalTableError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -388,7 +388,7 @@ impl CreateGlobalTableError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: CreateGlobalTableErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -445,7 +445,7 @@ pub enum CreateTableErrorKind {
     ResourceInUseError(crate::error::ResourceInUseError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for CreateTableError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -472,7 +472,7 @@ impl CreateTableError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: CreateTableErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -529,7 +529,7 @@ pub enum DeleteBackupErrorKind {
     LimitExceededError(crate::error::LimitExceededError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DeleteBackupError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -557,7 +557,7 @@ impl DeleteBackupError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DeleteBackupErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -618,7 +618,7 @@ pub enum DeleteItemErrorKind {
     TransactionConflictError(crate::error::TransactionConflictError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DeleteItemError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -649,7 +649,7 @@ impl DeleteItemError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DeleteItemErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -710,7 +710,7 @@ pub enum DeleteTableErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DeleteTableError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -738,7 +738,7 @@ impl DeleteTableError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DeleteTableErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -794,7 +794,7 @@ pub enum DescribeBackupErrorKind {
     InvalidEndpointError(crate::error::InvalidEndpointError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DescribeBackupError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -820,7 +820,7 @@ impl DescribeBackupError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DescribeBackupErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -874,7 +874,7 @@ pub enum DescribeContinuousBackupsErrorKind {
     TableNotFoundError(crate::error::TableNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DescribeContinuousBackupsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -900,7 +900,7 @@ impl DescribeContinuousBackupsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DescribeContinuousBackupsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -953,7 +953,7 @@ pub enum DescribeContributorInsightsErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DescribeContributorInsightsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -978,7 +978,7 @@ impl DescribeContributorInsightsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DescribeContributorInsightsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1027,7 +1027,7 @@ pub struct DescribeEndpointsError {
 #[derive(std::fmt::Debug)]
 pub enum DescribeEndpointsErrorKind {
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DescribeEndpointsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1050,7 +1050,7 @@ impl DescribeEndpointsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DescribeEndpointsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1101,7 +1101,7 @@ pub enum DescribeExportErrorKind {
     LimitExceededError(crate::error::LimitExceededError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DescribeExportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1127,7 +1127,7 @@ impl DescribeExportError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DescribeExportErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1181,7 +1181,7 @@ pub enum DescribeGlobalTableErrorKind {
     InvalidEndpointError(crate::error::InvalidEndpointError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DescribeGlobalTableError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1207,7 +1207,7 @@ impl DescribeGlobalTableError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DescribeGlobalTableErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1261,7 +1261,7 @@ pub enum DescribeGlobalTableSettingsErrorKind {
     InvalidEndpointError(crate::error::InvalidEndpointError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DescribeGlobalTableSettingsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1287,7 +1287,7 @@ impl DescribeGlobalTableSettingsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DescribeGlobalTableSettingsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1341,7 +1341,7 @@ pub enum DescribeKinesisStreamingDestinationErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DescribeKinesisStreamingDestinationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1376,7 +1376,7 @@ impl DescribeKinesisStreamingDestinationError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DescribeKinesisStreamingDestinationErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1437,7 +1437,7 @@ pub enum DescribeLimitsErrorKind {
     InvalidEndpointError(crate::error::InvalidEndpointError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DescribeLimitsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1462,7 +1462,7 @@ impl DescribeLimitsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DescribeLimitsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1515,7 +1515,7 @@ pub enum DescribeTableErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DescribeTableError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1541,7 +1541,7 @@ impl DescribeTableError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DescribeTableErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1594,7 +1594,7 @@ pub enum DescribeTableReplicaAutoScalingErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DescribeTableReplicaAutoScalingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1621,7 +1621,7 @@ impl DescribeTableReplicaAutoScalingError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DescribeTableReplicaAutoScalingErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1674,7 +1674,7 @@ pub enum DescribeTimeToLiveErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DescribeTimeToLiveError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1700,7 +1700,7 @@ impl DescribeTimeToLiveError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DescribeTimeToLiveErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1756,7 +1756,7 @@ pub enum DisableKinesisStreamingDestinationErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DisableKinesisStreamingDestinationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1797,7 +1797,7 @@ impl DisableKinesisStreamingDestinationError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DisableKinesisStreamingDestinationErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1861,7 +1861,7 @@ pub enum EnableKinesisStreamingDestinationErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for EnableKinesisStreamingDestinationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1898,7 +1898,7 @@ impl EnableKinesisStreamingDestinationError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: EnableKinesisStreamingDestinationErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1963,7 +1963,7 @@ pub enum ExecuteStatementErrorKind {
     TransactionConflictError(crate::error::TransactionConflictError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ExecuteStatementError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1996,7 +1996,7 @@ impl ExecuteStatementError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ExecuteStatementErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2059,7 +2059,7 @@ pub enum ExecuteTransactionErrorKind {
     TransactionInProgressError(crate::error::TransactionInProgressError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ExecuteTransactionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2091,7 +2091,7 @@ impl ExecuteTransactionError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ExecuteTransactionErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2152,7 +2152,7 @@ pub enum ExportTableToPointInTimeErrorKind {
     TableNotFoundError(crate::error::TableNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ExportTableToPointInTimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2183,7 +2183,7 @@ impl ExportTableToPointInTimeError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ExportTableToPointInTimeErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2244,7 +2244,7 @@ pub enum GetItemErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for GetItemError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2272,7 +2272,7 @@ impl GetItemError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: GetItemErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2327,7 +2327,7 @@ pub enum ListBackupsErrorKind {
     InvalidEndpointError(crate::error::InvalidEndpointError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ListBackupsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2352,7 +2352,7 @@ impl ListBackupsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ListBackupsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2404,7 +2404,7 @@ pub enum ListContributorInsightsErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ListContributorInsightsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2429,7 +2429,7 @@ impl ListContributorInsightsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ListContributorInsightsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2481,7 +2481,7 @@ pub enum ListExportsErrorKind {
     LimitExceededError(crate::error::LimitExceededError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ListExportsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2506,7 +2506,7 @@ impl ListExportsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ListExportsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2558,7 +2558,7 @@ pub enum ListGlobalTablesErrorKind {
     InvalidEndpointError(crate::error::InvalidEndpointError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ListGlobalTablesError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2583,7 +2583,7 @@ impl ListGlobalTablesError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ListGlobalTablesErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2635,7 +2635,7 @@ pub enum ListTablesErrorKind {
     InvalidEndpointError(crate::error::InvalidEndpointError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ListTablesError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2660,7 +2660,7 @@ impl ListTablesError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ListTablesErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2713,7 +2713,7 @@ pub enum ListTagsOfResourceErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ListTagsOfResourceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2739,7 +2739,7 @@ impl ListTagsOfResourceError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ListTagsOfResourceErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2798,7 +2798,7 @@ pub enum PutItemErrorKind {
     TransactionConflictError(crate::error::TransactionConflictError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for PutItemError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2829,7 +2829,7 @@ impl PutItemError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: PutItemErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2890,7 +2890,7 @@ pub enum QueryErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for QueryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2918,7 +2918,7 @@ impl QueryError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: QueryErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2978,7 +2978,7 @@ pub enum RestoreTableFromBackupErrorKind {
     TableInUseError(crate::error::TableInUseError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for RestoreTableFromBackupError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3008,7 +3008,7 @@ impl RestoreTableFromBackupError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: RestoreTableFromBackupErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3071,7 +3071,7 @@ pub enum RestoreTableToPointInTimeErrorKind {
     TableNotFoundError(crate::error::TableNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for RestoreTableToPointInTimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3104,7 +3104,7 @@ impl RestoreTableToPointInTimeError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: RestoreTableToPointInTimeErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3167,7 +3167,7 @@ pub enum ScanErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ScanError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3195,7 +3195,7 @@ impl ScanError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ScanErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3253,7 +3253,7 @@ pub enum TagResourceErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for TagResourceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3281,7 +3281,7 @@ impl TagResourceError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: TagResourceErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3340,7 +3340,7 @@ pub enum TransactGetItemsErrorKind {
     TransactionCanceledError(crate::error::TransactionCanceledError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for TransactGetItemsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3369,7 +3369,7 @@ impl TransactGetItemsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: TransactGetItemsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3431,7 +3431,7 @@ pub enum TransactWriteItemsErrorKind {
     TransactionInProgressError(crate::error::TransactionInProgressError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for TransactWriteItemsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3464,7 +3464,7 @@ impl TransactWriteItemsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: TransactWriteItemsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3525,7 +3525,7 @@ pub enum UntagResourceErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UntagResourceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3553,7 +3553,7 @@ impl UntagResourceError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UntagResourceErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3610,7 +3610,7 @@ pub enum UpdateContinuousBackupsErrorKind {
     TableNotFoundError(crate::error::TableNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UpdateContinuousBackupsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3639,7 +3639,7 @@ impl UpdateContinuousBackupsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UpdateContinuousBackupsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3695,7 +3695,7 @@ pub enum UpdateContributorInsightsErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UpdateContributorInsightsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3720,7 +3720,7 @@ impl UpdateContributorInsightsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UpdateContributorInsightsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3776,7 +3776,7 @@ pub enum UpdateGlobalTableErrorKind {
     TableNotFoundError(crate::error::TableNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UpdateGlobalTableError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3805,7 +3805,7 @@ impl UpdateGlobalTableError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UpdateGlobalTableErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3866,7 +3866,7 @@ pub enum UpdateGlobalTableSettingsErrorKind {
     ResourceInUseError(crate::error::ResourceInUseError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UpdateGlobalTableSettingsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3896,7 +3896,7 @@ impl UpdateGlobalTableSettingsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UpdateGlobalTableSettingsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3959,7 +3959,7 @@ pub enum UpdateItemErrorKind {
     TransactionConflictError(crate::error::TransactionConflictError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UpdateItemError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3990,7 +3990,7 @@ impl UpdateItemError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UpdateItemErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -4051,7 +4051,7 @@ pub enum UpdateTableErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UpdateTableError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -4079,7 +4079,7 @@ impl UpdateTableError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UpdateTableErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -4136,7 +4136,7 @@ pub enum UpdateTableReplicaAutoScalingErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UpdateTableReplicaAutoScalingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -4163,7 +4163,7 @@ impl UpdateTableReplicaAutoScalingError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UpdateTableReplicaAutoScalingErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -4220,7 +4220,7 @@ pub enum UpdateTimeToLiveErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UpdateTimeToLiveError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -4248,7 +4248,7 @@ impl UpdateTimeToLiveError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UpdateTimeToLiveErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -4338,6 +4338,10 @@ pub mod resource_not_found_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`ResourceNotFoundError`](crate::error::ResourceNotFoundError)
         pub fn build(self) -> crate::error::ResourceNotFoundError {
             crate::error::ResourceNotFoundError {
@@ -4400,6 +4404,10 @@ pub mod resource_in_use_error {
         /// <p>The resource which is being attempted to be changed is in use.</p>
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`ResourceInUseError`](crate::error::ResourceInUseError)
@@ -4472,6 +4480,10 @@ pub mod limit_exceeded_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`LimitExceededError`](crate::error::LimitExceededError)
         pub fn build(self) -> crate::error::LimitExceededError {
             crate::error::LimitExceededError {
@@ -4526,6 +4538,10 @@ pub mod invalid_endpoint_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`InvalidEndpointError`](crate::error::InvalidEndpointError)
@@ -4590,6 +4606,10 @@ pub mod internal_server_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`InternalServerError`](crate::error::InternalServerError)
         pub fn build(self) -> crate::error::InternalServerError {
             crate::error::InternalServerError {
@@ -4650,6 +4670,10 @@ pub mod transaction_conflict_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`TransactionConflictError`](crate::error::TransactionConflictError)
         pub fn build(self) -> crate::error::TransactionConflictError {
             crate::error::TransactionConflictError {
@@ -4708,6 +4732,10 @@ pub mod request_limit_exceeded {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`RequestLimitExceeded`](crate::error::RequestLimitExceeded)
@@ -4779,6 +4807,10 @@ pub mod provisioned_throughput_exceeded_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`ProvisionedThroughputExceededError`](crate::error::ProvisionedThroughputExceededError)
         pub fn build(self) -> crate::error::ProvisionedThroughputExceededError {
             crate::error::ProvisionedThroughputExceededError {
@@ -4842,6 +4874,10 @@ pub mod item_collection_size_limit_exceeded_error {
         /// <p>The total size of an item collection has exceeded the maximum limit of 10 gigabytes.</p>
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`ItemCollectionSizeLimitExceededError`](crate::error::ItemCollectionSizeLimitExceededError)
@@ -4909,6 +4945,10 @@ pub mod conditional_check_failed_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`ConditionalCheckFailedError`](crate::error::ConditionalCheckFailedError)
         pub fn build(self) -> crate::error::ConditionalCheckFailedError {
             crate::error::ConditionalCheckFailedError {
@@ -4967,6 +5007,10 @@ pub mod replica_not_found_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`ReplicaNotFoundError`](crate::error::ReplicaNotFoundError)
@@ -5029,6 +5073,10 @@ pub mod index_not_found_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`IndexNotFoundError`](crate::error::IndexNotFoundError)
         pub fn build(self) -> crate::error::IndexNotFoundError {
             crate::error::IndexNotFoundError {
@@ -5089,6 +5137,10 @@ pub mod global_table_not_found_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`GlobalTableNotFoundError`](crate::error::GlobalTableNotFoundError)
         pub fn build(self) -> crate::error::GlobalTableNotFoundError {
             crate::error::GlobalTableNotFoundError {
@@ -5147,6 +5199,10 @@ pub mod table_not_found_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`TableNotFoundError`](crate::error::TableNotFoundError)
@@ -5212,6 +5268,10 @@ pub mod replica_already_exists_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`ReplicaAlreadyExistsError`](crate::error::ReplicaAlreadyExistsError)
         pub fn build(self) -> crate::error::ReplicaAlreadyExistsError {
             crate::error::ReplicaAlreadyExistsError {
@@ -5275,6 +5335,10 @@ pub mod continuous_backups_unavailable_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`ContinuousBackupsUnavailableError`](crate::error::ContinuousBackupsUnavailableError)
         pub fn build(self) -> crate::error::ContinuousBackupsUnavailableError {
             crate::error::ContinuousBackupsUnavailableError {
@@ -5333,6 +5397,10 @@ pub mod transaction_in_progress_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`TransactionInProgressError`](crate::error::TransactionInProgressError)
@@ -5596,12 +5664,24 @@ pub mod transaction_canceled_error {
             self.message = Some(inp.into());
             self
         }
-        /// <p>A list of cancellation reasons.</p>
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         pub fn cancellation_reasons(
             mut self,
-            inp: std::vec::Vec<crate::model::CancellationReason>,
+            inp: impl Into<crate::model::CancellationReason>,
         ) -> Self {
-            self.cancellation_reasons = Some(inp);
+            let mut v = self.cancellation_reasons.unwrap_or_default();
+            v.push(inp.into());
+            self.cancellation_reasons = Some(v);
+            self
+        }
+        pub fn set_cancellation_reasons(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::CancellationReason>>,
+        ) -> Self {
+            self.cancellation_reasons = inp;
             self
         }
         /// Consumes the builder and constructs a [`TransactionCanceledError`](crate::error::TransactionCanceledError)
@@ -5666,6 +5746,10 @@ pub mod idempotent_parameter_mismatch_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`IdempotentParameterMismatchError`](crate::error::IdempotentParameterMismatchError)
         pub fn build(self) -> crate::error::IdempotentParameterMismatchError {
             crate::error::IdempotentParameterMismatchError {
@@ -5726,6 +5810,10 @@ pub mod table_in_use_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`TableInUseError`](crate::error::TableInUseError)
         pub fn build(self) -> crate::error::TableInUseError {
             crate::error::TableInUseError {
@@ -5784,6 +5872,10 @@ pub mod table_already_exists_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`TableAlreadyExistsError`](crate::error::TableAlreadyExistsError)
@@ -5849,6 +5941,10 @@ pub mod point_in_time_recovery_unavailable_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`PointInTimeRecoveryUnavailableError`](crate::error::PointInTimeRecoveryUnavailableError)
         pub fn build(self) -> crate::error::PointInTimeRecoveryUnavailableError {
             crate::error::PointInTimeRecoveryUnavailableError {
@@ -5907,6 +6003,10 @@ pub mod invalid_restore_time_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`InvalidRestoreTimeError`](crate::error::InvalidRestoreTimeError)
@@ -5969,6 +6069,10 @@ pub mod backup_not_found_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`BackupNotFoundError`](crate::error::BackupNotFoundError)
         pub fn build(self) -> crate::error::BackupNotFoundError {
             crate::error::BackupNotFoundError {
@@ -6027,6 +6131,10 @@ pub mod backup_in_use_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`BackupInUseError`](crate::error::BackupInUseError)
@@ -6090,6 +6198,10 @@ pub mod invalid_export_time_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`InvalidExportTimeError`](crate::error::InvalidExportTimeError)
         pub fn build(self) -> crate::error::InvalidExportTimeError {
             crate::error::InvalidExportTimeError {
@@ -6148,6 +6260,10 @@ pub mod export_conflict_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`ExportConflictError`](crate::error::ExportConflictError)
@@ -6212,6 +6328,10 @@ pub mod duplicate_item_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`DuplicateItemError`](crate::error::DuplicateItemError)
         pub fn build(self) -> crate::error::DuplicateItemError {
             crate::error::DuplicateItemError {
@@ -6270,6 +6390,10 @@ pub mod export_not_found_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`ExportNotFoundError`](crate::error::ExportNotFoundError)
@@ -6333,6 +6457,10 @@ pub mod global_table_already_exists_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`GlobalTableAlreadyExistsError`](crate::error::GlobalTableAlreadyExistsError)

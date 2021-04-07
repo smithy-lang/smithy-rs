@@ -61,12 +61,15 @@ impl CancelRotateSecret {
     pub fn builder() -> crate::input::cancel_rotate_secret_input::Builder {
         crate::input::cancel_rotate_secret_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::CancelRotateSecretInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::CancelRotateSecretInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::CancelRotateSecretOutput, crate::error::CancelRotateSecretError>
@@ -113,7 +116,7 @@ impl CancelRotateSecret {
                     },
                     Err(e) => crate::error::CancelRotateSecretError::unhandled(e),
                 },
-                _ => crate::error::CancelRotateSecretError::unhandled(generic),
+                _ => crate::error::CancelRotateSecretError::generic(generic),
             });
         }
         let body: crate::serializer::CancelRotateSecretOutputBody =
@@ -242,12 +245,15 @@ impl CreateSecret {
     pub fn builder() -> crate::input::create_secret_input::Builder {
         crate::input::create_secret_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::CreateSecretInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::CreateSecretInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::CreateSecretOutput, crate::error::CreateSecretError> {
@@ -326,7 +332,7 @@ impl CreateSecret {
                     },
                     Err(e) => crate::error::CreateSecretError::unhandled(e),
                 },
-                _ => crate::error::CreateSecretError::unhandled(generic),
+                _ => crate::error::CreateSecretError::generic(generic),
             });
         }
         let body: crate::serializer::CreateSecretOutputBody =
@@ -389,12 +395,15 @@ impl DeleteResourcePolicy {
     pub fn builder() -> crate::input::delete_resource_policy_input::Builder {
         crate::input::delete_resource_policy_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DeleteResourcePolicyInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DeleteResourcePolicyInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DeleteResourcePolicyOutput, crate::error::DeleteResourcePolicyError>
@@ -436,7 +445,7 @@ impl DeleteResourcePolicy {
                     },
                     Err(e) => crate::error::DeleteResourcePolicyError::unhandled(e),
                 },
-                _ => crate::error::DeleteResourcePolicyError::unhandled(generic),
+                _ => crate::error::DeleteResourcePolicyError::generic(generic),
             });
         }
         let body: crate::serializer::DeleteResourcePolicyOutputBody =
@@ -522,12 +531,15 @@ impl DeleteSecret {
     pub fn builder() -> crate::input::delete_secret_input::Builder {
         crate::input::delete_secret_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DeleteSecretInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DeleteSecretInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DeleteSecretOutput, crate::error::DeleteSecretError> {
@@ -569,7 +581,7 @@ impl DeleteSecret {
                     },
                     Err(e) => crate::error::DeleteSecretError::unhandled(e),
                 },
-                _ => crate::error::DeleteSecretError::unhandled(generic),
+                _ => crate::error::DeleteSecretError::generic(generic),
             });
         }
         let body: crate::serializer::DeleteSecretOutputBody =
@@ -636,12 +648,15 @@ impl DescribeSecret {
     pub fn builder() -> crate::input::describe_secret_input::Builder {
         crate::input::describe_secret_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeSecretInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeSecretInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DescribeSecretOutput, crate::error::DescribeSecretError> {
@@ -669,7 +684,7 @@ impl DescribeSecret {
                     },
                     Err(e) => crate::error::DescribeSecretError::unhandled(e),
                 },
-                _ => crate::error::DescribeSecretError::unhandled(generic),
+                _ => crate::error::DescribeSecretError::generic(generic),
             });
         }
         let body: crate::serializer::DescribeSecretOutputBody =
@@ -733,12 +748,15 @@ impl GetRandomPassword {
     pub fn builder() -> crate::input::get_random_password_input::Builder {
         crate::input::get_random_password_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::GetRandomPasswordInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::GetRandomPasswordInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::GetRandomPasswordOutput, crate::error::GetRandomPasswordError> {
@@ -773,7 +791,7 @@ impl GetRandomPassword {
                     },
                     Err(e) => crate::error::GetRandomPasswordError::unhandled(e),
                 },
-                _ => crate::error::GetRandomPasswordError::unhandled(generic),
+                _ => crate::error::GetRandomPasswordError::generic(generic),
             });
         }
         let body: crate::serializer::GetRandomPasswordOutputBody =
@@ -838,12 +856,15 @@ impl GetResourcePolicy {
     pub fn builder() -> crate::input::get_resource_policy_input::Builder {
         crate::input::get_resource_policy_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::GetResourcePolicyInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::GetResourcePolicyInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::GetResourcePolicyOutput, crate::error::GetResourcePolicyError> {
@@ -878,7 +899,7 @@ impl GetResourcePolicy {
                     },
                     Err(e) => crate::error::GetResourcePolicyError::unhandled(e),
                 },
-                _ => crate::error::GetResourcePolicyError::unhandled(generic),
+                _ => crate::error::GetResourcePolicyError::generic(generic),
             });
         }
         let body: crate::serializer::GetResourcePolicyOutputBody =
@@ -946,12 +967,15 @@ impl GetSecretValue {
     pub fn builder() -> crate::input::get_secret_value_input::Builder {
         crate::input::get_secret_value_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::GetSecretValueInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::GetSecretValueInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::GetSecretValueOutput, crate::error::GetSecretValueError> {
@@ -1000,7 +1024,7 @@ impl GetSecretValue {
                     },
                     Err(e) => crate::error::GetSecretValueError::unhandled(e),
                 },
-                _ => crate::error::GetSecretValueError::unhandled(generic),
+                _ => crate::error::GetSecretValueError::generic(generic),
             });
         }
         let body: crate::serializer::GetSecretValueOutputBody =
@@ -1073,12 +1097,15 @@ impl ListSecrets {
     pub fn builder() -> crate::input::list_secrets_input::Builder {
         crate::input::list_secrets_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListSecretsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListSecretsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListSecretsOutput, crate::error::ListSecretsError> {
@@ -1113,7 +1140,7 @@ impl ListSecrets {
                     },
                     Err(e) => crate::error::ListSecretsError::unhandled(e),
                 },
-                _ => crate::error::ListSecretsError::unhandled(generic),
+                _ => crate::error::ListSecretsError::generic(generic),
             });
         }
         let body: crate::serializer::ListSecretsOutputBody =
@@ -1180,12 +1207,15 @@ impl ListSecretVersionIds {
     pub fn builder() -> crate::input::list_secret_version_ids_input::Builder {
         crate::input::list_secret_version_ids_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListSecretVersionIdsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListSecretVersionIdsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListSecretVersionIdsOutput, crate::error::ListSecretVersionIdsError>
@@ -1227,7 +1257,7 @@ impl ListSecretVersionIds {
                     },
                     Err(e) => crate::error::ListSecretVersionIdsError::unhandled(e),
                 },
-                _ => crate::error::ListSecretVersionIdsError::unhandled(generic),
+                _ => crate::error::ListSecretVersionIdsError::generic(generic),
             });
         }
         let body: crate::serializer::ListSecretVersionIdsOutputBody =
@@ -1301,12 +1331,15 @@ impl PutResourcePolicy {
     pub fn builder() -> crate::input::put_resource_policy_input::Builder {
         crate::input::put_resource_policy_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::PutResourcePolicyInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::PutResourcePolicyInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::PutResourcePolicyOutput, crate::error::PutResourcePolicyError> {
@@ -1365,7 +1398,7 @@ impl PutResourcePolicy {
                     },
                     Err(e) => crate::error::PutResourcePolicyError::unhandled(e),
                 },
-                _ => crate::error::PutResourcePolicyError::unhandled(generic),
+                _ => crate::error::PutResourcePolicyError::generic(generic),
             });
         }
         let body: crate::serializer::PutResourcePolicyOutputBody =
@@ -1494,12 +1527,15 @@ impl PutSecretValue {
     pub fn builder() -> crate::input::put_secret_value_input::Builder {
         crate::input::put_secret_value_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::PutSecretValueInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::PutSecretValueInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::PutSecretValueOutput, crate::error::PutSecretValueError> {
@@ -1562,7 +1598,7 @@ impl PutSecretValue {
                     },
                     Err(e) => crate::error::PutSecretValueError::unhandled(e),
                 },
-                _ => crate::error::PutSecretValueError::unhandled(generic),
+                _ => crate::error::PutSecretValueError::generic(generic),
             });
         }
         let body: crate::serializer::PutSecretValueOutputBody =
@@ -1621,12 +1657,15 @@ impl RestoreSecret {
     pub fn builder() -> crate::input::restore_secret_input::Builder {
         crate::input::restore_secret_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::RestoreSecretInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::RestoreSecretInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::RestoreSecretOutput, crate::error::RestoreSecretError> {
@@ -1668,7 +1707,7 @@ impl RestoreSecret {
                     },
                     Err(e) => crate::error::RestoreSecretError::unhandled(e),
                 },
-                _ => crate::error::RestoreSecretError::unhandled(generic),
+                _ => crate::error::RestoreSecretError::generic(generic),
             });
         }
         let body: crate::serializer::RestoreSecretOutputBody =
@@ -1768,12 +1807,15 @@ impl RotateSecret {
     pub fn builder() -> crate::input::rotate_secret_input::Builder {
         crate::input::rotate_secret_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::RotateSecretInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::RotateSecretInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::RotateSecretOutput, crate::error::RotateSecretError> {
@@ -1815,7 +1857,7 @@ impl RotateSecret {
                     },
                     Err(e) => crate::error::RotateSecretError::unhandled(e),
                 },
-                _ => crate::error::RotateSecretError::unhandled(generic),
+                _ => crate::error::RotateSecretError::generic(generic),
             });
         }
         let body: crate::serializer::RotateSecretOutputBody =
@@ -1910,12 +1952,15 @@ impl TagResource {
     pub fn builder() -> crate::input::tag_resource_input::Builder {
         crate::input::tag_resource_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::TagResourceInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::TagResourceInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::TagResourceOutput, crate::error::TagResourceError> {
@@ -1957,7 +2002,7 @@ impl TagResource {
                     },
                     Err(e) => crate::error::TagResourceError::unhandled(e),
                 },
-                _ => crate::error::TagResourceError::unhandled(generic),
+                _ => crate::error::TagResourceError::generic(generic),
             });
         }
         Ok(crate::output::TagResourceOutput {})
@@ -2018,12 +2063,15 @@ impl UntagResource {
     pub fn builder() -> crate::input::untag_resource_input::Builder {
         crate::input::untag_resource_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UntagResourceInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UntagResourceInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::UntagResourceOutput, crate::error::UntagResourceError> {
@@ -2065,7 +2113,7 @@ impl UntagResource {
                     },
                     Err(e) => crate::error::UntagResourceError::unhandled(e),
                 },
-                _ => crate::error::UntagResourceError::unhandled(generic),
+                _ => crate::error::UntagResourceError::generic(generic),
             });
         }
         Ok(crate::output::UntagResourceOutput {})
@@ -2182,12 +2230,15 @@ impl UpdateSecret {
     pub fn builder() -> crate::input::update_secret_input::Builder {
         crate::input::update_secret_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UpdateSecretInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UpdateSecretInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::UpdateSecretOutput, crate::error::UpdateSecretError> {
@@ -2266,7 +2317,7 @@ impl UpdateSecret {
                     },
                     Err(e) => crate::error::UpdateSecretError::unhandled(e),
                 },
-                _ => crate::error::UpdateSecretError::unhandled(generic),
+                _ => crate::error::UpdateSecretError::generic(generic),
             });
         }
         let body: crate::serializer::UpdateSecretOutputBody =
@@ -2342,12 +2393,15 @@ impl UpdateSecretVersionStage {
     pub fn builder() -> crate::input::update_secret_version_stage_input::Builder {
         crate::input::update_secret_version_stage_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UpdateSecretVersionStageInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UpdateSecretVersionStageInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -2415,7 +2469,7 @@ impl UpdateSecretVersionStage {
                     },
                     Err(e) => crate::error::UpdateSecretVersionStageError::unhandled(e),
                 },
-                _ => crate::error::UpdateSecretVersionStageError::unhandled(generic),
+                _ => crate::error::UpdateSecretVersionStageError::generic(generic),
             });
         }
         let body: crate::serializer::UpdateSecretVersionStageOutputBody =
@@ -2464,12 +2518,15 @@ impl ValidateResourcePolicy {
     pub fn builder() -> crate::input::validate_resource_policy_input::Builder {
         crate::input::validate_resource_policy_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ValidateResourcePolicyInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ValidateResourcePolicyInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -2510,7 +2567,7 @@ impl ValidateResourcePolicy {
                     Ok(body) => crate::error::ValidateResourcePolicyError { kind: crate::error::ValidateResourcePolicyErrorKind::ResourceNotFoundError(body), meta: generic },
                     Err(e) => crate::error::ValidateResourcePolicyError::unhandled(e)
                 }
-                _ => crate::error::ValidateResourcePolicyError::unhandled(generic)
+                _ => crate::error::ValidateResourcePolicyError::generic(generic)
             });
         }
         let body: crate::serializer::ValidateResourcePolicyOutputBody =

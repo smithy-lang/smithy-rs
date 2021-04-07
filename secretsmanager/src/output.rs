@@ -27,16 +27,28 @@ pub mod validate_resource_policy_output {
         policy_validation_passed: std::option::Option<bool>,
     }
     impl Builder {
-        /// <p>Returns an error message if your policy doesn't pass validatation.</p>
         pub fn validation_errors(
             mut self,
-            inp: std::vec::Vec<crate::model::ValidationErrorsEntry>,
+            inp: impl Into<crate::model::ValidationErrorsEntry>,
         ) -> Self {
-            self.validation_errors = Some(inp);
+            let mut v = self.validation_errors.unwrap_or_default();
+            v.push(inp.into());
+            self.validation_errors = Some(v);
+            self
+        }
+        pub fn set_validation_errors(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::ValidationErrorsEntry>>,
+        ) -> Self {
+            self.validation_errors = inp;
             self
         }
         /// <p>Returns a message stating that your Reource Policy passed validation. </p>
         pub fn policy_validation_passed(mut self, inp: bool) -> Self {
+            self.policy_validation_passed = Some(inp);
+            self
+        }
+        pub fn set_policy_validation_passed(mut self, inp: bool) -> Self {
             self.policy_validation_passed = Some(inp);
             self
         }
@@ -88,9 +100,17 @@ pub mod update_secret_version_stage_output {
             self.arn = Some(inp.into());
             self
         }
+        pub fn set_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.arn = inp;
+            self
+        }
         /// <p>The friendly name of the secret with the modified staging label.</p>
         pub fn name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.name = Some(inp.into());
+            self
+        }
+        pub fn set_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.name = inp;
             self
         }
         /// Consumes the builder and constructs a [`UpdateSecretVersionStageOutput`](crate::output::UpdateSecretVersionStageOutput)
@@ -153,10 +173,18 @@ pub mod update_secret_output {
             self.name = Some(inp.into());
             self
         }
+        pub fn set_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.name = inp;
+            self
+        }
         /// <p>If a new version of the secret was created by this operation, then <code>VersionId</code>
         /// contains the unique identifier of the new version.</p>
         pub fn version_id(mut self, inp: impl Into<std::string::String>) -> Self {
             self.version_id = Some(inp.into());
+            self
+        }
+        pub fn set_version_id(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.version_id = inp;
             self
         }
         /// <p>The ARN of the secret that was updated.</p>
@@ -169,6 +197,10 @@ pub mod update_secret_output {
         /// </note>
         pub fn arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.arn = Some(inp.into());
+            self
+        }
+        pub fn set_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.arn = inp;
             self
         }
         /// Consumes the builder and constructs a [`UpdateSecretOutput`](crate::output::UpdateSecretOutput)
@@ -285,15 +317,27 @@ pub mod rotate_secret_output {
             self.arn = Some(inp.into());
             self
         }
+        pub fn set_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.arn = inp;
+            self
+        }
         /// <p>The friendly name of the secret.</p>
         pub fn name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.name = Some(inp.into());
+            self
+        }
+        pub fn set_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.name = inp;
             self
         }
         /// <p>The ID of the new version of the secret created by the rotation started by this
         /// request.</p>
         pub fn version_id(mut self, inp: impl Into<std::string::String>) -> Self {
             self.version_id = Some(inp.into());
+            self
+        }
+        pub fn set_version_id(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.version_id = inp;
             self
         }
         /// Consumes the builder and constructs a [`RotateSecretOutput`](crate::output::RotateSecretOutput)
@@ -345,9 +389,17 @@ pub mod restore_secret_output {
             self.arn = Some(inp.into());
             self
         }
+        pub fn set_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.arn = inp;
+            self
+        }
         /// <p>The friendly name of the secret that was restored.</p>
         pub fn name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.name = Some(inp.into());
+            self
+        }
+        pub fn set_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.name = inp;
             self
         }
         /// Consumes the builder and constructs a [`RestoreSecretOutput`](crate::output::RestoreSecretOutput)
@@ -408,11 +460,21 @@ pub mod put_secret_value_output {
             self.arn = Some(inp.into());
             self
         }
-        /// <p>The list of staging labels that are currently attached to this version of the secret.
-        /// Staging labels are used to track a version as it progresses through the secret rotation
-        /// process.</p>
-        pub fn version_stages(mut self, inp: std::vec::Vec<std::string::String>) -> Self {
-            self.version_stages = Some(inp);
+        pub fn set_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.arn = inp;
+            self
+        }
+        pub fn version_stages(mut self, inp: impl Into<std::string::String>) -> Self {
+            let mut v = self.version_stages.unwrap_or_default();
+            v.push(inp.into());
+            self.version_stages = Some(v);
+            self
+        }
+        pub fn set_version_stages(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<std::string::String>>,
+        ) -> Self {
+            self.version_stages = inp;
             self
         }
         /// <p>The friendly name of the secret for which you just created or updated a version.</p>
@@ -420,9 +482,17 @@ pub mod put_secret_value_output {
             self.name = Some(inp.into());
             self
         }
+        pub fn set_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.name = inp;
+            self
+        }
         /// <p>The unique identifier of the version of the secret you just created or updated.</p>
         pub fn version_id(mut self, inp: impl Into<std::string::String>) -> Self {
             self.version_id = Some(inp.into());
+            self
+        }
+        pub fn set_version_id(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.version_id = inp;
             self
         }
         /// Consumes the builder and constructs a [`PutSecretValueOutput`](crate::output::PutSecretValueOutput)
@@ -475,9 +545,17 @@ pub mod put_resource_policy_output {
             self.arn = Some(inp.into());
             self
         }
+        pub fn set_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.arn = inp;
+            self
+        }
         /// <p>The friendly name of the secret that the retrieved by the resource-based policy.</p>
         pub fn name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.name = Some(inp.into());
+            self
+        }
+        pub fn set_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.name = inp;
             self
         }
         /// Consumes the builder and constructs a [`PutResourcePolicyOutput`](crate::output::PutResourcePolicyOutput)
@@ -555,12 +633,21 @@ pub mod list_secret_version_ids_output {
             self.next_token = Some(inp.into());
             self
         }
-        /// <p>The list of the currently available versions of the specified secret.</p>
-        pub fn versions(
+        pub fn set_next_token(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.next_token = inp;
+            self
+        }
+        pub fn versions(mut self, inp: impl Into<crate::model::SecretVersionsListEntry>) -> Self {
+            let mut v = self.versions.unwrap_or_default();
+            v.push(inp.into());
+            self.versions = Some(v);
+            self
+        }
+        pub fn set_versions(
             mut self,
-            inp: std::vec::Vec<crate::model::SecretVersionsListEntry>,
+            inp: std::option::Option<std::vec::Vec<crate::model::SecretVersionsListEntry>>,
         ) -> Self {
-            self.versions = Some(inp);
+            self.versions = inp;
             self
         }
         /// <p>The Amazon Resource Name (ARN) for the secret.</p>
@@ -575,9 +662,17 @@ pub mod list_secret_version_ids_output {
             self.arn = Some(inp.into());
             self
         }
+        pub fn set_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.arn = inp;
+            self
+        }
         /// <p>The friendly name of the secret.</p>
         pub fn name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.name = Some(inp.into());
+            self
+        }
+        pub fn set_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.name = inp;
             self
         }
         /// Consumes the builder and constructs a [`ListSecretVersionIdsOutput`](crate::output::ListSecretVersionIdsOutput)
@@ -631,9 +726,17 @@ pub mod list_secrets_output {
         next_token: std::option::Option<std::string::String>,
     }
     impl Builder {
-        /// <p>A list of the secrets in the account.</p>
-        pub fn secret_list(mut self, inp: std::vec::Vec<crate::model::SecretListEntry>) -> Self {
-            self.secret_list = Some(inp);
+        pub fn secret_list(mut self, inp: impl Into<crate::model::SecretListEntry>) -> Self {
+            let mut v = self.secret_list.unwrap_or_default();
+            v.push(inp.into());
+            self.secret_list = Some(v);
+            self
+        }
+        pub fn set_secret_list(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::SecretListEntry>>,
+        ) -> Self {
+            self.secret_list = inp;
             self
         }
         /// <p>If present in the response, this value indicates that
@@ -645,6 +748,10 @@ pub mod list_secrets_output {
         /// <code>null</code>).</p>
         pub fn next_token(mut self, inp: impl Into<std::string::String>) -> Self {
             self.next_token = Some(inp.into());
+            self
+        }
+        pub fn set_next_token(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.next_token = inp;
             self
         }
         /// Consumes the builder and constructs a [`ListSecretsOutput`](crate::output::ListSecretsOutput)
@@ -732,9 +839,17 @@ pub mod get_secret_value_output {
             self.version_id = Some(inp.into());
             self
         }
+        pub fn set_version_id(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.version_id = inp;
+            self
+        }
         /// <p>The date and time that this version of the secret was created.</p>
         pub fn created_date(mut self, inp: smithy_types::Instant) -> Self {
             self.created_date = Some(inp);
+            self
+        }
+        pub fn set_created_date(mut self, inp: std::option::Option<smithy_types::Instant>) -> Self {
+            self.created_date = inp;
             self
         }
         /// <p>The decrypted part of the protected secret information that was originally provided as a
@@ -751,6 +866,10 @@ pub mod get_secret_value_output {
             self.secret_string = Some(inp.into());
             self
         }
+        pub fn set_secret_string(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.secret_string = inp;
+            self
+        }
         /// <p>The decrypted part of the protected secret information that was originally provided as
         /// binary data in the form of a byte array. The response parameter represents the binary data as
         /// a <a href="https://tools.ietf.org/html/rfc4648#section-4">base64-encoded</a>
@@ -763,10 +882,21 @@ pub mod get_secret_value_output {
             self.secret_binary = Some(inp);
             self
         }
-        /// <p>A list of all of the staging labels currently attached to this version of the
-        /// secret.</p>
-        pub fn version_stages(mut self, inp: std::vec::Vec<std::string::String>) -> Self {
-            self.version_stages = Some(inp);
+        pub fn set_secret_binary(mut self, inp: std::option::Option<smithy_types::Blob>) -> Self {
+            self.secret_binary = inp;
+            self
+        }
+        pub fn version_stages(mut self, inp: impl Into<std::string::String>) -> Self {
+            let mut v = self.version_stages.unwrap_or_default();
+            v.push(inp.into());
+            self.version_stages = Some(v);
+            self
+        }
+        pub fn set_version_stages(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<std::string::String>>,
+        ) -> Self {
+            self.version_stages = inp;
             self
         }
         /// <p>The friendly name of the secret.</p>
@@ -774,9 +904,17 @@ pub mod get_secret_value_output {
             self.name = Some(inp.into());
             self
         }
+        pub fn set_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.name = inp;
+            self
+        }
         /// <p>The ARN of the secret.</p>
         pub fn arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.arn = Some(inp.into());
+            self
+        }
+        pub fn set_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.arn = inp;
             self
         }
         /// Consumes the builder and constructs a [`GetSecretValueOutput`](crate::output::GetSecretValueOutput)
@@ -844,14 +982,29 @@ pub mod get_resource_policy_output {
             self.resource_policy = Some(inp.into());
             self
         }
+        pub fn set_resource_policy(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.resource_policy = inp;
+            self
+        }
         /// <p>The friendly name of the secret that the resource-based policy was retrieved for.</p>
         pub fn name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.name = Some(inp.into());
             self
         }
+        pub fn set_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.name = inp;
+            self
+        }
         /// <p>The ARN of the secret that the resource-based policy was retrieved for.</p>
         pub fn arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.arn = Some(inp.into());
+            self
+        }
+        pub fn set_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.arn = inp;
             self
         }
         /// Consumes the builder and constructs a [`GetResourcePolicyOutput`](crate::output::GetResourcePolicyOutput)
@@ -897,6 +1050,13 @@ pub mod get_random_password_output {
         /// <p>A string with the generated password.</p>
         pub fn random_password(mut self, inp: impl Into<std::string::String>) -> Self {
             self.random_password = Some(inp.into());
+            self
+        }
+        pub fn set_random_password(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.random_password = inp;
             self
         }
         /// Consumes the builder and constructs a [`GetRandomPasswordOutput`](crate::output::GetRandomPasswordOutput)
@@ -1023,9 +1183,20 @@ pub mod describe_secret_output {
             self.last_rotated_date = Some(inp);
             self
         }
+        pub fn set_last_rotated_date(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.last_rotated_date = inp;
+            self
+        }
         /// <p>The user-provided description of the secret.</p>
         pub fn description(mut self, inp: impl Into<std::string::String>) -> Self {
             self.description = Some(inp.into());
+            self
+        }
+        pub fn set_description(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.description = inp;
             self
         }
         /// <p>The ARN or alias of the AWS KMS customer master key (CMK) that's used to encrypt the
@@ -1036,18 +1207,27 @@ pub mod describe_secret_output {
             self.kms_key_id = Some(inp.into());
             self
         }
-        /// <p>A list of all of the currently assigned <code>VersionStage</code> staging labels and the
-        /// <code>VersionId</code> that each is attached to. Staging labels are used to keep track of
-        /// the different versions during the rotation process.</p>
-        /// <note>
-        /// <p>A version that does not have any staging labels attached is considered deprecated and
-        /// subject to deletion. Such versions are not included in this list.</p>
-        /// </note>
+        pub fn set_kms_key_id(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.kms_key_id = inp;
+            self
+        }
         pub fn version_ids_to_stages(
             mut self,
-            inp: std::collections::HashMap<std::string::String, std::vec::Vec<std::string::String>>,
+            k: impl Into<std::string::String>,
+            v: impl Into<std::vec::Vec<std::string::String>>,
         ) -> Self {
-            self.version_ids_to_stages = Some(inp);
+            let mut hash_map = self.version_ids_to_stages.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.version_ids_to_stages = Some(hash_map);
+            self
+        }
+        pub fn set_version_ids_to_stages(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, std::vec::Vec<std::string::String>>,
+            >,
+        ) -> Self {
+            self.version_ids_to_stages = inp;
             self
         }
         /// <p>The last date and time that this secret was modified in any way.</p>
@@ -1055,14 +1235,32 @@ pub mod describe_secret_output {
             self.last_changed_date = Some(inp);
             self
         }
+        pub fn set_last_changed_date(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.last_changed_date = inp;
+            self
+        }
         /// <p>A structure that contains the rotation configuration for this secret.</p>
         pub fn rotation_rules(mut self, inp: crate::model::RotationRulesType) -> Self {
             self.rotation_rules = Some(inp);
             self
         }
+        pub fn set_rotation_rules(
+            mut self,
+            inp: std::option::Option<crate::model::RotationRulesType>,
+        ) -> Self {
+            self.rotation_rules = inp;
+            self
+        }
         /// <p>The user-provided friendly name of the secret.</p>
         pub fn name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.name = Some(inp.into());
+            self
+        }
+        pub fn set_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.name = inp;
             self
         }
         /// <p>Specifies whether automatic rotation is enabled for this secret.</p>
@@ -1073,15 +1271,30 @@ pub mod describe_secret_output {
             self.rotation_enabled = Some(inp);
             self
         }
+        pub fn set_rotation_enabled(mut self, inp: std::option::Option<bool>) -> Self {
+            self.rotation_enabled = inp;
+            self
+        }
         /// <p>The last date that this secret was accessed. This value is truncated to midnight of the
         /// date and therefore shows only the date, not the time.</p>
         pub fn last_accessed_date(mut self, inp: smithy_types::Instant) -> Self {
             self.last_accessed_date = Some(inp);
             self
         }
+        pub fn set_last_accessed_date(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.last_accessed_date = inp;
+            self
+        }
         /// <p>The date that the secret was created.</p>
         pub fn created_date(mut self, inp: smithy_types::Instant) -> Self {
             self.created_date = Some(inp);
+            self
+        }
+        pub fn set_created_date(mut self, inp: std::option::Option<smithy_types::Instant>) -> Self {
+            self.created_date = inp;
             self
         }
         /// <p>This value exists if the secret is scheduled for deletion. Some time after the specified
@@ -1092,14 +1305,26 @@ pub mod describe_secret_output {
             self.deleted_date = Some(inp);
             self
         }
+        pub fn set_deleted_date(mut self, inp: std::option::Option<smithy_types::Instant>) -> Self {
+            self.deleted_date = inp;
+            self
+        }
         /// <p>The ARN of the secret.</p>
         pub fn arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.arn = Some(inp.into());
             self
         }
+        pub fn set_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.arn = inp;
+            self
+        }
         /// <p>Returns the name of the service that created this secret.</p>
         pub fn owning_service(mut self, inp: impl Into<std::string::String>) -> Self {
             self.owning_service = Some(inp.into());
+            self
+        }
+        pub fn set_owning_service(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.owning_service = inp;
             self
         }
         /// <p>The ARN of a Lambda function that's invoked by Secrets Manager to rotate the
@@ -1109,10 +1334,24 @@ pub mod describe_secret_output {
             self.rotation_lambda_arn = Some(inp.into());
             self
         }
-        /// <p>The list of user-defined tags that are associated with the secret. To add tags to a
-        /// secret, use <a>TagResource</a>. To remove tags, use <a>UntagResource</a>.</p>
-        pub fn tags(mut self, inp: std::vec::Vec<crate::model::Tag>) -> Self {
-            self.tags = Some(inp);
+        pub fn set_rotation_lambda_arn(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.rotation_lambda_arn = inp;
+            self
+        }
+        pub fn tags(mut self, inp: impl Into<crate::model::Tag>) -> Self {
+            let mut v = self.tags.unwrap_or_default();
+            v.push(inp.into());
+            self.tags = Some(v);
+            self
+        }
+        pub fn set_tags(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::Tag>>,
+        ) -> Self {
+            self.tags = inp;
             self
         }
         /// Consumes the builder and constructs a [`DescribeSecretOutput`](crate::output::DescribeSecretOutput)
@@ -1182,9 +1421,17 @@ pub mod delete_secret_output {
             self.arn = Some(inp.into());
             self
         }
+        pub fn set_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.arn = inp;
+            self
+        }
         /// <p>The friendly name of the secret that is now scheduled for deletion.</p>
         pub fn name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.name = Some(inp.into());
+            self
+        }
+        pub fn set_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.name = inp;
             self
         }
         /// <p>The date and time after which this secret can be deleted by Secrets Manager and can no longer be
@@ -1192,6 +1439,13 @@ pub mod delete_secret_output {
         /// specified in <code>RecoveryWindowInDays</code>.</p>
         pub fn deletion_date(mut self, inp: smithy_types::Instant) -> Self {
             self.deletion_date = Some(inp);
+            self
+        }
+        pub fn set_deletion_date(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.deletion_date = inp;
             self
         }
         /// Consumes the builder and constructs a [`DeleteSecretOutput`](crate::output::DeleteSecretOutput)
@@ -1243,9 +1497,17 @@ pub mod delete_resource_policy_output {
             self.arn = Some(inp.into());
             self
         }
+        pub fn set_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.arn = inp;
+            self
+        }
         /// <p>The friendly name of the secret that the resource-based policy was deleted for.</p>
         pub fn name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.name = Some(inp.into());
+            self
+        }
+        pub fn set_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.name = inp;
             self
         }
         /// Consumes the builder and constructs a [`DeleteResourcePolicyOutput`](crate::output::DeleteResourcePolicyOutput)
@@ -1309,9 +1571,17 @@ pub mod create_secret_output {
             self.version_id = Some(inp.into());
             self
         }
+        pub fn set_version_id(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.version_id = inp;
+            self
+        }
         /// <p>The friendly name of the secret that you just created.</p>
         pub fn name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.name = Some(inp.into());
+            self
+        }
+        pub fn set_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.name = inp;
             self
         }
         /// <p>The Amazon Resource Name (ARN) of the secret that you just created.</p>
@@ -1324,6 +1594,10 @@ pub mod create_secret_output {
         /// </note>
         pub fn arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.arn = Some(inp.into());
+            self
+        }
+        pub fn set_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.arn = inp;
             self
         }
         /// Consumes the builder and constructs a [`CreateSecretOutput`](crate::output::CreateSecretOutput)
@@ -1383,6 +1657,10 @@ pub mod cancel_rotate_secret_output {
             self.arn = Some(inp.into());
             self
         }
+        pub fn set_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.arn = inp;
+            self
+        }
         /// <p>The unique identifier of the version of the secret created during the rotation. This
         /// version might not be complete, and should be evaluated for possible deletion. At the very
         /// least, you should remove the <code>VersionStage</code> value <code>AWSPENDING</code> to enable this
@@ -1392,9 +1670,17 @@ pub mod cancel_rotate_secret_output {
             self.version_id = Some(inp.into());
             self
         }
+        pub fn set_version_id(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.version_id = inp;
+            self
+        }
         /// <p>The friendly name of the secret for which rotation was canceled.</p>
         pub fn name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.name = Some(inp.into());
+            self
+        }
+        pub fn set_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.name = inp;
             self
         }
         /// Consumes the builder and constructs a [`CancelRotateSecretOutput`](crate::output::CancelRotateSecretOutput)

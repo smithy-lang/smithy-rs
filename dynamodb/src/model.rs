@@ -41,10 +41,18 @@ pub mod time_to_live_specification {
             self.enabled = Some(inp);
             self
         }
+        pub fn set_enabled(mut self, inp: std::option::Option<bool>) -> Self {
+            self.enabled = inp;
+            self
+        }
         /// <p>The name of the TTL attribute used to store the expiration time for items in the
         /// table.</p>
         pub fn attribute_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.attribute_name = Some(inp.into());
+            self
+        }
+        pub fn set_attribute_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.attribute_name = inp;
             self
         }
         /// Consumes the builder and constructs a [`TimeToLiveSpecification`](crate::model::TimeToLiveSpecification)
@@ -127,6 +135,10 @@ pub mod table_auto_scaling_description {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>The current state of the table:</p>
         /// <ul>
         /// <li>
@@ -150,12 +162,27 @@ pub mod table_auto_scaling_description {
             self.table_status = Some(inp);
             self
         }
-        /// <p>Represents replicas of the global table.</p>
+        pub fn set_table_status(
+            mut self,
+            inp: std::option::Option<crate::model::TableStatus>,
+        ) -> Self {
+            self.table_status = inp;
+            self
+        }
         pub fn replicas(
             mut self,
-            inp: std::vec::Vec<crate::model::ReplicaAutoScalingDescription>,
+            inp: impl Into<crate::model::ReplicaAutoScalingDescription>,
         ) -> Self {
-            self.replicas = Some(inp);
+            let mut v = self.replicas.unwrap_or_default();
+            v.push(inp.into());
+            self.replicas = Some(v);
+            self
+        }
+        pub fn set_replicas(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::ReplicaAutoScalingDescription>>,
+        ) -> Self {
+            self.replicas = inp;
             self
         }
         /// Consumes the builder and constructs a [`TableAutoScalingDescription`](crate::model::TableAutoScalingDescription)
@@ -269,12 +296,26 @@ pub mod replica_auto_scaling_description {
             self.region_name = Some(inp.into());
             self
         }
-        /// <p>Replica-specific global secondary index auto scaling settings.</p>
+        pub fn set_region_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.region_name = inp;
+            self
+        }
         pub fn global_secondary_indexes(
             mut self,
-            inp: std::vec::Vec<crate::model::ReplicaGlobalSecondaryIndexAutoScalingDescription>,
+            inp: impl Into<crate::model::ReplicaGlobalSecondaryIndexAutoScalingDescription>,
         ) -> Self {
-            self.global_secondary_indexes = Some(inp);
+            let mut v = self.global_secondary_indexes.unwrap_or_default();
+            v.push(inp.into());
+            self.global_secondary_indexes = Some(v);
+            self
+        }
+        pub fn set_global_secondary_indexes(
+            mut self,
+            inp: std::option::Option<
+                std::vec::Vec<crate::model::ReplicaGlobalSecondaryIndexAutoScalingDescription>,
+            >,
+        ) -> Self {
+            self.global_secondary_indexes = inp;
             self
         }
         /// <p>Represents the auto scaling settings for a global table or global secondary
@@ -286,6 +327,13 @@ pub mod replica_auto_scaling_description {
             self.replica_provisioned_read_capacity_auto_scaling_settings = Some(inp);
             self
         }
+        pub fn set_replica_provisioned_read_capacity_auto_scaling_settings(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingSettingsDescription>,
+        ) -> Self {
+            self.replica_provisioned_read_capacity_auto_scaling_settings = inp;
+            self
+        }
         /// <p>Represents the auto scaling settings for a global table or global secondary
         /// index.</p>
         pub fn replica_provisioned_write_capacity_auto_scaling_settings(
@@ -293,6 +341,13 @@ pub mod replica_auto_scaling_description {
             inp: crate::model::AutoScalingSettingsDescription,
         ) -> Self {
             self.replica_provisioned_write_capacity_auto_scaling_settings = Some(inp);
+            self
+        }
+        pub fn set_replica_provisioned_write_capacity_auto_scaling_settings(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingSettingsDescription>,
+        ) -> Self {
+            self.replica_provisioned_write_capacity_auto_scaling_settings = inp;
             self
         }
         /// <p>The current state of the replica:</p>
@@ -316,6 +371,13 @@ pub mod replica_auto_scaling_description {
         /// </ul>
         pub fn replica_status(mut self, inp: crate::model::ReplicaStatus) -> Self {
             self.replica_status = Some(inp);
+            self
+        }
+        pub fn set_replica_status(
+            mut self,
+            inp: std::option::Option<crate::model::ReplicaStatus>,
+        ) -> Self {
+            self.replica_status = inp;
             self
         }
         /// Consumes the builder and constructs a [`ReplicaAutoScalingDescription`](crate::model::ReplicaAutoScalingDescription)
@@ -359,12 +421,9 @@ pub enum ReplicaStatus {
     Updating,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for ReplicaStatus
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for ReplicaStatus {
+    fn from(s: &str) -> Self {
+        match s {
             "ACTIVE" => ReplicaStatus::Active,
             "CREATING" => ReplicaStatus::Creating,
             "CREATION_FAILED" => ReplicaStatus::CreationFailed,
@@ -378,6 +437,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for ReplicaStatus {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ReplicaStatus::from(s))
+    }
+}
+
 impl ReplicaStatus {
     pub fn as_str(&self) -> &str {
         match self {
@@ -392,6 +460,11 @@ impl ReplicaStatus {
             ReplicaStatus::Updating => "UPDATING",
             ReplicaStatus::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for ReplicaStatus {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -480,9 +553,17 @@ pub mod auto_scaling_settings_description {
             self.minimum_units = Some(inp);
             self
         }
+        pub fn set_minimum_units(mut self, inp: std::option::Option<i64>) -> Self {
+            self.minimum_units = inp;
+            self
+        }
         /// <p>The maximum capacity units that a global table or global secondary index should be scaled up to.</p>
         pub fn maximum_units(mut self, inp: i64) -> Self {
             self.maximum_units = Some(inp);
+            self
+        }
+        pub fn set_maximum_units(mut self, inp: std::option::Option<i64>) -> Self {
+            self.maximum_units = inp;
             self
         }
         /// <p>Disabled auto scaling for this global table or global secondary index.</p>
@@ -490,17 +571,36 @@ pub mod auto_scaling_settings_description {
             self.auto_scaling_disabled = Some(inp);
             self
         }
+        pub fn set_auto_scaling_disabled(mut self, inp: std::option::Option<bool>) -> Self {
+            self.auto_scaling_disabled = inp;
+            self
+        }
         /// <p>Role ARN used for configuring the auto scaling policy.</p>
         pub fn auto_scaling_role_arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.auto_scaling_role_arn = Some(inp.into());
             self
         }
-        /// <p>Information about the scaling policies.</p>
+        pub fn set_auto_scaling_role_arn(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.auto_scaling_role_arn = inp;
+            self
+        }
         pub fn scaling_policies(
             mut self,
-            inp: std::vec::Vec<crate::model::AutoScalingPolicyDescription>,
+            inp: impl Into<crate::model::AutoScalingPolicyDescription>,
         ) -> Self {
-            self.scaling_policies = Some(inp);
+            let mut v = self.scaling_policies.unwrap_or_default();
+            v.push(inp.into());
+            self.scaling_policies = Some(v);
+            self
+        }
+        pub fn set_scaling_policies(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::AutoScalingPolicyDescription>>,
+        ) -> Self {
+            self.scaling_policies = inp;
             self
         }
         /// Consumes the builder and constructs a [`AutoScalingSettingsDescription`](crate::model::AutoScalingSettingsDescription)
@@ -568,12 +668,25 @@ pub mod auto_scaling_policy_description {
             self.policy_name = Some(inp.into());
             self
         }
+        pub fn set_policy_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.policy_name = inp;
+            self
+        }
         /// <p>Represents a target tracking scaling policy configuration.</p>
         pub fn target_tracking_scaling_policy_configuration(
             mut self,
             inp: crate::model::AutoScalingTargetTrackingScalingPolicyConfigurationDescription,
         ) -> Self {
             self.target_tracking_scaling_policy_configuration = Some(inp);
+            self
+        }
+        pub fn set_target_tracking_scaling_policy_configuration(
+            mut self,
+            inp: std::option::Option<
+                crate::model::AutoScalingTargetTrackingScalingPolicyConfigurationDescription,
+            >,
+        ) -> Self {
+            self.target_tracking_scaling_policy_configuration = inp;
             self
         }
         /// Consumes the builder and constructs a [`AutoScalingPolicyDescription`](crate::model::AutoScalingPolicyDescription)
@@ -662,6 +775,10 @@ pub mod auto_scaling_target_tracking_scaling_policy_configuration_description {
             self.disable_scale_in = Some(inp);
             self
         }
+        pub fn set_disable_scale_in(mut self, inp: std::option::Option<bool>) -> Self {
+            self.disable_scale_in = inp;
+            self
+        }
         /// <p>The amount of time, in seconds, after a scale in activity completes before another scale
         /// in activity can start. The cooldown period is used to block subsequent scale in requests
         /// until it has expired. You should scale in conservatively to protect your application's
@@ -670,6 +787,10 @@ pub mod auto_scaling_target_tracking_scaling_policy_configuration_description {
         /// immediately. </p>
         pub fn scale_in_cooldown(mut self, inp: i32) -> Self {
             self.scale_in_cooldown = Some(inp);
+            self
+        }
+        pub fn set_scale_in_cooldown(mut self, inp: std::option::Option<i32>) -> Self {
+            self.scale_in_cooldown = inp;
             self
         }
         /// <p>The amount of time, in seconds, after a scale out activity completes before another scale out
@@ -681,9 +802,17 @@ pub mod auto_scaling_target_tracking_scaling_policy_configuration_description {
             self.scale_out_cooldown = Some(inp);
             self
         }
+        pub fn set_scale_out_cooldown(mut self, inp: std::option::Option<i32>) -> Self {
+            self.scale_out_cooldown = inp;
+            self
+        }
         /// <p>The target value for the metric. The range is 8.515920e-109 to 1.174271e+108 (Base 10) or 2e-360 to 2e360 (Base 2).</p>
         pub fn target_value(mut self, inp: f64) -> Self {
             self.target_value = Some(inp);
+            self
+        }
+        pub fn set_target_value(mut self, inp: std::option::Option<f64>) -> Self {
+            self.target_value = inp;
             self
         }
         /// Consumes the builder and constructs a [`AutoScalingTargetTrackingScalingPolicyConfigurationDescription`](crate::model::AutoScalingTargetTrackingScalingPolicyConfigurationDescription)
@@ -791,6 +920,10 @@ pub mod replica_global_secondary_index_auto_scaling_description {
             self.index_name = Some(inp.into());
             self
         }
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
         /// <p>The current state of the replica global secondary index:</p>
         /// <ul>
         /// <li>
@@ -814,6 +947,13 @@ pub mod replica_global_secondary_index_auto_scaling_description {
             self.index_status = Some(inp);
             self
         }
+        pub fn set_index_status(
+            mut self,
+            inp: std::option::Option<crate::model::IndexStatus>,
+        ) -> Self {
+            self.index_status = inp;
+            self
+        }
         /// <p>Represents the auto scaling settings for a global table or global secondary
         /// index.</p>
         pub fn provisioned_read_capacity_auto_scaling_settings(
@@ -823,6 +963,13 @@ pub mod replica_global_secondary_index_auto_scaling_description {
             self.provisioned_read_capacity_auto_scaling_settings = Some(inp);
             self
         }
+        pub fn set_provisioned_read_capacity_auto_scaling_settings(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingSettingsDescription>,
+        ) -> Self {
+            self.provisioned_read_capacity_auto_scaling_settings = inp;
+            self
+        }
         /// <p>Represents the auto scaling settings for a global table or global secondary
         /// index.</p>
         pub fn provisioned_write_capacity_auto_scaling_settings(
@@ -830,6 +977,13 @@ pub mod replica_global_secondary_index_auto_scaling_description {
             inp: crate::model::AutoScalingSettingsDescription,
         ) -> Self {
             self.provisioned_write_capacity_auto_scaling_settings = Some(inp);
+            self
+        }
+        pub fn set_provisioned_write_capacity_auto_scaling_settings(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingSettingsDescription>,
+        ) -> Self {
+            self.provisioned_write_capacity_auto_scaling_settings = inp;
             self
         }
         /// Consumes the builder and constructs a [`ReplicaGlobalSecondaryIndexAutoScalingDescription`](crate::model::ReplicaGlobalSecondaryIndexAutoScalingDescription)
@@ -870,12 +1024,9 @@ pub enum IndexStatus {
     Updating,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for IndexStatus
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for IndexStatus {
+    fn from(s: &str) -> Self {
+        match s {
             "ACTIVE" => IndexStatus::Active,
             "CREATING" => IndexStatus::Creating,
             "DELETING" => IndexStatus::Deleting,
@@ -884,6 +1035,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for IndexStatus {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(IndexStatus::from(s))
+    }
+}
+
 impl IndexStatus {
     pub fn as_str(&self) -> &str {
         match self {
@@ -893,6 +1053,11 @@ impl IndexStatus {
             IndexStatus::Updating => "UPDATING",
             IndexStatus::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for IndexStatus {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -938,12 +1103,9 @@ pub enum TableStatus {
     Updating,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for TableStatus
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for TableStatus {
+    fn from(s: &str) -> Self {
+        match s {
             "ACTIVE" => TableStatus::Active,
             "ARCHIVED" => TableStatus::Archived,
             "ARCHIVING" => TableStatus::Archiving,
@@ -955,6 +1117,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for TableStatus {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(TableStatus::from(s))
+    }
+}
+
 impl TableStatus {
     pub fn as_str(&self) -> &str {
         match self {
@@ -967,6 +1138,11 @@ impl TableStatus {
             TableStatus::Updating => "UPDATING",
             TableStatus::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for TableStatus {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -1052,13 +1228,28 @@ pub mod replica_auto_scaling_update {
             self.region_name = Some(inp.into());
             self
         }
-        /// <p>Represents the auto scaling settings of global secondary indexes that will
-        /// be modified.</p>
+        pub fn set_region_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.region_name = inp;
+            self
+        }
         pub fn replica_global_secondary_index_updates(
             mut self,
-            inp: std::vec::Vec<crate::model::ReplicaGlobalSecondaryIndexAutoScalingUpdate>,
+            inp: impl Into<crate::model::ReplicaGlobalSecondaryIndexAutoScalingUpdate>,
         ) -> Self {
-            self.replica_global_secondary_index_updates = Some(inp);
+            let mut v = self
+                .replica_global_secondary_index_updates
+                .unwrap_or_default();
+            v.push(inp.into());
+            self.replica_global_secondary_index_updates = Some(v);
+            self
+        }
+        pub fn set_replica_global_secondary_index_updates(
+            mut self,
+            inp: std::option::Option<
+                std::vec::Vec<crate::model::ReplicaGlobalSecondaryIndexAutoScalingUpdate>,
+            >,
+        ) -> Self {
+            self.replica_global_secondary_index_updates = inp;
             self
         }
         /// <p>Represents the auto scaling settings to be modified for a global table or global
@@ -1068,6 +1259,13 @@ pub mod replica_auto_scaling_update {
             inp: crate::model::AutoScalingSettingsUpdate,
         ) -> Self {
             self.replica_provisioned_read_capacity_auto_scaling_update = Some(inp);
+            self
+        }
+        pub fn set_replica_provisioned_read_capacity_auto_scaling_update(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingSettingsUpdate>,
+        ) -> Self {
+            self.replica_provisioned_read_capacity_auto_scaling_update = inp;
             self
         }
         /// Consumes the builder and constructs a [`ReplicaAutoScalingUpdate`](crate::model::ReplicaAutoScalingUpdate)
@@ -1149,9 +1347,17 @@ pub mod auto_scaling_settings_update {
             self.minimum_units = Some(inp);
             self
         }
+        pub fn set_minimum_units(mut self, inp: std::option::Option<i64>) -> Self {
+            self.minimum_units = inp;
+            self
+        }
         /// <p>The maximum capacity units that a global table or global secondary index should be scaled up to.</p>
         pub fn maximum_units(mut self, inp: i64) -> Self {
             self.maximum_units = Some(inp);
+            self
+        }
+        pub fn set_maximum_units(mut self, inp: std::option::Option<i64>) -> Self {
+            self.maximum_units = inp;
             self
         }
         /// <p>Disabled auto scaling for this global table or global secondary index.</p>
@@ -1159,14 +1365,32 @@ pub mod auto_scaling_settings_update {
             self.auto_scaling_disabled = Some(inp);
             self
         }
+        pub fn set_auto_scaling_disabled(mut self, inp: std::option::Option<bool>) -> Self {
+            self.auto_scaling_disabled = inp;
+            self
+        }
         /// <p>Role ARN used for configuring auto scaling policy.</p>
         pub fn auto_scaling_role_arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.auto_scaling_role_arn = Some(inp.into());
             self
         }
+        pub fn set_auto_scaling_role_arn(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.auto_scaling_role_arn = inp;
+            self
+        }
         /// <p>The scaling policy to apply for scaling target global table or global secondary index capacity units.</p>
         pub fn scaling_policy_update(mut self, inp: crate::model::AutoScalingPolicyUpdate) -> Self {
             self.scaling_policy_update = Some(inp);
+            self
+        }
+        pub fn set_scaling_policy_update(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingPolicyUpdate>,
+        ) -> Self {
+            self.scaling_policy_update = inp;
             self
         }
         /// Consumes the builder and constructs a [`AutoScalingSettingsUpdate`](crate::model::AutoScalingSettingsUpdate)
@@ -1234,12 +1458,25 @@ pub mod auto_scaling_policy_update {
             self.policy_name = Some(inp.into());
             self
         }
+        pub fn set_policy_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.policy_name = inp;
+            self
+        }
         /// <p>Represents a target tracking scaling policy configuration.</p>
         pub fn target_tracking_scaling_policy_configuration(
             mut self,
             inp: crate::model::AutoScalingTargetTrackingScalingPolicyConfigurationUpdate,
         ) -> Self {
             self.target_tracking_scaling_policy_configuration = Some(inp);
+            self
+        }
+        pub fn set_target_tracking_scaling_policy_configuration(
+            mut self,
+            inp: std::option::Option<
+                crate::model::AutoScalingTargetTrackingScalingPolicyConfigurationUpdate,
+            >,
+        ) -> Self {
+            self.target_tracking_scaling_policy_configuration = inp;
             self
         }
         /// Consumes the builder and constructs a [`AutoScalingPolicyUpdate`](crate::model::AutoScalingPolicyUpdate)
@@ -1328,6 +1565,10 @@ pub mod auto_scaling_target_tracking_scaling_policy_configuration_update {
             self.disable_scale_in = Some(inp);
             self
         }
+        pub fn set_disable_scale_in(mut self, inp: std::option::Option<bool>) -> Self {
+            self.disable_scale_in = inp;
+            self
+        }
         /// <p>The amount of time, in seconds, after a scale in activity completes before another scale
         /// in activity can start. The cooldown period is used to block subsequent scale in requests
         /// until it has expired. You should scale in conservatively to protect your application's
@@ -1336,6 +1577,10 @@ pub mod auto_scaling_target_tracking_scaling_policy_configuration_update {
         /// immediately. </p>
         pub fn scale_in_cooldown(mut self, inp: i32) -> Self {
             self.scale_in_cooldown = Some(inp);
+            self
+        }
+        pub fn set_scale_in_cooldown(mut self, inp: std::option::Option<i32>) -> Self {
+            self.scale_in_cooldown = inp;
             self
         }
         /// <p>The amount of time, in seconds, after a scale out activity completes before another scale out
@@ -1347,9 +1592,17 @@ pub mod auto_scaling_target_tracking_scaling_policy_configuration_update {
             self.scale_out_cooldown = Some(inp);
             self
         }
+        pub fn set_scale_out_cooldown(mut self, inp: std::option::Option<i32>) -> Self {
+            self.scale_out_cooldown = inp;
+            self
+        }
         /// <p>The target value for the metric. The range is 8.515920e-109 to 1.174271e+108 (Base 10) or 2e-360 to 2e360 (Base 2).</p>
         pub fn target_value(mut self, inp: f64) -> Self {
             self.target_value = Some(inp);
+            self
+        }
+        pub fn set_target_value(mut self, inp: std::option::Option<f64>) -> Self {
+            self.target_value = inp;
             self
         }
         /// Consumes the builder and constructs a [`AutoScalingTargetTrackingScalingPolicyConfigurationUpdate`](crate::model::AutoScalingTargetTrackingScalingPolicyConfigurationUpdate)
@@ -1420,6 +1673,10 @@ pub mod replica_global_secondary_index_auto_scaling_update {
             self.index_name = Some(inp.into());
             self
         }
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
         /// <p>Represents the auto scaling settings to be modified for a global table or global
         /// secondary index.</p>
         pub fn provisioned_read_capacity_auto_scaling_update(
@@ -1427,6 +1684,13 @@ pub mod replica_global_secondary_index_auto_scaling_update {
             inp: crate::model::AutoScalingSettingsUpdate,
         ) -> Self {
             self.provisioned_read_capacity_auto_scaling_update = Some(inp);
+            self
+        }
+        pub fn set_provisioned_read_capacity_auto_scaling_update(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingSettingsUpdate>,
+        ) -> Self {
+            self.provisioned_read_capacity_auto_scaling_update = inp;
             self
         }
         /// Consumes the builder and constructs a [`ReplicaGlobalSecondaryIndexAutoScalingUpdate`](crate::model::ReplicaGlobalSecondaryIndexAutoScalingUpdate)
@@ -1492,6 +1756,10 @@ pub mod global_secondary_index_auto_scaling_update {
             self.index_name = Some(inp.into());
             self
         }
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
         /// <p>Represents the auto scaling settings to be modified for a global table or global
         /// secondary index.</p>
         pub fn provisioned_write_capacity_auto_scaling_update(
@@ -1499,6 +1767,13 @@ pub mod global_secondary_index_auto_scaling_update {
             inp: crate::model::AutoScalingSettingsUpdate,
         ) -> Self {
             self.provisioned_write_capacity_auto_scaling_update = Some(inp);
+            self
+        }
+        pub fn set_provisioned_write_capacity_auto_scaling_update(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingSettingsUpdate>,
+        ) -> Self {
+            self.provisioned_write_capacity_auto_scaling_update = inp;
             self
         }
         /// Consumes the builder and constructs a [`GlobalSecondaryIndexAutoScalingUpdate`](crate::model::GlobalSecondaryIndexAutoScalingUpdate)
@@ -1955,24 +2230,20 @@ pub mod table_description {
         archival_summary: std::option::Option<crate::model::ArchivalSummary>,
     }
     impl Builder {
-        /// <p>An array of <code>AttributeDefinition</code> objects. Each of these objects describes one attribute
-        /// in the table and index key schema.</p>
-        /// <p>Each <code>AttributeDefinition</code> object in this array is composed of:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>AttributeName</code> - The name of the attribute.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>AttributeType</code> - The data type for the attribute.</p>
-        /// </li>
-        /// </ul>
         pub fn attribute_definitions(
             mut self,
-            inp: std::vec::Vec<crate::model::AttributeDefinition>,
+            inp: impl Into<crate::model::AttributeDefinition>,
         ) -> Self {
-            self.attribute_definitions = Some(inp);
+            let mut v = self.attribute_definitions.unwrap_or_default();
+            v.push(inp.into());
+            self.attribute_definitions = Some(v);
+            self
+        }
+        pub fn set_attribute_definitions(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::AttributeDefinition>>,
+        ) -> Self {
+            self.attribute_definitions = inp;
             self
         }
         /// <p>The name of the table.</p>
@@ -1980,39 +2251,21 @@ pub mod table_description {
             self.table_name = Some(inp.into());
             self
         }
-        /// <p>The primary key structure for the table. Each <code>KeySchemaElement</code> consists of:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>AttributeName</code> - The name of the attribute.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>KeyType</code> - The role of the attribute:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>HASH</code> -  partition key</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>RANGE</code> - sort key</p>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>The partition key of an item is also known as its <i>hash attribute</i>.  The
-        /// term "hash attribute" derives from DynamoDB's usage of an internal hash function to
-        /// evenly distribute data items across partitions, based on their partition key values.</p>
-        /// <p>The sort key of an item is also known as its <i>range attribute</i>.
-        /// The term "range attribute" derives from the way DynamoDB stores items with the same
-        /// partition key physically close together, in sorted order by the sort key value.</p>
-        /// </note>
-        /// </li>
-        /// </ul>
-        /// <p>For more information about primary keys, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DataModel.html#DataModelPrimaryKey">Primary Key</a> in the
-        /// <i>Amazon DynamoDB Developer Guide</i>.</p>
-        pub fn key_schema(mut self, inp: std::vec::Vec<crate::model::KeySchemaElement>) -> Self {
-            self.key_schema = Some(inp);
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
+        pub fn key_schema(mut self, inp: impl Into<crate::model::KeySchemaElement>) -> Self {
+            let mut v = self.key_schema.unwrap_or_default();
+            v.push(inp.into());
+            self.key_schema = Some(v);
+            self
+        }
+        pub fn set_key_schema(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::KeySchemaElement>>,
+        ) -> Self {
+            self.key_schema = inp;
             self
         }
         /// <p>The current state of the table:</p>
@@ -2059,9 +2312,23 @@ pub mod table_description {
             self.table_status = Some(inp);
             self
         }
+        pub fn set_table_status(
+            mut self,
+            inp: std::option::Option<crate::model::TableStatus>,
+        ) -> Self {
+            self.table_status = inp;
+            self
+        }
         /// <p>The date and time when the table was created, in <a href="http://www.epochconverter.com/">UNIX epoch time</a> format.</p>
         pub fn creation_date_time(mut self, inp: smithy_types::Instant) -> Self {
             self.creation_date_time = Some(inp);
+            self
+        }
+        pub fn set_creation_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.creation_date_time = inp;
             self
         }
         /// <p>The provisioned throughput settings for the table, consisting of read and write capacity units, along with data about increases and decreases.</p>
@@ -2072,8 +2339,19 @@ pub mod table_description {
             self.provisioned_throughput = Some(inp);
             self
         }
+        pub fn set_provisioned_throughput(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughputDescription>,
+        ) -> Self {
+            self.provisioned_throughput = inp;
+            self
+        }
         /// <p>The total size of the specified table, in bytes. DynamoDB updates this value approximately every six hours. Recent changes might not be reflected in this value.</p>
         pub fn table_size_bytes(mut self, inp: i64) -> Self {
+            self.table_size_bytes = Some(inp);
+            self
+        }
+        pub fn set_table_size_bytes(mut self, inp: i64) -> Self {
             self.table_size_bytes = Some(inp);
             self
         }
@@ -2082,9 +2360,17 @@ pub mod table_description {
             self.item_count = Some(inp);
             self
         }
+        pub fn set_item_count(mut self, inp: i64) -> Self {
+            self.item_count = Some(inp);
+            self
+        }
         /// <p>The Amazon Resource Name (ARN) that uniquely identifies the table.</p>
         pub fn table_arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.table_arn = Some(inp.into());
+            self
+        }
+        pub fn set_table_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_arn = inp;
             self
         }
         /// <p>Unique identifier for the table for which the backup was created. </p>
@@ -2092,197 +2378,64 @@ pub mod table_description {
             self.table_id = Some(inp.into());
             self
         }
+        pub fn set_table_id(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_id = inp;
+            self
+        }
         /// <p>Contains the details for the read/write capacity mode.</p>
         pub fn billing_mode_summary(mut self, inp: crate::model::BillingModeSummary) -> Self {
             self.billing_mode_summary = Some(inp);
             self
         }
-        /// <p>Represents one or more local secondary indexes on the table. Each index is scoped to a given partition key value. Tables with one or more local secondary indexes are subject to an item collection size limit, where the amount of data within a given item collection cannot exceed 10 GB. Each element is composed of:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>IndexName</code> - The name of the local secondary index.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>KeySchema</code> - Specifies the complete index key schema. The attribute names in the
-        /// key schema must be between 1 and 255 characters (inclusive). The key schema must begin
-        /// with the same partition key as the table.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>Projection</code> - Specifies
-        /// attributes that are copied (projected) from the table into the index. These are in
-        /// addition to the primary key attributes and index key
-        /// attributes, which are automatically projected. Each
-        /// attribute specification is composed of:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>ProjectionType</code> - One
-        /// of the following:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>KEYS_ONLY</code> - Only the index and primary keys are projected into the
-        /// index.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>INCLUDE</code> - Only the specified table attributes are projected
-        /// into the index. The list of projected attributes is in
-        /// <code>NonKeyAttributes</code>.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>ALL</code> - All of the table attributes are projected into the
-        /// index.</p>
-        /// </li>
-        /// </ul>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>NonKeyAttributes</code> - A list of one or more non-key attribute names that are
-        /// projected into the secondary index. The total count of attributes provided in <code>NonKeyAttributes</code>, summed across all of the secondary indexes, must not exceed 20. If you project the same attribute into two different indexes, this counts as two distinct attributes when determining the total.</p>
-        /// </li>
-        /// </ul>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>IndexSizeBytes</code> - Represents the total size of the index, in bytes. DynamoDB updates
-        /// this value approximately every six hours. Recent changes might not be reflected in this
-        /// value.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>ItemCount</code> - Represents the number of items in the index. DynamoDB updates this value
-        /// approximately every six hours. Recent changes might not be reflected in this value.</p>
-        /// </li>
-        /// </ul>
-        /// <p>If the table is in the <code>DELETING</code> state, no information about indexes will be
-        /// returned.</p>
-        pub fn local_secondary_indexes(
+        pub fn set_billing_mode_summary(
             mut self,
-            inp: std::vec::Vec<crate::model::LocalSecondaryIndexDescription>,
+            inp: std::option::Option<crate::model::BillingModeSummary>,
         ) -> Self {
-            self.local_secondary_indexes = Some(inp);
+            self.billing_mode_summary = inp;
             self
         }
-        /// <p>The global secondary indexes, if any, on the table. Each index is scoped to a given partition key value. Each element is composed of:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>Backfilling</code> - If true, then the index is currently in the backfilling
-        /// phase. Backfilling occurs only when a new global secondary index is added to the
-        /// table. It is the process by which DynamoDB populates the new index with data from the
-        /// table. (This attribute does not appear for indexes that were created during a
-        /// <code>CreateTable</code> operation.) </p>
-        /// <p> You can delete an index that is being created during the <code>Backfilling</code>
-        /// phase when <code>IndexStatus</code> is set to CREATING and <code>Backfilling</code>
-        /// is true. You can't delete the index that is being created when
-        /// <code>IndexStatus</code> is set to CREATING and <code>Backfilling</code> is false.
-        /// (This attribute does not appear for indexes that were created during a
-        /// <code>CreateTable</code> operation.)</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>IndexName</code> - The name of the global secondary index.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>IndexSizeBytes</code> - The total size of the global secondary index, in bytes. DynamoDB updates this value approximately every six
-        /// hours. Recent changes might not be reflected in this value.
-        /// </p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>IndexStatus</code> - The current status of the global secondary index:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>CREATING</code> - The index is being created.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>UPDATING</code> - The index is being updated.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>DELETING</code> - The index is being deleted.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>ACTIVE</code> - The index is ready for use.</p>
-        /// </li>
-        /// </ul>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>ItemCount</code> - The number of items in the global secondary index. DynamoDB updates this value approximately every six
-        /// hours. Recent changes might not be reflected in this value.
-        /// </p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>KeySchema</code> - Specifies the complete index key schema. The attribute names in the
-        /// key schema must be between 1 and 255 characters (inclusive). The key schema must begin
-        /// with the same partition key as the table.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>Projection</code> - Specifies
-        /// attributes that are copied (projected) from the table into the index. These are in
-        /// addition to the primary key attributes and index key
-        /// attributes, which are automatically projected. Each
-        /// attribute specification is composed of:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>ProjectionType</code> - One
-        /// of the following:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>KEYS_ONLY</code> - Only the index and primary keys are projected into the
-        /// index.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>INCLUDE</code> - In addition to the attributes described in <code>KEYS_ONLY</code>, the secondary index will include other non-key attributes that you specify.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>ALL</code> - All of the table attributes are projected into the
-        /// index.</p>
-        /// </li>
-        /// </ul>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>NonKeyAttributes</code> - A list of one or more non-key attribute names that are
-        /// projected into the secondary index. The total count of attributes provided in <code>NonKeyAttributes</code>, summed across all of the secondary indexes, must not exceed 20. If you project the same attribute into two different indexes, this counts as two distinct attributes when determining the total.</p>
-        /// </li>
-        /// </ul>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>ProvisionedThroughput</code> - The provisioned throughput settings for the global secondary index,
-        /// consisting of read and write capacity units, along with data about increases and
-        /// decreases. </p>
-        /// </li>
-        /// </ul>
-        /// <p>If the table is in the <code>DELETING</code> state, no information about indexes will be
-        /// returned.</p>
+        pub fn local_secondary_indexes(
+            mut self,
+            inp: impl Into<crate::model::LocalSecondaryIndexDescription>,
+        ) -> Self {
+            let mut v = self.local_secondary_indexes.unwrap_or_default();
+            v.push(inp.into());
+            self.local_secondary_indexes = Some(v);
+            self
+        }
+        pub fn set_local_secondary_indexes(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::LocalSecondaryIndexDescription>>,
+        ) -> Self {
+            self.local_secondary_indexes = inp;
+            self
+        }
         pub fn global_secondary_indexes(
             mut self,
-            inp: std::vec::Vec<crate::model::GlobalSecondaryIndexDescription>,
+            inp: impl Into<crate::model::GlobalSecondaryIndexDescription>,
         ) -> Self {
-            self.global_secondary_indexes = Some(inp);
+            let mut v = self.global_secondary_indexes.unwrap_or_default();
+            v.push(inp.into());
+            self.global_secondary_indexes = Some(v);
+            self
+        }
+        pub fn set_global_secondary_indexes(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::GlobalSecondaryIndexDescription>>,
+        ) -> Self {
+            self.global_secondary_indexes = inp;
             self
         }
         /// <p>The current DynamoDB Streams configuration for the table.</p>
         pub fn stream_specification(mut self, inp: crate::model::StreamSpecification) -> Self {
             self.stream_specification = Some(inp);
+            self
+        }
+        pub fn set_stream_specification(
+            mut self,
+            inp: std::option::Option<crate::model::StreamSpecification>,
+        ) -> Self {
+            self.stream_specification = inp;
             self
         }
         /// <p>A timestamp, in ISO 8601 format, for this stream.</p>
@@ -2304,9 +2457,23 @@ pub mod table_description {
             self.latest_stream_label = Some(inp.into());
             self
         }
+        pub fn set_latest_stream_label(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.latest_stream_label = inp;
+            self
+        }
         /// <p>The Amazon Resource Name (ARN) that uniquely identifies the latest stream for this table.</p>
         pub fn latest_stream_arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.latest_stream_arn = Some(inp.into());
+            self
+        }
+        pub fn set_latest_stream_arn(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.latest_stream_arn = inp;
             self
         }
         /// <p>Represents the version of <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/GlobalTables.html">global tables</a> in use, if the table is replicated across AWS Regions.</p>
@@ -2314,9 +2481,24 @@ pub mod table_description {
             self.global_table_version = Some(inp.into());
             self
         }
-        /// <p>Represents replicas of the table.</p>
-        pub fn replicas(mut self, inp: std::vec::Vec<crate::model::ReplicaDescription>) -> Self {
-            self.replicas = Some(inp);
+        pub fn set_global_table_version(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.global_table_version = inp;
+            self
+        }
+        pub fn replicas(mut self, inp: impl Into<crate::model::ReplicaDescription>) -> Self {
+            let mut v = self.replicas.unwrap_or_default();
+            v.push(inp.into());
+            self.replicas = Some(v);
+            self
+        }
+        pub fn set_replicas(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::ReplicaDescription>>,
+        ) -> Self {
+            self.replicas = inp;
             self
         }
         /// <p>Contains details for the restore.</p>
@@ -2324,14 +2506,35 @@ pub mod table_description {
             self.restore_summary = Some(inp);
             self
         }
+        pub fn set_restore_summary(
+            mut self,
+            inp: std::option::Option<crate::model::RestoreSummary>,
+        ) -> Self {
+            self.restore_summary = inp;
+            self
+        }
         /// <p>The description of the server-side encryption status on the specified table.</p>
         pub fn sse_description(mut self, inp: crate::model::SSEDescription) -> Self {
             self.sse_description = Some(inp);
             self
         }
+        pub fn set_sse_description(
+            mut self,
+            inp: std::option::Option<crate::model::SSEDescription>,
+        ) -> Self {
+            self.sse_description = inp;
+            self
+        }
         /// <p>Contains information about the table archive.</p>
         pub fn archival_summary(mut self, inp: crate::model::ArchivalSummary) -> Self {
             self.archival_summary = Some(inp);
+            self
+        }
+        pub fn set_archival_summary(
+            mut self,
+            inp: std::option::Option<crate::model::ArchivalSummary>,
+        ) -> Self {
+            self.archival_summary = inp;
             self
         }
         /// Consumes the builder and constructs a [`TableDescription`](crate::model::TableDescription)
@@ -2436,6 +2639,13 @@ pub mod archival_summary {
             self.archival_date_time = Some(inp);
             self
         }
+        pub fn set_archival_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.archival_date_time = inp;
+            self
+        }
         /// <p>The reason DynamoDB archived the table. Currently, the only
         /// possible value is:</p>
         /// <ul>
@@ -2451,12 +2661,26 @@ pub mod archival_summary {
             self.archival_reason = Some(inp.into());
             self
         }
+        pub fn set_archival_reason(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.archival_reason = inp;
+            self
+        }
         /// <p>The Amazon Resource Name (ARN) of the backup the table was archived
         /// to, when applicable in the archival reason. If you wish to restore this
         /// backup to the same table name, you will need to delete the original
         /// table.</p>
         pub fn archival_backup_arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.archival_backup_arn = Some(inp.into());
+            self
+        }
+        pub fn set_archival_backup_arn(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.archival_backup_arn = inp;
             self
         }
         /// Consumes the builder and constructs a [`ArchivalSummary`](crate::model::ArchivalSummary)
@@ -2570,6 +2794,10 @@ pub mod sse_description {
             self.status = Some(inp);
             self
         }
+        pub fn set_status(mut self, inp: std::option::Option<crate::model::SSEStatus>) -> Self {
+            self.status = inp;
+            self
+        }
         /// <p>Server-side encryption type. The only supported value is:</p>
         /// <ul>
         /// <li>
@@ -2583,9 +2811,20 @@ pub mod sse_description {
             self.sse_type = Some(inp);
             self
         }
+        pub fn set_sse_type(mut self, inp: std::option::Option<crate::model::SSEType>) -> Self {
+            self.sse_type = inp;
+            self
+        }
         /// <p>The AWS KMS customer master key (CMK) ARN used for the AWS KMS encryption.</p>
         pub fn kms_master_key_arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.kms_master_key_arn = Some(inp.into());
+            self
+        }
+        pub fn set_kms_master_key_arn(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.kms_master_key_arn = inp;
             self
         }
         /// <p>Indicates the time, in UNIX epoch date format, when DynamoDB detected that the table's
@@ -2595,6 +2834,13 @@ pub mod sse_description {
         /// from this date.</p>
         pub fn inaccessible_encryption_date_time(mut self, inp: smithy_types::Instant) -> Self {
             self.inaccessible_encryption_date_time = Some(inp);
+            self
+        }
+        pub fn set_inaccessible_encryption_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.inaccessible_encryption_date_time = inp;
             self
         }
         /// Consumes the builder and constructs a [`SSEDescription`](crate::model::SSEDescription)
@@ -2630,18 +2876,24 @@ pub enum SSEType {
     Kms,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for SSEType
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for SSEType {
+    fn from(s: &str) -> Self {
+        match s {
             "AES256" => SSEType::Aes256,
             "KMS" => SSEType::Kms,
             other => SSEType::Unknown(other.to_owned()),
         }
     }
 }
+
+impl std::str::FromStr for SSEType {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(SSEType::from(s))
+    }
+}
+
 impl SSEType {
     pub fn as_str(&self) -> &str {
         match self {
@@ -2649,6 +2901,11 @@ impl SSEType {
             SSEType::Kms => "KMS",
             SSEType::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for SSEType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -2692,12 +2949,9 @@ pub enum SSEStatus {
     Updating,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for SSEStatus
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for SSEStatus {
+    fn from(s: &str) -> Self {
+        match s {
             "DISABLED" => SSEStatus::Disabled,
             "DISABLING" => SSEStatus::Disabling,
             "ENABLED" => SSEStatus::Enabled,
@@ -2707,6 +2961,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for SSEStatus {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(SSEStatus::from(s))
+    }
+}
+
 impl SSEStatus {
     pub fn as_str(&self) -> &str {
         match self {
@@ -2717,6 +2980,11 @@ impl SSEStatus {
             SSEStatus::Updating => "UPDATING",
             SSEStatus::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for SSEStatus {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -2801,9 +3069,23 @@ pub mod restore_summary {
             self.source_backup_arn = Some(inp.into());
             self
         }
+        pub fn set_source_backup_arn(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.source_backup_arn = inp;
+            self
+        }
         /// <p>The ARN of the source table of the backup that is being restored.</p>
         pub fn source_table_arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.source_table_arn = Some(inp.into());
+            self
+        }
+        pub fn set_source_table_arn(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.source_table_arn = inp;
             self
         }
         /// <p>Point in time or source backup time.</p>
@@ -2811,9 +3093,20 @@ pub mod restore_summary {
             self.restore_date_time = Some(inp);
             self
         }
+        pub fn set_restore_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.restore_date_time = inp;
+            self
+        }
         /// <p>Indicates if a restore is in progress or not.</p>
         pub fn restore_in_progress(mut self, inp: bool) -> Self {
             self.restore_in_progress = Some(inp);
+            self
+        }
+        pub fn set_restore_in_progress(mut self, inp: std::option::Option<bool>) -> Self {
+            self.restore_in_progress = inp;
             self
         }
         /// Consumes the builder and constructs a [`RestoreSummary`](crate::model::RestoreSummary)
@@ -2973,6 +3266,10 @@ pub mod replica_description {
             self.region_name = Some(inp.into());
             self
         }
+        pub fn set_region_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.region_name = inp;
+            self
+        }
         /// <p>The current state of the replica:</p>
         /// <ul>
         /// <li>
@@ -3010,9 +3307,23 @@ pub mod replica_description {
             self.replica_status = Some(inp);
             self
         }
+        pub fn set_replica_status(
+            mut self,
+            inp: std::option::Option<crate::model::ReplicaStatus>,
+        ) -> Self {
+            self.replica_status = inp;
+            self
+        }
         /// <p>Detailed information about the replica status.</p>
         pub fn replica_status_description(mut self, inp: impl Into<std::string::String>) -> Self {
             self.replica_status_description = Some(inp.into());
+            self
+        }
+        pub fn set_replica_status_description(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.replica_status_description = inp;
             self
         }
         /// <p>Specifies the progress of a Create, Update, or Delete action on the replica
@@ -3024,10 +3335,24 @@ pub mod replica_description {
             self.replica_status_percent_progress = Some(inp.into());
             self
         }
+        pub fn set_replica_status_percent_progress(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.replica_status_percent_progress = inp;
+            self
+        }
         /// <p>The AWS KMS customer master key (CMK) of the replica that will be used for AWS KMS
         /// encryption.</p>
         pub fn kms_master_key_id(mut self, inp: impl Into<std::string::String>) -> Self {
             self.kms_master_key_id = Some(inp.into());
+            self
+        }
+        pub fn set_kms_master_key_id(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.kms_master_key_id = inp;
             self
         }
         /// <p>Replica-specific provisioned throughput. If not described, uses the source table's
@@ -3039,17 +3364,41 @@ pub mod replica_description {
             self.provisioned_throughput_override = Some(inp);
             self
         }
-        /// <p>Replica-specific global secondary index settings.</p>
+        pub fn set_provisioned_throughput_override(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughputOverride>,
+        ) -> Self {
+            self.provisioned_throughput_override = inp;
+            self
+        }
         pub fn global_secondary_indexes(
             mut self,
-            inp: std::vec::Vec<crate::model::ReplicaGlobalSecondaryIndexDescription>,
+            inp: impl Into<crate::model::ReplicaGlobalSecondaryIndexDescription>,
         ) -> Self {
-            self.global_secondary_indexes = Some(inp);
+            let mut v = self.global_secondary_indexes.unwrap_or_default();
+            v.push(inp.into());
+            self.global_secondary_indexes = Some(v);
+            self
+        }
+        pub fn set_global_secondary_indexes(
+            mut self,
+            inp: std::option::Option<
+                std::vec::Vec<crate::model::ReplicaGlobalSecondaryIndexDescription>,
+            >,
+        ) -> Self {
+            self.global_secondary_indexes = inp;
             self
         }
         /// <p>The time at which the replica was first detected as inaccessible. To determine cause of inaccessibility check the <code>ReplicaStatus</code> property.</p>
         pub fn replica_inaccessible_date_time(mut self, inp: smithy_types::Instant) -> Self {
             self.replica_inaccessible_date_time = Some(inp);
+            self
+        }
+        pub fn set_replica_inaccessible_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.replica_inaccessible_date_time = inp;
             self
         }
         /// Consumes the builder and constructs a [`ReplicaDescription`](crate::model::ReplicaDescription)
@@ -3118,12 +3467,23 @@ pub mod replica_global_secondary_index_description {
             self.index_name = Some(inp.into());
             self
         }
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
         /// <p>If not described, uses the source table GSI's read capacity settings.</p>
         pub fn provisioned_throughput_override(
             mut self,
             inp: crate::model::ProvisionedThroughputOverride,
         ) -> Self {
             self.provisioned_throughput_override = Some(inp);
+            self
+        }
+        pub fn set_provisioned_throughput_override(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughputOverride>,
+        ) -> Self {
+            self.provisioned_throughput_override = inp;
             self
         }
         /// Consumes the builder and constructs a [`ReplicaGlobalSecondaryIndexDescription`](crate::model::ReplicaGlobalSecondaryIndexDescription)
@@ -3175,6 +3535,10 @@ pub mod provisioned_throughput_override {
         /// read capacity settings.</p>
         pub fn read_capacity_units(mut self, inp: i64) -> Self {
             self.read_capacity_units = Some(inp);
+            self
+        }
+        pub fn set_read_capacity_units(mut self, inp: std::option::Option<i64>) -> Self {
+            self.read_capacity_units = inp;
             self
         }
         /// Consumes the builder and constructs a [`ProvisionedThroughputOverride`](crate::model::ProvisionedThroughputOverride)
@@ -3255,6 +3619,10 @@ pub mod stream_specification {
             self.stream_enabled = Some(inp);
             self
         }
+        pub fn set_stream_enabled(mut self, inp: std::option::Option<bool>) -> Self {
+            self.stream_enabled = inp;
+            self
+        }
         /// <p>
         /// When an item in the table is modified, <code>StreamViewType</code>
         /// determines what information is written to the stream for this table. Valid values for
@@ -3282,6 +3650,13 @@ pub mod stream_specification {
         /// </ul>
         pub fn stream_view_type(mut self, inp: crate::model::StreamViewType) -> Self {
             self.stream_view_type = Some(inp);
+            self
+        }
+        pub fn set_stream_view_type(
+            mut self,
+            inp: std::option::Option<crate::model::StreamViewType>,
+        ) -> Self {
+            self.stream_view_type = inp;
             self
         }
         /// Consumes the builder and constructs a [`StreamSpecification`](crate::model::StreamSpecification)
@@ -3317,12 +3692,9 @@ pub enum StreamViewType {
     OldImage,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for StreamViewType
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for StreamViewType {
+    fn from(s: &str) -> Self {
+        match s {
             "KEYS_ONLY" => StreamViewType::KeysOnly,
             "NEW_AND_OLD_IMAGES" => StreamViewType::NewAndOldImages,
             "NEW_IMAGE" => StreamViewType::NewImage,
@@ -3331,6 +3703,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for StreamViewType {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(StreamViewType::from(s))
+    }
+}
+
 impl StreamViewType {
     pub fn as_str(&self) -> &str {
         match self {
@@ -3340,6 +3721,11 @@ impl StreamViewType {
             StreamViewType::OldImage => "OLD_IMAGE",
             StreamViewType::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for StreamViewType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -3498,27 +3884,21 @@ pub mod global_secondary_index_description {
             self.index_name = Some(inp.into());
             self
         }
-        /// <p>The complete key schema for a global secondary index, which consists of one or more pairs of attribute names and key types:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>HASH</code> - partition key</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>RANGE</code> - sort key</p>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>The partition key of an item is also known as its <i>hash attribute</i>.  The
-        /// term "hash attribute" derives from DynamoDB's usage of an internal hash function to
-        /// evenly distribute data items across partitions, based on their partition key values.</p>
-        /// <p>The sort key of an item is also known as its <i>range attribute</i>.
-        /// The term "range attribute" derives from the way DynamoDB stores items with the same
-        /// partition key physically close together, in sorted order by the sort key value.</p>
-        /// </note>
-        pub fn key_schema(mut self, inp: std::vec::Vec<crate::model::KeySchemaElement>) -> Self {
-            self.key_schema = Some(inp);
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
+        pub fn key_schema(mut self, inp: impl Into<crate::model::KeySchemaElement>) -> Self {
+            let mut v = self.key_schema.unwrap_or_default();
+            v.push(inp.into());
+            self.key_schema = Some(v);
+            self
+        }
+        pub fn set_key_schema(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::KeySchemaElement>>,
+        ) -> Self {
+            self.key_schema = inp;
             self
         }
         /// <p>Represents attributes that are copied (projected) from the table into the global
@@ -3526,6 +3906,13 @@ pub mod global_secondary_index_description {
         /// attributes, which are automatically projected. </p>
         pub fn projection(mut self, inp: crate::model::Projection) -> Self {
             self.projection = Some(inp);
+            self
+        }
+        pub fn set_projection(
+            mut self,
+            inp: std::option::Option<crate::model::Projection>,
+        ) -> Self {
+            self.projection = inp;
             self
         }
         /// <p>The current state of the global secondary index:</p>
@@ -3551,6 +3938,13 @@ pub mod global_secondary_index_description {
             self.index_status = Some(inp);
             self
         }
+        pub fn set_index_status(
+            mut self,
+            inp: std::option::Option<crate::model::IndexStatus>,
+        ) -> Self {
+            self.index_status = inp;
+            self
+        }
         /// <p>Indicates whether the index is currently backfilling. <i>Backfilling</i> is the process of reading items from
         /// the table and determining whether they can be added to the index. (Not all items will qualify:  For example, a partition key
         /// cannot have any duplicate values.) If an item can be added to the index, DynamoDB will do so. After all items have been processed,
@@ -3566,6 +3960,10 @@ pub mod global_secondary_index_description {
             self.backfilling = Some(inp);
             self
         }
+        pub fn set_backfilling(mut self, inp: std::option::Option<bool>) -> Self {
+            self.backfilling = inp;
+            self
+        }
         /// <p>Represents the provisioned throughput settings for the specified global secondary index.</p>
         /// <p>For current minimum and maximum provisioned throughput values, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Limits.html">Service, Account, and Table Quotas</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
         pub fn provisioned_throughput(
@@ -3575,8 +3973,19 @@ pub mod global_secondary_index_description {
             self.provisioned_throughput = Some(inp);
             self
         }
+        pub fn set_provisioned_throughput(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughputDescription>,
+        ) -> Self {
+            self.provisioned_throughput = inp;
+            self
+        }
         /// <p>The total size of the specified index, in bytes. DynamoDB updates this value approximately every six hours. Recent changes might not be reflected in this value.</p>
         pub fn index_size_bytes(mut self, inp: i64) -> Self {
+            self.index_size_bytes = Some(inp);
+            self
+        }
+        pub fn set_index_size_bytes(mut self, inp: i64) -> Self {
             self.index_size_bytes = Some(inp);
             self
         }
@@ -3585,9 +3994,17 @@ pub mod global_secondary_index_description {
             self.item_count = Some(inp);
             self
         }
+        pub fn set_item_count(mut self, inp: i64) -> Self {
+            self.item_count = Some(inp);
+            self
+        }
         /// <p>The Amazon Resource Name (ARN) that uniquely identifies the index.</p>
         pub fn index_arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.index_arn = Some(inp.into());
+            self
+        }
+        pub fn set_index_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_arn = inp;
             self
         }
         /// Consumes the builder and constructs a [`GlobalSecondaryIndexDescription`](crate::model::GlobalSecondaryIndexDescription)
@@ -3690,15 +4107,33 @@ pub mod provisioned_throughput_description {
             self.last_increase_date_time = Some(inp);
             self
         }
+        pub fn set_last_increase_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.last_increase_date_time = inp;
+            self
+        }
         /// <p>The date and time of the last provisioned throughput decrease for this table.</p>
         pub fn last_decrease_date_time(mut self, inp: smithy_types::Instant) -> Self {
             self.last_decrease_date_time = Some(inp);
+            self
+        }
+        pub fn set_last_decrease_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.last_decrease_date_time = inp;
             self
         }
         /// <p>The number of provisioned throughput decreases for this table during this UTC calendar day.
         /// For current maximums on provisioned throughput decreases, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Limits.html">Service, Account, and Table Quotas</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
         pub fn number_of_decreases_today(mut self, inp: i64) -> Self {
             self.number_of_decreases_today = Some(inp);
+            self
+        }
+        pub fn set_number_of_decreases_today(mut self, inp: std::option::Option<i64>) -> Self {
+            self.number_of_decreases_today = inp;
             self
         }
         /// <p>The maximum number of strongly consistent reads consumed per second before DynamoDB returns a
@@ -3709,10 +4144,18 @@ pub mod provisioned_throughput_description {
             self.read_capacity_units = Some(inp);
             self
         }
+        pub fn set_read_capacity_units(mut self, inp: std::option::Option<i64>) -> Self {
+            self.read_capacity_units = inp;
+            self
+        }
         /// <p>The maximum number of writes consumed per second before DynamoDB returns a
         /// <code>ThrottlingException</code>.</p>
         pub fn write_capacity_units(mut self, inp: i64) -> Self {
             self.write_capacity_units = Some(inp);
+            self
+        }
+        pub fn set_write_capacity_units(mut self, inp: std::option::Option<i64>) -> Self {
+            self.write_capacity_units = inp;
             self
         }
         /// Consumes the builder and constructs a [`ProvisionedThroughputDescription`](crate::model::ProvisionedThroughputDescription)
@@ -3806,12 +4249,24 @@ pub mod projection {
             self.projection_type = Some(inp);
             self
         }
-        /// <p>Represents the non-key attribute names which will be projected into the index.</p>
-        /// <p>For local secondary indexes, the total count of <code>NonKeyAttributes</code> summed across all of the local secondary indexes,
-        /// must not exceed 20. If you project the same attribute into two
-        /// different indexes, this counts as two distinct attributes when determining the total.</p>
-        pub fn non_key_attributes(mut self, inp: std::vec::Vec<std::string::String>) -> Self {
-            self.non_key_attributes = Some(inp);
+        pub fn set_projection_type(
+            mut self,
+            inp: std::option::Option<crate::model::ProjectionType>,
+        ) -> Self {
+            self.projection_type = inp;
+            self
+        }
+        pub fn non_key_attributes(mut self, inp: impl Into<std::string::String>) -> Self {
+            let mut v = self.non_key_attributes.unwrap_or_default();
+            v.push(inp.into());
+            self.non_key_attributes = Some(v);
+            self
+        }
+        pub fn set_non_key_attributes(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<std::string::String>>,
+        ) -> Self {
+            self.non_key_attributes = inp;
             self
         }
         /// Consumes the builder and constructs a [`Projection`](crate::model::Projection)
@@ -3846,12 +4301,9 @@ pub enum ProjectionType {
     KeysOnly,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for ProjectionType
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for ProjectionType {
+    fn from(s: &str) -> Self {
+        match s {
             "ALL" => ProjectionType::All,
             "INCLUDE" => ProjectionType::Include,
             "KEYS_ONLY" => ProjectionType::KeysOnly,
@@ -3859,6 +4311,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for ProjectionType {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ProjectionType::from(s))
+    }
+}
+
 impl ProjectionType {
     pub fn as_str(&self) -> &str {
         match self {
@@ -3867,6 +4328,11 @@ impl ProjectionType {
             ProjectionType::KeysOnly => "KEYS_ONLY",
             ProjectionType::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for ProjectionType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -3955,6 +4421,10 @@ pub mod key_schema_element {
             self.attribute_name = Some(inp.into());
             self
         }
+        pub fn set_attribute_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.attribute_name = inp;
+            self
+        }
         /// <p>The role that this key attribute will assume:</p>
         /// <ul>
         /// <li>
@@ -3976,6 +4446,10 @@ pub mod key_schema_element {
         /// </note>
         pub fn key_type(mut self, inp: crate::model::KeyType) -> Self {
             self.key_type = Some(inp);
+            self
+        }
+        pub fn set_key_type(mut self, inp: std::option::Option<crate::model::KeyType>) -> Self {
+            self.key_type = inp;
             self
         }
         /// Consumes the builder and constructs a [`KeySchemaElement`](crate::model::KeySchemaElement)
@@ -4009,18 +4483,24 @@ pub enum KeyType {
     Range,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for KeyType
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for KeyType {
+    fn from(s: &str) -> Self {
+        match s {
             "HASH" => KeyType::Hash,
             "RANGE" => KeyType::Range,
             other => KeyType::Unknown(other.to_owned()),
         }
     }
 }
+
+impl std::str::FromStr for KeyType {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(KeyType::from(s))
+    }
+}
+
 impl KeyType {
     pub fn as_str(&self) -> &str {
         match self {
@@ -4028,6 +4508,11 @@ impl KeyType {
             KeyType::Range => "RANGE",
             KeyType::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for KeyType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -4136,27 +4621,21 @@ pub mod local_secondary_index_description {
             self.index_name = Some(inp.into());
             self
         }
-        /// <p>The complete key schema for the local secondary index, consisting of one or more pairs of attribute names and key types:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>HASH</code> - partition key</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>RANGE</code> - sort key</p>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>The partition key of an item is also known as its <i>hash attribute</i>.  The
-        /// term "hash attribute" derives from DynamoDB's usage of an internal hash function to
-        /// evenly distribute data items across partitions, based on their partition key values.</p>
-        /// <p>The sort key of an item is also known as its <i>range attribute</i>.
-        /// The term "range attribute" derives from the way DynamoDB stores items with the same
-        /// partition key physically close together, in sorted order by the sort key value.</p>
-        /// </note>
-        pub fn key_schema(mut self, inp: std::vec::Vec<crate::model::KeySchemaElement>) -> Self {
-            self.key_schema = Some(inp);
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
+        pub fn key_schema(mut self, inp: impl Into<crate::model::KeySchemaElement>) -> Self {
+            let mut v = self.key_schema.unwrap_or_default();
+            v.push(inp.into());
+            self.key_schema = Some(v);
+            self
+        }
+        pub fn set_key_schema(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::KeySchemaElement>>,
+        ) -> Self {
+            self.key_schema = inp;
             self
         }
         /// <p>Represents attributes that are copied (projected) from the table into the global
@@ -4166,8 +4645,19 @@ pub mod local_secondary_index_description {
             self.projection = Some(inp);
             self
         }
+        pub fn set_projection(
+            mut self,
+            inp: std::option::Option<crate::model::Projection>,
+        ) -> Self {
+            self.projection = inp;
+            self
+        }
         /// <p>The total size of the specified index, in bytes. DynamoDB updates this value approximately every six hours. Recent changes might not be reflected in this value.</p>
         pub fn index_size_bytes(mut self, inp: i64) -> Self {
+            self.index_size_bytes = Some(inp);
+            self
+        }
+        pub fn set_index_size_bytes(mut self, inp: i64) -> Self {
             self.index_size_bytes = Some(inp);
             self
         }
@@ -4176,9 +4666,17 @@ pub mod local_secondary_index_description {
             self.item_count = Some(inp);
             self
         }
+        pub fn set_item_count(mut self, inp: i64) -> Self {
+            self.item_count = Some(inp);
+            self
+        }
         /// <p>The Amazon Resource Name (ARN) that uniquely identifies the index.</p>
         pub fn index_arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.index_arn = Some(inp.into());
+            self
+        }
+        pub fn set_index_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_arn = inp;
             self
         }
         /// Consumes the builder and constructs a [`LocalSecondaryIndexDescription`](crate::model::LocalSecondaryIndexDescription)
@@ -4271,12 +4769,26 @@ pub mod billing_mode_summary {
             self.billing_mode = Some(inp);
             self
         }
+        pub fn set_billing_mode(
+            mut self,
+            inp: std::option::Option<crate::model::BillingMode>,
+        ) -> Self {
+            self.billing_mode = inp;
+            self
+        }
         /// <p>Represents the time when <code>PAY_PER_REQUEST</code> was last set as the read/write capacity mode.</p>
         pub fn last_update_to_pay_per_request_date_time(
             mut self,
             inp: smithy_types::Instant,
         ) -> Self {
             self.last_update_to_pay_per_request_date_time = Some(inp);
+            self
+        }
+        pub fn set_last_update_to_pay_per_request_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.last_update_to_pay_per_request_date_time = inp;
             self
         }
         /// Consumes the builder and constructs a [`BillingModeSummary`](crate::model::BillingModeSummary)
@@ -4311,18 +4823,24 @@ pub enum BillingMode {
     Provisioned,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for BillingMode
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for BillingMode {
+    fn from(s: &str) -> Self {
+        match s {
             "PAY_PER_REQUEST" => BillingMode::PayPerRequest,
             "PROVISIONED" => BillingMode::Provisioned,
             other => BillingMode::Unknown(other.to_owned()),
         }
     }
 }
+
+impl std::str::FromStr for BillingMode {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(BillingMode::from(s))
+    }
+}
+
 impl BillingMode {
     pub fn as_str(&self) -> &str {
         match self {
@@ -4330,6 +4848,11 @@ impl BillingMode {
             BillingMode::Provisioned => "PROVISIONED",
             BillingMode::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for BillingMode {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -4408,6 +4931,10 @@ pub mod attribute_definition {
             self.attribute_name = Some(inp.into());
             self
         }
+        pub fn set_attribute_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.attribute_name = inp;
+            self
+        }
         /// <p>The data type for the attribute, where:</p>
         /// <ul>
         /// <li>
@@ -4425,6 +4952,13 @@ pub mod attribute_definition {
         /// </ul>
         pub fn attribute_type(mut self, inp: crate::model::ScalarAttributeType) -> Self {
             self.attribute_type = Some(inp);
+            self
+        }
+        pub fn set_attribute_type(
+            mut self,
+            inp: std::option::Option<crate::model::ScalarAttributeType>,
+        ) -> Self {
+            self.attribute_type = inp;
             self
         }
         /// Consumes the builder and constructs a [`AttributeDefinition`](crate::model::AttributeDefinition)
@@ -4459,12 +4993,9 @@ pub enum ScalarAttributeType {
     S,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for ScalarAttributeType
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for ScalarAttributeType {
+    fn from(s: &str) -> Self {
+        match s {
             "B" => ScalarAttributeType::B,
             "N" => ScalarAttributeType::N,
             "S" => ScalarAttributeType::S,
@@ -4472,6 +5003,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for ScalarAttributeType {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ScalarAttributeType::from(s))
+    }
+}
+
 impl ScalarAttributeType {
     pub fn as_str(&self) -> &str {
         match self {
@@ -4480,6 +5020,11 @@ impl ScalarAttributeType {
             ScalarAttributeType::S => "S",
             ScalarAttributeType::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for ScalarAttributeType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -4567,14 +5112,35 @@ pub mod replication_group_update {
             self.create = Some(inp);
             self
         }
+        pub fn set_create(
+            mut self,
+            inp: std::option::Option<crate::model::CreateReplicationGroupMemberAction>,
+        ) -> Self {
+            self.create = inp;
+            self
+        }
         /// <p>The parameters required for updating a replica for the table.</p>
         pub fn update(mut self, inp: crate::model::UpdateReplicationGroupMemberAction) -> Self {
             self.update = Some(inp);
             self
         }
+        pub fn set_update(
+            mut self,
+            inp: std::option::Option<crate::model::UpdateReplicationGroupMemberAction>,
+        ) -> Self {
+            self.update = inp;
+            self
+        }
         /// <p>The parameters required for deleting a replica for the table.</p>
         pub fn delete(mut self, inp: crate::model::DeleteReplicationGroupMemberAction) -> Self {
             self.delete = Some(inp);
+            self
+        }
+        pub fn set_delete(
+            mut self,
+            inp: std::option::Option<crate::model::DeleteReplicationGroupMemberAction>,
+        ) -> Self {
+            self.delete = inp;
             self
         }
         /// Consumes the builder and constructs a [`ReplicationGroupUpdate`](crate::model::ReplicationGroupUpdate)
@@ -4624,6 +5190,10 @@ pub mod delete_replication_group_member_action {
         /// <p>The Region where the replica exists.</p>
         pub fn region_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.region_name = Some(inp.into());
+            self
+        }
+        pub fn set_region_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.region_name = inp;
             self
         }
         /// Consumes the builder and constructs a [`DeleteReplicationGroupMemberAction`](crate::model::DeleteReplicationGroupMemberAction)
@@ -4705,12 +5275,23 @@ pub mod update_replication_group_member_action {
             self.region_name = Some(inp.into());
             self
         }
+        pub fn set_region_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.region_name = inp;
+            self
+        }
         /// <p>The AWS KMS customer master key (CMK) of the replica that should be used for AWS KMS encryption.
         /// To specify a CMK, use its key ID, Amazon Resource Name (ARN), alias name, or alias
         /// ARN. Note that you should only provide this parameter if the key is different from
         /// the default DynamoDB KMS master key alias/aws/dynamodb.</p>
         pub fn kms_master_key_id(mut self, inp: impl Into<std::string::String>) -> Self {
             self.kms_master_key_id = Some(inp.into());
+            self
+        }
+        pub fn set_kms_master_key_id(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.kms_master_key_id = inp;
             self
         }
         /// <p>Replica-specific provisioned throughput. If not specified, uses the source table's
@@ -4722,12 +5303,27 @@ pub mod update_replication_group_member_action {
             self.provisioned_throughput_override = Some(inp);
             self
         }
-        /// <p>Replica-specific global secondary index settings.</p>
+        pub fn set_provisioned_throughput_override(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughputOverride>,
+        ) -> Self {
+            self.provisioned_throughput_override = inp;
+            self
+        }
         pub fn global_secondary_indexes(
             mut self,
-            inp: std::vec::Vec<crate::model::ReplicaGlobalSecondaryIndex>,
+            inp: impl Into<crate::model::ReplicaGlobalSecondaryIndex>,
         ) -> Self {
-            self.global_secondary_indexes = Some(inp);
+            let mut v = self.global_secondary_indexes.unwrap_or_default();
+            v.push(inp.into());
+            self.global_secondary_indexes = Some(v);
+            self
+        }
+        pub fn set_global_secondary_indexes(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::ReplicaGlobalSecondaryIndex>>,
+        ) -> Self {
+            self.global_secondary_indexes = inp;
             self
         }
         /// Consumes the builder and constructs a [`UpdateReplicationGroupMemberAction`](crate::model::UpdateReplicationGroupMemberAction)
@@ -4793,6 +5389,10 @@ pub mod replica_global_secondary_index {
             self.index_name = Some(inp.into());
             self
         }
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
         /// <p>Replica table GSI-specific provisioned throughput. If not specified, uses the
         /// source table GSI's read capacity settings.</p>
         pub fn provisioned_throughput_override(
@@ -4800,6 +5400,13 @@ pub mod replica_global_secondary_index {
             inp: crate::model::ProvisionedThroughputOverride,
         ) -> Self {
             self.provisioned_throughput_override = Some(inp);
+            self
+        }
+        pub fn set_provisioned_throughput_override(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughputOverride>,
+        ) -> Self {
+            self.provisioned_throughput_override = inp;
             self
         }
         /// Consumes the builder and constructs a [`ReplicaGlobalSecondaryIndex`](crate::model::ReplicaGlobalSecondaryIndex)
@@ -4882,12 +5489,23 @@ pub mod create_replication_group_member_action {
             self.region_name = Some(inp.into());
             self
         }
+        pub fn set_region_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.region_name = inp;
+            self
+        }
         /// <p>The AWS KMS customer master key (CMK) that should be used for AWS KMS encryption
         /// in the new replica. To specify a CMK, use its key ID, Amazon Resource Name (ARN),
         /// alias name, or alias ARN. Note that you should only provide this parameter if the
         /// key is different from the default DynamoDB KMS master key alias/aws/dynamodb.</p>
         pub fn kms_master_key_id(mut self, inp: impl Into<std::string::String>) -> Self {
             self.kms_master_key_id = Some(inp.into());
+            self
+        }
+        pub fn set_kms_master_key_id(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.kms_master_key_id = inp;
             self
         }
         /// <p>Replica-specific provisioned throughput. If not specified, uses the source table's
@@ -4899,12 +5517,27 @@ pub mod create_replication_group_member_action {
             self.provisioned_throughput_override = Some(inp);
             self
         }
-        /// <p>Replica-specific global secondary index settings.</p>
+        pub fn set_provisioned_throughput_override(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughputOverride>,
+        ) -> Self {
+            self.provisioned_throughput_override = inp;
+            self
+        }
         pub fn global_secondary_indexes(
             mut self,
-            inp: std::vec::Vec<crate::model::ReplicaGlobalSecondaryIndex>,
+            inp: impl Into<crate::model::ReplicaGlobalSecondaryIndex>,
         ) -> Self {
-            self.global_secondary_indexes = Some(inp);
+            let mut v = self.global_secondary_indexes.unwrap_or_default();
+            v.push(inp.into());
+            self.global_secondary_indexes = Some(v);
+            self
+        }
+        pub fn set_global_secondary_indexes(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::ReplicaGlobalSecondaryIndex>>,
+        ) -> Self {
+            self.global_secondary_indexes = inp;
             self
         }
         /// Consumes the builder and constructs a [`CreateReplicationGroupMemberAction`](crate::model::CreateReplicationGroupMemberAction)
@@ -4986,6 +5619,10 @@ pub mod sse_specification {
             self.enabled = Some(inp);
             self
         }
+        pub fn set_enabled(mut self, inp: std::option::Option<bool>) -> Self {
+            self.enabled = inp;
+            self
+        }
         /// <p>Server-side encryption type. The only supported value is:</p>
         /// <ul>
         /// <li>
@@ -4999,12 +5636,23 @@ pub mod sse_specification {
             self.sse_type = Some(inp);
             self
         }
+        pub fn set_sse_type(mut self, inp: std::option::Option<crate::model::SSEType>) -> Self {
+            self.sse_type = inp;
+            self
+        }
         /// <p>The AWS KMS customer master key (CMK) that should be used for the AWS KMS encryption. To
         /// specify a CMK, use its key ID, Amazon Resource Name (ARN), alias name, or alias ARN. Note
         /// that you should only provide this parameter if the key is different from the default
         /// DynamoDB customer master key alias/aws/dynamodb.</p>
         pub fn kms_master_key_id(mut self, inp: impl Into<std::string::String>) -> Self {
             self.kms_master_key_id = Some(inp.into());
+            self
+        }
+        pub fn set_kms_master_key_id(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.kms_master_key_id = inp;
             self
         }
         /// Consumes the builder and constructs a [`SSESpecification`](crate::model::SSESpecification)
@@ -5108,6 +5756,13 @@ pub mod global_secondary_index_update {
             self.update = Some(inp);
             self
         }
+        pub fn set_update(
+            mut self,
+            inp: std::option::Option<crate::model::UpdateGlobalSecondaryIndexAction>,
+        ) -> Self {
+            self.update = inp;
+            self
+        }
         /// <p>The parameters required for creating a global secondary index on an existing table:</p>
         /// <ul>
         /// <li>
@@ -5140,9 +5795,23 @@ pub mod global_secondary_index_update {
             self.create = Some(inp);
             self
         }
+        pub fn set_create(
+            mut self,
+            inp: std::option::Option<crate::model::CreateGlobalSecondaryIndexAction>,
+        ) -> Self {
+            self.create = inp;
+            self
+        }
         /// <p>The name of an existing global secondary index to be removed.</p>
         pub fn delete(mut self, inp: crate::model::DeleteGlobalSecondaryIndexAction) -> Self {
             self.delete = Some(inp);
+            self
+        }
+        pub fn set_delete(
+            mut self,
+            inp: std::option::Option<crate::model::DeleteGlobalSecondaryIndexAction>,
+        ) -> Self {
+            self.delete = inp;
             self
         }
         /// Consumes the builder and constructs a [`GlobalSecondaryIndexUpdate`](crate::model::GlobalSecondaryIndexUpdate)
@@ -5192,6 +5861,10 @@ pub mod delete_global_secondary_index_action {
         /// <p>The name of the global secondary index to be deleted.</p>
         pub fn index_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.index_name = Some(inp.into());
+            self
+        }
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
             self
         }
         /// Consumes the builder and constructs a [`DeleteGlobalSecondaryIndexAction`](crate::model::DeleteGlobalSecondaryIndexAction)
@@ -5265,9 +5938,21 @@ pub mod create_global_secondary_index_action {
             self.index_name = Some(inp.into());
             self
         }
-        /// <p>The key schema for the global secondary index.</p>
-        pub fn key_schema(mut self, inp: std::vec::Vec<crate::model::KeySchemaElement>) -> Self {
-            self.key_schema = Some(inp);
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
+        pub fn key_schema(mut self, inp: impl Into<crate::model::KeySchemaElement>) -> Self {
+            let mut v = self.key_schema.unwrap_or_default();
+            v.push(inp.into());
+            self.key_schema = Some(v);
+            self
+        }
+        pub fn set_key_schema(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::KeySchemaElement>>,
+        ) -> Self {
+            self.key_schema = inp;
             self
         }
         /// <p>Represents attributes that are copied (projected) from the table into an index. These
@@ -5277,10 +5962,24 @@ pub mod create_global_secondary_index_action {
             self.projection = Some(inp);
             self
         }
+        pub fn set_projection(
+            mut self,
+            inp: std::option::Option<crate::model::Projection>,
+        ) -> Self {
+            self.projection = inp;
+            self
+        }
         /// <p>Represents the provisioned throughput settings for the specified global secondary index.</p>
         /// <p>For current minimum and maximum provisioned throughput values, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Limits.html">Service, Account, and Table Quotas</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
         pub fn provisioned_throughput(mut self, inp: crate::model::ProvisionedThroughput) -> Self {
             self.provisioned_throughput = Some(inp);
+            self
+        }
+        pub fn set_provisioned_throughput(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughput>,
+        ) -> Self {
+            self.provisioned_throughput = inp;
             self
         }
         /// Consumes the builder and constructs a [`CreateGlobalSecondaryIndexAction`](crate::model::CreateGlobalSecondaryIndexAction)
@@ -5351,12 +6050,20 @@ pub mod provisioned_throughput {
             self.read_capacity_units = Some(inp);
             self
         }
+        pub fn set_read_capacity_units(mut self, inp: std::option::Option<i64>) -> Self {
+            self.read_capacity_units = inp;
+            self
+        }
         /// <p>The maximum number of writes consumed per second before DynamoDB returns a
         /// <code>ThrottlingException</code>. For more information, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/WorkingWithTables.html#ProvisionedThroughput">Specifying Read and Write
         /// Requirements</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
         /// <p>If read/write capacity mode is <code>PAY_PER_REQUEST</code> the value is set to 0.</p>
         pub fn write_capacity_units(mut self, inp: i64) -> Self {
             self.write_capacity_units = Some(inp);
+            self
+        }
+        pub fn set_write_capacity_units(mut self, inp: std::option::Option<i64>) -> Self {
+            self.write_capacity_units = inp;
             self
         }
         /// Consumes the builder and constructs a [`ProvisionedThroughput`](crate::model::ProvisionedThroughput)
@@ -5415,10 +6122,21 @@ pub mod update_global_secondary_index_action {
             self.index_name = Some(inp.into());
             self
         }
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
         /// <p>Represents the provisioned throughput settings for the specified global secondary index.</p>
         /// <p>For current minimum and maximum provisioned throughput values, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Limits.html">Service, Account, and Table Quotas</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
         pub fn provisioned_throughput(mut self, inp: crate::model::ProvisionedThroughput) -> Self {
             self.provisioned_throughput = Some(inp);
+            self
+        }
+        pub fn set_provisioned_throughput(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughput>,
+        ) -> Self {
+            self.provisioned_throughput = inp;
             self
         }
         /// Consumes the builder and constructs a [`UpdateGlobalSecondaryIndexAction`](crate::model::UpdateGlobalSecondaryIndexAction)
@@ -5478,18 +6196,36 @@ pub mod item_collection_metrics {
         size_estimate_range_gb: std::option::Option<std::vec::Vec<f64>>,
     }
     impl Builder {
-        /// <p>The partition key value of the item collection. This value is the same as the partition key value of the item.</p>
         pub fn item_collection_key(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.item_collection_key = Some(inp);
+            let mut hash_map = self.item_collection_key.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.item_collection_key = Some(hash_map);
             self
         }
-        /// <p>An estimate of item collection size, in gigabytes. This value is a two-element array containing a lower bound and an upper bound for the estimate. The estimate includes the size of all the items in the table, plus the size of all attributes projected into all of the local secondary indexes on that table. Use this estimate to measure whether a local secondary index is approaching its size limit.</p>
-        /// <p>The estimate is subject to change over time; therefore, do not rely on the precision or accuracy of the estimate.</p>
-        pub fn size_estimate_range_gb(mut self, inp: std::vec::Vec<f64>) -> Self {
-            self.size_estimate_range_gb = Some(inp);
+        pub fn set_item_collection_key(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.item_collection_key = inp;
+            self
+        }
+        pub fn size_estimate_range_gb(mut self, inp: impl Into<f64>) -> Self {
+            let mut v = self.size_estimate_range_gb.unwrap_or_default();
+            v.push(inp.into());
+            self.size_estimate_range_gb = Some(v);
+            self
+        }
+        pub fn set_size_estimate_range_gb(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<f64>>,
+        ) -> Self {
+            self.size_estimate_range_gb = inp;
             self
         }
         /// Consumes the builder and constructs a [`ItemCollectionMetrics`](crate::model::ItemCollectionMetrics)
@@ -5665,9 +6401,17 @@ pub mod consumed_capacity {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>The total number of capacity units consumed by the operation.</p>
         pub fn capacity_units(mut self, inp: f64) -> Self {
             self.capacity_units = Some(inp);
+            self
+        }
+        pub fn set_capacity_units(mut self, inp: std::option::Option<f64>) -> Self {
+            self.capacity_units = inp;
             self
         }
         /// <p>The total number of read capacity units consumed by the operation.</p>
@@ -5675,9 +6419,17 @@ pub mod consumed_capacity {
             self.read_capacity_units = Some(inp);
             self
         }
+        pub fn set_read_capacity_units(mut self, inp: std::option::Option<f64>) -> Self {
+            self.read_capacity_units = inp;
+            self
+        }
         /// <p>The total number of write capacity units consumed by the operation.</p>
         pub fn write_capacity_units(mut self, inp: f64) -> Self {
             self.write_capacity_units = Some(inp);
+            self
+        }
+        pub fn set_write_capacity_units(mut self, inp: std::option::Option<f64>) -> Self {
+            self.write_capacity_units = inp;
             self
         }
         /// <p>The amount of throughput consumed on the table affected by the operation.</p>
@@ -5685,20 +6437,46 @@ pub mod consumed_capacity {
             self.table = Some(inp);
             self
         }
-        /// <p>The amount of throughput consumed on each local index affected by the operation.</p>
-        pub fn local_secondary_indexes(
-            mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::Capacity>,
-        ) -> Self {
-            self.local_secondary_indexes = Some(inp);
+        pub fn set_table(mut self, inp: std::option::Option<crate::model::Capacity>) -> Self {
+            self.table = inp;
             self
         }
-        /// <p>The amount of throughput consumed on each global index affected by the operation.</p>
+        pub fn local_secondary_indexes(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::Capacity>,
+        ) -> Self {
+            let mut hash_map = self.local_secondary_indexes.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.local_secondary_indexes = Some(hash_map);
+            self
+        }
+        pub fn set_local_secondary_indexes(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::Capacity>,
+            >,
+        ) -> Self {
+            self.local_secondary_indexes = inp;
+            self
+        }
         pub fn global_secondary_indexes(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::Capacity>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::Capacity>,
         ) -> Self {
-            self.global_secondary_indexes = Some(inp);
+            let mut hash_map = self.global_secondary_indexes.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.global_secondary_indexes = Some(hash_map);
+            self
+        }
+        pub fn set_global_secondary_indexes(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::Capacity>,
+            >,
+        ) -> Self {
+            self.global_secondary_indexes = inp;
             self
         }
         /// Consumes the builder and constructs a [`ConsumedCapacity`](crate::model::ConsumedCapacity)
@@ -5768,14 +6546,26 @@ pub mod capacity {
             self.read_capacity_units = Some(inp);
             self
         }
+        pub fn set_read_capacity_units(mut self, inp: std::option::Option<f64>) -> Self {
+            self.read_capacity_units = inp;
+            self
+        }
         /// <p>The total number of write capacity units consumed on a table or an index.</p>
         pub fn write_capacity_units(mut self, inp: f64) -> Self {
             self.write_capacity_units = Some(inp);
             self
         }
+        pub fn set_write_capacity_units(mut self, inp: std::option::Option<f64>) -> Self {
+            self.write_capacity_units = inp;
+            self
+        }
         /// <p>The total number of capacity units consumed on a table or an index.</p>
         pub fn capacity_units(mut self, inp: f64) -> Self {
             self.capacity_units = Some(inp);
+            self
+        }
+        pub fn set_capacity_units(mut self, inp: std::option::Option<f64>) -> Self {
+            self.capacity_units = inp;
             self
         }
         /// Consumes the builder and constructs a [`Capacity`](crate::model::Capacity)
@@ -5810,18 +6600,24 @@ pub enum ReturnItemCollectionMetrics {
     Size,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for ReturnItemCollectionMetrics
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for ReturnItemCollectionMetrics {
+    fn from(s: &str) -> Self {
+        match s {
             "NONE" => ReturnItemCollectionMetrics::None,
             "SIZE" => ReturnItemCollectionMetrics::Size,
             other => ReturnItemCollectionMetrics::Unknown(other.to_owned()),
         }
     }
 }
+
+impl std::str::FromStr for ReturnItemCollectionMetrics {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ReturnItemCollectionMetrics::from(s))
+    }
+}
+
 impl ReturnItemCollectionMetrics {
     pub fn as_str(&self) -> &str {
         match self {
@@ -5829,6 +6625,11 @@ impl ReturnItemCollectionMetrics {
             ReturnItemCollectionMetrics::Size => "SIZE",
             ReturnItemCollectionMetrics::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for ReturnItemCollectionMetrics {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -5870,12 +6671,9 @@ pub enum ReturnConsumedCapacity {
     Total,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for ReturnConsumedCapacity
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for ReturnConsumedCapacity {
+    fn from(s: &str) -> Self {
+        match s {
             "INDEXES" => ReturnConsumedCapacity::Indexes,
             "NONE" => ReturnConsumedCapacity::None,
             "TOTAL" => ReturnConsumedCapacity::Total,
@@ -5883,6 +6681,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for ReturnConsumedCapacity {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ReturnConsumedCapacity::from(s))
+    }
+}
+
 impl ReturnConsumedCapacity {
     pub fn as_str(&self) -> &str {
         match self {
@@ -5891,6 +6698,11 @@ impl ReturnConsumedCapacity {
             ReturnConsumedCapacity::Total => "TOTAL",
             ReturnConsumedCapacity::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for ReturnConsumedCapacity {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -5934,12 +6746,9 @@ pub enum ReturnValue {
     UpdatedOld,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for ReturnValue
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for ReturnValue {
+    fn from(s: &str) -> Self {
+        match s {
             "ALL_NEW" => ReturnValue::AllNew,
             "ALL_OLD" => ReturnValue::AllOld,
             "NONE" => ReturnValue::None,
@@ -5949,6 +6758,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for ReturnValue {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ReturnValue::from(s))
+    }
+}
+
 impl ReturnValue {
     pub fn as_str(&self) -> &str {
         match self {
@@ -5959,6 +6777,11 @@ impl ReturnValue {
             ReturnValue::UpdatedOld => "UPDATED_OLD",
             ReturnValue::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for ReturnValue {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -5999,18 +6822,24 @@ pub enum ConditionalOperator {
     Or,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for ConditionalOperator
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for ConditionalOperator {
+    fn from(s: &str) -> Self {
+        match s {
             "AND" => ConditionalOperator::And,
             "OR" => ConditionalOperator::Or,
             other => ConditionalOperator::Unknown(other.to_owned()),
         }
     }
 }
+
+impl std::str::FromStr for ConditionalOperator {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ConditionalOperator::from(s))
+    }
+}
+
 impl ConditionalOperator {
     pub fn as_str(&self) -> &str {
         match self {
@@ -6018,6 +6847,11 @@ impl ConditionalOperator {
             ConditionalOperator::Or => "OR",
             ConditionalOperator::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for ConditionalOperator {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -6306,6 +7140,10 @@ pub mod expected_attribute_value {
             self.value = Some(inp);
             self
         }
+        pub fn set_value(mut self, inp: std::option::Option<crate::model::AttributeValue>) -> Self {
+            self.value = inp;
+            self
+        }
         /// <p>Causes DynamoDB to evaluate the value before attempting a conditional operation:</p>
         /// <ul>
         /// <li>
@@ -6338,6 +7176,10 @@ pub mod expected_attribute_value {
         /// </ul>
         pub fn exists(mut self, inp: bool) -> Self {
             self.exists = Some(inp);
+            self
+        }
+        pub fn set_exists(mut self, inp: std::option::Option<bool>) -> Self {
+            self.exists = inp;
             self
         }
         /// <p>A comparator for evaluating attributes in the <code>AttributeValueList</code>. For example, equals,
@@ -6490,19 +7332,27 @@ pub mod expected_attribute_value {
             self.comparison_operator = Some(inp);
             self
         }
-        /// <p>One or more values to evaluate against the supplied attribute. The number of values in the
-        /// list depends on the <code>ComparisonOperator</code> being used.</p>
-        /// <p>For type Number, value comparisons are numeric.</p>
-        /// <p>String value comparisons for greater than, equals, or less than are based on ASCII character
-        /// code values. For example, <code>a</code> is greater than <code>A</code>, and <code>a</code>
-        /// is greater than <code>B</code>. For a list of code values, see <a href="http://en.wikipedia.org/wiki/ASCII#ASCII_printable_characters">http://en.wikipedia.org/wiki/ASCII#ASCII_printable_characters</a>.</p>
-        /// <p>For Binary, DynamoDB treats each byte of the binary data as unsigned when it compares binary values.</p>
-        /// <p>For information on specifying data types in JSON, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DataFormat.html">JSON Data Format</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
+        pub fn set_comparison_operator(
+            mut self,
+            inp: std::option::Option<crate::model::ComparisonOperator>,
+        ) -> Self {
+            self.comparison_operator = inp;
+            self
+        }
         pub fn attribute_value_list(
             mut self,
-            inp: std::vec::Vec<crate::model::AttributeValue>,
+            inp: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.attribute_value_list = Some(inp);
+            let mut v = self.attribute_value_list.unwrap_or_default();
+            v.push(inp.into());
+            self.attribute_value_list = Some(v);
+            self
+        }
+        pub fn set_attribute_value_list(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::AttributeValue>>,
+        ) -> Self {
+            self.attribute_value_list = inp;
             self
         }
         /// Consumes the builder and constructs a [`ExpectedAttributeValue`](crate::model::ExpectedAttributeValue)
@@ -6549,12 +7399,9 @@ pub enum ComparisonOperator {
     Null,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for ComparisonOperator
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for ComparisonOperator {
+    fn from(s: &str) -> Self {
+        match s {
             "BEGINS_WITH" => ComparisonOperator::BeginsWith,
             "BETWEEN" => ComparisonOperator::Between,
             "CONTAINS" => ComparisonOperator::Contains,
@@ -6572,6 +7419,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for ComparisonOperator {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ComparisonOperator::from(s))
+    }
+}
+
 impl ComparisonOperator {
     pub fn as_str(&self) -> &str {
         match self {
@@ -6590,6 +7446,11 @@ impl ComparisonOperator {
             ComparisonOperator::Null => "NULL",
             ComparisonOperator::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for ComparisonOperator {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -6751,6 +7612,10 @@ pub mod attribute_value_update {
             self.value = Some(inp);
             self
         }
+        pub fn set_value(mut self, inp: std::option::Option<crate::model::AttributeValue>) -> Self {
+            self.value = inp;
+            self
+        }
         /// <p>Specifies how to perform the update. Valid values are <code>PUT</code> (default), <code>DELETE</code>,
         /// and <code>ADD</code>. The behavior depends on whether the specified primary key already exists
         /// in the table.</p>
@@ -6838,6 +7703,13 @@ pub mod attribute_value_update {
             self.action = Some(inp);
             self
         }
+        pub fn set_action(
+            mut self,
+            inp: std::option::Option<crate::model::AttributeAction>,
+        ) -> Self {
+            self.action = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`AttributeValueUpdate`](crate::model::AttributeValueUpdate)
         pub fn build(self) -> crate::model::AttributeValueUpdate {
             crate::model::AttributeValueUpdate {
@@ -6870,12 +7742,9 @@ pub enum AttributeAction {
     Put,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for AttributeAction
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for AttributeAction {
+    fn from(s: &str) -> Self {
+        match s {
             "ADD" => AttributeAction::Add,
             "DELETE" => AttributeAction::Delete,
             "PUT" => AttributeAction::Put,
@@ -6883,6 +7752,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for AttributeAction {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(AttributeAction::from(s))
+    }
+}
+
 impl AttributeAction {
     pub fn as_str(&self) -> &str {
         match self {
@@ -6891,6 +7769,11 @@ impl AttributeAction {
             AttributeAction::Put => "PUT",
             AttributeAction::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for AttributeAction {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -7046,6 +7929,10 @@ pub mod replica_settings_description {
             self.region_name = Some(inp.into());
             self
         }
+        pub fn set_region_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.region_name = inp;
+            self
+        }
         /// <p>The current state of the Region:</p>
         /// <ul>
         /// <li>
@@ -7069,12 +7956,26 @@ pub mod replica_settings_description {
             self.replica_status = Some(inp);
             self
         }
+        pub fn set_replica_status(
+            mut self,
+            inp: std::option::Option<crate::model::ReplicaStatus>,
+        ) -> Self {
+            self.replica_status = inp;
+            self
+        }
         /// <p>The read/write capacity mode of the replica.</p>
         pub fn replica_billing_mode_summary(
             mut self,
             inp: crate::model::BillingModeSummary,
         ) -> Self {
             self.replica_billing_mode_summary = Some(inp);
+            self
+        }
+        pub fn set_replica_billing_mode_summary(
+            mut self,
+            inp: std::option::Option<crate::model::BillingModeSummary>,
+        ) -> Self {
+            self.replica_billing_mode_summary = inp;
             self
         }
         /// <p>The maximum number of strongly consistent reads consumed per second before DynamoDB returns a <code>ThrottlingException</code>.
@@ -7085,6 +7986,13 @@ pub mod replica_settings_description {
             self.replica_provisioned_read_capacity_units = Some(inp);
             self
         }
+        pub fn set_replica_provisioned_read_capacity_units(
+            mut self,
+            inp: std::option::Option<i64>,
+        ) -> Self {
+            self.replica_provisioned_read_capacity_units = inp;
+            self
+        }
         /// <p>Auto scaling settings for a global table replica's read capacity units.</p>
         pub fn replica_provisioned_read_capacity_auto_scaling_settings(
             mut self,
@@ -7093,11 +8001,25 @@ pub mod replica_settings_description {
             self.replica_provisioned_read_capacity_auto_scaling_settings = Some(inp);
             self
         }
+        pub fn set_replica_provisioned_read_capacity_auto_scaling_settings(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingSettingsDescription>,
+        ) -> Self {
+            self.replica_provisioned_read_capacity_auto_scaling_settings = inp;
+            self
+        }
         /// <p>The maximum number of writes consumed per second before DynamoDB returns a <code>ThrottlingException</code>.
         /// For more information, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/WorkingWithTables.html#ProvisionedThroughput">Specifying Read and Write
         /// Requirements</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
         pub fn replica_provisioned_write_capacity_units(mut self, inp: i64) -> Self {
             self.replica_provisioned_write_capacity_units = Some(inp);
+            self
+        }
+        pub fn set_replica_provisioned_write_capacity_units(
+            mut self,
+            inp: std::option::Option<i64>,
+        ) -> Self {
+            self.replica_provisioned_write_capacity_units = inp;
             self
         }
         /// <p>Auto scaling settings for a global table replica's write capacity units.</p>
@@ -7108,12 +8030,31 @@ pub mod replica_settings_description {
             self.replica_provisioned_write_capacity_auto_scaling_settings = Some(inp);
             self
         }
-        /// <p>Replica global secondary index settings for the global table.</p>
+        pub fn set_replica_provisioned_write_capacity_auto_scaling_settings(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingSettingsDescription>,
+        ) -> Self {
+            self.replica_provisioned_write_capacity_auto_scaling_settings = inp;
+            self
+        }
         pub fn replica_global_secondary_index_settings(
             mut self,
-            inp: std::vec::Vec<crate::model::ReplicaGlobalSecondaryIndexSettingsDescription>,
+            inp: impl Into<crate::model::ReplicaGlobalSecondaryIndexSettingsDescription>,
         ) -> Self {
-            self.replica_global_secondary_index_settings = Some(inp);
+            let mut v = self
+                .replica_global_secondary_index_settings
+                .unwrap_or_default();
+            v.push(inp.into());
+            self.replica_global_secondary_index_settings = Some(v);
+            self
+        }
+        pub fn set_replica_global_secondary_index_settings(
+            mut self,
+            inp: std::option::Option<
+                std::vec::Vec<crate::model::ReplicaGlobalSecondaryIndexSettingsDescription>,
+            >,
+        ) -> Self {
+            self.replica_global_secondary_index_settings = inp;
             self
         }
         /// Consumes the builder and constructs a [`ReplicaSettingsDescription`](crate::model::ReplicaSettingsDescription)
@@ -7246,6 +8187,10 @@ pub mod replica_global_secondary_index_settings_description {
             self.index_name = Some(inp.into());
             self
         }
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
         /// <p>
         /// The current status of the global secondary index:</p>
         /// <ul>
@@ -7270,9 +8215,23 @@ pub mod replica_global_secondary_index_settings_description {
             self.index_status = Some(inp);
             self
         }
+        pub fn set_index_status(
+            mut self,
+            inp: std::option::Option<crate::model::IndexStatus>,
+        ) -> Self {
+            self.index_status = inp;
+            self
+        }
         /// <p>The maximum number of strongly consistent reads consumed per second before DynamoDB returns a <code>ThrottlingException</code>.</p>
         pub fn provisioned_read_capacity_units(mut self, inp: i64) -> Self {
             self.provisioned_read_capacity_units = Some(inp);
+            self
+        }
+        pub fn set_provisioned_read_capacity_units(
+            mut self,
+            inp: std::option::Option<i64>,
+        ) -> Self {
+            self.provisioned_read_capacity_units = inp;
             self
         }
         /// <p>Auto scaling settings for a global secondary index replica's read capacity units.</p>
@@ -7283,9 +8242,23 @@ pub mod replica_global_secondary_index_settings_description {
             self.provisioned_read_capacity_auto_scaling_settings = Some(inp);
             self
         }
+        pub fn set_provisioned_read_capacity_auto_scaling_settings(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingSettingsDescription>,
+        ) -> Self {
+            self.provisioned_read_capacity_auto_scaling_settings = inp;
+            self
+        }
         /// <p>The maximum number of writes consumed per second before DynamoDB returns a <code>ThrottlingException</code>.</p>
         pub fn provisioned_write_capacity_units(mut self, inp: i64) -> Self {
             self.provisioned_write_capacity_units = Some(inp);
+            self
+        }
+        pub fn set_provisioned_write_capacity_units(
+            mut self,
+            inp: std::option::Option<i64>,
+        ) -> Self {
+            self.provisioned_write_capacity_units = inp;
             self
         }
         /// <p>Auto scaling settings for a global secondary index replica's write capacity
@@ -7295,6 +8268,13 @@ pub mod replica_global_secondary_index_settings_description {
             inp: crate::model::AutoScalingSettingsDescription,
         ) -> Self {
             self.provisioned_write_capacity_auto_scaling_settings = Some(inp);
+            self
+        }
+        pub fn set_provisioned_write_capacity_auto_scaling_settings(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingSettingsDescription>,
+        ) -> Self {
+            self.provisioned_write_capacity_auto_scaling_settings = inp;
             self
         }
         /// Consumes the builder and constructs a [`ReplicaGlobalSecondaryIndexSettingsDescription`](crate::model::ReplicaGlobalSecondaryIndexSettingsDescription)
@@ -7389,12 +8369,23 @@ pub mod replica_settings_update {
             self.region_name = Some(inp.into());
             self
         }
+        pub fn set_region_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.region_name = inp;
+            self
+        }
         /// <p>The maximum number of strongly consistent reads consumed per second before DynamoDB returns a <code>ThrottlingException</code>.
         /// For more information, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/WorkingWithTables.html#ProvisionedThroughput">Specifying Read and Write
         /// Requirements</a> in the <i>Amazon DynamoDB Developer Guide</i>.
         /// </p>
         pub fn replica_provisioned_read_capacity_units(mut self, inp: i64) -> Self {
             self.replica_provisioned_read_capacity_units = Some(inp);
+            self
+        }
+        pub fn set_replica_provisioned_read_capacity_units(
+            mut self,
+            inp: std::option::Option<i64>,
+        ) -> Self {
+            self.replica_provisioned_read_capacity_units = inp;
             self
         }
         /// <p>Auto scaling settings for managing a global table replica's read capacity units.</p>
@@ -7405,12 +8396,31 @@ pub mod replica_settings_update {
             self.replica_provisioned_read_capacity_auto_scaling_settings_update = Some(inp);
             self
         }
-        /// <p>Represents the settings of a global secondary index for a global table that will be modified.</p>
+        pub fn set_replica_provisioned_read_capacity_auto_scaling_settings_update(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingSettingsUpdate>,
+        ) -> Self {
+            self.replica_provisioned_read_capacity_auto_scaling_settings_update = inp;
+            self
+        }
         pub fn replica_global_secondary_index_settings_update(
             mut self,
-            inp: std::vec::Vec<crate::model::ReplicaGlobalSecondaryIndexSettingsUpdate>,
+            inp: impl Into<crate::model::ReplicaGlobalSecondaryIndexSettingsUpdate>,
         ) -> Self {
-            self.replica_global_secondary_index_settings_update = Some(inp);
+            let mut v = self
+                .replica_global_secondary_index_settings_update
+                .unwrap_or_default();
+            v.push(inp.into());
+            self.replica_global_secondary_index_settings_update = Some(v);
+            self
+        }
+        pub fn set_replica_global_secondary_index_settings_update(
+            mut self,
+            inp: std::option::Option<
+                std::vec::Vec<crate::model::ReplicaGlobalSecondaryIndexSettingsUpdate>,
+            >,
+        ) -> Self {
+            self.replica_global_secondary_index_settings_update = inp;
             self
         }
         /// Consumes the builder and constructs a [`ReplicaSettingsUpdate`](crate::model::ReplicaSettingsUpdate)
@@ -7489,9 +8499,20 @@ pub mod replica_global_secondary_index_settings_update {
             self.index_name = Some(inp.into());
             self
         }
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
         /// <p>The maximum number of strongly consistent reads consumed per second before DynamoDB returns a <code>ThrottlingException</code>.</p>
         pub fn provisioned_read_capacity_units(mut self, inp: i64) -> Self {
             self.provisioned_read_capacity_units = Some(inp);
+            self
+        }
+        pub fn set_provisioned_read_capacity_units(
+            mut self,
+            inp: std::option::Option<i64>,
+        ) -> Self {
+            self.provisioned_read_capacity_units = inp;
             self
         }
         /// <p>Auto scaling settings for managing a global secondary index replica's read capacity
@@ -7501,6 +8522,13 @@ pub mod replica_global_secondary_index_settings_update {
             inp: crate::model::AutoScalingSettingsUpdate,
         ) -> Self {
             self.provisioned_read_capacity_auto_scaling_settings_update = Some(inp);
+            self
+        }
+        pub fn set_provisioned_read_capacity_auto_scaling_settings_update(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingSettingsUpdate>,
+        ) -> Self {
+            self.provisioned_read_capacity_auto_scaling_settings_update = inp;
             self
         }
         /// Consumes the builder and constructs a [`ReplicaGlobalSecondaryIndexSettingsUpdate`](crate::model::ReplicaGlobalSecondaryIndexSettingsUpdate)
@@ -7577,10 +8605,21 @@ pub mod global_table_global_secondary_index_settings_update {
             self.index_name = Some(inp.into());
             self
         }
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
         /// <p>The maximum number of writes consumed per second before DynamoDB returns a <code>ThrottlingException.</code>
         /// </p>
         pub fn provisioned_write_capacity_units(mut self, inp: i64) -> Self {
             self.provisioned_write_capacity_units = Some(inp);
+            self
+        }
+        pub fn set_provisioned_write_capacity_units(
+            mut self,
+            inp: std::option::Option<i64>,
+        ) -> Self {
+            self.provisioned_write_capacity_units = inp;
             self
         }
         /// <p>Auto scaling settings for managing a global secondary index's write capacity
@@ -7590,6 +8629,13 @@ pub mod global_table_global_secondary_index_settings_update {
             inp: crate::model::AutoScalingSettingsUpdate,
         ) -> Self {
             self.provisioned_write_capacity_auto_scaling_settings_update = Some(inp);
+            self
+        }
+        pub fn set_provisioned_write_capacity_auto_scaling_settings_update(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingSettingsUpdate>,
+        ) -> Self {
+            self.provisioned_write_capacity_auto_scaling_settings_update = inp;
             self
         }
         /// Consumes the builder and constructs a [`GlobalTableGlobalSecondaryIndexSettingsUpdate`](crate::model::GlobalTableGlobalSecondaryIndexSettingsUpdate)
@@ -7689,12 +8735,20 @@ pub mod global_table_description {
         global_table_name: std::option::Option<std::string::String>,
     }
     impl Builder {
-        /// <p>The Regions where the global table has replicas.</p>
         pub fn replication_group(
             mut self,
-            inp: std::vec::Vec<crate::model::ReplicaDescription>,
+            inp: impl Into<crate::model::ReplicaDescription>,
         ) -> Self {
-            self.replication_group = Some(inp);
+            let mut v = self.replication_group.unwrap_or_default();
+            v.push(inp.into());
+            self.replication_group = Some(v);
+            self
+        }
+        pub fn set_replication_group(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::ReplicaDescription>>,
+        ) -> Self {
+            self.replication_group = inp;
             self
         }
         /// <p>The unique identifier of the global table.</p>
@@ -7702,9 +8756,23 @@ pub mod global_table_description {
             self.global_table_arn = Some(inp.into());
             self
         }
+        pub fn set_global_table_arn(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.global_table_arn = inp;
+            self
+        }
         /// <p>The creation time of the global table.</p>
         pub fn creation_date_time(mut self, inp: smithy_types::Instant) -> Self {
             self.creation_date_time = Some(inp);
+            self
+        }
+        pub fn set_creation_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.creation_date_time = inp;
             self
         }
         /// <p>The current state of the global table:</p>
@@ -7730,9 +8798,23 @@ pub mod global_table_description {
             self.global_table_status = Some(inp);
             self
         }
+        pub fn set_global_table_status(
+            mut self,
+            inp: std::option::Option<crate::model::GlobalTableStatus>,
+        ) -> Self {
+            self.global_table_status = inp;
+            self
+        }
         /// <p>The global table name.</p>
         pub fn global_table_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.global_table_name = Some(inp.into());
+            self
+        }
+        pub fn set_global_table_name(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.global_table_name = inp;
             self
         }
         /// Consumes the builder and constructs a [`GlobalTableDescription`](crate::model::GlobalTableDescription)
@@ -7771,12 +8853,9 @@ pub enum GlobalTableStatus {
     Updating,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for GlobalTableStatus
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for GlobalTableStatus {
+    fn from(s: &str) -> Self {
+        match s {
             "ACTIVE" => GlobalTableStatus::Active,
             "CREATING" => GlobalTableStatus::Creating,
             "DELETING" => GlobalTableStatus::Deleting,
@@ -7785,6 +8864,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for GlobalTableStatus {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(GlobalTableStatus::from(s))
+    }
+}
+
 impl GlobalTableStatus {
     pub fn as_str(&self) -> &str {
         match self {
@@ -7794,6 +8882,11 @@ impl GlobalTableStatus {
             GlobalTableStatus::Updating => "UPDATING",
             GlobalTableStatus::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for GlobalTableStatus {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -7869,9 +8962,23 @@ pub mod replica_update {
             self.create = Some(inp);
             self
         }
+        pub fn set_create(
+            mut self,
+            inp: std::option::Option<crate::model::CreateReplicaAction>,
+        ) -> Self {
+            self.create = inp;
+            self
+        }
         /// <p>The name of the existing replica to be removed.</p>
         pub fn delete(mut self, inp: crate::model::DeleteReplicaAction) -> Self {
             self.delete = Some(inp);
+            self
+        }
+        pub fn set_delete(
+            mut self,
+            inp: std::option::Option<crate::model::DeleteReplicaAction>,
+        ) -> Self {
+            self.delete = inp;
             self
         }
         /// Consumes the builder and constructs a [`ReplicaUpdate`](crate::model::ReplicaUpdate)
@@ -7922,6 +9029,10 @@ pub mod delete_replica_action {
             self.region_name = Some(inp.into());
             self
         }
+        pub fn set_region_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.region_name = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`DeleteReplicaAction`](crate::model::DeleteReplicaAction)
         pub fn build(self) -> crate::model::DeleteReplicaAction {
             crate::model::DeleteReplicaAction {
@@ -7969,6 +9080,10 @@ pub mod create_replica_action {
             self.region_name = Some(inp.into());
             self
         }
+        pub fn set_region_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.region_name = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`CreateReplicaAction`](crate::model::CreateReplicaAction)
         pub fn build(self) -> crate::model::CreateReplicaAction {
             crate::model::CreateReplicaAction {
@@ -8002,12 +9117,9 @@ pub enum ContributorInsightsStatus {
     Failed,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for ContributorInsightsStatus
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for ContributorInsightsStatus {
+    fn from(s: &str) -> Self {
+        match s {
             "DISABLED" => ContributorInsightsStatus::Disabled,
             "DISABLING" => ContributorInsightsStatus::Disabling,
             "ENABLED" => ContributorInsightsStatus::Enabled,
@@ -8017,6 +9129,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for ContributorInsightsStatus {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ContributorInsightsStatus::from(s))
+    }
+}
+
 impl ContributorInsightsStatus {
     pub fn as_str(&self) -> &str {
         match self {
@@ -8027,6 +9148,11 @@ impl ContributorInsightsStatus {
             ContributorInsightsStatus::Failed => "FAILED",
             ContributorInsightsStatus::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for ContributorInsightsStatus {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -8067,18 +9193,24 @@ pub enum ContributorInsightsAction {
     Enable,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for ContributorInsightsAction
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for ContributorInsightsAction {
+    fn from(s: &str) -> Self {
+        match s {
             "DISABLE" => ContributorInsightsAction::Disable,
             "ENABLE" => ContributorInsightsAction::Enable,
             other => ContributorInsightsAction::Unknown(other.to_owned()),
         }
     }
 }
+
+impl std::str::FromStr for ContributorInsightsAction {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ContributorInsightsAction::from(s))
+    }
+}
+
 impl ContributorInsightsAction {
     pub fn as_str(&self) -> &str {
         match self {
@@ -8086,6 +9218,11 @@ impl ContributorInsightsAction {
             ContributorInsightsAction::Enable => "ENABLE",
             ContributorInsightsAction::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for ContributorInsightsAction {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -8162,12 +9299,26 @@ pub mod continuous_backups_description {
             self.continuous_backups_status = Some(inp);
             self
         }
+        pub fn set_continuous_backups_status(
+            mut self,
+            inp: std::option::Option<crate::model::ContinuousBackupsStatus>,
+        ) -> Self {
+            self.continuous_backups_status = inp;
+            self
+        }
         /// <p>The description of the point in time recovery settings applied to the table.</p>
         pub fn point_in_time_recovery_description(
             mut self,
             inp: crate::model::PointInTimeRecoveryDescription,
         ) -> Self {
             self.point_in_time_recovery_description = Some(inp);
+            self
+        }
+        pub fn set_point_in_time_recovery_description(
+            mut self,
+            inp: std::option::Option<crate::model::PointInTimeRecoveryDescription>,
+        ) -> Self {
+            self.point_in_time_recovery_description = inp;
             self
         }
         /// Consumes the builder and constructs a [`ContinuousBackupsDescription`](crate::model::ContinuousBackupsDescription)
@@ -8287,10 +9438,24 @@ pub mod point_in_time_recovery_description {
             self.point_in_time_recovery_status = Some(inp);
             self
         }
+        pub fn set_point_in_time_recovery_status(
+            mut self,
+            inp: std::option::Option<crate::model::PointInTimeRecoveryStatus>,
+        ) -> Self {
+            self.point_in_time_recovery_status = inp;
+            self
+        }
         /// <p>Specifies the earliest point in time you can restore your table to. You can restore your
         /// table to any point in time during the last 35 days. </p>
         pub fn earliest_restorable_date_time(mut self, inp: smithy_types::Instant) -> Self {
             self.earliest_restorable_date_time = Some(inp);
+            self
+        }
+        pub fn set_earliest_restorable_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.earliest_restorable_date_time = inp;
             self
         }
         /// <p>
@@ -8298,6 +9463,13 @@ pub mod point_in_time_recovery_description {
         /// </p>
         pub fn latest_restorable_date_time(mut self, inp: smithy_types::Instant) -> Self {
             self.latest_restorable_date_time = Some(inp);
+            self
+        }
+        pub fn set_latest_restorable_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.latest_restorable_date_time = inp;
             self
         }
         /// Consumes the builder and constructs a [`PointInTimeRecoveryDescription`](crate::model::PointInTimeRecoveryDescription)
@@ -8332,18 +9504,24 @@ pub enum PointInTimeRecoveryStatus {
     Enabled,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for PointInTimeRecoveryStatus
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for PointInTimeRecoveryStatus {
+    fn from(s: &str) -> Self {
+        match s {
             "DISABLED" => PointInTimeRecoveryStatus::Disabled,
             "ENABLED" => PointInTimeRecoveryStatus::Enabled,
             other => PointInTimeRecoveryStatus::Unknown(other.to_owned()),
         }
     }
 }
+
+impl std::str::FromStr for PointInTimeRecoveryStatus {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(PointInTimeRecoveryStatus::from(s))
+    }
+}
+
 impl PointInTimeRecoveryStatus {
     pub fn as_str(&self) -> &str {
         match self {
@@ -8351,6 +9529,11 @@ impl PointInTimeRecoveryStatus {
             PointInTimeRecoveryStatus::Enabled => "ENABLED",
             PointInTimeRecoveryStatus::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for PointInTimeRecoveryStatus {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -8391,18 +9574,24 @@ pub enum ContinuousBackupsStatus {
     Enabled,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for ContinuousBackupsStatus
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for ContinuousBackupsStatus {
+    fn from(s: &str) -> Self {
+        match s {
             "DISABLED" => ContinuousBackupsStatus::Disabled,
             "ENABLED" => ContinuousBackupsStatus::Enabled,
             other => ContinuousBackupsStatus::Unknown(other.to_owned()),
         }
     }
 }
+
+impl std::str::FromStr for ContinuousBackupsStatus {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ContinuousBackupsStatus::from(s))
+    }
+}
+
 impl ContinuousBackupsStatus {
     pub fn as_str(&self) -> &str {
         match self {
@@ -8410,6 +9599,11 @@ impl ContinuousBackupsStatus {
             ContinuousBackupsStatus::Enabled => "ENABLED",
             ContinuousBackupsStatus::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for ContinuousBackupsStatus {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -8468,6 +9662,13 @@ pub mod point_in_time_recovery_specification {
         /// <p>Indicates whether point in time recovery is enabled (true) or disabled (false) on the table.</p>
         pub fn point_in_time_recovery_enabled(mut self, inp: bool) -> Self {
             self.point_in_time_recovery_enabled = Some(inp);
+            self
+        }
+        pub fn set_point_in_time_recovery_enabled(
+            mut self,
+            inp: std::option::Option<bool>,
+        ) -> Self {
+            self.point_in_time_recovery_enabled = inp;
             self
         }
         /// Consumes the builder and constructs a [`PointInTimeRecoverySpecification`](crate::model::PointInTimeRecoverySpecification)
@@ -8534,12 +9735,23 @@ pub mod cancellation_reason {
         message: std::option::Option<std::string::String>,
     }
     impl Builder {
-        /// <p>Item in the request which caused the transaction to get cancelled.</p>
         pub fn item(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.item = Some(inp);
+            let mut hash_map = self.item.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.item = Some(hash_map);
+            self
+        }
+        pub fn set_item(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.item = inp;
             self
         }
         /// <p>Status code for the result of the cancelled transaction.</p>
@@ -8547,9 +9759,17 @@ pub mod cancellation_reason {
             self.code = Some(inp.into());
             self
         }
+        pub fn set_code(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.code = inp;
+            self
+        }
         /// <p>Cancellation reason message description.</p>
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`CancellationReason`](crate::model::CancellationReason)
@@ -8622,9 +9842,20 @@ pub mod transact_write_item {
             self.condition_check = Some(inp);
             self
         }
+        pub fn set_condition_check(
+            mut self,
+            inp: std::option::Option<crate::model::ConditionCheck>,
+        ) -> Self {
+            self.condition_check = inp;
+            self
+        }
         /// <p>A request to perform a <code>PutItem</code> operation.</p>
         pub fn put(mut self, inp: crate::model::Put) -> Self {
             self.put = Some(inp);
+            self
+        }
+        pub fn set_put(mut self, inp: std::option::Option<crate::model::Put>) -> Self {
+            self.put = inp;
             self
         }
         /// <p>A request to perform a <code>DeleteItem</code> operation.</p>
@@ -8632,9 +9863,17 @@ pub mod transact_write_item {
             self.delete = Some(inp);
             self
         }
+        pub fn set_delete(mut self, inp: std::option::Option<crate::model::Delete>) -> Self {
+            self.delete = inp;
+            self
+        }
         /// <p>A request to perform an <code>UpdateItem</code> operation.</p>
         pub fn update(mut self, inp: crate::model::Update) -> Self {
             self.update = Some(inp);
+            self
+        }
+        pub fn set_update(mut self, inp: std::option::Option<crate::model::Update>) -> Self {
+            self.update = inp;
             self
         }
         /// Consumes the builder and constructs a [`TransactWriteItem`](crate::model::TransactWriteItem)
@@ -8752,13 +9991,23 @@ pub mod update {
             std::option::Option<crate::model::ReturnValuesOnConditionCheckFailure>,
     }
     impl Builder {
-        /// <p>The primary key of the item to be updated. Each element consists of
-        /// an attribute name and a value for that attribute.</p>
         pub fn key(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.key = Some(inp);
+            let mut hash_map = self.key.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.key = Some(hash_map);
+            self
+        }
+        pub fn set_key(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.key = inp;
             self
         }
         /// <p>An expression that defines one or more attributes to be updated,
@@ -8767,9 +10016,20 @@ pub mod update {
             self.update_expression = Some(inp.into());
             self
         }
+        pub fn set_update_expression(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.update_expression = inp;
+            self
+        }
         /// <p>Name of the table for the <code>UpdateItem</code> request.</p>
         pub fn table_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.table_name = Some(inp.into());
+            self
+        }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
             self
         }
         /// <p>A condition that must be satisfied in order for a conditional update to
@@ -8778,20 +10038,49 @@ pub mod update {
             self.condition_expression = Some(inp.into());
             self
         }
-        /// <p>One or more substitution tokens for attribute names in an expression.</p>
-        pub fn expression_attribute_names(
+        pub fn set_condition_expression(
             mut self,
-            inp: std::collections::HashMap<std::string::String, std::string::String>,
+            inp: std::option::Option<std::string::String>,
         ) -> Self {
-            self.expression_attribute_names = Some(inp);
+            self.condition_expression = inp;
             self
         }
-        /// <p>One or more values that can be substituted in an expression.</p>
+        pub fn expression_attribute_names(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<std::string::String>,
+        ) -> Self {
+            let mut hash_map = self.expression_attribute_names.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_names = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_names(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, std::string::String>,
+            >,
+        ) -> Self {
+            self.expression_attribute_names = inp;
+            self
+        }
         pub fn expression_attribute_values(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.expression_attribute_values = Some(inp);
+            let mut hash_map = self.expression_attribute_values.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_values = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_values(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.expression_attribute_values = inp;
             self
         }
         /// <p>Use <code>ReturnValuesOnConditionCheckFailure</code> to
@@ -8803,6 +10092,13 @@ pub mod update {
             inp: crate::model::ReturnValuesOnConditionCheckFailure,
         ) -> Self {
             self.return_values_on_condition_check_failure = Some(inp);
+            self
+        }
+        pub fn set_return_values_on_condition_check_failure(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnValuesOnConditionCheckFailure>,
+        ) -> Self {
+            self.return_values_on_condition_check_failure = inp;
             self
         }
         /// Consumes the builder and constructs a [`Update`](crate::model::Update)
@@ -8842,18 +10138,24 @@ pub enum ReturnValuesOnConditionCheckFailure {
     None,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for ReturnValuesOnConditionCheckFailure
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for ReturnValuesOnConditionCheckFailure {
+    fn from(s: &str) -> Self {
+        match s {
             "ALL_OLD" => ReturnValuesOnConditionCheckFailure::AllOld,
             "NONE" => ReturnValuesOnConditionCheckFailure::None,
             other => ReturnValuesOnConditionCheckFailure::Unknown(other.to_owned()),
         }
     }
 }
+
+impl std::str::FromStr for ReturnValuesOnConditionCheckFailure {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ReturnValuesOnConditionCheckFailure::from(s))
+    }
+}
+
 impl ReturnValuesOnConditionCheckFailure {
     pub fn as_str(&self) -> &str {
         match self {
@@ -8861,6 +10163,11 @@ impl ReturnValuesOnConditionCheckFailure {
             ReturnValuesOnConditionCheckFailure::None => "NONE",
             ReturnValuesOnConditionCheckFailure::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for ReturnValuesOnConditionCheckFailure {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -8974,13 +10281,23 @@ pub mod delete {
             std::option::Option<crate::model::ReturnValuesOnConditionCheckFailure>,
     }
     impl Builder {
-        /// <p>The primary key of the item to be deleted. Each element consists of an
-        /// attribute name and a value for that attribute.</p>
         pub fn key(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.key = Some(inp);
+            let mut hash_map = self.key.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.key = Some(hash_map);
+            self
+        }
+        pub fn set_key(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.key = inp;
             self
         }
         /// <p>Name of the table in which the item to be deleted resides.</p>
@@ -8988,25 +10305,58 @@ pub mod delete {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>A condition that must be satisfied in order for a conditional delete to succeed.</p>
         pub fn condition_expression(mut self, inp: impl Into<std::string::String>) -> Self {
             self.condition_expression = Some(inp.into());
             self
         }
-        /// <p>One or more substitution tokens for attribute names in an expression.</p>
-        pub fn expression_attribute_names(
+        pub fn set_condition_expression(
             mut self,
-            inp: std::collections::HashMap<std::string::String, std::string::String>,
+            inp: std::option::Option<std::string::String>,
         ) -> Self {
-            self.expression_attribute_names = Some(inp);
+            self.condition_expression = inp;
             self
         }
-        /// <p>One or more values that can be substituted in an expression.</p>
+        pub fn expression_attribute_names(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<std::string::String>,
+        ) -> Self {
+            let mut hash_map = self.expression_attribute_names.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_names = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_names(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, std::string::String>,
+            >,
+        ) -> Self {
+            self.expression_attribute_names = inp;
+            self
+        }
         pub fn expression_attribute_values(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.expression_attribute_values = Some(inp);
+            let mut hash_map = self.expression_attribute_values.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_values = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_values(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.expression_attribute_values = inp;
             self
         }
         /// <p>Use <code>ReturnValuesOnConditionCheckFailure</code> to
@@ -9018,6 +10368,13 @@ pub mod delete {
             inp: crate::model::ReturnValuesOnConditionCheckFailure,
         ) -> Self {
             self.return_values_on_condition_check_failure = Some(inp);
+            self
+        }
+        pub fn set_return_values_on_condition_check_failure(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnValuesOnConditionCheckFailure>,
+        ) -> Self {
+            self.return_values_on_condition_check_failure = inp;
             self
         }
         /// Consumes the builder and constructs a [`Delete`](crate::model::Delete)
@@ -9132,16 +10489,23 @@ pub mod put {
             std::option::Option<crate::model::ReturnValuesOnConditionCheckFailure>,
     }
     impl Builder {
-        /// <p>A map of attribute name to attribute values, representing the primary key
-        /// of the item to be written by <code>PutItem</code>. All of the table's primary key
-        /// attributes must be specified, and their data types must match those of the table's
-        /// key schema. If any attributes are present in the item that are part of an index
-        /// key schema for the table, their types must match the index key schema. </p>
         pub fn item(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.item = Some(inp);
+            let mut hash_map = self.item.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.item = Some(hash_map);
+            self
+        }
+        pub fn set_item(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.item = inp;
             self
         }
         /// <p>Name of the table in which to write the item.</p>
@@ -9149,25 +10513,58 @@ pub mod put {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>A condition that must be satisfied in order for a conditional update to succeed.</p>
         pub fn condition_expression(mut self, inp: impl Into<std::string::String>) -> Self {
             self.condition_expression = Some(inp.into());
             self
         }
-        /// <p>One or more substitution tokens for attribute names in an expression.</p>
-        pub fn expression_attribute_names(
+        pub fn set_condition_expression(
             mut self,
-            inp: std::collections::HashMap<std::string::String, std::string::String>,
+            inp: std::option::Option<std::string::String>,
         ) -> Self {
-            self.expression_attribute_names = Some(inp);
+            self.condition_expression = inp;
             self
         }
-        /// <p>One or more values that can be substituted in an expression.</p>
+        pub fn expression_attribute_names(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<std::string::String>,
+        ) -> Self {
+            let mut hash_map = self.expression_attribute_names.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_names = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_names(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, std::string::String>,
+            >,
+        ) -> Self {
+            self.expression_attribute_names = inp;
+            self
+        }
         pub fn expression_attribute_values(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.expression_attribute_values = Some(inp);
+            let mut hash_map = self.expression_attribute_values.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_values = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_values(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.expression_attribute_values = inp;
             self
         }
         /// <p>Use <code>ReturnValuesOnConditionCheckFailure</code> to
@@ -9179,6 +10576,13 @@ pub mod put {
             inp: crate::model::ReturnValuesOnConditionCheckFailure,
         ) -> Self {
             self.return_values_on_condition_check_failure = Some(inp);
+            self
+        }
+        pub fn set_return_values_on_condition_check_failure(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnValuesOnConditionCheckFailure>,
+        ) -> Self {
+            self.return_values_on_condition_check_failure = inp;
             self
         }
         /// Consumes the builder and constructs a [`Put`](crate::model::Put)
@@ -9291,13 +10695,23 @@ pub mod condition_check {
             std::option::Option<crate::model::ReturnValuesOnConditionCheckFailure>,
     }
     impl Builder {
-        /// <p>The primary key of the item to be checked. Each element consists of an
-        /// attribute name and a value for that attribute.</p>
         pub fn key(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.key = Some(inp);
+            let mut hash_map = self.key.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.key = Some(hash_map);
+            self
+        }
+        pub fn set_key(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.key = inp;
             self
         }
         /// <p>Name of the table for the check item request.</p>
@@ -9305,25 +10719,58 @@ pub mod condition_check {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>A condition that must be satisfied in order for a conditional update to succeed.</p>
         pub fn condition_expression(mut self, inp: impl Into<std::string::String>) -> Self {
             self.condition_expression = Some(inp.into());
             self
         }
-        /// <p>One or more substitution tokens for attribute names in an expression.</p>
-        pub fn expression_attribute_names(
+        pub fn set_condition_expression(
             mut self,
-            inp: std::collections::HashMap<std::string::String, std::string::String>,
+            inp: std::option::Option<std::string::String>,
         ) -> Self {
-            self.expression_attribute_names = Some(inp);
+            self.condition_expression = inp;
             self
         }
-        /// <p>One or more values that can be substituted in an expression.</p>
+        pub fn expression_attribute_names(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<std::string::String>,
+        ) -> Self {
+            let mut hash_map = self.expression_attribute_names.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_names = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_names(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, std::string::String>,
+            >,
+        ) -> Self {
+            self.expression_attribute_names = inp;
+            self
+        }
         pub fn expression_attribute_values(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.expression_attribute_values = Some(inp);
+            let mut hash_map = self.expression_attribute_values.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_values = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_values(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.expression_attribute_values = inp;
             self
         }
         /// <p>Use <code>ReturnValuesOnConditionCheckFailure</code> to
@@ -9335,6 +10782,13 @@ pub mod condition_check {
             inp: crate::model::ReturnValuesOnConditionCheckFailure,
         ) -> Self {
             self.return_values_on_condition_check_failure = Some(inp);
+            self
+        }
+        pub fn set_return_values_on_condition_check_failure(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnValuesOnConditionCheckFailure>,
+        ) -> Self {
+            self.return_values_on_condition_check_failure = inp;
             self
         }
         /// Consumes the builder and constructs a [`ConditionCheck`](crate::model::ConditionCheck)
@@ -9389,12 +10843,23 @@ pub mod item_response {
         >,
     }
     impl Builder {
-        /// <p>Map of attribute data consisting of the data type and attribute value.</p>
         pub fn item(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.item = Some(inp);
+            let mut hash_map = self.item.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.item = Some(hash_map);
+            self
+        }
+        pub fn set_item(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.item = inp;
             self
         }
         /// Consumes the builder and constructs a [`ItemResponse`](crate::model::ItemResponse)
@@ -9444,6 +10909,10 @@ pub mod transact_get_item {
         /// the specific attributes of the item to retrieve.</p>
         pub fn get(mut self, inp: crate::model::Get) -> Self {
             self.get = Some(inp);
+            self
+        }
+        pub fn set_get(mut self, inp: std::option::Option<crate::model::Get>) -> Self {
+            self.get = inp;
             self
         }
         /// Consumes the builder and constructs a [`TransactGetItem`](crate::model::TransactGetItem)
@@ -9524,18 +10993,32 @@ pub mod get {
         >,
     }
     impl Builder {
-        /// <p>A map of attribute names to <code>AttributeValue</code> objects that
-        /// specifies the primary key of the item to retrieve.</p>
         pub fn key(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.key = Some(inp);
+            let mut hash_map = self.key.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.key = Some(hash_map);
+            self
+        }
+        pub fn set_key(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.key = inp;
             self
         }
         /// <p>The name of the table from which to retrieve the specified item.</p>
         pub fn table_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.table_name = Some(inp.into());
+            self
+        }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
             self
         }
         /// <p>A string that identifies one or more attributes of the specified item
@@ -9547,13 +11030,30 @@ pub mod get {
             self.projection_expression = Some(inp.into());
             self
         }
-        /// <p>One or more substitution tokens for attribute names in the
-        /// ProjectionExpression parameter.</p>
+        pub fn set_projection_expression(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.projection_expression = inp;
+            self
+        }
         pub fn expression_attribute_names(
             mut self,
-            inp: std::collections::HashMap<std::string::String, std::string::String>,
+            k: impl Into<std::string::String>,
+            v: impl Into<std::string::String>,
         ) -> Self {
-            self.expression_attribute_names = Some(inp);
+            let mut hash_map = self.expression_attribute_names.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_names = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_names(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, std::string::String>,
+            >,
+        ) -> Self {
+            self.expression_attribute_names = inp;
             self
         }
         /// Consumes the builder and constructs a [`Get`](crate::model::Get)
@@ -9625,9 +11125,17 @@ pub mod tag {
             self.key = Some(inp.into());
             self
         }
+        pub fn set_key(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.key = inp;
+            self
+        }
         /// <p>The value of the tag. Tag values are case-sensitive and can be null.</p>
         pub fn value(mut self, inp: impl Into<std::string::String>) -> Self {
             self.value = Some(inp.into());
+            self
+        }
+        pub fn set_value(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.value = inp;
             self
         }
         /// Consumes the builder and constructs a [`Tag`](crate::model::Tag)
@@ -9850,18 +11358,20 @@ pub mod condition {
         comparison_operator: std::option::Option<crate::model::ComparisonOperator>,
     }
     impl Builder {
-        /// <p>One or more values to evaluate against the supplied attribute. The number of values in the
-        /// list depends on the <code>ComparisonOperator</code> being used.</p>
-        /// <p>For type Number, value comparisons are numeric.</p>
-        /// <p>String value comparisons for greater than, equals, or less than are based on ASCII character
-        /// code values. For example, <code>a</code> is greater than <code>A</code>, and <code>a</code>
-        /// is greater than <code>B</code>. For a list of code values, see <a href="http://en.wikipedia.org/wiki/ASCII#ASCII_printable_characters">http://en.wikipedia.org/wiki/ASCII#ASCII_printable_characters</a>.</p>
-        /// <p>For Binary, DynamoDB treats each byte of the binary data as unsigned when it compares binary values.</p>
         pub fn attribute_value_list(
             mut self,
-            inp: std::vec::Vec<crate::model::AttributeValue>,
+            inp: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.attribute_value_list = Some(inp);
+            let mut v = self.attribute_value_list.unwrap_or_default();
+            v.push(inp.into());
+            self.attribute_value_list = Some(v);
+            self
+        }
+        pub fn set_attribute_value_list(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::AttributeValue>>,
+        ) -> Self {
+            self.attribute_value_list = inp;
             self
         }
         /// <p>A comparator for evaluating attributes. For example, equals, greater than, less than, etc.</p>
@@ -10016,6 +11526,13 @@ pub mod condition {
             self.comparison_operator = Some(inp);
             self
         }
+        pub fn set_comparison_operator(
+            mut self,
+            inp: std::option::Option<crate::model::ComparisonOperator>,
+        ) -> Self {
+            self.comparison_operator = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`Condition`](crate::model::Condition)
         pub fn build(self) -> crate::model::Condition {
             crate::model::Condition {
@@ -10049,12 +11566,9 @@ pub enum Select {
     SpecificAttributes,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for Select
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for Select {
+    fn from(s: &str) -> Self {
+        match s {
             "ALL_ATTRIBUTES" => Select::AllAttributes,
             "ALL_PROJECTED_ATTRIBUTES" => Select::AllProjectedAttributes,
             "COUNT" => Select::Count,
@@ -10063,6 +11577,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for Select {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Select::from(s))
+    }
+}
+
 impl Select {
     pub fn as_str(&self) -> &str {
         match self {
@@ -10072,6 +11595,11 @@ impl Select {
             Select::SpecificAttributes => "SPECIFIC_ATTRIBUTES",
             Select::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for Select {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -10163,27 +11691,21 @@ pub mod local_secondary_index {
             self.index_name = Some(inp.into());
             self
         }
-        /// <p>The complete key schema for the local secondary index, consisting of one or more pairs of attribute names and key types:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>HASH</code> - partition key</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>RANGE</code> - sort key</p>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>The partition key of an item is also known as its <i>hash attribute</i>.  The
-        /// term "hash attribute" derives from DynamoDB's usage of an internal hash function to
-        /// evenly distribute data items across partitions, based on their partition key values.</p>
-        /// <p>The sort key of an item is also known as its <i>range attribute</i>.
-        /// The term "range attribute" derives from the way DynamoDB stores items with the same
-        /// partition key physically close together, in sorted order by the sort key value.</p>
-        /// </note>
-        pub fn key_schema(mut self, inp: std::vec::Vec<crate::model::KeySchemaElement>) -> Self {
-            self.key_schema = Some(inp);
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
+        pub fn key_schema(mut self, inp: impl Into<crate::model::KeySchemaElement>) -> Self {
+            let mut v = self.key_schema.unwrap_or_default();
+            v.push(inp.into());
+            self.key_schema = Some(v);
+            self
+        }
+        pub fn set_key_schema(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::KeySchemaElement>>,
+        ) -> Self {
+            self.key_schema = inp;
             self
         }
         /// <p>Represents attributes that are copied (projected) from the table into the local
@@ -10191,6 +11713,13 @@ pub mod local_secondary_index {
         /// attributes, which are automatically projected. </p>
         pub fn projection(mut self, inp: crate::model::Projection) -> Self {
             self.projection = Some(inp);
+            self
+        }
+        pub fn set_projection(
+            mut self,
+            inp: std::option::Option<crate::model::Projection>,
+        ) -> Self {
+            self.projection = inp;
             self
         }
         /// Consumes the builder and constructs a [`LocalSecondaryIndex`](crate::model::LocalSecondaryIndex)
@@ -10284,27 +11813,21 @@ pub mod global_secondary_index {
             self.index_name = Some(inp.into());
             self
         }
-        /// <p>The complete key schema for a global secondary index, which consists of one or more pairs of attribute names and key types:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>HASH</code> - partition key</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>RANGE</code> - sort key</p>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>The partition key of an item is also known as its <i>hash attribute</i>.  The
-        /// term "hash attribute" derives from DynamoDB's usage of an internal hash function to
-        /// evenly distribute data items across partitions, based on their partition key values.</p>
-        /// <p>The sort key of an item is also known as its <i>range attribute</i>.
-        /// The term "range attribute" derives from the way DynamoDB stores items with the same
-        /// partition key physically close together, in sorted order by the sort key value.</p>
-        /// </note>
-        pub fn key_schema(mut self, inp: std::vec::Vec<crate::model::KeySchemaElement>) -> Self {
-            self.key_schema = Some(inp);
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
+        pub fn key_schema(mut self, inp: impl Into<crate::model::KeySchemaElement>) -> Self {
+            let mut v = self.key_schema.unwrap_or_default();
+            v.push(inp.into());
+            self.key_schema = Some(v);
+            self
+        }
+        pub fn set_key_schema(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::KeySchemaElement>>,
+        ) -> Self {
+            self.key_schema = inp;
             self
         }
         /// <p>Represents attributes that are copied (projected) from the table into the global
@@ -10314,10 +11837,24 @@ pub mod global_secondary_index {
             self.projection = Some(inp);
             self
         }
+        pub fn set_projection(
+            mut self,
+            inp: std::option::Option<crate::model::Projection>,
+        ) -> Self {
+            self.projection = inp;
+            self
+        }
         /// <p>Represents the provisioned throughput settings for the specified global secondary index.</p>
         /// <p>For current minimum and maximum provisioned throughput values, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Limits.html">Service, Account, and Table Quotas</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
         pub fn provisioned_throughput(mut self, inp: crate::model::ProvisionedThroughput) -> Self {
             self.provisioned_throughput = Some(inp);
+            self
+        }
+        pub fn set_provisioned_throughput(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughput>,
+        ) -> Self {
+            self.provisioned_throughput = inp;
             self
         }
         /// Consumes the builder and constructs a [`GlobalSecondaryIndex`](crate::model::GlobalSecondaryIndex)
@@ -10377,9 +11914,24 @@ pub mod global_table {
             self.global_table_name = Some(inp.into());
             self
         }
-        /// <p>The Regions where the global table has replicas.</p>
-        pub fn replication_group(mut self, inp: std::vec::Vec<crate::model::Replica>) -> Self {
-            self.replication_group = Some(inp);
+        pub fn set_global_table_name(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.global_table_name = inp;
+            self
+        }
+        pub fn replication_group(mut self, inp: impl Into<crate::model::Replica>) -> Self {
+            let mut v = self.replication_group.unwrap_or_default();
+            v.push(inp.into());
+            self.replication_group = Some(v);
+            self
+        }
+        pub fn set_replication_group(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::Replica>>,
+        ) -> Self {
+            self.replication_group = inp;
             self
         }
         /// Consumes the builder and constructs a [`GlobalTable`](crate::model::GlobalTable)
@@ -10428,6 +11980,10 @@ pub mod replica {
         /// <p>The Region where the replica needs to be created.</p>
         pub fn region_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.region_name = Some(inp.into());
+            self
+        }
+        pub fn set_region_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.region_name = inp;
             self
         }
         /// Consumes the builder and constructs a [`Replica`](crate::model::Replica)
@@ -10484,9 +12040,20 @@ pub mod export_summary {
             self.export_arn = Some(inp.into());
             self
         }
+        pub fn set_export_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.export_arn = inp;
+            self
+        }
         /// <p>Export can be in one of the following states: IN_PROGRESS, COMPLETED, or FAILED.</p>
         pub fn export_status(mut self, inp: crate::model::ExportStatus) -> Self {
             self.export_status = Some(inp);
+            self
+        }
+        pub fn set_export_status(
+            mut self,
+            inp: std::option::Option<crate::model::ExportStatus>,
+        ) -> Self {
+            self.export_status = inp;
             self
         }
         /// Consumes the builder and constructs a [`ExportSummary`](crate::model::ExportSummary)
@@ -10521,12 +12088,9 @@ pub enum ExportStatus {
     InProgress,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for ExportStatus
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for ExportStatus {
+    fn from(s: &str) -> Self {
+        match s {
             "COMPLETED" => ExportStatus::Completed,
             "FAILED" => ExportStatus::Failed,
             "IN_PROGRESS" => ExportStatus::InProgress,
@@ -10534,6 +12098,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for ExportStatus {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ExportStatus::from(s))
+    }
+}
+
 impl ExportStatus {
     pub fn as_str(&self) -> &str {
         match self {
@@ -10542,6 +12115,11 @@ impl ExportStatus {
             ExportStatus::InProgress => "IN_PROGRESS",
             ExportStatus::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for ExportStatus {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -10616,9 +12194,17 @@ pub mod contributor_insights_summary {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>Name of the index associated with the summary, if any.</p>
         pub fn index_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.index_name = Some(inp.into());
+            self
+        }
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
             self
         }
         /// <p>Describes the current status for contributor insights for the given table and index, if applicable.</p>
@@ -10627,6 +12213,13 @@ pub mod contributor_insights_summary {
             inp: crate::model::ContributorInsightsStatus,
         ) -> Self {
             self.contributor_insights_status = Some(inp);
+            self
+        }
+        pub fn set_contributor_insights_status(
+            mut self,
+            inp: std::option::Option<crate::model::ContributorInsightsStatus>,
+        ) -> Self {
+            self.contributor_insights_status = inp;
             self
         }
         /// Consumes the builder and constructs a [`ContributorInsightsSummary`](crate::model::ContributorInsightsSummary)
@@ -10772,9 +12365,17 @@ pub mod backup_summary {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>Unique identifier for the table.</p>
         pub fn table_id(mut self, inp: impl Into<std::string::String>) -> Self {
             self.table_id = Some(inp.into());
+            self
+        }
+        pub fn set_table_id(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_id = inp;
             self
         }
         /// <p>ARN associated with the table.</p>
@@ -10782,9 +12383,17 @@ pub mod backup_summary {
             self.table_arn = Some(inp.into());
             self
         }
+        pub fn set_table_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_arn = inp;
+            self
+        }
         /// <p>ARN associated with the backup.</p>
         pub fn backup_arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.backup_arn = Some(inp.into());
+            self
+        }
+        pub fn set_backup_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.backup_arn = inp;
             self
         }
         /// <p>Name of the specified backup.</p>
@@ -10792,9 +12401,20 @@ pub mod backup_summary {
             self.backup_name = Some(inp.into());
             self
         }
+        pub fn set_backup_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.backup_name = inp;
+            self
+        }
         /// <p>Time at which the backup was created.</p>
         pub fn backup_creation_date_time(mut self, inp: smithy_types::Instant) -> Self {
             self.backup_creation_date_time = Some(inp);
+            self
+        }
+        pub fn set_backup_creation_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.backup_creation_date_time = inp;
             self
         }
         /// <p>Time at which the automatic on-demand backup created by DynamoDB will expire. This
@@ -10804,9 +12424,23 @@ pub mod backup_summary {
             self.backup_expiry_date_time = Some(inp);
             self
         }
+        pub fn set_backup_expiry_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.backup_expiry_date_time = inp;
+            self
+        }
         /// <p>Backup can be in one of the following states: CREATING, ACTIVE, DELETED.</p>
         pub fn backup_status(mut self, inp: crate::model::BackupStatus) -> Self {
             self.backup_status = Some(inp);
+            self
+        }
+        pub fn set_backup_status(
+            mut self,
+            inp: std::option::Option<crate::model::BackupStatus>,
+        ) -> Self {
+            self.backup_status = inp;
             self
         }
         /// <p>BackupType:</p>
@@ -10831,9 +12465,20 @@ pub mod backup_summary {
             self.backup_type = Some(inp);
             self
         }
+        pub fn set_backup_type(
+            mut self,
+            inp: std::option::Option<crate::model::BackupType>,
+        ) -> Self {
+            self.backup_type = inp;
+            self
+        }
         /// <p>Size of the backup in bytes.</p>
         pub fn backup_size_bytes(mut self, inp: i64) -> Self {
             self.backup_size_bytes = Some(inp);
+            self
+        }
+        pub fn set_backup_size_bytes(mut self, inp: std::option::Option<i64>) -> Self {
+            self.backup_size_bytes = inp;
             self
         }
         /// Consumes the builder and constructs a [`BackupSummary`](crate::model::BackupSummary)
@@ -10876,12 +12521,9 @@ pub enum BackupType {
     User,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for BackupType
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for BackupType {
+    fn from(s: &str) -> Self {
+        match s {
             "AWS_BACKUP" => BackupType::AwsBackup,
             "SYSTEM" => BackupType::System,
             "USER" => BackupType::User,
@@ -10889,6 +12531,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for BackupType {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(BackupType::from(s))
+    }
+}
+
 impl BackupType {
     pub fn as_str(&self) -> &str {
         match self {
@@ -10897,6 +12548,11 @@ impl BackupType {
             BackupType::User => "USER",
             BackupType::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for BackupType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -10938,12 +12594,9 @@ pub enum BackupStatus {
     Deleted,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for BackupStatus
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for BackupStatus {
+    fn from(s: &str) -> Self {
+        match s {
             "AVAILABLE" => BackupStatus::Available,
             "CREATING" => BackupStatus::Creating,
             "DELETED" => BackupStatus::Deleted,
@@ -10951,6 +12604,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for BackupStatus {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(BackupStatus::from(s))
+    }
+}
+
 impl BackupStatus {
     pub fn as_str(&self) -> &str {
         match self {
@@ -10959,6 +12621,11 @@ impl BackupStatus {
             BackupStatus::Deleted => "DELETED",
             BackupStatus::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for BackupStatus {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -11001,12 +12668,9 @@ pub enum BackupTypeFilter {
     User,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for BackupTypeFilter
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for BackupTypeFilter {
+    fn from(s: &str) -> Self {
+        match s {
             "ALL" => BackupTypeFilter::All,
             "AWS_BACKUP" => BackupTypeFilter::AwsBackup,
             "SYSTEM" => BackupTypeFilter::System,
@@ -11015,6 +12679,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for BackupTypeFilter {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(BackupTypeFilter::from(s))
+    }
+}
+
 impl BackupTypeFilter {
     pub fn as_str(&self) -> &str {
         match self {
@@ -11024,6 +12697,11 @@ impl BackupTypeFilter {
             BackupTypeFilter::User => "USER",
             BackupTypeFilter::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for BackupTypeFilter {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -11241,9 +12919,20 @@ pub mod export_description {
             self.export_arn = Some(inp.into());
             self
         }
+        pub fn set_export_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.export_arn = inp;
+            self
+        }
         /// <p>Export can be in one of the following states: IN_PROGRESS, COMPLETED, or FAILED.</p>
         pub fn export_status(mut self, inp: crate::model::ExportStatus) -> Self {
             self.export_status = Some(inp);
+            self
+        }
+        pub fn set_export_status(
+            mut self,
+            inp: std::option::Option<crate::model::ExportStatus>,
+        ) -> Self {
+            self.export_status = inp;
             self
         }
         /// <p>The time at which the export task began.</p>
@@ -11251,9 +12940,17 @@ pub mod export_description {
             self.start_time = Some(inp);
             self
         }
+        pub fn set_start_time(mut self, inp: std::option::Option<smithy_types::Instant>) -> Self {
+            self.start_time = inp;
+            self
+        }
         /// <p>The time at which the export task completed.</p>
         pub fn end_time(mut self, inp: smithy_types::Instant) -> Self {
             self.end_time = Some(inp);
+            self
+        }
+        pub fn set_end_time(mut self, inp: std::option::Option<smithy_types::Instant>) -> Self {
+            self.end_time = inp;
             self
         }
         /// <p>The name of the manifest file for the export task.</p>
@@ -11261,9 +12958,20 @@ pub mod export_description {
             self.export_manifest = Some(inp.into());
             self
         }
+        pub fn set_export_manifest(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.export_manifest = inp;
+            self
+        }
         /// <p>The Amazon Resource Name (ARN) of the table that was exported.</p>
         pub fn table_arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.table_arn = Some(inp.into());
+            self
+        }
+        pub fn set_table_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_arn = inp;
             self
         }
         /// <p>Unique ID of the table that was exported.</p>
@@ -11271,9 +12979,17 @@ pub mod export_description {
             self.table_id = Some(inp.into());
             self
         }
+        pub fn set_table_id(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_id = inp;
+            self
+        }
         /// <p>Point in time from which table data was exported.</p>
         pub fn export_time(mut self, inp: smithy_types::Instant) -> Self {
             self.export_time = Some(inp);
+            self
+        }
+        pub fn set_export_time(mut self, inp: std::option::Option<smithy_types::Instant>) -> Self {
+            self.export_time = inp;
             self
         }
         /// <p>The client token that was provided for the export task. A client token makes calls to
@@ -11283,9 +12999,17 @@ pub mod export_description {
             self.client_token = Some(inp.into());
             self
         }
+        pub fn set_client_token(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.client_token = inp;
+            self
+        }
         /// <p>The name of the Amazon S3 bucket containing the export.</p>
         pub fn s3_bucket(mut self, inp: impl Into<std::string::String>) -> Self {
             self.s3_bucket = Some(inp.into());
+            self
+        }
+        pub fn set_s3_bucket(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.s3_bucket = inp;
             self
         }
         /// <p>The ID of the AWS account that owns the bucket containing the export.</p>
@@ -11293,10 +13017,21 @@ pub mod export_description {
             self.s3_bucket_owner = Some(inp.into());
             self
         }
+        pub fn set_s3_bucket_owner(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.s3_bucket_owner = inp;
+            self
+        }
         /// <p>The Amazon S3 bucket prefix used as the file name and path of the exported
         /// snapshot.</p>
         pub fn s3_prefix(mut self, inp: impl Into<std::string::String>) -> Self {
             self.s3_prefix = Some(inp.into());
+            self
+        }
+        pub fn set_s3_prefix(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.s3_prefix = inp;
             self
         }
         /// <p>Type of encryption used on the bucket where export data is stored. Valid values
@@ -11315,10 +13050,24 @@ pub mod export_description {
             self.s3_sse_algorithm = Some(inp);
             self
         }
+        pub fn set_s3_sse_algorithm(
+            mut self,
+            inp: std::option::Option<crate::model::S3SseAlgorithm>,
+        ) -> Self {
+            self.s3_sse_algorithm = inp;
+            self
+        }
         /// <p>The ID of the AWS KMS managed key used to encrypt the S3 bucket where export data is
         /// stored (if applicable).</p>
         pub fn s3_sse_kms_key_id(mut self, inp: impl Into<std::string::String>) -> Self {
             self.s3_sse_kms_key_id = Some(inp.into());
+            self
+        }
+        pub fn set_s3_sse_kms_key_id(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.s3_sse_kms_key_id = inp;
             self
         }
         /// <p>Status code for the result of the failed export.</p>
@@ -11326,9 +13075,20 @@ pub mod export_description {
             self.failure_code = Some(inp.into());
             self
         }
+        pub fn set_failure_code(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.failure_code = inp;
+            self
+        }
         /// <p>Export failure reason description.</p>
         pub fn failure_message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.failure_message = Some(inp.into());
+            self
+        }
+        pub fn set_failure_message(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.failure_message = inp;
             self
         }
         /// <p>The format of the exported data. Valid values for <code>ExportFormat</code> are
@@ -11337,14 +13097,29 @@ pub mod export_description {
             self.export_format = Some(inp);
             self
         }
+        pub fn set_export_format(
+            mut self,
+            inp: std::option::Option<crate::model::ExportFormat>,
+        ) -> Self {
+            self.export_format = inp;
+            self
+        }
         /// <p>The billable size of the table export.</p>
         pub fn billed_size_bytes(mut self, inp: i64) -> Self {
             self.billed_size_bytes = Some(inp);
             self
         }
+        pub fn set_billed_size_bytes(mut self, inp: std::option::Option<i64>) -> Self {
+            self.billed_size_bytes = inp;
+            self
+        }
         /// <p>The number of items exported.</p>
         pub fn item_count(mut self, inp: i64) -> Self {
             self.item_count = Some(inp);
+            self
+        }
+        pub fn set_item_count(mut self, inp: std::option::Option<i64>) -> Self {
+            self.item_count = inp;
             self
         }
         /// Consumes the builder and constructs a [`ExportDescription`](crate::model::ExportDescription)
@@ -11395,18 +13170,24 @@ pub enum ExportFormat {
     Ion,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for ExportFormat
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for ExportFormat {
+    fn from(s: &str) -> Self {
+        match s {
             "DYNAMODB_JSON" => ExportFormat::DynamodbJson,
             "ION" => ExportFormat::Ion,
             other => ExportFormat::Unknown(other.to_owned()),
         }
     }
 }
+
+impl std::str::FromStr for ExportFormat {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ExportFormat::from(s))
+    }
+}
+
 impl ExportFormat {
     pub fn as_str(&self) -> &str {
         match self {
@@ -11414,6 +13195,11 @@ impl ExportFormat {
             ExportFormat::Ion => "ION",
             ExportFormat::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for ExportFormat {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -11454,18 +13240,24 @@ pub enum S3SseAlgorithm {
     Kms,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for S3SseAlgorithm
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for S3SseAlgorithm {
+    fn from(s: &str) -> Self {
+        match s {
             "AES256" => S3SseAlgorithm::Aes256,
             "KMS" => S3SseAlgorithm::Kms,
             other => S3SseAlgorithm::Unknown(other.to_owned()),
         }
     }
 }
+
+impl std::str::FromStr for S3SseAlgorithm {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(S3SseAlgorithm::from(s))
+    }
+}
+
 impl S3SseAlgorithm {
     pub fn as_str(&self) -> &str {
         match self {
@@ -11473,6 +13265,11 @@ impl S3SseAlgorithm {
             S3SseAlgorithm::Kms => "KMS",
             S3SseAlgorithm::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for S3SseAlgorithm {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -11545,11 +13342,21 @@ pub mod parameterized_statement {
             self.statement = Some(inp.into());
             self
         }
-        /// <p>
-        /// The parameter values.
-        /// </p>
-        pub fn parameters(mut self, inp: std::vec::Vec<crate::model::AttributeValue>) -> Self {
-            self.parameters = Some(inp);
+        pub fn set_statement(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.statement = inp;
+            self
+        }
+        pub fn parameters(mut self, inp: impl Into<crate::model::AttributeValue>) -> Self {
+            let mut v = self.parameters.unwrap_or_default();
+            v.push(inp.into());
+            self.parameters = Some(v);
+            self
+        }
+        pub fn set_parameters(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::AttributeValue>>,
+        ) -> Self {
+            self.parameters = inp;
             self
         }
         /// Consumes the builder and constructs a [`ParameterizedStatement`](crate::model::ParameterizedStatement)
@@ -11586,12 +13393,9 @@ pub enum DestinationStatus {
     Enabling,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for DestinationStatus
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for DestinationStatus {
+    fn from(s: &str) -> Self {
+        match s {
             "ACTIVE" => DestinationStatus::Active,
             "DISABLED" => DestinationStatus::Disabled,
             "DISABLING" => DestinationStatus::Disabling,
@@ -11601,6 +13405,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for DestinationStatus {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(DestinationStatus::from(s))
+    }
+}
+
 impl DestinationStatus {
     pub fn as_str(&self) -> &str {
         match self {
@@ -11611,6 +13424,11 @@ impl DestinationStatus {
             DestinationStatus::Enabling => "ENABLING",
             DestinationStatus::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for DestinationStatus {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -11675,9 +13493,20 @@ pub mod time_to_live_description {
             self.time_to_live_status = Some(inp);
             self
         }
+        pub fn set_time_to_live_status(
+            mut self,
+            inp: std::option::Option<crate::model::TimeToLiveStatus>,
+        ) -> Self {
+            self.time_to_live_status = inp;
+            self
+        }
         /// <p> The name of the TTL attribute for items in the table.</p>
         pub fn attribute_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.attribute_name = Some(inp.into());
+            self
+        }
+        pub fn set_attribute_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.attribute_name = inp;
             self
         }
         /// Consumes the builder and constructs a [`TimeToLiveDescription`](crate::model::TimeToLiveDescription)
@@ -11713,12 +13542,9 @@ pub enum TimeToLiveStatus {
     Enabling,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for TimeToLiveStatus
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for TimeToLiveStatus {
+    fn from(s: &str) -> Self {
+        match s {
             "DISABLED" => TimeToLiveStatus::Disabled,
             "DISABLING" => TimeToLiveStatus::Disabling,
             "ENABLED" => TimeToLiveStatus::Enabled,
@@ -11727,6 +13553,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for TimeToLiveStatus {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(TimeToLiveStatus::from(s))
+    }
+}
+
 impl TimeToLiveStatus {
     pub fn as_str(&self) -> &str {
         match self {
@@ -11736,6 +13571,11 @@ impl TimeToLiveStatus {
             TimeToLiveStatus::Enabling => "ENABLING",
             TimeToLiveStatus::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for TimeToLiveStatus {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -11810,9 +13650,20 @@ pub mod kinesis_data_stream_destination {
             self.stream_arn = Some(inp.into());
             self
         }
+        pub fn set_stream_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.stream_arn = inp;
+            self
+        }
         /// <p>The current status of replication.</p>
         pub fn destination_status(mut self, inp: crate::model::DestinationStatus) -> Self {
             self.destination_status = Some(inp);
+            self
+        }
+        pub fn set_destination_status(
+            mut self,
+            inp: std::option::Option<crate::model::DestinationStatus>,
+        ) -> Self {
+            self.destination_status = inp;
             self
         }
         /// <p>The human-readable string that corresponds to the replica status.</p>
@@ -11821,6 +13672,13 @@ pub mod kinesis_data_stream_destination {
             inp: impl Into<std::string::String>,
         ) -> Self {
             self.destination_status_description = Some(inp.into());
+            self
+        }
+        pub fn set_destination_status_description(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.destination_status_description = inp;
             self
         }
         /// Consumes the builder and constructs a [`KinesisDataStreamDestination`](crate::model::KinesisDataStreamDestination)
@@ -11877,8 +13735,16 @@ pub mod endpoint {
             self.address = Some(inp.into());
             self
         }
+        pub fn set_address(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.address = inp;
+            self
+        }
         /// <p>Endpoint cache time to live (TTL) value.</p>
         pub fn cache_period_in_minutes(mut self, inp: i64) -> Self {
+            self.cache_period_in_minutes = Some(inp);
+            self
+        }
+        pub fn set_cache_period_in_minutes(mut self, inp: i64) -> Self {
             self.cache_period_in_minutes = Some(inp);
             self
         }
@@ -11937,9 +13803,20 @@ pub mod failure_exception {
             self.exception_name = Some(inp.into());
             self
         }
+        pub fn set_exception_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.exception_name = inp;
+            self
+        }
         /// <p>Description of the failure.</p>
         pub fn exception_description(mut self, inp: impl Into<std::string::String>) -> Self {
             self.exception_description = Some(inp.into());
+            self
+        }
+        pub fn set_exception_description(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.exception_description = inp;
             self
         }
         /// Consumes the builder and constructs a [`FailureException`](crate::model::FailureException)
@@ -12007,9 +13884,23 @@ pub mod backup_description {
             self.backup_details = Some(inp);
             self
         }
+        pub fn set_backup_details(
+            mut self,
+            inp: std::option::Option<crate::model::BackupDetails>,
+        ) -> Self {
+            self.backup_details = inp;
+            self
+        }
         /// <p>Contains the details of the table when the backup was created. </p>
         pub fn source_table_details(mut self, inp: crate::model::SourceTableDetails) -> Self {
             self.source_table_details = Some(inp);
+            self
+        }
+        pub fn set_source_table_details(
+            mut self,
+            inp: std::option::Option<crate::model::SourceTableDetails>,
+        ) -> Self {
+            self.source_table_details = inp;
             self
         }
         /// <p>Contains the details of the features enabled on the table when the backup was created. For example, LSIs, GSIs, streams, TTL.</p>
@@ -12018,6 +13909,13 @@ pub mod backup_description {
             inp: crate::model::SourceTableFeatureDetails,
         ) -> Self {
             self.source_table_feature_details = Some(inp);
+            self
+        }
+        pub fn set_source_table_feature_details(
+            mut self,
+            inp: std::option::Option<crate::model::SourceTableFeatureDetails>,
+        ) -> Self {
+            self.source_table_feature_details = inp;
             self
         }
         /// Consumes the builder and constructs a [`BackupDescription`](crate::model::BackupDescription)
@@ -12098,27 +13996,48 @@ pub mod source_table_feature_details {
         sse_description: std::option::Option<crate::model::SSEDescription>,
     }
     impl Builder {
-        /// <p>Represents the LSI properties for the table when the backup was created. It includes the IndexName, KeySchema and Projection for the LSIs on the table at the time of backup. </p>
         pub fn local_secondary_indexes(
             mut self,
-            inp: std::vec::Vec<crate::model::LocalSecondaryIndexInfo>,
+            inp: impl Into<crate::model::LocalSecondaryIndexInfo>,
         ) -> Self {
-            self.local_secondary_indexes = Some(inp);
+            let mut v = self.local_secondary_indexes.unwrap_or_default();
+            v.push(inp.into());
+            self.local_secondary_indexes = Some(v);
             self
         }
-        /// <p>Represents the GSI properties for the table when the backup was created. It includes the
-        /// IndexName, KeySchema, Projection, and ProvisionedThroughput for the GSIs on the table at
-        /// the time of backup. </p>
+        pub fn set_local_secondary_indexes(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::LocalSecondaryIndexInfo>>,
+        ) -> Self {
+            self.local_secondary_indexes = inp;
+            self
+        }
         pub fn global_secondary_indexes(
             mut self,
-            inp: std::vec::Vec<crate::model::GlobalSecondaryIndexInfo>,
+            inp: impl Into<crate::model::GlobalSecondaryIndexInfo>,
         ) -> Self {
-            self.global_secondary_indexes = Some(inp);
+            let mut v = self.global_secondary_indexes.unwrap_or_default();
+            v.push(inp.into());
+            self.global_secondary_indexes = Some(v);
+            self
+        }
+        pub fn set_global_secondary_indexes(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::GlobalSecondaryIndexInfo>>,
+        ) -> Self {
+            self.global_secondary_indexes = inp;
             self
         }
         /// <p>Stream settings on the table when the backup was created.</p>
         pub fn stream_description(mut self, inp: crate::model::StreamSpecification) -> Self {
             self.stream_description = Some(inp);
+            self
+        }
+        pub fn set_stream_description(
+            mut self,
+            inp: std::option::Option<crate::model::StreamSpecification>,
+        ) -> Self {
+            self.stream_description = inp;
             self
         }
         /// <p>Time to Live settings on the table when the backup was created.</p>
@@ -12129,9 +14048,23 @@ pub mod source_table_feature_details {
             self.time_to_live_description = Some(inp);
             self
         }
+        pub fn set_time_to_live_description(
+            mut self,
+            inp: std::option::Option<crate::model::TimeToLiveDescription>,
+        ) -> Self {
+            self.time_to_live_description = inp;
+            self
+        }
         /// <p>The description of the server-side encryption status on the table when the backup was created.</p>
         pub fn sse_description(mut self, inp: crate::model::SSEDescription) -> Self {
             self.sse_description = Some(inp);
+            self
+        }
+        pub fn set_sse_description(
+            mut self,
+            inp: std::option::Option<crate::model::SSEDescription>,
+        ) -> Self {
+            self.sse_description = inp;
             self
         }
         /// Consumes the builder and constructs a [`SourceTableFeatureDetails`](crate::model::SourceTableFeatureDetails)
@@ -12228,27 +14161,21 @@ pub mod global_secondary_index_info {
             self.index_name = Some(inp.into());
             self
         }
-        /// <p>The complete key schema for a global secondary index, which consists of one or more pairs of attribute names and key types:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>HASH</code> - partition key</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>RANGE</code> - sort key</p>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>The partition key of an item is also known as its <i>hash attribute</i>.  The
-        /// term "hash attribute" derives from DynamoDB's usage of an internal hash function to
-        /// evenly distribute data items across partitions, based on their partition key values.</p>
-        /// <p>The sort key of an item is also known as its <i>range attribute</i>.
-        /// The term "range attribute" derives from the way DynamoDB stores items with the same
-        /// partition key physically close together, in sorted order by the sort key value.</p>
-        /// </note>
-        pub fn key_schema(mut self, inp: std::vec::Vec<crate::model::KeySchemaElement>) -> Self {
-            self.key_schema = Some(inp);
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
+        pub fn key_schema(mut self, inp: impl Into<crate::model::KeySchemaElement>) -> Self {
+            let mut v = self.key_schema.unwrap_or_default();
+            v.push(inp.into());
+            self.key_schema = Some(v);
+            self
+        }
+        pub fn set_key_schema(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::KeySchemaElement>>,
+        ) -> Self {
+            self.key_schema = inp;
             self
         }
         /// <p>Represents attributes that are copied (projected) from the table into
@@ -12259,9 +14186,23 @@ pub mod global_secondary_index_info {
             self.projection = Some(inp);
             self
         }
+        pub fn set_projection(
+            mut self,
+            inp: std::option::Option<crate::model::Projection>,
+        ) -> Self {
+            self.projection = inp;
+            self
+        }
         /// <p>Represents the provisioned throughput settings for the specified global secondary index. </p>
         pub fn provisioned_throughput(mut self, inp: crate::model::ProvisionedThroughput) -> Self {
             self.provisioned_throughput = Some(inp);
+            self
+        }
+        pub fn set_provisioned_throughput(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughput>,
+        ) -> Self {
+            self.provisioned_throughput = inp;
             self
         }
         /// Consumes the builder and constructs a [`GlobalSecondaryIndexInfo`](crate::model::GlobalSecondaryIndexInfo)
@@ -12347,32 +14288,33 @@ pub mod local_secondary_index_info {
             self.index_name = Some(inp.into());
             self
         }
-        /// <p>The complete key schema for a local secondary index, which consists of one or more pairs of attribute names and key types:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>HASH</code> - partition key</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>RANGE</code> - sort key</p>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>The partition key of an item is also known as its <i>hash attribute</i>.  The
-        /// term "hash attribute" derives from DynamoDB's usage of an internal hash function to
-        /// evenly distribute data items across partitions, based on their partition key values.</p>
-        /// <p>The sort key of an item is also known as its <i>range attribute</i>.
-        /// The term "range attribute" derives from the way DynamoDB stores items with the same
-        /// partition key physically close together, in sorted order by the sort key value.</p>
-        /// </note>
-        pub fn key_schema(mut self, inp: std::vec::Vec<crate::model::KeySchemaElement>) -> Self {
-            self.key_schema = Some(inp);
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
+        pub fn key_schema(mut self, inp: impl Into<crate::model::KeySchemaElement>) -> Self {
+            let mut v = self.key_schema.unwrap_or_default();
+            v.push(inp.into());
+            self.key_schema = Some(v);
+            self
+        }
+        pub fn set_key_schema(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::KeySchemaElement>>,
+        ) -> Self {
+            self.key_schema = inp;
             self
         }
         /// <p>Represents attributes that are copied (projected) from the table into the global secondary index. These are in addition to the primary key attributes and index key attributes, which are automatically projected. </p>
         pub fn projection(mut self, inp: crate::model::Projection) -> Self {
             self.projection = Some(inp);
+            self
+        }
+        pub fn set_projection(
+            mut self,
+            inp: std::option::Option<crate::model::Projection>,
+        ) -> Self {
+            self.projection = inp;
             self
         }
         /// Consumes the builder and constructs a [`LocalSecondaryIndexInfo`](crate::model::LocalSecondaryIndexInfo)
@@ -12495,9 +14437,17 @@ pub mod source_table_details {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>Unique identifier for the table for which the backup was created. </p>
         pub fn table_id(mut self, inp: impl Into<std::string::String>) -> Self {
             self.table_id = Some(inp.into());
+            self
+        }
+        pub fn set_table_id(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_id = inp;
             self
         }
         /// <p>ARN of the table for which backup was created. </p>
@@ -12505,14 +14455,30 @@ pub mod source_table_details {
             self.table_arn = Some(inp.into());
             self
         }
+        pub fn set_table_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_arn = inp;
+            self
+        }
         /// <p>Size of the table in bytes. Note that this is an approximate value.</p>
         pub fn table_size_bytes(mut self, inp: i64) -> Self {
             self.table_size_bytes = Some(inp);
             self
         }
-        /// <p>Schema of the table. </p>
-        pub fn key_schema(mut self, inp: std::vec::Vec<crate::model::KeySchemaElement>) -> Self {
-            self.key_schema = Some(inp);
+        pub fn set_table_size_bytes(mut self, inp: i64) -> Self {
+            self.table_size_bytes = Some(inp);
+            self
+        }
+        pub fn key_schema(mut self, inp: impl Into<crate::model::KeySchemaElement>) -> Self {
+            let mut v = self.key_schema.unwrap_or_default();
+            v.push(inp.into());
+            self.key_schema = Some(v);
+            self
+        }
+        pub fn set_key_schema(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::KeySchemaElement>>,
+        ) -> Self {
+            self.key_schema = inp;
             self
         }
         /// <p>Time when the source table was created. </p>
@@ -12520,14 +14486,32 @@ pub mod source_table_details {
             self.table_creation_date_time = Some(inp);
             self
         }
+        pub fn set_table_creation_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.table_creation_date_time = inp;
+            self
+        }
         /// <p>Read IOPs and Write IOPS on the table when the backup was created.</p>
         pub fn provisioned_throughput(mut self, inp: crate::model::ProvisionedThroughput) -> Self {
             self.provisioned_throughput = Some(inp);
             self
         }
+        pub fn set_provisioned_throughput(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughput>,
+        ) -> Self {
+            self.provisioned_throughput = inp;
+            self
+        }
         /// <p>Number of items in the table. Note that this is an approximate value. </p>
         pub fn item_count(mut self, inp: i64) -> Self {
             self.item_count = Some(inp);
+            self
+        }
+        pub fn set_item_count(mut self, inp: std::option::Option<i64>) -> Self {
+            self.item_count = inp;
             self
         }
         /// <p>Controls how you are charged for read and write throughput and how you manage capacity. This setting can be changed later.</p>
@@ -12544,6 +14528,13 @@ pub mod source_table_details {
         /// </ul>
         pub fn billing_mode(mut self, inp: crate::model::BillingMode) -> Self {
             self.billing_mode = Some(inp);
+            self
+        }
+        pub fn set_billing_mode(
+            mut self,
+            inp: std::option::Option<crate::model::BillingMode>,
+        ) -> Self {
+            self.billing_mode = inp;
             self
         }
         /// Consumes the builder and constructs a [`SourceTableDetails`](crate::model::SourceTableDetails)
@@ -12673,9 +14664,17 @@ pub mod backup_details {
             self.backup_arn = Some(inp.into());
             self
         }
+        pub fn set_backup_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.backup_arn = inp;
+            self
+        }
         /// <p>Name of the requested backup.</p>
         pub fn backup_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.backup_name = Some(inp.into());
+            self
+        }
+        pub fn set_backup_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.backup_name = inp;
             self
         }
         /// <p>Size of the backup in bytes.</p>
@@ -12683,9 +14682,20 @@ pub mod backup_details {
             self.backup_size_bytes = Some(inp);
             self
         }
+        pub fn set_backup_size_bytes(mut self, inp: std::option::Option<i64>) -> Self {
+            self.backup_size_bytes = inp;
+            self
+        }
         /// <p>Backup can be in one of the following states: CREATING, ACTIVE, DELETED. </p>
         pub fn backup_status(mut self, inp: crate::model::BackupStatus) -> Self {
             self.backup_status = Some(inp);
+            self
+        }
+        pub fn set_backup_status(
+            mut self,
+            inp: std::option::Option<crate::model::BackupStatus>,
+        ) -> Self {
+            self.backup_status = inp;
             self
         }
         /// <p>BackupType:</p>
@@ -12710,15 +14720,36 @@ pub mod backup_details {
             self.backup_type = Some(inp);
             self
         }
+        pub fn set_backup_type(
+            mut self,
+            inp: std::option::Option<crate::model::BackupType>,
+        ) -> Self {
+            self.backup_type = inp;
+            self
+        }
         /// <p>Time at which the backup was created. This is the request time of the backup. </p>
         pub fn backup_creation_date_time(mut self, inp: smithy_types::Instant) -> Self {
             self.backup_creation_date_time = Some(inp);
+            self
+        }
+        pub fn set_backup_creation_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.backup_creation_date_time = inp;
             self
         }
         /// <p>Time at which the automatic on-demand backup created by DynamoDB will expire. This <code>SYSTEM</code>
         /// on-demand backup expires automatically 35 days after its creation.</p>
         pub fn backup_expiry_date_time(mut self, inp: smithy_types::Instant) -> Self {
             self.backup_expiry_date_time = Some(inp);
+            self
+        }
+        pub fn set_backup_expiry_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.backup_expiry_date_time = inp;
             self
         }
         /// Consumes the builder and constructs a [`BackupDetails`](crate::model::BackupDetails)
@@ -12784,9 +14815,23 @@ pub mod write_request {
             self.put_request = Some(inp);
             self
         }
+        pub fn set_put_request(
+            mut self,
+            inp: std::option::Option<crate::model::PutRequest>,
+        ) -> Self {
+            self.put_request = inp;
+            self
+        }
         /// <p>A request to perform a <code>DeleteItem</code> operation.</p>
         pub fn delete_request(mut self, inp: crate::model::DeleteRequest) -> Self {
             self.delete_request = Some(inp);
+            self
+        }
+        pub fn set_delete_request(
+            mut self,
+            inp: std::option::Option<crate::model::DeleteRequest>,
+        ) -> Self {
+            self.delete_request = inp;
             self
         }
         /// Consumes the builder and constructs a [`WriteRequest`](crate::model::WriteRequest)
@@ -12836,12 +14881,23 @@ pub mod delete_request {
         >,
     }
     impl Builder {
-        /// <p>A map of attribute name to attribute values, representing the primary key of the item to delete. All of the table's primary key attributes must be specified, and their data types must match those of the table's key schema.</p>
         pub fn key(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.key = Some(inp);
+            let mut hash_map = self.key.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.key = Some(hash_map);
+            self
+        }
+        pub fn set_key(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.key = inp;
             self
         }
         /// Consumes the builder and constructs a [`DeleteRequest`](crate::model::DeleteRequest)
@@ -12892,16 +14948,23 @@ pub mod put_request {
         >,
     }
     impl Builder {
-        /// <p>A map of attribute name to attribute values, representing the primary key of an item to
-        /// be processed by <code>PutItem</code>. All of the table's primary key attributes must be
-        /// specified, and their data types must match those of the table's key schema. If any
-        /// attributes are present in the item that are part of an index key schema for the table,
-        /// their types must match the index key schema.</p>
         pub fn item(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.item = Some(inp);
+            let mut hash_map = self.item.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.item = Some(hash_map);
+            self
+        }
+        pub fn set_item(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.item = inp;
             self
         }
         /// Consumes the builder and constructs a [`PutRequest`](crate::model::PutRequest)
@@ -13032,26 +15095,47 @@ pub mod keys_and_attributes {
         >,
     }
     impl Builder {
-        /// <p>The primary key attribute values that define the items and the attributes associated with the items.</p>
         pub fn keys(
             mut self,
-            inp: std::vec::Vec<
-                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
-            >,
+            inp: impl Into<std::collections::HashMap<std::string::String, crate::model::AttributeValue>>,
         ) -> Self {
-            self.keys = Some(inp);
+            let mut v = self.keys.unwrap_or_default();
+            v.push(inp.into());
+            self.keys = Some(v);
             self
         }
-        /// <p>This is a legacy parameter.  Use <code>ProjectionExpression</code> instead.  For more information, see
-        /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.html">Legacy Conditional Parameters</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
-        pub fn attributes_to_get(mut self, inp: std::vec::Vec<std::string::String>) -> Self {
-            self.attributes_to_get = Some(inp);
+        pub fn set_keys(
+            mut self,
+            inp: std::option::Option<
+                std::vec::Vec<
+                    std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+                >,
+            >,
+        ) -> Self {
+            self.keys = inp;
+            self
+        }
+        pub fn attributes_to_get(mut self, inp: impl Into<std::string::String>) -> Self {
+            let mut v = self.attributes_to_get.unwrap_or_default();
+            v.push(inp.into());
+            self.attributes_to_get = Some(v);
+            self
+        }
+        pub fn set_attributes_to_get(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<std::string::String>>,
+        ) -> Self {
+            self.attributes_to_get = inp;
             self
         }
         /// <p>The consistency of a read operation. If set to <code>true</code>, then a strongly consistent
         /// read is used; otherwise, an eventually consistent read is used.</p>
         pub fn consistent_read(mut self, inp: bool) -> Self {
             self.consistent_read = Some(inp);
+            self
+        }
+        pub fn set_consistent_read(mut self, inp: std::option::Option<bool>) -> Self {
+            self.consistent_read = inp;
             self
         }
         /// <p>A string that identifies one or more attributes to retrieve from the table. These attributes can include scalars,
@@ -13063,51 +15147,30 @@ pub mod keys_and_attributes {
             self.projection_expression = Some(inp.into());
             self
         }
-        /// <p>One or more substitution tokens for attribute names in an expression. The following are some use cases for using <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>To access an attribute whose name conflicts with a DynamoDB reserved word.</p>
-        /// </li>
-        /// <li>
-        /// <p>To create a placeholder for repeating occurrences of an attribute name in an expression.</p>
-        /// </li>
-        /// <li>
-        /// <p>To prevent special characters in an attribute name from being misinterpreted in an expression.</p>
-        /// </li>
-        /// </ul>
-        /// <p>Use the <b>#</b> character in an expression to dereference an attribute name. For example, consider the following attribute name:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>Percentile</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>The name of this attribute conflicts with a reserved word, so it cannot be used directly in an expression. (For the complete list of reserved words, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ReservedWords.html">Reserved Words</a> in the <i>Amazon DynamoDB Developer Guide</i>). To work around this, you could specify the following for <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>{"#P":"Percentile"}</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>You could then use this substitution in an expression, as in this example:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>#P = :val</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>Tokens that begin with the <b>:</b> character are <i>expression attribute values</i>, which are placeholders for the actual value at runtime.</p>
-        /// </note>
-        /// <p>For more information on expression attribute names, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.AccessingItemAttributes.html">Accessing Item Attributes</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
+        pub fn set_projection_expression(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.projection_expression = inp;
+            self
+        }
         pub fn expression_attribute_names(
             mut self,
-            inp: std::collections::HashMap<std::string::String, std::string::String>,
+            k: impl Into<std::string::String>,
+            v: impl Into<std::string::String>,
         ) -> Self {
-            self.expression_attribute_names = Some(inp);
+            let mut hash_map = self.expression_attribute_names.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_names = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_names(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, std::string::String>,
+            >,
+        ) -> Self {
+            self.expression_attribute_names = inp;
             self
         }
         /// Consumes the builder and constructs a [`KeysAndAttributes`](crate::model::KeysAndAttributes)
@@ -13189,6 +15252,13 @@ pub mod batch_statement_response {
             self.error = Some(inp);
             self
         }
+        pub fn set_error(
+            mut self,
+            inp: std::option::Option<crate::model::BatchStatementError>,
+        ) -> Self {
+            self.error = inp;
+            self
+        }
         /// <p>
         /// The table name associated with a failed PartiQL batch statement.
         /// </p>
@@ -13196,14 +15266,27 @@ pub mod batch_statement_response {
             self.table_name = Some(inp.into());
             self
         }
-        /// <p>
-        /// A DynamoDB item associated with a BatchStatementResponse
-        /// </p>
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         pub fn item(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.item = Some(inp);
+            let mut hash_map = self.item.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.item = Some(hash_map);
+            self
+        }
+        pub fn set_item(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.item = inp;
             self
         }
         /// Consumes the builder and constructs a [`BatchStatementResponse`](crate::model::BatchStatementResponse)
@@ -13270,11 +15353,22 @@ pub mod batch_statement_error {
             self.code = Some(inp);
             self
         }
+        pub fn set_code(
+            mut self,
+            inp: std::option::Option<crate::model::BatchStatementErrorCodeEnum>,
+        ) -> Self {
+            self.code = inp;
+            self
+        }
         /// <p>
         /// The error message associated with the PartiQL batch resposne.
         /// </p>
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`BatchStatementError`](crate::model::BatchStatementError)
@@ -13317,12 +15411,9 @@ pub enum BatchStatementErrorCodeEnum {
     ValidationError,
     Unknown(String),
 }
-impl<T> std::convert::From<T> for BatchStatementErrorCodeEnum
-where
-    T: std::convert::AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        match s.as_ref() {
+impl std::convert::From<&str> for BatchStatementErrorCodeEnum {
+    fn from(s: &str) -> Self {
+        match s {
             "AccessDenied" => BatchStatementErrorCodeEnum::AccessDenied,
             "ConditionalCheckFailed" => BatchStatementErrorCodeEnum::ConditionalCheckFailed,
             "DuplicateItem" => BatchStatementErrorCodeEnum::DuplicateItem,
@@ -13342,6 +15433,15 @@ where
         }
     }
 }
+
+impl std::str::FromStr for BatchStatementErrorCodeEnum {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(BatchStatementErrorCodeEnum::from(s))
+    }
+}
+
 impl BatchStatementErrorCodeEnum {
     pub fn as_str(&self) -> &str {
         match self {
@@ -13362,6 +15462,11 @@ impl BatchStatementErrorCodeEnum {
             BatchStatementErrorCodeEnum::ValidationError => "ValidationError",
             BatchStatementErrorCodeEnum::Unknown(s) => s.as_ref(),
         }
+    }
+}
+impl AsRef<str> for BatchStatementErrorCodeEnum {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -13443,11 +15548,21 @@ pub mod batch_statement_request {
             self.statement = Some(inp.into());
             self
         }
-        /// <p>
-        /// The parameters associated with a PartiQL statement in the batch request.
-        /// </p>
-        pub fn parameters(mut self, inp: std::vec::Vec<crate::model::AttributeValue>) -> Self {
-            self.parameters = Some(inp);
+        pub fn set_statement(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.statement = inp;
+            self
+        }
+        pub fn parameters(mut self, inp: impl Into<crate::model::AttributeValue>) -> Self {
+            let mut v = self.parameters.unwrap_or_default();
+            v.push(inp.into());
+            self.parameters = Some(v);
+            self
+        }
+        pub fn set_parameters(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::AttributeValue>>,
+        ) -> Self {
+            self.parameters = inp;
             self
         }
         /// <p>
@@ -13455,6 +15570,10 @@ pub mod batch_statement_request {
         /// </p>
         pub fn consistent_read(mut self, inp: bool) -> Self {
             self.consistent_read = Some(inp);
+            self
+        }
+        pub fn set_consistent_read(mut self, inp: std::option::Option<bool>) -> Self {
+            self.consistent_read = inp;
             self
         }
         /// Consumes the builder and constructs a [`BatchStatementRequest`](crate::model::BatchStatementRequest)

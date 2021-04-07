@@ -36,14 +36,26 @@ pub mod update_shard_count_output {
             self.stream_name = Some(inp.into());
             self
         }
+        pub fn set_stream_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.stream_name = inp;
+            self
+        }
         /// <p>The updated number of shards.</p>
         pub fn target_shard_count(mut self, inp: i32) -> Self {
             self.target_shard_count = Some(inp);
             self
         }
+        pub fn set_target_shard_count(mut self, inp: std::option::Option<i32>) -> Self {
+            self.target_shard_count = inp;
+            self
+        }
         /// <p>The current number of shards.</p>
         pub fn current_shard_count(mut self, inp: i32) -> Self {
             self.current_shard_count = Some(inp);
+            self
+        }
+        pub fn set_current_shard_count(mut self, inp: std::option::Option<i32>) -> Self {
+            self.current_shard_count = inp;
             self
         }
         /// Consumes the builder and constructs a [`UpdateShardCountOutput`](crate::output::UpdateShardCountOutput)
@@ -89,6 +101,13 @@ pub mod subscribe_to_shard_output {
         /// <p>The event stream that your consumer can use to read records from the shard.</p>
         pub fn event_stream(mut self, inp: crate::model::SubscribeToShardEventStream) -> Self {
             self.event_stream = Some(inp);
+            self
+        }
+        pub fn set_event_stream(
+            mut self,
+            inp: std::option::Option<crate::model::SubscribeToShardEventStream>,
+        ) -> Self {
+            self.event_stream = inp;
             self
         }
         /// Consumes the builder and constructs a [`SubscribeToShardOutput`](crate::output::SubscribeToShardOutput)
@@ -256,6 +275,10 @@ pub mod register_stream_consumer_output {
             self.consumer = Some(inp);
             self
         }
+        pub fn set_consumer(mut self, inp: std::option::Option<crate::model::Consumer>) -> Self {
+            self.consumer = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`RegisterStreamConsumerOutput`](crate::output::RegisterStreamConsumerOutput)
         pub fn build(self) -> crate::output::RegisterStreamConsumerOutput {
             crate::output::RegisterStreamConsumerOutput {
@@ -321,13 +344,17 @@ pub mod put_records_output {
         failed_record_count: std::option::Option<i32>,
     }
     impl Builder {
-        /// <p>An array of successfully and unsuccessfully processed record results, correlated
-        /// with the request by natural ordering. A record that is successfully added to a stream
-        /// includes <code>SequenceNumber</code> and <code>ShardId</code> in the result. A record
-        /// that fails to be added to a stream includes <code>ErrorCode</code> and
-        /// <code>ErrorMessage</code> in the result.</p>
-        pub fn records(mut self, inp: std::vec::Vec<crate::model::PutRecordsResultEntry>) -> Self {
-            self.records = Some(inp);
+        pub fn records(mut self, inp: impl Into<crate::model::PutRecordsResultEntry>) -> Self {
+            let mut v = self.records.unwrap_or_default();
+            v.push(inp.into());
+            self.records = Some(v);
+            self
+        }
+        pub fn set_records(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::PutRecordsResultEntry>>,
+        ) -> Self {
+            self.records = inp;
             self
         }
         /// <p>The encryption type used on the records. This parameter can be one of the following
@@ -347,10 +374,21 @@ pub mod put_records_output {
             self.encryption_type = Some(inp);
             self
         }
+        pub fn set_encryption_type(
+            mut self,
+            inp: std::option::Option<crate::model::EncryptionType>,
+        ) -> Self {
+            self.encryption_type = inp;
+            self
+        }
         /// <p>The number of unsuccessfully processed records in a <code>PutRecords</code>
         /// request.</p>
         pub fn failed_record_count(mut self, inp: i32) -> Self {
             self.failed_record_count = Some(inp);
+            self
+        }
+        pub fn set_failed_record_count(mut self, inp: std::option::Option<i32>) -> Self {
+            self.failed_record_count = inp;
             self
         }
         /// Consumes the builder and constructs a [`PutRecordsOutput`](crate::output::PutRecordsOutput)
@@ -421,11 +459,22 @@ pub mod put_record_output {
             self.shard_id = Some(inp.into());
             self
         }
+        pub fn set_shard_id(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.shard_id = inp;
+            self
+        }
         /// <p>The sequence number identifier that was assigned to the put data record. The
         /// sequence number for the record is unique across all records in the stream. A sequence
         /// number is the identifier associated with every record put into the stream.</p>
         pub fn sequence_number(mut self, inp: impl Into<std::string::String>) -> Self {
             self.sequence_number = Some(inp.into());
+            self
+        }
+        pub fn set_sequence_number(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.sequence_number = inp;
             self
         }
         /// <p>The encryption type to use on the record. This parameter can be one of the
@@ -443,6 +492,13 @@ pub mod put_record_output {
         /// </ul>
         pub fn encryption_type(mut self, inp: crate::model::EncryptionType) -> Self {
             self.encryption_type = Some(inp);
+            self
+        }
+        pub fn set_encryption_type(
+            mut self,
+            inp: std::option::Option<crate::model::EncryptionType>,
+        ) -> Self {
+            self.encryption_type = inp;
             self
         }
         /// Consumes the builder and constructs a [`PutRecordOutput`](crate::output::PutRecordOutput)
@@ -523,17 +579,27 @@ pub mod list_tags_for_stream_output {
         has_more_tags: std::option::Option<bool>,
     }
     impl Builder {
-        /// <p>A list of tags associated with <code>StreamName</code>, starting with the first tag
-        /// after <code>ExclusiveStartTagKey</code> and up to the specified <code>Limit</code>.
-        /// </p>
-        pub fn tags(mut self, inp: std::vec::Vec<crate::model::Tag>) -> Self {
-            self.tags = Some(inp);
+        pub fn tags(mut self, inp: impl Into<crate::model::Tag>) -> Self {
+            let mut v = self.tags.unwrap_or_default();
+            v.push(inp.into());
+            self.tags = Some(v);
+            self
+        }
+        pub fn set_tags(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::Tag>>,
+        ) -> Self {
+            self.tags = inp;
             self
         }
         /// <p>If set to <code>true</code>, more tags are available. To request additional tags,
         /// set <code>ExclusiveStartTagKey</code> to the key of the last tag returned.</p>
         pub fn has_more_tags(mut self, inp: bool) -> Self {
             self.has_more_tags = Some(inp);
+            self
+        }
+        pub fn set_has_more_tags(mut self, inp: std::option::Option<bool>) -> Self {
+            self.has_more_tags = inp;
             self
         }
         /// Consumes the builder and constructs a [`ListTagsForStreamOutput`](crate::output::ListTagsForStreamOutput)
@@ -581,15 +647,26 @@ pub mod list_streams_output {
         has_more_streams: std::option::Option<bool>,
     }
     impl Builder {
-        /// <p>The names of the streams that are associated with the AWS account making the
-        /// <code>ListStreams</code> request.</p>
-        pub fn stream_names(mut self, inp: std::vec::Vec<std::string::String>) -> Self {
-            self.stream_names = Some(inp);
+        pub fn stream_names(mut self, inp: impl Into<std::string::String>) -> Self {
+            let mut v = self.stream_names.unwrap_or_default();
+            v.push(inp.into());
+            self.stream_names = Some(v);
+            self
+        }
+        pub fn set_stream_names(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<std::string::String>>,
+        ) -> Self {
+            self.stream_names = inp;
             self
         }
         /// <p>If set to <code>true</code>, there are more streams available to list.</p>
         pub fn has_more_streams(mut self, inp: bool) -> Self {
             self.has_more_streams = Some(inp);
+            self
+        }
+        pub fn set_has_more_streams(mut self, inp: std::option::Option<bool>) -> Self {
+            self.has_more_streams = inp;
             self
         }
         /// Consumes the builder and constructs a [`ListStreamsOutput`](crate::output::ListStreamsOutput)
@@ -649,9 +726,17 @@ pub mod list_stream_consumers_output {
         next_token: std::option::Option<std::string::String>,
     }
     impl Builder {
-        /// <p>An array of JSON objects. Each object represents one registered consumer.</p>
-        pub fn consumers(mut self, inp: std::vec::Vec<crate::model::Consumer>) -> Self {
-            self.consumers = Some(inp);
+        pub fn consumers(mut self, inp: impl Into<crate::model::Consumer>) -> Self {
+            let mut v = self.consumers.unwrap_or_default();
+            v.push(inp.into());
+            self.consumers = Some(v);
+            self
+        }
+        pub fn set_consumers(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::Consumer>>,
+        ) -> Self {
+            self.consumers = inp;
             self
         }
         /// <p>When the number of consumers that are registered with the data stream is greater than
@@ -671,6 +756,10 @@ pub mod list_stream_consumers_output {
         /// </important>
         pub fn next_token(mut self, inp: impl Into<std::string::String>) -> Self {
             self.next_token = Some(inp.into());
+            self
+        }
+        pub fn set_next_token(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.next_token = inp;
             self
         }
         /// Consumes the builder and constructs a [`ListStreamConsumersOutput`](crate::output::ListStreamConsumersOutput)
@@ -750,12 +839,21 @@ pub mod list_shards_output {
             self.next_token = Some(inp.into());
             self
         }
-        /// <p>An array of JSON objects. Each object represents one shard and specifies the IDs of
-        /// the shard, the shard's parent, and the shard that's adjacent to the shard's parent. Each
-        /// object also contains the starting and ending hash keys and the starting and ending
-        /// sequence numbers for the shard.</p>
-        pub fn shards(mut self, inp: std::vec::Vec<crate::model::Shard>) -> Self {
-            self.shards = Some(inp);
+        pub fn set_next_token(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.next_token = inp;
+            self
+        }
+        pub fn shards(mut self, inp: impl Into<crate::model::Shard>) -> Self {
+            let mut v = self.shards.unwrap_or_default();
+            v.push(inp.into());
+            self.shards = Some(v);
+            self
+        }
+        pub fn set_shards(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::Shard>>,
+        ) -> Self {
+            self.shards = inp;
             self
         }
         /// Consumes the builder and constructs a [`ListShardsOutput`](crate::output::ListShardsOutput)
@@ -837,6 +935,10 @@ pub mod get_shard_iterator_output {
             self.shard_iterator = Some(inp.into());
             self
         }
+        pub fn set_shard_iterator(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.shard_iterator = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`GetShardIteratorOutput`](crate::output::GetShardIteratorOutput)
         pub fn build(self) -> crate::output::GetShardIteratorOutput {
             crate::output::GetShardIteratorOutput {
@@ -899,9 +1001,24 @@ pub mod get_records_output {
             self.next_shard_iterator = Some(inp.into());
             self
         }
-        /// <p>The data records retrieved from the shard.</p>
-        pub fn records(mut self, inp: std::vec::Vec<crate::model::Record>) -> Self {
-            self.records = Some(inp);
+        pub fn set_next_shard_iterator(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.next_shard_iterator = inp;
+            self
+        }
+        pub fn records(mut self, inp: impl Into<crate::model::Record>) -> Self {
+            let mut v = self.records.unwrap_or_default();
+            v.push(inp.into());
+            self.records = Some(v);
+            self
+        }
+        pub fn set_records(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::Record>>,
+        ) -> Self {
+            self.records = inp;
             self
         }
         /// <p>The number of milliseconds the <a>GetRecords</a> response is from the
@@ -912,8 +1029,21 @@ pub mod get_records_output {
             self.millis_behind_latest = Some(inp);
             self
         }
-        pub fn child_shards(mut self, inp: std::vec::Vec<crate::model::ChildShard>) -> Self {
-            self.child_shards = Some(inp);
+        pub fn set_millis_behind_latest(mut self, inp: std::option::Option<i64>) -> Self {
+            self.millis_behind_latest = inp;
+            self
+        }
+        pub fn child_shards(mut self, inp: impl Into<crate::model::ChildShard>) -> Self {
+            let mut v = self.child_shards.unwrap_or_default();
+            v.push(inp.into());
+            self.child_shards = Some(v);
+            self
+        }
+        pub fn set_child_shards(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::ChildShard>>,
+        ) -> Self {
+            self.child_shards = inp;
             self
         }
         /// Consumes the builder and constructs a [`GetRecordsOutput`](crate::output::GetRecordsOutput)
@@ -974,13 +1104,20 @@ pub mod enable_enhanced_monitoring_output {
         current_shard_level_metrics: std::option::Option<std::vec::Vec<crate::model::MetricsName>>,
     }
     impl Builder {
-        /// <p>Represents the list of all the metrics that would be in the enhanced state after
-        /// the operation.</p>
         pub fn desired_shard_level_metrics(
             mut self,
-            inp: std::vec::Vec<crate::model::MetricsName>,
+            inp: impl Into<crate::model::MetricsName>,
         ) -> Self {
-            self.desired_shard_level_metrics = Some(inp);
+            let mut v = self.desired_shard_level_metrics.unwrap_or_default();
+            v.push(inp.into());
+            self.desired_shard_level_metrics = Some(v);
+            self
+        }
+        pub fn set_desired_shard_level_metrics(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::MetricsName>>,
+        ) -> Self {
+            self.desired_shard_level_metrics = inp;
             self
         }
         /// <p>The name of the Kinesis data stream.</p>
@@ -988,13 +1125,24 @@ pub mod enable_enhanced_monitoring_output {
             self.stream_name = Some(inp.into());
             self
         }
-        /// <p>Represents the current state of the metrics that are in the enhanced state before
-        /// the operation.</p>
+        pub fn set_stream_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.stream_name = inp;
+            self
+        }
         pub fn current_shard_level_metrics(
             mut self,
-            inp: std::vec::Vec<crate::model::MetricsName>,
+            inp: impl Into<crate::model::MetricsName>,
         ) -> Self {
-            self.current_shard_level_metrics = Some(inp);
+            let mut v = self.current_shard_level_metrics.unwrap_or_default();
+            v.push(inp.into());
+            self.current_shard_level_metrics = Some(v);
+            self
+        }
+        pub fn set_current_shard_level_metrics(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::MetricsName>>,
+        ) -> Self {
+            self.current_shard_level_metrics = inp;
             self
         }
         /// Consumes the builder and constructs a [`EnableEnhancedMonitoringOutput`](crate::output::EnableEnhancedMonitoringOutput)
@@ -1054,13 +1202,20 @@ pub mod disable_enhanced_monitoring_output {
         current_shard_level_metrics: std::option::Option<std::vec::Vec<crate::model::MetricsName>>,
     }
     impl Builder {
-        /// <p>Represents the list of all the metrics that would be in the enhanced state after
-        /// the operation.</p>
         pub fn desired_shard_level_metrics(
             mut self,
-            inp: std::vec::Vec<crate::model::MetricsName>,
+            inp: impl Into<crate::model::MetricsName>,
         ) -> Self {
-            self.desired_shard_level_metrics = Some(inp);
+            let mut v = self.desired_shard_level_metrics.unwrap_or_default();
+            v.push(inp.into());
+            self.desired_shard_level_metrics = Some(v);
+            self
+        }
+        pub fn set_desired_shard_level_metrics(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::MetricsName>>,
+        ) -> Self {
+            self.desired_shard_level_metrics = inp;
             self
         }
         /// <p>The name of the Kinesis data stream.</p>
@@ -1068,13 +1223,24 @@ pub mod disable_enhanced_monitoring_output {
             self.stream_name = Some(inp.into());
             self
         }
-        /// <p>Represents the current state of the metrics that are in the enhanced state before
-        /// the operation.</p>
+        pub fn set_stream_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.stream_name = inp;
+            self
+        }
         pub fn current_shard_level_metrics(
             mut self,
-            inp: std::vec::Vec<crate::model::MetricsName>,
+            inp: impl Into<crate::model::MetricsName>,
         ) -> Self {
-            self.current_shard_level_metrics = Some(inp);
+            let mut v = self.current_shard_level_metrics.unwrap_or_default();
+            v.push(inp.into());
+            self.current_shard_level_metrics = Some(v);
+            self
+        }
+        pub fn set_current_shard_level_metrics(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::MetricsName>>,
+        ) -> Self {
+            self.current_shard_level_metrics = inp;
             self
         }
         /// Consumes the builder and constructs a [`DisableEnhancedMonitoringOutput`](crate::output::DisableEnhancedMonitoringOutput)
@@ -1130,6 +1296,13 @@ pub mod describe_stream_summary_output {
             self.stream_description_summary = Some(inp);
             self
         }
+        pub fn set_stream_description_summary(
+            mut self,
+            inp: std::option::Option<crate::model::StreamDescriptionSummary>,
+        ) -> Self {
+            self.stream_description_summary = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`DescribeStreamSummaryOutput`](crate::output::DescribeStreamSummaryOutput)
         pub fn build(self) -> crate::output::DescribeStreamSummaryOutput {
             crate::output::DescribeStreamSummaryOutput {
@@ -1171,6 +1344,13 @@ pub mod describe_stream_consumer_output {
         /// <p>An object that represents the details of the consumer.</p>
         pub fn consumer_description(mut self, inp: crate::model::ConsumerDescription) -> Self {
             self.consumer_description = Some(inp);
+            self
+        }
+        pub fn set_consumer_description(
+            mut self,
+            inp: std::option::Option<crate::model::ConsumerDescription>,
+        ) -> Self {
+            self.consumer_description = inp;
             self
         }
         /// Consumes the builder and constructs a [`DescribeStreamConsumerOutput`](crate::output::DescribeStreamConsumerOutput)
@@ -1221,6 +1401,13 @@ pub mod describe_stream_output {
             self.stream_description = Some(inp);
             self
         }
+        pub fn set_stream_description(
+            mut self,
+            inp: std::option::Option<crate::model::StreamDescription>,
+        ) -> Self {
+            self.stream_description = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`DescribeStreamOutput`](crate::output::DescribeStreamOutput)
         pub fn build(self) -> crate::output::DescribeStreamOutput {
             crate::output::DescribeStreamOutput {
@@ -1268,9 +1455,17 @@ pub mod describe_limits_output {
             self.open_shard_count = Some(inp);
             self
         }
+        pub fn set_open_shard_count(mut self, inp: std::option::Option<i32>) -> Self {
+            self.open_shard_count = inp;
+            self
+        }
         /// <p>The maximum number of shards.</p>
         pub fn shard_limit(mut self, inp: i32) -> Self {
             self.shard_limit = Some(inp);
+            self
+        }
+        pub fn set_shard_limit(mut self, inp: std::option::Option<i32>) -> Self {
+            self.shard_limit = inp;
             self
         }
         /// Consumes the builder and constructs a [`DescribeLimitsOutput`](crate::output::DescribeLimitsOutput)

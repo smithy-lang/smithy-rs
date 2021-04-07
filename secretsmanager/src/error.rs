@@ -15,7 +15,7 @@ pub enum CancelRotateSecretErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for CancelRotateSecretError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -42,7 +42,7 @@ impl CancelRotateSecretError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: CancelRotateSecretErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -103,7 +103,7 @@ pub enum CreateSecretErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for CreateSecretError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -135,7 +135,7 @@ impl CreateSecretError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: CreateSecretErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -195,7 +195,7 @@ pub enum DeleteResourcePolicyErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DeleteResourcePolicyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -221,7 +221,7 @@ impl DeleteResourcePolicyError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DeleteResourcePolicyErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -276,7 +276,7 @@ pub enum DeleteSecretErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DeleteSecretError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -303,7 +303,7 @@ impl DeleteSecretError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DeleteSecretErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -357,7 +357,7 @@ pub enum DescribeSecretErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DescribeSecretError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -382,7 +382,7 @@ impl DescribeSecretError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DescribeSecretErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -435,7 +435,7 @@ pub enum GetRandomPasswordErrorKind {
     InvalidRequestError(crate::error::InvalidRequestError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for GetRandomPasswordError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -461,7 +461,7 @@ impl GetRandomPasswordError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: GetRandomPasswordErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -515,7 +515,7 @@ pub enum GetResourcePolicyErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for GetResourcePolicyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -541,7 +541,7 @@ impl GetResourcePolicyError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: GetResourcePolicyErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -597,7 +597,7 @@ pub enum GetSecretValueErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for GetSecretValueError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -625,7 +625,7 @@ impl GetSecretValueError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: GetSecretValueErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -681,7 +681,7 @@ pub enum ListSecretsErrorKind {
     InvalidParameterError(crate::error::InvalidParameterError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ListSecretsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -707,7 +707,7 @@ impl ListSecretsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ListSecretsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -761,7 +761,7 @@ pub enum ListSecretVersionIdsErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ListSecretVersionIdsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -787,7 +787,7 @@ impl ListSecretVersionIdsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ListSecretVersionIdsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -844,7 +844,7 @@ pub enum PutResourcePolicyErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for PutResourcePolicyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -873,7 +873,7 @@ impl PutResourcePolicyError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: PutResourcePolicyErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -934,7 +934,7 @@ pub enum PutSecretValueErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for PutSecretValueError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -964,7 +964,7 @@ impl PutSecretValueError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: PutSecretValueErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1023,7 +1023,7 @@ pub enum RestoreSecretErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for RestoreSecretError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1050,7 +1050,7 @@ impl RestoreSecretError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: RestoreSecretErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1106,7 +1106,7 @@ pub enum RotateSecretErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for RotateSecretError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1133,7 +1133,7 @@ impl RotateSecretError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: RotateSecretErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1189,7 +1189,7 @@ pub enum TagResourceErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for TagResourceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1216,7 +1216,7 @@ impl TagResourceError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: TagResourceErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1272,7 +1272,7 @@ pub enum UntagResourceErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UntagResourceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1299,7 +1299,7 @@ impl UntagResourceError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UntagResourceErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1360,7 +1360,7 @@ pub enum UpdateSecretErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UpdateSecretError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1392,7 +1392,7 @@ impl UpdateSecretError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UpdateSecretErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1454,7 +1454,7 @@ pub enum UpdateSecretVersionStageErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UpdateSecretVersionStageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1482,7 +1482,7 @@ impl UpdateSecretVersionStageError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UpdateSecretVersionStageErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1540,7 +1540,7 @@ pub enum ValidateResourcePolicyErrorKind {
     ResourceNotFoundError(crate::error::ResourceNotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ValidateResourcePolicyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1568,7 +1568,7 @@ impl ValidateResourcePolicyError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ValidateResourcePolicyErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1652,6 +1652,10 @@ pub mod resource_not_found_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`ResourceNotFoundError`](crate::error::ResourceNotFoundError)
         pub fn build(self) -> crate::error::ResourceNotFoundError {
             crate::error::ResourceNotFoundError {
@@ -1710,6 +1714,10 @@ pub mod malformed_policy_document_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`MalformedPolicyDocumentError`](crate::error::MalformedPolicyDocumentError)
@@ -1780,6 +1788,10 @@ pub mod invalid_request_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`InvalidRequestError`](crate::error::InvalidRequestError)
         pub fn build(self) -> crate::error::InvalidRequestError {
             crate::error::InvalidRequestError {
@@ -1835,6 +1847,10 @@ pub mod invalid_parameter_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`InvalidParameterError`](crate::error::InvalidParameterError)
@@ -1894,6 +1910,10 @@ pub mod internal_service_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`InternalServiceError`](crate::error::InternalServiceError)
         pub fn build(self) -> crate::error::InternalServiceError {
             crate::error::InternalServiceError {
@@ -1949,6 +1969,10 @@ pub mod limit_exceeded_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`LimitExceededError`](crate::error::LimitExceededError)
@@ -2008,6 +2032,10 @@ pub mod resource_exists_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`ResourceExistsError`](crate::error::ResourceExistsError)
         pub fn build(self) -> crate::error::ResourceExistsError {
             crate::error::ResourceExistsError {
@@ -2063,6 +2091,10 @@ pub mod precondition_not_met_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`PreconditionNotMetError`](crate::error::PreconditionNotMetError)
@@ -2125,6 +2157,10 @@ pub mod encryption_failure {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`EncryptionFailure`](crate::error::EncryptionFailure)
         pub fn build(self) -> crate::error::EncryptionFailure {
             crate::error::EncryptionFailure {
@@ -2180,6 +2216,10 @@ pub mod public_policy_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`PublicPolicyError`](crate::error::PublicPolicyError)
@@ -2239,6 +2279,10 @@ pub mod invalid_next_token_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`InvalidNextTokenError`](crate::error::InvalidNextTokenError)
         pub fn build(self) -> crate::error::InvalidNextTokenError {
             crate::error::InvalidNextTokenError {
@@ -2294,6 +2338,10 @@ pub mod decryption_failure {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`DecryptionFailure`](crate::error::DecryptionFailure)

@@ -1,4 +1,4 @@
 [workspace]
 members = [
-    "secretsmanager","kms","kinesis","dynamodb","smithy-types","smithy-http","smithy-http-tower","protocol-test-helpers","aws-auth","aws-endpoint","aws-types","aws-hyper","aws-sig-auth","aws-http","examples/dynamo-movies","examples/kms-helloworld","examples/dynamo-helloworld"
+    "secretsmanager","polly","apigateway","kms","kinesis","dynamodb","smithy-types","smithy-http","smithy-http-tower","protocol-test-helpers","aws-auth","aws-endpoint","aws-types","aws-hyper","aws-sig-auth","aws-http","examples/polly-generate-speech","examples/polly-helloworld","examples/dynamo-movies","examples/kms-helloworld","examples/dynamo-helloworld"
 ]

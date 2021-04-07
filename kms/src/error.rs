@@ -16,7 +16,7 @@ pub enum CancelKeyDeletionErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for CancelKeyDeletionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -44,7 +44,7 @@ impl CancelKeyDeletionError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: CancelKeyDeletionErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -104,7 +104,7 @@ pub enum ConnectCustomKeyStoreErrorKind {
     KMSInternalError(crate::error::KMSInternalError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ConnectCustomKeyStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -136,7 +136,7 @@ impl ConnectCustomKeyStoreError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ConnectCustomKeyStoreErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -198,7 +198,7 @@ pub enum CreateAliasErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for CreateAliasError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -228,7 +228,7 @@ impl CreateAliasError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: CreateAliasErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -292,7 +292,7 @@ pub enum CreateCustomKeyStoreErrorKind {
     KMSInternalError(crate::error::KMSInternalError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for CreateCustomKeyStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -324,7 +324,7 @@ impl CreateCustomKeyStoreError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: CreateCustomKeyStoreErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -389,7 +389,7 @@ pub enum CreateGrantErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for CreateGrantError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -420,7 +420,7 @@ impl CreateGrantError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: CreateGrantErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -488,7 +488,7 @@ pub enum CreateKeyErrorKind {
     UnsupportedOperationError(crate::error::UnsupportedOperationError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for CreateKeyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -521,7 +521,7 @@ impl CreateKeyError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: CreateKeyErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -589,7 +589,7 @@ pub enum DecryptErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DecryptError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -622,7 +622,7 @@ impl DecryptError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DecryptErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -684,7 +684,7 @@ pub enum DeleteAliasErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DeleteAliasError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -711,7 +711,7 @@ impl DeleteAliasError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DeleteAliasErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -767,7 +767,7 @@ pub enum DeleteCustomKeyStoreErrorKind {
     KMSInternalError(crate::error::KMSInternalError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DeleteCustomKeyStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -794,7 +794,7 @@ impl DeleteCustomKeyStoreError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DeleteCustomKeyStoreErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -852,7 +852,7 @@ pub enum DeleteImportedKeyMaterialErrorKind {
     UnsupportedOperationError(crate::error::UnsupportedOperationError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DeleteImportedKeyMaterialError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -881,7 +881,7 @@ impl DeleteImportedKeyMaterialError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DeleteImportedKeyMaterialErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -937,7 +937,7 @@ pub enum DescribeCustomKeyStoresErrorKind {
     KMSInternalError(crate::error::KMSInternalError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DescribeCustomKeyStoresError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -962,7 +962,7 @@ impl DescribeCustomKeyStoresError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DescribeCustomKeyStoresErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1016,7 +1016,7 @@ pub enum DescribeKeyErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DescribeKeyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1043,7 +1043,7 @@ impl DescribeKeyError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DescribeKeyErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1100,7 +1100,7 @@ pub enum DisableKeyErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DisableKeyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1128,7 +1128,7 @@ impl DisableKeyError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DisableKeyErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1188,7 +1188,7 @@ pub enum DisableKeyRotationErrorKind {
     UnsupportedOperationError(crate::error::UnsupportedOperationError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DisableKeyRotationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1218,7 +1218,7 @@ impl DisableKeyRotationError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DisableKeyRotationErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1276,7 +1276,7 @@ pub enum DisconnectCustomKeyStoreErrorKind {
     KMSInternalError(crate::error::KMSInternalError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for DisconnectCustomKeyStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1304,7 +1304,7 @@ impl DisconnectCustomKeyStoreError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: DisconnectCustomKeyStoreErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1363,7 +1363,7 @@ pub enum EnableKeyErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for EnableKeyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1392,7 +1392,7 @@ impl EnableKeyError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: EnableKeyErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1453,7 +1453,7 @@ pub enum EnableKeyRotationErrorKind {
     UnsupportedOperationError(crate::error::UnsupportedOperationError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for EnableKeyRotationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1483,7 +1483,7 @@ impl EnableKeyRotationError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: EnableKeyRotationErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1546,7 +1546,7 @@ pub enum EncryptErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for EncryptError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1577,7 +1577,7 @@ impl EncryptError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: EncryptErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1641,7 +1641,7 @@ pub enum GenerateDataKeyErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for GenerateDataKeyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1672,7 +1672,7 @@ impl GenerateDataKeyError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: GenerateDataKeyErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1737,7 +1737,7 @@ pub enum GenerateDataKeyPairErrorKind {
     UnsupportedOperationError(crate::error::UnsupportedOperationError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for GenerateDataKeyPairError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1769,7 +1769,7 @@ impl GenerateDataKeyPairError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: GenerateDataKeyPairErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1835,7 +1835,7 @@ pub enum GenerateDataKeyPairWithoutPlaintextErrorKind {
     UnsupportedOperationError(crate::error::UnsupportedOperationError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for GenerateDataKeyPairWithoutPlaintextError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1882,7 +1882,7 @@ impl GenerateDataKeyPairWithoutPlaintextError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: GenerateDataKeyPairWithoutPlaintextErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -1961,7 +1961,7 @@ pub enum GenerateDataKeyWithoutPlaintextErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for GenerateDataKeyWithoutPlaintextError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1996,7 +1996,7 @@ impl GenerateDataKeyWithoutPlaintextError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: GenerateDataKeyWithoutPlaintextErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2060,7 +2060,7 @@ pub enum GenerateRandomErrorKind {
     KMSInternalError(crate::error::KMSInternalError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for GenerateRandomError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2087,7 +2087,7 @@ impl GenerateRandomError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: GenerateRandomErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2144,7 +2144,7 @@ pub enum GetKeyPolicyErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for GetKeyPolicyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2172,7 +2172,7 @@ impl GetKeyPolicyError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: GetKeyPolicyErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2231,7 +2231,7 @@ pub enum GetKeyRotationStatusErrorKind {
     UnsupportedOperationError(crate::error::UnsupportedOperationError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for GetKeyRotationStatusError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2260,7 +2260,7 @@ impl GetKeyRotationStatusError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: GetKeyRotationStatusErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2320,7 +2320,7 @@ pub enum GetParametersForImportErrorKind {
     UnsupportedOperationError(crate::error::UnsupportedOperationError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for GetParametersForImportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2349,7 +2349,7 @@ impl GetParametersForImportError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: GetParametersForImportErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2413,7 +2413,7 @@ pub enum GetPublicKeyErrorKind {
     UnsupportedOperationError(crate::error::UnsupportedOperationError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for GetPublicKeyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2446,7 +2446,7 @@ impl GetPublicKeyError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: GetPublicKeyErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2514,7 +2514,7 @@ pub enum ImportKeyMaterialErrorKind {
     UnsupportedOperationError(crate::error::UnsupportedOperationError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ImportKeyMaterialError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2547,7 +2547,7 @@ impl ImportKeyMaterialError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ImportKeyMaterialErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2610,7 +2610,7 @@ pub enum ListAliasesErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ListAliasesError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2638,7 +2638,7 @@ impl ListAliasesError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ListAliasesErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2697,7 +2697,7 @@ pub enum ListGrantsErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ListGrantsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2726,7 +2726,7 @@ impl ListGrantsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ListGrantsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2785,7 +2785,7 @@ pub enum ListKeyPoliciesErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ListKeyPoliciesError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2813,7 +2813,7 @@ impl ListKeyPoliciesError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ListKeyPoliciesErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2869,7 +2869,7 @@ pub enum ListKeysErrorKind {
     KMSInternalError(crate::error::KMSInternalError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ListKeysError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2895,7 +2895,7 @@ impl ListKeysError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ListKeysErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -2950,7 +2950,7 @@ pub enum ListResourceTagsErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ListResourceTagsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2977,7 +2977,7 @@ impl ListResourceTagsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ListResourceTagsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3034,7 +3034,7 @@ pub enum ListRetirableGrantsErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ListRetirableGrantsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3062,7 +3062,7 @@ impl ListRetirableGrantsError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ListRetirableGrantsErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3123,7 +3123,7 @@ pub enum PutKeyPolicyErrorKind {
     UnsupportedOperationError(crate::error::UnsupportedOperationError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for PutKeyPolicyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3154,7 +3154,7 @@ impl PutKeyPolicyError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: PutKeyPolicyErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3220,7 +3220,7 @@ pub enum ReEncryptErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ReEncryptError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3253,7 +3253,7 @@ impl ReEncryptError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ReEncryptErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3318,7 +3318,7 @@ pub enum RetireGrantErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for RetireGrantError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3348,7 +3348,7 @@ impl RetireGrantError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: RetireGrantErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3409,7 +3409,7 @@ pub enum RevokeGrantErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for RevokeGrantError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3438,7 +3438,7 @@ impl RevokeGrantError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: RevokeGrantErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3497,7 +3497,7 @@ pub enum ScheduleKeyDeletionErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for ScheduleKeyDeletionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3525,7 +3525,7 @@ impl ScheduleKeyDeletionError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: ScheduleKeyDeletionErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3586,7 +3586,7 @@ pub enum SignErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for SignError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3617,7 +3617,7 @@ impl SignError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: SignErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3679,7 +3679,7 @@ pub enum TagResourceErrorKind {
     TagError(crate::error::TagError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for TagResourceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3708,7 +3708,7 @@ impl TagResourceError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: TagResourceErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3767,7 +3767,7 @@ pub enum UntagResourceErrorKind {
     TagError(crate::error::TagError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UntagResourceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3795,7 +3795,7 @@ impl UntagResourceError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UntagResourceErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3853,7 +3853,7 @@ pub enum UpdateAliasErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UpdateAliasError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3881,7 +3881,7 @@ impl UpdateAliasError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UpdateAliasErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -3944,7 +3944,7 @@ pub enum UpdateCustomKeyStoreErrorKind {
     KMSInternalError(crate::error::KMSInternalError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UpdateCustomKeyStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -3977,7 +3977,7 @@ impl UpdateCustomKeyStoreError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UpdateCustomKeyStoreErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -4040,7 +4040,7 @@ pub enum UpdateKeyDescriptionErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for UpdateKeyDescriptionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -4068,7 +4068,7 @@ impl UpdateKeyDescriptionError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: UpdateKeyDescriptionErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -4130,7 +4130,7 @@ pub enum VerifyErrorKind {
     NotFoundError(crate::error::NotFoundError),
 
     /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-    Unhandled(Box<dyn std::error::Error>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 impl std::fmt::Display for VerifyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -4162,7 +4162,7 @@ impl VerifyError {
         Self { kind, meta }
     }
 
-    pub fn unhandled(err: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unhandled(err: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
             kind: VerifyErrorKind::Unhandled(err.into()),
             meta: Default::default(),
@@ -4254,6 +4254,10 @@ pub mod not_found_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`NotFoundError`](crate::error::NotFoundError)
         pub fn build(self) -> crate::error::NotFoundError {
             crate::error::NotFoundError {
@@ -4319,6 +4323,10 @@ pub mod kms_invalid_state_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`KMSInvalidStateError`](crate::error::KMSInvalidStateError)
         pub fn build(self) -> crate::error::KMSInvalidStateError {
             crate::error::KMSInvalidStateError {
@@ -4379,6 +4387,10 @@ pub mod kms_invalid_signature_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`KMSInvalidSignatureError`](crate::error::KMSInvalidSignatureError)
@@ -4442,6 +4454,10 @@ pub mod kms_internal_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`KMSInternalError`](crate::error::KMSInternalError)
         pub fn build(self) -> crate::error::KMSInternalError {
             crate::error::KMSInternalError {
@@ -4501,6 +4517,10 @@ pub mod key_unavailable_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`KeyUnavailableError`](crate::error::KeyUnavailableError)
@@ -4579,6 +4599,10 @@ pub mod invalid_key_usage_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`InvalidKeyUsageError`](crate::error::InvalidKeyUsageError)
         pub fn build(self) -> crate::error::InvalidKeyUsageError {
             crate::error::InvalidKeyUsageError {
@@ -4639,6 +4663,10 @@ pub mod invalid_grant_token_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`InvalidGrantTokenError`](crate::error::InvalidGrantTokenError)
         pub fn build(self) -> crate::error::InvalidGrantTokenError {
             crate::error::InvalidGrantTokenError {
@@ -4697,6 +4725,10 @@ pub mod disabled_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`DisabledError`](crate::error::DisabledError)
@@ -4760,6 +4792,10 @@ pub mod dependency_timeout_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`DependencyTimeoutError`](crate::error::DependencyTimeoutError)
         pub fn build(self) -> crate::error::DependencyTimeoutError {
             crate::error::DependencyTimeoutError {
@@ -4819,6 +4855,10 @@ pub mod invalid_arn_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`InvalidArnError`](crate::error::InvalidArnError)
@@ -4885,6 +4925,10 @@ pub mod custom_key_store_not_found_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`CustomKeyStoreNotFoundError`](crate::error::CustomKeyStoreNotFoundError)
         pub fn build(self) -> crate::error::CustomKeyStoreNotFoundError {
             crate::error::CustomKeyStoreNotFoundError {
@@ -4948,6 +4992,10 @@ pub mod custom_key_store_name_in_use_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`CustomKeyStoreNameInUseError`](crate::error::CustomKeyStoreNameInUseError)
@@ -5033,6 +5081,10 @@ pub mod custom_key_store_invalid_state_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`CustomKeyStoreInvalidStateError`](crate::error::CustomKeyStoreInvalidStateError)
         pub fn build(self) -> crate::error::CustomKeyStoreInvalidStateError {
             crate::error::CustomKeyStoreInvalidStateError {
@@ -5103,6 +5155,10 @@ pub mod cloud_hsm_cluster_not_related_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`CloudHsmClusterNotRelatedError`](crate::error::CloudHsmClusterNotRelatedError)
         pub fn build(self) -> crate::error::CloudHsmClusterNotRelatedError {
             crate::error::CloudHsmClusterNotRelatedError {
@@ -5165,6 +5221,10 @@ pub mod cloud_hsm_cluster_not_found_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`CloudHsmClusterNotFoundError`](crate::error::CloudHsmClusterNotFoundError)
@@ -5230,6 +5290,10 @@ pub mod cloud_hsm_cluster_not_active_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`CloudHsmClusterNotActiveError`](crate::error::CloudHsmClusterNotActiveError)
@@ -5323,6 +5387,10 @@ pub mod cloud_hsm_cluster_invalid_configuration_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`CloudHsmClusterInvalidConfigurationError`](crate::error::CloudHsmClusterInvalidConfigurationError)
         pub fn build(self) -> crate::error::CloudHsmClusterInvalidConfigurationError {
             crate::error::CloudHsmClusterInvalidConfigurationError {
@@ -5382,6 +5450,10 @@ pub mod limit_exceeded_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`LimitExceededError`](crate::error::LimitExceededError)
@@ -5444,6 +5516,10 @@ pub mod tag_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`TagError`](crate::error::TagError)
         pub fn build(self) -> crate::error::TagError {
             crate::error::TagError {
@@ -5502,6 +5578,10 @@ pub mod invalid_grant_id_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`InvalidGrantIdError`](crate::error::InvalidGrantIdError)
@@ -5569,6 +5649,10 @@ pub mod invalid_ciphertext_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`InvalidCiphertextError`](crate::error::InvalidCiphertextError)
         pub fn build(self) -> crate::error::InvalidCiphertextError {
             crate::error::InvalidCiphertextError {
@@ -5630,6 +5714,10 @@ pub mod incorrect_key_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`IncorrectKeyError`](crate::error::IncorrectKeyError)
@@ -5696,6 +5784,10 @@ pub mod unsupported_operation_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`UnsupportedOperationError`](crate::error::UnsupportedOperationError)
         pub fn build(self) -> crate::error::UnsupportedOperationError {
             crate::error::UnsupportedOperationError {
@@ -5760,6 +5852,10 @@ pub mod malformed_policy_document_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`MalformedPolicyDocumentError`](crate::error::MalformedPolicyDocumentError)
         pub fn build(self) -> crate::error::MalformedPolicyDocumentError {
             crate::error::MalformedPolicyDocumentError {
@@ -5821,6 +5917,10 @@ pub mod invalid_marker_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`InvalidMarkerError`](crate::error::InvalidMarkerError)
         pub fn build(self) -> crate::error::InvalidMarkerError {
             crate::error::InvalidMarkerError {
@@ -5880,6 +5980,10 @@ pub mod invalid_import_token_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`InvalidImportTokenError`](crate::error::InvalidImportTokenError)
@@ -5947,6 +6051,10 @@ pub mod incorrect_key_material_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`IncorrectKeyMaterialError`](crate::error::IncorrectKeyMaterialError)
         pub fn build(self) -> crate::error::IncorrectKeyMaterialError {
             crate::error::IncorrectKeyMaterialError {
@@ -6006,6 +6114,10 @@ pub mod expired_import_token_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`ExpiredImportTokenError`](crate::error::ExpiredImportTokenError)
@@ -6073,6 +6185,10 @@ pub mod custom_key_store_has_cm_ks_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`CustomKeyStoreHasCMKsError`](crate::error::CustomKeyStoreHasCMKsError)
         pub fn build(self) -> crate::error::CustomKeyStoreHasCMKsError {
             crate::error::CustomKeyStoreHasCMKsError {
@@ -6137,6 +6253,10 @@ pub mod incorrect_trust_anchor_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`IncorrectTrustAnchorError`](crate::error::IncorrectTrustAnchorError)
@@ -6206,6 +6326,10 @@ pub mod cloud_hsm_cluster_in_use_error {
             self.message = Some(inp.into());
             self
         }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
+            self
+        }
         /// Consumes the builder and constructs a [`CloudHsmClusterInUseError`](crate::error::CloudHsmClusterInUseError)
         pub fn build(self) -> crate::error::CloudHsmClusterInUseError {
             crate::error::CloudHsmClusterInUseError {
@@ -6264,6 +6388,10 @@ pub mod invalid_alias_name_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`InvalidAliasNameError`](crate::error::InvalidAliasNameError)
@@ -6325,6 +6453,10 @@ pub mod already_exists_error {
     impl Builder {
         pub fn message(mut self, inp: impl Into<std::string::String>) -> Self {
             self.message = Some(inp.into());
+            self
+        }
+        pub fn set_message(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.message = inp;
             self
         }
         /// Consumes the builder and constructs a [`AlreadyExistsError`](crate::error::AlreadyExistsError)

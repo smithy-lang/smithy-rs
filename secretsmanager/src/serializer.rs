@@ -1120,7 +1120,7 @@ impl<'a> std::fmt::Debug for ValidateResourcePolicyInputBody<'a> {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct CancelRotateSecretOutputBody {
     /// <p>The ARN of the secret for which rotation was canceled.</p>
     #[serde(rename = "ARN")]
@@ -1150,7 +1150,7 @@ impl std::fmt::Debug for CancelRotateSecretOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct CreateSecretOutputBody {
     /// <p>The unique identifier associated with the version of the secret you just
     /// created.</p>
@@ -1184,7 +1184,7 @@ impl std::fmt::Debug for CreateSecretOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DeleteResourcePolicyOutputBody {
     /// <p>The ARN of the secret that the resource-based policy was deleted for.</p>
     #[serde(rename = "ARN")]
@@ -1205,7 +1205,7 @@ impl std::fmt::Debug for DeleteResourcePolicyOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DeleteSecretOutputBody {
     /// <p>The ARN of the secret that is now scheduled for deletion.</p>
     #[serde(rename = "ARN")]
@@ -1236,7 +1236,7 @@ impl std::fmt::Debug for DeleteSecretOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeSecretOutputBody {
     /// <p>The most recent date and time that the Secrets Manager rotation process was successfully
     /// completed. This value is null if the secret has never rotated.</p>
@@ -1359,7 +1359,7 @@ impl std::fmt::Debug for DescribeSecretOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct GetRandomPasswordOutputBody {
     /// <p>A string with the generated password.</p>
     #[serde(rename = "RandomPassword")]
@@ -1375,7 +1375,7 @@ impl std::fmt::Debug for GetRandomPasswordOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct GetResourcePolicyOutputBody {
     /// <p>A JSON-formatted string that describes the permissions that are associated with the
     /// attached secret. These permissions are combined with any permissions that are associated with
@@ -1405,7 +1405,7 @@ impl std::fmt::Debug for GetResourcePolicyOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct GetSecretValueOutputBody {
     /// <p>The unique identifier of this version of the secret.</p>
     #[serde(rename = "VersionId")]
@@ -1472,7 +1472,7 @@ impl std::fmt::Debug for GetSecretValueOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListSecretsOutputBody {
     /// <p>A list of the secrets in the account.</p>
     #[serde(rename = "SecretList")]
@@ -1499,7 +1499,7 @@ impl std::fmt::Debug for ListSecretsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListSecretVersionIdsOutputBody {
     /// <p>If present in the response, this value indicates that
     /// there's more output available than included in the current response. This can
@@ -1543,7 +1543,7 @@ impl std::fmt::Debug for ListSecretVersionIdsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct PutResourcePolicyOutputBody {
     /// <p>The ARN of the secret retrieved by the resource-based policy.</p>
     #[serde(rename = "ARN")]
@@ -1564,7 +1564,7 @@ impl std::fmt::Debug for PutResourcePolicyOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct PutSecretValueOutputBody {
     /// <p>The Amazon Resource Name (ARN) for the secret for which you just created a version.</p>
     #[serde(rename = "ARN")]
@@ -1597,7 +1597,7 @@ impl std::fmt::Debug for PutSecretValueOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct RestoreSecretOutputBody {
     /// <p>The ARN of the secret that was restored.</p>
     #[serde(rename = "ARN")]
@@ -1618,7 +1618,7 @@ impl std::fmt::Debug for RestoreSecretOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct RotateSecretOutputBody {
     /// <p>The ARN of the secret.</p>
     #[serde(rename = "ARN")]
@@ -1645,7 +1645,7 @@ impl std::fmt::Debug for RotateSecretOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct UpdateSecretOutputBody {
     /// <p>The friendly name of the secret that was updated.</p>
     #[serde(rename = "Name")]
@@ -1679,7 +1679,7 @@ impl std::fmt::Debug for UpdateSecretOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct UpdateSecretVersionStageOutputBody {
     /// <p>The ARN of the secret with the modified staging label.</p>
     #[serde(rename = "ARN")]
@@ -1700,7 +1700,7 @@ impl std::fmt::Debug for UpdateSecretVersionStageOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ValidateResourcePolicyOutputBody {
     /// <p>Returns an error message if your policy doesn't pass validatation.</p>
     #[serde(rename = "ValidationErrors")]

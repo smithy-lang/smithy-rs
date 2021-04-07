@@ -10,14 +10,17 @@ pub mod batch_execute_statement_input {
         statements: std::option::Option<std::vec::Vec<crate::model::BatchStatementRequest>>,
     }
     impl Builder {
-        /// <p>
-        /// The list of PartiQL statements representing the batch to run.
-        /// </p>
-        pub fn statements(
+        pub fn statements(mut self, inp: impl Into<crate::model::BatchStatementRequest>) -> Self {
+            let mut v = self.statements.unwrap_or_default();
+            v.push(inp.into());
+            self.statements = Some(v);
+            self
+        }
+        pub fn set_statements(
             mut self,
-            inp: std::vec::Vec<crate::model::BatchStatementRequest>,
+            inp: std::option::Option<std::vec::Vec<crate::model::BatchStatementRequest>>,
         ) -> Self {
-            self.statements = Some(inp);
+            self.statements = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`BatchExecuteStatement`](crate::operation::BatchExecuteStatement)>
@@ -25,68 +28,75 @@ pub mod batch_execute_statement_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::BatchExecuteStatement,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::BatchExecuteStatement,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::BatchExecuteStatement::new(
-                crate::input::BatchExecuteStatementInput {
-                    statements: self.statements,
-                },
-            );
+            Ok({
+                let op = crate::operation::BatchExecuteStatement::new(
+                    crate::input::BatchExecuteStatementInput {
+                        statements: self.statements,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("BatchExecuteStatement", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("BatchExecuteStatement", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl BatchExecuteStatementInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.BatchExecuteStatement")
+            .header("X-Amz-Target", "DynamoDB_20120810.BatchExecuteStatement"))
     }
     fn body(&self) -> crate::serializer::BatchExecuteStatementInputBody {
         crate::serializer::BatchExecuteStatementInputBody {
@@ -124,89 +134,23 @@ pub mod batch_get_item_input {
         return_consumed_capacity: std::option::Option<crate::model::ReturnConsumedCapacity>,
     }
     impl Builder {
-        /// <p>A map of one or more table names and, for each table, a map that describes one or more items to retrieve from that table. Each table name can be used only once per <code>BatchGetItem</code> request.</p>
-        /// <p>Each element in the map of items to retrieve consists of the following:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>ConsistentRead</code> - If <code>true</code>, a strongly consistent read is used; if
-        /// <code>false</code> (the default), an eventually consistent read is used.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>ExpressionAttributeNames</code> - One or more substitution tokens for attribute names in the <code>ProjectionExpression</code> parameter. The following are some use cases for using <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>To access an attribute whose name conflicts with a DynamoDB reserved word.</p>
-        /// </li>
-        /// <li>
-        /// <p>To create a placeholder for repeating occurrences of an attribute name in an expression.</p>
-        /// </li>
-        /// <li>
-        /// <p>To prevent special characters in an attribute name from being misinterpreted in an expression.</p>
-        /// </li>
-        /// </ul>
-        /// <p>Use the <b>#</b> character in an expression to dereference an attribute name. For example, consider the following attribute name:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>Percentile</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>The name of this attribute conflicts with a reserved word, so it cannot be used directly in an expression. (For the complete list of reserved words, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ReservedWords.html">Reserved Words</a> in the <i>Amazon DynamoDB Developer Guide</i>). To work around this, you could specify the following for <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>{"#P":"Percentile"}</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>You could then use this substitution in an expression, as in this example:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>#P = :val</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>Tokens that begin with the <b>:</b> character are <i>expression attribute values</i>, which are placeholders for the actual value at runtime.</p>
-        /// </note>
-        /// <p>For more information about expression attribute names, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.AccessingItemAttributes.html">Accessing Item Attributes</a> in the <i>Amazon DynamoDB
-        /// Developer Guide</i>.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>Keys</code> - An array of primary key attribute values that define specific items in the
-        /// table. For each primary key, you must provide <i>all</i> of the key attributes. For
-        /// example, with a simple primary key, you only need to provide the partition key value. For a
-        /// composite key, you must provide <i>both</i> the partition key value and the sort key value.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>ProjectionExpression</code> - A string that identifies one or more
-        /// attributes to retrieve from the table. These attributes can include scalars,
-        /// sets, or elements of a JSON document. The attributes in the expression must be
-        /// separated by commas.</p>
-        /// <p>If no attribute names are specified, then all attributes are returned. If any
-        /// of the requested attributes are not found, they do not appear in the
-        /// result.</p>
-        /// <p>For more information, see
-        /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.AccessingItemAttributes.html">Accessing Item Attributes</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>AttributesToGet</code> - This is a legacy parameter.  Use <code>ProjectionExpression</code> instead.  For more information, see
-        /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.AttributesToGet.html">AttributesToGet</a> in the <i>Amazon DynamoDB Developer Guide</i>.
-        /// </p>
-        /// </li>
-        /// </ul>
         pub fn request_items(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::KeysAndAttributes>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::KeysAndAttributes>,
         ) -> Self {
-            self.request_items = Some(inp);
+            let mut hash_map = self.request_items.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.request_items = Some(hash_map);
+            self
+        }
+        pub fn set_request_items(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::KeysAndAttributes>,
+            >,
+        ) -> Self {
+            self.request_items = inp;
             self
         }
         /// <p>Determines the level of detail about provisioned throughput consumption that is returned in the response:</p>
@@ -232,72 +176,86 @@ pub mod batch_get_item_input {
             self.return_consumed_capacity = Some(inp);
             self
         }
+        pub fn set_return_consumed_capacity(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnConsumedCapacity>,
+        ) -> Self {
+            self.return_consumed_capacity = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`BatchGetItem`](crate::operation::BatchGetItem)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::BatchGetItem,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::BatchGetItem,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::BatchGetItem::new(crate::input::BatchGetItemInput {
-                request_items: self.request_items,
-                return_consumed_capacity: self.return_consumed_capacity,
-            });
+            Ok({
+                let op = crate::operation::BatchGetItem::new(crate::input::BatchGetItemInput {
+                    request_items: self.request_items,
+                    return_consumed_capacity: self.return_consumed_capacity,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("BatchGetItem", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("BatchGetItem", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl BatchGetItemInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.BatchGetItem")
+            .header("X-Amz-Target", "DynamoDB_20120810.BatchGetItem"))
     }
     fn body(&self) -> crate::serializer::BatchGetItemInputBody {
         crate::serializer::BatchGetItemInputBody {
@@ -341,51 +299,26 @@ pub mod batch_write_item_input {
             std::option::Option<crate::model::ReturnItemCollectionMetrics>,
     }
     impl Builder {
-        /// <p>A map of one or more table names and, for each table, a list of operations to be performed
-        /// (<code>DeleteRequest</code> or <code>PutRequest</code>). Each element in the map consists of the
-        /// following:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>DeleteRequest</code> - Perform a <code>DeleteItem</code> operation on the specified item. The
-        /// item to be deleted is identified by a <code>Key</code> subelement:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>Key</code> - A map of primary key attribute values that uniquely identify the item.
-        /// Each entry in this map consists of an attribute name and an attribute value. For each
-        /// primary key, you must provide <i>all</i> of the key attributes. For example, with a
-        /// simple primary key, you only need to provide a value for the partition key. For a
-        /// composite primary key, you must provide values for <i>both</i> the partition key and the sort key.</p>
-        /// </li>
-        /// </ul>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>PutRequest</code> - Perform a <code>PutItem</code> operation on the specified item. The item to
-        /// be put is identified by an <code>Item</code> subelement:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>Item</code> - A map of attributes and their values. Each entry in
-        /// this map consists of an attribute name and an attribute value. Attribute
-        /// values must not be null; string and binary type attributes must have
-        /// lengths greater than zero; and set type attributes must not be empty.
-        /// Requests that contain empty values are rejected with a
-        /// <code>ValidationException</code> exception.</p>
-        /// <p>If you specify any attributes that are part of an index key, then the data types for those attributes must match those of the schema in the table's attribute definition.</p>
-        /// </li>
-        /// </ul>
-        /// </li>
-        /// </ul>
         pub fn request_items(
             mut self,
-            inp: std::collections::HashMap<
-                std::string::String,
-                std::vec::Vec<crate::model::WriteRequest>,
+            k: impl Into<std::string::String>,
+            v: impl Into<std::vec::Vec<crate::model::WriteRequest>>,
+        ) -> Self {
+            let mut hash_map = self.request_items.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.request_items = Some(hash_map);
+            self
+        }
+        pub fn set_request_items(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<
+                    std::string::String,
+                    std::vec::Vec<crate::model::WriteRequest>,
+                >,
             >,
         ) -> Self {
-            self.request_items = Some(inp);
+            self.request_items = inp;
             self
         }
         /// <p>Determines the level of detail about provisioned throughput consumption that is returned in the response:</p>
@@ -411,6 +344,13 @@ pub mod batch_write_item_input {
             self.return_consumed_capacity = Some(inp);
             self
         }
+        pub fn set_return_consumed_capacity(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnConsumedCapacity>,
+        ) -> Self {
+            self.return_consumed_capacity = inp;
+            self
+        }
         /// <p>Determines whether item collection metrics are returned.  If set to <code>SIZE</code>, the response includes statistics about item collections, if any, that were modified during
         /// the operation are returned in the response. If set to <code>NONE</code> (the default), no statistics are returned.</p>
         pub fn return_item_collection_metrics(
@@ -420,73 +360,87 @@ pub mod batch_write_item_input {
             self.return_item_collection_metrics = Some(inp);
             self
         }
+        pub fn set_return_item_collection_metrics(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnItemCollectionMetrics>,
+        ) -> Self {
+            self.return_item_collection_metrics = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`BatchWriteItem`](crate::operation::BatchWriteItem)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::BatchWriteItem,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::BatchWriteItem,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::BatchWriteItem::new(crate::input::BatchWriteItemInput {
-                request_items: self.request_items,
-                return_consumed_capacity: self.return_consumed_capacity,
-                return_item_collection_metrics: self.return_item_collection_metrics,
-            });
+            Ok({
+                let op = crate::operation::BatchWriteItem::new(crate::input::BatchWriteItemInput {
+                    request_items: self.request_items,
+                    return_consumed_capacity: self.return_consumed_capacity,
+                    return_item_collection_metrics: self.return_item_collection_metrics,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("BatchWriteItem", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("BatchWriteItem", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl BatchWriteItemInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.BatchWriteItem")
+            .header("X-Amz-Target", "DynamoDB_20120810.BatchWriteItem"))
     }
     fn body(&self) -> crate::serializer::BatchWriteItemInputBody {
         crate::serializer::BatchWriteItemInputBody {
@@ -529,9 +483,17 @@ pub mod create_backup_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>Specified name for the backup.</p>
         pub fn backup_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.backup_name = Some(inp.into());
+            self
+        }
+        pub fn set_backup_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.backup_name = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`CreateBackup`](crate::operation::CreateBackup)>
@@ -539,67 +501,74 @@ pub mod create_backup_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::CreateBackup,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::CreateBackup,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::CreateBackup::new(crate::input::CreateBackupInput {
-                table_name: self.table_name,
-                backup_name: self.backup_name,
-            });
+            Ok({
+                let op = crate::operation::CreateBackup::new(crate::input::CreateBackupInput {
+                    table_name: self.table_name,
+                    backup_name: self.backup_name,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("CreateBackup", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("CreateBackup", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl CreateBackupInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.CreateBackup")
+            .header("X-Amz-Target", "DynamoDB_20120810.CreateBackup"))
     }
     fn body(&self) -> crate::serializer::CreateBackupInputBody {
         crate::serializer::CreateBackupInputBody {
@@ -641,9 +610,24 @@ pub mod create_global_table_input {
             self.global_table_name = Some(inp.into());
             self
         }
-        /// <p>The Regions where the global table needs to be created.</p>
-        pub fn replication_group(mut self, inp: std::vec::Vec<crate::model::Replica>) -> Self {
-            self.replication_group = Some(inp);
+        pub fn set_global_table_name(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.global_table_name = inp;
+            self
+        }
+        pub fn replication_group(mut self, inp: impl Into<crate::model::Replica>) -> Self {
+            let mut v = self.replication_group.unwrap_or_default();
+            v.push(inp.into());
+            self.replication_group = Some(v);
+            self
+        }
+        pub fn set_replication_group(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::Replica>>,
+        ) -> Self {
+            self.replication_group = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`CreateGlobalTable`](crate::operation::CreateGlobalTable)>
@@ -651,68 +635,76 @@ pub mod create_global_table_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::CreateGlobalTable,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::CreateGlobalTable,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op =
-                crate::operation::CreateGlobalTable::new(crate::input::CreateGlobalTableInput {
-                    global_table_name: self.global_table_name,
-                    replication_group: self.replication_group,
-                });
+            Ok({
+                let op = crate::operation::CreateGlobalTable::new(
+                    crate::input::CreateGlobalTableInput {
+                        global_table_name: self.global_table_name,
+                        replication_group: self.replication_group,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("CreateGlobalTable", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("CreateGlobalTable", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl CreateGlobalTableInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.CreateGlobalTable")
+            .header("X-Amz-Target", "DynamoDB_20120810.CreateGlobalTable"))
     }
     fn body(&self) -> crate::serializer::CreateGlobalTableInputBody {
         crate::serializer::CreateGlobalTableInputBody {
@@ -760,12 +752,20 @@ pub mod create_table_input {
         tags: std::option::Option<std::vec::Vec<crate::model::Tag>>,
     }
     impl Builder {
-        /// <p>An array of attributes that describe the key schema for the table and indexes.</p>
         pub fn attribute_definitions(
             mut self,
-            inp: std::vec::Vec<crate::model::AttributeDefinition>,
+            inp: impl Into<crate::model::AttributeDefinition>,
         ) -> Self {
-            self.attribute_definitions = Some(inp);
+            let mut v = self.attribute_definitions.unwrap_or_default();
+            v.push(inp.into());
+            self.attribute_definitions = Some(v);
+            self
+        }
+        pub fn set_attribute_definitions(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::AttributeDefinition>>,
+        ) -> Self {
+            self.attribute_definitions = inp;
             self
         }
         /// <p>The name of the table to create.</p>
@@ -773,174 +773,53 @@ pub mod create_table_input {
             self.table_name = Some(inp.into());
             self
         }
-        /// <p>Specifies the attributes that make up the primary key for a table or an index. The attributes
-        /// in <code>KeySchema</code> must also be defined in the <code>AttributeDefinitions</code> array. For more
-        /// information, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DataModel.html">Data Model</a> in the
-        /// <i>Amazon DynamoDB Developer Guide</i>.</p>
-        /// <p>Each <code>KeySchemaElement</code> in the array is composed of:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>AttributeName</code> - The name of this key attribute.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>KeyType</code> - The role that the key attribute will assume:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>HASH</code> - partition key</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>RANGE</code> - sort key</p>
-        /// </li>
-        /// </ul>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>The partition key of an item is also known as its <i>hash
-        /// attribute</i>. The term "hash attribute" derives from the DynamoDB usage of
-        /// an internal hash function to evenly distribute data items across partitions, based
-        /// on their partition key values.</p>
-        /// <p>The sort key of an item is also known as its <i>range attribute</i>.
-        /// The term "range attribute" derives from the way DynamoDB stores items with the same
-        /// partition key physically close together, in sorted order by the sort key value.</p>
-        /// </note>
-        /// <p>For a simple primary key (partition key), you must provide
-        /// exactly one element with a <code>KeyType</code> of <code>HASH</code>.</p>
-        /// <p>For a composite primary key (partition key and sort key), you must provide exactly two
-        /// elements, in this order: The first element must have a <code>KeyType</code> of <code>HASH</code>,
-        /// and the second element must have a <code>KeyType</code> of <code>RANGE</code>.</p>
-        /// <p>For more information, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/WorkingWithTables.html#WorkingWithTables.primary.key">Working with Tables</a> in the <i>Amazon DynamoDB Developer
-        /// Guide</i>.</p>
-        pub fn key_schema(mut self, inp: std::vec::Vec<crate::model::KeySchemaElement>) -> Self {
-            self.key_schema = Some(inp);
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
             self
         }
-        /// <p>One or more local secondary indexes (the maximum is 5) to be created on the table. Each index is scoped to a given partition key value. There is a 10 GB size limit per partition key value; otherwise, the size of a local secondary index is unconstrained.</p>
-        /// <p>Each local secondary index in the array includes the following:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>IndexName</code> - The name of the local secondary index. Must be unique only for this table.</p>
-        /// <p></p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>KeySchema</code> - Specifies the key schema for the local secondary index. The key schema must begin with
-        /// the same partition key as the table.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>Projection</code> - Specifies
-        /// attributes that are copied (projected) from the table into the index. These are in
-        /// addition to the primary key attributes and index key
-        /// attributes, which are automatically projected. Each
-        /// attribute specification is composed of:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>ProjectionType</code> - One
-        /// of the following:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>KEYS_ONLY</code> - Only the index and primary keys are projected into the
-        /// index.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>INCLUDE</code> - Only the specified table attributes are
-        /// projected into the index. The list of projected attributes is in
-        /// <code>NonKeyAttributes</code>.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>ALL</code> - All of the table attributes are projected into the
-        /// index.</p>
-        /// </li>
-        /// </ul>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>NonKeyAttributes</code> - A list of one or more non-key
-        /// attribute names that are projected into the secondary index. The total
-        /// count of attributes provided in <code>NonKeyAttributes</code>,
-        /// summed across all of the secondary indexes, must not exceed 100. If you
-        /// project the same attribute into two different indexes, this counts as
-        /// two distinct attributes when determining the total.</p>
-        /// </li>
-        /// </ul>
-        /// </li>
-        /// </ul>
+        pub fn key_schema(mut self, inp: impl Into<crate::model::KeySchemaElement>) -> Self {
+            let mut v = self.key_schema.unwrap_or_default();
+            v.push(inp.into());
+            self.key_schema = Some(v);
+            self
+        }
+        pub fn set_key_schema(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::KeySchemaElement>>,
+        ) -> Self {
+            self.key_schema = inp;
+            self
+        }
         pub fn local_secondary_indexes(
             mut self,
-            inp: std::vec::Vec<crate::model::LocalSecondaryIndex>,
+            inp: impl Into<crate::model::LocalSecondaryIndex>,
         ) -> Self {
-            self.local_secondary_indexes = Some(inp);
+            let mut v = self.local_secondary_indexes.unwrap_or_default();
+            v.push(inp.into());
+            self.local_secondary_indexes = Some(v);
             self
         }
-        /// <p>One or more global secondary indexes (the maximum is 20) to be created on the table. Each global secondary index in the array includes the following:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>IndexName</code> - The name of the global secondary index. Must be unique only for this table.</p>
-        /// <p></p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>KeySchema</code> - Specifies the key schema for the global secondary index.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>Projection</code> - Specifies
-        /// attributes that are copied (projected) from the table into the index. These are in
-        /// addition to the primary key attributes and index key
-        /// attributes, which are automatically projected. Each
-        /// attribute specification is composed of:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>ProjectionType</code> - One
-        /// of the following:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>KEYS_ONLY</code> - Only the index and primary keys are projected into the
-        /// index.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>INCLUDE</code> - Only the specified table attributes are
-        /// projected into the index. The list of projected attributes is in
-        /// <code>NonKeyAttributes</code>.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>ALL</code> - All of the table attributes are projected into the
-        /// index.</p>
-        /// </li>
-        /// </ul>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>NonKeyAttributes</code> - A list of one or more non-key attribute names that are
-        /// projected into the secondary index. The total count of attributes provided in <code>NonKeyAttributes</code>, summed across all of the secondary indexes, must not exceed 100. If you project the same attribute into two different indexes, this counts as two distinct attributes when determining the total.</p>
-        /// </li>
-        /// </ul>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>ProvisionedThroughput</code> - The provisioned throughput settings for the global secondary index,
-        /// consisting of read and write capacity units.</p>
-        /// </li>
-        /// </ul>
+        pub fn set_local_secondary_indexes(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::LocalSecondaryIndex>>,
+        ) -> Self {
+            self.local_secondary_indexes = inp;
+            self
+        }
         pub fn global_secondary_indexes(
             mut self,
-            inp: std::vec::Vec<crate::model::GlobalSecondaryIndex>,
+            inp: impl Into<crate::model::GlobalSecondaryIndex>,
         ) -> Self {
-            self.global_secondary_indexes = Some(inp);
+            let mut v = self.global_secondary_indexes.unwrap_or_default();
+            v.push(inp.into());
+            self.global_secondary_indexes = Some(v);
+            self
+        }
+        pub fn set_global_secondary_indexes(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::GlobalSecondaryIndex>>,
+        ) -> Self {
+            self.global_secondary_indexes = inp;
             self
         }
         /// <p>Controls how you are charged for read and write throughput and how you manage capacity. This setting can be changed later.</p>
@@ -959,6 +838,13 @@ pub mod create_table_input {
             self.billing_mode = Some(inp);
             self
         }
+        pub fn set_billing_mode(
+            mut self,
+            inp: std::option::Option<crate::model::BillingMode>,
+        ) -> Self {
+            self.billing_mode = inp;
+            self
+        }
         /// <p>Represents the provisioned throughput settings for a specified table or index. The
         /// settings can be modified using the <code>UpdateTable</code> operation.</p>
         /// <p> If you set BillingMode as <code>PROVISIONED</code>, you must specify this property. If you
@@ -969,6 +855,13 @@ pub mod create_table_input {
         /// Guide</i>.</p>
         pub fn provisioned_throughput(mut self, inp: crate::model::ProvisionedThroughput) -> Self {
             self.provisioned_throughput = Some(inp);
+            self
+        }
+        pub fn set_provisioned_throughput(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughput>,
+        ) -> Self {
+            self.provisioned_throughput = inp;
             self
         }
         /// <p>The settings for DynamoDB Streams on the table. These settings consist of:</p>
@@ -1011,14 +904,36 @@ pub mod create_table_input {
             self.stream_specification = Some(inp);
             self
         }
+        pub fn set_stream_specification(
+            mut self,
+            inp: std::option::Option<crate::model::StreamSpecification>,
+        ) -> Self {
+            self.stream_specification = inp;
+            self
+        }
         /// <p>Represents the settings used to enable server-side encryption.</p>
         pub fn sse_specification(mut self, inp: crate::model::SSESpecification) -> Self {
             self.sse_specification = Some(inp);
             self
         }
-        /// <p>A list of key-value pairs to label the table. For more information, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Tagging.html">Tagging for DynamoDB</a>.</p>
-        pub fn tags(mut self, inp: std::vec::Vec<crate::model::Tag>) -> Self {
-            self.tags = Some(inp);
+        pub fn set_sse_specification(
+            mut self,
+            inp: std::option::Option<crate::model::SSESpecification>,
+        ) -> Self {
+            self.sse_specification = inp;
+            self
+        }
+        pub fn tags(mut self, inp: impl Into<crate::model::Tag>) -> Self {
+            let mut v = self.tags.unwrap_or_default();
+            v.push(inp.into());
+            self.tags = Some(v);
+            self
+        }
+        pub fn set_tags(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::Tag>>,
+        ) -> Self {
+            self.tags = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`CreateTable`](crate::operation::CreateTable)>
@@ -1026,75 +941,82 @@ pub mod create_table_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::CreateTable,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::CreateTable,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::CreateTable::new(crate::input::CreateTableInput {
-                attribute_definitions: self.attribute_definitions,
-                table_name: self.table_name,
-                key_schema: self.key_schema,
-                local_secondary_indexes: self.local_secondary_indexes,
-                global_secondary_indexes: self.global_secondary_indexes,
-                billing_mode: self.billing_mode,
-                provisioned_throughput: self.provisioned_throughput,
-                stream_specification: self.stream_specification,
-                sse_specification: self.sse_specification,
-                tags: self.tags,
-            });
+            Ok({
+                let op = crate::operation::CreateTable::new(crate::input::CreateTableInput {
+                    attribute_definitions: self.attribute_definitions,
+                    table_name: self.table_name,
+                    key_schema: self.key_schema,
+                    local_secondary_indexes: self.local_secondary_indexes,
+                    global_secondary_indexes: self.global_secondary_indexes,
+                    billing_mode: self.billing_mode,
+                    provisioned_throughput: self.provisioned_throughput,
+                    stream_specification: self.stream_specification,
+                    sse_specification: self.sse_specification,
+                    tags: self.tags,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("CreateTable", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("CreateTable", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl CreateTableInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.CreateTable")
+            .header("X-Amz-Target", "DynamoDB_20120810.CreateTable"))
     }
     fn body(&self) -> crate::serializer::CreateTableInputBody {
         crate::serializer::CreateTableInputBody {
@@ -1143,71 +1065,82 @@ pub mod delete_backup_input {
             self.backup_arn = Some(inp.into());
             self
         }
+        pub fn set_backup_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.backup_arn = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`DeleteBackup`](crate::operation::DeleteBackup)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DeleteBackup,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DeleteBackup,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::DeleteBackup::new(crate::input::DeleteBackupInput {
-                backup_arn: self.backup_arn,
-            });
+            Ok({
+                let op = crate::operation::DeleteBackup::new(crate::input::DeleteBackupInput {
+                    backup_arn: self.backup_arn,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("DeleteBackup", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("DeleteBackup", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DeleteBackupInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.DeleteBackup")
+            .header("X-Amz-Target", "DynamoDB_20120810.DeleteBackup"))
     }
     fn body(&self) -> crate::serializer::DeleteBackupInputBody {
         crate::serializer::DeleteBackupInputBody {
@@ -1265,32 +1198,62 @@ pub mod delete_item_input {
             self.table_name = Some(inp.into());
             self
         }
-        /// <p>A map of attribute names to <code>AttributeValue</code> objects, representing the primary key of
-        /// the item to delete.</p>
-        /// <p>For the primary key, you must provide all of the attributes. For example, with a simple primary key, you only need to provide a value for the partition key. For a composite primary key, you must provide values for both the partition key and the sort key.</p>
-        pub fn key(
-            mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
-        ) -> Self {
-            self.key = Some(inp);
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
             self
         }
-        /// <p>This is a legacy parameter.  Use <code>ConditionExpression</code> instead.  For more information, see
-        /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.Expected.html">Expected</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
-        pub fn expected(
+        pub fn key(
             mut self,
-            inp: std::collections::HashMap<
-                std::string::String,
-                crate::model::ExpectedAttributeValue,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
+        ) -> Self {
+            let mut hash_map = self.key.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.key = Some(hash_map);
+            self
+        }
+        pub fn set_key(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
             >,
         ) -> Self {
-            self.expected = Some(inp);
+            self.key = inp;
+            self
+        }
+        pub fn expected(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::ExpectedAttributeValue>,
+        ) -> Self {
+            let mut hash_map = self.expected.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expected = Some(hash_map);
+            self
+        }
+        pub fn set_expected(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<
+                    std::string::String,
+                    crate::model::ExpectedAttributeValue,
+                >,
+            >,
+        ) -> Self {
+            self.expected = inp;
             self
         }
         /// <p>This is a legacy parameter.  Use <code>ConditionExpression</code> instead.  For more information, see
         /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.ConditionalOperator.html">ConditionalOperator</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
         pub fn conditional_operator(mut self, inp: crate::model::ConditionalOperator) -> Self {
             self.conditional_operator = Some(inp);
+            self
+        }
+        pub fn set_conditional_operator(
+            mut self,
+            inp: std::option::Option<crate::model::ConditionalOperator>,
+        ) -> Self {
+            self.conditional_operator = inp;
             self
         }
         /// <p>Use <code>ReturnValues</code> if you want to get the item attributes as they appeared before they
@@ -1316,6 +1279,13 @@ pub mod delete_item_input {
             self.return_values = Some(inp);
             self
         }
+        pub fn set_return_values(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnValue>,
+        ) -> Self {
+            self.return_values = inp;
+            self
+        }
         /// <p>Determines the level of detail about provisioned throughput consumption that is returned in the response:</p>
         /// <ul>
         /// <li>
@@ -1339,6 +1309,13 @@ pub mod delete_item_input {
             self.return_consumed_capacity = Some(inp);
             self
         }
+        pub fn set_return_consumed_capacity(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnConsumedCapacity>,
+        ) -> Self {
+            self.return_consumed_capacity = inp;
+            self
+        }
         /// <p>Determines whether item collection metrics are returned.  If set to <code>SIZE</code>, the response includes statistics about item collections, if any, that were modified during
         /// the operation are returned in the response. If set to <code>NONE</code> (the default), no statistics are returned.</p>
         pub fn return_item_collection_metrics(
@@ -1346,6 +1323,13 @@ pub mod delete_item_input {
             inp: crate::model::ReturnItemCollectionMetrics,
         ) -> Self {
             self.return_item_collection_metrics = Some(inp);
+            self
+        }
+        pub fn set_return_item_collection_metrics(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnItemCollectionMetrics>,
+        ) -> Self {
+            self.return_item_collection_metrics = inp;
             self
         }
         /// <p>A condition that must be satisfied in order for a conditional <code>DeleteItem</code> to
@@ -1374,74 +1358,49 @@ pub mod delete_item_input {
             self.condition_expression = Some(inp.into());
             self
         }
-        /// <p>One or more substitution tokens for attribute names in an expression. The following are some use cases for using <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>To access an attribute whose name conflicts with a DynamoDB reserved word.</p>
-        /// </li>
-        /// <li>
-        /// <p>To create a placeholder for repeating occurrences of an attribute name in an expression.</p>
-        /// </li>
-        /// <li>
-        /// <p>To prevent special characters in an attribute name from being misinterpreted in an expression.</p>
-        /// </li>
-        /// </ul>
-        /// <p>Use the <b>#</b> character in an expression to dereference an attribute name. For example, consider the following attribute name:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>Percentile</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>The name of this attribute conflicts with a reserved word, so it cannot be used directly in an expression. (For the complete list of reserved words, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ReservedWords.html">Reserved Words</a> in the <i>Amazon DynamoDB Developer Guide</i>). To work around this, you could specify the following for <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>{"#P":"Percentile"}</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>You could then use this substitution in an expression, as in this example:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>#P = :val</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>Tokens that begin with the <b>:</b> character are <i>expression attribute values</i>, which are placeholders for the actual value at runtime.</p>
-        /// </note>
-        /// <p>For more information on expression attribute names, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.AccessingItemAttributes.html">Specifying Item Attributes</a> in the <i>Amazon DynamoDB Developer
-        /// Guide</i>.</p>
-        pub fn expression_attribute_names(
+        pub fn set_condition_expression(
             mut self,
-            inp: std::collections::HashMap<std::string::String, std::string::String>,
+            inp: std::option::Option<std::string::String>,
         ) -> Self {
-            self.expression_attribute_names = Some(inp);
+            self.condition_expression = inp;
             self
         }
-        /// <p>One or more values that can be substituted in an expression.</p>
-        /// <p>Use the <b>:</b> (colon) character in an expression to dereference an attribute value. For example, suppose that you wanted to check whether the value of the <i>ProductStatus</i> attribute was one of the following: </p>
-        /// <p>
-        /// <code>Available | Backordered | Discontinued</code>
-        /// </p>
-        /// <p>You would first need to specify <code>ExpressionAttributeValues</code> as follows:</p>
-        /// <p>
-        /// <code>{ ":avail":{"S":"Available"}, ":back":{"S":"Backordered"}, ":disc":{"S":"Discontinued"} }</code>
-        /// </p>
-        /// <p>You could then use these values in an expression, such as this:</p>
-        /// <p>
-        /// <code>ProductStatus IN (:avail, :back, :disc)</code>
-        /// </p>
-        /// <p>For more information on expression attribute values, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.SpecifyingConditions.html">Condition Expressions</a> in the <i>Amazon DynamoDB Developer
-        /// Guide</i>.</p>
+        pub fn expression_attribute_names(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<std::string::String>,
+        ) -> Self {
+            let mut hash_map = self.expression_attribute_names.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_names = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_names(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, std::string::String>,
+            >,
+        ) -> Self {
+            self.expression_attribute_names = inp;
+            self
+        }
         pub fn expression_attribute_values(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.expression_attribute_values = Some(inp);
+            let mut hash_map = self.expression_attribute_values.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_values = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_values(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.expression_attribute_values = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`DeleteItem`](crate::operation::DeleteItem)>
@@ -1449,75 +1408,82 @@ pub mod delete_item_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DeleteItem,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DeleteItem,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::DeleteItem::new(crate::input::DeleteItemInput {
-                table_name: self.table_name,
-                key: self.key,
-                expected: self.expected,
-                conditional_operator: self.conditional_operator,
-                return_values: self.return_values,
-                return_consumed_capacity: self.return_consumed_capacity,
-                return_item_collection_metrics: self.return_item_collection_metrics,
-                condition_expression: self.condition_expression,
-                expression_attribute_names: self.expression_attribute_names,
-                expression_attribute_values: self.expression_attribute_values,
-            });
+            Ok({
+                let op = crate::operation::DeleteItem::new(crate::input::DeleteItemInput {
+                    table_name: self.table_name,
+                    key: self.key,
+                    expected: self.expected,
+                    conditional_operator: self.conditional_operator,
+                    return_values: self.return_values,
+                    return_consumed_capacity: self.return_consumed_capacity,
+                    return_item_collection_metrics: self.return_item_collection_metrics,
+                    condition_expression: self.condition_expression,
+                    expression_attribute_names: self.expression_attribute_names,
+                    expression_attribute_values: self.expression_attribute_values,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("DeleteItem", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("DeleteItem", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DeleteItemInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.DeleteItem")
+            .header("X-Amz-Target", "DynamoDB_20120810.DeleteItem"))
     }
     fn body(&self) -> crate::serializer::DeleteItemInputBody {
         crate::serializer::DeleteItemInputBody {
@@ -1566,71 +1532,82 @@ pub mod delete_table_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`DeleteTable`](crate::operation::DeleteTable)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DeleteTable,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DeleteTable,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::DeleteTable::new(crate::input::DeleteTableInput {
-                table_name: self.table_name,
-            });
+            Ok({
+                let op = crate::operation::DeleteTable::new(crate::input::DeleteTableInput {
+                    table_name: self.table_name,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("DeleteTable", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("DeleteTable", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DeleteTableInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.DeleteTable")
+            .header("X-Amz-Target", "DynamoDB_20120810.DeleteTable"))
     }
     fn body(&self) -> crate::serializer::DeleteTableInputBody {
         crate::serializer::DeleteTableInputBody {
@@ -1670,71 +1647,82 @@ pub mod describe_backup_input {
             self.backup_arn = Some(inp.into());
             self
         }
+        pub fn set_backup_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.backup_arn = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`DescribeBackup`](crate::operation::DescribeBackup)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DescribeBackup,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DescribeBackup,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::DescribeBackup::new(crate::input::DescribeBackupInput {
-                backup_arn: self.backup_arn,
-            });
+            Ok({
+                let op = crate::operation::DescribeBackup::new(crate::input::DescribeBackupInput {
+                    backup_arn: self.backup_arn,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("DescribeBackup", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("DescribeBackup", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DescribeBackupInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.DescribeBackup")
+            .header("X-Amz-Target", "DynamoDB_20120810.DescribeBackup"))
     }
     fn body(&self) -> crate::serializer::DescribeBackupInputBody {
         crate::serializer::DescribeBackupInputBody {
@@ -1774,76 +1762,87 @@ pub mod describe_continuous_backups_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`DescribeContinuousBackups`](crate::operation::DescribeContinuousBackups)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DescribeContinuousBackups,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DescribeContinuousBackups,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::DescribeContinuousBackups::new(
-                crate::input::DescribeContinuousBackupsInput {
-                    table_name: self.table_name,
-                },
-            );
+            Ok({
+                let op = crate::operation::DescribeContinuousBackups::new(
+                    crate::input::DescribeContinuousBackupsInput {
+                        table_name: self.table_name,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("DescribeContinuousBackups", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("DescribeContinuousBackups", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DescribeContinuousBackupsInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
             .header(
                 "X-Amz-Target",
                 "DynamoDB_20120810.DescribeContinuousBackups",
-            )
+            ))
     }
     fn body(&self) -> crate::serializer::DescribeContinuousBackupsInputBody {
         crate::serializer::DescribeContinuousBackupsInputBody {
@@ -1884,9 +1883,17 @@ pub mod describe_contributor_insights_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>The name of the global secondary index to describe, if applicable.</p>
         pub fn index_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.index_name = Some(inp.into());
+            self
+        }
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`DescribeContributorInsights`](crate::operation::DescribeContributorInsights)>
@@ -1894,72 +1901,82 @@ pub mod describe_contributor_insights_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DescribeContributorInsights,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DescribeContributorInsights,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::DescribeContributorInsights::new(
-                crate::input::DescribeContributorInsightsInput {
-                    table_name: self.table_name,
-                    index_name: self.index_name,
-                },
-            );
+            Ok({
+                let op = crate::operation::DescribeContributorInsights::new(
+                    crate::input::DescribeContributorInsightsInput {
+                        table_name: self.table_name,
+                        index_name: self.index_name,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("DescribeContributorInsights", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new(
+                        "DescribeContributorInsights",
+                        "dynamodb",
+                    ),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DescribeContributorInsightsInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
             .header(
                 "X-Amz-Target",
                 "DynamoDB_20120810.DescribeContributorInsights",
-            )
+            ))
     }
     fn body(&self) -> crate::serializer::DescribeContributorInsightsInputBody {
         crate::serializer::DescribeContributorInsightsInputBody {
@@ -1998,65 +2015,73 @@ pub mod describe_endpoints_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DescribeEndpoints,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DescribeEndpoints,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op =
-                crate::operation::DescribeEndpoints::new(crate::input::DescribeEndpointsInput {});
+            Ok({
+                let op = crate::operation::DescribeEndpoints::new(
+                    crate::input::DescribeEndpointsInput {},
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("DescribeEndpoints", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("DescribeEndpoints", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DescribeEndpointsInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.DescribeEndpoints")
+            .header("X-Amz-Target", "DynamoDB_20120810.DescribeEndpoints"))
     }
     pub fn build_body(&self) -> std::vec::Vec<u8> {
         "{}".to_string().into()
@@ -2091,71 +2116,82 @@ pub mod describe_export_input {
             self.export_arn = Some(inp.into());
             self
         }
+        pub fn set_export_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.export_arn = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`DescribeExport`](crate::operation::DescribeExport)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DescribeExport,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DescribeExport,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::DescribeExport::new(crate::input::DescribeExportInput {
-                export_arn: self.export_arn,
-            });
+            Ok({
+                let op = crate::operation::DescribeExport::new(crate::input::DescribeExportInput {
+                    export_arn: self.export_arn,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("DescribeExport", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("DescribeExport", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DescribeExportInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.DescribeExport")
+            .header("X-Amz-Target", "DynamoDB_20120810.DescribeExport"))
     }
     fn body(&self) -> crate::serializer::DescribeExportInputBody {
         crate::serializer::DescribeExportInputBody {
@@ -2195,73 +2231,87 @@ pub mod describe_global_table_input {
             self.global_table_name = Some(inp.into());
             self
         }
+        pub fn set_global_table_name(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.global_table_name = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`DescribeGlobalTable`](crate::operation::DescribeGlobalTable)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DescribeGlobalTable,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DescribeGlobalTable,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::DescribeGlobalTable::new(
-                crate::input::DescribeGlobalTableInput {
-                    global_table_name: self.global_table_name,
-                },
-            );
+            Ok({
+                let op = crate::operation::DescribeGlobalTable::new(
+                    crate::input::DescribeGlobalTableInput {
+                        global_table_name: self.global_table_name,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("DescribeGlobalTable", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("DescribeGlobalTable", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DescribeGlobalTableInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.DescribeGlobalTable")
+            .header("X-Amz-Target", "DynamoDB_20120810.DescribeGlobalTable"))
     }
     fn body(&self) -> crate::serializer::DescribeGlobalTableInputBody {
         crate::serializer::DescribeGlobalTableInputBody {
@@ -2301,76 +2351,93 @@ pub mod describe_global_table_settings_input {
             self.global_table_name = Some(inp.into());
             self
         }
+        pub fn set_global_table_name(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.global_table_name = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`DescribeGlobalTableSettings`](crate::operation::DescribeGlobalTableSettings)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DescribeGlobalTableSettings,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DescribeGlobalTableSettings,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::DescribeGlobalTableSettings::new(
-                crate::input::DescribeGlobalTableSettingsInput {
-                    global_table_name: self.global_table_name,
-                },
-            );
+            Ok({
+                let op = crate::operation::DescribeGlobalTableSettings::new(
+                    crate::input::DescribeGlobalTableSettingsInput {
+                        global_table_name: self.global_table_name,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("DescribeGlobalTableSettings", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new(
+                        "DescribeGlobalTableSettings",
+                        "dynamodb",
+                    ),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DescribeGlobalTableSettingsInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
             .header(
                 "X-Amz-Target",
                 "DynamoDB_20120810.DescribeGlobalTableSettings",
-            )
+            ))
     }
     fn body(&self) -> crate::serializer::DescribeGlobalTableSettingsInputBody {
         crate::serializer::DescribeGlobalTableSettingsInputBody {
@@ -2410,79 +2477,90 @@ pub mod describe_kinesis_streaming_destination_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`DescribeKinesisStreamingDestination`](crate::operation::DescribeKinesisStreamingDestination)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DescribeKinesisStreamingDestination,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DescribeKinesisStreamingDestination,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::DescribeKinesisStreamingDestination::new(
-                crate::input::DescribeKinesisStreamingDestinationInput {
-                    table_name: self.table_name,
-                },
-            );
+            Ok({
+                let op = crate::operation::DescribeKinesisStreamingDestination::new(
+                    crate::input::DescribeKinesisStreamingDestinationInput {
+                        table_name: self.table_name,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new(
-                    "DescribeKinesisStreamingDestination",
-                    "dynamodb",
-                ),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new(
+                        "DescribeKinesisStreamingDestination",
+                        "dynamodb",
+                    ),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DescribeKinesisStreamingDestinationInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
             .header(
                 "X-Amz-Target",
                 "DynamoDB_20120810.DescribeKinesisStreamingDestination",
-            )
+            ))
     }
     fn body(&self) -> crate::serializer::DescribeKinesisStreamingDestinationInputBody {
         crate::serializer::DescribeKinesisStreamingDestinationInputBody {
@@ -2520,64 +2598,72 @@ pub mod describe_limits_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DescribeLimits,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DescribeLimits,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::DescribeLimits::new(crate::input::DescribeLimitsInput {});
+            Ok({
+                let op =
+                    crate::operation::DescribeLimits::new(crate::input::DescribeLimitsInput {});
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("DescribeLimits", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("DescribeLimits", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DescribeLimitsInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.DescribeLimits")
+            .header("X-Amz-Target", "DynamoDB_20120810.DescribeLimits"))
     }
     pub fn build_body(&self) -> std::vec::Vec<u8> {
         "{}".to_string().into()
@@ -2612,71 +2698,82 @@ pub mod describe_table_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`DescribeTable`](crate::operation::DescribeTable)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DescribeTable,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DescribeTable,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::DescribeTable::new(crate::input::DescribeTableInput {
-                table_name: self.table_name,
-            });
+            Ok({
+                let op = crate::operation::DescribeTable::new(crate::input::DescribeTableInput {
+                    table_name: self.table_name,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("DescribeTable", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("DescribeTable", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DescribeTableInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.DescribeTable")
+            .header("X-Amz-Target", "DynamoDB_20120810.DescribeTable"))
     }
     fn body(&self) -> crate::serializer::DescribeTableInputBody {
         crate::serializer::DescribeTableInputBody {
@@ -2716,79 +2813,90 @@ pub mod describe_table_replica_auto_scaling_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`DescribeTableReplicaAutoScaling`](crate::operation::DescribeTableReplicaAutoScaling)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DescribeTableReplicaAutoScaling,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DescribeTableReplicaAutoScaling,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::DescribeTableReplicaAutoScaling::new(
-                crate::input::DescribeTableReplicaAutoScalingInput {
-                    table_name: self.table_name,
-                },
-            );
+            Ok({
+                let op = crate::operation::DescribeTableReplicaAutoScaling::new(
+                    crate::input::DescribeTableReplicaAutoScalingInput {
+                        table_name: self.table_name,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new(
-                    "DescribeTableReplicaAutoScaling",
-                    "dynamodb",
-                ),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new(
+                        "DescribeTableReplicaAutoScaling",
+                        "dynamodb",
+                    ),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DescribeTableReplicaAutoScalingInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
             .header(
                 "X-Amz-Target",
                 "DynamoDB_20120810.DescribeTableReplicaAutoScaling",
-            )
+            ))
     }
     fn body(&self) -> crate::serializer::DescribeTableReplicaAutoScalingInputBody {
         crate::serializer::DescribeTableReplicaAutoScalingInputBody {
@@ -2828,72 +2936,84 @@ pub mod describe_time_to_live_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`DescribeTimeToLive`](crate::operation::DescribeTimeToLive)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DescribeTimeToLive,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DescribeTimeToLive,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op =
-                crate::operation::DescribeTimeToLive::new(crate::input::DescribeTimeToLiveInput {
-                    table_name: self.table_name,
-                });
+            Ok({
+                let op = crate::operation::DescribeTimeToLive::new(
+                    crate::input::DescribeTimeToLiveInput {
+                        table_name: self.table_name,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("DescribeTimeToLive", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("DescribeTimeToLive", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DescribeTimeToLiveInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.DescribeTimeToLive")
+            .header("X-Amz-Target", "DynamoDB_20120810.DescribeTimeToLive"))
     }
     fn body(&self) -> crate::serializer::DescribeTimeToLiveInputBody {
         crate::serializer::DescribeTimeToLiveInputBody {
@@ -2934,9 +3054,17 @@ pub mod disable_kinesis_streaming_destination_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>The ARN for a Kinesis data stream.</p>
         pub fn stream_arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.stream_arn = Some(inp.into());
+            self
+        }
+        pub fn set_stream_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.stream_arn = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`DisableKinesisStreamingDestination`](crate::operation::DisableKinesisStreamingDestination)>
@@ -2944,75 +3072,82 @@ pub mod disable_kinesis_streaming_destination_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::DisableKinesisStreamingDestination,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::DisableKinesisStreamingDestination,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::DisableKinesisStreamingDestination::new(
-                crate::input::DisableKinesisStreamingDestinationInput {
-                    table_name: self.table_name,
-                    stream_arn: self.stream_arn,
-                },
-            );
+            Ok({
+                let op = crate::operation::DisableKinesisStreamingDestination::new(
+                    crate::input::DisableKinesisStreamingDestinationInput {
+                        table_name: self.table_name,
+                        stream_arn: self.stream_arn,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new(
-                    "DisableKinesisStreamingDestination",
-                    "dynamodb",
-                ),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new(
+                        "DisableKinesisStreamingDestination",
+                        "dynamodb",
+                    ),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl DisableKinesisStreamingDestinationInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
             .header(
                 "X-Amz-Target",
                 "DynamoDB_20120810.DisableKinesisStreamingDestination",
-            )
+            ))
     }
     fn body(&self) -> crate::serializer::DisableKinesisStreamingDestinationInputBody {
         crate::serializer::DisableKinesisStreamingDestinationInputBody {
@@ -3054,9 +3189,17 @@ pub mod enable_kinesis_streaming_destination_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>The ARN for a Kinesis data stream.</p>
         pub fn stream_arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.stream_arn = Some(inp.into());
+            self
+        }
+        pub fn set_stream_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.stream_arn = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`EnableKinesisStreamingDestination`](crate::operation::EnableKinesisStreamingDestination)>
@@ -3064,75 +3207,82 @@ pub mod enable_kinesis_streaming_destination_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::EnableKinesisStreamingDestination,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::EnableKinesisStreamingDestination,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::EnableKinesisStreamingDestination::new(
-                crate::input::EnableKinesisStreamingDestinationInput {
-                    table_name: self.table_name,
-                    stream_arn: self.stream_arn,
-                },
-            );
+            Ok({
+                let op = crate::operation::EnableKinesisStreamingDestination::new(
+                    crate::input::EnableKinesisStreamingDestinationInput {
+                        table_name: self.table_name,
+                        stream_arn: self.stream_arn,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new(
-                    "EnableKinesisStreamingDestination",
-                    "dynamodb",
-                ),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new(
+                        "EnableKinesisStreamingDestination",
+                        "dynamodb",
+                    ),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl EnableKinesisStreamingDestinationInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
             .header(
                 "X-Amz-Target",
                 "DynamoDB_20120810.EnableKinesisStreamingDestination",
-            )
+            ))
     }
     fn body(&self) -> crate::serializer::EnableKinesisStreamingDestinationInputBody {
         crate::serializer::EnableKinesisStreamingDestinationInputBody {
@@ -3178,11 +3328,21 @@ pub mod execute_statement_input {
             self.statement = Some(inp.into());
             self
         }
-        /// <p>
-        /// The parameters for the PartiQL statement, if any.
-        /// </p>
-        pub fn parameters(mut self, inp: std::vec::Vec<crate::model::AttributeValue>) -> Self {
-            self.parameters = Some(inp);
+        pub fn set_statement(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.statement = inp;
+            self
+        }
+        pub fn parameters(mut self, inp: impl Into<crate::model::AttributeValue>) -> Self {
+            let mut v = self.parameters.unwrap_or_default();
+            v.push(inp.into());
+            self.parameters = Some(v);
+            self
+        }
+        pub fn set_parameters(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::AttributeValue>>,
+        ) -> Self {
+            self.parameters = inp;
             self
         }
         /// <p>
@@ -3192,6 +3352,10 @@ pub mod execute_statement_input {
             self.consistent_read = Some(inp);
             self
         }
+        pub fn set_consistent_read(mut self, inp: std::option::Option<bool>) -> Self {
+            self.consistent_read = inp;
+            self
+        }
         /// <p>
         /// Set this value to get remaining results, if <code>NextToken</code> was returned in the statement response.
         /// </p>
@@ -3199,74 +3363,86 @@ pub mod execute_statement_input {
             self.next_token = Some(inp.into());
             self
         }
+        pub fn set_next_token(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.next_token = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`ExecuteStatement`](crate::operation::ExecuteStatement)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::ExecuteStatement,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::ExecuteStatement,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::ExecuteStatement::new(crate::input::ExecuteStatementInput {
-                statement: self.statement,
-                parameters: self.parameters,
-                consistent_read: self.consistent_read,
-                next_token: self.next_token,
-            });
+            Ok({
+                let op =
+                    crate::operation::ExecuteStatement::new(crate::input::ExecuteStatementInput {
+                        statement: self.statement,
+                        parameters: self.parameters,
+                        consistent_read: self.consistent_read,
+                        next_token: self.next_token,
+                    });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("ExecuteStatement", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("ExecuteStatement", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl ExecuteStatementInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.ExecuteStatement")
+            .header("X-Amz-Target", "DynamoDB_20120810.ExecuteStatement"))
     }
     fn body(&self) -> crate::serializer::ExecuteStatementInputBody {
         crate::serializer::ExecuteStatementInputBody {
@@ -3306,14 +3482,20 @@ pub mod execute_transaction_input {
         client_request_token: std::option::Option<std::string::String>,
     }
     impl Builder {
-        /// <p>
-        /// The list of PartiQL statements representing the transaction to run.
-        /// </p>
         pub fn transact_statements(
             mut self,
-            inp: std::vec::Vec<crate::model::ParameterizedStatement>,
+            inp: impl Into<crate::model::ParameterizedStatement>,
         ) -> Self {
-            self.transact_statements = Some(inp);
+            let mut v = self.transact_statements.unwrap_or_default();
+            v.push(inp.into());
+            self.transact_statements = Some(v);
+            self
+        }
+        pub fn set_transact_statements(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::ParameterizedStatement>>,
+        ) -> Self {
+            self.transact_statements = inp;
             self
         }
         /// <p>
@@ -3323,75 +3505,90 @@ pub mod execute_transaction_input {
             self.client_request_token = Some(inp.into());
             self
         }
+        pub fn set_client_request_token(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.client_request_token = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`ExecuteTransaction`](crate::operation::ExecuteTransaction)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::ExecuteTransaction,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::ExecuteTransaction,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op =
-                crate::operation::ExecuteTransaction::new(crate::input::ExecuteTransactionInput {
-                    transact_statements: self.transact_statements,
-                    client_request_token: self
-                        .client_request_token
-                        .or_else(|| Some(_config.make_token.make_idempotency_token())),
-                });
+            Ok({
+                let op = crate::operation::ExecuteTransaction::new(
+                    crate::input::ExecuteTransactionInput {
+                        transact_statements: self.transact_statements,
+                        client_request_token: self
+                            .client_request_token
+                            .or_else(|| Some(_config.make_token.make_idempotency_token())),
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("ExecuteTransaction", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("ExecuteTransaction", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl ExecuteTransactionInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.ExecuteTransaction")
+            .header("X-Amz-Target", "DynamoDB_20120810.ExecuteTransaction"))
     }
     fn body(&self) -> crate::serializer::ExecuteTransactionInputBody {
         crate::serializer::ExecuteTransactionInputBody {
@@ -3440,10 +3637,18 @@ pub mod export_table_to_point_in_time_input {
             self.table_arn = Some(inp.into());
             self
         }
+        pub fn set_table_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_arn = inp;
+            self
+        }
         /// <p>Time in the past from which to export table data. The table export will be a snapshot
         /// of the table's state at this point in time.</p>
         pub fn export_time(mut self, inp: smithy_types::Instant) -> Self {
             self.export_time = Some(inp);
+            self
+        }
+        pub fn set_export_time(mut self, inp: std::option::Option<smithy_types::Instant>) -> Self {
+            self.export_time = inp;
             self
         }
         /// <p>Providing a <code>ClientToken</code> makes the call to
@@ -3460,9 +3665,17 @@ pub mod export_table_to_point_in_time_input {
             self.client_token = Some(inp.into());
             self
         }
+        pub fn set_client_token(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.client_token = inp;
+            self
+        }
         /// <p>The name of the Amazon S3 bucket to export the snapshot to.</p>
         pub fn s3_bucket(mut self, inp: impl Into<std::string::String>) -> Self {
             self.s3_bucket = Some(inp.into());
+            self
+        }
+        pub fn set_s3_bucket(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.s3_bucket = inp;
             self
         }
         /// <p>The ID of the AWS account that owns the bucket the export will be stored in.</p>
@@ -3470,10 +3683,21 @@ pub mod export_table_to_point_in_time_input {
             self.s3_bucket_owner = Some(inp.into());
             self
         }
+        pub fn set_s3_bucket_owner(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.s3_bucket_owner = inp;
+            self
+        }
         /// <p>The Amazon S3 bucket prefix to use as the file name and path of the exported
         /// snapshot.</p>
         pub fn s3_prefix(mut self, inp: impl Into<std::string::String>) -> Self {
             self.s3_prefix = Some(inp.into());
+            self
+        }
+        pub fn set_s3_prefix(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.s3_prefix = inp;
             self
         }
         /// <p>Type of encryption used on the bucket where export data will be stored. Valid values
@@ -3492,10 +3716,24 @@ pub mod export_table_to_point_in_time_input {
             self.s3_sse_algorithm = Some(inp);
             self
         }
+        pub fn set_s3_sse_algorithm(
+            mut self,
+            inp: std::option::Option<crate::model::S3SseAlgorithm>,
+        ) -> Self {
+            self.s3_sse_algorithm = inp;
+            self
+        }
         /// <p>The ID of the AWS KMS managed key used to encrypt the S3 bucket where export data will
         /// be stored (if applicable).</p>
         pub fn s3_sse_kms_key_id(mut self, inp: impl Into<std::string::String>) -> Self {
             self.s3_sse_kms_key_id = Some(inp.into());
+            self
+        }
+        pub fn set_s3_sse_kms_key_id(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.s3_sse_kms_key_id = inp;
             self
         }
         /// <p>The format for the exported data. Valid values for <code>ExportFormat</code> are
@@ -3504,83 +3742,97 @@ pub mod export_table_to_point_in_time_input {
             self.export_format = Some(inp);
             self
         }
+        pub fn set_export_format(
+            mut self,
+            inp: std::option::Option<crate::model::ExportFormat>,
+        ) -> Self {
+            self.export_format = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`ExportTableToPointInTime`](crate::operation::ExportTableToPointInTime)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::ExportTableToPointInTime,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::ExportTableToPointInTime,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::ExportTableToPointInTime::new(
-                crate::input::ExportTableToPointInTimeInput {
-                    table_arn: self.table_arn,
-                    export_time: self.export_time,
-                    client_token: self
-                        .client_token
-                        .or_else(|| Some(_config.make_token.make_idempotency_token())),
-                    s3_bucket: self.s3_bucket,
-                    s3_bucket_owner: self.s3_bucket_owner,
-                    s3_prefix: self.s3_prefix,
-                    s3_sse_algorithm: self.s3_sse_algorithm,
-                    s3_sse_kms_key_id: self.s3_sse_kms_key_id,
-                    export_format: self.export_format,
-                },
-            );
+            Ok({
+                let op = crate::operation::ExportTableToPointInTime::new(
+                    crate::input::ExportTableToPointInTimeInput {
+                        table_arn: self.table_arn,
+                        export_time: self.export_time,
+                        client_token: self
+                            .client_token
+                            .or_else(|| Some(_config.make_token.make_idempotency_token())),
+                        s3_bucket: self.s3_bucket,
+                        s3_bucket_owner: self.s3_bucket_owner,
+                        s3_prefix: self.s3_prefix,
+                        s3_sse_algorithm: self.s3_sse_algorithm,
+                        s3_sse_kms_key_id: self.s3_sse_kms_key_id,
+                        export_format: self.export_format,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("ExportTableToPointInTime", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("ExportTableToPointInTime", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl ExportTableToPointInTimeInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.ExportTableToPointInTime")
+            .header("X-Amz-Target", "DynamoDB_20120810.ExportTableToPointInTime"))
     }
     fn body(&self) -> crate::serializer::ExportTableToPointInTimeInputBody {
         crate::serializer::ExportTableToPointInTimeInputBody {
@@ -3638,25 +3890,49 @@ pub mod get_item_input {
             self.table_name = Some(inp.into());
             self
         }
-        /// <p>A map of attribute names to <code>AttributeValue</code> objects, representing the primary key of
-        /// the item to retrieve.</p>
-        /// <p>For the primary key, you must provide all of the attributes. For example, with a simple primary key, you only need to provide a value for the partition key. For a composite primary key, you must provide values for both the partition key and the sort key.</p>
-        pub fn key(
-            mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
-        ) -> Self {
-            self.key = Some(inp);
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
             self
         }
-        /// <p>This is a legacy parameter.  Use <code>ProjectionExpression</code> instead.  For more information, see
-        /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.AttributesToGet.html">AttributesToGet</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
-        pub fn attributes_to_get(mut self, inp: std::vec::Vec<std::string::String>) -> Self {
-            self.attributes_to_get = Some(inp);
+        pub fn key(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
+        ) -> Self {
+            let mut hash_map = self.key.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.key = Some(hash_map);
+            self
+        }
+        pub fn set_key(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.key = inp;
+            self
+        }
+        pub fn attributes_to_get(mut self, inp: impl Into<std::string::String>) -> Self {
+            let mut v = self.attributes_to_get.unwrap_or_default();
+            v.push(inp.into());
+            self.attributes_to_get = Some(v);
+            self
+        }
+        pub fn set_attributes_to_get(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<std::string::String>>,
+        ) -> Self {
+            self.attributes_to_get = inp;
             self
         }
         /// <p>Determines the read consistency model:  If set to <code>true</code>, then the operation uses strongly consistent reads; otherwise, the operation uses eventually consistent reads.</p>
         pub fn consistent_read(mut self, inp: bool) -> Self {
             self.consistent_read = Some(inp);
+            self
+        }
+        pub fn set_consistent_read(mut self, inp: std::option::Option<bool>) -> Self {
+            self.consistent_read = inp;
             self
         }
         /// <p>Determines the level of detail about provisioned throughput consumption that is returned in the response:</p>
@@ -3682,6 +3958,13 @@ pub mod get_item_input {
             self.return_consumed_capacity = Some(inp);
             self
         }
+        pub fn set_return_consumed_capacity(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnConsumedCapacity>,
+        ) -> Self {
+            self.return_consumed_capacity = inp;
+            self
+        }
         /// <p>A string that identifies one or more attributes to retrieve from the table. These attributes can include scalars, sets, or elements of a JSON document. The attributes in the expression must be separated by commas.</p>
         /// <p>If no attribute names are specified, then all attributes are returned. If any of the
         /// requested attributes are not found, they do not appear in the result.</p>
@@ -3691,52 +3974,30 @@ pub mod get_item_input {
             self.projection_expression = Some(inp.into());
             self
         }
-        /// <p>One or more substitution tokens for attribute names in an expression. The following are some use cases for using <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>To access an attribute whose name conflicts with a DynamoDB reserved word.</p>
-        /// </li>
-        /// <li>
-        /// <p>To create a placeholder for repeating occurrences of an attribute name in an expression.</p>
-        /// </li>
-        /// <li>
-        /// <p>To prevent special characters in an attribute name from being misinterpreted in an expression.</p>
-        /// </li>
-        /// </ul>
-        /// <p>Use the <b>#</b> character in an expression to dereference an attribute name. For example, consider the following attribute name:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>Percentile</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>The name of this attribute conflicts with a reserved word, so it cannot be used directly in an expression. (For the complete list of reserved words, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ReservedWords.html">Reserved Words</a> in the <i>Amazon DynamoDB Developer Guide</i>). To work around this, you could specify the following for <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>{"#P":"Percentile"}</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>You could then use this substitution in an expression, as in this example:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>#P = :val</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>Tokens that begin with the <b>:</b> character are <i>expression attribute values</i>, which are placeholders for the actual value at runtime.</p>
-        /// </note>
-        /// <p>For more information on expression attribute names, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.AccessingItemAttributes.html">Specifying Item Attributes</a> in the <i>Amazon DynamoDB Developer
-        /// Guide</i>.</p>
+        pub fn set_projection_expression(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.projection_expression = inp;
+            self
+        }
         pub fn expression_attribute_names(
             mut self,
-            inp: std::collections::HashMap<std::string::String, std::string::String>,
+            k: impl Into<std::string::String>,
+            v: impl Into<std::string::String>,
         ) -> Self {
-            self.expression_attribute_names = Some(inp);
+            let mut hash_map = self.expression_attribute_names.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_names = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_names(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, std::string::String>,
+            >,
+        ) -> Self {
+            self.expression_attribute_names = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`GetItem`](crate::operation::GetItem)>
@@ -3744,71 +4005,78 @@ pub mod get_item_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::GetItem,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::GetItem,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::GetItem::new(crate::input::GetItemInput {
-                table_name: self.table_name,
-                key: self.key,
-                attributes_to_get: self.attributes_to_get,
-                consistent_read: self.consistent_read,
-                return_consumed_capacity: self.return_consumed_capacity,
-                projection_expression: self.projection_expression,
-                expression_attribute_names: self.expression_attribute_names,
-            });
+            Ok({
+                let op = crate::operation::GetItem::new(crate::input::GetItemInput {
+                    table_name: self.table_name,
+                    key: self.key,
+                    attributes_to_get: self.attributes_to_get,
+                    consistent_read: self.consistent_read,
+                    return_consumed_capacity: self.return_consumed_capacity,
+                    projection_expression: self.projection_expression,
+                    expression_attribute_names: self.expression_attribute_names,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op)
-                .with_metadata(smithy_http::operation::Metadata::new("GetItem", "dynamodb"));
+                let op = smithy_http::operation::Operation::new(request, op)
+                    .with_metadata(smithy_http::operation::Metadata::new("GetItem", "dynamodb"));
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl GetItemInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.GetItem")
+            .header("X-Amz-Target", "DynamoDB_20120810.GetItem"))
     }
     fn body(&self) -> crate::serializer::GetItemInputBody {
         crate::serializer::GetItemInputBody {
@@ -3859,9 +4127,17 @@ pub mod list_backups_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>Maximum number of backups to return at once.</p>
         pub fn limit(mut self, inp: i32) -> Self {
             self.limit = Some(inp);
+            self
+        }
+        pub fn set_limit(mut self, inp: std::option::Option<i32>) -> Self {
+            self.limit = inp;
             self
         }
         /// <p>Only backups created after this time are listed. <code>TimeRangeLowerBound</code> is inclusive.</p>
@@ -3869,9 +4145,23 @@ pub mod list_backups_input {
             self.time_range_lower_bound = Some(inp);
             self
         }
+        pub fn set_time_range_lower_bound(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.time_range_lower_bound = inp;
+            self
+        }
         /// <p>Only backups created before this time are listed. <code>TimeRangeUpperBound</code> is exclusive. </p>
         pub fn time_range_upper_bound(mut self, inp: smithy_types::Instant) -> Self {
             self.time_range_upper_bound = Some(inp);
+            self
+        }
+        pub fn set_time_range_upper_bound(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.time_range_upper_bound = inp;
             self
         }
         /// <p>
@@ -3881,6 +4171,13 @@ pub mod list_backups_input {
         /// new <code>ListBackups</code> operation in order to fetch the next page of results. </p>
         pub fn exclusive_start_backup_arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.exclusive_start_backup_arn = Some(inp.into());
+            self
+        }
+        pub fn set_exclusive_start_backup_arn(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.exclusive_start_backup_arn = inp;
             self
         }
         /// <p>The backups from the table specified by <code>BackupType</code> are listed.</p>
@@ -3904,76 +4201,90 @@ pub mod list_backups_input {
             self.backup_type = Some(inp);
             self
         }
+        pub fn set_backup_type(
+            mut self,
+            inp: std::option::Option<crate::model::BackupTypeFilter>,
+        ) -> Self {
+            self.backup_type = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`ListBackups`](crate::operation::ListBackups)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::ListBackups,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::ListBackups,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::ListBackups::new(crate::input::ListBackupsInput {
-                table_name: self.table_name,
-                limit: self.limit,
-                time_range_lower_bound: self.time_range_lower_bound,
-                time_range_upper_bound: self.time_range_upper_bound,
-                exclusive_start_backup_arn: self.exclusive_start_backup_arn,
-                backup_type: self.backup_type,
-            });
+            Ok({
+                let op = crate::operation::ListBackups::new(crate::input::ListBackupsInput {
+                    table_name: self.table_name,
+                    limit: self.limit,
+                    time_range_lower_bound: self.time_range_lower_bound,
+                    time_range_upper_bound: self.time_range_upper_bound,
+                    exclusive_start_backup_arn: self.exclusive_start_backup_arn,
+                    backup_type: self.backup_type,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("ListBackups", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("ListBackups", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl ListBackupsInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.ListBackups")
+            .header("X-Amz-Target", "DynamoDB_20120810.ListBackups"))
     }
     fn body(&self) -> crate::serializer::ListBackupsInputBody {
         crate::serializer::ListBackupsInputBody {
@@ -4020,13 +4331,25 @@ pub mod list_contributor_insights_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>A token to for the desired page, if there is one.</p>
         pub fn next_token(mut self, inp: impl Into<std::string::String>) -> Self {
             self.next_token = Some(inp.into());
             self
         }
+        pub fn set_next_token(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.next_token = inp;
+            self
+        }
         /// <p>Maximum number of results to return per page.</p>
         pub fn max_results(mut self, inp: i32) -> Self {
+            self.max_results = Some(inp);
+            self
+        }
+        pub fn set_max_results(mut self, inp: i32) -> Self {
             self.max_results = Some(inp);
             self
         }
@@ -4035,70 +4358,77 @@ pub mod list_contributor_insights_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::ListContributorInsights,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::ListContributorInsights,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::ListContributorInsights::new(
-                crate::input::ListContributorInsightsInput {
-                    table_name: self.table_name,
-                    next_token: self.next_token,
-                    max_results: self.max_results.unwrap_or_default(),
-                },
-            );
+            Ok({
+                let op = crate::operation::ListContributorInsights::new(
+                    crate::input::ListContributorInsightsInput {
+                        table_name: self.table_name,
+                        next_token: self.next_token,
+                        max_results: self.max_results.unwrap_or_default(),
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("ListContributorInsights", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("ListContributorInsights", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl ListContributorInsightsInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.ListContributorInsights")
+            .header("X-Amz-Target", "DynamoDB_20120810.ListContributorInsights"))
     }
     fn body(&self) -> crate::serializer::ListContributorInsightsInputBody {
         crate::serializer::ListContributorInsightsInputBody {
@@ -4142,9 +4472,17 @@ pub mod list_exports_input {
             self.table_arn = Some(inp.into());
             self
         }
+        pub fn set_table_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_arn = inp;
+            self
+        }
         /// <p>Maximum number of results to return per page.</p>
         pub fn max_results(mut self, inp: i32) -> Self {
             self.max_results = Some(inp);
+            self
+        }
+        pub fn set_max_results(mut self, inp: std::option::Option<i32>) -> Self {
+            self.max_results = inp;
             self
         }
         /// <p>An optional string that, if supplied, must be copied from the output of a previous
@@ -4154,73 +4492,84 @@ pub mod list_exports_input {
             self.next_token = Some(inp.into());
             self
         }
+        pub fn set_next_token(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.next_token = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`ListExports`](crate::operation::ListExports)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::ListExports,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::ListExports,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::ListExports::new(crate::input::ListExportsInput {
-                table_arn: self.table_arn,
-                max_results: self.max_results,
-                next_token: self.next_token,
-            });
+            Ok({
+                let op = crate::operation::ListExports::new(crate::input::ListExportsInput {
+                    table_arn: self.table_arn,
+                    max_results: self.max_results,
+                    next_token: self.next_token,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("ListExports", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("ListExports", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl ListExportsInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.ListExports")
+            .header("X-Amz-Target", "DynamoDB_20120810.ListExports"))
     }
     fn body(&self) -> crate::serializer::ListExportsInputBody {
         crate::serializer::ListExportsInputBody {
@@ -4267,6 +4616,13 @@ pub mod list_global_tables_input {
             self.exclusive_start_global_table_name = Some(inp.into());
             self
         }
+        pub fn set_exclusive_start_global_table_name(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.exclusive_start_global_table_name = inp;
+            self
+        }
         /// <p>The maximum number of table names to return, if the parameter is not specified DynamoDB defaults to 100.</p>
         /// <p>If the number of global tables DynamoDB finds reaches this limit, it stops the operation and returns the table names collected up to that point,
         /// with a table name in the <code>LastEvaluatedGlobalTableName</code> to apply in a subsequent operation to the <code>ExclusiveStartGlobalTableName</code> parameter.</p>
@@ -4274,9 +4630,17 @@ pub mod list_global_tables_input {
             self.limit = Some(inp);
             self
         }
+        pub fn set_limit(mut self, inp: std::option::Option<i32>) -> Self {
+            self.limit = inp;
+            self
+        }
         /// <p>Lists the global tables in a specific Region.</p>
         pub fn region_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.region_name = Some(inp.into());
+            self
+        }
+        pub fn set_region_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.region_name = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`ListGlobalTables`](crate::operation::ListGlobalTables)>
@@ -4284,68 +4648,76 @@ pub mod list_global_tables_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::ListGlobalTables,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::ListGlobalTables,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::ListGlobalTables::new(crate::input::ListGlobalTablesInput {
-                exclusive_start_global_table_name: self.exclusive_start_global_table_name,
-                limit: self.limit,
-                region_name: self.region_name,
-            });
+            Ok({
+                let op =
+                    crate::operation::ListGlobalTables::new(crate::input::ListGlobalTablesInput {
+                        exclusive_start_global_table_name: self.exclusive_start_global_table_name,
+                        limit: self.limit,
+                        region_name: self.region_name,
+                    });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("ListGlobalTables", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("ListGlobalTables", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl ListGlobalTablesInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.ListGlobalTables")
+            .header("X-Amz-Target", "DynamoDB_20120810.ListGlobalTables"))
     }
     fn body(&self) -> crate::serializer::ListGlobalTablesInputBody {
         crate::serializer::ListGlobalTablesInputBody {
@@ -4390,9 +4762,20 @@ pub mod list_tables_input {
             self.exclusive_start_table_name = Some(inp.into());
             self
         }
+        pub fn set_exclusive_start_table_name(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.exclusive_start_table_name = inp;
+            self
+        }
         /// <p>A maximum number of table names to return. If this parameter is not specified, the limit is 100.</p>
         pub fn limit(mut self, inp: i32) -> Self {
             self.limit = Some(inp);
+            self
+        }
+        pub fn set_limit(mut self, inp: std::option::Option<i32>) -> Self {
+            self.limit = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`ListTables`](crate::operation::ListTables)>
@@ -4400,67 +4783,74 @@ pub mod list_tables_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::ListTables,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::ListTables,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::ListTables::new(crate::input::ListTablesInput {
-                exclusive_start_table_name: self.exclusive_start_table_name,
-                limit: self.limit,
-            });
+            Ok({
+                let op = crate::operation::ListTables::new(crate::input::ListTablesInput {
+                    exclusive_start_table_name: self.exclusive_start_table_name,
+                    limit: self.limit,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("ListTables", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("ListTables", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl ListTablesInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.ListTables")
+            .header("X-Amz-Target", "DynamoDB_20120810.ListTables"))
     }
     fn body(&self) -> crate::serializer::ListTablesInputBody {
         crate::serializer::ListTablesInputBody {
@@ -4502,10 +4892,18 @@ pub mod list_tags_of_resource_input {
             self.resource_arn = Some(inp.into());
             self
         }
+        pub fn set_resource_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.resource_arn = inp;
+            self
+        }
         /// <p>An optional string that, if supplied, must be copied from the output of a previous
         /// call to ListTagOfResource. When provided in this manner, this API fetches the next page of results.</p>
         pub fn next_token(mut self, inp: impl Into<std::string::String>) -> Self {
             self.next_token = Some(inp.into());
+            self
+        }
+        pub fn set_next_token(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.next_token = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`ListTagsOfResource`](crate::operation::ListTagsOfResource)>
@@ -4513,68 +4911,76 @@ pub mod list_tags_of_resource_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::ListTagsOfResource,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::ListTagsOfResource,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op =
-                crate::operation::ListTagsOfResource::new(crate::input::ListTagsOfResourceInput {
-                    resource_arn: self.resource_arn,
-                    next_token: self.next_token,
-                });
+            Ok({
+                let op = crate::operation::ListTagsOfResource::new(
+                    crate::input::ListTagsOfResourceInput {
+                        resource_arn: self.resource_arn,
+                        next_token: self.next_token,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("ListTagsOfResource", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("ListTagsOfResource", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl ListTagsOfResourceInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.ListTagsOfResource")
+            .header("X-Amz-Target", "DynamoDB_20120810.ListTagsOfResource"))
     }
     fn body(&self) -> crate::serializer::ListTagsOfResourceInputBody {
         crate::serializer::ListTagsOfResourceInputBody {
@@ -4633,30 +5039,49 @@ pub mod put_item_input {
             self.table_name = Some(inp.into());
             self
         }
-        /// <p>A map of attribute name/value pairs, one for each attribute. Only the primary key attributes are required; you can optionally provide other attribute name-value pairs for the item.</p>
-        /// <p>You must provide all of the attributes for the primary key. For example, with a simple primary key, you only need to provide a value for the partition key. For a composite primary key, you must provide both values for both the partition key and the sort key.</p>
-        /// <p>If you specify any attributes that are part of an index key, then the data types for those attributes must match those of the schema in the table's attribute definition.</p>
-        /// <p>Empty String and Binary attribute values are allowed. Attribute values of type String and Binary must have a length greater than zero if the attribute is used as a key attribute for a table or index.</p>
-        /// <p>For more information about primary keys, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.CoreComponents.html#HowItWorks.CoreComponents.PrimaryKey">Primary Key</a> in the <i>Amazon DynamoDB Developer
-        /// Guide</i>.</p>
-        /// <p>Each element in the <code>Item</code> map is an <code>AttributeValue</code> object.</p>
-        pub fn item(
-            mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
-        ) -> Self {
-            self.item = Some(inp);
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
             self
         }
-        /// <p>This is a legacy parameter.  Use <code>ConditionExpression</code> instead.  For more information, see
-        /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.Expected.html">Expected</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
-        pub fn expected(
+        pub fn item(
             mut self,
-            inp: std::collections::HashMap<
-                std::string::String,
-                crate::model::ExpectedAttributeValue,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
+        ) -> Self {
+            let mut hash_map = self.item.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.item = Some(hash_map);
+            self
+        }
+        pub fn set_item(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
             >,
         ) -> Self {
-            self.expected = Some(inp);
+            self.item = inp;
+            self
+        }
+        pub fn expected(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::ExpectedAttributeValue>,
+        ) -> Self {
+            let mut hash_map = self.expected.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expected = Some(hash_map);
+            self
+        }
+        pub fn set_expected(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<
+                    std::string::String,
+                    crate::model::ExpectedAttributeValue,
+                >,
+            >,
+        ) -> Self {
+            self.expected = inp;
             self
         }
         /// <p>Use <code>ReturnValues</code> if you want to get the item attributes as they appeared before they
@@ -4683,6 +5108,13 @@ pub mod put_item_input {
             self.return_values = Some(inp);
             self
         }
+        pub fn set_return_values(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnValue>,
+        ) -> Self {
+            self.return_values = inp;
+            self
+        }
         /// <p>Determines the level of detail about provisioned throughput consumption that is returned in the response:</p>
         /// <ul>
         /// <li>
@@ -4706,6 +5138,13 @@ pub mod put_item_input {
             self.return_consumed_capacity = Some(inp);
             self
         }
+        pub fn set_return_consumed_capacity(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnConsumedCapacity>,
+        ) -> Self {
+            self.return_consumed_capacity = inp;
+            self
+        }
         /// <p>Determines whether item collection metrics are returned.  If set to <code>SIZE</code>, the response includes statistics about item collections, if any, that were modified during
         /// the operation are returned in the response. If set to <code>NONE</code> (the default), no statistics are returned.</p>
         pub fn return_item_collection_metrics(
@@ -4715,10 +5154,24 @@ pub mod put_item_input {
             self.return_item_collection_metrics = Some(inp);
             self
         }
+        pub fn set_return_item_collection_metrics(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnItemCollectionMetrics>,
+        ) -> Self {
+            self.return_item_collection_metrics = inp;
+            self
+        }
         /// <p>This is a legacy parameter.  Use <code>ConditionExpression</code> instead.  For more information, see
         /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.ConditionalOperator.html">ConditionalOperator</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
         pub fn conditional_operator(mut self, inp: crate::model::ConditionalOperator) -> Self {
             self.conditional_operator = Some(inp);
+            self
+        }
+        pub fn set_conditional_operator(
+            mut self,
+            inp: std::option::Option<crate::model::ConditionalOperator>,
+        ) -> Self {
+            self.conditional_operator = inp;
             self
         }
         /// <p>A condition that must be satisfied in order for a conditional <code>PutItem</code> operation to
@@ -4747,74 +5200,49 @@ pub mod put_item_input {
             self.condition_expression = Some(inp.into());
             self
         }
-        /// <p>One or more substitution tokens for attribute names in an expression. The following are some use cases for using <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>To access an attribute whose name conflicts with a DynamoDB reserved word.</p>
-        /// </li>
-        /// <li>
-        /// <p>To create a placeholder for repeating occurrences of an attribute name in an expression.</p>
-        /// </li>
-        /// <li>
-        /// <p>To prevent special characters in an attribute name from being misinterpreted in an expression.</p>
-        /// </li>
-        /// </ul>
-        /// <p>Use the <b>#</b> character in an expression to dereference an attribute name. For example, consider the following attribute name:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>Percentile</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>The name of this attribute conflicts with a reserved word, so it cannot be used directly in an expression. (For the complete list of reserved words, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ReservedWords.html">Reserved Words</a> in the <i>Amazon DynamoDB Developer Guide</i>). To work around this, you could specify the following for <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>{"#P":"Percentile"}</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>You could then use this substitution in an expression, as in this example:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>#P = :val</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>Tokens that begin with the <b>:</b> character are <i>expression attribute values</i>, which are placeholders for the actual value at runtime.</p>
-        /// </note>
-        /// <p>For more information on expression attribute names, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.AccessingItemAttributes.html">Specifying Item Attributes</a> in the <i>Amazon DynamoDB Developer
-        /// Guide</i>.</p>
-        pub fn expression_attribute_names(
+        pub fn set_condition_expression(
             mut self,
-            inp: std::collections::HashMap<std::string::String, std::string::String>,
+            inp: std::option::Option<std::string::String>,
         ) -> Self {
-            self.expression_attribute_names = Some(inp);
+            self.condition_expression = inp;
             self
         }
-        /// <p>One or more values that can be substituted in an expression.</p>
-        /// <p>Use the <b>:</b> (colon) character in an expression to dereference an attribute value. For example, suppose that you wanted to check whether the value of the <i>ProductStatus</i> attribute was one of the following: </p>
-        /// <p>
-        /// <code>Available | Backordered | Discontinued</code>
-        /// </p>
-        /// <p>You would first need to specify <code>ExpressionAttributeValues</code> as follows:</p>
-        /// <p>
-        /// <code>{ ":avail":{"S":"Available"}, ":back":{"S":"Backordered"}, ":disc":{"S":"Discontinued"} }</code>
-        /// </p>
-        /// <p>You could then use these values in an expression, such as this:</p>
-        /// <p>
-        /// <code>ProductStatus IN (:avail, :back, :disc)</code>
-        /// </p>
-        /// <p>For more information on expression attribute values, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.SpecifyingConditions.html">Condition Expressions</a> in the <i>Amazon DynamoDB Developer
-        /// Guide</i>.</p>
+        pub fn expression_attribute_names(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<std::string::String>,
+        ) -> Self {
+            let mut hash_map = self.expression_attribute_names.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_names = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_names(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, std::string::String>,
+            >,
+        ) -> Self {
+            self.expression_attribute_names = inp;
+            self
+        }
         pub fn expression_attribute_values(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.expression_attribute_values = Some(inp);
+            let mut hash_map = self.expression_attribute_values.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_values = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_values(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.expression_attribute_values = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`PutItem`](crate::operation::PutItem)>
@@ -4822,74 +5250,81 @@ pub mod put_item_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::PutItem,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::PutItem,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::PutItem::new(crate::input::PutItemInput {
-                table_name: self.table_name,
-                item: self.item,
-                expected: self.expected,
-                return_values: self.return_values,
-                return_consumed_capacity: self.return_consumed_capacity,
-                return_item_collection_metrics: self.return_item_collection_metrics,
-                conditional_operator: self.conditional_operator,
-                condition_expression: self.condition_expression,
-                expression_attribute_names: self.expression_attribute_names,
-                expression_attribute_values: self.expression_attribute_values,
-            });
+            Ok({
+                let op = crate::operation::PutItem::new(crate::input::PutItemInput {
+                    table_name: self.table_name,
+                    item: self.item,
+                    expected: self.expected,
+                    return_values: self.return_values,
+                    return_consumed_capacity: self.return_consumed_capacity,
+                    return_item_collection_metrics: self.return_item_collection_metrics,
+                    conditional_operator: self.conditional_operator,
+                    condition_expression: self.condition_expression,
+                    expression_attribute_names: self.expression_attribute_names,
+                    expression_attribute_values: self.expression_attribute_values,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op)
-                .with_metadata(smithy_http::operation::Metadata::new("PutItem", "dynamodb"));
+                let op = smithy_http::operation::Operation::new(request, op)
+                    .with_metadata(smithy_http::operation::Metadata::new("PutItem", "dynamodb"));
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl PutItemInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.PutItem")
+            .header("X-Amz-Target", "DynamoDB_20120810.PutItem"))
     }
     fn body(&self) -> crate::serializer::PutItemInputBody {
         crate::serializer::PutItemInputBody {
@@ -4964,11 +5399,19 @@ pub mod query_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>The name of an index to query. This index can be any local secondary index or global secondary index on the table. Note that
         /// if you use the <code>IndexName</code> parameter, you must also provide <code>TableName.</code>
         /// </p>
         pub fn index_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.index_name = Some(inp.into());
+            self
+        }
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
             self
         }
         /// <p>The attributes to be returned in the
@@ -5031,10 +5474,21 @@ pub mod query_input {
             self.select = Some(inp);
             self
         }
-        /// <p>This is a legacy parameter.  Use <code>ProjectionExpression</code> instead.  For more information, see
-        /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.AttributesToGet.html">AttributesToGet</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
-        pub fn attributes_to_get(mut self, inp: std::vec::Vec<std::string::String>) -> Self {
-            self.attributes_to_get = Some(inp);
+        pub fn set_select(mut self, inp: std::option::Option<crate::model::Select>) -> Self {
+            self.select = inp;
+            self
+        }
+        pub fn attributes_to_get(mut self, inp: impl Into<std::string::String>) -> Self {
+            let mut v = self.attributes_to_get.unwrap_or_default();
+            v.push(inp.into());
+            self.attributes_to_get = Some(v);
+            self
+        }
+        pub fn set_attributes_to_get(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<std::string::String>>,
+        ) -> Self {
+            self.attributes_to_get = inp;
             self
         }
         /// <p>The maximum number of items to evaluate (not necessarily the number of matching items).
@@ -5050,6 +5504,10 @@ pub mod query_input {
             self.limit = Some(inp);
             self
         }
+        pub fn set_limit(mut self, inp: std::option::Option<i32>) -> Self {
+            self.limit = inp;
+            self
+        }
         /// <p>Determines the read consistency model:  If set to <code>true</code>, then the operation uses strongly consistent reads; otherwise, the operation uses eventually consistent reads.</p>
         /// <p>Strongly consistent reads
         /// are not supported on global secondary indexes. If you query a global secondary index with <code>ConsistentRead</code> set to
@@ -5058,28 +5516,59 @@ pub mod query_input {
             self.consistent_read = Some(inp);
             self
         }
-        /// <p>This is a legacy parameter.  Use <code>KeyConditionExpression</code> instead.   For more information, see
-        /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.KeyConditions.html">KeyConditions</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
-        pub fn key_conditions(
-            mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::Condition>,
-        ) -> Self {
-            self.key_conditions = Some(inp);
+        pub fn set_consistent_read(mut self, inp: std::option::Option<bool>) -> Self {
+            self.consistent_read = inp;
             self
         }
-        /// <p>This is a legacy parameter.  Use <code>FilterExpression</code> instead.   For more information, see
-        /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.QueryFilter.html">QueryFilter</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
+        pub fn key_conditions(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::Condition>,
+        ) -> Self {
+            let mut hash_map = self.key_conditions.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.key_conditions = Some(hash_map);
+            self
+        }
+        pub fn set_key_conditions(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::Condition>,
+            >,
+        ) -> Self {
+            self.key_conditions = inp;
+            self
+        }
         pub fn query_filter(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::Condition>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::Condition>,
         ) -> Self {
-            self.query_filter = Some(inp);
+            let mut hash_map = self.query_filter.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.query_filter = Some(hash_map);
+            self
+        }
+        pub fn set_query_filter(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::Condition>,
+            >,
+        ) -> Self {
+            self.query_filter = inp;
             self
         }
         /// <p>This is a legacy parameter.  Use <code>FilterExpression</code> instead.  For more information, see
         /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.ConditionalOperator.html">ConditionalOperator</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
         pub fn conditional_operator(mut self, inp: crate::model::ConditionalOperator) -> Self {
             self.conditional_operator = Some(inp);
+            self
+        }
+        pub fn set_conditional_operator(
+            mut self,
+            inp: std::option::Option<crate::model::ConditionalOperator>,
+        ) -> Self {
+            self.conditional_operator = inp;
             self
         }
         /// <p>Specifies the order for index traversal: If <code>true</code> (default), the traversal is performed in ascending order; if <code>false</code>, the traversal is performed in descending order. </p>
@@ -5089,14 +5578,27 @@ pub mod query_input {
             self.scan_index_forward = Some(inp);
             self
         }
-        /// <p>The primary key of the first item that this operation will evaluate. Use the value that was returned for <code>LastEvaluatedKey</code> in the previous operation.</p>
-        /// <p>The data type for <code>ExclusiveStartKey</code> must be String, Number, or Binary. No
-        /// set data types are allowed.</p>
+        pub fn set_scan_index_forward(mut self, inp: std::option::Option<bool>) -> Self {
+            self.scan_index_forward = inp;
+            self
+        }
         pub fn exclusive_start_key(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.exclusive_start_key = Some(inp);
+            let mut hash_map = self.exclusive_start_key.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.exclusive_start_key = Some(hash_map);
+            self
+        }
+        pub fn set_exclusive_start_key(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.exclusive_start_key = inp;
             self
         }
         /// <p>Determines the level of detail about provisioned throughput consumption that is returned in the response:</p>
@@ -5122,12 +5624,26 @@ pub mod query_input {
             self.return_consumed_capacity = Some(inp);
             self
         }
+        pub fn set_return_consumed_capacity(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnConsumedCapacity>,
+        ) -> Self {
+            self.return_consumed_capacity = inp;
+            self
+        }
         /// <p>A string that identifies one or more attributes to retrieve from the table. These attributes can include scalars, sets, or elements of a JSON document. The attributes in the expression must be separated by commas.</p>
         /// <p>If no attribute names are specified, then all attributes will be returned. If any of the requested attributes are not found, they will not appear in the result.</p>
         /// <p>For more information, see
         /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.AccessingItemAttributes.html">Accessing Item Attributes</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
         pub fn projection_expression(mut self, inp: impl Into<std::string::String>) -> Self {
             self.projection_expression = Some(inp.into());
+            self
+        }
+        pub fn set_projection_expression(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.projection_expression = inp;
             self
         }
         /// <p>A string that contains conditions that DynamoDB applies after the <code>Query</code> operation, but
@@ -5142,6 +5658,13 @@ pub mod query_input {
         /// Expressions</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
         pub fn filter_expression(mut self, inp: impl Into<std::string::String>) -> Self {
             self.filter_expression = Some(inp.into());
+            self
+        }
+        pub fn set_filter_expression(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.filter_expression = inp;
             self
         }
         /// <p>The condition that specifies the key values for items to be retrieved by the
@@ -5252,75 +5775,49 @@ pub mod query_input {
             self.key_condition_expression = Some(inp.into());
             self
         }
-        /// <p>One or more substitution tokens for attribute names in an expression. The following are some use cases for using <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>To access an attribute whose name conflicts with a DynamoDB reserved word.</p>
-        /// </li>
-        /// <li>
-        /// <p>To create a placeholder for repeating occurrences of an attribute name in an expression.</p>
-        /// </li>
-        /// <li>
-        /// <p>To prevent special characters in an attribute name from being misinterpreted in an expression.</p>
-        /// </li>
-        /// </ul>
-        /// <p>Use the <b>#</b> character in an expression to dereference an attribute name. For example, consider the following attribute name:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>Percentile</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>The name of this attribute conflicts with a reserved word, so it cannot be used directly in an expression. (For the complete list of reserved words, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ReservedWords.html">Reserved Words</a> in the <i>Amazon DynamoDB Developer Guide</i>). To work around this, you could specify the following for
-        /// <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>{"#P":"Percentile"}</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>You could then use this substitution in an expression, as in this example:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>#P = :val</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>Tokens that begin with the <b>:</b> character are <i>expression attribute values</i>, which are placeholders for the actual value at runtime.</p>
-        /// </note>
-        /// <p>For more information on expression attribute names, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.AccessingItemAttributes.html">Specifying Item Attributes</a> in the <i>Amazon DynamoDB Developer
-        /// Guide</i>.</p>
-        pub fn expression_attribute_names(
+        pub fn set_key_condition_expression(
             mut self,
-            inp: std::collections::HashMap<std::string::String, std::string::String>,
+            inp: std::option::Option<std::string::String>,
         ) -> Self {
-            self.expression_attribute_names = Some(inp);
+            self.key_condition_expression = inp;
             self
         }
-        /// <p>One or more values that can be substituted in an expression.</p>
-        /// <p>Use the <b>:</b> (colon) character in an expression to dereference an attribute value. For example, suppose that you wanted to check whether the value of the
-        /// <i>ProductStatus</i> attribute was one of the following: </p>
-        /// <p>
-        /// <code>Available | Backordered | Discontinued</code>
-        /// </p>
-        /// <p>You would first need to specify <code>ExpressionAttributeValues</code> as follows:</p>
-        /// <p>
-        /// <code>{ ":avail":{"S":"Available"}, ":back":{"S":"Backordered"}, ":disc":{"S":"Discontinued"} }</code>
-        /// </p>
-        /// <p>You could then use these values in an expression, such as this:</p>
-        /// <p>
-        /// <code>ProductStatus IN (:avail, :back, :disc)</code>
-        /// </p>
-        /// <p>For more information on expression attribute values, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.SpecifyingConditions.html">Specifying Conditions</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
+        pub fn expression_attribute_names(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<std::string::String>,
+        ) -> Self {
+            let mut hash_map = self.expression_attribute_names.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_names = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_names(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, std::string::String>,
+            >,
+        ) -> Self {
+            self.expression_attribute_names = inp;
+            self
+        }
         pub fn expression_attribute_values(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.expression_attribute_values = Some(inp);
+            let mut hash_map = self.expression_attribute_values.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_values = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_values(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.expression_attribute_values = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`Query`](crate::operation::Query)>
@@ -5328,79 +5825,88 @@ pub mod query_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<crate::operation::Query, aws_http::AwsErrorRetryPolicy>
-        {
-            let op = crate::operation::Query::new(crate::input::QueryInput {
-                table_name: self.table_name,
-                index_name: self.index_name,
-                select: self.select,
-                attributes_to_get: self.attributes_to_get,
-                limit: self.limit,
-                consistent_read: self.consistent_read,
-                key_conditions: self.key_conditions,
-                query_filter: self.query_filter,
-                conditional_operator: self.conditional_operator,
-                scan_index_forward: self.scan_index_forward,
-                exclusive_start_key: self.exclusive_start_key,
-                return_consumed_capacity: self.return_consumed_capacity,
-                projection_expression: self.projection_expression,
-                filter_expression: self.filter_expression,
-                key_condition_expression: self.key_condition_expression,
-                expression_attribute_names: self.expression_attribute_names,
-                expression_attribute_values: self.expression_attribute_values,
-            });
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::Query,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
+        > {
+            Ok({
+                let op = crate::operation::Query::new(crate::input::QueryInput {
+                    table_name: self.table_name,
+                    index_name: self.index_name,
+                    select: self.select,
+                    attributes_to_get: self.attributes_to_get,
+                    limit: self.limit,
+                    consistent_read: self.consistent_read,
+                    key_conditions: self.key_conditions,
+                    query_filter: self.query_filter,
+                    conditional_operator: self.conditional_operator,
+                    scan_index_forward: self.scan_index_forward,
+                    exclusive_start_key: self.exclusive_start_key,
+                    return_consumed_capacity: self.return_consumed_capacity,
+                    projection_expression: self.projection_expression,
+                    filter_expression: self.filter_expression,
+                    key_condition_expression: self.key_condition_expression,
+                    expression_attribute_names: self.expression_attribute_names,
+                    expression_attribute_values: self.expression_attribute_values,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op)
-                .with_metadata(smithy_http::operation::Metadata::new("Query", "dynamodb"));
+                let op = smithy_http::operation::Operation::new(request, op)
+                    .with_metadata(smithy_http::operation::Metadata::new("Query", "dynamodb"));
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl QueryInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.Query")
+            .header("X-Amz-Target", "DynamoDB_20120810.Query"))
     }
     fn body(&self) -> crate::serializer::QueryInputBody {
         crate::serializer::QueryInputBody {
@@ -5464,9 +5970,20 @@ pub mod restore_table_from_backup_input {
             self.target_table_name = Some(inp.into());
             self
         }
+        pub fn set_target_table_name(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.target_table_name = inp;
+            self
+        }
         /// <p>The Amazon Resource Name (ARN) associated with the backup.</p>
         pub fn backup_arn(mut self, inp: impl Into<std::string::String>) -> Self {
             self.backup_arn = Some(inp.into());
+            self
+        }
+        pub fn set_backup_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.backup_arn = inp;
             self
         }
         /// <p>The billing mode of the restored table.</p>
@@ -5474,24 +5991,43 @@ pub mod restore_table_from_backup_input {
             self.billing_mode_override = Some(inp);
             self
         }
-        /// <p>List of global secondary indexes for the restored table. The indexes
-        /// provided should match existing secondary indexes. You can choose to exclude
-        /// some or all of the indexes at the time of restore.</p>
-        pub fn global_secondary_index_override(
+        pub fn set_billing_mode_override(
             mut self,
-            inp: std::vec::Vec<crate::model::GlobalSecondaryIndex>,
+            inp: std::option::Option<crate::model::BillingMode>,
         ) -> Self {
-            self.global_secondary_index_override = Some(inp);
+            self.billing_mode_override = inp;
             self
         }
-        /// <p>List of local secondary indexes for the restored table. The indexes
-        /// provided should match existing secondary indexes. You can choose to exclude
-        /// some or all of the indexes at the time of restore.</p>
+        pub fn global_secondary_index_override(
+            mut self,
+            inp: impl Into<crate::model::GlobalSecondaryIndex>,
+        ) -> Self {
+            let mut v = self.global_secondary_index_override.unwrap_or_default();
+            v.push(inp.into());
+            self.global_secondary_index_override = Some(v);
+            self
+        }
+        pub fn set_global_secondary_index_override(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::GlobalSecondaryIndex>>,
+        ) -> Self {
+            self.global_secondary_index_override = inp;
+            self
+        }
         pub fn local_secondary_index_override(
             mut self,
-            inp: std::vec::Vec<crate::model::LocalSecondaryIndex>,
+            inp: impl Into<crate::model::LocalSecondaryIndex>,
         ) -> Self {
-            self.local_secondary_index_override = Some(inp);
+            let mut v = self.local_secondary_index_override.unwrap_or_default();
+            v.push(inp.into());
+            self.local_secondary_index_override = Some(v);
+            self
+        }
+        pub fn set_local_secondary_index_override(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::LocalSecondaryIndex>>,
+        ) -> Self {
+            self.local_secondary_index_override = inp;
             self
         }
         /// <p>Provisioned throughput settings for the restored table.</p>
@@ -5502,9 +6038,23 @@ pub mod restore_table_from_backup_input {
             self.provisioned_throughput_override = Some(inp);
             self
         }
+        pub fn set_provisioned_throughput_override(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughput>,
+        ) -> Self {
+            self.provisioned_throughput_override = inp;
+            self
+        }
         /// <p>The new server-side encryption settings for the restored table.</p>
         pub fn sse_specification_override(mut self, inp: crate::model::SSESpecification) -> Self {
             self.sse_specification_override = Some(inp);
+            self
+        }
+        pub fn set_sse_specification_override(
+            mut self,
+            inp: std::option::Option<crate::model::SSESpecification>,
+        ) -> Self {
+            self.sse_specification_override = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`RestoreTableFromBackup`](crate::operation::RestoreTableFromBackup)>
@@ -5512,74 +6062,81 @@ pub mod restore_table_from_backup_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::RestoreTableFromBackup,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::RestoreTableFromBackup,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::RestoreTableFromBackup::new(
-                crate::input::RestoreTableFromBackupInput {
-                    target_table_name: self.target_table_name,
-                    backup_arn: self.backup_arn,
-                    billing_mode_override: self.billing_mode_override,
-                    global_secondary_index_override: self.global_secondary_index_override,
-                    local_secondary_index_override: self.local_secondary_index_override,
-                    provisioned_throughput_override: self.provisioned_throughput_override,
-                    sse_specification_override: self.sse_specification_override,
-                },
-            );
+            Ok({
+                let op = crate::operation::RestoreTableFromBackup::new(
+                    crate::input::RestoreTableFromBackupInput {
+                        target_table_name: self.target_table_name,
+                        backup_arn: self.backup_arn,
+                        billing_mode_override: self.billing_mode_override,
+                        global_secondary_index_override: self.global_secondary_index_override,
+                        local_secondary_index_override: self.local_secondary_index_override,
+                        provisioned_throughput_override: self.provisioned_throughput_override,
+                        sse_specification_override: self.sse_specification_override,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("RestoreTableFromBackup", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("RestoreTableFromBackup", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl RestoreTableFromBackupInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.RestoreTableFromBackup")
+            .header("X-Amz-Target", "DynamoDB_20120810.RestoreTableFromBackup"))
     }
     fn body(&self) -> crate::serializer::RestoreTableFromBackupInputBody {
         crate::serializer::RestoreTableFromBackupInputBody {
@@ -5637,14 +6194,35 @@ pub mod restore_table_to_point_in_time_input {
             self.source_table_arn = Some(inp.into());
             self
         }
+        pub fn set_source_table_arn(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.source_table_arn = inp;
+            self
+        }
         /// <p>Name of the source table that is being restored.</p>
         pub fn source_table_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.source_table_name = Some(inp.into());
             self
         }
+        pub fn set_source_table_name(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.source_table_name = inp;
+            self
+        }
         /// <p>The name of the new table to which it must be restored to.</p>
         pub fn target_table_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.target_table_name = Some(inp.into());
+            self
+        }
+        pub fn set_target_table_name(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.target_table_name = inp;
             self
         }
         /// <p>Restore the table to the latest possible time. <code>LatestRestorableDateTime</code>
@@ -5653,9 +6231,20 @@ pub mod restore_table_to_point_in_time_input {
             self.use_latest_restorable_time = Some(inp);
             self
         }
+        pub fn set_use_latest_restorable_time(mut self, inp: std::option::Option<bool>) -> Self {
+            self.use_latest_restorable_time = inp;
+            self
+        }
         /// <p>Time in the past to restore the table to.</p>
         pub fn restore_date_time(mut self, inp: smithy_types::Instant) -> Self {
             self.restore_date_time = Some(inp);
+            self
+        }
+        pub fn set_restore_date_time(
+            mut self,
+            inp: std::option::Option<smithy_types::Instant>,
+        ) -> Self {
+            self.restore_date_time = inp;
             self
         }
         /// <p>The billing mode of the restored table.</p>
@@ -5663,24 +6252,43 @@ pub mod restore_table_to_point_in_time_input {
             self.billing_mode_override = Some(inp);
             self
         }
-        /// <p>List of global secondary indexes for the restored table. The indexes
-        /// provided should match existing secondary indexes. You can choose to exclude
-        /// some or all of the indexes at the time of restore.</p>
-        pub fn global_secondary_index_override(
+        pub fn set_billing_mode_override(
             mut self,
-            inp: std::vec::Vec<crate::model::GlobalSecondaryIndex>,
+            inp: std::option::Option<crate::model::BillingMode>,
         ) -> Self {
-            self.global_secondary_index_override = Some(inp);
+            self.billing_mode_override = inp;
             self
         }
-        /// <p>List of local secondary indexes for the restored table. The indexes
-        /// provided should match existing secondary indexes. You can choose to exclude
-        /// some or all of the indexes at the time of restore.</p>
+        pub fn global_secondary_index_override(
+            mut self,
+            inp: impl Into<crate::model::GlobalSecondaryIndex>,
+        ) -> Self {
+            let mut v = self.global_secondary_index_override.unwrap_or_default();
+            v.push(inp.into());
+            self.global_secondary_index_override = Some(v);
+            self
+        }
+        pub fn set_global_secondary_index_override(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::GlobalSecondaryIndex>>,
+        ) -> Self {
+            self.global_secondary_index_override = inp;
+            self
+        }
         pub fn local_secondary_index_override(
             mut self,
-            inp: std::vec::Vec<crate::model::LocalSecondaryIndex>,
+            inp: impl Into<crate::model::LocalSecondaryIndex>,
         ) -> Self {
-            self.local_secondary_index_override = Some(inp);
+            let mut v = self.local_secondary_index_override.unwrap_or_default();
+            v.push(inp.into());
+            self.local_secondary_index_override = Some(v);
+            self
+        }
+        pub fn set_local_secondary_index_override(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::LocalSecondaryIndex>>,
+        ) -> Self {
+            self.local_secondary_index_override = inp;
             self
         }
         /// <p>Provisioned throughput settings for the restored table.</p>
@@ -5691,9 +6299,23 @@ pub mod restore_table_to_point_in_time_input {
             self.provisioned_throughput_override = Some(inp);
             self
         }
+        pub fn set_provisioned_throughput_override(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughput>,
+        ) -> Self {
+            self.provisioned_throughput_override = inp;
+            self
+        }
         /// <p>The new server-side encryption settings for the restored table.</p>
         pub fn sse_specification_override(mut self, inp: crate::model::SSESpecification) -> Self {
             self.sse_specification_override = Some(inp);
+            self
+        }
+        pub fn set_sse_specification_override(
+            mut self,
+            inp: std::option::Option<crate::model::SSESpecification>,
+        ) -> Self {
+            self.sse_specification_override = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`RestoreTableToPointInTime`](crate::operation::RestoreTableToPointInTime)>
@@ -5701,80 +6323,87 @@ pub mod restore_table_to_point_in_time_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::RestoreTableToPointInTime,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::RestoreTableToPointInTime,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::RestoreTableToPointInTime::new(
-                crate::input::RestoreTableToPointInTimeInput {
-                    source_table_arn: self.source_table_arn,
-                    source_table_name: self.source_table_name,
-                    target_table_name: self.target_table_name,
-                    use_latest_restorable_time: self.use_latest_restorable_time,
-                    restore_date_time: self.restore_date_time,
-                    billing_mode_override: self.billing_mode_override,
-                    global_secondary_index_override: self.global_secondary_index_override,
-                    local_secondary_index_override: self.local_secondary_index_override,
-                    provisioned_throughput_override: self.provisioned_throughput_override,
-                    sse_specification_override: self.sse_specification_override,
-                },
-            );
+            Ok({
+                let op = crate::operation::RestoreTableToPointInTime::new(
+                    crate::input::RestoreTableToPointInTimeInput {
+                        source_table_arn: self.source_table_arn,
+                        source_table_name: self.source_table_name,
+                        target_table_name: self.target_table_name,
+                        use_latest_restorable_time: self.use_latest_restorable_time,
+                        restore_date_time: self.restore_date_time,
+                        billing_mode_override: self.billing_mode_override,
+                        global_secondary_index_override: self.global_secondary_index_override,
+                        local_secondary_index_override: self.local_secondary_index_override,
+                        provisioned_throughput_override: self.provisioned_throughput_override,
+                        sse_specification_override: self.sse_specification_override,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("RestoreTableToPointInTime", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("RestoreTableToPointInTime", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl RestoreTableToPointInTimeInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
             .header(
                 "X-Amz-Target",
                 "DynamoDB_20120810.RestoreTableToPointInTime",
-            )
+            ))
     }
     fn body(&self) -> crate::serializer::RestoreTableToPointInTimeInputBody {
         crate::serializer::RestoreTableToPointInTimeInputBody {
@@ -5847,15 +6476,30 @@ pub mod scan_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>The name of a secondary index to scan. This index can be any local secondary index or global secondary index.  Note that if you use the <code>IndexName</code> parameter, you must also provide <code>TableName</code>.</p>
         pub fn index_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.index_name = Some(inp.into());
             self
         }
-        /// <p>This is a legacy parameter.  Use <code>ProjectionExpression</code> instead.  For more information, see
-        /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.AttributesToGet.html">AttributesToGet</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
-        pub fn attributes_to_get(mut self, inp: std::vec::Vec<std::string::String>) -> Self {
-            self.attributes_to_get = Some(inp);
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
+            self
+        }
+        pub fn attributes_to_get(mut self, inp: impl Into<std::string::String>) -> Self {
+            let mut v = self.attributes_to_get.unwrap_or_default();
+            v.push(inp.into());
+            self.attributes_to_get = Some(v);
+            self
+        }
+        pub fn set_attributes_to_get(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<std::string::String>>,
+        ) -> Self {
+            self.attributes_to_get = inp;
             self
         }
         /// <p>The maximum number of items to evaluate (not necessarily the number of matching items).
@@ -5869,6 +6513,10 @@ pub mod scan_input {
         /// Guide</i>.</p>
         pub fn limit(mut self, inp: i32) -> Self {
             self.limit = Some(inp);
+            self
+        }
+        pub fn set_limit(mut self, inp: std::option::Option<i32>) -> Self {
+            self.limit = inp;
             self
         }
         /// <p>The attributes to be returned in the
@@ -5931,13 +6579,27 @@ pub mod scan_input {
             self.select = Some(inp);
             self
         }
-        /// <p>This is a legacy parameter.  Use <code>FilterExpression</code> instead.   For more information, see
-        /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.ScanFilter.html">ScanFilter</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
+        pub fn set_select(mut self, inp: std::option::Option<crate::model::Select>) -> Self {
+            self.select = inp;
+            self
+        }
         pub fn scan_filter(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::Condition>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::Condition>,
         ) -> Self {
-            self.scan_filter = Some(inp);
+            let mut hash_map = self.scan_filter.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.scan_filter = Some(hash_map);
+            self
+        }
+        pub fn set_scan_filter(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::Condition>,
+            >,
+        ) -> Self {
+            self.scan_filter = inp;
             self
         }
         /// <p>This is a legacy parameter.  Use <code>FilterExpression</code> instead.   For more information, see
@@ -5946,16 +6608,30 @@ pub mod scan_input {
             self.conditional_operator = Some(inp);
             self
         }
-        /// <p>The primary key of the first item that this operation will evaluate. Use the value that was returned for <code>LastEvaluatedKey</code> in the previous operation.</p>
-        /// <p>The data type for <code>ExclusiveStartKey</code> must be String, Number or Binary. No set data types are allowed.</p>
-        /// <p>In a parallel scan, a
-        /// <code>Scan</code> request that includes <code>ExclusiveStartKey</code> must specify the same segment
-        /// whose previous <code>Scan</code> returned the corresponding value of <code>LastEvaluatedKey</code>.</p>
+        pub fn set_conditional_operator(
+            mut self,
+            inp: std::option::Option<crate::model::ConditionalOperator>,
+        ) -> Self {
+            self.conditional_operator = inp;
+            self
+        }
         pub fn exclusive_start_key(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.exclusive_start_key = Some(inp);
+            let mut hash_map = self.exclusive_start_key.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.exclusive_start_key = Some(hash_map);
+            self
+        }
+        pub fn set_exclusive_start_key(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.exclusive_start_key = inp;
             self
         }
         /// <p>Determines the level of detail about provisioned throughput consumption that is returned in the response:</p>
@@ -5981,6 +6657,13 @@ pub mod scan_input {
             self.return_consumed_capacity = Some(inp);
             self
         }
+        pub fn set_return_consumed_capacity(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnConsumedCapacity>,
+        ) -> Self {
+            self.return_consumed_capacity = inp;
+            self
+        }
         /// <p>For a parallel <code>Scan</code> request, <code>TotalSegments</code> represents the total number of
         /// segments into which the <code>Scan</code> operation will be divided. The value of
         /// <code>TotalSegments</code> corresponds to the number of application workers that will perform the
@@ -5992,6 +6675,10 @@ pub mod scan_input {
         /// <p>If you specify <code>TotalSegments</code>, you must also specify <code>Segment</code>.</p>
         pub fn total_segments(mut self, inp: i32) -> Self {
             self.total_segments = Some(inp);
+            self
+        }
+        pub fn set_total_segments(mut self, inp: std::option::Option<i32>) -> Self {
+            self.total_segments = inp;
             self
         }
         /// <p>For a parallel <code>Scan</code> request, <code>Segment</code> identifies an individual segment to be
@@ -6009,12 +6696,23 @@ pub mod scan_input {
             self.segment = Some(inp);
             self
         }
+        pub fn set_segment(mut self, inp: std::option::Option<i32>) -> Self {
+            self.segment = inp;
+            self
+        }
         /// <p>A string that identifies one or more attributes to retrieve from the specified table or index. These attributes can include scalars, sets, or elements of a JSON document. The attributes in the expression must be separated by commas.</p>
         /// <p>If no attribute names are specified, then all attributes will be returned. If any of the requested attributes are not found, they will not appear in the result.</p>
         /// <p>For more information, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.AccessingItemAttributes.html">Specifying Item Attributes</a> in the <i>Amazon DynamoDB Developer
         /// Guide</i>.</p>
         pub fn projection_expression(mut self, inp: impl Into<std::string::String>) -> Self {
             self.projection_expression = Some(inp.into());
+            self
+        }
+        pub fn set_projection_expression(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.projection_expression = inp;
             self
         }
         /// <p>A string that contains conditions that DynamoDB applies after the <code>Scan</code> operation, but
@@ -6030,76 +6728,49 @@ pub mod scan_input {
             self.filter_expression = Some(inp.into());
             self
         }
-        /// <p>One or more substitution tokens for attribute names in an expression. The following are some use cases for using <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>To access an attribute whose name conflicts with a DynamoDB reserved word.</p>
-        /// </li>
-        /// <li>
-        /// <p>To create a placeholder for repeating occurrences of an attribute name in an expression.</p>
-        /// </li>
-        /// <li>
-        /// <p>To prevent special characters in an attribute name from being misinterpreted in an expression.</p>
-        /// </li>
-        /// </ul>
-        /// <p>Use the <b>#</b> character in an expression to dereference an attribute name. For example, consider the following attribute name:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>Percentile</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>The name of this attribute conflicts with a reserved word, so it cannot be used directly in an expression. (For the complete list of reserved words, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ReservedWords.html">Reserved Words</a> in the <i>Amazon DynamoDB Developer Guide</i>). To work around this, you could specify the following for <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>{"#P":"Percentile"}</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>You could then use this substitution in an expression, as in this example:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>#P = :val</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>Tokens that begin with the <b>:</b> character are <i>expression attribute values</i>, which are placeholders for the actual value at runtime.</p>
-        /// </note>
-        /// <p>For more information on expression attribute names, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.AccessingItemAttributes.html">Specifying Item Attributes</a> in the <i>Amazon DynamoDB Developer
-        /// Guide</i>.</p>
-        pub fn expression_attribute_names(
+        pub fn set_filter_expression(
             mut self,
-            inp: std::collections::HashMap<std::string::String, std::string::String>,
+            inp: std::option::Option<std::string::String>,
         ) -> Self {
-            self.expression_attribute_names = Some(inp);
+            self.filter_expression = inp;
             self
         }
-        /// <p>One or more values that can be substituted in an expression.</p>
-        /// <p>Use the <b>:</b> (colon) character in an expression to
-        /// dereference an attribute value. For example, suppose that you wanted to check whether
-        /// the value of the <code>ProductStatus</code> attribute was one of the following: </p>
-        /// <p>
-        /// <code>Available | Backordered | Discontinued</code>
-        /// </p>
-        /// <p>You would first need to specify <code>ExpressionAttributeValues</code> as follows:</p>
-        /// <p>
-        /// <code>{ ":avail":{"S":"Available"}, ":back":{"S":"Backordered"}, ":disc":{"S":"Discontinued"} }</code>
-        /// </p>
-        /// <p>You could then use these values in an expression, such as this:</p>
-        /// <p>
-        /// <code>ProductStatus IN (:avail, :back, :disc)</code>
-        /// </p>
-        /// <p>For more information on expression attribute values, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.SpecifyingConditions.html">Condition Expressions</a> in the <i>Amazon DynamoDB Developer
-        /// Guide</i>.</p>
+        pub fn expression_attribute_names(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<std::string::String>,
+        ) -> Self {
+            let mut hash_map = self.expression_attribute_names.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_names = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_names(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, std::string::String>,
+            >,
+        ) -> Self {
+            self.expression_attribute_names = inp;
+            self
+        }
         pub fn expression_attribute_values(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.expression_attribute_values = Some(inp);
+            let mut hash_map = self.expression_attribute_values.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_values = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_values(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.expression_attribute_values = inp;
             self
         }
         /// <p>A Boolean value that determines the read consistency model during the scan:</p>
@@ -6120,83 +6791,96 @@ pub mod scan_input {
             self.consistent_read = Some(inp);
             self
         }
+        pub fn set_consistent_read(mut self, inp: std::option::Option<bool>) -> Self {
+            self.consistent_read = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`Scan`](crate::operation::Scan)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<crate::operation::Scan, aws_http::AwsErrorRetryPolicy>
-        {
-            let op = crate::operation::Scan::new(crate::input::ScanInput {
-                table_name: self.table_name,
-                index_name: self.index_name,
-                attributes_to_get: self.attributes_to_get,
-                limit: self.limit,
-                select: self.select,
-                scan_filter: self.scan_filter,
-                conditional_operator: self.conditional_operator,
-                exclusive_start_key: self.exclusive_start_key,
-                return_consumed_capacity: self.return_consumed_capacity,
-                total_segments: self.total_segments,
-                segment: self.segment,
-                projection_expression: self.projection_expression,
-                filter_expression: self.filter_expression,
-                expression_attribute_names: self.expression_attribute_names,
-                expression_attribute_values: self.expression_attribute_values,
-                consistent_read: self.consistent_read,
-            });
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::Scan,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
+        > {
+            Ok({
+                let op = crate::operation::Scan::new(crate::input::ScanInput {
+                    table_name: self.table_name,
+                    index_name: self.index_name,
+                    attributes_to_get: self.attributes_to_get,
+                    limit: self.limit,
+                    select: self.select,
+                    scan_filter: self.scan_filter,
+                    conditional_operator: self.conditional_operator,
+                    exclusive_start_key: self.exclusive_start_key,
+                    return_consumed_capacity: self.return_consumed_capacity,
+                    total_segments: self.total_segments,
+                    segment: self.segment,
+                    projection_expression: self.projection_expression,
+                    filter_expression: self.filter_expression,
+                    expression_attribute_names: self.expression_attribute_names,
+                    expression_attribute_values: self.expression_attribute_values,
+                    consistent_read: self.consistent_read,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op)
-                .with_metadata(smithy_http::operation::Metadata::new("Scan", "dynamodb"));
+                let op = smithy_http::operation::Operation::new(request, op)
+                    .with_metadata(smithy_http::operation::Metadata::new("Scan", "dynamodb"));
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl ScanInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.Scan")
+            .header("X-Amz-Target", "DynamoDB_20120810.Scan"))
     }
     fn body(&self) -> crate::serializer::ScanInputBody {
         crate::serializer::ScanInputBody {
@@ -6252,9 +6936,21 @@ pub mod tag_resource_input {
             self.resource_arn = Some(inp.into());
             self
         }
-        /// <p>The tags to be assigned to the Amazon DynamoDB resource.</p>
-        pub fn tags(mut self, inp: std::vec::Vec<crate::model::Tag>) -> Self {
-            self.tags = Some(inp);
+        pub fn set_resource_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.resource_arn = inp;
+            self
+        }
+        pub fn tags(mut self, inp: impl Into<crate::model::Tag>) -> Self {
+            let mut v = self.tags.unwrap_or_default();
+            v.push(inp.into());
+            self.tags = Some(v);
+            self
+        }
+        pub fn set_tags(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::Tag>>,
+        ) -> Self {
+            self.tags = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`TagResource`](crate::operation::TagResource)>
@@ -6262,67 +6958,74 @@ pub mod tag_resource_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::TagResource,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::TagResource,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::TagResource::new(crate::input::TagResourceInput {
-                resource_arn: self.resource_arn,
-                tags: self.tags,
-            });
+            Ok({
+                let op = crate::operation::TagResource::new(crate::input::TagResourceInput {
+                    resource_arn: self.resource_arn,
+                    tags: self.tags,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("TagResource", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("TagResource", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl TagResourceInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.TagResource")
+            .header("X-Amz-Target", "DynamoDB_20120810.TagResource"))
     }
     fn body(&self) -> crate::serializer::TagResourceInputBody {
         crate::serializer::TagResourceInputBody {
@@ -6359,10 +7062,17 @@ pub mod transact_get_items_input {
         return_consumed_capacity: std::option::Option<crate::model::ReturnConsumedCapacity>,
     }
     impl Builder {
-        /// <p>An ordered array of up to 25 <code>TransactGetItem</code> objects,
-        /// each of which contains a <code>Get</code> structure.</p>
-        pub fn transact_items(mut self, inp: std::vec::Vec<crate::model::TransactGetItem>) -> Self {
-            self.transact_items = Some(inp);
+        pub fn transact_items(mut self, inp: impl Into<crate::model::TransactGetItem>) -> Self {
+            let mut v = self.transact_items.unwrap_or_default();
+            v.push(inp.into());
+            self.transact_items = Some(v);
+            self
+        }
+        pub fn set_transact_items(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::TransactGetItem>>,
+        ) -> Self {
+            self.transact_items = inp;
             self
         }
         /// <p>A value of <code>TOTAL</code> causes consumed capacity information
@@ -6375,72 +7085,87 @@ pub mod transact_get_items_input {
             self.return_consumed_capacity = Some(inp);
             self
         }
+        pub fn set_return_consumed_capacity(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnConsumedCapacity>,
+        ) -> Self {
+            self.return_consumed_capacity = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`TransactGetItems`](crate::operation::TransactGetItems)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::TransactGetItems,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::TransactGetItems,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::TransactGetItems::new(crate::input::TransactGetItemsInput {
-                transact_items: self.transact_items,
-                return_consumed_capacity: self.return_consumed_capacity,
-            });
+            Ok({
+                let op =
+                    crate::operation::TransactGetItems::new(crate::input::TransactGetItemsInput {
+                        transact_items: self.transact_items,
+                        return_consumed_capacity: self.return_consumed_capacity,
+                    });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("TransactGetItems", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("TransactGetItems", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl TransactGetItemsInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.TransactGetItems")
+            .header("X-Amz-Target", "DynamoDB_20120810.TransactGetItems"))
     }
     fn body(&self) -> crate::serializer::TransactGetItemsInputBody {
         crate::serializer::TransactGetItemsInputBody {
@@ -6480,16 +7205,17 @@ pub mod transact_write_items_input {
         client_request_token: std::option::Option<std::string::String>,
     }
     impl Builder {
-        /// <p>An ordered array of up to 25 <code>TransactWriteItem</code> objects, each of which
-        /// contains a <code>ConditionCheck</code>, <code>Put</code>, <code>Update</code>, or
-        /// <code>Delete</code> object. These can operate on items in different tables, but the
-        /// tables must reside in the same AWS account and Region, and no two of them can operate on
-        /// the same item. </p>
-        pub fn transact_items(
+        pub fn transact_items(mut self, inp: impl Into<crate::model::TransactWriteItem>) -> Self {
+            let mut v = self.transact_items.unwrap_or_default();
+            v.push(inp.into());
+            self.transact_items = Some(v);
+            self
+        }
+        pub fn set_transact_items(
             mut self,
-            inp: std::vec::Vec<crate::model::TransactWriteItem>,
+            inp: std::option::Option<std::vec::Vec<crate::model::TransactWriteItem>>,
         ) -> Self {
-            self.transact_items = Some(inp);
+            self.transact_items = inp;
             self
         }
         /// <p>Determines the level of detail about provisioned throughput consumption that is returned in the response:</p>
@@ -6515,6 +7241,13 @@ pub mod transact_write_items_input {
             self.return_consumed_capacity = Some(inp);
             self
         }
+        pub fn set_return_consumed_capacity(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnConsumedCapacity>,
+        ) -> Self {
+            self.return_consumed_capacity = inp;
+            self
+        }
         /// <p>Determines whether item collection metrics are returned. If set to
         /// <code>SIZE</code>, the response includes statistics about item collections (if any), that
         /// were modified during the operation and are returned in the response.
@@ -6525,6 +7258,13 @@ pub mod transact_write_items_input {
             inp: crate::model::ReturnItemCollectionMetrics,
         ) -> Self {
             self.return_item_collection_metrics = Some(inp);
+            self
+        }
+        pub fn set_return_item_collection_metrics(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnItemCollectionMetrics>,
+        ) -> Self {
+            self.return_item_collection_metrics = inp;
             self
         }
         /// <p>Providing a <code>ClientRequestToken</code> makes the call to <code>TransactWriteItems</code>
@@ -6547,77 +7287,92 @@ pub mod transact_write_items_input {
             self.client_request_token = Some(inp.into());
             self
         }
+        pub fn set_client_request_token(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.client_request_token = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`TransactWriteItems`](crate::operation::TransactWriteItems)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::TransactWriteItems,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::TransactWriteItems,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op =
-                crate::operation::TransactWriteItems::new(crate::input::TransactWriteItemsInput {
-                    transact_items: self.transact_items,
-                    return_consumed_capacity: self.return_consumed_capacity,
-                    return_item_collection_metrics: self.return_item_collection_metrics,
-                    client_request_token: self
-                        .client_request_token
-                        .or_else(|| Some(_config.make_token.make_idempotency_token())),
-                });
+            Ok({
+                let op = crate::operation::TransactWriteItems::new(
+                    crate::input::TransactWriteItemsInput {
+                        transact_items: self.transact_items,
+                        return_consumed_capacity: self.return_consumed_capacity,
+                        return_item_collection_metrics: self.return_item_collection_metrics,
+                        client_request_token: self
+                            .client_request_token
+                            .or_else(|| Some(_config.make_token.make_idempotency_token())),
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("TransactWriteItems", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("TransactWriteItems", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl TransactWriteItemsInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.TransactWriteItems")
+            .header("X-Amz-Target", "DynamoDB_20120810.TransactWriteItems"))
     }
     fn body(&self) -> crate::serializer::TransactWriteItemsInputBody {
         crate::serializer::TransactWriteItemsInputBody {
@@ -6662,10 +7417,21 @@ pub mod untag_resource_input {
             self.resource_arn = Some(inp.into());
             self
         }
-        /// <p>A list of tag keys. Existing tags of the resource whose keys are members of this list
-        /// will be removed from the DynamoDB resource.</p>
-        pub fn tag_keys(mut self, inp: std::vec::Vec<std::string::String>) -> Self {
-            self.tag_keys = Some(inp);
+        pub fn set_resource_arn(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.resource_arn = inp;
+            self
+        }
+        pub fn tag_keys(mut self, inp: impl Into<std::string::String>) -> Self {
+            let mut v = self.tag_keys.unwrap_or_default();
+            v.push(inp.into());
+            self.tag_keys = Some(v);
+            self
+        }
+        pub fn set_tag_keys(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<std::string::String>>,
+        ) -> Self {
+            self.tag_keys = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`UntagResource`](crate::operation::UntagResource)>
@@ -6673,67 +7439,74 @@ pub mod untag_resource_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::UntagResource,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::UntagResource,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::UntagResource::new(crate::input::UntagResourceInput {
-                resource_arn: self.resource_arn,
-                tag_keys: self.tag_keys,
-            });
+            Ok({
+                let op = crate::operation::UntagResource::new(crate::input::UntagResourceInput {
+                    resource_arn: self.resource_arn,
+                    tag_keys: self.tag_keys,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("UntagResource", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("UntagResource", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl UntagResourceInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.UntagResource")
+            .header("X-Amz-Target", "DynamoDB_20120810.UntagResource"))
     }
     fn body(&self) -> crate::serializer::UntagResourceInputBody {
         crate::serializer::UntagResourceInputBody {
@@ -6776,6 +7549,10 @@ pub mod update_continuous_backups_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>Represents the settings used to enable point in time recovery.</p>
         pub fn point_in_time_recovery_specification(
             mut self,
@@ -6784,74 +7561,89 @@ pub mod update_continuous_backups_input {
             self.point_in_time_recovery_specification = Some(inp);
             self
         }
+        pub fn set_point_in_time_recovery_specification(
+            mut self,
+            inp: std::option::Option<crate::model::PointInTimeRecoverySpecification>,
+        ) -> Self {
+            self.point_in_time_recovery_specification = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`UpdateContinuousBackups`](crate::operation::UpdateContinuousBackups)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::UpdateContinuousBackups,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::UpdateContinuousBackups,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::UpdateContinuousBackups::new(
-                crate::input::UpdateContinuousBackupsInput {
-                    table_name: self.table_name,
-                    point_in_time_recovery_specification: self.point_in_time_recovery_specification,
-                },
-            );
+            Ok({
+                let op = crate::operation::UpdateContinuousBackups::new(
+                    crate::input::UpdateContinuousBackupsInput {
+                        table_name: self.table_name,
+                        point_in_time_recovery_specification: self
+                            .point_in_time_recovery_specification,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("UpdateContinuousBackups", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("UpdateContinuousBackups", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl UpdateContinuousBackupsInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.UpdateContinuousBackups")
+            .header("X-Amz-Target", "DynamoDB_20120810.UpdateContinuousBackups"))
     }
     fn body(&self) -> crate::serializer::UpdateContinuousBackupsInputBody {
         crate::serializer::UpdateContinuousBackupsInputBody {
@@ -6894,9 +7686,17 @@ pub mod update_contributor_insights_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>The global secondary index name, if applicable.</p>
         pub fn index_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.index_name = Some(inp.into());
+            self
+        }
+        pub fn set_index_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.index_name = inp;
             self
         }
         /// <p>Represents the contributor insights action.</p>
@@ -6907,78 +7707,92 @@ pub mod update_contributor_insights_input {
             self.contributor_insights_action = Some(inp);
             self
         }
+        pub fn set_contributor_insights_action(
+            mut self,
+            inp: std::option::Option<crate::model::ContributorInsightsAction>,
+        ) -> Self {
+            self.contributor_insights_action = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`UpdateContributorInsights`](crate::operation::UpdateContributorInsights)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::UpdateContributorInsights,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::UpdateContributorInsights,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::UpdateContributorInsights::new(
-                crate::input::UpdateContributorInsightsInput {
-                    table_name: self.table_name,
-                    index_name: self.index_name,
-                    contributor_insights_action: self.contributor_insights_action,
-                },
-            );
+            Ok({
+                let op = crate::operation::UpdateContributorInsights::new(
+                    crate::input::UpdateContributorInsightsInput {
+                        table_name: self.table_name,
+                        index_name: self.index_name,
+                        contributor_insights_action: self.contributor_insights_action,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("UpdateContributorInsights", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("UpdateContributorInsights", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl UpdateContributorInsightsInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
             .header(
                 "X-Amz-Target",
                 "DynamoDB_20120810.UpdateContributorInsights",
-            )
+            ))
     }
     fn body(&self) -> crate::serializer::UpdateContributorInsightsInputBody {
         crate::serializer::UpdateContributorInsightsInputBody {
@@ -7021,9 +7835,24 @@ pub mod update_global_table_input {
             self.global_table_name = Some(inp.into());
             self
         }
-        /// <p>A list of Regions that should be added or removed from the global table.</p>
-        pub fn replica_updates(mut self, inp: std::vec::Vec<crate::model::ReplicaUpdate>) -> Self {
-            self.replica_updates = Some(inp);
+        pub fn set_global_table_name(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.global_table_name = inp;
+            self
+        }
+        pub fn replica_updates(mut self, inp: impl Into<crate::model::ReplicaUpdate>) -> Self {
+            let mut v = self.replica_updates.unwrap_or_default();
+            v.push(inp.into());
+            self.replica_updates = Some(v);
+            self
+        }
+        pub fn set_replica_updates(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::ReplicaUpdate>>,
+        ) -> Self {
+            self.replica_updates = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`UpdateGlobalTable`](crate::operation::UpdateGlobalTable)>
@@ -7031,68 +7860,76 @@ pub mod update_global_table_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::UpdateGlobalTable,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::UpdateGlobalTable,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op =
-                crate::operation::UpdateGlobalTable::new(crate::input::UpdateGlobalTableInput {
-                    global_table_name: self.global_table_name,
-                    replica_updates: self.replica_updates,
-                });
+            Ok({
+                let op = crate::operation::UpdateGlobalTable::new(
+                    crate::input::UpdateGlobalTableInput {
+                        global_table_name: self.global_table_name,
+                        replica_updates: self.replica_updates,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("UpdateGlobalTable", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("UpdateGlobalTable", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl UpdateGlobalTableInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.UpdateGlobalTable")
+            .header("X-Amz-Target", "DynamoDB_20120810.UpdateGlobalTable"))
     }
     fn body(&self) -> crate::serializer::UpdateGlobalTableInputBody {
         crate::serializer::UpdateGlobalTableInputBody {
@@ -7142,6 +7979,13 @@ pub mod update_global_table_settings_input {
             self.global_table_name = Some(inp.into());
             self
         }
+        pub fn set_global_table_name(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.global_table_name = inp;
+            self
+        }
         /// <p>The billing mode of the global table. If <code>GlobalTableBillingMode</code> is not specified, the global table defaults to <code>PROVISIONED</code> capacity billing mode.</p>
         /// <ul>
         /// <li>
@@ -7158,10 +8002,24 @@ pub mod update_global_table_settings_input {
             self.global_table_billing_mode = Some(inp);
             self
         }
+        pub fn set_global_table_billing_mode(
+            mut self,
+            inp: std::option::Option<crate::model::BillingMode>,
+        ) -> Self {
+            self.global_table_billing_mode = inp;
+            self
+        }
         /// <p>The maximum number of writes consumed per second before DynamoDB returns a <code>ThrottlingException.</code>
         /// </p>
         pub fn global_table_provisioned_write_capacity_units(mut self, inp: i64) -> Self {
             self.global_table_provisioned_write_capacity_units = Some(inp);
+            self
+        }
+        pub fn set_global_table_provisioned_write_capacity_units(
+            mut self,
+            inp: std::option::Option<i64>,
+        ) -> Self {
+            self.global_table_provisioned_write_capacity_units = inp;
             self
         }
         /// <p>Auto scaling settings for managing provisioned write capacity for the global
@@ -7173,20 +8031,47 @@ pub mod update_global_table_settings_input {
             self.global_table_provisioned_write_capacity_auto_scaling_settings_update = Some(inp);
             self
         }
-        /// <p>Represents the settings of a global secondary index for a global table that will be modified.</p>
-        pub fn global_table_global_secondary_index_settings_update(
+        pub fn set_global_table_provisioned_write_capacity_auto_scaling_settings_update(
             mut self,
-            inp: std::vec::Vec<crate::model::GlobalTableGlobalSecondaryIndexSettingsUpdate>,
+            inp: std::option::Option<crate::model::AutoScalingSettingsUpdate>,
         ) -> Self {
-            self.global_table_global_secondary_index_settings_update = Some(inp);
+            self.global_table_provisioned_write_capacity_auto_scaling_settings_update = inp;
             self
         }
-        /// <p>Represents the settings for a global table in a Region that will be modified.</p>
+        pub fn global_table_global_secondary_index_settings_update(
+            mut self,
+            inp: impl Into<crate::model::GlobalTableGlobalSecondaryIndexSettingsUpdate>,
+        ) -> Self {
+            let mut v = self
+                .global_table_global_secondary_index_settings_update
+                .unwrap_or_default();
+            v.push(inp.into());
+            self.global_table_global_secondary_index_settings_update = Some(v);
+            self
+        }
+        pub fn set_global_table_global_secondary_index_settings_update(
+            mut self,
+            inp: std::option::Option<
+                std::vec::Vec<crate::model::GlobalTableGlobalSecondaryIndexSettingsUpdate>,
+            >,
+        ) -> Self {
+            self.global_table_global_secondary_index_settings_update = inp;
+            self
+        }
         pub fn replica_settings_update(
             mut self,
-            inp: std::vec::Vec<crate::model::ReplicaSettingsUpdate>,
+            inp: impl Into<crate::model::ReplicaSettingsUpdate>,
         ) -> Self {
-            self.replica_settings_update = Some(inp);
+            let mut v = self.replica_settings_update.unwrap_or_default();
+            v.push(inp.into());
+            self.replica_settings_update = Some(v);
+            self
+        }
+        pub fn set_replica_settings_update(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::ReplicaSettingsUpdate>>,
+        ) -> Self {
+            self.replica_settings_update = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`UpdateGlobalTableSettings`](crate::operation::UpdateGlobalTableSettings)>
@@ -7194,79 +8079,86 @@ pub mod update_global_table_settings_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::UpdateGlobalTableSettings,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::UpdateGlobalTableSettings,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::UpdateGlobalTableSettings::new(
-                crate::input::UpdateGlobalTableSettingsInput {
-                    global_table_name: self.global_table_name,
-                    global_table_billing_mode: self.global_table_billing_mode,
-                    global_table_provisioned_write_capacity_units: self
-                        .global_table_provisioned_write_capacity_units,
-                    global_table_provisioned_write_capacity_auto_scaling_settings_update: self
-                        .global_table_provisioned_write_capacity_auto_scaling_settings_update,
-                    global_table_global_secondary_index_settings_update: self
-                        .global_table_global_secondary_index_settings_update,
-                    replica_settings_update: self.replica_settings_update,
-                },
-            );
+            Ok({
+                let op = crate::operation::UpdateGlobalTableSettings::new(
+                    crate::input::UpdateGlobalTableSettingsInput {
+                        global_table_name: self.global_table_name,
+                        global_table_billing_mode: self.global_table_billing_mode,
+                        global_table_provisioned_write_capacity_units: self
+                            .global_table_provisioned_write_capacity_units,
+                        global_table_provisioned_write_capacity_auto_scaling_settings_update: self
+                            .global_table_provisioned_write_capacity_auto_scaling_settings_update,
+                        global_table_global_secondary_index_settings_update: self
+                            .global_table_global_secondary_index_settings_update,
+                        replica_settings_update: self.replica_settings_update,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("UpdateGlobalTableSettings", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("UpdateGlobalTableSettings", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl UpdateGlobalTableSettingsInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
             .header(
                 "X-Amz-Target",
                 "DynamoDB_20120810.UpdateGlobalTableSettings",
-            )
+            ))
     }
     fn body(&self) -> crate::serializer::UpdateGlobalTableSettingsInputBody {
         crate::serializer::UpdateGlobalTableSettingsInputBody {
@@ -7336,40 +8228,81 @@ pub mod update_item_input {
             self.table_name = Some(inp.into());
             self
         }
-        /// <p>The primary key of the item to be updated. Each element consists of an attribute name and a value for that attribute.</p>
-        /// <p>For the primary key, you must provide all of the attributes. For example, with a simple primary key, you only need to provide a value for the partition key. For a composite primary key, you must provide values for both the partition key and the sort key.</p>
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         pub fn key(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.key = Some(inp);
+            let mut hash_map = self.key.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.key = Some(hash_map);
             self
         }
-        /// <p>This is a legacy parameter.  Use <code>UpdateExpression</code> instead.   For more information, see
-        /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.AttributeUpdates.html">AttributeUpdates</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
-        pub fn attribute_updates(
+        pub fn set_key(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValueUpdate>,
-        ) -> Self {
-            self.attribute_updates = Some(inp);
-            self
-        }
-        /// <p>This is a legacy parameter.  Use <code>ConditionExpression</code> instead.   For more information, see
-        /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.Expected.html">Expected</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
-        pub fn expected(
-            mut self,
-            inp: std::collections::HashMap<
-                std::string::String,
-                crate::model::ExpectedAttributeValue,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
             >,
         ) -> Self {
-            self.expected = Some(inp);
+            self.key = inp;
+            self
+        }
+        pub fn attribute_updates(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValueUpdate>,
+        ) -> Self {
+            let mut hash_map = self.attribute_updates.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.attribute_updates = Some(hash_map);
+            self
+        }
+        pub fn set_attribute_updates(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValueUpdate>,
+            >,
+        ) -> Self {
+            self.attribute_updates = inp;
+            self
+        }
+        pub fn expected(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::ExpectedAttributeValue>,
+        ) -> Self {
+            let mut hash_map = self.expected.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expected = Some(hash_map);
+            self
+        }
+        pub fn set_expected(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<
+                    std::string::String,
+                    crate::model::ExpectedAttributeValue,
+                >,
+            >,
+        ) -> Self {
+            self.expected = inp;
             self
         }
         /// <p>This is a legacy parameter.  Use <code>ConditionExpression</code> instead.   For more information, see
         /// <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.ConditionalOperator.html">ConditionalOperator</a> in the <i>Amazon DynamoDB Developer Guide</i>.</p>
         pub fn conditional_operator(mut self, inp: crate::model::ConditionalOperator) -> Self {
             self.conditional_operator = Some(inp);
+            self
+        }
+        pub fn set_conditional_operator(
+            mut self,
+            inp: std::option::Option<crate::model::ConditionalOperator>,
+        ) -> Self {
+            self.conditional_operator = inp;
             self
         }
         /// <p>Use <code>ReturnValues</code> if you want to get the item attributes as they appear
@@ -7407,6 +8340,13 @@ pub mod update_item_input {
             self.return_values = Some(inp);
             self
         }
+        pub fn set_return_values(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnValue>,
+        ) -> Self {
+            self.return_values = inp;
+            self
+        }
         /// <p>Determines the level of detail about provisioned throughput consumption that is returned in the response:</p>
         /// <ul>
         /// <li>
@@ -7430,6 +8370,13 @@ pub mod update_item_input {
             self.return_consumed_capacity = Some(inp);
             self
         }
+        pub fn set_return_consumed_capacity(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnConsumedCapacity>,
+        ) -> Self {
+            self.return_consumed_capacity = inp;
+            self
+        }
         /// <p>Determines whether item collection metrics are returned.  If set to <code>SIZE</code>, the response includes statistics about item collections, if any, that were modified during
         /// the operation are returned in the response. If set to <code>NONE</code> (the default), no statistics are returned.</p>
         pub fn return_item_collection_metrics(
@@ -7437,6 +8384,13 @@ pub mod update_item_input {
             inp: crate::model::ReturnItemCollectionMetrics,
         ) -> Self {
             self.return_item_collection_metrics = Some(inp);
+            self
+        }
+        pub fn set_return_item_collection_metrics(
+            mut self,
+            inp: std::option::Option<crate::model::ReturnItemCollectionMetrics>,
+        ) -> Self {
+            self.return_item_collection_metrics = inp;
             self
         }
         /// <p>An expression that defines one or more attributes to be updated, the action to be
@@ -7531,6 +8485,13 @@ pub mod update_item_input {
             self.update_expression = Some(inp.into());
             self
         }
+        pub fn set_update_expression(
+            mut self,
+            inp: std::option::Option<std::string::String>,
+        ) -> Self {
+            self.update_expression = inp;
+            self
+        }
         /// <p>A condition that must be satisfied in order for a conditional update to succeed.</p>
         /// <p>An expression can contain any of the following:</p>
         /// <ul>
@@ -7556,79 +8517,49 @@ pub mod update_item_input {
             self.condition_expression = Some(inp.into());
             self
         }
-        /// <p>One or more substitution tokens for attribute names in an expression. The following are some use cases for using <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>To access an attribute whose name conflicts with a DynamoDB reserved word.</p>
-        /// </li>
-        /// <li>
-        /// <p>To create a placeholder for repeating occurrences of an attribute name in an expression.</p>
-        /// </li>
-        /// <li>
-        /// <p>To prevent special characters in an attribute name from being misinterpreted in an expression.</p>
-        /// </li>
-        /// </ul>
-        /// <p>Use the <b>#</b> character in an expression to dereference an attribute name. For example, consider the following attribute name:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>Percentile</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>The name of this attribute conflicts with a reserved word, so it cannot be used directly
-        /// in an expression. (For the complete list of reserved words, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ReservedWords.html">Reserved Words</a> in the <i>Amazon DynamoDB Developer
-        /// Guide</i>.) To work around this, you could specify the following for
-        /// <code>ExpressionAttributeNames</code>:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>{"#P":"Percentile"}</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <p>You could then use this substitution in an expression, as in this example:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>#P = :val</code>
-        /// </p>
-        /// </li>
-        /// </ul>
-        /// <note>
-        /// <p>Tokens that begin with the <b>:</b> character are <i>expression attribute values</i>, which are placeholders for the actual value at runtime.</p>
-        /// </note>
-        /// <p>For more information about expression attribute names, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.AccessingItemAttributes.html">Specifying Item Attributes</a> in the <i>Amazon DynamoDB Developer
-        /// Guide</i>.</p>
-        pub fn expression_attribute_names(
+        pub fn set_condition_expression(
             mut self,
-            inp: std::collections::HashMap<std::string::String, std::string::String>,
+            inp: std::option::Option<std::string::String>,
         ) -> Self {
-            self.expression_attribute_names = Some(inp);
+            self.condition_expression = inp;
             self
         }
-        /// <p>One or more values that can be substituted in an expression.</p>
-        /// <p>Use the <b>:</b> (colon) character in an expression to
-        /// dereference an attribute value. For example, suppose that you wanted to check whether
-        /// the value of the <code>ProductStatus</code> attribute was one of the following: </p>
-        /// <p>
-        /// <code>Available | Backordered | Discontinued</code>
-        /// </p>
-        /// <p>You would first need to specify <code>ExpressionAttributeValues</code> as follows:</p>
-        /// <p>
-        /// <code>{ ":avail":{"S":"Available"}, ":back":{"S":"Backordered"}, ":disc":{"S":"Discontinued"} }</code>
-        /// </p>
-        /// <p>You could then use these values in an expression, such as this:</p>
-        /// <p>
-        /// <code>ProductStatus IN (:avail, :back, :disc)</code>
-        /// </p>
-        /// <p>For more information on expression attribute values, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.SpecifyingConditions.html">Condition Expressions</a> in the <i>Amazon DynamoDB Developer
-        /// Guide</i>.</p>
+        pub fn expression_attribute_names(
+            mut self,
+            k: impl Into<std::string::String>,
+            v: impl Into<std::string::String>,
+        ) -> Self {
+            let mut hash_map = self.expression_attribute_names.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_names = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_names(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, std::string::String>,
+            >,
+        ) -> Self {
+            self.expression_attribute_names = inp;
+            self
+        }
         pub fn expression_attribute_values(
             mut self,
-            inp: std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            k: impl Into<std::string::String>,
+            v: impl Into<crate::model::AttributeValue>,
         ) -> Self {
-            self.expression_attribute_values = Some(inp);
+            let mut hash_map = self.expression_attribute_values.unwrap_or_default();
+            hash_map.insert(k.into(), v.into());
+            self.expression_attribute_values = Some(hash_map);
+            self
+        }
+        pub fn set_expression_attribute_values(
+            mut self,
+            inp: std::option::Option<
+                std::collections::HashMap<std::string::String, crate::model::AttributeValue>,
+            >,
+        ) -> Self {
+            self.expression_attribute_values = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`UpdateItem`](crate::operation::UpdateItem)>
@@ -7636,77 +8567,84 @@ pub mod update_item_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::UpdateItem,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::UpdateItem,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::UpdateItem::new(crate::input::UpdateItemInput {
-                table_name: self.table_name,
-                key: self.key,
-                attribute_updates: self.attribute_updates,
-                expected: self.expected,
-                conditional_operator: self.conditional_operator,
-                return_values: self.return_values,
-                return_consumed_capacity: self.return_consumed_capacity,
-                return_item_collection_metrics: self.return_item_collection_metrics,
-                update_expression: self.update_expression,
-                condition_expression: self.condition_expression,
-                expression_attribute_names: self.expression_attribute_names,
-                expression_attribute_values: self.expression_attribute_values,
-            });
+            Ok({
+                let op = crate::operation::UpdateItem::new(crate::input::UpdateItemInput {
+                    table_name: self.table_name,
+                    key: self.key,
+                    attribute_updates: self.attribute_updates,
+                    expected: self.expected,
+                    conditional_operator: self.conditional_operator,
+                    return_values: self.return_values,
+                    return_consumed_capacity: self.return_consumed_capacity,
+                    return_item_collection_metrics: self.return_item_collection_metrics,
+                    update_expression: self.update_expression,
+                    condition_expression: self.condition_expression,
+                    expression_attribute_names: self.expression_attribute_names,
+                    expression_attribute_values: self.expression_attribute_values,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("UpdateItem", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("UpdateItem", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl UpdateItemInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.UpdateItem")
+            .header("X-Amz-Target", "DynamoDB_20120810.UpdateItem"))
     }
     fn body(&self) -> crate::serializer::UpdateItemInputBody {
         crate::serializer::UpdateItemInputBody {
@@ -7761,17 +8699,29 @@ pub mod update_table_input {
         replica_updates: std::option::Option<std::vec::Vec<crate::model::ReplicationGroupUpdate>>,
     }
     impl Builder {
-        /// <p>An array of attributes that describe the key schema for the table and indexes. If you are adding a new global secondary index to the table, <code>AttributeDefinitions</code> must include the key element(s) of the new index.</p>
         pub fn attribute_definitions(
             mut self,
-            inp: std::vec::Vec<crate::model::AttributeDefinition>,
+            inp: impl Into<crate::model::AttributeDefinition>,
         ) -> Self {
-            self.attribute_definitions = Some(inp);
+            let mut v = self.attribute_definitions.unwrap_or_default();
+            v.push(inp.into());
+            self.attribute_definitions = Some(v);
+            self
+        }
+        pub fn set_attribute_definitions(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::AttributeDefinition>>,
+        ) -> Self {
+            self.attribute_definitions = inp;
             self
         }
         /// <p>The name of the table to be updated.</p>
         pub fn table_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.table_name = Some(inp.into());
+            self
+        }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
             self
         }
         /// <p>Controls how you are charged for read and write throughput and how you manage capacity.
@@ -7793,34 +8743,39 @@ pub mod update_table_input {
             self.billing_mode = Some(inp);
             self
         }
+        pub fn set_billing_mode(
+            mut self,
+            inp: std::option::Option<crate::model::BillingMode>,
+        ) -> Self {
+            self.billing_mode = inp;
+            self
+        }
         /// <p>The new provisioned throughput settings for the specified table or index.</p>
         pub fn provisioned_throughput(mut self, inp: crate::model::ProvisionedThroughput) -> Self {
             self.provisioned_throughput = Some(inp);
             self
         }
-        /// <p>An array of one or more global secondary indexes for the table. For each index in the array, you can request one action:</p>
-        /// <ul>
-        /// <li>
-        /// <p>
-        /// <code>Create</code> - add a new global secondary index to the table.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>Update</code> - modify the provisioned throughput settings of an existing global secondary index.</p>
-        /// </li>
-        /// <li>
-        /// <p>
-        /// <code>Delete</code> - remove a global secondary index from the table.</p>
-        /// </li>
-        /// </ul>
-        /// <p>You can create or delete only one global secondary index per <code>UpdateTable</code> operation.</p>
-        /// <p>For more information, see <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/GSI.OnlineOps.html">Managing Global Secondary
-        /// Indexes</a> in the <i>Amazon DynamoDB Developer Guide</i>. </p>
+        pub fn set_provisioned_throughput(
+            mut self,
+            inp: std::option::Option<crate::model::ProvisionedThroughput>,
+        ) -> Self {
+            self.provisioned_throughput = inp;
+            self
+        }
         pub fn global_secondary_index_updates(
             mut self,
-            inp: std::vec::Vec<crate::model::GlobalSecondaryIndexUpdate>,
+            inp: impl Into<crate::model::GlobalSecondaryIndexUpdate>,
         ) -> Self {
-            self.global_secondary_index_updates = Some(inp);
+            let mut v = self.global_secondary_index_updates.unwrap_or_default();
+            v.push(inp.into());
+            self.global_secondary_index_updates = Some(v);
+            self
+        }
+        pub fn set_global_secondary_index_updates(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::GlobalSecondaryIndexUpdate>>,
+        ) -> Self {
+            self.global_secondary_index_updates = inp;
             self
         }
         /// <p>Represents the DynamoDB Streams configuration for the table.</p>
@@ -7833,20 +8788,39 @@ pub mod update_table_input {
             self.stream_specification = Some(inp);
             self
         }
+        pub fn set_stream_specification(
+            mut self,
+            inp: std::option::Option<crate::model::StreamSpecification>,
+        ) -> Self {
+            self.stream_specification = inp;
+            self
+        }
         /// <p>The new server-side encryption settings for the specified table.</p>
         pub fn sse_specification(mut self, inp: crate::model::SSESpecification) -> Self {
             self.sse_specification = Some(inp);
             self
         }
-        /// <p>A list of replica update actions (create, delete, or update) for the table.</p>
-        /// <note>
-        /// <p>This property only applies to <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/globaltables.V2.html">Version 2019.11.21</a> of global tables.</p>
-        /// </note>
+        pub fn set_sse_specification(
+            mut self,
+            inp: std::option::Option<crate::model::SSESpecification>,
+        ) -> Self {
+            self.sse_specification = inp;
+            self
+        }
         pub fn replica_updates(
             mut self,
-            inp: std::vec::Vec<crate::model::ReplicationGroupUpdate>,
+            inp: impl Into<crate::model::ReplicationGroupUpdate>,
         ) -> Self {
-            self.replica_updates = Some(inp);
+            let mut v = self.replica_updates.unwrap_or_default();
+            v.push(inp.into());
+            self.replica_updates = Some(v);
+            self
+        }
+        pub fn set_replica_updates(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::ReplicationGroupUpdate>>,
+        ) -> Self {
+            self.replica_updates = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`UpdateTable`](crate::operation::UpdateTable)>
@@ -7854,73 +8828,80 @@ pub mod update_table_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::UpdateTable,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::UpdateTable,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::UpdateTable::new(crate::input::UpdateTableInput {
-                attribute_definitions: self.attribute_definitions,
-                table_name: self.table_name,
-                billing_mode: self.billing_mode,
-                provisioned_throughput: self.provisioned_throughput,
-                global_secondary_index_updates: self.global_secondary_index_updates,
-                stream_specification: self.stream_specification,
-                sse_specification: self.sse_specification,
-                replica_updates: self.replica_updates,
-            });
+            Ok({
+                let op = crate::operation::UpdateTable::new(crate::input::UpdateTableInput {
+                    attribute_definitions: self.attribute_definitions,
+                    table_name: self.table_name,
+                    billing_mode: self.billing_mode,
+                    provisioned_throughput: self.provisioned_throughput,
+                    global_secondary_index_updates: self.global_secondary_index_updates,
+                    stream_specification: self.stream_specification,
+                    sse_specification: self.sse_specification,
+                    replica_updates: self.replica_updates,
+                });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("UpdateTable", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("UpdateTable", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl UpdateTableInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.UpdateTable")
+            .header("X-Amz-Target", "DynamoDB_20120810.UpdateTable"))
     }
     fn body(&self) -> crate::serializer::UpdateTableInputBody {
         crate::serializer::UpdateTableInputBody {
@@ -7967,18 +8948,31 @@ pub mod update_table_replica_auto_scaling_input {
         replica_updates: std::option::Option<std::vec::Vec<crate::model::ReplicaAutoScalingUpdate>>,
     }
     impl Builder {
-        /// <p>Represents the auto scaling settings of the global secondary indexes of the replica
-        /// to be updated.</p>
         pub fn global_secondary_index_updates(
             mut self,
-            inp: std::vec::Vec<crate::model::GlobalSecondaryIndexAutoScalingUpdate>,
+            inp: impl Into<crate::model::GlobalSecondaryIndexAutoScalingUpdate>,
         ) -> Self {
-            self.global_secondary_index_updates = Some(inp);
+            let mut v = self.global_secondary_index_updates.unwrap_or_default();
+            v.push(inp.into());
+            self.global_secondary_index_updates = Some(v);
+            self
+        }
+        pub fn set_global_secondary_index_updates(
+            mut self,
+            inp: std::option::Option<
+                std::vec::Vec<crate::model::GlobalSecondaryIndexAutoScalingUpdate>,
+            >,
+        ) -> Self {
+            self.global_secondary_index_updates = inp;
             self
         }
         /// <p>The name of the global table to be updated.</p>
         pub fn table_name(mut self, inp: impl Into<std::string::String>) -> Self {
             self.table_name = Some(inp.into());
+            self
+        }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
             self
         }
         /// <p>Represents the auto scaling settings to be modified for a global table or global
@@ -7990,13 +8984,27 @@ pub mod update_table_replica_auto_scaling_input {
             self.provisioned_write_capacity_auto_scaling_update = Some(inp);
             self
         }
-        /// <p>Represents the auto scaling settings of replicas of the table that will be
-        /// modified.</p>
+        pub fn set_provisioned_write_capacity_auto_scaling_update(
+            mut self,
+            inp: std::option::Option<crate::model::AutoScalingSettingsUpdate>,
+        ) -> Self {
+            self.provisioned_write_capacity_auto_scaling_update = inp;
+            self
+        }
         pub fn replica_updates(
             mut self,
-            inp: std::vec::Vec<crate::model::ReplicaAutoScalingUpdate>,
+            inp: impl Into<crate::model::ReplicaAutoScalingUpdate>,
         ) -> Self {
-            self.replica_updates = Some(inp);
+            let mut v = self.replica_updates.unwrap_or_default();
+            v.push(inp.into());
+            self.replica_updates = Some(v);
+            self
+        }
+        pub fn set_replica_updates(
+            mut self,
+            inp: std::option::Option<std::vec::Vec<crate::model::ReplicaAutoScalingUpdate>>,
+        ) -> Self {
+            self.replica_updates = inp;
             self
         }
         /// Consumes the builder and constructs an Operation<[`UpdateTableReplicaAutoScaling`](crate::operation::UpdateTableReplicaAutoScaling)>
@@ -8004,75 +9012,85 @@ pub mod update_table_replica_auto_scaling_input {
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::UpdateTableReplicaAutoScaling,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::UpdateTableReplicaAutoScaling,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::UpdateTableReplicaAutoScaling::new(
-                crate::input::UpdateTableReplicaAutoScalingInput {
-                    global_secondary_index_updates: self.global_secondary_index_updates,
-                    table_name: self.table_name,
-                    provisioned_write_capacity_auto_scaling_update: self
-                        .provisioned_write_capacity_auto_scaling_update,
-                    replica_updates: self.replica_updates,
-                },
-            );
+            Ok({
+                let op = crate::operation::UpdateTableReplicaAutoScaling::new(
+                    crate::input::UpdateTableReplicaAutoScalingInput {
+                        global_secondary_index_updates: self.global_secondary_index_updates,
+                        table_name: self.table_name,
+                        provisioned_write_capacity_auto_scaling_update: self
+                            .provisioned_write_capacity_auto_scaling_update,
+                        replica_updates: self.replica_updates,
+                    },
+                );
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("UpdateTableReplicaAutoScaling", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new(
+                        "UpdateTableReplicaAutoScaling",
+                        "dynamodb",
+                    ),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl UpdateTableReplicaAutoScalingInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
             .header(
                 "X-Amz-Target",
                 "DynamoDB_20120810.UpdateTableReplicaAutoScaling",
-            )
+            ))
     }
     fn body(&self) -> crate::serializer::UpdateTableReplicaAutoScalingInputBody {
         crate::serializer::UpdateTableReplicaAutoScalingInputBody {
@@ -8117,6 +9135,10 @@ pub mod update_time_to_live_input {
             self.table_name = Some(inp.into());
             self
         }
+        pub fn set_table_name(mut self, inp: std::option::Option<std::string::String>) -> Self {
+            self.table_name = inp;
+            self
+        }
         /// <p>Represents the settings used to enable or disable Time to Live for the specified table.</p>
         pub fn time_to_live_specification(
             mut self,
@@ -8125,72 +9147,87 @@ pub mod update_time_to_live_input {
             self.time_to_live_specification = Some(inp);
             self
         }
+        pub fn set_time_to_live_specification(
+            mut self,
+            inp: std::option::Option<crate::model::TimeToLiveSpecification>,
+        ) -> Self {
+            self.time_to_live_specification = inp;
+            self
+        }
         /// Consumes the builder and constructs an Operation<[`UpdateTimeToLive`](crate::operation::UpdateTimeToLive)>
         #[allow(clippy::let_and_return)]
         pub fn build(
             self,
             _config: &crate::config::Config,
-        ) -> smithy_http::operation::Operation<
-            crate::operation::UpdateTimeToLive,
-            aws_http::AwsErrorRetryPolicy,
+        ) -> Result<
+            smithy_http::operation::Operation<
+                crate::operation::UpdateTimeToLive,
+                aws_http::AwsErrorRetryPolicy,
+            >,
+            smithy_http::operation::BuildError,
         > {
-            let op = crate::operation::UpdateTimeToLive::new(crate::input::UpdateTimeToLiveInput {
-                table_name: self.table_name,
-                time_to_live_specification: self.time_to_live_specification,
-            });
+            Ok({
+                let op =
+                    crate::operation::UpdateTimeToLive::new(crate::input::UpdateTimeToLiveInput {
+                        table_name: self.table_name,
+                        time_to_live_specification: self.time_to_live_specification,
+                    });
 
-            #[allow(unused_mut)]
-            let mut request = smithy_http::operation::Request::new(
-                op.build_http_request()
-                    .map(smithy_http::body::SdkBody::from),
-            );
+                #[allow(unused_mut)]
+                let mut request = smithy_http::operation::Request::new(
+                    op.build_http_request()?
+                        .map(smithy_http::body::SdkBody::from),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_http::user_agent::AwsUserAgent::new_from_environment(
-                    crate::API_METADATA.clone(),
-                ));
+                request.config_mut().insert(
+                    aws_http::user_agent::AwsUserAgent::new_from_environment(
+                        crate::API_METADATA.clone(),
+                    ),
+                );
 
-            request
-                .config_mut()
-                .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
-            request
-                .config_mut()
-                .insert(aws_types::SigningService::from_static(
-                    _config.signing_service(),
-                ));
+                request
+                    .config_mut()
+                    .insert(aws_sig_auth::signer::OperationSigningConfig::default_config());
+                request
+                    .config_mut()
+                    .insert(aws_types::SigningService::from_static(
+                        _config.signing_service(),
+                    ));
 
-            aws_endpoint::set_endpoint_resolver(
-                &mut request.config_mut(),
-                _config.endpoint_resolver.clone(),
-            );
+                aws_endpoint::set_endpoint_resolver(
+                    &mut request.config_mut(),
+                    _config.endpoint_resolver.clone(),
+                );
 
-            if let Some(region) = &_config.region {
-                request.config_mut().insert(region.clone());
-            }
+                if let Some(region) = &_config.region {
+                    request.config_mut().insert(region.clone());
+                }
 
-            aws_auth::set_provider(
-                &mut request.config_mut(),
-                _config.credentials_provider.clone(),
-            );
+                aws_auth::set_provider(
+                    &mut request.config_mut(),
+                    _config.credentials_provider.clone(),
+                );
 
-            let op = smithy_http::operation::Operation::new(request, op).with_metadata(
-                smithy_http::operation::Metadata::new("UpdateTimeToLive", "dynamodb"),
-            );
+                let op = smithy_http::operation::Operation::new(request, op).with_metadata(
+                    smithy_http::operation::Metadata::new("UpdateTimeToLive", "dynamodb"),
+                );
 
-            let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
-            op
+                let op = op.with_retry_policy(aws_http::AwsErrorRetryPolicy::new());
+                op
+            })
         }
     }
 }
 impl UpdateTimeToLiveInput {
-    pub fn request_builder_base(&self) -> http::request::Builder {
+    pub fn request_builder_base(
+        &self,
+    ) -> Result<http::request::Builder, smithy_http::operation::BuildError> {
         let builder = http::request::Builder::new();
 
-        builder
+        Ok(builder
             .method("POST")
             .header("Content-Type", "application/x-amz-json-1.0")
-            .header("X-Amz-Target", "DynamoDB_20120810.UpdateTimeToLive")
+            .header("X-Amz-Target", "DynamoDB_20120810.UpdateTimeToLive"))
     }
     fn body(&self) -> crate::serializer::UpdateTimeToLiveInputBody {
         crate::serializer::UpdateTimeToLiveInputBody {

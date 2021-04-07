@@ -3202,7 +3202,7 @@ impl<'a> std::fmt::Debug for UpdateTimeToLiveInputBody<'a> {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct BatchExecuteStatementOutputBody {
     /// <p>
     /// The response to each PartiQL statement in the batch.
@@ -3221,7 +3221,7 @@ impl std::fmt::Debug for BatchExecuteStatementOutputBody {
 
 /// <p>Represents the output of a <code>BatchGetItem</code> operation.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct BatchGetItemOutputBody {
     /// <p>A map of table name to a list of items. Each object in <code>Responses</code> consists of a table
     /// name, along with a map of attribute data consisting of the data type and attribute value.</p>
@@ -3294,7 +3294,7 @@ impl std::fmt::Debug for BatchGetItemOutputBody {
 
 /// <p>Represents the output of a <code>BatchWriteItem</code> operation.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct BatchWriteItemOutputBody {
     /// <p>A map of tables and requests against those tables that were not processed. The
     /// <code>UnprocessedItems</code> value is in the same form as <code>RequestItems</code>, so you can provide
@@ -3394,7 +3394,7 @@ impl std::fmt::Debug for BatchWriteItemOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct CreateBackupOutputBody {
     /// <p>Contains the details of the backup created for the table.</p>
     #[serde(rename = "BackupDetails")]
@@ -3410,7 +3410,7 @@ impl std::fmt::Debug for CreateBackupOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct CreateGlobalTableOutputBody {
     /// <p>Contains the details of the global table.</p>
     #[serde(rename = "GlobalTableDescription")]
@@ -3427,7 +3427,7 @@ impl std::fmt::Debug for CreateGlobalTableOutputBody {
 
 /// <p>Represents the output of a <code>CreateTable</code> operation.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct CreateTableOutputBody {
     /// <p>Represents the properties of the table.</p>
     #[serde(rename = "TableDescription")]
@@ -3443,7 +3443,7 @@ impl std::fmt::Debug for CreateTableOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DeleteBackupOutputBody {
     /// <p>Contains the description of the backup created for the table.</p>
     #[serde(rename = "BackupDescription")]
@@ -3460,7 +3460,7 @@ impl std::fmt::Debug for DeleteBackupOutputBody {
 
 /// <p>Represents the output of a <code>DeleteItem</code> operation.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DeleteItemOutputBody {
     /// <p>A map of attribute names to <code>AttributeValue</code> objects, representing the item as it
     /// appeared before the <code>DeleteItem</code> operation. This map appears in the response only if
@@ -3521,7 +3521,7 @@ impl std::fmt::Debug for DeleteItemOutputBody {
 
 /// <p>Represents the output of a <code>DeleteTable</code> operation.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DeleteTableOutputBody {
     /// <p>Represents the properties of a table.</p>
     #[serde(rename = "TableDescription")]
@@ -3537,7 +3537,7 @@ impl std::fmt::Debug for DeleteTableOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeBackupOutputBody {
     /// <p>Contains the description of the backup created for the table.</p>
     #[serde(rename = "BackupDescription")]
@@ -3553,7 +3553,7 @@ impl std::fmt::Debug for DescribeBackupOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeContinuousBackupsOutputBody {
     /// <p>Represents the continuous backups and point in time recovery settings on the table.</p>
     #[serde(rename = "ContinuousBackupsDescription")]
@@ -3573,7 +3573,7 @@ impl std::fmt::Debug for DescribeContinuousBackupsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeContributorInsightsOutputBody {
     /// <p>The name of the table being described.</p>
     #[serde(rename = "TableName")]
@@ -3639,7 +3639,7 @@ impl std::fmt::Debug for DescribeContributorInsightsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeEndpointsOutputBody {
     /// <p>List of endpoints.</p>
     #[serde(rename = "Endpoints")]
@@ -3655,7 +3655,7 @@ impl std::fmt::Debug for DescribeEndpointsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeExportOutputBody {
     /// <p>Represents the properties of the export.</p>
     #[serde(rename = "ExportDescription")]
@@ -3671,7 +3671,7 @@ impl std::fmt::Debug for DescribeExportOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeGlobalTableOutputBody {
     /// <p>Contains the details of the global table.</p>
     #[serde(rename = "GlobalTableDescription")]
@@ -3687,7 +3687,7 @@ impl std::fmt::Debug for DescribeGlobalTableOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeGlobalTableSettingsOutputBody {
     /// <p>The name of the global table.</p>
     #[serde(rename = "GlobalTableName")]
@@ -3709,7 +3709,7 @@ impl std::fmt::Debug for DescribeGlobalTableSettingsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeKinesisStreamingDestinationOutputBody {
     /// <p>The name of the table being described.</p>
     #[serde(rename = "TableName")]
@@ -3735,7 +3735,7 @@ impl std::fmt::Debug for DescribeKinesisStreamingDestinationOutputBody {
 
 /// <p>Represents the output of a <code>DescribeLimits</code> operation.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeLimitsOutputBody {
     /// <p>The maximum total read capacity units that your account allows you to provision across
     /// all of your tables in this Region.</p>
@@ -3785,7 +3785,7 @@ impl std::fmt::Debug for DescribeLimitsOutputBody {
 
 /// <p>Represents the output of a <code>DescribeTable</code> operation.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeTableOutputBody {
     /// <p>The properties of the table.</p>
     #[serde(rename = "Table")]
@@ -3801,7 +3801,7 @@ impl std::fmt::Debug for DescribeTableOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeTableReplicaAutoScalingOutputBody {
     /// <p>Represents the auto scaling properties of the table.</p>
     #[serde(rename = "TableAutoScalingDescription")]
@@ -3821,7 +3821,7 @@ impl std::fmt::Debug for DescribeTableReplicaAutoScalingOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeTimeToLiveOutputBody {
     /// <p></p>
     #[serde(rename = "TimeToLiveDescription")]
@@ -3837,7 +3837,7 @@ impl std::fmt::Debug for DescribeTimeToLiveOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DisableKinesisStreamingDestinationOutputBody {
     /// <p>The name of the table being modified.</p>
     #[serde(rename = "TableName")]
@@ -3863,7 +3863,7 @@ impl std::fmt::Debug for DisableKinesisStreamingDestinationOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct EnableKinesisStreamingDestinationOutputBody {
     /// <p>The name of the table being modified.</p>
     #[serde(rename = "TableName")]
@@ -3889,7 +3889,7 @@ impl std::fmt::Debug for EnableKinesisStreamingDestinationOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ExecuteStatementOutputBody {
     /// <p>
     /// If a read operation was used, this property will contain the result of the reade operation; a map of attribute names and their values. For the write operations this value will be empty.
@@ -3916,7 +3916,7 @@ impl std::fmt::Debug for ExecuteStatementOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ExecuteTransactionOutputBody {
     /// <p>
     /// The response to a PartiQL transaction.
@@ -3934,7 +3934,7 @@ impl std::fmt::Debug for ExecuteTransactionOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ExportTableToPointInTimeOutputBody {
     /// <p>Contains a description of the table export.</p>
     #[serde(rename = "ExportDescription")]
@@ -3951,7 +3951,7 @@ impl std::fmt::Debug for ExportTableToPointInTimeOutputBody {
 
 /// <p>Represents the output of a <code>GetItem</code> operation.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct GetItemOutputBody {
     /// <p>A map of attribute names to <code>AttributeValue</code> objects, as specified
     /// by <code>ProjectionExpression</code>.</p>
@@ -3980,7 +3980,7 @@ impl std::fmt::Debug for GetItemOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListBackupsOutputBody {
     /// <p>List of <code>BackupSummary</code> objects.</p>
     #[serde(rename = "BackupSummaries")]
@@ -4012,7 +4012,7 @@ impl std::fmt::Debug for ListBackupsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListContributorInsightsOutputBody {
     /// <p>A list of ContributorInsightsSummary.</p>
     #[serde(rename = "ContributorInsightsSummaries")]
@@ -4037,7 +4037,7 @@ impl std::fmt::Debug for ListContributorInsightsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListExportsOutputBody {
     /// <p>A list of <code>ExportSummary</code> objects.</p>
     #[serde(rename = "ExportSummaries")]
@@ -4060,7 +4060,7 @@ impl std::fmt::Debug for ListExportsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListGlobalTablesOutputBody {
     /// <p>List of global table names.</p>
     #[serde(rename = "GlobalTables")]
@@ -4085,7 +4085,7 @@ impl std::fmt::Debug for ListGlobalTablesOutputBody {
 
 /// <p>Represents the output of a <code>ListTables</code> operation.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListTablesOutputBody {
     /// <p>The names of the tables associated with the current account at the current endpoint. The maximum size of this array is 100.</p>
     /// <p>If <code>LastEvaluatedTableName</code> also appears in the output, you can use this value as the
@@ -4113,7 +4113,7 @@ impl std::fmt::Debug for ListTablesOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListTagsOfResourceOutputBody {
     /// <p>The tags currently associated with the Amazon DynamoDB resource.</p>
     #[serde(rename = "Tags")]
@@ -4136,7 +4136,7 @@ impl std::fmt::Debug for ListTagsOfResourceOutputBody {
 
 /// <p>Represents the output of a <code>PutItem</code> operation.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct PutItemOutputBody {
     /// <p>The attribute values as they appeared before the <code>PutItem</code> operation, but only if
     /// <code>ReturnValues</code> is specified as <code>ALL_OLD</code> in the request. Each element
@@ -4195,7 +4195,7 @@ impl std::fmt::Debug for PutItemOutputBody {
 
 /// <p>Represents the output of a <code>Query</code> operation.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct QueryOutputBody {
     /// <p>An array of item attributes that match the query criteria. Each element in this array consists of an attribute name and the value for that attribute.</p>
     #[serde(rename = "Items")]
@@ -4250,7 +4250,7 @@ impl std::fmt::Debug for QueryOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct RestoreTableFromBackupOutputBody {
     /// <p>The description of the table created from an existing backup.</p>
     #[serde(rename = "TableDescription")]
@@ -4266,7 +4266,7 @@ impl std::fmt::Debug for RestoreTableFromBackupOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct RestoreTableToPointInTimeOutputBody {
     /// <p>Represents the properties of a table.</p>
     #[serde(rename = "TableDescription")]
@@ -4283,7 +4283,7 @@ impl std::fmt::Debug for RestoreTableToPointInTimeOutputBody {
 
 /// <p>Represents the output of a <code>Scan</code> operation.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ScanOutputBody {
     /// <p>An array of item attributes that match the scan criteria. Each element in this array consists of an attribute name and the value for that attribute.</p>
     #[serde(rename = "Items")]
@@ -4343,7 +4343,7 @@ impl std::fmt::Debug for ScanOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct TransactGetItemsOutputBody {
     /// <p>If the <i>ReturnConsumedCapacity</i> value was <code>TOTAL</code>,
     /// this is an array of <code>ConsumedCapacity</code> objects, one for each table
@@ -4375,7 +4375,7 @@ impl std::fmt::Debug for TransactGetItemsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct TransactWriteItemsOutputBody {
     /// <p>The capacity units consumed by the entire <code>TransactWriteItems</code>
     /// operation. The values of the list are ordered according to
@@ -4407,7 +4407,7 @@ impl std::fmt::Debug for TransactWriteItemsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct UpdateContinuousBackupsOutputBody {
     /// <p>Represents the continuous backups and point in time recovery settings on the table.</p>
     #[serde(rename = "ContinuousBackupsDescription")]
@@ -4427,7 +4427,7 @@ impl std::fmt::Debug for UpdateContinuousBackupsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct UpdateContributorInsightsOutputBody {
     /// <p>The name of the table.</p>
     #[serde(rename = "TableName")]
@@ -4456,7 +4456,7 @@ impl std::fmt::Debug for UpdateContributorInsightsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct UpdateGlobalTableOutputBody {
     /// <p>Contains the details of the global table.</p>
     #[serde(rename = "GlobalTableDescription")]
@@ -4472,7 +4472,7 @@ impl std::fmt::Debug for UpdateGlobalTableOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct UpdateGlobalTableSettingsOutputBody {
     /// <p>The name of the global table.</p>
     #[serde(rename = "GlobalTableName")]
@@ -4495,7 +4495,7 @@ impl std::fmt::Debug for UpdateGlobalTableSettingsOutputBody {
 
 /// <p>Represents the output of an <code>UpdateItem</code> operation.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct UpdateItemOutputBody {
     /// <p>A map of attribute values as they appear before or after the <code>UpdateItem</code>
     /// operation, as determined by the <code>ReturnValues</code> parameter.</p>
@@ -4556,7 +4556,7 @@ impl std::fmt::Debug for UpdateItemOutputBody {
 
 /// <p>Represents the output of an <code>UpdateTable</code> operation.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct UpdateTableOutputBody {
     /// <p>Represents the properties of the table.</p>
     #[serde(rename = "TableDescription")]
@@ -4572,7 +4572,7 @@ impl std::fmt::Debug for UpdateTableOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct UpdateTableReplicaAutoScalingOutputBody {
     /// <p>Returns information about the auto scaling settings of a table with replicas.</p>
     #[serde(rename = "TableAutoScalingDescription")]
@@ -4592,7 +4592,7 @@ impl std::fmt::Debug for UpdateTableReplicaAutoScalingOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct UpdateTimeToLiveOutputBody {
     /// <p>Represents the output of an <code>UpdateTimeToLive</code> operation.</p>
     #[serde(rename = "TimeToLiveSpecification")]

@@ -7,6 +7,12 @@ version = "0.0.2"
 description = "<fullname>Amazon Kinesis Data Streams Service API Reference</fullname>\n        <p>Amazon Kinesis Data Streams is a managed service that scales elastically for\n            real-time processing of streaming big data.</p>"
 authors = ["TODO@todo.com"]
 edition = "2018"
+[dependencies.aws-hyper]
+path = "..//aws-hyper"
+features = ["test-util"]
+optional = true
+[dependencies.smithy-http]
+path = "..//smithy-http"
 [dependencies.aws-endpoint]
 path = "..//aws-endpoint"
 [dependencies.aws-types]
@@ -18,12 +24,6 @@ path = "..//smithy-types"
 [dependencies.serde]
 version = "1"
 features = ["derive"]
-[dependencies.aws-hyper]
-path = "..//aws-hyper"
-features = ["test-util"]
-optional = true
-[dependencies.smithy-http]
-path = "..//smithy-http"
 [dependencies.aws-http]
 path = "..//aws-http"
 [dependencies.aws-sig-auth]
@@ -36,7 +36,7 @@ features = ["float_roundtrip"]
 [dependencies.bytes]
 version = "1"
 [features]
-fluent = ["aws-hyper"]
-default = ["fluent"]
+client = ["aws-hyper"]
+default = ["client"]
 
 

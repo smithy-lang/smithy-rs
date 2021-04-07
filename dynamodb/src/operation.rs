@@ -12,12 +12,15 @@ impl BatchExecuteStatement {
     pub fn builder() -> crate::input::batch_execute_statement_input::Builder {
         crate::input::batch_execute_statement_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::BatchExecuteStatementInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::BatchExecuteStatementInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::BatchExecuteStatementOutput, crate::error::BatchExecuteStatementError>
@@ -50,7 +53,7 @@ impl BatchExecuteStatement {
                     },
                     Err(e) => crate::error::BatchExecuteStatementError::unhandled(e),
                 },
-                _ => crate::error::BatchExecuteStatementError::unhandled(generic),
+                _ => crate::error::BatchExecuteStatementError::generic(generic),
             });
         }
         let body: crate::serializer::BatchExecuteStatementOutputBody =
@@ -137,12 +140,15 @@ impl BatchGetItem {
     pub fn builder() -> crate::input::batch_get_item_input::Builder {
         crate::input::batch_get_item_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::BatchGetItemInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::BatchGetItemInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::BatchGetItemOutput, crate::error::BatchGetItemError> {
@@ -194,7 +200,7 @@ impl BatchGetItem {
                     },
                     Err(e) => crate::error::BatchGetItemError::unhandled(e),
                 },
-                _ => crate::error::BatchGetItemError::unhandled(generic),
+                _ => crate::error::BatchGetItemError::generic(generic),
             });
         }
         let body: crate::serializer::BatchGetItemOutputBody =
@@ -307,12 +313,15 @@ impl BatchWriteItem {
     pub fn builder() -> crate::input::batch_write_item_input::Builder {
         crate::input::batch_write_item_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::BatchWriteItemInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::BatchWriteItemInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::BatchWriteItemOutput, crate::error::BatchWriteItemError> {
@@ -350,7 +359,7 @@ impl BatchWriteItem {
                     Ok(body) => crate::error::BatchWriteItemError { kind: crate::error::BatchWriteItemErrorKind::ResourceNotFoundError(body), meta: generic },
                     Err(e) => crate::error::BatchWriteItemError::unhandled(e)
                 }
-                _ => crate::error::BatchWriteItemError::unhandled(generic)
+                _ => crate::error::BatchWriteItemError::generic(generic)
             });
         }
         let body: crate::serializer::BatchWriteItemOutputBody =
@@ -419,12 +428,15 @@ impl CreateBackup {
     pub fn builder() -> crate::input::create_backup_input::Builder {
         crate::input::create_backup_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::CreateBackupInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::CreateBackupInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::CreateBackupOutput, crate::error::CreateBackupError> {
@@ -490,7 +502,7 @@ impl CreateBackup {
                     },
                     Err(e) => crate::error::CreateBackupError::unhandled(e),
                 },
-                _ => crate::error::CreateBackupError::unhandled(generic),
+                _ => crate::error::CreateBackupError::generic(generic),
             });
         }
         let body: crate::serializer::CreateBackupOutputBody =
@@ -593,12 +605,15 @@ impl CreateGlobalTable {
     pub fn builder() -> crate::input::create_global_table_input::Builder {
         crate::input::create_global_table_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::CreateGlobalTableInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::CreateGlobalTableInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::CreateGlobalTableOutput, crate::error::CreateGlobalTableError> {
@@ -650,7 +665,7 @@ impl CreateGlobalTable {
                     },
                     Err(e) => crate::error::CreateGlobalTableError::unhandled(e),
                 },
-                _ => crate::error::CreateGlobalTableError::unhandled(generic),
+                _ => crate::error::CreateGlobalTableError::generic(generic),
             });
         }
         let body: crate::serializer::CreateGlobalTableOutputBody =
@@ -701,12 +716,15 @@ impl CreateTable {
     pub fn builder() -> crate::input::create_table_input::Builder {
         crate::input::create_table_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::CreateTableInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::CreateTableInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::CreateTableOutput, crate::error::CreateTableError> {
@@ -748,7 +766,7 @@ impl CreateTable {
                     },
                     Err(e) => crate::error::CreateTableError::unhandled(e),
                 },
-                _ => crate::error::CreateTableError::unhandled(generic),
+                _ => crate::error::CreateTableError::generic(generic),
             });
         }
         let body: crate::serializer::CreateTableOutputBody =
@@ -787,12 +805,15 @@ impl DeleteBackup {
     pub fn builder() -> crate::input::delete_backup_input::Builder {
         crate::input::delete_backup_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DeleteBackupInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DeleteBackupInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DeleteBackupOutput, crate::error::DeleteBackupError> {
@@ -841,7 +862,7 @@ impl DeleteBackup {
                     },
                     Err(e) => crate::error::DeleteBackupError::unhandled(e),
                 },
-                _ => crate::error::DeleteBackupError::unhandled(generic),
+                _ => crate::error::DeleteBackupError::generic(generic),
             });
         }
         let body: crate::serializer::DeleteBackupOutputBody =
@@ -884,12 +905,15 @@ impl DeleteItem {
     pub fn builder() -> crate::input::delete_item_input::Builder {
         crate::input::delete_item_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DeleteItemInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DeleteItemInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DeleteItemOutput, crate::error::DeleteItemError> {
@@ -964,7 +988,7 @@ impl DeleteItem {
                     },
                     Err(e) => crate::error::DeleteItemError::unhandled(e),
                 },
-                _ => crate::error::DeleteItemError::unhandled(generic),
+                _ => crate::error::DeleteItemError::generic(generic),
             });
         }
         let body: crate::serializer::DeleteItemOutputBody =
@@ -1019,12 +1043,15 @@ impl DeleteTable {
     pub fn builder() -> crate::input::delete_table_input::Builder {
         crate::input::delete_table_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DeleteTableInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DeleteTableInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DeleteTableOutput, crate::error::DeleteTableError> {
@@ -1073,7 +1100,7 @@ impl DeleteTable {
                     },
                     Err(e) => crate::error::DeleteTableError::unhandled(e),
                 },
-                _ => crate::error::DeleteTableError::unhandled(generic),
+                _ => crate::error::DeleteTableError::generic(generic),
             });
         }
         let body: crate::serializer::DeleteTableOutputBody =
@@ -1112,12 +1139,15 @@ impl DescribeBackup {
     pub fn builder() -> crate::input::describe_backup_input::Builder {
         crate::input::describe_backup_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeBackupInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeBackupInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DescribeBackupOutput, crate::error::DescribeBackupError> {
@@ -1152,7 +1182,7 @@ impl DescribeBackup {
                     },
                     Err(e) => crate::error::DescribeBackupError::unhandled(e),
                 },
-                _ => crate::error::DescribeBackupError::unhandled(generic),
+                _ => crate::error::DescribeBackupError::generic(generic),
             });
         }
         let body: crate::serializer::DescribeBackupOutputBody =
@@ -1200,12 +1230,15 @@ impl DescribeContinuousBackups {
     pub fn builder() -> crate::input::describe_continuous_backups_input::Builder {
         crate::input::describe_continuous_backups_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeContinuousBackupsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeContinuousBackupsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -1254,7 +1287,7 @@ impl DescribeContinuousBackups {
                     },
                     Err(e) => crate::error::DescribeContinuousBackupsError::unhandled(e),
                 },
-                _ => crate::error::DescribeContinuousBackupsError::unhandled(generic),
+                _ => crate::error::DescribeContinuousBackupsError::generic(generic),
             });
         }
         let body: crate::serializer::DescribeContinuousBackupsOutputBody =
@@ -1298,12 +1331,15 @@ impl DescribeContributorInsights {
     pub fn builder() -> crate::input::describe_contributor_insights_input::Builder {
         crate::input::describe_contributor_insights_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeContributorInsightsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeContributorInsightsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -1332,7 +1368,7 @@ impl DescribeContributorInsights {
                     Ok(body) => crate::error::DescribeContributorInsightsError { kind: crate::error::DescribeContributorInsightsErrorKind::ResourceNotFoundError(body), meta: generic },
                     Err(e) => crate::error::DescribeContributorInsightsError::unhandled(e)
                 }
-                _ => crate::error::DescribeContributorInsightsError::unhandled(generic)
+                _ => crate::error::DescribeContributorInsightsError::generic(generic)
             });
         }
         let body: crate::serializer::DescribeContributorInsightsOutputBody =
@@ -1381,12 +1417,15 @@ impl DescribeEndpoints {
     pub fn builder() -> crate::input::describe_endpoints_input::Builder {
         crate::input::describe_endpoints_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeEndpointsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeEndpointsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DescribeEndpointsOutput, crate::error::DescribeEndpointsError> {
@@ -1433,12 +1472,15 @@ impl DescribeExport {
     pub fn builder() -> crate::input::describe_export_input::Builder {
         crate::input::describe_export_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeExportInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeExportInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DescribeExportOutput, crate::error::DescribeExportError> {
@@ -1473,7 +1515,7 @@ impl DescribeExport {
                     },
                     Err(e) => crate::error::DescribeExportError::unhandled(e),
                 },
-                _ => crate::error::DescribeExportError::unhandled(generic),
+                _ => crate::error::DescribeExportError::generic(generic),
             });
         }
         let body: crate::serializer::DescribeExportOutputBody =
@@ -1515,12 +1557,15 @@ impl DescribeGlobalTable {
     pub fn builder() -> crate::input::describe_global_table_input::Builder {
         crate::input::describe_global_table_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeGlobalTableInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeGlobalTableInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DescribeGlobalTableOutput, crate::error::DescribeGlobalTableError>
@@ -1560,7 +1605,7 @@ impl DescribeGlobalTable {
                     },
                     Err(e) => crate::error::DescribeGlobalTableError::unhandled(e),
                 },
-                _ => crate::error::DescribeGlobalTableError::unhandled(generic),
+                _ => crate::error::DescribeGlobalTableError::generic(generic),
             });
         }
         let body: crate::serializer::DescribeGlobalTableOutputBody =
@@ -1603,12 +1648,15 @@ impl DescribeGlobalTableSettings {
     pub fn builder() -> crate::input::describe_global_table_settings_input::Builder {
         crate::input::describe_global_table_settings_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeGlobalTableSettingsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeGlobalTableSettingsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -1641,7 +1689,7 @@ impl DescribeGlobalTableSettings {
                     Ok(body) => crate::error::DescribeGlobalTableSettingsError { kind: crate::error::DescribeGlobalTableSettingsErrorKind::InvalidEndpointError(body), meta: generic },
                     Err(e) => crate::error::DescribeGlobalTableSettingsError::unhandled(e)
                 }
-                _ => crate::error::DescribeGlobalTableSettingsError::unhandled(generic)
+                _ => crate::error::DescribeGlobalTableSettingsError::generic(generic)
             });
         }
         let body: crate::serializer::DescribeGlobalTableSettingsOutputBody =
@@ -1686,12 +1734,17 @@ impl DescribeKinesisStreamingDestination {
     pub fn builder() -> crate::input::describe_kinesis_streaming_destination_input::Builder {
         crate::input::describe_kinesis_streaming_destination_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeKinesisStreamingDestinationInput::assemble(
-            self.input.request_builder_base(),
-            self.input.build_body(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(
+            crate::input::DescribeKinesisStreamingDestinationInput::assemble(
+                self.input.request_builder_base()?,
+                self.input.build_body(),
+            ),
         )
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -1724,7 +1777,7 @@ impl DescribeKinesisStreamingDestination {
                     Ok(body) => crate::error::DescribeKinesisStreamingDestinationError { kind: crate::error::DescribeKinesisStreamingDestinationErrorKind::ResourceNotFoundError(body), meta: generic },
                     Err(e) => crate::error::DescribeKinesisStreamingDestinationError::unhandled(e)
                 }
-                _ => crate::error::DescribeKinesisStreamingDestinationError::unhandled(generic)
+                _ => crate::error::DescribeKinesisStreamingDestinationError::generic(generic)
             });
         }
         let body: crate::serializer::DescribeKinesisStreamingDestinationOutputBody =
@@ -1828,12 +1881,15 @@ impl DescribeLimits {
     pub fn builder() -> crate::input::describe_limits_input::Builder {
         crate::input::describe_limits_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeLimitsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeLimitsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DescribeLimitsOutput, crate::error::DescribeLimitsError> {
@@ -1861,7 +1917,7 @@ impl DescribeLimits {
                     },
                     Err(e) => crate::error::DescribeLimitsError::unhandled(e),
                 },
-                _ => crate::error::DescribeLimitsError::unhandled(generic),
+                _ => crate::error::DescribeLimitsError::generic(generic),
             });
         }
         let body: crate::serializer::DescribeLimitsOutputBody =
@@ -1908,12 +1964,15 @@ impl DescribeTable {
     pub fn builder() -> crate::input::describe_table_input::Builder {
         crate::input::describe_table_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeTableInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeTableInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DescribeTableOutput, crate::error::DescribeTableError> {
@@ -1948,7 +2007,7 @@ impl DescribeTable {
                     },
                     Err(e) => crate::error::DescribeTableError::unhandled(e),
                 },
-                _ => crate::error::DescribeTableError::unhandled(generic),
+                _ => crate::error::DescribeTableError::generic(generic),
             });
         }
         let body: crate::serializer::DescribeTableOutputBody =
@@ -1987,12 +2046,17 @@ impl DescribeTableReplicaAutoScaling {
     pub fn builder() -> crate::input::describe_table_replica_auto_scaling_input::Builder {
         crate::input::describe_table_replica_auto_scaling_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeTableReplicaAutoScalingInput::assemble(
-            self.input.request_builder_base(),
-            self.input.build_body(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(
+            crate::input::DescribeTableReplicaAutoScalingInput::assemble(
+                self.input.request_builder_base()?,
+                self.input.build_body(),
+            ),
         )
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -2021,7 +2085,7 @@ impl DescribeTableReplicaAutoScaling {
                     Ok(body) => crate::error::DescribeTableReplicaAutoScalingError { kind: crate::error::DescribeTableReplicaAutoScalingErrorKind::ResourceNotFoundError(body), meta: generic },
                     Err(e) => crate::error::DescribeTableReplicaAutoScalingError::unhandled(e)
                 }
-                _ => crate::error::DescribeTableReplicaAutoScalingError::unhandled(generic)
+                _ => crate::error::DescribeTableReplicaAutoScalingError::generic(generic)
             });
         }
         let body: crate::serializer::DescribeTableReplicaAutoScalingOutputBody =
@@ -2065,12 +2129,15 @@ impl DescribeTimeToLive {
     pub fn builder() -> crate::input::describe_time_to_live_input::Builder {
         crate::input::describe_time_to_live_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeTimeToLiveInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeTimeToLiveInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DescribeTimeToLiveOutput, crate::error::DescribeTimeToLiveError>
@@ -2108,7 +2175,7 @@ impl DescribeTimeToLive {
                     },
                     Err(e) => crate::error::DescribeTimeToLiveError::unhandled(e),
                 },
-                _ => crate::error::DescribeTimeToLiveError::unhandled(generic),
+                _ => crate::error::DescribeTimeToLiveError::generic(generic),
             });
         }
         let body: crate::serializer::DescribeTimeToLiveOutputBody =
@@ -2149,12 +2216,17 @@ impl DisableKinesisStreamingDestination {
     pub fn builder() -> crate::input::disable_kinesis_streaming_destination_input::Builder {
         crate::input::disable_kinesis_streaming_destination_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DisableKinesisStreamingDestinationInput::assemble(
-            self.input.request_builder_base(),
-            self.input.build_body(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(
+            crate::input::DisableKinesisStreamingDestinationInput::assemble(
+                self.input.request_builder_base()?,
+                self.input.build_body(),
+            ),
         )
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -2195,7 +2267,7 @@ impl DisableKinesisStreamingDestination {
                     Ok(body) => crate::error::DisableKinesisStreamingDestinationError { kind: crate::error::DisableKinesisStreamingDestinationErrorKind::ResourceNotFoundError(body), meta: generic },
                     Err(e) => crate::error::DisableKinesisStreamingDestinationError::unhandled(e)
                 }
-                _ => crate::error::DisableKinesisStreamingDestinationError::unhandled(generic)
+                _ => crate::error::DisableKinesisStreamingDestinationError::generic(generic)
             });
         }
         let body: crate::serializer::DisableKinesisStreamingDestinationOutputBody =
@@ -2244,12 +2316,17 @@ impl EnableKinesisStreamingDestination {
     pub fn builder() -> crate::input::enable_kinesis_streaming_destination_input::Builder {
         crate::input::enable_kinesis_streaming_destination_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::EnableKinesisStreamingDestinationInput::assemble(
-            self.input.request_builder_base(),
-            self.input.build_body(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(
+            crate::input::EnableKinesisStreamingDestinationInput::assemble(
+                self.input.request_builder_base()?,
+                self.input.build_body(),
+            ),
         )
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -2290,7 +2367,7 @@ impl EnableKinesisStreamingDestination {
                     Ok(body) => crate::error::EnableKinesisStreamingDestinationError { kind: crate::error::EnableKinesisStreamingDestinationErrorKind::ResourceNotFoundError(body), meta: generic },
                     Err(e) => crate::error::EnableKinesisStreamingDestinationError::unhandled(e)
                 }
-                _ => crate::error::EnableKinesisStreamingDestinationError::unhandled(generic)
+                _ => crate::error::EnableKinesisStreamingDestinationError::generic(generic)
             });
         }
         let body: crate::serializer::EnableKinesisStreamingDestinationOutputBody =
@@ -2338,12 +2415,15 @@ impl ExecuteStatement {
     pub fn builder() -> crate::input::execute_statement_input::Builder {
         crate::input::execute_statement_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ExecuteStatementInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ExecuteStatementInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ExecuteStatementOutput, crate::error::ExecuteStatementError> {
@@ -2389,7 +2469,7 @@ impl ExecuteStatement {
                     Ok(body) => crate::error::ExecuteStatementError { kind: crate::error::ExecuteStatementErrorKind::TransactionConflictError(body), meta: generic },
                     Err(e) => crate::error::ExecuteStatementError::unhandled(e)
                 }
-                _ => crate::error::ExecuteStatementError::unhandled(generic)
+                _ => crate::error::ExecuteStatementError::generic(generic)
             });
         }
         let body: crate::serializer::ExecuteStatementOutputBody =
@@ -2431,12 +2511,15 @@ impl ExecuteTransaction {
     pub fn builder() -> crate::input::execute_transaction_input::Builder {
         crate::input::execute_transaction_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ExecuteTransactionInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ExecuteTransactionInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ExecuteTransactionOutput, crate::error::ExecuteTransactionError>
@@ -2479,7 +2562,7 @@ impl ExecuteTransaction {
                     Ok(body) => crate::error::ExecuteTransactionError { kind: crate::error::ExecuteTransactionErrorKind::TransactionInProgressError(body), meta: generic },
                     Err(e) => crate::error::ExecuteTransactionError::unhandled(e)
                 }
-                _ => crate::error::ExecuteTransactionError::unhandled(generic)
+                _ => crate::error::ExecuteTransactionError::generic(generic)
             });
         }
         let body: crate::serializer::ExecuteTransactionOutputBody =
@@ -2521,12 +2604,15 @@ impl ExportTableToPointInTime {
     pub fn builder() -> crate::input::export_table_to_point_in_time_input::Builder {
         crate::input::export_table_to_point_in_time_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ExportTableToPointInTimeInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ExportTableToPointInTimeInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -2571,7 +2657,7 @@ impl ExportTableToPointInTime {
                     Ok(body) => crate::error::ExportTableToPointInTimeError { kind: crate::error::ExportTableToPointInTimeErrorKind::TableNotFoundError(body), meta: generic },
                     Err(e) => crate::error::ExportTableToPointInTimeError::unhandled(e)
                 }
-                _ => crate::error::ExportTableToPointInTimeError::unhandled(generic)
+                _ => crate::error::ExportTableToPointInTimeError::generic(generic)
             });
         }
         let body: crate::serializer::ExportTableToPointInTimeOutputBody =
@@ -2621,12 +2707,15 @@ impl GetItem {
     pub fn builder() -> crate::input::get_item_input::Builder {
         crate::input::get_item_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::GetItemInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::GetItemInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::GetItemOutput, crate::error::GetItemError> {
@@ -2677,7 +2766,7 @@ impl GetItem {
                     },
                     Err(e) => crate::error::GetItemError::unhandled(e),
                 },
-                _ => crate::error::GetItemError::unhandled(generic),
+                _ => crate::error::GetItemError::generic(generic),
             });
         }
         let body: crate::serializer::GetItemOutputBody =
@@ -2722,12 +2811,15 @@ impl ListBackups {
     pub fn builder() -> crate::input::list_backups_input::Builder {
         crate::input::list_backups_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListBackupsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListBackupsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListBackupsOutput, crate::error::ListBackupsError> {
@@ -2755,7 +2847,7 @@ impl ListBackups {
                     },
                     Err(e) => crate::error::ListBackupsError::unhandled(e),
                 },
-                _ => crate::error::ListBackupsError::unhandled(generic),
+                _ => crate::error::ListBackupsError::generic(generic),
             });
         }
         let body: crate::serializer::ListBackupsOutputBody =
@@ -2794,12 +2886,15 @@ impl ListContributorInsights {
     pub fn builder() -> crate::input::list_contributor_insights_input::Builder {
         crate::input::list_contributor_insights_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListContributorInsightsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListContributorInsightsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -2838,7 +2933,7 @@ impl ListContributorInsights {
                     },
                     Err(e) => crate::error::ListContributorInsightsError::unhandled(e),
                 },
-                _ => crate::error::ListContributorInsightsError::unhandled(generic),
+                _ => crate::error::ListContributorInsightsError::generic(generic),
             });
         }
         let body: crate::serializer::ListContributorInsightsOutputBody =
@@ -2883,12 +2978,15 @@ impl ListExports {
     pub fn builder() -> crate::input::list_exports_input::Builder {
         crate::input::list_exports_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListExportsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListExportsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListExportsOutput, crate::error::ListExportsError> {
@@ -2916,7 +3014,7 @@ impl ListExports {
                     },
                     Err(e) => crate::error::ListExportsError::unhandled(e),
                 },
-                _ => crate::error::ListExportsError::unhandled(generic),
+                _ => crate::error::ListExportsError::generic(generic),
             });
         }
         let body: crate::serializer::ListExportsOutputBody =
@@ -2958,12 +3056,15 @@ impl ListGlobalTables {
     pub fn builder() -> crate::input::list_global_tables_input::Builder {
         crate::input::list_global_tables_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListGlobalTablesInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListGlobalTablesInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListGlobalTablesOutput, crate::error::ListGlobalTablesError> {
@@ -2991,7 +3092,7 @@ impl ListGlobalTables {
                     },
                     Err(e) => crate::error::ListGlobalTablesError::unhandled(e),
                 },
-                _ => crate::error::ListGlobalTablesError::unhandled(generic),
+                _ => crate::error::ListGlobalTablesError::generic(generic),
             });
         }
         let body: crate::serializer::ListGlobalTablesOutputBody =
@@ -3033,12 +3134,15 @@ impl ListTables {
     pub fn builder() -> crate::input::list_tables_input::Builder {
         crate::input::list_tables_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListTablesInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListTablesInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListTablesOutput, crate::error::ListTablesError> {
@@ -3066,7 +3170,7 @@ impl ListTables {
                     },
                     Err(e) => crate::error::ListTablesError::unhandled(e),
                 },
-                _ => crate::error::ListTablesError::unhandled(generic),
+                _ => crate::error::ListTablesError::generic(generic),
             });
         }
         let body: crate::serializer::ListTablesOutputBody =
@@ -3108,12 +3212,15 @@ impl ListTagsOfResource {
     pub fn builder() -> crate::input::list_tags_of_resource_input::Builder {
         crate::input::list_tags_of_resource_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListTagsOfResourceInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListTagsOfResourceInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListTagsOfResourceOutput, crate::error::ListTagsOfResourceError>
@@ -3151,7 +3258,7 @@ impl ListTagsOfResource {
                     },
                     Err(e) => crate::error::ListTagsOfResourceError::unhandled(e),
                 },
-                _ => crate::error::ListTagsOfResourceError::unhandled(generic),
+                _ => crate::error::ListTagsOfResourceError::generic(generic),
             });
         }
         let body: crate::serializer::ListTagsOfResourceOutputBody =
@@ -3258,12 +3365,15 @@ impl PutItem {
     pub fn builder() -> crate::input::put_item_input::Builder {
         crate::input::put_item_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::PutItemInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::PutItemInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::PutItemOutput, crate::error::PutItemError> {
@@ -3337,7 +3447,7 @@ impl PutItem {
                     },
                     Err(e) => crate::error::PutItemError::unhandled(e),
                 },
-                _ => crate::error::PutItemError::unhandled(generic),
+                _ => crate::error::PutItemError::generic(generic),
             });
         }
         let body: crate::serializer::PutItemOutputBody =
@@ -3432,12 +3542,15 @@ impl Query {
     pub fn builder() -> crate::input::query_input::Builder {
         crate::input::query_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::QueryInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::QueryInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::QueryOutput, crate::error::QueryError> {
@@ -3488,7 +3601,7 @@ impl Query {
                     },
                     Err(e) => crate::error::QueryError::unhandled(e),
                 },
-                _ => crate::error::QueryError::unhandled(generic),
+                _ => crate::error::QueryError::generic(generic),
             });
         }
         let body: crate::serializer::QueryOutputBody =
@@ -3554,12 +3667,15 @@ impl RestoreTableFromBackup {
     pub fn builder() -> crate::input::restore_table_from_backup_input::Builder {
         crate::input::restore_table_from_backup_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::RestoreTableFromBackupInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::RestoreTableFromBackupInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -3640,7 +3756,7 @@ impl RestoreTableFromBackup {
                     },
                     Err(e) => crate::error::RestoreTableFromBackupError::unhandled(e),
                 },
-                _ => crate::error::RestoreTableFromBackupError::unhandled(generic),
+                _ => crate::error::RestoreTableFromBackupError::generic(generic),
             });
         }
         let body: crate::serializer::RestoreTableFromBackupOutputBody =
@@ -3738,12 +3854,15 @@ impl RestoreTableToPointInTime {
     pub fn builder() -> crate::input::restore_table_to_point_in_time_input::Builder {
         crate::input::restore_table_to_point_in_time_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::RestoreTableToPointInTimeInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::RestoreTableToPointInTimeInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -3796,7 +3915,7 @@ impl RestoreTableToPointInTime {
                     Ok(body) => crate::error::RestoreTableToPointInTimeError { kind: crate::error::RestoreTableToPointInTimeErrorKind::TableNotFoundError(body), meta: generic },
                     Err(e) => crate::error::RestoreTableToPointInTimeError::unhandled(e)
                 }
-                _ => crate::error::RestoreTableToPointInTimeError::unhandled(generic)
+                _ => crate::error::RestoreTableToPointInTimeError::generic(generic)
             });
         }
         let body: crate::serializer::RestoreTableToPointInTimeOutputBody =
@@ -3864,12 +3983,15 @@ impl Scan {
     pub fn builder() -> crate::input::scan_input::Builder {
         crate::input::scan_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ScanInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ScanInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ScanOutput, crate::error::ScanError> {
@@ -3918,7 +4040,7 @@ impl Scan {
                     },
                     Err(e) => crate::error::ScanError::unhandled(e),
                 },
-                _ => crate::error::ScanError::unhandled(generic),
+                _ => crate::error::ScanError::generic(generic),
             });
         }
         let body: crate::serializer::ScanOutputBody =
@@ -3966,12 +4088,15 @@ impl TagResource {
     pub fn builder() -> crate::input::tag_resource_input::Builder {
         crate::input::tag_resource_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::TagResourceInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::TagResourceInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::TagResourceOutput, crate::error::TagResourceError> {
@@ -4020,7 +4145,7 @@ impl TagResource {
                     },
                     Err(e) => crate::error::TagResourceError::unhandled(e),
                 },
-                _ => crate::error::TagResourceError::unhandled(generic),
+                _ => crate::error::TagResourceError::generic(generic),
             });
         }
         Ok(crate::output::TagResourceOutput {})
@@ -4078,12 +4203,15 @@ impl TransactGetItems {
     pub fn builder() -> crate::input::transact_get_items_input::Builder {
         crate::input::transact_get_items_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::TransactGetItemsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::TransactGetItemsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::TransactGetItemsOutput, crate::error::TransactGetItemsError> {
@@ -4121,7 +4249,7 @@ impl TransactGetItems {
                     Ok(body) => crate::error::TransactGetItemsError { kind: crate::error::TransactGetItemsErrorKind::TransactionCanceledError(body), meta: generic },
                     Err(e) => crate::error::TransactGetItemsError::unhandled(e)
                 }
-                _ => crate::error::TransactGetItemsError::unhandled(generic)
+                _ => crate::error::TransactGetItemsError::generic(generic)
             });
         }
         let body: crate::serializer::TransactGetItemsOutputBody =
@@ -4231,12 +4359,15 @@ impl TransactWriteItems {
     pub fn builder() -> crate::input::transact_write_items_input::Builder {
         crate::input::transact_write_items_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::TransactWriteItemsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::TransactWriteItemsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::TransactWriteItemsOutput, crate::error::TransactWriteItemsError>
@@ -4283,7 +4414,7 @@ impl TransactWriteItems {
                     Ok(body) => crate::error::TransactWriteItemsError { kind: crate::error::TransactWriteItemsErrorKind::TransactionInProgressError(body), meta: generic },
                     Err(e) => crate::error::TransactWriteItemsError::unhandled(e)
                 }
-                _ => crate::error::TransactWriteItemsError::unhandled(generic)
+                _ => crate::error::TransactWriteItemsError::generic(generic)
             });
         }
         let body: crate::serializer::TransactWriteItemsOutputBody =
@@ -4328,12 +4459,15 @@ impl UntagResource {
     pub fn builder() -> crate::input::untag_resource_input::Builder {
         crate::input::untag_resource_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UntagResourceInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UntagResourceInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::UntagResourceOutput, crate::error::UntagResourceError> {
@@ -4382,7 +4516,7 @@ impl UntagResource {
                     },
                     Err(e) => crate::error::UntagResourceError::unhandled(e),
                 },
-                _ => crate::error::UntagResourceError::unhandled(generic),
+                _ => crate::error::UntagResourceError::generic(generic),
             });
         }
         Ok(crate::output::UntagResourceOutput {})
@@ -4426,12 +4560,15 @@ impl UpdateContinuousBackups {
     pub fn builder() -> crate::input::update_continuous_backups_input::Builder {
         crate::input::update_continuous_backups_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UpdateContinuousBackupsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UpdateContinuousBackupsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -4468,7 +4605,7 @@ impl UpdateContinuousBackups {
                     Ok(body) => crate::error::UpdateContinuousBackupsError { kind: crate::error::UpdateContinuousBackupsErrorKind::TableNotFoundError(body), meta: generic },
                     Err(e) => crate::error::UpdateContinuousBackupsError::unhandled(e)
                 }
-                _ => crate::error::UpdateContinuousBackupsError::unhandled(generic)
+                _ => crate::error::UpdateContinuousBackupsError::generic(generic)
             });
         }
         let body: crate::serializer::UpdateContinuousBackupsOutputBody =
@@ -4512,12 +4649,15 @@ impl UpdateContributorInsights {
     pub fn builder() -> crate::input::update_contributor_insights_input::Builder {
         crate::input::update_contributor_insights_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UpdateContributorInsightsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UpdateContributorInsightsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -4557,7 +4697,7 @@ impl UpdateContributorInsights {
                     },
                     Err(e) => crate::error::UpdateContributorInsightsError::unhandled(e),
                 },
-                _ => crate::error::UpdateContributorInsightsError::unhandled(generic),
+                _ => crate::error::UpdateContributorInsightsError::generic(generic),
             });
         }
         let body: crate::serializer::UpdateContributorInsightsOutputBody =
@@ -4631,12 +4771,15 @@ impl UpdateGlobalTable {
     pub fn builder() -> crate::input::update_global_table_input::Builder {
         crate::input::update_global_table_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UpdateGlobalTableInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UpdateGlobalTableInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::UpdateGlobalTableOutput, crate::error::UpdateGlobalTableError> {
@@ -4696,7 +4839,7 @@ impl UpdateGlobalTable {
                     },
                     Err(e) => crate::error::UpdateGlobalTableError::unhandled(e),
                 },
-                _ => crate::error::UpdateGlobalTableError::unhandled(generic),
+                _ => crate::error::UpdateGlobalTableError::generic(generic),
             });
         }
         let body: crate::serializer::UpdateGlobalTableOutputBody =
@@ -4735,12 +4878,15 @@ impl UpdateGlobalTableSettings {
     pub fn builder() -> crate::input::update_global_table_settings_input::Builder {
         crate::input::update_global_table_settings_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UpdateGlobalTableSettingsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UpdateGlobalTableSettingsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -4789,7 +4935,7 @@ impl UpdateGlobalTableSettings {
                     Ok(body) => crate::error::UpdateGlobalTableSettingsError { kind: crate::error::UpdateGlobalTableSettingsErrorKind::ResourceInUseError(body), meta: generic },
                     Err(e) => crate::error::UpdateGlobalTableSettingsError::unhandled(e)
                 }
-                _ => crate::error::UpdateGlobalTableSettingsError::unhandled(generic)
+                _ => crate::error::UpdateGlobalTableSettingsError::generic(generic)
             });
         }
         let body: crate::serializer::UpdateGlobalTableSettingsOutputBody =
@@ -4836,12 +4982,15 @@ impl UpdateItem {
     pub fn builder() -> crate::input::update_item_input::Builder {
         crate::input::update_item_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UpdateItemInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UpdateItemInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::UpdateItemOutput, crate::error::UpdateItemError> {
@@ -4916,7 +5065,7 @@ impl UpdateItem {
                     },
                     Err(e) => crate::error::UpdateItemError::unhandled(e),
                 },
-                _ => crate::error::UpdateItemError::unhandled(generic),
+                _ => crate::error::UpdateItemError::generic(generic),
             });
         }
         let body: crate::serializer::UpdateItemOutputBody =
@@ -4978,12 +5127,15 @@ impl UpdateTable {
     pub fn builder() -> crate::input::update_table_input::Builder {
         crate::input::update_table_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UpdateTableInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UpdateTableInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::UpdateTableOutput, crate::error::UpdateTableError> {
@@ -5032,7 +5184,7 @@ impl UpdateTable {
                     },
                     Err(e) => crate::error::UpdateTableError::unhandled(e),
                 },
-                _ => crate::error::UpdateTableError::unhandled(generic),
+                _ => crate::error::UpdateTableError::generic(generic),
             });
         }
         let body: crate::serializer::UpdateTableOutputBody =
@@ -5073,12 +5225,15 @@ impl UpdateTableReplicaAutoScaling {
     pub fn builder() -> crate::input::update_table_replica_auto_scaling_input::Builder {
         crate::input::update_table_replica_auto_scaling_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UpdateTableReplicaAutoScalingInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UpdateTableReplicaAutoScalingInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -5115,7 +5270,7 @@ impl UpdateTableReplicaAutoScaling {
                     Ok(body) => crate::error::UpdateTableReplicaAutoScalingError { kind: crate::error::UpdateTableReplicaAutoScalingErrorKind::ResourceNotFoundError(body), meta: generic },
                     Err(e) => crate::error::UpdateTableReplicaAutoScalingError::unhandled(e)
                 }
-                _ => crate::error::UpdateTableReplicaAutoScalingError::unhandled(generic)
+                _ => crate::error::UpdateTableReplicaAutoScalingError::generic(generic)
             });
         }
         let body: crate::serializer::UpdateTableReplicaAutoScalingOutputBody =
@@ -5183,12 +5338,15 @@ impl UpdateTimeToLive {
     pub fn builder() -> crate::input::update_time_to_live_input::Builder {
         crate::input::update_time_to_live_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UpdateTimeToLiveInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UpdateTimeToLiveInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::UpdateTimeToLiveOutput, crate::error::UpdateTimeToLiveError> {
@@ -5237,7 +5395,7 @@ impl UpdateTimeToLive {
                     },
                     Err(e) => crate::error::UpdateTimeToLiveError::unhandled(e),
                 },
-                _ => crate::error::UpdateTimeToLiveError::unhandled(generic),
+                _ => crate::error::UpdateTimeToLiveError::generic(generic),
             });
         }
         let body: crate::serializer::UpdateTimeToLiveOutputBody =

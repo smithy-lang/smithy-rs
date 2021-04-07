@@ -23,12 +23,15 @@ impl CancelKeyDeletion {
     pub fn builder() -> crate::input::cancel_key_deletion_input::Builder {
         crate::input::cancel_key_deletion_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::CancelKeyDeletionInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::CancelKeyDeletionInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::CancelKeyDeletionOutput, crate::error::CancelKeyDeletionError> {
@@ -79,7 +82,7 @@ impl CancelKeyDeletion {
                     },
                     Err(e) => crate::error::CancelKeyDeletionError::unhandled(e),
                 },
-                _ => crate::error::CancelKeyDeletionError::unhandled(generic),
+                _ => crate::error::CancelKeyDeletionError::generic(generic),
             });
         }
         let body: crate::serializer::CancelKeyDeletionOutputBody =
@@ -178,12 +181,15 @@ impl ConnectCustomKeyStore {
     pub fn builder() -> crate::input::connect_custom_key_store_input::Builder {
         crate::input::connect_custom_key_store_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ConnectCustomKeyStoreInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ConnectCustomKeyStoreInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ConnectCustomKeyStoreOutput, crate::error::ConnectCustomKeyStoreError>
@@ -218,7 +224,7 @@ impl ConnectCustomKeyStore {
                     Ok(body) => crate::error::ConnectCustomKeyStoreError { kind: crate::error::ConnectCustomKeyStoreErrorKind::KMSInternalError(body), meta: generic },
                     Err(e) => crate::error::ConnectCustomKeyStoreError::unhandled(e)
                 }
-                _ => crate::error::ConnectCustomKeyStoreError::unhandled(generic)
+                _ => crate::error::ConnectCustomKeyStoreError::generic(generic)
             });
         }
         Ok(crate::output::ConnectCustomKeyStoreOutput {})
@@ -306,12 +312,15 @@ impl CreateAlias {
     pub fn builder() -> crate::input::create_alias_input::Builder {
         crate::input::create_alias_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::CreateAliasInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::CreateAliasInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::CreateAliasOutput, crate::error::CreateAliasError> {
@@ -374,7 +383,7 @@ impl CreateAlias {
                     },
                     Err(e) => crate::error::CreateAliasError::unhandled(e),
                 },
-                _ => crate::error::CreateAliasError::unhandled(generic),
+                _ => crate::error::CreateAliasError::generic(generic),
             });
         }
         Ok(crate::output::CreateAliasOutput {})
@@ -456,12 +465,15 @@ impl CreateCustomKeyStore {
     pub fn builder() -> crate::input::create_custom_key_store_input::Builder {
         crate::input::create_custom_key_store_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::CreateCustomKeyStoreInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::CreateCustomKeyStoreInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::CreateCustomKeyStoreOutput, crate::error::CreateCustomKeyStoreError>
@@ -504,7 +516,7 @@ impl CreateCustomKeyStore {
                     Ok(body) => crate::error::CreateCustomKeyStoreError { kind: crate::error::CreateCustomKeyStoreErrorKind::KMSInternalError(body), meta: generic },
                     Err(e) => crate::error::CreateCustomKeyStoreError::unhandled(e)
                 }
-                _ => crate::error::CreateCustomKeyStoreError::unhandled(generic)
+                _ => crate::error::CreateCustomKeyStoreError::generic(generic)
             });
         }
         let body: crate::serializer::CreateCustomKeyStoreOutputBody =
@@ -612,12 +624,15 @@ impl CreateGrant {
     pub fn builder() -> crate::input::create_grant_input::Builder {
         crate::input::create_grant_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::CreateGrantInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::CreateGrantInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::CreateGrantOutput, crate::error::CreateGrantError> {
@@ -687,7 +702,7 @@ impl CreateGrant {
                     },
                     Err(e) => crate::error::CreateGrantError::unhandled(e),
                 },
-                _ => crate::error::CreateGrantError::unhandled(generic),
+                _ => crate::error::CreateGrantError::generic(generic),
             });
         }
         let body: crate::serializer::CreateGrantOutputBody =
@@ -824,12 +839,15 @@ impl CreateKey {
     pub fn builder() -> crate::input::create_key_input::Builder {
         crate::input::create_key_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::CreateKeyInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::CreateKeyInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::CreateKeyOutput, crate::error::CreateKeyError> {
@@ -883,7 +901,7 @@ impl CreateKey {
                     Ok(body) => crate::error::CreateKeyError { kind: crate::error::CreateKeyErrorKind::UnsupportedOperationError(body), meta: generic },
                     Err(e) => crate::error::CreateKeyError::unhandled(e)
                 }
-                _ => crate::error::CreateKeyError::unhandled(generic)
+                _ => crate::error::CreateKeyError::generic(generic)
             });
         }
         let body: crate::serializer::CreateKeyOutputBody =
@@ -1005,12 +1023,15 @@ impl Decrypt {
     pub fn builder() -> crate::input::decrypt_input::Builder {
         crate::input::decrypt_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DecryptInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DecryptInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DecryptOutput, crate::error::DecryptError> {
@@ -1094,7 +1115,7 @@ impl Decrypt {
                     },
                     Err(e) => crate::error::DecryptError::unhandled(e),
                 },
-                _ => crate::error::DecryptError::unhandled(generic),
+                _ => crate::error::DecryptError::generic(generic),
             });
         }
         let body: crate::serializer::DecryptOutputBody =
@@ -1175,12 +1196,15 @@ impl DeleteAlias {
     pub fn builder() -> crate::input::delete_alias_input::Builder {
         crate::input::delete_alias_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DeleteAliasInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DeleteAliasInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DeleteAliasOutput, crate::error::DeleteAliasError> {
@@ -1222,7 +1246,7 @@ impl DeleteAlias {
                     },
                     Err(e) => crate::error::DeleteAliasError::unhandled(e),
                 },
-                _ => crate::error::DeleteAliasError::unhandled(generic),
+                _ => crate::error::DeleteAliasError::generic(generic),
             });
         }
         Ok(crate::output::DeleteAliasOutput {})
@@ -1308,12 +1332,15 @@ impl DeleteCustomKeyStore {
     pub fn builder() -> crate::input::delete_custom_key_store_input::Builder {
         crate::input::delete_custom_key_store_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DeleteCustomKeyStoreInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DeleteCustomKeyStoreInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DeleteCustomKeyStoreOutput, crate::error::DeleteCustomKeyStoreError>
@@ -1344,7 +1371,7 @@ impl DeleteCustomKeyStore {
                     Ok(body) => crate::error::DeleteCustomKeyStoreError { kind: crate::error::DeleteCustomKeyStoreErrorKind::KMSInternalError(body), meta: generic },
                     Err(e) => crate::error::DeleteCustomKeyStoreError::unhandled(e)
                 }
-                _ => crate::error::DeleteCustomKeyStoreError::unhandled(generic)
+                _ => crate::error::DeleteCustomKeyStoreError::generic(generic)
             });
         }
         Ok(crate::output::DeleteCustomKeyStoreOutput {})
@@ -1409,12 +1436,15 @@ impl DeleteImportedKeyMaterial {
     pub fn builder() -> crate::input::delete_imported_key_material_input::Builder {
         crate::input::delete_imported_key_material_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DeleteImportedKeyMaterialInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DeleteImportedKeyMaterialInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -1459,7 +1489,7 @@ impl DeleteImportedKeyMaterial {
                     Ok(body) => crate::error::DeleteImportedKeyMaterialError { kind: crate::error::DeleteImportedKeyMaterialErrorKind::UnsupportedOperationError(body), meta: generic },
                     Err(e) => crate::error::DeleteImportedKeyMaterialError::unhandled(e)
                 }
-                _ => crate::error::DeleteImportedKeyMaterialError::unhandled(generic)
+                _ => crate::error::DeleteImportedKeyMaterialError::generic(generic)
             });
         }
         Ok(crate::output::DeleteImportedKeyMaterialOutput {})
@@ -1551,12 +1581,15 @@ impl DescribeCustomKeyStores {
     pub fn builder() -> crate::input::describe_custom_key_stores_input::Builder {
         crate::input::describe_custom_key_stores_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeCustomKeyStoresInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeCustomKeyStoresInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -1585,7 +1618,7 @@ impl DescribeCustomKeyStores {
                     Ok(body) => crate::error::DescribeCustomKeyStoresError { kind: crate::error::DescribeCustomKeyStoresErrorKind::KMSInternalError(body), meta: generic },
                     Err(e) => crate::error::DescribeCustomKeyStoresError::unhandled(e)
                 }
-                _ => crate::error::DescribeCustomKeyStoresError::unhandled(generic)
+                _ => crate::error::DescribeCustomKeyStoresError::generic(generic)
             });
         }
         let body: crate::serializer::DescribeCustomKeyStoresOutputBody =
@@ -1708,12 +1741,15 @@ impl DescribeKey {
     pub fn builder() -> crate::input::describe_key_input::Builder {
         crate::input::describe_key_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeKeyInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeKeyInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DescribeKeyOutput, crate::error::DescribeKeyError> {
@@ -1755,7 +1791,7 @@ impl DescribeKey {
                     },
                     Err(e) => crate::error::DescribeKeyError::unhandled(e),
                 },
-                _ => crate::error::DescribeKeyError::unhandled(generic),
+                _ => crate::error::DescribeKeyError::generic(generic),
             });
         }
         let body: crate::serializer::DescribeKeyOutputBody =
@@ -1808,12 +1844,15 @@ impl DisableKey {
     pub fn builder() -> crate::input::disable_key_input::Builder {
         crate::input::disable_key_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DisableKeyInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DisableKeyInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DisableKeyOutput, crate::error::DisableKeyError> {
@@ -1862,7 +1901,7 @@ impl DisableKey {
                     },
                     Err(e) => crate::error::DisableKeyError::unhandled(e),
                 },
-                _ => crate::error::DisableKeyError::unhandled(generic),
+                _ => crate::error::DisableKeyError::generic(generic),
             });
         }
         Ok(crate::output::DisableKeyOutput {})
@@ -1920,12 +1959,15 @@ impl DisableKeyRotation {
     pub fn builder() -> crate::input::disable_key_rotation_input::Builder {
         crate::input::disable_key_rotation_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DisableKeyRotationInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DisableKeyRotationInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DisableKeyRotationOutput, crate::error::DisableKeyRotationError>
@@ -1993,7 +2035,7 @@ impl DisableKeyRotation {
                     },
                     Err(e) => crate::error::DisableKeyRotationError::unhandled(e),
                 },
-                _ => crate::error::DisableKeyRotationError::unhandled(generic),
+                _ => crate::error::DisableKeyRotationError::generic(generic),
             });
         }
         Ok(crate::output::DisableKeyRotationOutput {})
@@ -2078,12 +2120,15 @@ impl DisconnectCustomKeyStore {
     pub fn builder() -> crate::input::disconnect_custom_key_store_input::Builder {
         crate::input::disconnect_custom_key_store_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DisconnectCustomKeyStoreInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DisconnectCustomKeyStoreInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -2116,7 +2161,7 @@ impl DisconnectCustomKeyStore {
                     Ok(body) => crate::error::DisconnectCustomKeyStoreError { kind: crate::error::DisconnectCustomKeyStoreErrorKind::KMSInternalError(body), meta: generic },
                     Err(e) => crate::error::DisconnectCustomKeyStoreError::unhandled(e)
                 }
-                _ => crate::error::DisconnectCustomKeyStoreError::unhandled(generic)
+                _ => crate::error::DisconnectCustomKeyStoreError::generic(generic)
             });
         }
         Ok(crate::output::DisconnectCustomKeyStoreOutput {})
@@ -2166,12 +2211,15 @@ impl EnableKey {
     pub fn builder() -> crate::input::enable_key_input::Builder {
         crate::input::enable_key_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::EnableKeyInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::EnableKeyInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::EnableKeyOutput, crate::error::EnableKeyError> {
@@ -2227,7 +2275,7 @@ impl EnableKey {
                     },
                     Err(e) => crate::error::EnableKeyError::unhandled(e),
                 },
-                _ => crate::error::EnableKeyError::unhandled(generic),
+                _ => crate::error::EnableKeyError::generic(generic),
             });
         }
         Ok(crate::output::EnableKeyOutput {})
@@ -2284,12 +2332,15 @@ impl EnableKeyRotation {
     pub fn builder() -> crate::input::enable_key_rotation_input::Builder {
         crate::input::enable_key_rotation_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::EnableKeyRotationInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::EnableKeyRotationInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::EnableKeyRotationOutput, crate::error::EnableKeyRotationError> {
@@ -2356,7 +2407,7 @@ impl EnableKeyRotation {
                     },
                     Err(e) => crate::error::EnableKeyRotationError::unhandled(e),
                 },
-                _ => crate::error::EnableKeyRotationError::unhandled(generic),
+                _ => crate::error::EnableKeyRotationError::generic(generic),
             });
         }
         Ok(crate::output::EnableKeyRotationOutput {})
@@ -2508,12 +2559,15 @@ impl Encrypt {
     pub fn builder() -> crate::input::encrypt_input::Builder {
         crate::input::encrypt_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::EncryptInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::EncryptInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::EncryptOutput, crate::error::EncryptError> {
@@ -2583,7 +2637,7 @@ impl Encrypt {
                     },
                     Err(e) => crate::error::EncryptError::unhandled(e),
                 },
-                _ => crate::error::EncryptError::unhandled(generic),
+                _ => crate::error::EncryptError::generic(generic),
             });
         }
         let body: crate::serializer::EncryptOutputBody =
@@ -2712,12 +2766,15 @@ impl GenerateDataKey {
     pub fn builder() -> crate::input::generate_data_key_input::Builder {
         crate::input::generate_data_key_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::GenerateDataKeyInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::GenerateDataKeyInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::GenerateDataKeyOutput, crate::error::GenerateDataKeyError> {
@@ -2787,7 +2844,7 @@ impl GenerateDataKey {
                     },
                     Err(e) => crate::error::GenerateDataKeyError::unhandled(e),
                 },
-                _ => crate::error::GenerateDataKeyError::unhandled(generic),
+                _ => crate::error::GenerateDataKeyError::generic(generic),
             });
         }
         let body: crate::serializer::GenerateDataKeyOutputBody =
@@ -2890,12 +2947,15 @@ impl GenerateDataKeyPair {
     pub fn builder() -> crate::input::generate_data_key_pair_input::Builder {
         crate::input::generate_data_key_pair_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::GenerateDataKeyPairInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::GenerateDataKeyPairInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::GenerateDataKeyPairOutput, crate::error::GenerateDataKeyPairError>
@@ -2983,7 +3043,7 @@ impl GenerateDataKeyPair {
                     },
                     Err(e) => crate::error::GenerateDataKeyPairError::unhandled(e),
                 },
-                _ => crate::error::GenerateDataKeyPairError::unhandled(generic),
+                _ => crate::error::GenerateDataKeyPairError::generic(generic),
             });
         }
         let body: crate::serializer::GenerateDataKeyPairOutputBody =
@@ -3085,12 +3145,17 @@ impl GenerateDataKeyPairWithoutPlaintext {
     pub fn builder() -> crate::input::generate_data_key_pair_without_plaintext_input::Builder {
         crate::input::generate_data_key_pair_without_plaintext_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::GenerateDataKeyPairWithoutPlaintextInput::assemble(
-            self.input.request_builder_base(),
-            self.input.build_body(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(
+            crate::input::GenerateDataKeyPairWithoutPlaintextInput::assemble(
+                self.input.request_builder_base()?,
+                self.input.build_body(),
+            ),
         )
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -3147,7 +3212,7 @@ impl GenerateDataKeyPairWithoutPlaintext {
                     Ok(body) => crate::error::GenerateDataKeyPairWithoutPlaintextError { kind: crate::error::GenerateDataKeyPairWithoutPlaintextErrorKind::UnsupportedOperationError(body), meta: generic },
                     Err(e) => crate::error::GenerateDataKeyPairWithoutPlaintextError::unhandled(e)
                 }
-                _ => crate::error::GenerateDataKeyPairWithoutPlaintextError::unhandled(generic)
+                _ => crate::error::GenerateDataKeyPairWithoutPlaintextError::generic(generic)
             });
         }
         let body: crate::serializer::GenerateDataKeyPairWithoutPlaintextOutputBody =
@@ -3260,12 +3325,17 @@ impl GenerateDataKeyWithoutPlaintext {
     pub fn builder() -> crate::input::generate_data_key_without_plaintext_input::Builder {
         crate::input::generate_data_key_without_plaintext_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::GenerateDataKeyWithoutPlaintextInput::assemble(
-            self.input.request_builder_base(),
-            self.input.build_body(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(
+            crate::input::GenerateDataKeyWithoutPlaintextInput::assemble(
+                self.input.request_builder_base()?,
+                self.input.build_body(),
+            ),
         )
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -3318,7 +3388,7 @@ impl GenerateDataKeyWithoutPlaintext {
                     Ok(body) => crate::error::GenerateDataKeyWithoutPlaintextError { kind: crate::error::GenerateDataKeyWithoutPlaintextErrorKind::NotFoundError(body), meta: generic },
                     Err(e) => crate::error::GenerateDataKeyWithoutPlaintextError::unhandled(e)
                 }
-                _ => crate::error::GenerateDataKeyWithoutPlaintextError::unhandled(generic)
+                _ => crate::error::GenerateDataKeyWithoutPlaintextError::generic(generic)
             });
         }
         let body: crate::serializer::GenerateDataKeyWithoutPlaintextOutputBody =
@@ -3370,12 +3440,15 @@ impl GenerateRandom {
     pub fn builder() -> crate::input::generate_random_input::Builder {
         crate::input::generate_random_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::GenerateRandomInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::GenerateRandomInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::GenerateRandomOutput, crate::error::GenerateRandomError> {
@@ -3422,7 +3495,7 @@ impl GenerateRandom {
                     },
                     Err(e) => crate::error::GenerateRandomError::unhandled(e),
                 },
-                _ => crate::error::GenerateRandomError::unhandled(generic),
+                _ => crate::error::GenerateRandomError::generic(generic),
             });
         }
         let body: crate::serializer::GenerateRandomOutputBody =
@@ -3467,12 +3540,15 @@ impl GetKeyPolicy {
     pub fn builder() -> crate::input::get_key_policy_input::Builder {
         crate::input::get_key_policy_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::GetKeyPolicyInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::GetKeyPolicyInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::GetKeyPolicyOutput, crate::error::GetKeyPolicyError> {
@@ -3521,7 +3597,7 @@ impl GetKeyPolicy {
                     },
                     Err(e) => crate::error::GetKeyPolicyError::unhandled(e),
                 },
-                _ => crate::error::GetKeyPolicyError::unhandled(generic),
+                _ => crate::error::GetKeyPolicyError::generic(generic),
             });
         }
         let body: crate::serializer::GetKeyPolicyOutputBody =
@@ -3595,12 +3671,15 @@ impl GetKeyRotationStatus {
     pub fn builder() -> crate::input::get_key_rotation_status_input::Builder {
         crate::input::get_key_rotation_status_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::GetKeyRotationStatusInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::GetKeyRotationStatusInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::GetKeyRotationStatusOutput, crate::error::GetKeyRotationStatusError>
@@ -3664,7 +3743,7 @@ impl GetKeyRotationStatus {
                     },
                     Err(e) => crate::error::GetKeyRotationStatusError::unhandled(e),
                 },
-                _ => crate::error::GetKeyRotationStatusError::unhandled(generic),
+                _ => crate::error::GetKeyRotationStatusError::generic(generic),
             });
         }
         let body: crate::serializer::GetKeyRotationStatusOutputBody =
@@ -3739,12 +3818,15 @@ impl GetParametersForImport {
     pub fn builder() -> crate::input::get_parameters_for_import_input::Builder {
         crate::input::get_parameters_for_import_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::GetParametersForImportInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::GetParametersForImportInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -3814,7 +3896,7 @@ impl GetParametersForImport {
                     },
                     Err(e) => crate::error::GetParametersForImportError::unhandled(e),
                 },
-                _ => crate::error::GetParametersForImportError::unhandled(generic),
+                _ => crate::error::GetParametersForImportError::generic(generic),
             });
         }
         let body: crate::serializer::GetParametersForImportOutputBody =
@@ -3905,12 +3987,15 @@ impl GetPublicKey {
     pub fn builder() -> crate::input::get_public_key_input::Builder {
         crate::input::get_public_key_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::GetPublicKeyInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::GetPublicKeyInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::GetPublicKeyOutput, crate::error::GetPublicKeyError> {
@@ -3994,7 +4079,7 @@ impl GetPublicKey {
                     },
                     Err(e) => crate::error::GetPublicKeyError::unhandled(e),
                 },
-                _ => crate::error::GetPublicKeyError::unhandled(generic),
+                _ => crate::error::GetPublicKeyError::generic(generic),
             });
         }
         let body: crate::serializer::GetPublicKeyOutputBody =
@@ -4100,12 +4185,15 @@ impl ImportKeyMaterial {
     pub fn builder() -> crate::input::import_key_material_input::Builder {
         crate::input::import_key_material_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ImportKeyMaterialInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ImportKeyMaterialInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ImportKeyMaterialOutput, crate::error::ImportKeyMaterialError> {
@@ -4201,7 +4289,7 @@ impl ImportKeyMaterial {
                     },
                     Err(e) => crate::error::ImportKeyMaterialError::unhandled(e),
                 },
-                _ => crate::error::ImportKeyMaterialError::unhandled(generic),
+                _ => crate::error::ImportKeyMaterialError::generic(generic),
             });
         }
         Ok(crate::output::ImportKeyMaterialOutput {})
@@ -4274,12 +4362,15 @@ impl ListAliases {
     pub fn builder() -> crate::input::list_aliases_input::Builder {
         crate::input::list_aliases_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListAliasesInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListAliasesInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListAliasesOutput, crate::error::ListAliasesError> {
@@ -4328,7 +4419,7 @@ impl ListAliases {
                     },
                     Err(e) => crate::error::ListAliasesError::unhandled(e),
                 },
-                _ => crate::error::ListAliasesError::unhandled(generic),
+                _ => crate::error::ListAliasesError::generic(generic),
             });
         }
         let body: crate::serializer::ListAliasesOutputBody =
@@ -4405,12 +4496,15 @@ impl ListGrants {
     pub fn builder() -> crate::input::list_grants_input::Builder {
         crate::input::list_grants_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListGrantsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListGrantsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListGrantsOutput, crate::error::ListGrantsError> {
@@ -4466,7 +4560,7 @@ impl ListGrants {
                     },
                     Err(e) => crate::error::ListGrantsError::unhandled(e),
                 },
-                _ => crate::error::ListGrantsError::unhandled(generic),
+                _ => crate::error::ListGrantsError::generic(generic),
             });
         }
         let body: crate::serializer::ListGrantsOutputBody =
@@ -4527,12 +4621,15 @@ impl ListKeyPolicies {
     pub fn builder() -> crate::input::list_key_policies_input::Builder {
         crate::input::list_key_policies_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListKeyPoliciesInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListKeyPoliciesInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListKeyPoliciesOutput, crate::error::ListKeyPoliciesError> {
@@ -4581,7 +4678,7 @@ impl ListKeyPolicies {
                     },
                     Err(e) => crate::error::ListKeyPoliciesError::unhandled(e),
                 },
-                _ => crate::error::ListKeyPoliciesError::unhandled(generic),
+                _ => crate::error::ListKeyPoliciesError::generic(generic),
             });
         }
         let body: crate::serializer::ListKeyPoliciesOutputBody =
@@ -4651,12 +4748,15 @@ impl ListKeys {
     pub fn builder() -> crate::input::list_keys_input::Builder {
         crate::input::list_keys_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListKeysInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListKeysInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListKeysOutput, crate::error::ListKeysError> {
@@ -4691,7 +4791,7 @@ impl ListKeys {
                     },
                     Err(e) => crate::error::ListKeysError::unhandled(e),
                 },
-                _ => crate::error::ListKeysError::unhandled(generic),
+                _ => crate::error::ListKeysError::generic(generic),
             });
         }
         let body: crate::serializer::ListKeysOutputBody =
@@ -4754,12 +4854,15 @@ impl ListResourceTags {
     pub fn builder() -> crate::input::list_resource_tags_input::Builder {
         crate::input::list_resource_tags_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListResourceTagsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListResourceTagsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListResourceTagsOutput, crate::error::ListResourceTagsError> {
@@ -4801,7 +4904,7 @@ impl ListResourceTags {
                     },
                     Err(e) => crate::error::ListResourceTagsError::unhandled(e),
                 },
-                _ => crate::error::ListResourceTagsError::unhandled(generic),
+                _ => crate::error::ListResourceTagsError::generic(generic),
             });
         }
         let body: crate::serializer::ListResourceTagsOutputBody =
@@ -4880,12 +4983,15 @@ impl ListRetirableGrants {
     pub fn builder() -> crate::input::list_retirable_grants_input::Builder {
         crate::input::list_retirable_grants_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListRetirableGrantsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListRetirableGrantsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListRetirableGrantsOutput, crate::error::ListRetirableGrantsError>
@@ -4937,7 +5043,7 @@ impl ListRetirableGrants {
                     },
                     Err(e) => crate::error::ListRetirableGrantsError::unhandled(e),
                 },
-                _ => crate::error::ListRetirableGrantsError::unhandled(generic),
+                _ => crate::error::ListRetirableGrantsError::generic(generic),
             });
         }
         let body: crate::serializer::ListRetirableGrantsOutputBody =
@@ -4991,12 +5097,15 @@ impl PutKeyPolicy {
     pub fn builder() -> crate::input::put_key_policy_input::Builder {
         crate::input::put_key_policy_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::PutKeyPolicyInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::PutKeyPolicyInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::PutKeyPolicyOutput, crate::error::PutKeyPolicyError> {
@@ -5068,7 +5177,7 @@ impl PutKeyPolicy {
                     },
                     Err(e) => crate::error::PutKeyPolicyError::unhandled(e),
                 },
-                _ => crate::error::PutKeyPolicyError::unhandled(generic),
+                _ => crate::error::PutKeyPolicyError::generic(generic),
             });
         }
         Ok(crate::output::PutKeyPolicyOutput {})
@@ -5190,12 +5299,15 @@ impl ReEncrypt {
     pub fn builder() -> crate::input::re_encrypt_input::Builder {
         crate::input::re_encrypt_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ReEncryptInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ReEncryptInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ReEncryptOutput, crate::error::ReEncryptError> {
@@ -5279,7 +5391,7 @@ impl ReEncrypt {
                     },
                     Err(e) => crate::error::ReEncryptError::unhandled(e),
                 },
-                _ => crate::error::ReEncryptError::unhandled(generic),
+                _ => crate::error::ReEncryptError::generic(generic),
             });
         }
         let body: crate::serializer::ReEncryptOutputBody =
@@ -5372,12 +5484,15 @@ impl RetireGrant {
     pub fn builder() -> crate::input::retire_grant_input::Builder {
         crate::input::retire_grant_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::RetireGrantInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::RetireGrantInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::RetireGrantOutput, crate::error::RetireGrantError> {
@@ -5440,7 +5555,7 @@ impl RetireGrant {
                     },
                     Err(e) => crate::error::RetireGrantError::unhandled(e),
                 },
-                _ => crate::error::RetireGrantError::unhandled(generic),
+                _ => crate::error::RetireGrantError::generic(generic),
             });
         }
         Ok(crate::output::RetireGrantOutput {})
@@ -5504,12 +5619,15 @@ impl RevokeGrant {
     pub fn builder() -> crate::input::revoke_grant_input::Builder {
         crate::input::revoke_grant_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::RevokeGrantInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::RevokeGrantInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::RevokeGrantOutput, crate::error::RevokeGrantError> {
@@ -5565,7 +5683,7 @@ impl RevokeGrant {
                     },
                     Err(e) => crate::error::RevokeGrantError::unhandled(e),
                 },
-                _ => crate::error::RevokeGrantError::unhandled(generic),
+                _ => crate::error::RevokeGrantError::generic(generic),
             });
         }
         Ok(crate::output::RevokeGrantOutput {})
@@ -5637,12 +5755,15 @@ impl ScheduleKeyDeletion {
     pub fn builder() -> crate::input::schedule_key_deletion_input::Builder {
         crate::input::schedule_key_deletion_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ScheduleKeyDeletionInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ScheduleKeyDeletionInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ScheduleKeyDeletionOutput, crate::error::ScheduleKeyDeletionError>
@@ -5696,7 +5817,7 @@ impl ScheduleKeyDeletion {
                     },
                     Err(e) => crate::error::ScheduleKeyDeletionError::unhandled(e),
                 },
-                _ => crate::error::ScheduleKeyDeletionError::unhandled(generic),
+                _ => crate::error::ScheduleKeyDeletionError::generic(generic),
             });
         }
         let body: crate::serializer::ScheduleKeyDeletionOutputBody =
@@ -5782,12 +5903,15 @@ impl Sign {
     pub fn builder() -> crate::input::sign_input::Builder {
         crate::input::sign_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::SignInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::SignInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::SignOutput, crate::error::SignError> {
@@ -5857,7 +5981,7 @@ impl Sign {
                     },
                     Err(e) => crate::error::SignError::unhandled(e),
                 },
-                _ => crate::error::SignError::unhandled(generic),
+                _ => crate::error::SignError::generic(generic),
             });
         }
         let body: crate::serializer::SignOutputBody =
@@ -5930,12 +6054,15 @@ impl TagResource {
     pub fn builder() -> crate::input::tag_resource_input::Builder {
         crate::input::tag_resource_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::TagResourceInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::TagResourceInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::TagResourceOutput, crate::error::TagResourceError> {
@@ -5991,7 +6118,7 @@ impl TagResource {
                     },
                     Err(e) => crate::error::TagResourceError::unhandled(e),
                 },
-                _ => crate::error::TagResourceError::unhandled(generic),
+                _ => crate::error::TagResourceError::generic(generic),
             });
         }
         Ok(crate::output::TagResourceOutput {})
@@ -6054,12 +6181,15 @@ impl UntagResource {
     pub fn builder() -> crate::input::untag_resource_input::Builder {
         crate::input::untag_resource_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UntagResourceInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UntagResourceInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::UntagResourceOutput, crate::error::UntagResourceError> {
@@ -6108,7 +6238,7 @@ impl UntagResource {
                     },
                     Err(e) => crate::error::UntagResourceError::unhandled(e),
                 },
-                _ => crate::error::UntagResourceError::unhandled(generic),
+                _ => crate::error::UntagResourceError::generic(generic),
             });
         }
         Ok(crate::output::UntagResourceOutput {})
@@ -6197,12 +6327,15 @@ impl UpdateAlias {
     pub fn builder() -> crate::input::update_alias_input::Builder {
         crate::input::update_alias_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UpdateAliasInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UpdateAliasInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::UpdateAliasOutput, crate::error::UpdateAliasError> {
@@ -6251,7 +6384,7 @@ impl UpdateAlias {
                     },
                     Err(e) => crate::error::UpdateAliasError::unhandled(e),
                 },
-                _ => crate::error::UpdateAliasError::unhandled(generic),
+                _ => crate::error::UpdateAliasError::generic(generic),
             });
         }
         Ok(crate::output::UpdateAliasOutput {})
@@ -6355,12 +6488,15 @@ impl UpdateCustomKeyStore {
     pub fn builder() -> crate::input::update_custom_key_store_input::Builder {
         crate::input::update_custom_key_store_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UpdateCustomKeyStoreInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UpdateCustomKeyStoreInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::UpdateCustomKeyStoreOutput, crate::error::UpdateCustomKeyStoreError>
@@ -6407,7 +6543,7 @@ impl UpdateCustomKeyStore {
                     Ok(body) => crate::error::UpdateCustomKeyStoreError { kind: crate::error::UpdateCustomKeyStoreErrorKind::KMSInternalError(body), meta: generic },
                     Err(e) => crate::error::UpdateCustomKeyStoreError::unhandled(e)
                 }
-                _ => crate::error::UpdateCustomKeyStoreError::unhandled(generic)
+                _ => crate::error::UpdateCustomKeyStoreError::generic(generic)
             });
         }
         Ok(crate::output::UpdateCustomKeyStoreOutput {})
@@ -6465,12 +6601,15 @@ impl UpdateKeyDescription {
     pub fn builder() -> crate::input::update_key_description_input::Builder {
         crate::input::update_key_description_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UpdateKeyDescriptionInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UpdateKeyDescriptionInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::UpdateKeyDescriptionOutput, crate::error::UpdateKeyDescriptionError>
@@ -6524,7 +6663,7 @@ impl UpdateKeyDescription {
                     },
                     Err(e) => crate::error::UpdateKeyDescriptionError::unhandled(e),
                 },
-                _ => crate::error::UpdateKeyDescriptionError::unhandled(generic),
+                _ => crate::error::UpdateKeyDescriptionError::generic(generic),
             });
         }
         Ok(crate::output::UpdateKeyDescriptionOutput {})
@@ -6589,12 +6728,15 @@ impl Verify {
     pub fn builder() -> crate::input::verify_input::Builder {
         crate::input::verify_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::VerifyInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::VerifyInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::VerifyOutput, crate::error::VerifyError> {
@@ -6671,7 +6813,7 @@ impl Verify {
                     },
                     Err(e) => crate::error::VerifyError::unhandled(e),
                 },
-                _ => crate::error::VerifyError::unhandled(generic),
+                _ => crate::error::VerifyError::generic(generic),
             });
         }
         let body: crate::serializer::VerifyOutputBody =

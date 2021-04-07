@@ -18,12 +18,15 @@ impl AddTagsToStream {
     pub fn builder() -> crate::input::add_tags_to_stream_input::Builder {
         crate::input::add_tags_to_stream_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::AddTagsToStreamInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::AddTagsToStreamInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::AddTagsToStreamOutput, crate::error::AddTagsToStreamError> {
@@ -65,7 +68,7 @@ impl AddTagsToStream {
                     },
                     Err(e) => crate::error::AddTagsToStreamError::unhandled(e),
                 },
-                _ => crate::error::AddTagsToStreamError::unhandled(generic),
+                _ => crate::error::AddTagsToStreamError::generic(generic),
             });
         }
         Ok(crate::output::AddTagsToStreamOutput {})
@@ -136,12 +139,15 @@ impl CreateStream {
     pub fn builder() -> crate::input::create_stream_input::Builder {
         crate::input::create_stream_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::CreateStreamInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::CreateStreamInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::CreateStreamOutput, crate::error::CreateStreamError> {
@@ -176,7 +182,7 @@ impl CreateStream {
                     },
                     Err(e) => crate::error::CreateStreamError::unhandled(e),
                 },
-                _ => crate::error::CreateStreamError::unhandled(generic),
+                _ => crate::error::CreateStreamError::generic(generic),
             });
         }
         Ok(crate::output::CreateStreamOutput {})
@@ -214,12 +220,15 @@ impl DecreaseStreamRetentionPeriod {
     pub fn builder() -> crate::input::decrease_stream_retention_period_input::Builder {
         crate::input::decrease_stream_retention_period_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DecreaseStreamRetentionPeriodInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DecreaseStreamRetentionPeriodInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -256,7 +265,7 @@ impl DecreaseStreamRetentionPeriod {
                     Ok(body) => crate::error::DecreaseStreamRetentionPeriodError { kind: crate::error::DecreaseStreamRetentionPeriodErrorKind::ResourceNotFoundError(body), meta: generic },
                     Err(e) => crate::error::DecreaseStreamRetentionPeriodError::unhandled(e)
                 }
-                _ => crate::error::DecreaseStreamRetentionPeriodError::unhandled(generic)
+                _ => crate::error::DecreaseStreamRetentionPeriodError::generic(generic)
             });
         }
         Ok(crate::output::DecreaseStreamRetentionPeriodOutput {})
@@ -313,12 +322,15 @@ impl DeleteStream {
     pub fn builder() -> crate::input::delete_stream_input::Builder {
         crate::input::delete_stream_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DeleteStreamInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DeleteStreamInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DeleteStreamOutput, crate::error::DeleteStreamError> {
@@ -353,7 +365,7 @@ impl DeleteStream {
                     },
                     Err(e) => crate::error::DeleteStreamError::unhandled(e),
                 },
-                _ => crate::error::DeleteStreamError::unhandled(generic),
+                _ => crate::error::DeleteStreamError::generic(generic),
             });
         }
         Ok(crate::output::DeleteStreamOutput {})
@@ -393,12 +405,15 @@ impl DeregisterStreamConsumer {
     pub fn builder() -> crate::input::deregister_stream_consumer_input::Builder {
         crate::input::deregister_stream_consumer_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DeregisterStreamConsumerInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DeregisterStreamConsumerInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -447,7 +462,7 @@ impl DeregisterStreamConsumer {
                     },
                     Err(e) => crate::error::DeregisterStreamConsumerError::unhandled(e),
                 },
-                _ => crate::error::DeregisterStreamConsumerError::unhandled(generic),
+                _ => crate::error::DeregisterStreamConsumerError::generic(generic),
             });
         }
         Ok(crate::output::DeregisterStreamConsumerOutput {})
@@ -489,12 +504,15 @@ impl DescribeLimits {
     pub fn builder() -> crate::input::describe_limits_input::Builder {
         crate::input::describe_limits_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeLimitsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeLimitsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DescribeLimitsOutput, crate::error::DescribeLimitsError> {
@@ -515,7 +533,7 @@ impl DescribeLimits {
                     },
                     Err(e) => crate::error::DescribeLimitsError::unhandled(e),
                 },
-                _ => crate::error::DescribeLimitsError::unhandled(generic),
+                _ => crate::error::DescribeLimitsError::generic(generic),
             });
         }
         let body: crate::serializer::DescribeLimitsOutputBody =
@@ -568,12 +586,15 @@ impl DescribeStream {
     pub fn builder() -> crate::input::describe_stream_input::Builder {
         crate::input::describe_stream_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeStreamInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeStreamInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DescribeStreamOutput, crate::error::DescribeStreamError> {
@@ -601,7 +622,7 @@ impl DescribeStream {
                     },
                     Err(e) => crate::error::DescribeStreamError::unhandled(e),
                 },
-                _ => crate::error::DescribeStreamError::unhandled(generic),
+                _ => crate::error::DescribeStreamError::generic(generic),
             });
         }
         let body: crate::serializer::DescribeStreamOutputBody =
@@ -646,12 +667,15 @@ impl DescribeStreamConsumer {
     pub fn builder() -> crate::input::describe_stream_consumer_input::Builder {
         crate::input::describe_stream_consumer_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeStreamConsumerInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeStreamConsumerInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -699,7 +723,7 @@ impl DescribeStreamConsumer {
                     },
                     Err(e) => crate::error::DescribeStreamConsumerError::unhandled(e),
                 },
-                _ => crate::error::DescribeStreamConsumerError::unhandled(generic),
+                _ => crate::error::DescribeStreamConsumerError::generic(generic),
             });
         }
         let body: crate::serializer::DescribeStreamConsumerOutputBody =
@@ -750,12 +774,15 @@ impl DescribeStreamSummary {
     pub fn builder() -> crate::input::describe_stream_summary_input::Builder {
         crate::input::describe_stream_summary_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DescribeStreamSummaryInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DescribeStreamSummaryInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::DescribeStreamSummaryOutput, crate::error::DescribeStreamSummaryError>
@@ -788,7 +815,7 @@ impl DescribeStreamSummary {
                     },
                     Err(e) => crate::error::DescribeStreamSummaryError::unhandled(e),
                 },
-                _ => crate::error::DescribeStreamSummaryError::unhandled(generic),
+                _ => crate::error::DescribeStreamSummaryError::generic(generic),
             });
         }
         let body: crate::serializer::DescribeStreamSummaryOutputBody =
@@ -830,12 +857,15 @@ impl DisableEnhancedMonitoring {
     pub fn builder() -> crate::input::disable_enhanced_monitoring_input::Builder {
         crate::input::disable_enhanced_monitoring_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::DisableEnhancedMonitoringInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::DisableEnhancedMonitoringInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -894,7 +924,7 @@ impl DisableEnhancedMonitoring {
                     },
                     Err(e) => crate::error::DisableEnhancedMonitoringError::unhandled(e),
                 },
-                _ => crate::error::DisableEnhancedMonitoringError::unhandled(generic),
+                _ => crate::error::DisableEnhancedMonitoringError::generic(generic),
             });
         }
         let body: crate::serializer::DisableEnhancedMonitoringOutputBody =
@@ -940,12 +970,15 @@ impl EnableEnhancedMonitoring {
     pub fn builder() -> crate::input::enable_enhanced_monitoring_input::Builder {
         crate::input::enable_enhanced_monitoring_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::EnableEnhancedMonitoringInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::EnableEnhancedMonitoringInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -1003,7 +1036,7 @@ impl EnableEnhancedMonitoring {
                     },
                     Err(e) => crate::error::EnableEnhancedMonitoringError::unhandled(e),
                 },
-                _ => crate::error::EnableEnhancedMonitoringError::unhandled(generic),
+                _ => crate::error::EnableEnhancedMonitoringError::generic(generic),
             });
         }
         let body: crate::serializer::EnableEnhancedMonitoringOutputBody =
@@ -1094,12 +1127,15 @@ impl GetRecords {
     pub fn builder() -> crate::input::get_records_input::Builder {
         crate::input::get_records_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::GetRecordsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::GetRecordsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::GetRecordsOutput, crate::error::GetRecordsError> {
@@ -1185,7 +1221,7 @@ impl GetRecords {
                     },
                     Err(e) => crate::error::GetRecordsError::unhandled(e),
                 },
-                _ => crate::error::GetRecordsError::unhandled(generic),
+                _ => crate::error::GetRecordsError::generic(generic),
             });
         }
         let body: crate::serializer::GetRecordsOutputBody =
@@ -1259,12 +1295,15 @@ impl GetShardIterator {
     pub fn builder() -> crate::input::get_shard_iterator_input::Builder {
         crate::input::get_shard_iterator_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::GetShardIteratorInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::GetShardIteratorInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::GetShardIteratorOutput, crate::error::GetShardIteratorError> {
@@ -1290,7 +1329,7 @@ impl GetShardIterator {
                     Ok(body) => crate::error::GetShardIteratorError { kind: crate::error::GetShardIteratorErrorKind::ResourceNotFoundError(body), meta: generic },
                     Err(e) => crate::error::GetShardIteratorError::unhandled(e)
                 }
-                _ => crate::error::GetShardIteratorError::unhandled(generic)
+                _ => crate::error::GetShardIteratorError::generic(generic)
             });
         }
         let body: crate::serializer::GetShardIteratorOutputBody =
@@ -1337,12 +1376,15 @@ impl IncreaseStreamRetentionPeriod {
     pub fn builder() -> crate::input::increase_stream_retention_period_input::Builder {
         crate::input::increase_stream_retention_period_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::IncreaseStreamRetentionPeriodInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::IncreaseStreamRetentionPeriodInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -1379,7 +1421,7 @@ impl IncreaseStreamRetentionPeriod {
                     Ok(body) => crate::error::IncreaseStreamRetentionPeriodError { kind: crate::error::IncreaseStreamRetentionPeriodErrorKind::ResourceNotFoundError(body), meta: generic },
                     Err(e) => crate::error::IncreaseStreamRetentionPeriodError::unhandled(e)
                 }
-                _ => crate::error::IncreaseStreamRetentionPeriodError::unhandled(generic)
+                _ => crate::error::IncreaseStreamRetentionPeriodError::generic(generic)
             });
         }
         Ok(crate::output::IncreaseStreamRetentionPeriodOutput {})
@@ -1426,12 +1468,15 @@ impl ListShards {
     pub fn builder() -> crate::input::list_shards_input::Builder {
         crate::input::list_shards_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListShardsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListShardsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListShardsOutput, crate::error::ListShardsError> {
@@ -1480,7 +1525,7 @@ impl ListShards {
                     },
                     Err(e) => crate::error::ListShardsError::unhandled(e),
                 },
-                _ => crate::error::ListShardsError::unhandled(generic),
+                _ => crate::error::ListShardsError::generic(generic),
             });
         }
         let body: crate::serializer::ListShardsOutputBody =
@@ -1521,12 +1566,15 @@ impl ListStreamConsumers {
     pub fn builder() -> crate::input::list_stream_consumers_input::Builder {
         crate::input::list_stream_consumers_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListStreamConsumersInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListStreamConsumersInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListStreamConsumersOutput, crate::error::ListStreamConsumersError>
@@ -1582,7 +1630,7 @@ impl ListStreamConsumers {
                     },
                     Err(e) => crate::error::ListStreamConsumersError::unhandled(e),
                 },
-                _ => crate::error::ListStreamConsumersError::unhandled(generic),
+                _ => crate::error::ListStreamConsumersError::generic(generic),
             });
         }
         let body: crate::serializer::ListStreamConsumersOutputBody =
@@ -1638,12 +1686,15 @@ impl ListStreams {
     pub fn builder() -> crate::input::list_streams_input::Builder {
         crate::input::list_streams_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListStreamsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListStreamsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListStreamsOutput, crate::error::ListStreamsError> {
@@ -1664,7 +1715,7 @@ impl ListStreams {
                     },
                     Err(e) => crate::error::ListStreamsError::unhandled(e),
                 },
-                _ => crate::error::ListStreamsError::unhandled(generic),
+                _ => crate::error::ListStreamsError::generic(generic),
             });
         }
         let body: crate::serializer::ListStreamsOutputBody =
@@ -1704,12 +1755,15 @@ impl ListTagsForStream {
     pub fn builder() -> crate::input::list_tags_for_stream_input::Builder {
         crate::input::list_tags_for_stream_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::ListTagsForStreamInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::ListTagsForStreamInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::ListTagsForStreamOutput, crate::error::ListTagsForStreamError> {
@@ -1744,7 +1798,7 @@ impl ListTagsForStream {
                     },
                     Err(e) => crate::error::ListTagsForStreamError::unhandled(e),
                 },
-                _ => crate::error::ListTagsForStreamError::unhandled(generic),
+                _ => crate::error::ListTagsForStreamError::generic(generic),
             });
         }
         let body: crate::serializer::ListTagsForStreamOutputBody =
@@ -1819,12 +1873,15 @@ impl MergeShards {
     pub fn builder() -> crate::input::merge_shards_input::Builder {
         crate::input::merge_shards_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::MergeShardsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::MergeShardsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::MergeShardsOutput, crate::error::MergeShardsError> {
@@ -1866,7 +1923,7 @@ impl MergeShards {
                     },
                     Err(e) => crate::error::MergeShardsError::unhandled(e),
                 },
-                _ => crate::error::MergeShardsError::unhandled(generic),
+                _ => crate::error::MergeShardsError::generic(generic),
             });
         }
         Ok(crate::output::MergeShardsOutput {})
@@ -1934,12 +1991,15 @@ impl PutRecord {
     pub fn builder() -> crate::input::put_record_input::Builder {
         crate::input::put_record_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::PutRecordInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::PutRecordInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::PutRecordOutput, crate::error::PutRecordError> {
@@ -2018,7 +2078,7 @@ impl PutRecord {
                     },
                     Err(e) => crate::error::PutRecordError::unhandled(e),
                 },
-                _ => crate::error::PutRecordError::unhandled(generic),
+                _ => crate::error::PutRecordError::generic(generic),
             });
         }
         let body: crate::serializer::PutRecordOutputBody =
@@ -2113,12 +2173,15 @@ impl PutRecords {
     pub fn builder() -> crate::input::put_records_input::Builder {
         crate::input::put_records_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::PutRecordsInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::PutRecordsInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::PutRecordsOutput, crate::error::PutRecordsError> {
@@ -2197,7 +2260,7 @@ impl PutRecords {
                     },
                     Err(e) => crate::error::PutRecordsError::unhandled(e),
                 },
-                _ => crate::error::PutRecordsError::unhandled(generic),
+                _ => crate::error::PutRecordsError::generic(generic),
             });
         }
         let body: crate::serializer::PutRecordsOutputBody =
@@ -2250,12 +2313,15 @@ impl RegisterStreamConsumer {
     pub fn builder() -> crate::input::register_stream_consumer_input::Builder {
         crate::input::register_stream_consumer_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::RegisterStreamConsumerInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::RegisterStreamConsumerInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<
@@ -2312,7 +2378,7 @@ impl RegisterStreamConsumer {
                     },
                     Err(e) => crate::error::RegisterStreamConsumerError::unhandled(e),
                 },
-                _ => crate::error::RegisterStreamConsumerError::unhandled(generic),
+                _ => crate::error::RegisterStreamConsumerError::generic(generic),
             });
         }
         let body: crate::serializer::RegisterStreamConsumerOutputBody =
@@ -2361,12 +2427,15 @@ impl RemoveTagsFromStream {
     pub fn builder() -> crate::input::remove_tags_from_stream_input::Builder {
         crate::input::remove_tags_from_stream_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::RemoveTagsFromStreamInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::RemoveTagsFromStreamInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::RemoveTagsFromStreamOutput, crate::error::RemoveTagsFromStreamError>
@@ -2413,7 +2482,7 @@ impl RemoveTagsFromStream {
                     },
                     Err(e) => crate::error::RemoveTagsFromStreamError::unhandled(e),
                 },
-                _ => crate::error::RemoveTagsFromStreamError::unhandled(generic),
+                _ => crate::error::RemoveTagsFromStreamError::generic(generic),
             });
         }
         Ok(crate::output::RemoveTagsFromStreamOutput {})
@@ -2489,12 +2558,15 @@ impl SplitShard {
     pub fn builder() -> crate::input::split_shard_input::Builder {
         crate::input::split_shard_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::SplitShardInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::SplitShardInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::SplitShardOutput, crate::error::SplitShardError> {
@@ -2536,7 +2608,7 @@ impl SplitShard {
                     },
                     Err(e) => crate::error::SplitShardError::unhandled(e),
                 },
-                _ => crate::error::SplitShardError::unhandled(generic),
+                _ => crate::error::SplitShardError::generic(generic),
             });
         }
         Ok(crate::output::SplitShardOutput {})
@@ -2584,12 +2656,15 @@ impl StartStreamEncryption {
     pub fn builder() -> crate::input::start_stream_encryption_input::Builder {
         crate::input::start_stream_encryption_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::StartStreamEncryptionInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::StartStreamEncryptionInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::StartStreamEncryptionOutput, crate::error::StartStreamEncryptionError>
@@ -2688,7 +2763,7 @@ impl StartStreamEncryption {
                     },
                     Err(e) => crate::error::StartStreamEncryptionError::unhandled(e),
                 },
-                _ => crate::error::StartStreamEncryptionError::unhandled(generic),
+                _ => crate::error::StartStreamEncryptionError::generic(generic),
             });
         }
         Ok(crate::output::StartStreamEncryptionOutput {})
@@ -2740,12 +2815,15 @@ impl StopStreamEncryption {
     pub fn builder() -> crate::input::stop_stream_encryption_input::Builder {
         crate::input::stop_stream_encryption_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::StopStreamEncryptionInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::StopStreamEncryptionInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::StopStreamEncryptionOutput, crate::error::StopStreamEncryptionError>
@@ -2792,7 +2870,7 @@ impl StopStreamEncryption {
                     },
                     Err(e) => crate::error::StopStreamEncryptionError::unhandled(e),
                 },
-                _ => crate::error::StopStreamEncryptionError::unhandled(generic),
+                _ => crate::error::StopStreamEncryptionError::generic(generic),
             });
         }
         Ok(crate::output::StopStreamEncryptionOutput {})
@@ -2848,12 +2926,15 @@ impl SubscribeToShard {
     pub fn builder() -> crate::input::subscribe_to_shard_input::Builder {
         crate::input::subscribe_to_shard_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::SubscribeToShardInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::SubscribeToShardInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::SubscribeToShardOutput, crate::error::SubscribeToShardError> {
@@ -2895,7 +2976,7 @@ impl SubscribeToShard {
                     },
                     Err(e) => crate::error::SubscribeToShardError::unhandled(e),
                 },
-                _ => crate::error::SubscribeToShardError::unhandled(generic),
+                _ => crate::error::SubscribeToShardError::generic(generic),
             });
         }
         let body: crate::serializer::SubscribeToShardOutputBody =
@@ -2977,12 +3058,15 @@ impl UpdateShardCount {
     pub fn builder() -> crate::input::update_shard_count_input::Builder {
         crate::input::update_shard_count_input::Builder::default()
     }
-    pub fn build_http_request(&self) -> http::request::Request<Vec<u8>> {
-        crate::input::UpdateShardCountInput::assemble(
-            self.input.request_builder_base(),
+    pub fn build_http_request(
+        &self,
+    ) -> Result<http::request::Request<Vec<u8>>, smithy_http::operation::BuildError> {
+        Ok(crate::input::UpdateShardCountInput::assemble(
+            self.input.request_builder_base()?,
             self.input.build_body(),
-        )
+        ))
     }
+    #[allow(clippy::unnecessary_wraps)]
     fn from_response(
         response: &http::response::Response<impl AsRef<[u8]>>,
     ) -> Result<crate::output::UpdateShardCountOutput, crate::error::UpdateShardCountError> {
@@ -3024,7 +3108,7 @@ impl UpdateShardCount {
                     },
                     Err(e) => crate::error::UpdateShardCountError::unhandled(e),
                 },
-                _ => crate::error::UpdateShardCountError::unhandled(generic),
+                _ => crate::error::UpdateShardCountError::generic(generic),
             });
         }
         let body: crate::serializer::UpdateShardCountOutputBody =

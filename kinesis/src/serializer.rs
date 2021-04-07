@@ -1030,7 +1030,7 @@ impl<'a> std::fmt::Debug for UpdateShardCountInputBody<'a> {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeLimitsOutputBody {
     /// <p>The number of open shards.</p>
     #[serde(rename = "OpenShardCount")]
@@ -1052,7 +1052,7 @@ impl std::fmt::Debug for DescribeLimitsOutputBody {
 
 /// <p>Represents the output for <code>DescribeStream</code>.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeStreamOutputBody {
     /// <p>The current status of the stream, the stream Amazon Resource Name (ARN), an array
     /// of shard objects that comprise the stream, and whether there are more shards
@@ -1070,7 +1070,7 @@ impl std::fmt::Debug for DescribeStreamOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeStreamConsumerOutputBody {
     /// <p>An object that represents the details of the consumer.</p>
     #[serde(rename = "ConsumerDescription")]
@@ -1086,7 +1086,7 @@ impl std::fmt::Debug for DescribeStreamConsumerOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DescribeStreamSummaryOutputBody {
     /// <p>A <a>StreamDescriptionSummary</a> containing information about the
     /// stream.</p>
@@ -1107,7 +1107,7 @@ impl std::fmt::Debug for DescribeStreamSummaryOutputBody {
 
 /// <p>Represents the output for <a>EnableEnhancedMonitoring</a> and <a>DisableEnhancedMonitoring</a>.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct DisableEnhancedMonitoringOutputBody {
     /// <p>Represents the list of all the metrics that would be in the enhanced state after
     /// the operation.</p>
@@ -1142,7 +1142,7 @@ impl std::fmt::Debug for DisableEnhancedMonitoringOutputBody {
 
 /// <p>Represents the output for <a>EnableEnhancedMonitoring</a> and <a>DisableEnhancedMonitoring</a>.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct EnableEnhancedMonitoringOutputBody {
     /// <p>Represents the list of all the metrics that would be in the enhanced state after
     /// the operation.</p>
@@ -1177,7 +1177,7 @@ impl std::fmt::Debug for EnableEnhancedMonitoringOutputBody {
 
 /// <p>Represents the output for <a>GetRecords</a>.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct GetRecordsOutputBody {
     /// <p>The next position in the shard from which to start sequentially reading data
     /// records. If set to <code>null</code>, the shard has been closed and the requested
@@ -1213,7 +1213,7 @@ impl std::fmt::Debug for GetRecordsOutputBody {
 
 /// <p>Represents the output for <code>GetShardIterator</code>.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct GetShardIteratorOutputBody {
     /// <p>The position in the shard from which to start reading data records sequentially. A
     /// shard iterator specifies this position using the sequence number of a data record in a
@@ -1231,7 +1231,7 @@ impl std::fmt::Debug for GetShardIteratorOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListShardsOutputBody {
     /// <p>When the number of shards in the data stream is greater than the default value for
     /// the <code>MaxResults</code> parameter, or if you explicitly specify a value for
@@ -1268,7 +1268,7 @@ impl std::fmt::Debug for ListShardsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListStreamConsumersOutputBody {
     /// <p>An array of JSON objects. Each object represents one registered consumer.</p>
     #[serde(rename = "Consumers")]
@@ -1304,7 +1304,7 @@ impl std::fmt::Debug for ListStreamConsumersOutputBody {
 
 /// <p>Represents the output for <code>ListStreams</code>.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListStreamsOutputBody {
     /// <p>The names of the streams that are associated with the AWS account making the
     /// <code>ListStreams</code> request.</p>
@@ -1327,7 +1327,7 @@ impl std::fmt::Debug for ListStreamsOutputBody {
 
 /// <p>Represents the output for <code>ListTagsForStream</code>.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct ListTagsForStreamOutputBody {
     /// <p>A list of tags associated with <code>StreamName</code>, starting with the first tag
     /// after <code>ExclusiveStartTagKey</code> and up to the specified <code>Limit</code>.
@@ -1352,7 +1352,7 @@ impl std::fmt::Debug for ListTagsForStreamOutputBody {
 
 /// <p>Represents the output for <code>PutRecord</code>.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct PutRecordOutputBody {
     /// <p>The shard ID of the shard where the data record was placed.</p>
     #[serde(rename = "ShardId")]
@@ -1394,7 +1394,7 @@ impl std::fmt::Debug for PutRecordOutputBody {
 /// <p>
 /// <code>PutRecords</code> results.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct PutRecordsOutputBody {
     /// <p>An array of successfully and unsuccessfully processed record results, correlated
     /// with the request by natural ordering. A record that is successfully added to a stream
@@ -1437,7 +1437,7 @@ impl std::fmt::Debug for PutRecordsOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct RegisterStreamConsumerOutputBody {
     /// <p>An object that represents the details of the consumer you registered. When you
     /// register a consumer, it gets an ARN that is generated by Kinesis Data Streams.</p>
@@ -1454,7 +1454,7 @@ impl std::fmt::Debug for RegisterStreamConsumerOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct SubscribeToShardOutputBody {
     /// <p>The event stream that your consumer can use to read records from the shard.</p>
     #[serde(rename = "EventStream")]
@@ -1470,7 +1470,7 @@ impl std::fmt::Debug for SubscribeToShardOutputBody {
 }
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::default::Default, serde::Deserialize, std::clone::Clone, std::cmp::PartialEq)]
 pub struct UpdateShardCountOutputBody {
     /// <p>The name of the stream.</p>
     #[serde(rename = "StreamName")]
