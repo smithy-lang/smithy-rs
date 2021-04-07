@@ -83,7 +83,8 @@ class OperationInputBuilderGenerator(
         ).name
         }"
         rust(
-            """#T::MissingField { field: ${field.dq()}, details: ${detailedMessage.dq()}}""", runtimeConfig.operationBuildError()
+            """#T::MissingField { field: ${field.dq()}, details: ${detailedMessage.dq()}}""",
+            runtimeConfig.operationBuildError()
         )
     }
 
@@ -183,22 +184,32 @@ abstract class BuilderGenerator(
 
         writer.rustBlock("impl $builderName") {
             members.forEach { member ->
-                val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional
                 val memberSymbol = symbolProvider.toSymbol(member)
                 val outerType = memberSymbol.rustType()
                 val coreType = outerType.stripOuter<RustType.Option>()
-                val signature = when (coreType) {
-                    is RustType.String,
-                    is RustType.Box -> "(mut self, inp: impl Into<${coreType.render(true)}>) -> Self"
-                    else -> "(mut self, inp: ${coreType.render(true)}) -> Self"
-                }
-                writer.documentShape(member, model)
-                writer.rustBlock("pub fn $memberName$signature") {
-                    write("self.$memberName = Some(${builderConverter(coreType)});")
-                    write("self")
+                val memberName = symbolProvider.toMemberName(member)
+                // Render a context-aware builder method for certain types, eg. a method for vectors that automatically
+                // appends
+                when (coreType) {
+                    is RustType.Vec -> renderVecHelper(memberName, coreType)
+                    is RustType.HashMap -> renderMapHelper(memberName, coreType)
+                    else -> {
+                        val signature = when (coreType) {
+                            is RustType.String,
+                            is RustType.Box -> "(mut self, inp: impl Into<${coreType.render(true)}>) -> Self"
+                            else -> "(mut self, inp: ${coreType.render(true)}) -> Self"
+                        }
+                        writer.documentShape(member, model)
+                        writer.rustBlock("pub fn $memberName$signature") {
+                            write("self.$memberName = Some(${builderConverter(coreType)});")
+                            write("self")
+                        }
+                    }
                 }
 
+                // Render a `set_foo` method. This is useful as a target for code generation, because the argument type
+                // is exactly the same as the resulting member type.
                 writer.rustBlock("pub fn ${member.setterName()}(mut self, inp: ${outerType.render(true)}) -> Self") {
                     val v = "inp".letIf(outerType !is RustType.Option) {
                         "Some($it)"
@@ -206,8 +217,33 @@ abstract class BuilderGenerator(
                     rust("self.$memberName = $v; self")
                 }
             }
-
             buildFn(this)
+        }
+    }
+
+    private fun RustWriter.renderVecHelper(memberName: String, coreType: RustType.Vec) {
+        rustBlock("pub fn $memberName(mut self, inp: impl Into<${coreType.member.render(true)}>) -> Self") {
+            rust(
+                """
+                let mut v = self.$memberName.unwrap_or_default();
+                v.push(inp.into());
+                self.$memberName = Some(v);
+                self
+            """
+            )
+        }
+    }
+
+    private fun RustWriter.renderMapHelper(memberName: String, coreType: RustType.HashMap) {
+        rustBlock("pub fn $memberName(mut self, k: impl Into<${coreType.key.render(true)}>, v: impl Into<${coreType.member.render(true)}>) -> Self") {
+            rust(
+                """
+                let mut hash_map = self.$memberName.unwrap_or_default();
+                hash_map.insert(k.into(), v.into());
+                self.$memberName = Some(hash_map);
+                self
+            """
+            )
         }
     }
 
@@ -236,7 +272,10 @@ abstract class BuilderGenerator(
                     // Write the modifier
                     when {
                         !memberSymbol.isOptional() && default == Default.RustDefault -> rust(".unwrap_or_default()")
-                        !memberSymbol.isOptional() -> withBlock(".ok_or(", ")?") { missingRequiredField(memberName) }
+                        !memberSymbol.isOptional() -> withBlock(
+                            ".ok_or(",
+                            ")?"
+                        ) { missingRequiredField(memberName) }
                         memberSymbol.isOptional() && default is Default.Custom -> {
                             withBlock(".or_else(||Some(", "))") { default.render(this) }
                         }

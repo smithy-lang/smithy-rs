@@ -101,7 +101,7 @@ sealed class RustType {
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
 }
 
-fun RustType.render(fullyQualified: Boolean): String {
+fun RustType.render(fullyQualified: Boolean = true): String {
     val namespace = if (fullyQualified) {
         this.namespace?.let { "$it::" } ?: ""
     } else ""
