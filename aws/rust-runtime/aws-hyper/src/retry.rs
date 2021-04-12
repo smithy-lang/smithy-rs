@@ -262,10 +262,7 @@ where
             tokio::time::sleep(dur).await;
             next
         }
-        .instrument(
-            tracing::info_span!("retry", kind = &debug(retry))
-                .display("Sleeping during retry to DynamoDB"),
-        );
+        .instrument(tracing::info_span!("retry", kind = &debug(retry)));
         Some(check_send_sync(Box::pin(fut)))
     }
 
