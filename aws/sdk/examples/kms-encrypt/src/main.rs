@@ -3,18 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use clap::{App, Arg};
-
-use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::process;
 
 use aws_hyper::SdkError;
+
 use kms::error::{EncryptError, EncryptErrorKind};
-use kms::Blob;
-use kms::Client;
-use kms::Region;
+use kms::{Blob, Client, Region};
+
+use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
 
@@ -42,79 +40,64 @@ async fn display_error_hint(client: &Client, err: EncryptError) {
     }
 }
 
+#[derive(Debug, StructOpt)]
+struct Opt {
+    /// Specifies the region
+    #[structopt(default_value = "us-west-2", short, long)]
+    region: String,
+
+    /// Specifies the encryption key
+    #[structopt(short, long)]
+    key: String,
+
+    /// Specifies the text to encrypt
+    #[structopt(short, long)]
+    text: String,
+
+    /// Specifies the name of the file to store the encrypted text in
+    #[structopt(short, long)]
+    out: String,
+
+    /// Whether to display additional runtime information
+    #[structopt(short, long)]
+    verbose: bool,
+}
+
 #[tokio::main]
 async fn main() {
-    let matches = App::new("myapp")
-        .arg(
-            Arg::with_name("region")
-                .short("r")
-                .long("region")
-                .value_name("REGION")
-                .help("Specifies the region")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("key")
-                .short("k")
-                .long("key")
-                .value_name("KEY")
-                .help("Specifies the encryption key")
-                .takes_value(true)
-                .required(true),
-        )
-        .arg(
-            Arg::with_name("text")
-                .short("t")
-                .long("text")
-                .value_name("TEXT")
-                .help("Specifies the text to encrypt")
-                .takes_value(true)
-                .required(true),
-        )
-        .arg(
-            Arg::with_name("out")
-                .short("o")
-                .long("out")
-                .value_name("OUT")
-                .help("Specifies the name of the file to store the encrypted text in.")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("verbose")
-                .short("v")
-                .long("verbose")
-                .value_name("VERBOSE")
-                .help("Whether to display additional runtime information.")
-                .takes_value(false),
-        )
-        .get_matches();
+    let opt = Opt::from_args();
 
-    // Get value of AWS_DEFAULT_REGION, if set.
-    let default_region = match env::var("AWS_DEFAULT_REGION") {
-        Ok(val) => val,
-        Err(_e) => "us-west-2".to_string(),
-    };
+    if opt.verbose {
+        println!("KMS client version: {}\n", kms::PKG_VERSION);
+        println!("Region: {}", opt.region);
+        println!("Key:    {}", opt.key);
+        println!("Text:   {}", opt.text);
+        println!("Out:     {}", opt.out);
 
-    let region = matches.value_of("region").unwrap_or(&*default_region);
-    let key = matches.value_of("key").expect("marked required in clap");
-    let text = matches.value_of("text").expect("marked required in clap");
-    let out = matches.value_of("out").unwrap_or("output.txt");
-    let verbose = matches.is_present("verbose");
-
-    if verbose {
         SubscriberBuilder::default()
             .with_env_filter("info")
             .with_span_events(FmtSpan::CLOSE)
             .init();
     }
 
-    let config = kms::Config::builder().region(Region::from(region)).build();
+    let r = &opt.region;
+    let o = &opt.out;
+
+    let config = kms::Config::builder()
+        .region(Region::new(String::from(r)))
+        .build();
 
     let client = kms::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
-    let blob = Blob::new(text.as_bytes());
+    let blob = Blob::new(opt.text.as_bytes());
 
-    let resp = match client.encrypt().key_id(key).plaintext(blob).send().await {
+    let resp = match client
+        .encrypt()
+        .key_id(opt.key)
+        .plaintext(blob)
+        .send()
+        .await
+    {
         Ok(output) => output,
         Err(SdkError::ServiceError { err, .. }) => {
             display_error_hint(&client, err).await;
@@ -132,9 +115,9 @@ async fn main() {
 
     let s = base64::encode(&bytes);
 
-    let mut ofile = File::create(out).expect("unable to create file");
+    let mut ofile = File::create(o).expect("unable to create file");
     ofile.write_all(s.as_bytes()).expect("unable to write");
 
-    println!("Wrote the following to {}", out);
+    println!("Wrote the following to {}", o);
     println!("{}", s);
 }

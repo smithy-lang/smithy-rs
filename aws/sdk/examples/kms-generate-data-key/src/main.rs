@@ -3,18 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use clap::{App, Arg};
-
-use std::env;
 use std::process;
 
 use aws_hyper::SdkError;
 
 use kms::error::{GenerateDataKeyError, GenerateDataKeyErrorKind};
 use kms::model::DataKeySpec;
-use kms::Client;
-use kms::Region;
+use kms::{Client, Region};
 
+use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
 
@@ -42,50 +39,29 @@ async fn display_error_hint(client: &Client, err: GenerateDataKeyError) {
     }
 }
 
+#[derive(Debug, StructOpt)]
+struct Opt {
+    /// Specifies the region
+    #[structopt(default_value = "us-west-2", short, long)]
+    region: String,
+
+    /// Specifies the encryption key
+    #[structopt(short, long)]
+    key: String,
+
+    /// Specifies whether additonal runtime informmation is displayed
+    #[structopt(short, long)]
+    verbose: bool,
+}
+
 #[tokio::main]
 async fn main() {
-    let matches = App::new("myapp")
-        .arg(
-            Arg::with_name("region")
-                .short("r")
-                .long("region")
-                .value_name("REGION")
-                .help("Specifies the region")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("key")
-                .short("k")
-                .long("key")
-                .value_name("KEY")
-                .help("Specifies the encryption key")
-                .takes_value(true)
-                .required(true),
-        )
-        .arg(
-            Arg::with_name("verbose")
-                .short("v")
-                .long("verbose")
-                .value_name("VERBOSE")
-                .help("Whether to display additional runtime information.")
-                .takes_value(false),
-        )
-        .get_matches();
+    let opt = Opt::from_args();
 
-    // Get value of AWS_DEFAULT_REGION, if set.
-    let default_region = match env::var("AWS_DEFAULT_REGION") {
-        Ok(val) => val,
-        Err(_e) => "us-west-2".to_string(),
-    };
-
-    let region = matches.value_of("region").unwrap_or(&*default_region);
-    let key = matches.value_of("key").expect("marked required in clap");
-    let verbose = matches.is_present("verbose");
-
-    if verbose {
-        println!("GenerateDataKey called with options:");
-        println!("  Region:  {}", region);
-        println!("  KMS key: {}", key);
+    if opt.verbose {
+        println!("KMS client version: {}\n", kms::PKG_VERSION);
+        println!("Region: {}", opt.region);
+        println!("Key:    {}", opt.key);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -93,12 +69,14 @@ async fn main() {
             .init();
     }
 
-    let config = kms::Config::builder().region(Region::from(region)).build();
+    let config = kms::Config::builder()
+        .region(Region::new(opt.region))
+        .build();
     let client = kms::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
     let resp = match client
         .generate_data_key()
-        .key_id(key)
+        .key_id(opt.key)
         .key_spec(DataKeySpec::Aes256)
         .send()
         .await

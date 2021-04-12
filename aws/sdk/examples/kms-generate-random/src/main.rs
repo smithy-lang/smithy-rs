@@ -3,82 +3,50 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use clap::{App, Arg};
-
-use std::env;
 use std::process;
 
 use kms::Region;
 
+use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
 
-fn v_print(v: bool, s: &str) {
-    if v {
-        println!("{}", s);
-    }
+#[derive(Debug, StructOpt)]
+struct Opt {
+    /// Specifies the region
+    #[structopt(default_value = "us-west-2", short, long)]
+    region: String,
+
+    /// The # of bytes (64, 128, or 256)
+    #[structopt(short, long)]
+    length: String,
+
+    /// The name of the input file with encrypted text to decrypt
+    #[structopt(short, long)]
+    input: String,
+
+    /// Specifies whether additonal runtime informmation is displayed
+    #[structopt(short, long)]
+    verbose: bool,
 }
 
 #[tokio::main]
 async fn main() {
-    let matches = App::new("myapp")
-        .arg(
-            Arg::with_name("region")
-                .short("r")
-                .long("region")
-                .value_name("REGION")
-                .help("Specifies the region")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("length")
-                .short("l")
-                .long("length")
-                .value_name("LENGTH")
-                .help("The # of bytes (64, 128, or 256).")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("verbose")
-                .short("v")
-                .long("verbose")
-                .value_name("VERBOSE")
-                .help("Whether to display additional runtime information.")
-                .takes_value(false),
-        )
-        .get_matches();
+    let mut opt = Opt::from_args();
 
-    // Get value of AWS_DEFAULT_REGION, if set.
-    let default_region = match env::var("AWS_DEFAULT_REGION") {
-        Ok(val) => val,
-        Err(_e) => "us-west-2".to_string(),
-    };
-
-    let region = matches.value_of("region").unwrap_or(&*default_region);
-    let length = matches.value_of("length").unwrap_or("");
-    let verbose = matches.is_present("verbose");
-
-    let mut l = length.parse::<i32>().unwrap();
-
-    match l {
-        0 => {
-            v_print(verbose, "Length was zero, setting to 256");
-            l = 256;
-        }
-        64 => v_print(verbose, "Length is 64"),
-        128 => v_print(verbose, "Length is 128"),
-        _ => {
-            if verbose {
-                println!("Length was {}, setting it to 256", length);
-                l = 256;
-            }
-        }
+    match &opt.length[..] {
+        "" => opt.length = String::from("256"),
+        "64" => opt.length = String::from("64"),
+        "128" => opt.length = String::from("128"),
+        "256" => opt.length = String::from("256"),
+        _ => opt.length = String::from("256"),
     }
 
-    if verbose {
-        println!("\nGenerateRandom called with options:");
-        println!("  Region:           {}", region);
-        println!("  Length (# bytes): {}\n", length);
+    if opt.verbose {
+        println!("KMS client version: {}\n", kms::PKG_VERSION);
+        println!("Region: {}", opt.region);
+        println!("Length: {}", opt.length);
+        println!("Input:  {}", opt.input);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -86,7 +54,12 @@ async fn main() {
             .init();
     }
 
-    let config = kms::Config::builder().region(Region::from(region)).build();
+    let r = &opt.region;
+    let l = opt.length.parse::<i32>().unwrap();
+
+    let config = kms::Config::builder()
+        .region(Region::new(String::from(r)))
+        .build();
     let client = kms::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
     let resp = match client.generate_random().number_of_bytes(l).send().await {

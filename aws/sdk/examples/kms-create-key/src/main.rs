@@ -3,50 +3,58 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use clap::{App, Arg};
+use std::process;
 
-use kms::operation::CreateKey;
 use kms::Region;
+
+use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
 
+#[derive(Debug, StructOpt)]
+struct Opt {
+    #[structopt(default_value = "us-west-2", short, long)]
+    region: String,
+
+    /// Activate verbose mode    
+    #[structopt(short, long)]
+    verbose: bool,
+}
+
 #[tokio::main]
 async fn main() {
-    let matches = App::new("myapp")
-        .arg(
-            Arg::with_name("region")
-                .short("r")
-                .long("region")
-                .value_name("REGION")
-                .help("Specifies the region")
-                .takes_value(true),
-        )
-        .get_matches();
+   let opt = Opt::from_args();
 
-    let region = matches.value_of("region").unwrap_or("us-west-2");
+    if opt.verbose {
+        println!("KMS client version: {}\n", kms::PKG_VERSION);
+        println!("Region: {}", opt.region);
 
-    println!("Region: {}", region);
-
-    SubscriberBuilder::default()
-        .with_env_filter("info")
-        .with_span_events(FmtSpan::CLOSE)
-        .init();
-    let config = kms::Config::builder().region(Region::from(region)).build();
-
-    let client = aws_hyper::Client::https();
-
-    let data = client
-        .call(CreateKey::builder().build(&config))
-        .await
-        .expect("failed to create key");
-
-    println!("");
-
-    match data.key_metadata {
-        None => println!("No metadata found"),
-        Some(x) => match x.key_id {
-            None => println!("No key id"),
-            Some(k) => println!("{}", k),
-        },
+        SubscriberBuilder::default()
+            .with_env_filter("info")
+            .with_span_events(FmtSpan::CLOSE)
+            .init();
     }
+
+    let r = &opt.region;
+
+    let config = kms::Config::builder()
+        .region(Region::new(String::from(r)))
+        .build();
+
+    let client = kms::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+
+    match client.create_key().send().await {
+        Ok(data) => match data.key_metadata {
+            None => println!("No metadata found"),
+            Some(x) => match x.key_id {
+                None => println!("No key id"),
+                Some(k) => println!("\n\nKey:\n{}", k),
+            },
+        },
+        Err(_) => {
+            println!("");
+            process::exit(1);
+        }
+    };
+    println!("");
 }
