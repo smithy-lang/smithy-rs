@@ -71,7 +71,7 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                       "service": "${it.service}",
                       "module": "aws-sdk-${it.module}",
                       "moduleVersion": "0.0.2",
-                      "moduleAuthors": ["aws-sdk-rust@amazon.com", "rcoh@amazon.com"],
+                      "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
                       "build": {
                         "rootProject": true
                       }
