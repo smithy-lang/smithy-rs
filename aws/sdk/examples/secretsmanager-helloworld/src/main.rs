@@ -26,24 +26,29 @@ async fn main() {
     let conn = Standard::https();
     let client = Client::from_conf_conn(config, conn);
 
-    // attempt to create a secret, 
-    // need to find a better way to handle failure such as ResourceExistsException 
+    // attempt to create a secret,
+    // need to find a better way to handle failure such as ResourceExistsException
     let data = match client
         .create_secret()
         .name(secret_name)
         .secret_string(secret_value)
         .send()
-        .await{
-            Ok(secret) => secret,
-            Err(SdkError::ServiceError { err, .. }) => match err.kind {
-                secretsmanager::error::CreateSecretErrorKind::ResourceExistsError(_) => {
-                    panic!("This secret already exists!")
-                },
-                _ => panic!("Secretsmanager Error: {}", err),
-            },
-            Err(other) => panic!("Failed to create secret: {}", other),
-        };
-    println!("Created secret {:?} with ARN {:?}", secret_name, data.arn.unwrap());
+        .await
+    {
+        Ok(secret) => secret,
+        Err(SdkError::ServiceError { err, .. }) => match err.kind {
+            secretsmanager::error::CreateSecretErrorKind::ResourceExistsError(_) => {
+                panic!("This secret already exists!")
+            }
+            _ => panic!("Secretsmanager Error: {}", err),
+        },
+        Err(other) => panic!("Failed to create secret: {}", other),
+    };
+    println!(
+        "Created secret {:?} with ARN {:?}",
+        secret_name,
+        data.arn.unwrap()
+    );
 
     //  try and retrieve the secret value we just created
     let retrieved_secret = client
@@ -54,5 +59,7 @@ async fn main() {
         .expect("unable to retrieve secret");
 
     assert_eq!(retrieved_secret.secret_string.unwrap(), secret_value);
-    println!("successfully retrieved secret string that matches the original one we created earlier");
+    println!(
+        "successfully retrieved secret string that matches the original one we created earlier"
+    );
 }
