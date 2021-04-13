@@ -164,6 +164,7 @@ fun TestWriterDelegator.compileAndTest() {
             codegenConfig = CodegenConfig(),
             build = BuildSettings.Default(),
             model = stubModel,
+            moduleAuthors = listOf("test@module.com")
         ),
         libRsCustomizations = listOf(),
     )
