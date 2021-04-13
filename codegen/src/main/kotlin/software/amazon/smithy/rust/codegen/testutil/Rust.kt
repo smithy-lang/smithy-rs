@@ -123,6 +123,7 @@ fun generatePluginContext(model: Model): Pair<PluginContext, Path> {
     val settings = Node.objectNodeBuilder()
         .withMember("module", Node.from(moduleName))
         .withMember("moduleVersion", Node.from("1.0.0"))
+        .withMember("moduleAuthors", Node.fromStrings("testgenerator@smithy.com"))
         .withMember(
             "runtimeConfig",
             Node.objectNodeBuilder().withMember("relativePath", Node.from(TestRuntimeConfig.relativePath)).build()

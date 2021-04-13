@@ -64,7 +64,8 @@ abstract class HttpProtocolGenerator(
         val inputShape = operationShape.inputShape(model)
         val inputSymbol = symbolProvider.toSymbol(inputShape)
         val sdkId =
-            protocolConfig.serviceShape.expectTrait(ServiceTrait::class.java).sdkId.toLowerCase().replace(" ", "")
+            protocolConfig.serviceShape.getTrait(ServiceTrait::class.java)
+                .map { it.sdkId.toLowerCase().replace(" ", "") }.orElse(protocolConfig.serviceShape.id.name)
         val builderGenerator = OperationInputBuilderGenerator(
             model,
             symbolProvider,
