@@ -39,6 +39,7 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
                       },
                       "service": "${it.service}",
                       "module": "${it.module}",
+                      "moduleAuthors": ["protocoltest@example.com"],
                       "moduleVersion": "0.0.1",
                       "build": {
                         "rootProject": true
