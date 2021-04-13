@@ -3,18 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use std::env;
-
 use kinesis::{Client, Config, Region};
 
+use aws_types::region::{EnvironmentProvider, ProvideRegion};
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    #[structopt(default_value = "", short, long)]
-    region: String,
+    #[structopt(short, long)]
+    region: Option<String>,
 
     #[structopt(short, long)]
     name: String,
@@ -25,25 +24,20 @@ struct Opt {
 
 #[tokio::main]
 async fn main() {
-    let mut opt = Opt::from_args();
+    let Opt {
+        name,
+        region,
+        verbose,
+    } = Opt::from_args();
+    let region = EnvironmentProvider::new()
+        .region()
+        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+        .unwrap_or_else(|| Region::new("us-east-1"));
 
-    let mut default_region = match env::var("AWS_DEFAULT_REGION") {
-        Ok(val) => val,
-        Err(_e) => String::from(""),
-    };
-
-    if default_region == "" {
-        default_region = String::from("us-west-2");
-    }
-
-    if opt.region == "" {
-        opt.region = default_region;
-    }
-
-    if opt.verbose {
+    if verbose {
         println!("kinesis client version: {}\n", kinesis::PKG_VERSION);
-        println!("Region:      {}", opt.region);
-        println!("Stream name: {}", opt.name);
+        println!("Region:      {:?}", &region);
+        println!("Stream name: {}", &name);
         // print any other opt settings
 
         SubscriberBuilder::default()
@@ -52,20 +46,15 @@ async fn main() {
             .init();
     }
 
-    let r = &opt.region;
-    let n = &opt.name;
-
-    let config = Config::builder()
-        .region(Region::new(String::from(r)))
-        .build();
+    let config = Config::builder().region(&region).build();
 
     let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
-    match client.create_stream().stream_name(n).send().await {
-        Ok(_) => println!("\nCreated stream {} in {} region.\n", opt.name, opt.region),
+    match client.create_stream().stream_name(&name).send().await {
+        Ok(_) => println!("\nCreated stream {} in {:?} region.\n", &name, &region),
         Err(e) => {
-            println!("Got an error creating stream name {}:", opt.name);
-            println!("{:?}", e);
+            println!("Got an error creating stream name {}:", name);
+            println!("{}", e);
         }
     };
 }
