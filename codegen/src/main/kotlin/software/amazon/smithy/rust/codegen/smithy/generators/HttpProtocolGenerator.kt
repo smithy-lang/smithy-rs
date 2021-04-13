@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
+import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -62,12 +63,14 @@ abstract class HttpProtocolGenerator(
         } */
         val inputShape = operationShape.inputShape(model)
         val inputSymbol = symbolProvider.toSymbol(inputShape)
+        val sdkId =
+            protocolConfig.serviceShape.expectTrait(ServiceTrait::class.java).sdkId.toLowerCase().replace(" ", "")
         val builderGenerator = OperationInputBuilderGenerator(
             model,
             symbolProvider,
             operationShape,
-            protocolConfig.moduleName,
-            customizations
+            serviceName = sdkId,
+            features = customizations
         )
         builderGenerator.render(inputWriter)
         // impl OperationInputShape { ... }
@@ -101,7 +104,9 @@ abstract class HttpProtocolGenerator(
             builderGenerator.renderConvenienceMethod(this)
 
             rustBlock(
-                "pub fn build_http_request(&self) -> Result<#T<Vec<u8>>, #T>", RuntimeType.Http("request::Request"), buildErrorT
+                "pub fn build_http_request(&self) -> Result<#T<Vec<u8>>, #T>",
+                RuntimeType.Http("request::Request"),
+                buildErrorT
             ) {
                 write("Ok(#T::assemble(self.input.request_builder_base()?, self.input.build_body()))", inputSymbol)
             }
