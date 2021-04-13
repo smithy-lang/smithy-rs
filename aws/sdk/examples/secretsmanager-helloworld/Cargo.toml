@@ -1,7 +1,7 @@
 [package]
 name = "secretsmanager-helloworld"
 version = "0.1.0"
-authors = ["Nas Taibi <naceredd@amazon.com>"]
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Nas Taibi <naceredd@amazon.com>"]
 edition = "2018"
 description = "Example usage of the SecretManager service"
 
@@ -10,5 +10,4 @@ secretsmanager = { path = "../../build/aws-sdk/secretsmanager" }
 aws-hyper = { path = "../../build/aws-sdk/aws-hyper" }
 tokio = { version = "1", features = ["full"]}
 # optional
-env_logger = "0.8.2"
 tracing-subscriber = { version = "0.2.16", features = ["fmt"] }
