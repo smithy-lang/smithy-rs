@@ -29,7 +29,8 @@ class CargoTomlGenerator(
                 "version" to settings.moduleVersion,
                 "description" to settings.moduleDescription,
                 "authors" to settings.moduleAuthors,
-                "edition" to "2018"
+                "license" to settings.license,
+                "edition" to "2018",
             ),
             "dependencies" to dependencies.filter { it.scope == DependencyScope.Compile }.map { it.name to it.toMap() }
                 .toMap(),
