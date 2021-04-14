@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DocumentationTrait
+import software.amazon.smithy.rust.codegen.util.orNull
 import java.util.Optional
 import java.util.logging.Logger
 import kotlin.streams.toList
@@ -26,6 +27,7 @@ private const val MODULE_AUTHORS = "moduleAuthors"
 private const val BUILD_SETTINGS = "build"
 private const val RUNTIME_CONFIG = "runtimeConfig"
 private const val CODEGEN_SETTINGS = "codegen"
+private const val LICENSE = "license"
 
 data class CodegenConfig(val renameExceptions: Boolean = true) {
     companion object {
@@ -52,6 +54,7 @@ class RustSettings(
     val runtimeConfig: RuntimeConfig,
     val codegenConfig: CodegenConfig,
     val build: BuildSettings,
+    val license: String?,
     private val model: Model
 ) {
 
@@ -108,15 +111,17 @@ class RustSettings(
             val runtimeConfig = config.getObjectMember(RUNTIME_CONFIG)
             val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
             val moduleAuthors = config.expectArrayMember(MODULE_AUTHORS).map { it.expectStringNode().value }
+            val license = config.getStringMember(LICENSE).orNull()?.value
             return RustSettings(
-                service,
-                moduleName,
-                version,
+                service = service,
+                moduleName = moduleName,
+                moduleVersion = version,
                 moduleAuthors = moduleAuthors,
                 runtimeConfig = RuntimeConfig.fromNode(runtimeConfig),
                 codegenConfig = CodegenConfig.fromNode(codegenSettings),
                 build = BuildSettings.fromNode(build),
-                model = model
+                model = model,
+                license = license
             )
         }
 
