@@ -14,7 +14,7 @@ fn generate_build_vars(output_path: &Path) {
     let mut f = File::create(&output_path.join("build_env.rs"))
         .expect("Could not create build environment");
     f.write_all(format!("static RUST_VERSION: &str = \"{}\";", rust_version).as_bytes())
-        .expect("Unable to write user agent");
+        .expect("Unable to write rust version");
 }
 
 fn main() {
