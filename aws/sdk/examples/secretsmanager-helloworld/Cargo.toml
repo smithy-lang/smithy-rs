@@ -6,7 +6,7 @@ edition = "2018"
 description = "Example usage of the SecretManager service"
 
 [dependencies]
-secretsmanager = { path = "../../build/aws-sdk/secretsmanager" }
+secretsmanager = { package = "aws-sdk-secretsmanager", path = "../../build/aws-sdk/secretsmanager" }
 aws-hyper = { path = "../../build/aws-sdk/aws-hyper" }
 tokio = { version = "1", features = ["full"]}
 # optional
