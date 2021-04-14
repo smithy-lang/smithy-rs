@@ -7,6 +7,7 @@ use aws_auth::Credentials;
 use aws_http::user_agent::AwsUserAgent;
 use aws_hyper::test_connection::TestConnection;
 use aws_hyper::{Client, SdkError};
+use aws_sdk_kms as kms;
 use http::Uri;
 use kms::error::GenerateRandomErrorKind;
 use kms::operation::GenerateRandom;
@@ -47,7 +48,10 @@ async fn generate_random() {
         .region(Region::new("us-east-1"))
         .credentials_provider(creds)
         .build();
-    let mut op = GenerateRandom::builder().number_of_bytes(64).build(&conf).expect("valid operation");
+    let mut op = GenerateRandom::builder()
+        .number_of_bytes(64)
+        .build(&conf)
+        .expect("valid operation");
     op.config_mut()
         .insert(UNIX_EPOCH + Duration::from_secs(1614952162));
     op.config_mut().insert(AwsUserAgent::for_tests());
@@ -87,7 +91,10 @@ async fn generate_random_malformed_response() {
         .region(Region::new("us-east-1"))
         .credentials_provider(creds)
         .build();
-    let op = GenerateRandom::builder().number_of_bytes(64).build(&conf).expect("valid operation");
+    let op = GenerateRandom::builder()
+        .number_of_bytes(64)
+        .build(&conf)
+        .expect("valid operation");
     client.call(op).await.expect_err("response was malformed");
 }
 
@@ -130,7 +137,8 @@ async fn generate_random_keystore_not_found() {
     let mut op = GenerateRandom::builder()
         .number_of_bytes(64)
         .custom_key_store_id("does not exist")
-        .build(&conf).expect("valid operation");
+        .build(&conf)
+        .expect("valid operation");
 
     op.config_mut()
         .insert(UNIX_EPOCH + Duration::from_secs(1614955644));

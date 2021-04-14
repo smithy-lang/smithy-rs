@@ -69,8 +69,9 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                         "relativePath": "../"
                       },
                       "service": "${it.service}",
-                      "module": "${it.module}",
+                      "module": "aws-sdk-${it.module}",
                       "moduleVersion": "0.0.2",
+                      "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
                       "license": "Apache-2.0",
                       "build": {
                         "rootProject": true

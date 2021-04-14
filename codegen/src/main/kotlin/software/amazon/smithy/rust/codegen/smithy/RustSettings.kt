@@ -23,6 +23,7 @@ private const val SERVICE = "service"
 private const val MODULE_NAME = "module"
 private const val MODULE_DESCRIPTION = "moduleDescription"
 private const val MODULE_VERSION = "moduleVersion"
+private const val MODULE_AUTHORS = "moduleAuthors"
 private const val BUILD_SETTINGS = "build"
 private const val RUNTIME_CONFIG = "runtimeConfig"
 private const val CODEGEN_SETTINGS = "codegen"
@@ -49,7 +50,7 @@ class RustSettings(
     val service: ShapeId,
     val moduleName: String,
     val moduleVersion: String,
-    val moduleAuthors: List<String> = listOf("TODO@todo.com"),
+    val moduleAuthors: List<String>,
     val runtimeConfig: RuntimeConfig,
     val codegenConfig: CodegenConfig,
     val build: BuildSettings,
@@ -93,6 +94,7 @@ class RustSettings(
                     SERVICE,
                     MODULE_NAME,
                     MODULE_DESCRIPTION,
+                    MODULE_AUTHORS,
                     MODULE_VERSION,
                     BUILD_SETTINGS,
                     RUNTIME_CONFIG
@@ -108,11 +110,13 @@ class RustSettings(
             val build = config.getObjectMember(BUILD_SETTINGS)
             val runtimeConfig = config.getObjectMember(RUNTIME_CONFIG)
             val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
+            val moduleAuthors = config.expectArrayMember(MODULE_AUTHORS).map { it.expectStringNode().value }
             val license = config.getStringMember(LICENSE).orNull()?.value
             return RustSettings(
                 service = service,
                 moduleName = moduleName,
                 moduleVersion = version,
+                moduleAuthors = moduleAuthors,
                 runtimeConfig = RuntimeConfig.fromNode(runtimeConfig),
                 codegenConfig = CodegenConfig.fromNode(codegenSettings),
                 build = BuildSettings.fromNode(build),
