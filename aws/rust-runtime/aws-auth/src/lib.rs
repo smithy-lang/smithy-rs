@@ -6,7 +6,7 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
 use std::time::SystemTime;
-use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
 /// AWS SDK Credentials
 ///
@@ -19,9 +19,9 @@ use zeroize::Zeroize;
 pub struct Credentials(Arc<Inner>);
 
 struct Inner {
-    access_key_id: String,
-    secret_access_key: String,
-    session_token: Option<String>,
+    access_key_id: Zeroizing<String>,
+    secret_access_key: Zeroizing<String>,
+    session_token: Zeroizing<Option<String>>,
 
     /// Credential Expiry
     ///
@@ -33,16 +33,6 @@ struct Inner {
     expires_after: Option<SystemTime>,
 
     provider_name: &'static str,
-}
-
-impl Drop for Inner {
-    fn drop(&mut self) {
-        self.access_key_id.zeroize();
-        self.secret_access_key.zeroize();
-        if let Some(tok) = &mut self.session_token {
-            tok.zeroize();
-        }
-    }
 }
 
 impl Debug for Credentials {
@@ -63,9 +53,9 @@ impl Credentials {
         provider_name: &'static str,
     ) -> Self {
         Credentials(Arc::new(Inner {
-            access_key_id: access_key_id.into(),
-            secret_access_key: secret_access_key.into(),
-            session_token,
+            access_key_id: Zeroizing::new(access_key_id.into()),
+            secret_access_key: Zeroizing::new(secret_access_key.into()),
+            session_token: Zeroizing::new(session_token),
             expires_after,
             provider_name,
         }))
