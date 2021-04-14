@@ -4,9 +4,11 @@ namespace crate
 use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
 use aws.protocols#awsJson1_1
+use aws.api#service
 
 /// Confounds model generation machinery with lots of problematic names
 @awsJson1_1
+@service(sdkId: "Config")
 service Config {
     version: "2006-03-01",
     operations: [
