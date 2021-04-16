@@ -54,6 +54,7 @@ class ApiVersion(private val runtimeConfig: RuntimeConfig, serviceTrait: Service
     override fun section(section: LibRsSection): Writable = when (section) {
         // PKG_VERSION comes from CrateVersionGenerator
         is LibRsSection.Body -> writable { rust("static API_METADATA: #1T::ApiMetadata = #1T::ApiMetadata::new(${serviceId.dq()}, PKG_VERSION);", runtimeConfig.userAgentModule()) }
+        else -> emptySection
     }
 }
 

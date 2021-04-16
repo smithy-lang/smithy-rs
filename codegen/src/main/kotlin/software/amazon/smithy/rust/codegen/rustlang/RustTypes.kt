@@ -222,9 +222,11 @@ sealed class Attribute {
         }
     }
 
-    data class Custom(val annotation: String, val symbols: List<RuntimeType> = listOf()) : Attribute() {
+    data class Custom(val annotation: String, val symbols: List<RuntimeType> = listOf(), val container: Boolean = false) : Attribute() {
         override fun render(writer: RustWriter) {
-            writer.raw("#[$annotation]")
+
+            val bang = if (container) "!" else ""
+            writer.raw("#$bang[$annotation]")
             symbols.forEach {
                 writer.addDependency(it.dependency)
             }
