@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.generators
+package software.amazon.smithy.rust.codegen.smithy.generators.error
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
@@ -80,7 +80,7 @@ class CombinedErrorGenerator(
             rust(
                 """
                 /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
-                Unhandled(Box<dyn #T>),
+                Unhandled(Box<dyn #T + Send + Sync + 'static>),
             """,
                 RuntimeType.StdError
             )
@@ -125,7 +125,7 @@ class CombinedErrorGenerator(
                     Self { kind, meta }
                 }
 
-                pub fn unhandled(err: impl Into<Box<dyn #{std_error}>>) -> Self {
+                pub fn unhandled(err: impl Into<Box<dyn #{std_error} + Send + Sync + 'static>>) -> Self {
                     Self {
                         kind: ${symbol.name}Kind::Unhandled(err.into()),
                         meta: Default::default()

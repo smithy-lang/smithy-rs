@@ -242,7 +242,7 @@ where
     Handler: Clone,
     R: ClassifyResponse<SdkSuccess<T>, SdkError<E>>,
 {
-    type Future = Pin<Box<dyn Future<Output = Self>>>;
+    type Future = Pin<Box<dyn Future<Output = Self> + Send>>;
 
     fn retry(
         &self,
@@ -263,7 +263,7 @@ where
             next
         }
         .instrument(tracing::info_span!("retry", kind = &debug(retry)));
-        Some(Box::pin(fut))
+        Some(check_send_sync(Box::pin(fut)))
     }
 
     fn clone_request(&self, req: &Operation<Handler, R>) -> Option<Operation<Handler, R>> {
@@ -271,14 +271,25 @@ where
     }
 }
 
+fn check_send_sync<T: Send>(t: T) -> T {
+    t
+}
+
 #[cfg(test)]
 mod test {
-    use crate::retry::{RetryConfig, RetryHandlerFactory};
+    use crate::retry::{RetryConfig, RetryHandler, RetryHandlerFactory};
     use smithy_types::retry::ErrorKind;
     use std::time::Duration;
 
+    fn assert_send_sync<T: Send + Sync>() {}
+
     fn test_config() -> RetryConfig {
         RetryConfig::default().with_base(|| 1_f64)
+    }
+
+    #[test]
+    fn retry_handler_send_sync() {
+        assert_send_sync::<RetryHandler>()
     }
 
     #[test]

@@ -17,7 +17,8 @@ val DECORATORS = listOf(
     RetryPolicyDecorator(),
     IntegrationTestDecorator(),
     FluentClientDecorator(),
-    ApiGatewayCustomizationDecorator()
+    ApiGatewayCustomizationDecorator(),
+    CrateLicenseDecorator()
 )
 
 class AwsCodegenDecorator : CombinedCodegenDecorator(DECORATORS) {

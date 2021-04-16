@@ -12,6 +12,8 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfigGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.error.CombinedErrorGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.error.TopLevelErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
@@ -43,6 +45,8 @@ class ServiceGenerator(
                 CombinedErrorGenerator(config.model, config.symbolProvider, operation).render(writer)
             }
         }
+
+        TopLevelErrorGenerator(config, operations).render(rustCrate)
         renderBodies(operations)
 
         rustCrate.withModule(RustModule.Config) { writer ->
