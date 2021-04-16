@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 fun pubUseTypes(runtimeConfig: RuntimeConfig) = listOf(
     RuntimeType.Blob(runtimeConfig),
     CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::SdkError"),
-    RuntimeType("Config", namespace = "config", dependency = null)
 )
 
 class SmithyTypesPubUseGenerator(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {

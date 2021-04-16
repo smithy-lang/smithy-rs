@@ -9,7 +9,6 @@ import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecor
 import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayCustomizationDecorator
 
 val DECORATORS = listOf(
-    AllowClippyLintsDecorator(),
     CredentialsProviderDecorator(),
     RegionDecorator(),
     AwsEndpointDecorator(),

@@ -222,6 +222,15 @@ sealed class Attribute {
         }
     }
 
+    /**
+     * A custom Attribute
+     *
+     * [annotation] represents the body of the attribute, eg. `cfg(foo)` in `#[cfg(foo)]`
+     * If [container] is set, this attribute refers to its container rather than its successor. This generates `#![cfg(foo)]`
+     *
+     * Finally, any symbols listed will be imported when this attribute is rendered. This enables using attributes like
+     * `#[serde(Serialize)]` where `Serialize` is actually a symbol that must be imported.
+     */
     data class Custom(val annotation: String, val symbols: List<RuntimeType> = listOf(), val container: Boolean = false) : Attribute() {
         override fun render(writer: RustWriter) {
 
