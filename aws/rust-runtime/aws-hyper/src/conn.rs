@@ -18,22 +18,36 @@ pub struct Standard(Connector);
 
 impl Standard {
     /// An https connection
+    ///
+    /// If the `rustls` feature is enabled, this will use `rustls`.
+    /// If the ONLY the `native-tls` feature is enabled, this will use `rustls`.
+    /// If both features are enabled, this will use `rustls`
     #[cfg(any(feature = "native-tls", feature = "rustls"))]
     pub fn https() -> Self {
         #[cfg(feature = "rustls")]
         {
-            let https = hyper_rustls::HttpsConnector::with_native_roots();
-            let client = hyper::Client::builder().build::<_, SdkBody>(https);
-            Self(Connector::RustlsHttps(client))
+            Self::rustls()
         }
 
-        // If we are compiling this function & rustls is not enabled, then we must be nativetls
+        // If we are compiling this function & rustls is not enabled, then native-tls MUST be enabled
         #[cfg(not(feature = "rustls"))]
         {
-            let https = hyper_tls::HttpsConnector::new();
-            let client = hyper::Client::builder().build::<_, SdkBody>(https);
-            Self(Connector::NativeHttps(client))
+            Self::native_tls()
         }
+    }
+
+    #[cfg(feature = "rustls")]
+    pub fn rustls() -> Self {
+        let https = hyper_rustls::HttpsConnector::with_native_roots();
+        let client = hyper::Client::builder().build::<_, SdkBody>(https);
+        Self(Connector::RustlsHttps(client))
+    }
+
+    #[cfg(feature = "native-tls")]
+    pub fn native_tls() -> Self {
+        let https = hyper_tls::HttpsConnector::new();
+        let client = hyper::Client::builder().build::<_, SdkBody>(https);
+        Self(Connector::NativeHttps(client))
     }
 
     /// A connection based on the provided `impl HttpService`
@@ -62,6 +76,9 @@ enum Connector {
     #[cfg(feature = "native-tls")]
     NativeHttps(hyper::Client<hyper_tls::HttpsConnector<hyper::client::HttpConnector>, SdkBody>),
 
+    /// An Https Connection
+    ///
+    /// This is the correct connection for use cases talking to real AWS services.
     #[cfg(feature = "rustls")]
     RustlsHttps(hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, SdkBody>),
 
