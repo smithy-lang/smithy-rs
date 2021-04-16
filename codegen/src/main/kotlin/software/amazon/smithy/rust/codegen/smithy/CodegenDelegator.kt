@@ -27,6 +27,7 @@ open class RustCrate(
     private val inner = CodegenWriterDelegator(fileManifest, symbolProvider, RustWriter.Factory)
     private val modules: MutableMap<String, RustModule> = baseModules.toMutableMap()
     private val features: MutableSet<Feature> = mutableSetOf()
+    private val defaultFeatures: MutableSet<String> = mutableSetOf()
     fun useShapeWriter(shape: Shape, f: (RustWriter) -> Unit) {
         inner.useShapeWriter(shape, f)
     }
@@ -36,6 +37,7 @@ open class RustCrate(
     }
 
     fun addFeature(feature: Feature) = this.features.add(feature)
+    fun addDefaultFeature(feature: String) = this.defaultFeatures.add(feature)
 
     fun finalize(settings: RustSettings, libRsCustomizations: List<LibRsCustomization>) {
         injectInlineDependencies()

@@ -5,9 +5,8 @@
 
 use crate::BoxError;
 use http::Request;
-use hyper::client::{HttpConnector, ResponseFuture};
+use hyper::client::ResponseFuture;
 use hyper::Response;
-use hyper_tls::HttpsConnector;
 use smithy_http::body::SdkBody;
 use std::future::{Future, Ready};
 use std::pin::Pin;
@@ -19,11 +18,22 @@ pub struct Standard(Connector);
 
 impl Standard {
     /// An https connection
+    #[cfg(any(feature = "native-tls", feature = "rustls"))]
     pub fn https() -> Self {
-        let https = HttpsConnector::new();
-        Self(Connector::Https(
-            hyper::Client::builder().build::<_, SdkBody>(https),
-        ))
+        #[cfg(feature = "rustls")]
+        {
+            let https = hyper_rustls::HttpsConnector::with_native_roots();
+            let client = hyper::Client::builder().build::<_, SdkBody>(https);
+            Self(Connector::RustlsHttps(client))
+        }
+
+        // If we are compiling this function & rustls is not enabled, then we must be nativetls
+        #[cfg(not(feature = "rustls"))]
+        {
+            let https = hyper_tls::HttpsConnector::new();
+            let client = hyper::Client::builder().build::<_, SdkBody>(https);
+            Self(Connector::NativeHttps(client))
+        }
     }
 
     /// A connection based on the provided `impl HttpService`
@@ -49,7 +59,11 @@ enum Connector {
     /// An Https Connection
     ///
     /// This is the correct connection for use cases talking to real AWS services.
-    Https(hyper::Client<HttpsConnector<HttpConnector>, SdkBody>),
+    #[cfg(feature = "native-tls")]
+    NativeHttps(hyper::Client<hyper_tls::HttpsConnector<hyper::client::HttpConnector>, SdkBody>),
+
+    #[cfg(feature = "rustls")]
+    RustlsHttps(hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, SdkBody>),
 
     /// A generic escape hatch
     ///
@@ -123,14 +137,24 @@ impl tower::Service<http::Request<SdkBody>> for Standard {
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         match &mut self.0 {
-            Connector::Https(https) => Service::poll_ready(https, cx).map_err(|err| err.into()),
+            #[cfg(feature = "native-tls")]
+            Connector::NativeHttps(https) => {
+                Service::poll_ready(https, cx).map_err(|err| err.into())
+            }
+            #[cfg(feature = "rustls")]
+            Connector::RustlsHttps(https) => {
+                Service::poll_ready(https, cx).map_err(|err| err.into())
+            }
             Connector::Dyn(conn) => conn.poll_ready(cx),
         }
     }
 
     fn call(&mut self, req: http::Request<SdkBody>) -> Self::Future {
         match &mut self.0 {
-            Connector::Https(https) => StandardFuture::Https(Service::call(https, req)),
+            #[cfg(feature = "native-tls")]
+            Connector::NativeHttps(https) => StandardFuture::Https(Service::call(https, req)),
+            #[cfg(feature = "rustls")]
+            Connector::RustlsHttps(https) => StandardFuture::Https(Service::call(https, req)),
             Connector::Dyn(conn) => StandardFuture::Dyn(conn.call(req)),
         }
     }
