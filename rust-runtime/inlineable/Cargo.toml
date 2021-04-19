@@ -17,4 +17,4 @@ are to allow this crate to be compilable and testable in isolation, no client co
 "fastrand" = "1"
 
 [dev-dependencies]
-proptest = "0.10.1"
+proptest = "1"
