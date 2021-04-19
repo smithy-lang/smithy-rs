@@ -6,7 +6,7 @@ edition = "2018"
 description = "Example usage of the KMS service"
 
 [dependencies]
-kms = { path = "../../build/aws-sdk/kms" }
+kms = { package = "aws-sdk-kms", path = "../../build/aws-sdk/kms" }
 aws-hyper = { path = "../../build/aws-sdk/aws-hyper" }
 tokio = { version = "1", features = ["full"]}
 # optional
