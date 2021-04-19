@@ -45,7 +45,7 @@ The Fluent API is implemented as a thin wrapper around the core API to improve e
 ## Internals
 Internally, the Rust SDK is built on Tower Middleware, Tokio & Hyper. We're continuing to iterate on the internals to enable running the AWS SDK in other environments. As an example, you can see a demo of adding `reqwest` as a custom HTTP stack to gain access to its HTTP Proxy support!
 
-For more details about the SDK internals see [Operation Design](./operation.md)
+For more details about the SDK internals see [Operation Design](transport/operation.md)
 
 ## Code Generation
 The Rust SDK is code generated from Smithy models, using Smithy codegeneration utilities. The Code generation is written in Kotlin. More details can be found in the [Smithy](./smithy/overview.md) section.
