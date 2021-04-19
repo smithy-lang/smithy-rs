@@ -20,7 +20,7 @@ impl Standard {
     /// An https connection
     ///
     /// If the `rustls` feature is enabled, this will use `rustls`.
-    /// If the ONLY the `native-tls` feature is enabled, this will use `rustls`.
+    /// If the ONLY the `native-tls` feature is enabled, this will use `native-tls`.
     /// If both features are enabled, this will use `rustls`
     #[cfg(any(feature = "native-tls", feature = "rustls"))]
     pub fn https() -> Self {
