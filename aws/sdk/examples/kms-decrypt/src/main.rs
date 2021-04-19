@@ -38,25 +38,12 @@ struct Opt {
 
 async fn display_error_hint(client: &Client, err: DecryptError) {
     eprintln!("Error while decrypting: {}", err);
-    match err.kind {
-        DecryptErrorKind::NotFoundError(_) => {
-            let existing_keys = client
-                .list_keys()
-                .send()
-                .await
-                .expect("failure to list keys");
-            let existing_keys = existing_keys
-                .keys
-                .unwrap_or_default()
-                .into_iter()
-                .map(|key| key.key_id.expect("keys must have ids"))
-                .collect::<Vec<_>>();
-            eprintln!(
-                "  hint: Did you create the key first?\n  Existing keys in this region: {:?}",
-                existing_keys
-            )
-        }
-        _ => (),
+    if let DecryptErrorKind::NotFoundError(_) = err.kind {
+         client
+             .list_keys()
+             .send()
+             .await
+             .expect("failure to list keys");
     }
 }
 
@@ -123,7 +110,7 @@ async fn main() {
         Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
     };
 
-    println!("");
+    println!();
     println!("Decoded string:");
     println!("{}", s);
 }

@@ -58,9 +58,9 @@ async fn main() {
             },
         },
         Err(_) => {
-            println!("");
+            println!();
             process::exit(1);
         }
     };
-    println!("");
+    println!();
 }

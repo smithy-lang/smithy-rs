@@ -21,25 +21,12 @@ use tracing_subscriber::fmt::SubscriberBuilder;
 
 async fn display_error_hint(client: &Client, err: ReEncryptError) {
     eprintln!("Error while decrypting: {}", err);
-    match err.kind {
-        ReEncryptErrorKind::NotFoundError(_) => {
-            let existing_keys = client
-                .list_keys()
-                .send()
-                .await
-                .expect("failure to list keys");
-            let existing_keys = existing_keys
-                .keys
-                .unwrap_or_default()
-                .into_iter()
-                .map(|key| key.key_id.expect("keys must have ids"))
-                .collect::<Vec<_>>();
-            eprintln!(
-                "  hint: Did you create the key first?\n  Existing keys in this region: {:?}",
-                existing_keys
-            )
-        }
-        _ => (),
+        if let ReEncryptErrorKind::NotFoundError(_) = err.kind {
+        client
+            .list_keys()
+            .send()
+            .await
+            .expect("failure to list keys");
     }
 }
 
