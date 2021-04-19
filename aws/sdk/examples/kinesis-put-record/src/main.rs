@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use std::env;
+use std::process;
 
 use kinesis::{Client, Config, Region};
+
+use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -13,8 +15,9 @@ use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    #[structopt(default_value = "", short, long)]
-    region: String,
+    /// The region
+    #[structopt(short, long)]
+    region: Option<String>,
 
     #[structopt(short, long)]
     data: String,
@@ -31,28 +34,26 @@ struct Opt {
 
 #[tokio::main]
 async fn main() {
-    let mut opt = Opt::from_args();
+    let Opt {
+        data,
+        key,
+        name,
+        region,
+        verbose,
+    } = Opt::from_args();
 
-    let mut default_region = match env::var("AWS_DEFAULT_REGION") {
-        Ok(val) => val,
-        Err(_e) => String::from(""),
-    };
+    let region = EnvironmentProvider::new()
+        .region()
+        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+        .unwrap_or_else(|| Region::new("us-west-2"));
 
-    if default_region == "" {
-        default_region = String::from("us-west-2");
-    }
-
-    if opt.region == "" {
-        opt.region = default_region;
-    }
-
-    if opt.verbose {
-        println!("kinesis client version: {}\n", kinesis::PKG_VERSION);
-        println!("Region:        {}", opt.region);
+    if verbose {
+        println!("Kinesis client version: {}\n", kinesis::PKG_VERSION);
+        println!("Region:      {:?}", &region);
         println!("Data:");
-        println!("\n{}\n", opt.data);
-        println!("Partition key: {}", opt.key);
-        println!("Stream name:   {}", opt.name);
+        println!("\n{}\n", data);
+        println!("Partition key: {}", key);
+        println!("Stream name:   {}", name);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -60,35 +61,27 @@ async fn main() {
             .init();
     }
 
-    let r = &opt.region;
-    let d = &opt.data;
-    let n = &opt.name;
-
-    let config = Config::builder()
-        .region(Region::new(String::from(r)))
-        .build();
+    let config = Config::builder().region(region).build();
 
     let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
     // data is a Base64-encoded binary data object
-    let data = base64::encode(d);
+    let data = base64::encode(data);
     let blob = kinesis::Blob::new(data);
 
     match client
         .put_record()
         .data(blob)
-        .partition_key(opt.key)
-        .stream_name(n)
+        .partition_key(key)
+        .stream_name(name)
         .send()
         .await
     {
-        Ok(_) => println!(
-            "\nPut data '{}' into stream {} in {} region.\n",
-            opt.data, opt.name, opt.region
-        ),
+        Ok(_) => println!("Put data into stream."),
         Err(e) => {
             println!("Got an error putting record:");
             println!("{:?}", e);
+            process::exit(1);
         }
     };
 }
