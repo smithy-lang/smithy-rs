@@ -8,7 +8,9 @@ use std::process;
 use dynamodb::model::{
     AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType,
 };
-use dynamodb::Region;
+use dynamodb::{Client, Config, Region};
+
+use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -16,8 +18,9 @@ use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    #[structopt(default_value = "us-west-2", short, long)]
-    region: String,
+    /// The region
+    #[structopt(short, long)]
+    region: Option<String>,
 
     /// The table name
     #[structopt(short, long)]
@@ -34,19 +37,23 @@ struct Opt {
 
 #[tokio::main]
 async fn main() {
-    let opt = Opt::from_args();
+    let Opt {
+        table,
+        key,
+        region,
+        verbose,
+    } = Opt::from_args();
 
-    if opt.table == "" || opt.key == "" {
-        println!("\nYou must supply a table name and key");
-        println!("-t TABLE -k KEY)\n");
-        process::exit(1);
-    }
+    let region = EnvironmentProvider::new()
+        .region()
+        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+        .unwrap_or_else(|| Region::new("us-west-2"));
 
-    if opt.verbose {
+    if verbose {
         println!("DynamoDB client version: {}\n", dynamodb::PKG_VERSION);
-        println!("Region: {}", opt.region);
-        println!("Table:  {}", opt.table);
-        println!("Key:   {}\n", opt.key);
+        println!("Region: {:?}", &region);
+        println!("Table:  {}", table);
+        println!("Key:    {}\n", key);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -54,15 +61,11 @@ async fn main() {
             .init();
     }
 
-    let t = &opt.table;
-    let k = &opt.key;
-    let r = &opt.region;
+    let t = &table;
+    let k = &key;
 
-    let config = dynamodb::Config::builder()
-        .region(Region::new(String::from(r)))
-        .build();
-
-    let client = dynamodb::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let config = Config::builder().region(region).build();
+    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
     let ad = AttributeDefinition::builder()
         .attribute_name(String::from(k))
@@ -88,10 +91,7 @@ async fn main() {
         .send()
         .await
     {
-        Ok(_) => println!(
-            "Added table {} with key {} in region {}",
-            opt.table, opt.key, opt.region
-        ),
+        Ok(_) => println!("Added table {} with key {}", table, key),
         Err(e) => {
             println!("Got an error creating table:");
             println!("{:?}", e);
