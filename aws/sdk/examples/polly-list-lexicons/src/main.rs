@@ -19,17 +19,14 @@ struct Opt {
     #[structopt(short, long)]
     region: Option<String>,
 
-    /// Activate verbose mode    
+    /// Activate verbose mode
     #[structopt(short, long)]
     verbose: bool,
 }
 
 #[tokio::main]
 async fn main() {
-    let Opt {
-        region,
-        verbose,
-    } = Opt::from_args();
+    let Opt { region, verbose } = Opt::from_args();
 
     let region = EnvironmentProvider::new()
         .region()
@@ -46,36 +43,37 @@ async fn main() {
             .init();
     }
 
-//    let r = &opt.region;
-
     let config = Config::builder().region(region).build();
 
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
     match client.list_lexicons().send().await {
         Ok(resp) => {
             println!("Lexicons:");
-            let mut l = 0;
+            let lexicons = resp.lexicons.unwrap_or_default();
 
-            for lexicon in resp.lexicons.iter() {
-                for lex in lexicon.iter() {
-                    l += 1;
-                    match &lex.name {
-                        None => {}
-                        Some(x) => println!("  Name:     {}", x),
-                    }
-                    match &lex.attributes {
-                        None => {}
-                        Some(x) => println!("  Language: {:?}\n", x.language_code),
-                    }
-                }
+            for lexicon in &lexicons {
+                println!(
+                    "  Name:     {}",
+                    lexicon.name.as_deref().unwrap_or_default()
+                );
+                println!(
+                    "  Language: {:?}\n",
+                    lexicon
+                        .attributes
+                        .as_ref()
+                        .map(|attrib| attrib
+                            .language_code
+                            .as_ref()
+                            .expect("languages must have language codes"))
+                        .expect("languages must have attributes")
+                );
             }
-
-            println!("\nFound {} lexicons.\n", l);
+            println!("\nFound {} lexicons.\n", lexicons.len());
         }
         Err(e) => {
             println!("Got an error listing lexicons:");
-            println!("{:?}", e);
+            println!("{}", e);
             process::exit(1);
         }
     };

@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 use std::fs;
-use std::fs::File;
-use std::io::Write;
 use std::process;
 
 use polly::model::{OutputFormat, VoiceId};
@@ -55,14 +53,11 @@ async fn main() {
             .init();
     }
 
-    //    let r = &opt.region;
-    let f = &filename;
-
     let config = Config::builder().region(region).build();
 
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
-    let content = fs::read_to_string(f);
+    let content = fs::read_to_string(&filename);
 
     let resp = match client
         .synthesize_speech()
@@ -75,23 +70,18 @@ async fn main() {
         Ok(output) => output,
         Err(e) => {
             println!("Got an error synthesizing speech:");
-            println!("{:?}", e);
+            println!("{}", e);
             process::exit(1);
         }
     };
 
-    // Get MP3 code from response and save it
+    // Get MP3 data from response and save it
     let blob = resp.audio_stream.expect("Could not get synthesized text");
     let bytes = blob.as_ref();
 
     // Create output filename from input filename
-
     let parts: Vec<&str> = filename.split('.').collect();
     let out_file = format!("{}{}", String::from(parts[0]), ".mp3");
 
-    let mut ofile = File::create(out_file).expect("unable to create file");
-
-    ofile
-        .write_all(bytes)
-        .expect("Could not write to output file");
+    fs::write(out_file, bytes).expect("Could not write to file");
 }

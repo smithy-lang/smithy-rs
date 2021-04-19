@@ -26,10 +26,7 @@ struct Opt {
 
 #[tokio::main]
 async fn main() {
-    let Opt {
-        region,
-        verbose,
-    } = Opt::from_args();
+    let Opt { region, verbose } = Opt::from_args();
 
     let region = EnvironmentProvider::new()
         .region()
@@ -46,32 +43,28 @@ async fn main() {
             .init();
     }
 
-//    let r = &region;
-
     let config = Config::builder().region(region).build();
-
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
     match client.describe_voices().send().await {
         Ok(resp) => {
             println!("Voices:");
-            let mut l = 0;
-
-            for voice in resp.voices.iter() {
-                for v in voice.iter() {
-                    l += 1;
-                    match &v.name {
-                        None => {}
-                        Some(x) => println!("  Name:     {}", x),
-                    }
-                    match &v.language_name {
-                        None => {}
-                        Some(x) => println!("  Language: {}\n", x),
-                    }
-                }
+            let voices = resp.voices.unwrap_or_default();
+            for voice in &voices {
+                println!(
+                    "  Name:     {}",
+                    voice.name.as_deref().unwrap_or_else(|| "No name!")
+                );
+                println!(
+                    "  Language:     {}",
+                    voice
+                        .language_name
+                        .as_deref()
+                        .unwrap_or_else(|| "No language!")
+                );
             }
 
-            println!("\nFound {} voices\n", l);
+            println!("\nFound {} voices\n", voices.len());
         }
         Err(e) => {
             println!("Got an error describing voices:");
