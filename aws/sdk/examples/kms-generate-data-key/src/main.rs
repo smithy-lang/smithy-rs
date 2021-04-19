@@ -2,14 +2,15 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-
 use std::process;
 
 use aws_hyper::SdkError;
 
 use kms::error::{GenerateDataKeyError, GenerateDataKeyErrorKind};
 use kms::model::DataKeySpec;
-use kms::{Client, Region};
+use kms::{Client, Config, Region};
+
+use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -41,9 +42,9 @@ async fn display_error_hint(client: &Client, err: GenerateDataKeyError) {
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// Specifies the region
-    #[structopt(default_value = "us-west-2", short, long)]
-    region: String,
+    /// The region
+    #[structopt(short, long)]
+    region: Option<String>,
 
     /// Specifies the encryption key
     #[structopt(short, long)]
@@ -56,12 +57,21 @@ struct Opt {
 
 #[tokio::main]
 async fn main() {
-    let opt = Opt::from_args();
+    let Opt {
+        key,
+        region,
+        verbose,
+    } = Opt::from_args();
 
-    if opt.verbose {
+    let region = EnvironmentProvider::new()
+        .region()
+        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+        .unwrap_or_else(|| Region::new("us-west-2"));
+	
+    if verbose {
         println!("KMS client version: {}\n", kms::PKG_VERSION);
-        println!("Region: {}", opt.region);
-        println!("Key:    {}", opt.key);
+        println!("Region: {:?}", &region);
+        println!("Key:    {}", key);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -69,14 +79,13 @@ async fn main() {
             .init();
     }
 
-    let config = kms::Config::builder()
-        .region(Region::new(opt.region))
-        .build();
+    let config = Config::builder().region(region).build();
+
     let client = kms::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
     let resp = match client
         .generate_data_key()
-        .key_id(opt.key)
+        .key_id(key)
         .key_spec(DataKeySpec::Aes256)
         .send()
         .await

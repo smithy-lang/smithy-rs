@@ -9,7 +9,9 @@ use std::process;
 use aws_hyper::SdkError;
 
 use kms::error::{DecryptError, DecryptErrorKind};
-use kms::{Blob, Client, Region};
+use kms::{Blob, Client, Config, Region};
+
+use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -17,9 +19,9 @@ use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// Specifies the region
-    #[structopt(default_value = "us-west-2", short, long)]
-    region: String,
+    /// The region
+    #[structopt(short, long)]
+    region: Option<String>,
 
     /// Specifies the encryption key
     #[structopt(short, long)]
@@ -60,13 +62,23 @@ async fn display_error_hint(client: &Client, err: DecryptError) {
 
 #[tokio::main]
 async fn main() {
-    let opt = Opt::from_args();
+    let Opt {
+        key,
+	input,
+        region,
+        verbose,
+    } = Opt::from_args();
 
-    if opt.verbose {
+    let region = EnvironmentProvider::new()
+        .region()
+        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+        .unwrap_or_else(|| Region::new("us-west-2"));
+
+    if verbose {
         println!("KMS client version: {}\n", kms::PKG_VERSION);
-        println!("Region: {}", opt.region);
-        println!("Key:    {}", opt.key);
-        println!("Input:  {}", opt.input);
+        println!("Region: {:?}", &region);
+        println!("Key:    {}", key);
+        println!("Input:  {}", input);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -74,22 +86,20 @@ async fn main() {
             .init();
     }
 
-    let r = &opt.region;
+//    let r = &region;
 
-    let config = kms::Config::builder()
-        .region(Region::new(String::from(r)))
-        .build();
+    let config = Config::builder().region(region).build();
     let client = kms::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
     // Open input text file and get contents as a string
     // input is a base-64 encoded string, so decode it:
-    let data = fs::read_to_string(opt.input)
+    let data = fs::read_to_string(input)
         .map(|input| base64::decode(input).expect("invalid base 64"))
         .map(Blob::new);
 
     let resp = match client
         .decrypt()
-        .key_id(opt.key)
+        .key_id(key)
         .ciphertext_blob(data.unwrap())
         .send()
         .await

@@ -5,7 +5,9 @@
 
 use std::process;
 
-use kms::Region;
+use kms::{Client, Config, Region};
+
+use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -13,9 +15,9 @@ use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// Specifies the region
-    #[structopt(default_value = "us-west-2", short, long)]
-    region: String,
+    /// The region
+    #[structopt(short, long)]
+    region: Option<String>,
 
     /// The # of bytes (64, 128, or 256)
     #[structopt(short, long)]
@@ -32,21 +34,31 @@ struct Opt {
 
 #[tokio::main]
 async fn main() {
-    let mut opt = Opt::from_args();
+    let Opt {
+        input,
+	mut length,
+        region,
+        verbose,
+    } = Opt::from_args();
 
-    match &opt.length[..] {
-        "" => opt.length = String::from("256"),
-        "64" => opt.length = String::from("64"),
-        "128" => opt.length = String::from("128"),
-        "256" => opt.length = String::from("256"),
-        _ => opt.length = String::from("256"),
+    let region = EnvironmentProvider::new()
+        .region()
+        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+        .unwrap_or_else(|| Region::new("us-west-2"));
+
+    match &length[..] {
+        "" => length = String::from("256"),
+        "64" => length = String::from("64"),
+        "128" => length = String::from("128"),
+        "256" => length = String::from("256"),
+        _ => length = String::from("256"),
     }
 
-    if opt.verbose {
+    if verbose {
         println!("KMS client version: {}\n", kms::PKG_VERSION);
-        println!("Region: {}", opt.region);
-        println!("Length: {}", opt.length);
-        println!("Input:  {}", opt.input);
+        println!("Region: {:?}", &region);
+        println!("Length: {}", length);
+        println!("Input:  {}", input);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -54,13 +66,11 @@ async fn main() {
             .init();
     }
 
-    let r = &opt.region;
-    let l = opt.length.parse::<i32>().unwrap();
+    let l = length.parse::<i32>().unwrap();
 
-    let config = kms::Config::builder()
-        .region(Region::new(String::from(r)))
-        .build();
-    let client = kms::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let config = Config::builder().region(region).build();
+    
+    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
     let resp = match client.generate_random().number_of_bytes(l).send().await {
         Ok(output) => output,

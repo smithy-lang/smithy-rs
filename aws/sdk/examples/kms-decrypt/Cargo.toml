@@ -6,9 +6,10 @@ edition = "2018"
 description = "Code example of the KMS Decrypt API"
 
 [dependencies]
-kms = { path = "../../build/aws-sdk/kms" }
+kms = { package = "aws-sdk-kms", path = "../../build/aws-sdk/kms" }
 aws-hyper = { path = "../../build/aws-sdk/aws-hyper" }
 tokio = { version = "1", features = ["full"]}
 base64 = "0.13.0"
 structopt = { version = "0.3", default-features = false }
 tracing-subscriber = { version = "0.2.16", features = ["fmt"] }
+aws-types = { path = "../../build/aws-sdk/aws-types" }

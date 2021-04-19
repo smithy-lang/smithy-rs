@@ -10,7 +10,9 @@ use std::process;
 use aws_hyper::SdkError;
 
 use kms::error::{EncryptError, EncryptErrorKind};
-use kms::{Blob, Client, Region};
+use kms::{Blob, Client, Config, Region};
+
+use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -42,9 +44,9 @@ async fn display_error_hint(client: &Client, err: EncryptError) {
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// Specifies the region
-    #[structopt(default_value = "us-west-2", short, long)]
-    region: String,
+    /// The region
+    #[structopt(short, long)]
+    region: Option<String>,
 
     /// Specifies the encryption key
     #[structopt(short, long)]
@@ -65,14 +67,25 @@ struct Opt {
 
 #[tokio::main]
 async fn main() {
-    let opt = Opt::from_args();
+    let Opt {
+        key,
+        out,
+        region,
+        text,
+        verbose,
+    } = Opt::from_args();
 
-    if opt.verbose {
+    let region = EnvironmentProvider::new()
+        .region()
+        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+        .unwrap_or_else(|| Region::new("us-west-2"));
+
+    if verbose {
         println!("KMS client version: {}\n", kms::PKG_VERSION);
-        println!("Region: {}", opt.region);
-        println!("Key:    {}", opt.key);
-        println!("Text:   {}", opt.text);
-        println!("Out:     {}", opt.out);
+        println!("Region: {:?}", &region);
+        println!("Key:    {}", key);
+        println!("Text:   {}", text);
+        println!("Out:    {}", out);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -80,24 +93,15 @@ async fn main() {
             .init();
     }
 
-    let r = &opt.region;
-    let o = &opt.out;
+    //    let r = &region;
 
-    let config = kms::Config::builder()
-        .region(Region::new(String::from(r)))
-        .build();
+    let config = Config::builder().region(region).build();
 
     let client = kms::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
-    let blob = Blob::new(opt.text.as_bytes());
+    let blob = Blob::new(text.as_bytes());
 
-    let resp = match client
-        .encrypt()
-        .key_id(opt.key)
-        .plaintext(blob)
-        .send()
-        .await
-    {
+    let resp = match client.encrypt().key_id(key).plaintext(blob).send().await {
         Ok(output) => output,
         Err(SdkError::ServiceError { err, .. }) => {
             display_error_hint(&client, err).await;
@@ -115,9 +119,11 @@ async fn main() {
 
     let s = base64::encode(&bytes);
 
+    let o = &out;
+
     let mut ofile = File::create(o).expect("unable to create file");
     ofile.write_all(s.as_bytes()).expect("unable to write");
 
-    println!("Wrote the following to {}", o);
+    println!("Wrote the following to {}", out);
     println!("{}", s);
 }

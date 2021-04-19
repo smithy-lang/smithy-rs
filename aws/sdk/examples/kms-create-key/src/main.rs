@@ -2,10 +2,11 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-
 use std::process;
 
-use kms::Region;
+use kms::{Client, Config, Region};
+
+use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -13,8 +14,9 @@ use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    #[structopt(default_value = "us-west-2", short, long)]
-    region: String,
+    /// The region
+    #[structopt(short, long)]
+    region: Option<String>,
 
     /// Activate verbose mode    
     #[structopt(short, long)]
@@ -23,11 +25,19 @@ struct Opt {
 
 #[tokio::main]
 async fn main() {
-   let opt = Opt::from_args();
+    let Opt {
+        region,
+        verbose,
+    } = Opt::from_args();
 
-    if opt.verbose {
+    let region = EnvironmentProvider::new()
+        .region()
+        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+        .unwrap_or_else(|| Region::new("us-west-2"));
+
+    if verbose {
         println!("KMS client version: {}\n", kms::PKG_VERSION);
-        println!("Region: {}", opt.region);
+        println!("Region:      {:?}", &region);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -35,13 +45,9 @@ async fn main() {
             .init();
     }
 
-    let r = &opt.region;
+    let config = Config::builder().region(region).build();
 
-    let config = kms::Config::builder()
-        .region(Region::new(String::from(r)))
-        .build();
-
-    let client = kms::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
     match client.create_key().send().await {
         Ok(data) => match data.key_metadata {

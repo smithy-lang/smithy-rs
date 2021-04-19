@@ -11,8 +11,9 @@ use std::process;
 use aws_hyper::SdkError;
 use kms::error::{ReEncryptError, ReEncryptErrorKind};
 use kms::Blob;
-use kms::Client;
-use kms::Region;
+use kms::{ Client, Config, Region} ;
+
+use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -45,20 +46,25 @@ async fn display_error_hint(client: &Client, err: ReEncryptError) {
 #[derive(Debug, StructOpt)]
 struct Opt {
     /// The region
-    #[structopt(default_value = "us-west-2", short, long)]
-    region: String,
+    #[structopt(short, long)]
+    region: Option<String>,
+
     /// The source (original) encryption key
     #[structopt(short, long)]
     source: String,
+    
     /// The destination (new) encryption key
     #[structopt(short, long)]
     destination: String,
+    
     /// The name of the input file containing the text to reencrypt
     #[structopt(short, long)]
     input: String,
+    
     /// The name of the output file containing the reencrypted text
     #[structopt(short, long)]
     output: String,
+    
     /// Whether to display additonal runtime information
     #[structopt(short, long)]
     verbose: bool,
@@ -66,14 +72,27 @@ struct Opt {
 
 #[tokio::main]
 async fn main() {
-    let opt = Opt::from_args();
-    if opt.verbose {
+    let Opt {
+        destination,
+        input,
+	output,
+        region,
+	source,
+        verbose,
+    } = Opt::from_args();
+
+    let region = EnvironmentProvider::new()
+        .region()
+        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+        .unwrap_or_else(|| Region::new("us-west-2"));
+    
+    if verbose {
         println!("Running ReEncryptData with args:");
-        println!("Region:             {}", opt.region);
-        println!("Source key ID:      {}", opt.source);
-        println!("Destination key ID: {}", opt.destination);
-        println!("Input filename:     {}", opt.input);
-        println!("Output filename:    {}", opt.output);
+        println!("Region:      {:?}", &region);
+        println!("Source key ID:      {}", source);
+        println!("Destination key ID: {}", destination);
+        println!("Input filename:     {}", input);
+        println!("Output filename:    {}", output);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -81,25 +100,24 @@ async fn main() {
             .init();
     }
 
-    let o = &opt.output;
+//    let o = &output;
 
-    let config = kms::Config::builder()
-        .region(Region::new(opt.region))
-        .build();
-    let client = kms::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let config = Config::builder().region(region).build();
+
+    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
     // Get blob from input file
     // Open input text file and get contents as a string
     // input is a base-64 encoded string, so decode it:
-    let data = fs::read_to_string(opt.input)
+    let data = fs::read_to_string(input)
         .map(|input| base64::decode(input).expect("invalid base 64"))
         .map(Blob::new);
 
     let resp = match client
         .re_encrypt()
         .ciphertext_blob(data.unwrap())
-        .source_key_id(opt.source)
-        .destination_key_id(opt.destination)
+        .source_key_id(source)
+        .destination_key_id(destination)
         .send()
         .await
     {
@@ -119,14 +137,15 @@ async fn main() {
     let bytes = blob.as_ref();
 
     let s = base64::encode(&bytes);
+    let o = &output;
 
     let mut ofile = File::create(o).expect("unable to create file");
     ofile.write_all(s.as_bytes()).expect("unable to write");
 
-    if opt.verbose {
-        println!("Wrote the following to {}:", o);
+    if verbose {
+        println!("Wrote the following to {}:", output);
         println!("{}", s);
     } else {
-        println!("Wrote base64-encoded output to {}", opt.output);
+        println!("Wrote base64-encoded output to {}", output);
     }
 }
