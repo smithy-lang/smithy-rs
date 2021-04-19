@@ -78,6 +78,7 @@ impl<S> Client<S> {
 
 impl Client<Standard> {
     /// Construct an `https` based client
+    #[cfg(any(feature = "native-tls", feature = "rustls"))]
     pub fn https() -> StandardClient {
         Client {
             inner: Standard::https(),
@@ -141,26 +142,21 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::Client;
 
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
     #[test]
     fn construct_default_client() {
-        let _ = Client::https();
+        let c = crate::Client::https();
+        fn is_send_sync<T: Send + Sync>(_c: T) {}
+        is_send_sync(c);
     }
 
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
     #[test]
     fn client_debug_includes_retry_info() {
-        let client = Client::https();
+        let client = crate::Client::https();
         let s = format!("{:?}", client);
         assert!(s.contains("RetryConfig"));
         assert!(s.contains("quota_available"));
-    }
-
-    fn is_send_sync<T: Send + Sync>(_: T) {}
-
-    #[test]
-    fn client_is_send_sync() {
-        let c = Client::https();
-        is_send_sync(c);
     }
 }
