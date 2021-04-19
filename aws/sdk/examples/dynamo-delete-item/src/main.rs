@@ -6,7 +6,9 @@
 use std::process;
 
 use dynamodb::model::AttributeValue;
-use dynamodb::Region;
+use dynamodb::{Client, Config, Region};
+
+use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -14,8 +16,9 @@ use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    #[structopt(default_value = "us-west-2", short, long)]
-    region: String,
+    /// The region
+    #[structopt(short, long)]
+    region: Option<String>,
 
     /// The table name
     #[structopt(short, long)]
@@ -29,26 +32,31 @@ struct Opt {
     #[structopt(short, long)]
     value: String,
 
-    /// Activate info mode
+    /// Whether to display additional information
     #[structopt(short, long)]
     info: bool,
 }
 
 #[tokio::main]
 async fn main() {
-    let opt = Opt::from_args();
+    let Opt {
+        info,
+        key,
+        region,
+        table,
+        value,
+    } = Opt::from_args();
 
-    if opt.table == "" || opt.key == "" {
-        println!("\nYou must supply a table name and key");
-        println!("-t TABLE -k KEY)\n");
-        process::exit(1);
-    }
+    let region = EnvironmentProvider::new()
+        .region()
+        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+        .unwrap_or_else(|| Region::new("us-west-2"));
 
-    if opt.info {
+    if info {
         println!("DynamoDB client version: {}\n", dynamodb::PKG_VERSION);
-        println!("Region: {}", opt.region);
-        println!("Table:  {}", opt.table);
-        println!("Key:   {}\n", opt.key);
+        println!("Region: {:?}", &region);
+        println!("Table:  {}", table);
+        println!("Key:    {}\n", key);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -56,28 +64,18 @@ async fn main() {
             .init();
     }
 
-    let t = &opt.table;
-    let k = &opt.key;
-    let v = &opt.value;
-    let r = &opt.region;
+    let config = Config::builder().region(region).build();
 
-    let config = dynamodb::Config::builder()
-        .region(Region::new(String::from(r)))
-        .build();
-
-    let client = dynamodb::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
     match client
         .delete_item()
-        .table_name(String::from(t))
-        .key(String::from(k), AttributeValue::S(String::from(v)))
+        .table_name(table)
+        .key(key, AttributeValue::S(value))
         .send()
         .await
     {
-        Ok(_) => println!(
-            "Deleted {} from table {} in region {}",
-            opt.value, opt.table, opt.region
-        ),
+        Ok(_) => println!("Deleted item from table"),
         Err(e) => {
             println!("Got an error creating table:");
             println!("{:?}", e);

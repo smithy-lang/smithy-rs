@@ -6,7 +6,9 @@
 use std::process;
 
 use dynamodb::model::AttributeValue;
-use dynamodb::Region;
+use dynamodb::{Client, Config, Region};
+
+use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -39,8 +41,8 @@ struct Opt {
     table: String,
 
     /// The region
-    #[structopt(default_value = "us-west-2", short, long)]
-    region: String,
+    #[structopt(short, long)]
+    region: Option<String>,
 
     /// Activate verbose mode    
     #[structopt(short, long)]
@@ -49,36 +51,38 @@ struct Opt {
 
 #[tokio::main]
 async fn main() {
-    let opt = Opt::from_args();
+    let Opt {
+        table,
+        username,
+        p_type,
+        age,
+        first,
+        last,
+        region,
+        verbose,
+    } = Opt::from_args();
 
-    if opt.table == ""
-        || opt.username == ""
-        || opt.p_type == ""
-        || opt.age == ""
-        || opt.first == ""
-        || opt.last == ""
-    {
-        println!("\nYou must supply a table name, user name, permission type, age, and first and last names");
-        println!("-t TABLE -u USER-NAME -p PERMISSION-TYPE (admin or standard_user) -a AGE -f FIRST-NAME -l LAST-NAME)\n");
-        process::exit(1);
-    }
-
-    if opt.p_type != "standard_user" && opt.p_type != "admin" {
-        println!("\n{} is not a valid permission type", opt.p_type);
+    if p_type != "standard_user" && p_type != "admin" {
+        println!("\n{} is not a valid permission type", p_type);
         println!("You must specify a permission type value of 'admin' or 'standard_user':");
         println!("-p PERMISSION-TYPE\n");
         process::exit(1);
     }
 
-    if opt.verbose {
+    let region = EnvironmentProvider::new()
+        .region()
+        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+        .unwrap_or_else(|| Region::new("us-west-2"));
+
+    if verbose {
         println!("DynamoDB client version: {}\n", dynamodb::PKG_VERSION);
-        println!("Region: {}", opt.region);
-        println!("Table:  {}", opt.table);
-        println!("User:   {}", opt.username);
-        println!("Type:   {}", opt.p_type);
-        println!("Age:    {}", opt.age);
-        println!("First:  {}", opt.first);
-        println!("Last:   {}\n", opt.last);
+        println!("Region: {:?}", &region);
+        println!("Table:  {}", table);
+        println!("User:   {}", username);
+        println!("Type:   {}", p_type);
+        println!("Age:    {}", age);
+        println!("First:  {}", first);
+        println!("Last:   {}\n", last);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -86,17 +90,15 @@ async fn main() {
             .init();
     }
 
-    let config = dynamodb::Config::builder()
-        .region(Region::new(opt.region))
-        .build();
+    let config = Config::builder().region(region).build();
 
-    let client = dynamodb::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
-    let u = &opt.username;
-    let t = &opt.p_type;
-    let a = &opt.age;
-    let f = &opt.first;
-    let l = &opt.last;
+    let u = &username;
+    let t = &table;
+    let a = &age;
+    let f = &first;
+    let l = &last;
 
     let user_av = AttributeValue::S(String::from(u));
     let type_av = AttributeValue::S(String::from(t));
@@ -106,7 +108,7 @@ async fn main() {
 
     match client
         .put_item()
-        .table_name(opt.table)
+        .table_name(table)
         .item("username", user_av)
         .item("account_type", type_av)
         .item("age", age_av)
@@ -117,7 +119,7 @@ async fn main() {
     {
         Ok(_) => println!(
             "Added user {}, {} {}, age {} as {} user",
-            opt.username, opt.first, opt.last, opt.age, opt.p_type
+            username, first, last, age, p_type
         ),
         Err(e) => {
             println!("Got an error adding item:");

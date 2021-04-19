@@ -5,7 +5,9 @@
 
 use std::process;
 
-use dynamodb::Region;
+use dynamodb::{Client, Config, Region};
+
+use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -13,8 +15,9 @@ use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    #[structopt(default_value = "us-west-2", short, long)]
-    region: String,
+    /// The region
+    #[structopt(short, long)]
+    region: Option<String>,
 
     #[structopt(short, long)]
     table: String,
@@ -25,35 +28,40 @@ struct Opt {
 
 #[tokio::main]
 async fn main() {
-    let opt = Opt::from_args();
+    let Opt {
+        table,
+        region,
+        verbose,
+    } = Opt::from_args();
 
-    if opt.verbose {
+    let region = EnvironmentProvider::new()
+        .region()
+        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+        .unwrap_or_else(|| Region::new("us-west-2"));
+
+    if verbose {
         println!("DynamoDB client version: {}\n", dynamodb::PKG_VERSION);
-        println!("Region: {}", opt.region);
-        println!("Table:  {}", opt.table);
+        println!("Region: {:?}", &region);
+        println!("Table:  {}", table);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
             .with_span_events(FmtSpan::CLOSE)
             .init();
     }
+    let t = &table;
 
-    let r = &opt.region;
-    let t = &opt.table;
+    let config = Config::builder().region(region).build();
 
-    let config = dynamodb::Config::builder()
-        .region(Region::new(String::from(r)))
-        .build();
-
-    let client = dynamodb::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
 
     match client.scan().table_name(String::from(t)).send().await {
         Ok(resp) => {
-            println!("Items in table {}", opt.table);
+            println!("Items in table {}:", table);
 
             for item in resp.items.iter() {
                 for n in item.iter() {
-                    println!("    {:?}", n);
+                    println!("   {:?}", n);
                 }
             }
         }
