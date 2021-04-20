@@ -53,10 +53,10 @@ async fn main() {
         .unwrap_or_else(|| Region::new("us-west-2"));
 
     if info {
-        println!("DynamoDB client version: {}\n", dynamodb::PKG_VERSION);
+        println!("DynamoDB client version: {}", dynamodb::PKG_VERSION);
         println!("Region: {:?}", &region);
         println!("Table:  {}", table);
-        println!("Key:    {}\n", key);
+        println!("Key:    {}", key);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -66,7 +66,7 @@ async fn main() {
 
     let config = Config::builder().region(region).build();
 
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
     match client
         .delete_item()
@@ -77,8 +77,8 @@ async fn main() {
     {
         Ok(_) => println!("Deleted item from table"),
         Err(e) => {
-            println!("Got an error creating table:");
-            println!("{:?}", e);
+            println!("Got an error deleting item from table:");
+            println!("{}", e);
             process::exit(1);
         }
     };

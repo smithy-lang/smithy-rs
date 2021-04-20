@@ -33,7 +33,7 @@ async fn main() {
         .unwrap_or_else(|| Region::new("us-west-2"));
 
     if verbose {
-        println!("DynamoDB client version: {}\n", dynamodb::PKG_VERSION);
+        println!("DynamoDB client version: {}", dynamodb::PKG_VERSION);
         println!("Region:      {:?}", &region);
 
         SubscriberBuilder::default()
@@ -44,25 +44,23 @@ async fn main() {
 
     let config = Config::builder().region(region).build();
 
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
     match client.list_tables().send().await {
         Ok(resp) => {
             println!("Tables:");
-            let mut l = 0;
 
-            for name in resp.table_names.iter() {
-                for n in name.iter() {
-                    l += 1;
-                    println!("    {:?}", n);
-                }
+            let names = resp.table_names.unwrap_or_default();
+
+            for name in &names {
+                println!("  {}", name);
             }
 
-            println!("\nFound {} tables:\n", l);
+            println!("Found {} tables", names.len());
         }
         Err(e) => {
             println!("Got an error listing tables:");
-            println!("{:?}", e);
+            println!("{}", e);
             process::exit(1);
         }
     };

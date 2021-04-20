@@ -52,22 +52,22 @@ async fn main() {
             .init();
     }
 
-    let t = &table;
+    //let t = &table;
 
     let config = Config::builder().region(region).build();
 
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
     match client
         .delete_table()
-        .table_name(String::from(t))
+        .table_name(String::from(&table))
         .send()
         .await
     {
         Ok(_) => println!("Deleted table"),
         Err(e) => {
             println!("Got an error deleting the table:");
-            println!("{:?}", e);
+            println!("{}", e);
             process::exit(1);
         }
     };

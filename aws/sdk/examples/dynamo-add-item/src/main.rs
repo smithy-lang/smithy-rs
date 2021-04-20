@@ -92,19 +92,13 @@ async fn main() {
 
     let config = Config::builder().region(region).build();
 
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
-    let u = &username;
-    let t = &table;
-    let a = &age;
-    let f = &first;
-    let l = &last;
-
-    let user_av = AttributeValue::S(String::from(u));
-    let type_av = AttributeValue::S(String::from(t));
-    let age_av = AttributeValue::S(String::from(a));
-    let first_av = AttributeValue::S(String::from(f));
-    let last_av = AttributeValue::S(String::from(l));
+    let user_av = AttributeValue::S(String::from(&username));
+    let type_av = AttributeValue::S(String::from(&p_type));
+    let age_av = AttributeValue::S(String::from(&age));
+    let first_av = AttributeValue::S(String::from(&first));
+    let last_av = AttributeValue::S(String::from(&last));
 
     match client
         .put_item()

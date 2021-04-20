@@ -61,19 +61,19 @@ async fn main() {
             .init();
     }
 
-    let t = &table;
-    let k = &key;
+    //    let t = &table;
+    //    let k = &key;
 
     let config = Config::builder().region(region).build();
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
     let ad = AttributeDefinition::builder()
-        .attribute_name(String::from(k))
+        .attribute_name(String::from(&key))
         .attribute_type(ScalarAttributeType::S)
         .build();
 
     let ks = KeySchemaElement::builder()
-        .attribute_name(String::from(k))
+        .attribute_name(String::from(&key))
         .key_type(KeyType::Hash)
         .build();
 
@@ -84,7 +84,7 @@ async fn main() {
 
     match client
         .create_table()
-        .table_name(String::from(t))
+        .table_name(String::from(&table))
         .key_schema(ks)
         .attribute_definitions(ad)
         .provisioned_throughput(pt)

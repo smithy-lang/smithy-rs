@@ -49,25 +49,24 @@ async fn main() {
             .with_span_events(FmtSpan::CLOSE)
             .init();
     }
-    let t = &table;
 
     let config = Config::builder().region(region).build();
 
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
-    match client.scan().table_name(String::from(t)).send().await {
+    match client.scan().table_name(String::from(&table)).send().await {
         Ok(resp) => {
-            println!("Items in table {}:", table);
+            println!("Items in table {}:", &table);
 
-            for item in resp.items.iter() {
-                for n in item.iter() {
-                    println!("   {:?}", n);
-                }
+            let items = resp.items.unwrap_or_default();
+
+            for item in items {
+                println!("   {:?}", item);
             }
         }
         Err(e) => {
             println!("Got an error listing items:");
-            println!("{:?}", e);
+            println!("{}", e);
             process::exit(1);
         }
     };

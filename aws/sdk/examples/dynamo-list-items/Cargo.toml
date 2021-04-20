@@ -1,5 +1,5 @@
 [package]
-name = "dynamo-list-items"
+name = "dynamodb-list-items"
 version = "0.1.0"
 authors = ["Doug Schwartz <dougsch@amazon.com>"]
 edition = "2018"
@@ -7,8 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dynamodb = { path = "../../build/aws-sdk/dynamodb" }
-aws-hyper = { path = "../../build/aws-sdk/aws-hyper"}
+dynamodb = { package = "aws-sdk-dynamodb", path = "../../build/aws-sdk/dynamodb" }
 tokio = { version = "1", features = ["full"] }
 structopt = { version = "0.3", default-features = false }
 tracing-subscriber = { version = "0.2.16", features = ["fmt"] }
+aws-types = { path = "../../build/aws-sdk/aws-types" }
