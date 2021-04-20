@@ -11,7 +11,7 @@ use std::process;
 use aws_hyper::SdkError;
 use kms::error::{ReEncryptError, ReEncryptErrorKind};
 use kms::Blob;
-use kms::{ Client, Config, Region} ;
+use kms::{Client, Config, Region};
 
 use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
@@ -21,7 +21,7 @@ use tracing_subscriber::fmt::SubscriberBuilder;
 
 async fn display_error_hint(client: &Client, err: ReEncryptError) {
     eprintln!("Error while decrypting: {}", err);
-        if let ReEncryptErrorKind::NotFoundError(_) = err.kind {
+    if let ReEncryptErrorKind::NotFoundError(_) = err.kind {
         client
             .list_keys()
             .send()
@@ -39,19 +39,15 @@ struct Opt {
     /// The source (original) encryption key
     #[structopt(short, long)]
     source: String,
-    
     /// The destination (new) encryption key
     #[structopt(short, long)]
     destination: String,
-    
     /// The name of the input file containing the text to reencrypt
     #[structopt(short, long)]
     input: String,
-    
     /// The name of the output file containing the reencrypted text
     #[structopt(short, long)]
     output: String,
-    
     /// Whether to display additonal runtime information
     #[structopt(short, long)]
     verbose: bool,
@@ -62,9 +58,9 @@ async fn main() {
     let Opt {
         destination,
         input,
-	output,
+        output,
         region,
-	source,
+        source,
         verbose,
     } = Opt::from_args();
 
@@ -72,7 +68,6 @@ async fn main() {
         .region()
         .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
         .unwrap_or_else(|| Region::new("us-west-2"));
-    
     if verbose {
         println!("Running ReEncryptData with args:");
         println!("Region:      {:?}", &region);
@@ -87,11 +82,9 @@ async fn main() {
             .init();
     }
 
-//    let o = &output;
-
     let config = Config::builder().region(region).build();
 
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
     // Get blob from input file
     // Open input text file and get contents as a string

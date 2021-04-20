@@ -25,10 +25,7 @@ struct Opt {
 
 #[tokio::main]
 async fn main() {
-    let Opt {
-        region,
-        verbose,
-    } = Opt::from_args();
+    let Opt { region, verbose } = Opt::from_args();
 
     let region = EnvironmentProvider::new()
         .region()
@@ -47,16 +44,17 @@ async fn main() {
 
     let config = Config::builder().region(region).build();
 
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
     match client.create_key().send().await {
-        Ok(data) => match data.key_metadata {
-            None => println!("No metadata found"),
-            Some(x) => match x.key_id {
-                None => println!("No key id"),
-                Some(k) => println!("\n\nKey:\n{}", k),
-            },
-        },
+        Ok(resp) => {
+            let id = resp
+                .key_metadata
+                .unwrap()
+                .key_id
+                .unwrap_or_else(|| String::from("No ID!"));
+            println!("Key: {}", id);
+        }
         Err(_) => {
             println!();
             process::exit(1);

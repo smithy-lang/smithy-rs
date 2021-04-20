@@ -23,10 +23,6 @@ struct Opt {
     #[structopt(short, long)]
     length: String,
 
-    /// The name of the input file with encrypted text to decrypt
-    #[structopt(short, long)]
-    input: String,
-
     /// Specifies whether additonal runtime informmation is displayed
     #[structopt(short, long)]
     verbose: bool,
@@ -35,8 +31,7 @@ struct Opt {
 #[tokio::main]
 async fn main() {
     let Opt {
-        input,
-	mut length,
+        mut length,
         region,
         verbose,
     } = Opt::from_args();
@@ -58,7 +53,6 @@ async fn main() {
         println!("KMS client version: {}\n", kms::PKG_VERSION);
         println!("Region: {:?}", &region);
         println!("Length: {}", length);
-        println!("Input:  {}", input);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -69,8 +63,7 @@ async fn main() {
     let l = length.parse::<i32>().unwrap();
 
     let config = Config::builder().region(region).build();
-    
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
     let resp = match client.generate_random().number_of_bytes(l).send().await {
         Ok(output) => output,

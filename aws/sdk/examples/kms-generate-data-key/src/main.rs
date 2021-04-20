@@ -54,7 +54,6 @@ async fn main() {
         .region()
         .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
         .unwrap_or_else(|| Region::new("us-west-2"));
-	
     if verbose {
         println!("KMS client version: {}\n", kms::PKG_VERSION);
         println!("Region: {:?}", &region);
@@ -68,7 +67,7 @@ async fn main() {
 
     let config = Config::builder().region(region).build();
 
-    let client = kms::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = kms::Client::from_conf(config);
 
     let resp = match client
         .generate_data_key()

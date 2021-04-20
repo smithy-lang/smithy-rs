@@ -39,11 +39,11 @@ struct Opt {
 async fn display_error_hint(client: &Client, err: DecryptError) {
     eprintln!("Error while decrypting: {}", err);
     if let DecryptErrorKind::NotFoundError(_) = err.kind {
-         client
-             .list_keys()
-             .send()
-             .await
-             .expect("failure to list keys");
+        client
+            .list_keys()
+            .send()
+            .await
+            .expect("failure to list keys");
     }
 }
 
@@ -51,7 +51,7 @@ async fn display_error_hint(client: &Client, err: DecryptError) {
 async fn main() {
     let Opt {
         key,
-	input,
+        input,
         region,
         verbose,
     } = Opt::from_args();
@@ -73,10 +73,8 @@ async fn main() {
             .init();
     }
 
-//    let r = &region;
-
     let config = Config::builder().region(region).build();
-    let client = kms::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = kms::Client::from_conf(config);
 
     // Open input text file and get contents as a string
     // input is a base-64 encoded string, so decode it:

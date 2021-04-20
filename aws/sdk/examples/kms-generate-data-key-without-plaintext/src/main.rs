@@ -68,8 +68,7 @@ async fn main() {
     }
 
     let config = Config::builder().region(region).build();
-	
-    let client = kms::Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = kms::Client::from_conf(config);
 
     let resp = match client
         .generate_data_key_without_plaintext()
