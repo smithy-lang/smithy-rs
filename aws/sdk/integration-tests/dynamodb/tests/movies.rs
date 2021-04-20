@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use aws_sdk_dynamodb as dynamodb;
+
 use aws_http::AwsErrorRetryPolicy;
 use aws_hyper::test_connection::TestConnection;
 use aws_hyper::{SdkError, SdkSuccess};

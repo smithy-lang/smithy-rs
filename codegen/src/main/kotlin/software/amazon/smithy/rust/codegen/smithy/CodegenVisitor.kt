@@ -16,14 +16,12 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.CrateVersionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ModelBuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ServiceGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.SmithyTypesPubUseGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
@@ -87,7 +85,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
             settings,
             codegenDecorator.libRsCustomizations(
                 protocolConfig,
-                listOf(CrateVersionGenerator(), SmithyTypesPubUseGenerator(protocolConfig.runtimeConfig))
+                listOf()
             )
         )
         try {
