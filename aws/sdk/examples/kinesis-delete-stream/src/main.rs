@@ -54,13 +54,13 @@ async fn main() {
 
     let config = Config::builder().region(region).build();
 
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
     match client.delete_stream().stream_name(name).send().await {
         Ok(_) => println!("Deleted stream."),
         Err(e) => {
             println!("Got an error deleting the stream:");
-            println!("{:?}", e);
+            println!("{}", e);
             process::exit(1);
         }
     };

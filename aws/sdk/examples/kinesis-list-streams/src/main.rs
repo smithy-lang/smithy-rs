@@ -45,26 +45,22 @@ async fn main() {
 
     let config = Config::builder().region(region).build();
 
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
     match client.list_streams().send().await {
-        Ok(resp) => match resp.stream_names {
-            None => println!("Did not find any streams"),
-            Some(names) => {
-                let l = names.len();
+        Ok(resp) => {
+            println!("Stream names:");
 
-                println!("Streams:");
-
-                for name in names {
-                    println!("    {:?}", name);
-                }
-
-                println!("Found {} streams.", l);
+            let streams = resp.stream_names.unwrap_or_default();
+            for stream in &streams {
+                println!("  {}", stream);
             }
-        },
+
+            println!("Found {} stream(s)", streams.len());
+        }
         Err(e) => {
             println!("Got an error listing stream names:");
-            println!("{:?}", e);
+            println!("{}", e);
             process::exit(1);
         }
     };

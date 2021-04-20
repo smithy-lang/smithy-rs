@@ -2,6 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
+
 use std::process;
 
 use kinesis::{Client, Config, Region};
@@ -51,13 +52,13 @@ async fn main() {
 
     let config = Config::builder().region(region).build();
 
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
     match client.create_stream().stream_name(name).send().await {
-        Ok(_) => println!("\nCreated stream"),
+        Ok(_) => println!("Created stream"),
         Err(e) => {
             println!("Got an error creating stream");
-            println!("{:?}", e);
+            println!("{}", e);
             process::exit(1);
         }
     };

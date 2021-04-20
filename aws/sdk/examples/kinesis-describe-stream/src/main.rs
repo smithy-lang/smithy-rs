@@ -53,7 +53,7 @@ async fn main() {
 
     let config = Config::builder().region(region).build();
 
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
     match client.describe_stream().stream_name(name).send().await {
         Ok(resp) => match resp.stream_description {
@@ -72,7 +72,7 @@ async fn main() {
         },
         Err(e) => {
             println!("Got an error describing stream");
-            println!("{:?}", e);
+            println!("{}", e);
             process::exit(1);
         }
     };

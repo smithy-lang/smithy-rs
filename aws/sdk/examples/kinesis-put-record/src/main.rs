@@ -63,7 +63,7 @@ async fn main() {
 
     let config = Config::builder().region(region).build();
 
-    let client = Client::from_conf_conn(config, aws_hyper::conn::Standard::https());
+    let client = Client::from_conf(config);
 
     // data is a Base64-encoded binary data object
     let data = base64::encode(data);
@@ -80,7 +80,7 @@ async fn main() {
         Ok(_) => println!("Put data into stream."),
         Err(e) => {
             println!("Got an error putting record:");
-            println!("{:?}", e);
+            println!("{}", e);
             process::exit(1);
         }
     };

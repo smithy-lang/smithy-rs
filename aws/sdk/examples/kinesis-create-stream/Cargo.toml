@@ -8,7 +8,6 @@ edition = "2018"
 
 [dependencies]
 kinesis = { package = "aws-sdk-kinesis", path = "../../build/aws-sdk/kinesis" }
-aws-hyper = { path = "../../build/aws-sdk/aws-hyper"}
 tokio = { version = "1", features = ["full"] }
 structopt = { version = "0.3", default-features = false }
 tracing-subscriber = { version = "0.2.16", features = ["fmt"] }
