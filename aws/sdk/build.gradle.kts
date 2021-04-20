@@ -222,7 +222,7 @@ tasks.register<Exec>("cargoDocs") {
 tasks.register<Exec>("cargoClippy") {
     workingDir(sdkOutputDir)
     // disallow warnings
-    commandLine("cargo", "clippy", "--", "-D", "warnings", "-Aclippy::upper_case_acronyms", "-Aclippy::large-enum-variant", "-Aclippy::module-inception")
+    commandLine("cargo", "clippy", "--", "-D", "warnings")
     dependsOn("assemble")
 }
 
