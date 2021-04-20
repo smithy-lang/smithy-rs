@@ -53,14 +53,11 @@ async fn main() {
             for voice in &voices {
                 println!(
                     "  Name:     {}",
-                    voice.name.as_deref().unwrap_or_else(|| "No name!")
+                    voice.name.as_deref().unwrap_or("No name!")
                 );
                 println!(
                     "  Language:     {}",
-                    voice
-                        .language_name
-                        .as_deref()
-                        .unwrap_or_else(|| "No language!")
+                    voice.language_name.as_deref().unwrap_or("No language!")
                 );
             }
 
@@ -68,7 +65,7 @@ async fn main() {
         }
         Err(e) => {
             println!("Got an error describing voices:");
-            println!("{:?}", e);
+            println!("{}", e);
             process::exit(1);
         }
     };
