@@ -3,7 +3,7 @@ on: [push]
 name: CI
 
 env:
-  rust_version: 1.50.0
+  rust_version: 1.51.0
   java_version: 14
 
 jobs:

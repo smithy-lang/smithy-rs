@@ -104,6 +104,7 @@ class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
     override fun section(section: LibRsSection): Writable {
         return when (section) {
             is LibRsSection.Body -> writable { rust("pub use #T::Credentials;", awsAuth(runtimeConfig).asType()) }
+            else -> emptySection
         }
     }
 }

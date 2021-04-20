@@ -118,6 +118,7 @@ class PubUseEndpoint(private val runtimeConfig: RuntimeConfig) : LibRsCustomizat
                     CargoDependency.SmithyHttp(runtimeConfig).asType()
                 )
             }
+            else -> emptySection
         }
     }
 }

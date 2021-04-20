@@ -113,7 +113,7 @@ tasks.register<Exec>("cargoDocs") {
 tasks.register<Exec>("cargoClippy") {
     workingDir("build/smithyprojections/sdk-codegen-test/")
     // disallow warnings
-    commandLine("cargo", "clippy", "--", "-D", "warnings", "-Aclippy::upper_case_acronyms", "-Aclippy::large-enum-variant")
+    commandLine("cargo", "clippy", "--", "-D", "warnings")
     dependsOn("assemble")
 }
 

@@ -45,7 +45,10 @@ class FluentClientDecorator : RustCodegenDecorator {
         rustCrate.withModule(RustModule("client", module)) { writer ->
             FluentClientGenerator(protocolConfig).render(writer)
         }
-        rustCrate.addFeature(Feature("client", true, listOf(protocolConfig.runtimeConfig.awsHyper().name)))
+        val awsHyper = protocolConfig.runtimeConfig.awsHyper().name
+        rustCrate.addFeature(Feature("client", true, listOf(awsHyper)))
+        rustCrate.addFeature(Feature("rustls", default = true, listOf("$awsHyper/rustls")))
+        rustCrate.addFeature(Feature("native-tls", default = false, listOf("$awsHyper/native-tls")))
     }
 
     override fun libRsCustomizations(
@@ -53,9 +56,12 @@ class FluentClientDecorator : RustCodegenDecorator {
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         return baseCustomizations + object : LibRsCustomization() {
-            override fun section(section: LibRsSection) = writable {
-                Attribute.Cfg.feature("client").render(this)
-                rust("pub use client::Client;")
+            override fun section(section: LibRsSection) = when (section) {
+                is LibRsSection.Body -> writable {
+                    Attribute.Cfg.feature("client").render(this)
+                    rust("pub use client::Client;")
+                }
+                else -> emptySection
             }
         }
     }
@@ -87,8 +93,14 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
         writer.rustBlock("impl Client") {
             rustTemplate(
                 """
+                ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn from_env() -> Self {
                     Self::from_conf_conn(crate::Config::builder().build(), #{aws_hyper}::conn::Standard::https())
+                }
+
+                ##[cfg(any(feature = "rustls", feature = "native-tls"))]
+                pub fn from_conf(conf: crate::Config) -> Self {
+                    Self::from_conf_conn(conf, #{aws_hyper}::conn::Standard::https())
                 }
 
                 pub fn from_conf_conn(conf: crate::Config, conn: #{aws_hyper}::conn::Standard) -> Self {
