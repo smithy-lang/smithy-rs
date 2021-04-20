@@ -6,7 +6,7 @@ Our design choices are guided by our [Tenets](./tenets.md).
 
 ## Acknowledgments
 
-This design was vastly improved by countless hours of 1:1s with the members of the SDK org who generously gave their time to answer all my questions, sometimes multiple times. Outside the SDK org, David Barsky, iliana etaoin and Carl Lerche provided continuous feedback outside the scope of their day jobs that had a massive impact on the final design. And of course, the design builds on the learnings, ideas, and GitHub issues of the 142 Rusoto contributors who built this first and learned the hard way.
+The design builds on the learnings, ideas, hard work, and GitHub issues of the 142 Rusoto contributors & thousands of users who built this first and learned the hard way.
 
 ## External API Overview
 
@@ -43,7 +43,7 @@ async fn main() {
 The Fluent API is implemented as a thin wrapper around the core API to improve ergonomics.
 
 ## Internals
-Internally, the Rust SDK is built on Tower Middleware, Tokio & Hyper. We're continuing to iterate on the internals to enable running the AWS SDK in other environments. As an example, you can see a demo of adding `reqwest` as a custom HTTP stack to gain access to its HTTP Proxy support!
+The Rust SDK is built on Tower Middleware, Tokio & Hyper. We're continuing to iterate on the internals to enable running the AWS SDK in other executors & HTTP stacks. As an example, you can see a demo of adding `reqwest` as a custom HTTP stack to gain access to its HTTP Proxy support!
 
 For more details about the SDK internals see [Operation Design](transport/operation.md)
 
