@@ -21,7 +21,7 @@ struct Opt {
 
     /// The # of bytes (64, 128, or 256)
     #[structopt(short, long)]
-    length: String,
+    length: i32,
 
     /// Specifies whether additonal runtime informmation is displayed
     #[structopt(short, long)]
@@ -41,12 +41,11 @@ async fn main() {
         .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
         .unwrap_or_else(|| Region::new("us-west-2"));
 
-    match &length[..] {
-        "" => length = String::from("256"),
-        "64" => length = String::from("64"),
-        "128" => length = String::from("128"),
-        "256" => length = String::from("256"),
-        _ => length = String::from("256"),
+    match length {
+        1...1034 => {
+            // Within range
+        }
+        _ => length = 256,
     }
 
     if verbose {
@@ -60,15 +59,19 @@ async fn main() {
             .init();
     }
 
-    let l = length.parse::<i32>().unwrap();
-
     let config = Config::builder().region(region).build();
     let client = Client::from_conf(config);
 
-    let resp = match client.generate_random().number_of_bytes(l).send().await {
+    let resp = match client
+        .generate_random()
+        .number_of_bytes(length)
+        .send()
+        .await
+    {
         Ok(output) => output,
         Err(e) => {
-            println!("Caught an error {} calling GenerateRandom", e);
+            println!("Got an error calling GenerateRandom:");
+            println!("{}", e);
             process::exit(1);
         }
     };

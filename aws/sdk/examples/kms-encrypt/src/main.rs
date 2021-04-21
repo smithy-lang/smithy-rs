@@ -7,8 +7,6 @@ use std::fs::File;
 use std::io::Write;
 use std::process;
 
-use aws_hyper::SdkError;
-
 use kms::error::{EncryptError, EncryptErrorKind};
 use kms::{Blob, Client, Config, Region};
 
@@ -17,17 +15,6 @@ use aws_types::region::{EnvironmentProvider, ProvideRegion};
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
-
-async fn display_error_hint(client: &Client, err: EncryptError) {
-    eprintln!("Error while encrypting: {}", err);
-    if let EncryptErrorKind::NotFoundError(_) = err.kind {
-        client
-            .list_keys()
-            .send()
-            .await
-            .expect("failure to list keys");
-    }
-}
 
 #[derive(Debug, StructOpt)]
 struct Opt {
@@ -88,12 +75,8 @@ async fn main() {
 
     let resp = match client.encrypt().key_id(key).plaintext(blob).send().await {
         Ok(output) => output,
-        Err(SdkError::ServiceError { err, .. }) => {
-            display_error_hint(&client, err).await;
-            process::exit(1);
-        }
-        Err(other) => {
-            eprintln!("Encryption failure: {}", other);
+        Err(e) => {
+            eprintln!("Encryption failure: {}", e);
             process::exit(1);
         }
     };

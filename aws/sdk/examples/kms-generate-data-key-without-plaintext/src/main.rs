@@ -4,8 +4,6 @@
  */
 use std::process;
 
-use aws_hyper::SdkError;
-
 use kms::error::{GenerateDataKeyWithoutPlaintextError, GenerateDataKeyWithoutPlaintextErrorKind};
 use kms::model::DataKeySpec;
 
@@ -16,17 +14,6 @@ use aws_types::region::{EnvironmentProvider, ProvideRegion};
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
-
-async fn display_error_hint(client: &Client, err: GenerateDataKeyWithoutPlaintextError) {
-    eprintln!("Error while decrypting: {}", err);
-    if let GenerateDataKeyWithoutPlaintextErrorKind::NotFoundError(_) = err.kind {
-        client
-            .list_keys()
-            .send()
-            .await
-            .expect("failure to list keys");
-    }
-}
 
 #[derive(Debug, StructOpt)]
 struct Opt {
@@ -78,12 +65,8 @@ async fn main() {
         .await
     {
         Ok(output) => output,
-        Err(SdkError::ServiceError { err, .. }) => {
-            display_error_hint(&client, err).await;
-            process::exit(1);
-        }
-        Err(other) => {
-            eprintln!("Encryption failure: {}", other);
+        Err(e) => {
+            eprintln!("Encryption failure: {}", e);
             process::exit(1);
         }
     };

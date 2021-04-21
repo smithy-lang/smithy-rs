@@ -55,10 +55,10 @@ async fn main() {
                 .unwrap_or_else(|| String::from("No ID!"));
             println!("Key: {}", id);
         }
-        Err(_) => {
-            println!();
+        Err(e) => {
+            println!("Got error creating key:");
+            println!("{}", e);
             process::exit(1);
         }
     };
-    println!();
 }

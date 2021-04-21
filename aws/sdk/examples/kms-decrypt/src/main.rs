@@ -6,8 +6,6 @@
 use std::fs;
 use std::process;
 
-use aws_hyper::SdkError;
-
 use kms::error::{DecryptError, DecryptErrorKind};
 use kms::{Blob, Client, Config, Region};
 
@@ -34,17 +32,6 @@ struct Opt {
     /// Specifies whether to display additonal runtime informmation
     #[structopt(short, long)]
     verbose: bool,
-}
-
-async fn display_error_hint(client: &Client, err: DecryptError) {
-    eprintln!("Error while decrypting: {}", err);
-    if let DecryptErrorKind::NotFoundError(_) = err.kind {
-        client
-            .list_keys()
-            .send()
-            .await
-            .expect("failure to list keys");
-    }
 }
 
 #[tokio::main]
@@ -79,7 +66,9 @@ async fn main() {
     // Open input text file and get contents as a string
     // input is a base-64 encoded string, so decode it:
     let data = fs::read_to_string(input)
-        .map(|input| base64::decode(input).expect("invalid base 64"))
+        .map(|input| {
+            base64::decode(input).expect("Input file does not contain valid base 64 characters.")
+        })
         .map(Blob::new);
 
     let resp = match client
@@ -90,12 +79,8 @@ async fn main() {
         .await
     {
         Ok(output) => output,
-        Err(SdkError::ServiceError { err, .. }) => {
-            display_error_hint(&client, err).await;
-            process::exit(1);
-        }
-        Err(other) => {
-            eprintln!("Encryption failure: {}", other);
+        Err(e) => {
+            eprintln!("Encryption failure: {}", e);
             process::exit(1);
         }
     };
