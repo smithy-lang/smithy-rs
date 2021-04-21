@@ -1,0 +1,11 @@
+[package]
+name = "$crate_name"
+version = "0.0.0"
+authors = ["Russell Cohen <rcoh@amazon.com>", "AWS Rust SDK Team <aws-rust-sdk@amazon.com>"]
+edition = "2018"
+description = "This package is a placeholder for the future AWS SDK for Rust supporting $sdk_id. Please see the [AWS SDK GitHub repository](https://github.com/awslabs/aws-sdk-rust) for more information."
+
+[dependencies]
+
+[package.metadata.docs.rs]
+targets = []

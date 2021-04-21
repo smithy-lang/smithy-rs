@@ -1,0 +1,259 @@
+{"sdk_id": "IoT Wireless", "crate_name": "iotwireless"}
+{"sdk_id": "forecast", "crate_name": "forecast"}
+{"sdk_id": "CodeBuild", "crate_name": "codebuild"}
+{"sdk_id": "IotDeviceAdvisor", "crate_name": "iotdeviceadvisor"}
+{"sdk_id": "IoT Events Data", "crate_name": "ioteventsdata"}
+{"sdk_id": "EFS", "crate_name": "efs"}
+{"sdk_id": "CodeGuruProfiler", "crate_name": "codeguruprofiler"}
+{"sdk_id": "Kinesis", "crate_name": "kinesis"}
+{"sdk_id": "Kinesis Video", "crate_name": "kinesisvideo"}
+{"sdk_id": "Pinpoint", "crate_name": "pinpoint"}
+{"sdk_id": "Chime", "crate_name": "chime"}
+{"sdk_id": "Organizations", "crate_name": "organizations"}
+{"sdk_id": "Shield", "crate_name": "shield"}
+{"sdk_id": "SSM", "crate_name": "ssm"}
+{"sdk_id": "signer", "crate_name": "signer"}
+{"sdk_id": "Service Catalog", "crate_name": "servicecatalog"}
+{"sdk_id": "LakeFormation", "crate_name": "lakeformation"}
+{"sdk_id": "Secrets Manager", "crate_name": "secretsmanager"}
+{"sdk_id": "MediaConnect", "crate_name": "mediaconnect"}
+{"sdk_id": "MWAA", "crate_name": "mwaa"}
+{"sdk_id": "KMS", "crate_name": "kms"}
+{"sdk_id": "QuickSight", "crate_name": "quicksight"}
+{"sdk_id": "WorkMail", "crate_name": "workmail"}
+{"sdk_id": "EventBridge", "crate_name": "eventbridge"}
+{"sdk_id": "FraudDetector", "crate_name": "frauddetector"}
+{"sdk_id": "Elastic Transcoder", "crate_name": "elastictranscoder"}
+{"sdk_id": "Glue", "crate_name": "glue"}
+{"sdk_id": "Elastic Inference", "crate_name": "elasticinference"}
+{"sdk_id": "Personalize Events", "crate_name": "personalizeevents"}
+{"sdk_id": "S3", "crate_name": "s3"}
+{"sdk_id": "AppIntegrations", "crate_name": "appintegrations"}
+{"sdk_id": "SESv2", "crate_name": "sesv2"}
+{"sdk_id": "IoTFleetHub", "crate_name": "iotfleethub"}
+{"sdk_id": "Personalize", "crate_name": "personalize"}
+{"sdk_id": "Outposts", "crate_name": "outposts"}
+{"sdk_id": "WorkDocs", "crate_name": "workdocs"}
+{"sdk_id": "NetworkManager", "crate_name": "networkmanager"}
+{"sdk_id": "Kinesis Video Signaling", "crate_name": "kinesisvideosignaling"}
+{"sdk_id": "MediaPackage", "crate_name": "mediapackage"}
+{"sdk_id": "SageMaker FeatureStore Runtime", "crate_name": "sagemakerfeaturestoreruntime"}
+{"sdk_id": "MediaLive", "crate_name": "medialive"}
+{"sdk_id": "Connect Contact Lens", "crate_name": "connectcontactlens"}
+{"sdk_id": "MediaConvert", "crate_name": "mediaconvert"}
+{"sdk_id": "SNS", "crate_name": "sns"}
+{"sdk_id": "DataSync", "crate_name": "datasync"}
+{"sdk_id": "Macie", "crate_name": "macie"}
+{"sdk_id": "Cognito Identity Provider", "crate_name": "cognitoidentityprovider"}
+{"sdk_id": "GreengrassV2", "crate_name": "greengrassv2"}
+{"sdk_id": "ACM PCA", "crate_name": "acmpca"}
+{"sdk_id": "IoTAnalytics", "crate_name": "iotanalytics"}
+{"sdk_id": "GroundStation", "crate_name": "groundstation"}
+{"sdk_id": "ECR PUBLIC", "crate_name": "ecrpublic"}
+{"sdk_id": "fis", "crate_name": "fis"}
+{"sdk_id": "Pinpoint SMS Voice", "crate_name": "pinpointsmsvoice"}
+{"sdk_id": "CloudHSM", "crate_name": "cloudhsm"}
+{"sdk_id": "Directory Service", "crate_name": "directoryservice"}
+{"sdk_id": "SMS", "crate_name": "sms"}
+{"sdk_id": "Config Service", "crate_name": "configservice"}
+{"sdk_id": "Inspector", "crate_name": "inspector"}
+{"sdk_id": "Translate", "crate_name": "translate"}
+{"sdk_id": "FMS", "crate_name": "fms"}
+{"sdk_id": "S3 Control", "crate_name": "s3control"}
+{"sdk_id": "Kinesis Analytics V2", "crate_name": "kinesisanalyticsv2"}
+{"sdk_id": "Customer Profiles", "crate_name": "customerprofiles"}
+{"sdk_id": "Marketplace Commerce Analytics", "crate_name": "marketplacecommerceanalytics"}
+{"sdk_id": "synthetics", "crate_name": "synthetics"}
+{"sdk_id": "IoTSecureTunneling", "crate_name": "iotsecuretunneling"}
+{"sdk_id": "Lex Runtime Service", "crate_name": "lexruntimeservice"}
+{"sdk_id": "CloudFront", "crate_name": "cloudfront"}
+{"sdk_id": "Location", "crate_name": "location"}
+{"sdk_id": "WAFV2", "crate_name": "wafv2"}
+{"sdk_id": "EMR", "crate_name": "emr"}
+{"sdk_id": "IoTThingsGraph", "crate_name": "iotthingsgraph"}
+{"sdk_id": "SageMaker Runtime", "crate_name": "sagemakerruntime"}
+{"sdk_id": "Health", "crate_name": "health"}
+{"sdk_id": "WorkMailMessageFlow", "crate_name": "workmailmessageflow"}
+{"sdk_id": "MediaStore Data", "crate_name": "mediastoredata"}
+{"sdk_id": "EC2 Instance Connect", "crate_name": "ec2instanceconnect"}
+{"sdk_id": "ComprehendMedical", "crate_name": "comprehendmedical"}
+{"sdk_id": "AccessAnalyzer", "crate_name": "accessanalyzer"}
+{"sdk_id": "Glacier", "crate_name": "glacier"}
+{"sdk_id": "Lightsail", "crate_name": "lightsail"}
+{"sdk_id": "imagebuilder", "crate_name": "imagebuilder"}
+{"sdk_id": "Application Discovery Service", "crate_name": "applicationdiscoveryservice"}
+{"sdk_id": "ServerlessApplicationRepository", "crate_name": "serverlessapplicationrepository"}
+{"sdk_id": "Elastic Beanstalk", "crate_name": "elasticbeanstalk"}
+{"sdk_id": "CloudSearch Domain", "crate_name": "cloudsearchdomain"}
+{"sdk_id": "Neptune", "crate_name": "neptune"}
+{"sdk_id": "Transfer", "crate_name": "transfer"}
+{"sdk_id": "Braket", "crate_name": "braket"}
+{"sdk_id": "WAF Regional", "crate_name": "wafregional"}
+{"sdk_id": "QLDB", "crate_name": "qldb"}
+{"sdk_id": "ECR", "crate_name": "ecr"}
+{"sdk_id": "Kinesis Video Media", "crate_name": "kinesisvideomedia"}
+{"sdk_id": "DynamoDB", "crate_name": "dynamodb"}
+{"sdk_id": "Route 53 Domains", "crate_name": "route53domains"}
+{"sdk_id": "Macie2", "crate_name": "macie2"}
+{"sdk_id": "Auto Scaling Plans", "crate_name": "autoscalingplans"}
+{"sdk_id": "S3Outposts", "crate_name": "s3outposts"}
+{"sdk_id": "Honeycode", "crate_name": "honeycode"}
+{"sdk_id": "Storage Gateway", "crate_name": "storagegateway"}
+{"sdk_id": "Service Quotas", "crate_name": "servicequotas"}
+{"sdk_id": "ECS", "crate_name": "ecs"}
+{"sdk_id": "Elastic Load Balancing", "crate_name": "elasticloadbalancing"}
+{"sdk_id": "Application Auto Scaling", "crate_name": "applicationautoscaling"}
+{"sdk_id": "DynamoDB Streams", "crate_name": "dynamodbstreams"}
+{"sdk_id": "Timestream Write", "crate_name": "timestreamwrite"}
+{"sdk_id": "CloudSearch", "crate_name": "cloudsearch"}
+{"sdk_id": "LookoutVision", "crate_name": "lookoutvision"}
+{"sdk_id": "Route53Resolver", "crate_name": "route53resolver"}
+{"sdk_id": "WorkSpaces", "crate_name": "workspaces"}
+{"sdk_id": "Machine Learning", "crate_name": "machinelearning"}
+{"sdk_id": "FSx", "crate_name": "fsx"}
+{"sdk_id": "CodePipeline", "crate_name": "codepipeline"}
+{"sdk_id": "Elastic Load Balancing v2", "crate_name": "elasticloadbalancingv2"}
+{"sdk_id": "schemas", "crate_name": "schemas"}
+{"sdk_id": "SQS", "crate_name": "sqs"}
+{"sdk_id": "App Mesh", "crate_name": "appmesh"}
+{"sdk_id": "IoT", "crate_name": "iot"}
+{"sdk_id": "SSO OIDC", "crate_name": "ssooidc"}
+{"sdk_id": "codestar notifications", "crate_name": "codestarnotifications"}
+{"sdk_id": "EBS", "crate_name": "ebs"}
+{"sdk_id": "Amplify", "crate_name": "amplify"}
+{"sdk_id": "WellArchitected", "crate_name": "wellarchitected"}
+{"sdk_id": "MigrationHub Config", "crate_name": "migrationhubconfig"}
+{"sdk_id": "Redshift", "crate_name": "redshift"}
+{"sdk_id": "Appflow", "crate_name": "appflow"}
+{"sdk_id": "GameLift", "crate_name": "gamelift"}
+{"sdk_id": "Lex Model Building Service", "crate_name": "lexmodelbuildingservice"}
+{"sdk_id": "CloudTrail", "crate_name": "cloudtrail"}
+{"sdk_id": "Resource Groups", "crate_name": "resourcegroups"}
+{"sdk_id": "Redshift Data", "crate_name": "redshiftdata"}
+{"sdk_id": "MediaTailor", "crate_name": "mediatailor"}
+{"sdk_id": "PI", "crate_name": "pi"}
+{"sdk_id": "IoT 1Click Devices Service", "crate_name": "iot1clickdevicesservice"}
+{"sdk_id": "AppConfig", "crate_name": "appconfig"}
+{"sdk_id": "Network Firewall", "crate_name": "networkfirewall"}
+{"sdk_id": "ConnectParticipant", "crate_name": "connectparticipant"}
+{"sdk_id": "Sagemaker Edge", "crate_name": "sagemakeredge"}
+{"sdk_id": "IAM", "crate_name": "iam"}
+{"sdk_id": "MediaStore", "crate_name": "mediastore"}
+{"sdk_id": "Cloud9", "crate_name": "cloud9"}
+{"sdk_id": "SSO", "crate_name": "sso"}
+{"sdk_id": "AuditManager", "crate_name": "auditmanager"}
+{"sdk_id": "Snowball", "crate_name": "snowball"}
+{"sdk_id": "CloudWatch Logs", "crate_name": "cloudwatchlogs"}
+{"sdk_id": "Kinesis Analytics", "crate_name": "kinesisanalytics"}
+{"sdk_id": "OpsWorks", "crate_name": "opsworks"}
+{"sdk_id": "identitystore", "crate_name": "identitystore"}
+{"sdk_id": "Textract", "crate_name": "textract"}
+{"sdk_id": "Compute Optimizer", "crate_name": "computeoptimizer"}
+{"sdk_id": "EKS", "crate_name": "eks"}
+{"sdk_id": "Support", "crate_name": "support"}
+{"sdk_id": "ApiGatewayV2", "crate_name": "apigatewayv2"}
+{"sdk_id": "Marketplace Metering", "crate_name": "marketplacemetering"}
+{"sdk_id": "amp", "crate_name": "amp"}
+{"sdk_id": "IoT Data Plane", "crate_name": "iotdataplane"}
+{"sdk_id": "Kafka", "crate_name": "kafka"}
+{"sdk_id": "DataBrew", "crate_name": "databrew"}
+{"sdk_id": "Mobile", "crate_name": "mobile"}
+{"sdk_id": "CodeDeploy", "crate_name": "codedeploy"}
+{"sdk_id": "CloudHSM V2", "crate_name": "cloudhsmv2"}
+{"sdk_id": "Batch", "crate_name": "batch"}
+{"sdk_id": "IoT 1Click Projects", "crate_name": "iot1clickprojects"}
+{"sdk_id": "Lex Models V2", "crate_name": "lexmodelsv2"}
+{"sdk_id": "savingsplans", "crate_name": "savingsplans"}
+{"sdk_id": "Timestream Query", "crate_name": "timestreamquery"}
+{"sdk_id": "CodeGuru Reviewer", "crate_name": "codegurureviewer"}
+{"sdk_id": "AppSync", "crate_name": "appsync"}
+{"sdk_id": "DLM", "crate_name": "dlm"}
+{"sdk_id": "AmplifyBackend", "crate_name": "amplifybackend"}
+{"sdk_id": "SFN", "crate_name": "sfn"}
+{"sdk_id": "Budgets", "crate_name": "budgets"}
+{"sdk_id": "Pinpoint Email", "crate_name": "pinpointemail"}
+{"sdk_id": "MTurk", "crate_name": "mturk"}
+{"sdk_id": "Detective", "crate_name": "detective"}
+{"sdk_id": "Lambda", "crate_name": "lambda"}
+{"sdk_id": "Migration Hub", "crate_name": "migrationhub"}
+{"sdk_id": "IoT Events", "crate_name": "iotevents"}
+{"sdk_id": "ManagedBlockchain", "crate_name": "managedblockchain"}
+{"sdk_id": "ServiceDiscovery", "crate_name": "servicediscovery"}
+{"sdk_id": "WAF", "crate_name": "waf"}
+{"sdk_id": "ivs", "crate_name": "ivs"}
+{"sdk_id": "DevOps Guru", "crate_name": "devopsguru"}
+{"sdk_id": "Direct Connect", "crate_name": "directconnect"}
+{"sdk_id": "Cost and Usage Report Service", "crate_name": "costandusagereportservice"}
+{"sdk_id": "Service Catalog AppRegistry", "crate_name": "servicecatalogappregistry"}
+{"sdk_id": "mq", "crate_name": "mq"}
+{"sdk_id": "License Manager", "crate_name": "licensemanager"}
+{"sdk_id": "CodeStar connections", "crate_name": "codestarconnections"}
+{"sdk_id": "IoTSiteWise", "crate_name": "iotsitewise"}
+{"sdk_id": "CodeStar", "crate_name": "codestar"}
+{"sdk_id": "Personalize Runtime", "crate_name": "personalizeruntime"}
+{"sdk_id": "CloudDirectory", "crate_name": "clouddirectory"}
+{"sdk_id": "Cognito Sync", "crate_name": "cognitosync"}
+{"sdk_id": "codeartifact", "crate_name": "codeartifact"}
+{"sdk_id": "GuardDuty", "crate_name": "guardduty"}
+{"sdk_id": "WorkLink", "crate_name": "worklink"}
+{"sdk_id": "SageMaker A2I Runtime", "crate_name": "sagemakera2iruntime"}
+{"sdk_id": "Elasticsearch Service", "crate_name": "elasticsearchservice"}
+{"sdk_id": "DAX", "crate_name": "dax"}
+{"sdk_id": "OpsWorksCM", "crate_name": "opsworkscm"}
+{"sdk_id": "DocDB", "crate_name": "docdb"}
+{"sdk_id": "Firehose", "crate_name": "firehose"}
+{"sdk_id": "Database Migration Service", "crate_name": "databasemigrationservice"}
+{"sdk_id": "Global Accelerator", "crate_name": "globalaccelerator"}
+{"sdk_id": "Lex Runtime V2", "crate_name": "lexruntimev2"}
+{"sdk_id": "Application Insights", "crate_name": "applicationinsights"}
+{"sdk_id": "Alexa For Business", "crate_name": "alexaforbusiness"}
+{"sdk_id": "RoboMaker", "crate_name": "robomaker"}
+{"sdk_id": "CloudWatch", "crate_name": "cloudwatch"}
+{"sdk_id": "CloudWatch Events", "crate_name": "cloudwatchevents"}
+{"sdk_id": "Auto Scaling", "crate_name": "autoscaling"}
+{"sdk_id": "Greengrass", "crate_name": "greengrass"}
+{"sdk_id": "SecurityHub", "crate_name": "securityhub"}
+{"sdk_id": "Backup", "crate_name": "backup"}
+{"sdk_id": "CloudFormation", "crate_name": "cloudformation"}
+{"sdk_id": "kendra", "crate_name": "kendra"}
+{"sdk_id": "Connect", "crate_name": "connect"}
+{"sdk_id": "ElastiCache", "crate_name": "elasticache"}
+{"sdk_id": "Cost Explorer", "crate_name": "costexplorer"}
+{"sdk_id": "SSO Admin", "crate_name": "ssoadmin"}
+{"sdk_id": "Comprehend", "crate_name": "comprehend"}
+{"sdk_id": "Device Farm", "crate_name": "devicefarm"}
+{"sdk_id": "RDS Data", "crate_name": "rdsdata"}
+{"sdk_id": "Rekognition", "crate_name": "rekognition"}
+{"sdk_id": "AppStream", "crate_name": "appstream"}
+{"sdk_id": "Polly", "crate_name": "polly"}
+{"sdk_id": "RDS", "crate_name": "rds"}
+{"sdk_id": "Pricing", "crate_name": "pricing"}
+{"sdk_id": "SWF", "crate_name": "swf"}
+{"sdk_id": "QLDB Session", "crate_name": "qldbsession"}
+{"sdk_id": "Marketplace Entitlement Service", "crate_name": "marketplaceentitlementservice"}
+{"sdk_id": "Data Pipeline", "crate_name": "datapipeline"}
+{"sdk_id": "Transcribe", "crate_name": "transcribe"}
+{"sdk_id": "CodeCommit", "crate_name": "codecommit"}
+{"sdk_id": "Resource Groups Tagging API", "crate_name": "resourcegroupstaggingapi"}
+{"sdk_id": "forecastquery", "crate_name": "forecastquery"}
+{"sdk_id": "SES", "crate_name": "ses"}
+{"sdk_id": "HealthLake", "crate_name": "healthlake"}
+{"sdk_id": "Marketplace Catalog", "crate_name": "marketplacecatalog"}
+{"sdk_id": "EMR containers", "crate_name": "emrcontainers"}
+{"sdk_id": "ApiGatewayManagementApi", "crate_name": "apigatewaymanagementapi"}
+{"sdk_id": "XRay", "crate_name": "xray"}
+{"sdk_id": "API Gateway", "crate_name": "apigateway"}
+{"sdk_id": "Transcribe Streaming", "crate_name": "transcribestreaming"}
+{"sdk_id": "RAM", "crate_name": "ram"}
+{"sdk_id": "Cognito Identity", "crate_name": "cognitoidentity"}
+{"sdk_id": "DataExchange", "crate_name": "dataexchange"}
+{"sdk_id": "STS", "crate_name": "sts"}
+{"sdk_id": "SageMaker", "crate_name": "sagemaker"}
+{"sdk_id": "Kinesis Video Archived Media", "crate_name": "kinesisvideoarchivedmedia"}
+{"sdk_id": "ACM", "crate_name": "acm"}
+{"sdk_id": "Athena", "crate_name": "athena"}
+{"sdk_id": "Route 53", "crate_name": "route53"}
+{"sdk_id": "IoT Jobs Data Plane", "crate_name": "iotjobsdataplane"}
+{"sdk_id": "MediaPackage Vod", "crate_name": "mediapackagevod"}
+{"sdk_id": "EC2", "crate_name": "ec2"}
+{"sdk_id": "LookoutMetrics", "crate_name": "lookoutmetrics"}
