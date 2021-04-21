@@ -82,6 +82,6 @@ async fn main() {
 
     let s = base64::encode(&bytes);
 
-    println!("\nData key:");
+    println!("Data key:");
     println!("{}", s);
 }
