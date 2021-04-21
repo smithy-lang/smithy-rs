@@ -1,5 +1,5 @@
 [package]
-name = "$crate_name"
+name = "aws-sdk-$crate_name"
 version = "0.0.0"
 authors = ["Russell Cohen <rcoh@amazon.com>", "AWS Rust SDK Team <aws-rust-sdk@amazon.com>"]
 edition = "2018"

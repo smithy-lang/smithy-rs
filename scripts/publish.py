@@ -28,7 +28,7 @@ def main():
         command = shlex.split(f'cargo publish {flag}')
         confirm(command)
         subprocess.run(command, cwd=f'build/{crate}', check=True)
-        subprocess.run(shlex.split('cargo owner --add github:awslabs:rust-sdk-owners'), check=True)
+        subprocess.run(shlex.split('cargo owner --add github:awslabs:rust-sdk-owners'), cwd=f'build/{crate}', check=True)
         print('sleeping for 2 minutes...')
         with open('complete', 'a') as f:
             print(crate, file=f)
