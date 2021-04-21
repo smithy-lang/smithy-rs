@@ -1,5 +1,5 @@
 # Rust SDK Design Tenets
-> Unless you know better ones! These are our tenets today, but we'd love your thoughts! Do you wish we had different priorities? Let us know by opening and issue or starting a discussion.
+> Unless you know better ones! These are our tenets today, but we'd love your thoughts. Do you wish we had different priorities? Let us know by opening and issue or starting a discussion.
 1. [**Batteries included, but replaceable.**](#batteries-included-but-replaceable) The Rust SDK should provide a best-in-class experience for many use cases, **but**, we can’t foresee all the situations the customer will use our software. **Meet customers where they are;** strive to be compatible with their tools. Provide escape hatches to allow customers make different choices.
 2. [**Make common problems easy to solve.**](#make-common-problems-easy-to-solve) Make uncommon problems solvable. Lead customers into [the pit of success](https://blog.codinghorror.com/falling-into-the-pit-of-success/).
 3. [**Design for the Future.**](#design-for-the-future) We can’t know how APIs will evolve, what protocols will gain adoption, and what new service will be created. Don’t simplify or unify code today that prevents evolution tomorrow.
