@@ -44,14 +44,14 @@ class UnionGenerator(
         writer.rustBlock("impl ${symbol.name}") {
             sortedMembers.forEach { member ->
                 val memberSymbol = symbolProvider.toSymbol(member)
-                val funcNamePart = member.memberName.toSnakeCase().removeSuffix("_value")
+                val funcNamePart = member.memberName.toSnakeCase()
                 val variantName = member.memberName.toPascalCase()
 
                 writer.rustBlock("pub fn as_$funcNamePart(&self) -> Option<&#T>", memberSymbol) {
-                    write("if let ${symbol.name}::$variantName(val) = &self { Some(&val) } else { None }")
+                    rust("if let ${symbol.name}::$variantName(val) = &self { Some(&val) } else { None }")
                 }
                 writer.rustBlock("pub fn is_$funcNamePart(&self) -> bool") {
-                    write("self.as_$funcNamePart().is_some()")
+                    rust("self.as_$funcNamePart().is_some()")
                 }
             }
         }

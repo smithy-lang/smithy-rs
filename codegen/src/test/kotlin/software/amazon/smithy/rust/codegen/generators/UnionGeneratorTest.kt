@@ -40,4 +40,34 @@ class UnionGeneratorTest {
         )
         writer.toString() shouldContain "#[non_exhaustive]"
     }
+
+    @Test
+    fun `generate conversion helper methods`() {
+        val model = """
+        namespace test
+        union MyUnion {
+            stringValue: String,
+            intValue: PrimitiveInteger
+        }
+        """.asSmithyModel()
+        val provider: SymbolProvider = testSymbolProvider(model)
+        val writer = RustWriter.forModule("model")
+        val generator = UnionGenerator(model, provider, writer, model.lookup("test#MyUnion"))
+        generator.render()
+
+        writer.compileAndTest(
+            """
+            let foo = MyUnion::StringValue("foo".to_string());
+            let bar = MyUnion::IntValue(10);
+            assert_eq!(foo.is_string_value(), true);
+            assert_eq!(foo.is_int_value(), false);
+            assert_eq!(foo.as_string_value(), Some(&"foo".to_string()));
+            assert_eq!(foo.as_int_value(), None);
+            assert_eq!(bar.is_string_value(), false);
+            assert_eq!(bar.is_int_value(), true);
+            assert_eq!(bar.as_string_value(), None);
+            assert_eq!(bar.as_int_value(), Some(&10));
+        """
+        )
+    }
 }
