@@ -5,9 +5,8 @@
 
 use aws_http::AwsErrorRetryPolicy;
 use aws_hyper::{SdkError, SdkSuccess};
+use dynamodb::client::fluent_builders::Query;
 use dynamodb::error::DescribeTableError;
-use dynamodb::fluent::fluent_builders::Query;
-use dynamodb::fluent::Client;
 use dynamodb::input::DescribeTableInput;
 use dynamodb::model::{
     AttributeDefinition, AttributeValue, KeySchemaElement, KeyType, ProvisionedThroughput,
@@ -37,7 +36,7 @@ async fn main() {
         .region(Region::new("us-east-1"))
         .build();
     let conn = aws_hyper::conn::Standard::https();
-    let client = dynamodb::fluent::Client::from_conf_conn(conf, conn);
+    let client = dynamodb::Client::from_conf_conn(conf, conn);
     let raw_client = aws_hyper::Client::https();
 
     let table_exists = client
@@ -72,7 +71,7 @@ async fn main() {
         client
             .put_item()
             .table_name(table_name)
-            .item(parse_item(value))
+            .set_item(Some(parse_item(value)))
             .send()
             .await
             .expect("failed to insert item");
@@ -105,32 +104,36 @@ async fn main() {
 }
 
 fn create_table(
-    client: &Client,
+    client: &dynamodb::Client,
     table_name: &str,
-) -> dynamodb::fluent::fluent_builders::CreateTable {
+) -> dynamodb::client::fluent_builders::CreateTable {
     client
         .create_table()
         .table_name(table_name)
-        .key_schema(vec![
+        .key_schema(
             KeySchemaElement::builder()
                 .attribute_name("year")
                 .key_type(KeyType::Hash)
                 .build(),
+        )
+        .key_schema(
             KeySchemaElement::builder()
                 .attribute_name("title")
                 .key_type(KeyType::Range)
                 .build(),
-        ])
-        .attribute_definitions(vec![
+        )
+        .attribute_definitions(
             AttributeDefinition::builder()
                 .attribute_name("year")
                 .attribute_type(ScalarAttributeType::N)
                 .build(),
+        )
+        .attribute_definitions(
             AttributeDefinition::builder()
                 .attribute_name("title")
                 .attribute_type(ScalarAttributeType::S)
                 .build(),
-        ])
+        )
         .provisioned_throughput(
             ProvisionedThroughput::builder()
                 .read_capacity_units(10)
@@ -159,17 +162,13 @@ fn value_to_item(value: Value) -> AttributeValue {
     }
 }
 
-fn movies_in_year(client: &Client, table_name: &str, year: u16) -> Query {
-    let mut expr_attrib_names = HashMap::new();
-    expr_attrib_names.insert("#yr".to_string(), "year".to_string());
-    let mut expr_attrib_values = HashMap::new();
-    expr_attrib_values.insert(":yyyy".to_string(), AttributeValue::N(year.to_string()));
+fn movies_in_year(client: &dynamodb::Client, table_name: &str, year: u16) -> Query {
     client
         .query()
         .table_name(table_name)
         .key_condition_expression("#yr = :yyyy")
-        .expression_attribute_names(expr_attrib_names)
-        .expression_attribute_values(expr_attrib_values)
+        .expression_attribute_names("#yr", "year")
+        .expression_attribute_values(":yyyy", AttributeValue::N(year.to_string()))
 }
 
 /// Hand-written waiter to retry every second until the table is out of `Creating` state

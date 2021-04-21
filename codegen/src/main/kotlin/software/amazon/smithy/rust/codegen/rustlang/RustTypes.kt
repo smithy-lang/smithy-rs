@@ -101,7 +101,7 @@ sealed class RustType {
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
 }
 
-fun RustType.render(fullyQualified: Boolean): String {
+fun RustType.render(fullyQualified: Boolean = true): String {
     val namespace = if (fullyQualified) {
         this.namespace?.let { "$it::" } ?: ""
     } else ""
@@ -222,9 +222,20 @@ sealed class Attribute {
         }
     }
 
-    data class Custom(val annotation: String, val symbols: List<RuntimeType> = listOf()) : Attribute() {
+    /**
+     * A custom Attribute
+     *
+     * [annotation] represents the body of the attribute, eg. `cfg(foo)` in `#[cfg(foo)]`
+     * If [container] is set, this attribute refers to its container rather than its successor. This generates `#![cfg(foo)]`
+     *
+     * Finally, any symbols listed will be imported when this attribute is rendered. This enables using attributes like
+     * `#[serde(Serialize)]` where `Serialize` is actually a symbol that must be imported.
+     */
+    data class Custom(val annotation: String, val symbols: List<RuntimeType> = listOf(), val container: Boolean = false) : Attribute() {
         override fun render(writer: RustWriter) {
-            writer.raw("#[$annotation]")
+
+            val bang = if (container) "!" else ""
+            writer.raw("#$bang[$annotation]")
             symbols.forEach {
                 writer.addDependency(it.dependency)
             }

@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 use polly::model::{Engine, OutputFormat, VoiceId};
 use std::error::Error;
 use tokio::fs::File;
@@ -5,7 +10,7 @@ use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
-    let client = polly::fluent::Client::from_env();
+    let client = polly::Client::from_env();
     let resp = client
         .synthesize_speech()
         .voice_id(VoiceId::Emma)

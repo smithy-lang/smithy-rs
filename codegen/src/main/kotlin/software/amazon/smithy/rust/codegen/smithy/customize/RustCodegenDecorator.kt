@@ -123,12 +123,10 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
                 RustCodegenDecorator::class.java,
                 context.pluginClassLoader.orElse(RustCodegenDecorator::class.java.classLoader)
             )
-                .also { decorators ->
-                    decorators.forEach {
-                        logger.info("Adding Codegen Decorator: ${it.javaClass.name}")
-                    }
+                .onEach {
+                    logger.info("Adding Codegen Decorator: ${it.javaClass.name}")
                 }.toList()
-            return CombinedCodegenDecorator(decorators)
+            return CombinedCodegenDecorator(decorators + BaseCustomizations())
         }
     }
 }

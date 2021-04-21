@@ -60,6 +60,7 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
                       "service": "${it.service}",
                       "module": "${it.module}",
                       "moduleVersion": "0.0.1",
+                      "moduleAuthors": ["protocoltest@example.com"],
                       "build": {
                         "rootProject": true
                       }
@@ -132,7 +133,7 @@ tasks.register<Exec>("cargoDocs") {
 tasks.register<Exec>("cargoClippy") {
     workingDir("build/smithyprojections/codegen-test/")
     // disallow warnings
-    commandLine("cargo", "clippy", "--", "-D", "warnings", "-Aclippy::upper_case_acronyms", "-Aclippy::large-enum-variant")
+    commandLine("cargo", "clippy", "--", "-D", "warnings")
     dependsOn("assemble")
 }
 

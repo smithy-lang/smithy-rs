@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 pub mod conn;
 mod retry;
 #[cfg(feature = "test-util")]
@@ -73,6 +78,7 @@ impl<S> Client<S> {
 
 impl Client<Standard> {
     /// Construct an `https` based client
+    #[cfg(any(feature = "native-tls", feature = "rustls"))]
     pub fn https() -> StandardClient {
         Client {
             inner: Standard::https(),
@@ -96,7 +102,7 @@ where
     /// access the raw response use `call_raw`.
     pub async fn call<O, T, E, Retry>(&self, input: Operation<O, Retry>) -> Result<T, SdkError<E>>
     where
-        O: ParseHttpResponse<hyper::Body, Output = Result<T, E>> + Send + Clone + 'static,
+        O: ParseHttpResponse<hyper::Body, Output = Result<T, E>> + Send + Sync + Clone + 'static,
         E: Error + ProvideErrorKind,
         Retry: ClassifyResponse<SdkSuccess<T>, SdkError<E>>,
     {
@@ -112,7 +118,7 @@ where
         input: Operation<O, Retry>,
     ) -> Result<SdkSuccess<R>, SdkError<E>>
     where
-        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + Clone + 'static,
+        O: ParseHttpResponse<hyper::Body, Output = Result<R, E>> + Send + Sync + Clone + 'static,
         E: Error + ProvideErrorKind,
         Retry: ClassifyResponse<SdkSuccess<R>, SdkError<E>>,
     {
@@ -136,26 +142,21 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::Client;
 
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
     #[test]
     fn construct_default_client() {
-        let _ = Client::https();
+        let c = crate::Client::https();
+        fn is_send_sync<T: Send + Sync>(_c: T) {}
+        is_send_sync(c);
     }
 
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
     #[test]
     fn client_debug_includes_retry_info() {
-        let client = Client::https();
+        let client = crate::Client::https();
         let s = format!("{:?}", client);
         assert!(s.contains("RetryConfig"));
         assert!(s.contains("quota_available"));
-    }
-
-    fn is_send_sync<T: Send + Sync>(_: T) {}
-
-    #[test]
-    fn client_is_send_sync() {
-        let c = Client::https();
-        is_send_sync(c);
     }
 }

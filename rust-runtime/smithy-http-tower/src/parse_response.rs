@@ -57,7 +57,7 @@ where
     }
 }
 
-type BoxedResultFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>>>>;
+type BoxedResultFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>> + Send>>;
 
 /// ParseResponseService
 ///
@@ -71,10 +71,10 @@ type BoxedResultFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>>>>;
 impl<S, O, T, E, B, R> tower::Service<operation::Operation<O, R>> for ParseResponseService<S, O, R>
 where
     S: Service<operation::Request, Response = http::Response<B>, Error = SendOperationError>,
-    S::Future: 'static,
-    B: http_body::Body + 'static,
+    S::Future: Send + 'static,
+    B: http_body::Body + Send + 'static,
     B::Error: Into<BoxError>,
-    O: ParseHttpResponse<B, Output = Result<T, E>> + 'static,
+    O: ParseHttpResponse<B, Output = Result<T, E>> + Send + Sync + 'static,
     E: Error,
 {
     type Response = smithy_http::result::SdkSuccess<T>;

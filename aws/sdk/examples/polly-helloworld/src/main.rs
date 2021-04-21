@@ -1,9 +1,14 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 use polly::model::{Engine, Voice};
 use std::error::Error;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
-    let client = polly::fluent::Client::from_env();
+    let client = polly::Client::from_env();
     let mut tok = None;
     let mut voices: Vec<Voice> = vec![];
     // Below is an an example of how pagination can be implemented manually.
