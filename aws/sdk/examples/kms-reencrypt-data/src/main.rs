@@ -8,8 +8,7 @@ use std::fs::File;
 use std::io::Write;
 use std::process;
 
-use kms::Blob;
-use kms::{Client, Config, Region};
+use kms::{Blob, Client, Config, Region};
 
 use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
