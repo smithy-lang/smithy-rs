@@ -1,10 +1,8 @@
 # Rust SDK Design Tenets
 > Unless you know better ones! These are our tenets today, but we'd love your thoughts! Do you wish we had different priorities? Let us know by opening and issue or starting a discussion.
 1. [**Batteries included, but replaceable.**](#batteries-included-but-replaceable) The Rust SDK should provide a best-in-class experience for many use cases, **but**, we can’t foresee all the situations the customer will use our software. **Meet customers where they are;** strive to be compatible with their tools. Provide escape hatches to allow customers make different choices.
-4. [**Make common problems easy to solve.**](#make-common-problems-easy-to-solve) Make uncommon problems solvable. Lead customers into [the pit of success](https://blog.codinghorror.com/falling-into-the-pit-of-success/).
-2. **Dependencies must be a force multiplier for customers.** A large tree of transitive dependencies increases risk for our customers. Using someone else’s code is high leverage for authors of an SDK, but to be included, a dependency must also be high leverage for SDK customers.
-5. [**Design for the Future.**](#design-for-the-future) We can’t know how APIs will evolve, what protocols will gain adoption, and what new service will be created. Don’t simplify or unify code today that prevents evolution tomorrow.
-3. **Customer experience > our experience.** Our experience developing the SDK is important, but we have limited resources and need to prioritize what makes the best possible SDK for the customer. Although our productivity is important, we must only prioritize the experience of an SDK author over an SDK customer deliberately and carefully.
+2. [**Make common problems easy to solve.**](#make-common-problems-easy-to-solve) Make uncommon problems solvable. Lead customers into [the pit of success](https://blog.codinghorror.com/falling-into-the-pit-of-success/).
+3. [**Design for the Future.**](#design-for-the-future) We can’t know how APIs will evolve, what protocols will gain adoption, and what new service will be created. Don’t simplify or unify code today that prevents evolution tomorrow.
 
 ## Details, Justification, and Ramifications
 
@@ -20,9 +18,9 @@ If solving a common problem isn’t obvious from the API, it should be obvious f
 
 ### **Design for the Future**
 
-We can’t consider every potential future API evolution, so it’s crucial that we can add new modes for new services without breaking existing clients. This means limiting the blast radius of changes:
+We can't consider every potential future API evolution, so it’s crucial that we can evolve the SDK without breaking existing clients. This means limiting the blast radius of changes:
 
 * Keeping the shared core as small & opaque as possible.
 * Don’t leak our internal dependencies to customers
 
-This may not be DRY code, and that’s OK! Code that is auto generated has different goals and tradeoffs than code that has been written by hand.
+This may not result in DRY code, and that’s OK! Code that is auto generated has different goals and tradeoffs than code that has been written by hand.
