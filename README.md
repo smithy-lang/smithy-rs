@@ -12,6 +12,13 @@ The nightly SDK build can be found under `Actions -> CI (take latest run) -> Art
 2. Running tests requires a working Rust installation. See [Rust docs](https://www.rust-lang.org/learn/get-started) for
 installation instructions on your platform. Minimum supported Rust version is the latest released Rust version, although older versions may work.
 
+## Generate an AWS SDK
+The generated SDK will be placed in `aws/sdk/build/aws-sdk`.
+```
+./gradlew :aws:sdk:assemble # Generate an SDK. Do not attempt to compile / run tests
+./gradlew :aws:sdk:test # Run all the tests
+./gradlew :aws:sdk:cargoCheck # only validate that it compiles
+```
 ## Run tests
 ```./test.sh```
 
