@@ -11,9 +11,11 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.util.toPascalCase
+import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class UnionGenerator(
     val model: Model,
@@ -37,6 +39,20 @@ class UnionGenerator(
                 documentShape(member, model)
                 memberSymbol.expectRustMetadata().renderAttributes(this)
                 write("${member.memberName.toPascalCase()}(#T),", symbolProvider.toSymbol(member))
+            }
+        }
+        writer.rustBlock("impl ${symbol.name}") {
+            sortedMembers.forEach { member ->
+                val memberSymbol = symbolProvider.toSymbol(member)
+                val funcNamePart = member.memberName.toSnakeCase().removeSuffix("_value")
+                val variantName = member.memberName.toPascalCase()
+
+                writer.rustBlock("pub fn as_$funcNamePart(&self) -> Option<&#T>", memberSymbol) {
+                    write("if let ${symbol.name}::$variantName(val) = &self { Some(&val) } else { None }")
+                }
+                writer.rustBlock("pub fn is_$funcNamePart(&self) -> bool") {
+                    write("self.as_$funcNamePart().is_some()")
+                }
             }
         }
     }
