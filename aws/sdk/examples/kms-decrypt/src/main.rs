@@ -6,7 +6,6 @@
 use std::fs;
 use std::process;
 
-use kms::error::{DecryptError, DecryptErrorKind};
 use kms::{Blob, Client, Config, Region};
 
 use aws_types::region::{EnvironmentProvider, ProvideRegion};
@@ -61,7 +60,7 @@ async fn main() {
     }
 
     let config = Config::builder().region(region).build();
-    let client = kms::Client::from_conf(config);
+    let client = Client::from_conf(config);
 
     // Open input text file and get contents as a string
     // input is a base-64 encoded string, so decode it:
