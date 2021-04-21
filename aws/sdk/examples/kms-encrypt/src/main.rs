@@ -7,7 +7,6 @@ use std::fs::File;
 use std::io::Write;
 use std::process;
 
-use kms::error::{EncryptError, EncryptErrorKind};
 use kms::{Blob, Client, Config, Region};
 
 use aws_types::region::{EnvironmentProvider, ProvideRegion};

@@ -8,7 +8,6 @@ use std::fs::File;
 use std::io::Write;
 use std::process;
 
-use kms::error::{ReEncryptError, ReEncryptErrorKind};
 use kms::Blob;
 use kms::{Client, Config, Region};
 

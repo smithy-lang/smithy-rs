@@ -4,7 +4,6 @@
  */
 use std::process;
 
-use kms::error::{GenerateDataKeyWithoutPlaintextError, GenerateDataKeyWithoutPlaintextErrorKind};
 use kms::model::DataKeySpec;
 
 use kms::{Client, Config, Region};
