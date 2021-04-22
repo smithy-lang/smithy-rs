@@ -131,9 +131,9 @@ impl http_body::Body for SdkBody {
 
     fn poll_data(
         self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
+        cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
-        self.poll_inner(_cx)
+        self.poll_inner(cx)
     }
 
     fn poll_trailers(
