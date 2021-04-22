@@ -34,20 +34,30 @@ enum Inner {
     Once(#[pin] Option<Bytes>),
     Streaming(#[pin] hyper::Body),
     Dyn(#[pin] BoxBody),
+
+    /// When a streaming body is transferred out to a stream parser, the body is replaced with
+    /// `Taken`. This will return an Error when polled. Attempting to read data out of a `Taken`
+    /// Body is a bug.
+    Taken,
 }
 
 impl Debug for Inner {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self {
-            i @ Inner::Once(_) | i @ Inner::Streaming(_) => i.fmt(f),
+            i @ Inner::Once(_) | i @ Inner::Streaming(_) | i @ Inner::Taken => i.fmt(f),
             Inner::Dyn(_) => write!(f, "BoxBody"),
         }
     }
 }
 
 impl SdkBody {
+    /// Construct an SdkBody from a Boxed implementation of http::Body
     pub fn from_dyn(body: BoxBody) -> Self {
         Self(Inner::Dyn(body))
+    }
+
+    pub fn taken() -> Self {
+        Self(Inner::Taken)
     }
 
     fn poll_inner(
@@ -65,6 +75,9 @@ impl SdkBody {
             }
             InnerProj::Streaming(body) => body.poll_data(cx).map_err(|e| e.into()),
             InnerProj::Dyn(box_body) => box_body.poll_data(cx),
+            InnerProj::Taken => {
+                Poll::Ready(Some(Err("A `Taken` body should never be polled".into())))
+            }
         }
     }
 
@@ -136,6 +149,7 @@ impl http_body::Body for SdkBody {
             Inner::Once(Some(bytes)) => bytes.is_empty(),
             Inner::Streaming(hyper_body) => hyper_body.is_end_stream(),
             Inner::Dyn(box_body) => box_body.is_end_stream(),
+            Inner::Taken => true,
         }
     }
 
@@ -145,6 +159,7 @@ impl http_body::Body for SdkBody {
             Inner::Once(Some(bytes)) => SizeHint::with_exact(bytes.len() as u64),
             Inner::Streaming(hyper_body) => hyper_body.size_hint(),
             Inner::Dyn(box_body) => box_body.size_hint(),
+            Inner::Taken => SizeHint::new(),
         }
     }
 }
