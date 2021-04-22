@@ -32,6 +32,7 @@ impl SdkBody {
             SdkBody::Once(ref mut opt) => {
                 let data = opt.take();
                 match data {
+                    Some(bytes) if bytes.is_empty() => Poll::Ready(None),
                     Some(bytes) => Poll::Ready(Some(Ok(bytes))),
                     None => Poll::Ready(None),
                 }
