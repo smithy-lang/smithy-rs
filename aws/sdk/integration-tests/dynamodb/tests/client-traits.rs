@@ -6,7 +6,7 @@
 use aws_sdk_dynamodb as dynamodb;
 
 #[tokio::test]
-async fn client_is_debug() {
+async fn client_impl_debug() {
     let client = dynamodb::Client::from_env();
-    assert_eq!(format!("{:?}", client), "foo"));
+    assert_ne!(format!("{:?}", client), "");
 }

@@ -103,10 +103,12 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
     }
 
     fun render(writer: RustWriter) {
-      writer.rustBlock("""
-            ##[derive(std::fmt::Debug)]
-            pub struct Config
-          """) {
+        writer.rustBlock(
+            """
+        ##[derive(std::fmt::Debug)]
+        pub struct Config
+      """
+        ) {
             customizations.forEach {
                 it.section(ServiceConfig.ConfigStruct)(this)
             }
