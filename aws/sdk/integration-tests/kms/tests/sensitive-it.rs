@@ -8,7 +8,7 @@ use kms::error::CreateAliasError;
 use kms::operation::{CreateAlias, GenerateRandom};
 use kms::output::GenerateRandomOutput;
 use kms::Blob;
-use smithy_http::middleware::ResponseBody;
+use smithy_http::body::SdkBody;
 use smithy_http::result::SdkError;
 use smithy_http::retry::ClassifyResponse;
 use smithy_types::retry::{ErrorKind, RetryKind};
@@ -55,7 +55,7 @@ fn errors_are_retryable() {
         .parse_response(&http_response)
         .map_err(|e| SdkError::ServiceError {
             err: e,
-            raw: http_response.map(ResponseBody::from_static),
+            raw: http_response.map(SdkBody::from),
         });
     let retry_kind = parts.retry_policy.classify(err.as_ref());
     assert_eq!(retry_kind, RetryKind::Error(ErrorKind::ThrottlingError));
@@ -77,7 +77,7 @@ fn unmodeled_errors_are_retryable() {
         .parse_response(&http_response)
         .map_err(|e| SdkError::ServiceError {
             err: e,
-            raw: http_response.map(ResponseBody::from_static),
+            raw: http_response.map(SdkBody::from),
         });
     let retry_kind = parts.retry_policy.classify(err.as_ref());
     assert_eq!(retry_kind, RetryKind::Error(ErrorKind::ThrottlingError));
