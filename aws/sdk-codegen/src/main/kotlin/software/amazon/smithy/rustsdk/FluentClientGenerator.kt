@@ -79,11 +79,13 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
+            ##[derive(std::fmt::Debug)]
             pub(crate) struct Handle {
                 client: #{aws_hyper}::Client<#{aws_hyper}::conn::Standard>,
                 conf: crate::Config
             }
 
+            ##[derive(std::fmt::Debug)]
             pub struct Client {
                 handle: std::sync::Arc<Handle>
             }

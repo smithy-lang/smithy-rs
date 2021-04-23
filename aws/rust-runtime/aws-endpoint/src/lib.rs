@@ -71,7 +71,7 @@ pub type BoxError = Box<dyn Error + Send + Sync + 'static>;
 /// In the future, each AWS service will generate their own implementation of `ResolveAwsEndpoint`. This implementation
 /// may use endpoint discovery. The list of supported regions for a given service
 /// will be codegenerated from `endpoints.json`.
-pub trait ResolveAwsEndpoint: Send + Sync {
+pub trait ResolveAwsEndpoint: Send + Sync + Debug {
     // TODO: consider if we want modeled error variants here
     fn endpoint(&self, region: &Region) -> Result<AwsEndpoint, BoxError>;
 }
@@ -81,6 +81,7 @@ pub trait ResolveAwsEndpoint: Send + Sync {
 /// This is used as a temporary stub. Prior to GA, this will be replaced with specifically generated endpoint
 /// resolvers for each service that model the endpoints for each service correctly. Some services differ
 /// from the standard endpoint pattern.
+#[derive(Debug)]
 pub struct DefaultAwsEndpointResolver {
     service: &'static str,
 }
@@ -241,6 +242,7 @@ mod test {
 
     #[test]
     fn sets_service_override_when_set() {
+        #[derive(Debug)]
         struct ServiceOverrideResolver;
         impl ResolveAwsEndpoint for ServiceOverrideResolver {
             fn endpoint(&self, _region: &Region) -> Result<AwsEndpoint, BoxError> {

@@ -130,7 +130,7 @@ pub type CredentialsProvider = Arc<dyn ProvideCredentials>;
 /// async method to drive refresh (eg. in a background task).
 ///
 /// Pending future design iteration, an async credentials provider may be introduced.
-pub trait ProvideCredentials: Send + Sync {
+pub trait ProvideCredentials: Send + Sync + Debug {
     fn provide_credentials(&self) -> Result<Credentials, CredentialsError>;
 }
 

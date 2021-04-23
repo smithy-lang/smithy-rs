@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use std::fmt::Debug;
 use std::sync::Mutex;
 
 pub(crate) fn uuid_v4(input: u128) -> String {
@@ -30,7 +31,7 @@ pub(crate) fn uuid_v4(input: u128) -> String {
     out
 }
 
-pub trait MakeIdempotencyToken: Send + Sync {
+pub trait MakeIdempotencyToken: Send + Sync + Debug {
     fn make_idempotency_token(&self) -> String;
 }
 
