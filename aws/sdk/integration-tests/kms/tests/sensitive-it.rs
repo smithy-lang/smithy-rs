@@ -38,6 +38,18 @@ fn types_are_send_sync() {
     assert_send_fut(kms::Client::from_env().list_keys().send());
 }
 
+#[test]
+fn client_is_debug() {
+    let client = kms::Client::from_env();
+    assert_ne!(format!("{:?}", client), "");
+}
+
+#[test]
+fn client_is_clone() {
+    let client = kms::Client::from_env();
+    let _ = client.clone();
+}
+
 /// Parse a semi-real response body and assert that the correct retry status is returned
 #[test]
 fn errors_are_retryable() {
