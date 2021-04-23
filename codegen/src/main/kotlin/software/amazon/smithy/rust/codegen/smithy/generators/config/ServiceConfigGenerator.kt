@@ -109,6 +109,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
             }
         }
 
+        // Custom implementation for Debug so we don't need to enforce Debug down the chain
         writer.rustBlock("impl std::fmt::Debug for Config") {
             rustTemplate(
                 """
