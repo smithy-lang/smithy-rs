@@ -13,7 +13,7 @@ async fn main() -> Result<(), qldb::Error> {
             println!("* {:?}", ledger);
         }
 
-        if let Some(_) = result.next_token {
+        if result.next_token.is_some() {
             todo!("pagination is not yet demonstrated")
         }
     }
