@@ -6,18 +6,10 @@
 use crate::{Credentials, CredentialsError, ProvideCredentials};
 use std::collections::HashMap;
 use std::env::VarError;
-use std::fmt::{Debug, Formatter};
 
 /// Load Credentials from Environment Variables
 pub struct EnvironmentVariableCredentialsProvider {
     env: Box<dyn Fn(&str) -> Result<String, VarError> + Send + Sync>,
-}
-
-impl Debug for EnvironmentVariableCredentialsProvider {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut creds = f.debug_struct("EnvironmentVariableCredentialsProvider");
-        creds.finish()
-    }
 }
 
 impl EnvironmentVariableCredentialsProvider {
