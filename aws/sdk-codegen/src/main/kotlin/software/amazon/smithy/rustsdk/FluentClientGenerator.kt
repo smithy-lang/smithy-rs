@@ -85,7 +85,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                 conf: crate::Config
             }
 
-            ##[derive(std::fmt::Debug)]
+            ##[derive(Clone, std::fmt::Debug)]
             pub struct Client {
                 handle: std::sync::Arc<Handle>
             }

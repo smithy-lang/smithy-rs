@@ -10,3 +10,9 @@ async fn client_impl_debug() {
     let client = dynamodb::Client::from_env();
     assert_ne!(format!("{:?}", client), "");
 }
+
+#[tokio::test]
+async fn client_impl_clone() {
+    let client = dynamodb::Client::from_env();
+    let _ = client.clone();
+}
