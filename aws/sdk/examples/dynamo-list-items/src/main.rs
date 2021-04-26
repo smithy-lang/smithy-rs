@@ -54,9 +54,11 @@ async fn main() {
 
     let client = Client::from_conf(config);
 
-    match client.scan().table_name(String::from(&table)).send().await {
+    let t = &table;
+
+    match client.scan().table_name(t).send().await {
         Ok(resp) => {
-            println!("Items in table {}:", &table);
+            println!("Items in table {}:", table);
 
             let items = resp.items.unwrap_or_default();
 

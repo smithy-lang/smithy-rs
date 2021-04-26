@@ -37,6 +37,17 @@ struct Opt {
     info: bool,
 }
 
+/// Deletes an item from an Amazon DynamoDB table.
+/// The table schema must use the key as the primary key.
+/// # Arguments
+///
+/// * `-t TABLE` - The name of the table.
+/// * `-k KEY` - The table's primary key.
+/// * `-v VALUE` - The value of the item's primary key.
+/// * `[-r REGION]` - The region in which the table is created.
+///   If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///   If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-i]` - Whether to display additional information.
 #[tokio::main]
 async fn main() {
     let Opt {

@@ -52,18 +52,11 @@ async fn main() {
             .init();
     }
 
-    //let t = &table;
-
     let config = Config::builder().region(region).build();
 
     let client = Client::from_conf(config);
 
-    match client
-        .delete_table()
-        .table_name(String::from(&table))
-        .send()
-        .await
-    {
+    match client.delete_table().table_name(table).send().await {
         Ok(_) => println!("Deleted table"),
         Err(e) => {
             println!("Got an error deleting the table:");

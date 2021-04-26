@@ -49,6 +49,20 @@ struct Opt {
     verbose: bool,
 }
 
+/// Adds an item to an Amazon DynamoDB table.
+/// The table schema must use one of username, p_type, age, first, or last as the primary key.
+/// # Arguments
+///
+/// * `-t TABLE` - The name of the table.
+/// * `-u USERNAME` - The username of the new table item.
+/// * `-p PERMISSION-TYPE` - The type of user, either "standard_user" or "admin".
+/// * `-a AGE` - The age of the user.
+/// * `-f FIRST` - The first name of the user.
+/// * `-l LAST` - The last name of the user.
+/// * `[-r REGION]` - The region in which the table is created.
+///   If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///   If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() {
     let Opt {
@@ -117,7 +131,7 @@ async fn main() {
         ),
         Err(e) => {
             println!("Got an error adding item:");
-            println!("{:?}", e);
+            println!("{}", e);
             process::exit(1);
         }
     };

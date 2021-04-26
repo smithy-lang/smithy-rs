@@ -61,9 +61,6 @@ async fn main() {
             .init();
     }
 
-    //    let t = &table;
-    //    let k = &key;
-
     let config = Config::builder().region(region).build();
     let client = Client::from_conf(config);
 
@@ -94,7 +91,7 @@ async fn main() {
         Ok(_) => println!("Added table {} with key {}", table, key),
         Err(e) => {
             println!("Got an error creating table:");
-            println!("{:?}", e);
+            println!("{}", e);
             process::exit(1);
         }
     };
