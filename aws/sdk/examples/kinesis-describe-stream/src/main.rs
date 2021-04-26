@@ -56,20 +56,19 @@ async fn main() {
     let client = Client::from_conf(config);
 
     match client.describe_stream().stream_name(name).send().await {
-        Ok(resp) => match resp.stream_description {
-            None => println!("\nDid not find stream\n"),
-            Some(stream) => {
-                println!("Stream description:");
-                println!("  Name:              {}:", stream.stream_name.unwrap());
-                println!("  Status:            {:?}", stream.stream_status.unwrap());
-                println!("  Open shards:       {:?}", stream.shards.unwrap().len());
-                println!(
-                    "  Retention (hours): {}",
-                    stream.retention_period_hours.unwrap()
-                );
-                println!("  Encryption:        {:?}", stream.encryption_type.unwrap());
-            }
-        },
+        Ok(resp) => {
+            let desc = resp.stream_description.unwrap();
+
+            println!("Stream description:");
+            println!("  Name:              {}:", desc.stream_name.unwrap());
+            println!("  Status:            {:?}", desc.stream_status.unwrap());
+            println!("  Open shards:       {:?}", desc.shards.unwrap().len());
+            println!(
+                "  Retention (hours): {}",
+                desc.retention_period_hours.unwrap()
+            );
+            println!("  Encryption:        {:?}", desc.encryption_type.unwrap());
+        }
         Err(e) => {
             println!("Got an error describing stream");
             println!("{}", e);
