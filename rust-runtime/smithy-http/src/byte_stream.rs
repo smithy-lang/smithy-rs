@@ -98,10 +98,13 @@ use std::task::{Context, Poll};
 ///     ```rust
 ///     use smithy_http::byte_stream::{ByteStream, AggregatedBytes};
 ///     use smithy_http::body::SdkBody;
+///     use bytes::Buf;
 ///     async fn example() {
 ///        let stream = ByteStream::new(SdkBody::from("hello! This is some data"));
 ///        // Load data from the stream into memory:
-///        let data: AggregatedBytes = stream.collect().await.expect("error reading data");
+///        let data = stream.collect().await.expect("error reading data");
+///        // collect returns a `bytes::Buf`:
+///        println!("first chunk: {:?}", data.chunk());
 ///     }
 ///     ```
 /// 2. Via [`impl Stream`](futures_core::Stream):
