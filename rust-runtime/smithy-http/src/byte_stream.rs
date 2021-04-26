@@ -93,7 +93,7 @@ use std::task::{Context, Poll};
 ///
 /// `ByteStream` provides two primary mechanisms for accessing the data:
 /// 1. With `.collect()`:
-/// [`.collect()`](crate::byte_stream::ByteStream::data) reads the complete ByteStream into memory and stores it in `AggregatedBytes`,
+/// [`.collect()`](crate::byte_stream::ByteStream::collect) reads the complete ByteStream into memory and stores it in `AggregatedBytes`,
 /// a non-contiguous ByteBuffer.
 ///     ```rust
 ///     use smithy_http::byte_stream::{ByteStream, AggregatedBytes};
@@ -105,7 +105,9 @@ use std::task::{Context, Poll};
 ///     }
 ///     ```
 /// 2. Via [`impl Stream`](futures_core::Stream):
-///     **Note**: An import of `StreamExt` is required to use `next()`.
+///     **Note**: An import of `StreamExt` is required to use `try_next()`.
+///     For use-cases where holding the entire ByteStream in memory is unecessary, use the
+///     `Stream` implementation:
 ///     ```rust
 ///     # mod crc32 {
 ///     #   pub struct Digest { }
