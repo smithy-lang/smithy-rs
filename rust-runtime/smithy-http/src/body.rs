@@ -27,7 +27,7 @@ pub type Error = Box<dyn StdError + Send + Sync>;
 #[derive(Debug)]
 pub struct SdkBody(#[pin] Inner);
 
-type BoxBody = http_body::combinators::BoxBody<Bytes, Box<dyn StdError + Send + Sync>>;
+type BoxBody = http_body::combinators::BoxBody<Bytes, Error>;
 
 #[pin_project(project = InnerProj)]
 enum Inner {

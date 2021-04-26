@@ -23,7 +23,7 @@
 //! async fn audio_to_file(
 //!     output: SynthesizeSpeechOutput,
 //! ) -> Result<(), Box<dyn Error + Send + Sync>> {
-//!     let mut buf = output.audio_stream.data().await?;
+//!     let mut buf = output.audio_stream.collect().await?;
 //!     let mut file = File::open("audio.mp3").await?;
 //!     while buf.has_remaining() {
 //!         file.write_buf(&mut buf).await?;
@@ -43,7 +43,7 @@
 //! async fn load_audio(
 //!     output: SynthesizeSpeechOutput,
 //! ) -> Result<Bytes, Box<dyn Error + Send + Sync>> {
-//!     Ok(output.audio_stream.data().await?.into_bytes())
+//!     Ok(output.audio_stream.collect().await?.into_bytes())
 //! }
 //! ```
 //!
@@ -83,7 +83,7 @@ use http_body::Body;
 use pin_project::pin_project;
 use std::error::Error as StdError;
 use std::fmt::{Debug, Formatter};
-use std::io::ErrorKind;
+use std::io::IoSlice;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -92,8 +92,8 @@ use std::task::{Context, Poll};
 /// `ByteStream` wraps a stream of binary data for ease of use.
 ///
 /// `ByteStream` provides two primary mechanisms for accessing the data:
-/// 1. With `.data()`:
-/// [`.data()`](crate::byte_stream::ByteStream::data) reads the complete ByteStream into memory and stores it in `AggregatedBytes`,
+/// 1. With `.collect()`:
+/// [`.collect()`](crate::byte_stream::ByteStream::data) reads the complete ByteStream into memory and stores it in `AggregatedBytes`,
 /// a non-contiguous ByteBuffer.
 ///     ```rust
 ///     use smithy_http::byte_stream::{ByteStream, AggregatedBytes};
@@ -101,7 +101,7 @@ use std::task::{Context, Poll};
 ///     async fn example() {
 ///        let stream = ByteStream::new(SdkBody::from("hello! This is some data"));
 ///        // Load data from the stream into memory:
-///        let data: AggregatedBytes = stream.data().await.expect("error reading data");
+///        let data: AggregatedBytes = stream.collect().await.expect("error reading data");
 ///     }
 ///     ```
 /// 2. Via [`impl Stream`](futures_core::Stream):
@@ -122,8 +122,7 @@ use std::task::{Context, Poll};
 ///     async fn example() -> Result<(), Error> {
 ///        let mut stream = ByteStream::new(SdkBody::from("hello! This is some data"));
 ///        let mut digest = crc32::Digest::new();
-///        while let Some(bytes) = stream.next().await {
-///            let bytes = bytes?;
+///        while let Some(bytes) = stream.try_next().await? {
 ///            digest.write(&bytes);
 ///        }
 ///        println!("digest: {}", digest.finish());
@@ -141,6 +140,14 @@ impl ByteStream {
         Self(Inner::new(body))
     }
 
+    /// Consumes the ByteStream, returning the wrapped SdkBody
+    // Backwards compatibility note: Because SdkBody has a dyn variant,
+    // we will always be able to implement this method, even if we stop using
+    // SdkBody as the internal representation
+    pub fn into_inner(self) -> SdkBody {
+        self.0.body
+    }
+
     /// Read all the data from this `ByteStream` into memory
     ///
     /// If an error in the underlying stream is encountered, `ByteStreamError` is returned.
@@ -154,11 +161,17 @@ impl ByteStream {
     /// use smithy_http::byte_stream::{ByteStream, Error};
     /// async fn get_data() {
     ///     let stream = ByteStream::new(SdkBody::from("hello!"));
-    ///     let data: Result<Bytes, Error> = stream.data().await.map(|data| data.into_bytes());
+    ///     let data: Result<Bytes, Error> = stream.collect().await.map(|data| data.into_bytes());
     /// }
     /// ```
-    pub async fn data(self) -> Result<AggregatedBytes, Error> {
-        self.0.data().await.map_err(|err| Error(err))
+    pub async fn collect(self) -> Result<AggregatedBytes, Error> {
+        self.0.collect().await.map_err(|err| Error(err))
+    }
+}
+
+impl From<SdkBody> for ByteStream {
+    fn from(inp: SdkBody) -> Self {
+        ByteStream::new(inp)
     }
 }
 
@@ -170,15 +183,10 @@ impl std::fmt::Display for Error {
         write!(f, "{}", self.0)
     }
 }
+
 impl StdError for Error {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         Some(self.0.as_ref() as _)
-    }
-}
-
-impl From<Error> for std::io::Error {
-    fn from(e: Error) -> Self {
-        std::io::Error::new(ErrorKind::Other, e)
     }
 }
 
@@ -219,6 +227,7 @@ impl AggregatedBytes {
 }
 
 impl Buf for AggregatedBytes {
+    // Forward all methods that SegmentedBuf has custom implementations of.
     fn remaining(&self) -> usize {
         self.0.remaining()
     }
@@ -227,13 +236,23 @@ impl Buf for AggregatedBytes {
         self.0.chunk()
     }
 
+    fn chunks_vectored<'a>(&'a self, dst: &mut [IoSlice<'a>]) -> usize {
+        self.0.chunks_vectored(dst)
+    }
+
     fn advance(&mut self, cnt: usize) {
         self.0.advance(cnt)
     }
+
+    fn copy_to_bytes(&mut self, len: usize) -> Bytes {
+        self.0.copy_to_bytes(len)
+    }
 }
 
+#[pin_project]
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Inner<B> {
+    #[pin]
     body: B,
 }
 
@@ -241,7 +260,7 @@ impl<B> Inner<B> {
     pub fn new(body: B) -> Self {
         Self { body }
     }
-    pub async fn data(self) -> Result<AggregatedBytes, B::Error>
+    pub async fn collect(self) -> Result<AggregatedBytes, B::Error>
     where
         B: http_body::Body<Data = Bytes>,
     {
@@ -257,14 +276,12 @@ impl<B> Inner<B> {
 
 impl<B> futures_core::stream::Stream for Inner<B>
 where
-    B: http_body::Body + Unpin,
+    B: http_body::Body,
 {
     type Item = Result<Bytes, B::Error>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let body = &mut self.body;
-        crate::pin_mut!(body);
-        match body.poll_data(cx) {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        match self.project().body.poll_data(cx) {
             Poll::Ready(Some(Ok(mut data))) => {
                 let len = data.chunk().len();
                 let bytes = data.copy_to_bytes(len);
@@ -295,7 +312,7 @@ mod tests {
         let body = hyper::Body::from("a simple body");
         assert_eq!(
             Inner::new(body)
-                .data()
+                .collect()
                 .await
                 .expect("no errors")
                 .into_bytes(),
@@ -313,7 +330,7 @@ mod tests {
             sender.send_data(Bytes::from("data 3")).await.unwrap();
         });
         assert_eq!(
-            byte_stream.data().await.expect("no errors").into_bytes(),
+            byte_stream.collect().await.expect("no errors").into_bytes(),
             Bytes::from("data 1data 2data 3")
         );
     }
