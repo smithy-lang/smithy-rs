@@ -7,13 +7,13 @@ use bytes::Bytes;
 use http::{HeaderMap, HeaderValue};
 use http_body::{Body, SizeHint};
 use pin_project::pin_project;
-use std::error::Error;
+use std::error::Error as StdError;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-type BodyError = Box<dyn Error + Send + Sync>;
+pub type Error = Box<dyn StdError + Send + Sync>;
 
 /// SdkBody type
 ///
@@ -27,7 +27,7 @@ type BodyError = Box<dyn Error + Send + Sync>;
 #[derive(Debug)]
 pub struct SdkBody(#[pin] Inner);
 
-type BoxBody = http_body::combinators::BoxBody<Bytes, Box<dyn Error + Send + Sync>>;
+type BoxBody = http_body::combinators::BoxBody<Bytes, Error>;
 
 #[pin_project(project = InnerProj)]
 enum Inner {
@@ -63,7 +63,7 @@ impl SdkBody {
     fn poll_inner(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Bytes, BodyError>>> {
+    ) -> Poll<Option<Result<Bytes, Error>>> {
         match self.project().0.project() {
             InnerProj::Once(ref mut opt) => {
                 let data = opt.take();
@@ -127,7 +127,7 @@ impl From<Vec<u8>> for SdkBody {
 
 impl http_body::Body for SdkBody {
     type Data = Bytes;
-    type Error = BodyError;
+    type Error = Error;
 
     fn poll_data(
         self: Pin<&mut Self>,
