@@ -17,11 +17,14 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
@@ -222,11 +225,22 @@ class HttpProtocolTestGenerator(
         rust(
             """
                 .status(${testCase.code})
-                .body(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"})
+                .body(#T::from(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"}))
                 .unwrap();
-            """
+            """,
+            RuntimeType.sdkBody(runtimeConfig = protocolConfig.runtimeConfig)
         )
-        write("let parsed = #T::from_response(&http_response);", operationSymbol)
+        rustTemplate(
+            """
+            use #{parse_http_response};
+            let parsed = #{op}::parse_unloaded(&mut http_response);
+            let parsed = parsed
+                .unwrap_or_else(||
+                    #{op}::parse_loaded(http_response.map(|body|#{bytes}::from(body.bytes().unwrap())))
+            );
+        """,
+            "op" to operationSymbol, "bytes" to RuntimeType.Bytes, "parse_http_response" to CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType().member("response::ParseHttpResponse")
+        )
         if (expectedShape.hasTrait(ErrorTrait::class.java)) {
             val errorSymbol = operationShape.errorSymbol(protocolConfig.symbolProvider)
             val errorVariant = protocolConfig.symbolProvider.toSymbol(expectedShape).name
