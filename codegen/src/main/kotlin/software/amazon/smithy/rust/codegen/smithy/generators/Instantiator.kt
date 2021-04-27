@@ -29,7 +29,6 @@ import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
-import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
@@ -42,7 +41,6 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.toPascalCase
@@ -270,48 +268,21 @@ class Instantiator(
         data: ObjectNode,
         ctx: Ctx
     ) {
-        writer.rustBlock("") {
-            val isSyntheticInput = shape.hasTrait(SyntheticInputTrait::class.java)
-            if (isSyntheticInput) {
-                rust(
-                    """
-                let config = #T::Config::builder()
-            """,
-                    RuntimeType.Config
+        writer.write("#T::builder()", symbolProvider.toSymbol(shape))
+        data.members.forEach { (key, value) ->
+            val memberShape = shape.expectMember(key.value)
+            writer.withBlock(".${memberShape.setterName()}(", ")") {
+                renderMember(
+                    this,
+                    memberShape,
+                    value,
+                    ctx
                 )
-                if (shape.allMembers.values.any { it.hasTrait(IdempotencyTokenTrait::class.java) }) {
-                    rust(".make_token(\"00000000-0000-4000-8000-000000000000\")")
-                }
-                rust(".build();")
-            } else {
-                write("let _ = 5;")
-            }
-            writer.write("#T::builder()", symbolProvider.toSymbol(shape))
-            data.members.forEach { (key, value) ->
-                val memberShape = shape.expectMember(key.value)
-                writer.withBlock(".${memberShape.setterName()}(", ")") {
-                    renderMember(
-                        this,
-                        memberShape,
-                        value,
-                        ctx
-                    )
-                }
-            }
-            if (isSyntheticInput) {
-                writer.write(".build(&config)")
-            } else {
-                writer.write(".build()")
-            }
-            // All operation builders are fallible
-            if (StructureGenerator.fallibleBuilder(shape, symbolProvider) || isSyntheticInput) {
-                writer.write(".unwrap()")
             }
         }
-    }
-
-    private fun getMember(shape: StructureShape, key: StringNode): Pair<MemberShape, Shape> {
-        val memberShape = shape.expectMember(key.value)
-        return memberShape to model.expectShape(memberShape.target)
+        writer.write(".build()")
+        if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
+            writer.write(".unwrap()")
+        }
     }
 }

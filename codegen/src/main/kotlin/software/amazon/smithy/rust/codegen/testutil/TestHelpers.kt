@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCodegenPlugin
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.smithy.generators.ModelBuilderGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
@@ -55,7 +55,7 @@ fun String.asSmithyModel(sourceLocation: String? = null): Model {
  */
 fun StructureShape.renderWithModelBuilder(model: Model, symbolProvider: RustSymbolProvider, writer: RustWriter) {
     StructureGenerator(model, symbolProvider, writer, this).render()
-    val modelBuilder = ModelBuilderGenerator(model, symbolProvider, this)
+    val modelBuilder = BuilderGenerator(model, symbolProvider, this)
     modelBuilder.render(writer)
     writer.implBlock(this, symbolProvider) {
         modelBuilder.renderConvenienceMethod(this)
