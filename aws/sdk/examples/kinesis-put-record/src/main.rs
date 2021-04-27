@@ -66,7 +66,6 @@ async fn main() {
     let client = Client::from_conf(config);
 
     // data is a Base64-encoded binary data object
-    let data = base64::encode(data);
     let blob = kinesis::Blob::new(data);
 
     match client
