@@ -39,10 +39,7 @@ type BoxError = Box<dyn Error + Send + Sync>;
 ///     fn apply(&self, request: operation::Request) -> Result<operation::Request, Self::Error> {
 ///         request.augment(|mut request, properties| {
 ///             if properties.get::<NeedsHeader>().is_some() {
-///                 request.headers_mut().append(
-///                     self.0.clone(),
-///                     self.1.clone(),
-///                 );
+///                 request.headers_mut().append(self.0.clone(), self.1.clone());
 ///             }
 ///             Ok(request)
 ///         })

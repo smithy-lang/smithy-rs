@@ -43,6 +43,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -76,7 +77,7 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
         return OperationNormalizer(model).transformModel(
             inputBodyFactory = { op, input -> restJsonBody(input, httpIndex.getRequestBindings(op)) },
             outputBodyFactory = { op, output -> restJsonBody(output, httpIndex.getResponseBindings(op)) },
-        )
+        ).let(RemoveEventStreamOperations::transform)
     }
 
     override fun support(): ProtocolSupport {

@@ -79,11 +79,13 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
+            ##[derive(std::fmt::Debug)]
             pub(crate) struct Handle {
                 client: #{aws_hyper}::Client<#{aws_hyper}::conn::Standard>,
                 conf: crate::Config
             }
 
+            ##[derive(Clone, std::fmt::Debug)]
             pub struct Client {
                 handle: std::sync::Arc<Handle>
             }
@@ -148,7 +150,9 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                     }
 
                     pub async fn send(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>> {
-                        let op = self.inner.build(&self.handle.conf).map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
+                        let input = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
+                        let op = input.make_operation(&self.handle.conf)
+                            .map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
                         self.handle.client.call(op).await
                     }
                     """,

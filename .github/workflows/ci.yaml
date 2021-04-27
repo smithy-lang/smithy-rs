@@ -4,7 +4,7 @@ name: CI
 
 env:
   rust_version: 1.51.0
-  java_version: 14
+  java_version: 11
 
 jobs:
   style:

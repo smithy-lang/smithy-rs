@@ -10,6 +10,7 @@ import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.protocoltests.traits.AppliesTo
 import software.amazon.smithy.protocoltests.traits.HttpMessageTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
@@ -29,6 +30,7 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.findMember
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -153,12 +155,20 @@ class HttpProtocolTestGenerator(
     private fun RustWriter.renderHttpRequestTestCase(
         httpRequestTestCase: HttpRequestTestCase
     ) {
+        val customToken = if (inputShape.findMember<IdempotencyTokenTrait>(protocolConfig.model) != null) {
+            """.make_token("00000000-0000-4000-8000-000000000000")"""
+        } else ""
+        rust(
+            """let config = #T::Config::builder()$customToken.build();""",
+            RuntimeType.Config
+        )
         writeInline("let input =")
         instantiator.render(this, inputShape, httpRequestTestCase.params)
-        write(";")
-        write("let (http_request, _) = input.into_request_response().0.into_parts();")
+
+        rust(""".make_operation(&config).expect("operation failed to build");""")
+        rust("let (http_request, _) = input.into_request_response().0.into_parts();")
         with(httpRequestTestCase) {
-            write(
+            rust(
                 """
                     assert_eq!(http_request.method(), ${method.dq()});
                     assert_eq!(http_request.uri().path(), ${uri.dq()});
