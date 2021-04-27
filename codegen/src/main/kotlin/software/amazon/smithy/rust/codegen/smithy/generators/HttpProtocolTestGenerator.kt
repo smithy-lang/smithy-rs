@@ -228,7 +228,7 @@ class HttpProtocolTestGenerator(
         writeInline("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        write("let http_response = #T::new()", RuntimeType.HttpResponseBuilder)
+        write("let mut http_response = #T::new()", RuntimeType.HttpResponseBuilder)
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
         }
@@ -243,13 +243,18 @@ class HttpProtocolTestGenerator(
         rustTemplate(
             """
             use #{parse_http_response};
-            let parsed = #{op}::parse_unloaded(&mut http_response);
-            let parsed = parsed
-                .unwrap_or_else(||
-                    #{op}::parse_loaded(http_response.map(|body|#{bytes}::from(body.bytes().unwrap())))
+            let parser = #{op}::new();
+            let parsed = parser.parse_unloaded(&mut http_response);
+            let http_response = http_response.map(|body|#{bytes}::copy_from_slice(body.bytes().unwrap()));
+            let parsed = parsed.unwrap_or_else(||
+                <#{op} as #{parse_http_response}<#{sdk_body}>>::parse_loaded(&parser, &http_response)
             );
         """,
-            "op" to operationSymbol, "bytes" to RuntimeType.Bytes, "parse_http_response" to CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType().member("response::ParseHttpResponse")
+            "op" to operationSymbol,
+            "bytes" to RuntimeType.Bytes,
+            "parse_http_response" to CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType()
+                .member("response::ParseHttpResponse"),
+            "sdk_body" to RuntimeType.sdkBody(runtimeConfig = protocolConfig.runtimeConfig)
         )
         if (expectedShape.hasTrait(ErrorTrait::class.java)) {
             val errorSymbol = operationShape.errorSymbol(protocolConfig.symbolProvider)
