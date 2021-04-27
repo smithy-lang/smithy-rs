@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.generators.StructureGeneratorTest
@@ -19,7 +18,7 @@ import software.amazon.smithy.rust.codegen.smithy.setDefault
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 
-internal class ModelBuilderGeneratorTest {
+internal class BuilderGeneratorTest {
     private val model = StructureGeneratorTest.model
     private val inner = StructureGeneratorTest.inner
     private val struct = StructureGeneratorTest.struct
@@ -30,7 +29,7 @@ internal class ModelBuilderGeneratorTest {
         val writer = RustWriter.forModule("model")
         val innerGenerator = StructureGenerator(model, provider, writer, inner)
         val generator = StructureGenerator(model, provider, writer, struct)
-        val builderGenerator = ModelBuilderGenerator(model, provider, struct)
+        val builderGenerator = BuilderGenerator(model, provider, struct)
         generator.render()
         innerGenerator.render()
         builderGenerator.render(writer)
@@ -48,11 +47,11 @@ internal class ModelBuilderGeneratorTest {
 
     @Test
     fun `generate fallible builders`() {
-        val baseProvider: SymbolProvider = testSymbolProvider(StructureGeneratorTest.model)
+        val baseProvider: RustSymbolProvider = testSymbolProvider(StructureGeneratorTest.model)
         val provider =
             object : RustSymbolProvider {
                 override fun config(): SymbolVisitorConfig {
-                    TODO("Not yet implemented")
+                    return baseProvider.config()
                 }
 
                 override fun toSymbol(shape: Shape?): Symbol {
@@ -74,7 +73,7 @@ internal class ModelBuilderGeneratorTest {
         )
         generator.render()
         innerGenerator.render()
-        val builderGenerator = ModelBuilderGenerator(model, provider, struct)
+        val builderGenerator = BuilderGenerator(model, provider, struct)
         builderGenerator.render(writer)
         writer.implBlock(struct, provider) {
             builderGenerator.renderConvenienceMethod(this)

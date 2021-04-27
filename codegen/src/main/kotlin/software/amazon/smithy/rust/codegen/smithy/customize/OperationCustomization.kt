@@ -3,15 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.generators
+package software.amazon.smithy.rust.codegen.smithy.customize
 
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
-import software.amazon.smithy.rust.codegen.smithy.customize.Section
 
 sealed class OperationSection(name: String) : Section(name) {
     /** Write custom code into the `impl` block of this operation */
-    object ImplBlock : OperationSection("ImplBlock")
+    object OperationImplBlock : OperationSection("OperationImplBlock")
+
+    data class MutateInput(val input: String, val config: String) : OperationSection("MutateInput")
 
     /** Write custom code into the block that builds an operation
      *
@@ -26,4 +26,17 @@ sealed class OperationSection(name: String) : Section(name) {
 
 abstract class OperationCustomization : NamedSectionGenerator<OperationSection>() {
     open fun retryType(): RuntimeType? = null
+
+    /**
+     * Does `make_operation` consume the self parameter?
+     *
+     * This is required for things like idempotency tokens where the operation can only be sent once
+     * and an idempotency token will mutate the request.
+     */
+    open fun consumesSelf(): Boolean = false
+
+    /**
+     * Does `make_operation` mutate the self parameter?
+     */
+    open fun mutSelf(): Boolean = false
 }
