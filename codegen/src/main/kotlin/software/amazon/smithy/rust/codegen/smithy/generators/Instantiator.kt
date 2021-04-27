@@ -29,6 +29,7 @@ import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
+import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
@@ -41,6 +42,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.toPascalCase
@@ -58,9 +60,14 @@ class Instantiator(
 
     // The Rust HTTP library lower cases headers but Smithy protocol tests
     // contain httpPrefix headers with uppercase keys
-    data class Ctx(val lowercaseMapKeys: Boolean)
+    data class Ctx(val lowercaseMapKeys: Boolean, val streaming: Boolean)
 
-    fun render(writer: RustWriter, shape: Shape, arg: Node, ctx: Ctx = Ctx(false)) {
+    fun render(
+        writer: RustWriter,
+        shape: Shape,
+        arg: Node,
+        ctx: Ctx = Ctx(lowercaseMapKeys = false, streaming = false)
+    ) {
         when (shape) {
             // Compound Shapes
             is StructureShape -> renderStructure(writer, shape, arg as ObjectNode, ctx)
@@ -85,10 +92,17 @@ class Instantiator(
              * Blob::new("arg")
              * ```
              */
-            is BlobShape -> writer.write(
-                "#T::new(${(arg as StringNode).value.dq()})",
-                RuntimeType.Blob(runtimeConfig)
-            )
+            is BlobShape -> if (ctx.streaming) {
+                writer.write(
+                    "#T::from_static(b${(arg as StringNode).value.dq()})",
+                    RuntimeType.byteStream(runtimeConfig)
+                )
+            } else {
+                writer.write(
+                    "#T::new(${(arg as StringNode).value.dq()})",
+                    RuntimeType.Blob(runtimeConfig)
+                )
+            }
 
             // Simple Shapes
             is StringShape -> renderString(writer, shape, arg as StringNode)
@@ -136,7 +150,14 @@ class Instantiator(
                         target,
                         arg,
                         ctx.letIf(shape.getMemberTrait(model, HttpPrefixHeadersTrait::class.java).isPresent) {
-                            ctx.copy(lowercaseMapKeys = true)
+                            it.copy(lowercaseMapKeys = true)
+                        }.letIf(
+                            shape.getMemberTrait(
+                                model,
+                                StreamingTrait::class.java
+                            ).isPresent && model.expectShape(shape.container).hasTrait(SyntheticOutputTrait::class.java)
+                        ) {
+                            it.copy(streaming = true)
                         }
                     )
                 }
