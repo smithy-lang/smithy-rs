@@ -3,12 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use aws_http::AwsErrorRetryPolicy;
 use aws_sdk_kms as kms;
 use kms::error::CreateAliasError;
 use kms::operation::{CreateAlias, GenerateRandom};
 use kms::output::GenerateRandomOutput;
 use kms::Blob;
 use smithy_http::body::SdkBody;
+use smithy_http::operation::Parts;
 use smithy_http::result::SdkError;
 use smithy_http::retry::ClassifyResponse;
 use smithy_types::retry::{ErrorKind, RetryKind};
@@ -50,47 +52,50 @@ fn client_is_clone() {
     let _ = client.clone();
 }
 
+fn create_alias_op() -> Parts<CreateAlias, AwsErrorRetryPolicy> {
+    let conf = kms::Config::builder().build();
+    let (_, parts) = CreateAlias::builder()
+        .build()
+        .unwrap()
+        .make_operation(&conf)
+        .expect("valid request")
+        .into_request_response();
+    parts
+}
+
 /// Parse a semi-real response body and assert that the correct retry status is returned
 #[test]
 fn errors_are_retryable() {
-    let conf = kms::Config::builder().build();
-    let (_, parts) = CreateAlias::builder()
-        .build(&conf)
-        .expect("valid request")
-        .into_request_response();
+    let op = create_alias_op();
     let http_response = http::Response::builder()
         .status(400)
         .body(r#"{ "code": "LimitExceededException" }"#)
         .unwrap();
-    let err = parts
+    let err = op
         .response_handler
         .parse_response(&http_response)
         .map_err(|e| SdkError::ServiceError {
             err: e,
             raw: http_response.map(SdkBody::from),
         });
-    let retry_kind = parts.retry_policy.classify(err.as_ref());
+    let retry_kind = op.retry_policy.classify(err.as_ref());
     assert_eq!(retry_kind, RetryKind::Error(ErrorKind::ThrottlingError));
 }
 
 #[test]
 fn unmodeled_errors_are_retryable() {
-    let conf = kms::Config::builder().build();
-    let (_, parts) = CreateAlias::builder()
-        .build(&conf)
-        .expect("valid request")
-        .into_request_response();
+    let op = create_alias_op();
     let http_response = http::Response::builder()
         .status(400)
         .body(r#"{ "code": "ThrottlingException" }"#)
         .unwrap();
-    let err = parts
+    let err = op
         .response_handler
         .parse_response(&http_response)
         .map_err(|e| SdkError::ServiceError {
             err: e,
             raw: http_response.map(SdkBody::from),
         });
-    let retry_kind = parts.retry_policy.classify(err.as_ref());
+    let retry_kind = op.retry_policy.classify(err.as_ref());
     assert_eq!(retry_kind, RetryKind::Error(ErrorKind::ThrottlingError));
 }

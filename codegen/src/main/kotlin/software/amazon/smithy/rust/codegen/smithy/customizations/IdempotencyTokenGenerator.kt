@@ -28,7 +28,13 @@ class IdempotencyTokenGenerator(protocolConfig: ProtocolConfig, private val oper
         val memberName = symbolProvider.toMemberName(idempotencyTokenMember)
         return when (section) {
             is OperationSection.MutateInput -> writable {
-                rust("${section.input}.$memberName = Some(${section.config}.make_token.make_idempotency_token());")
+                rust(
+                    """
+                if ${section.input}.$memberName.is_none() {
+                    ${section.input}.$memberName = Some(${section.config}.make_token.make_idempotency_token());
+                }
+                """
+                )
             }
             else -> emptySection
         }
