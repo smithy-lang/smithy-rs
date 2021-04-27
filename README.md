@@ -6,7 +6,7 @@ The nightly SDK build can be found under `Actions -> CI (take latest run) -> Art
 **All internal and external interfaces are considered unstable and subject to change without notice.**
 
 ## Setup
-1. `./gradlew` will setup gradle for you
+1. `./gradlew` will setup gradle for you. JDK 11 is required.
 2. Running tests requires a working Rust installation. See [Rust docs](https://www.rust-lang.org/learn/get-started) for
 installation instructions on your platform. Minimum supported Rust version is the latest released Rust version, although older versions may work.
 

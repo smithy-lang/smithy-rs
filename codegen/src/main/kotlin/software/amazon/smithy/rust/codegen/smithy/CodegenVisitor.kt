@@ -72,7 +72,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         httpGenerator = protocolGenerator.buildProtocolGenerator(protocolConfig)
     }
 
-    private fun baselineTransform(model: Model) = RecursiveShapeBoxer.transform(model)
+    private fun baselineTransform(model: Model) = model.let(RecursiveShapeBoxer::transform)
 
     fun execute() {
         logger.info("generating Rust client...")
@@ -128,6 +128,12 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     }
 
     override fun serviceShape(shape: ServiceShape) {
-        ServiceGenerator(rustCrate, httpGenerator, protocolGenerator.support(), protocolConfig, codegenDecorator).render()
+        ServiceGenerator(
+            rustCrate,
+            httpGenerator,
+            protocolGenerator.support(),
+            protocolConfig,
+            codegenDecorator
+        ).render()
     }
 }
