@@ -20,9 +20,11 @@ class RustCodegenPlugin : SmithyBuildPlugin {
     }
 
     companion object {
-        fun BaseSymbolProvider(model: Model, symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig) =
+        fun baseSymbolProvider(model: Model, symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig) =
             SymbolVisitor(model, config = symbolVisitorConfig)
+                .let { StreamingShapeSymbolProvider(it, model) }
                 .let { BaseSymbolMetadataProvider(it) }
+                .let { StreamingShapeMetadataProvider(it, model) }
                 .let { RustReservedWordSymbolProvider(it) }
     }
 }

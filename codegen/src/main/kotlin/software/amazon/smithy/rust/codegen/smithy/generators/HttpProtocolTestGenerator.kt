@@ -27,7 +27,7 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.findMember
+import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -152,7 +152,7 @@ class HttpProtocolTestGenerator(
     private fun RustWriter.renderHttpRequestTestCase(
         httpRequestTestCase: HttpRequestTestCase
     ) {
-        val customToken = if (inputShape.findMember<IdempotencyTokenTrait>(protocolConfig.model) != null) {
+        val customToken = if (inputShape.findMemberWithTrait<IdempotencyTokenTrait>(protocolConfig.model) != null) {
             """.make_token("00000000-0000-4000-8000-000000000000")"""
         } else ""
         rust(

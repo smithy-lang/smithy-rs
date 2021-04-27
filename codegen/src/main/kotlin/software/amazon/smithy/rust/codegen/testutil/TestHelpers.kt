@@ -32,7 +32,7 @@ val TestSymbolVisitorConfig = SymbolVisitorConfig(
 )
 
 fun testSymbolProvider(model: Model): RustSymbolProvider =
-    RustCodegenPlugin.BaseSymbolProvider(model, TestSymbolVisitorConfig)
+    RustCodegenPlugin.baseSymbolProvider(model, TestSymbolVisitorConfig)
 
 fun testProtocolConfig(model: Model, serviceShape: ServiceShape? = null): ProtocolConfig = ProtocolConfig(
     model,

@@ -37,6 +37,7 @@ fun UnionShape.expectMember(member: String): MemberShape =
     this.getMember(member).orElseThrow { CodegenException("$member did not exist on $this") }
 
 fun StructureShape.hasStreamingMember(model: Model) = this.findStreamingMember(model) != null
+fun UnionShape.hasStreamingMember(model: Model) = this.findMemberWithTrait<StreamingTrait>(model) != null
 
 /*
  * Returns the member of this structure targeted with streaming trait (if it exists).
@@ -44,9 +45,13 @@ fun StructureShape.hasStreamingMember(model: Model) = this.findStreamingMember(m
  * A structure must have at most one streaming member.
  */
 fun StructureShape.findStreamingMember(model: Model): MemberShape? {
-    return this.findMember<StreamingTrait>(model)
+    return this.findMemberWithTrait<StreamingTrait>(model)
 }
 
-inline fun <reified T : Trait> StructureShape.findMember(model: Model): MemberShape? {
+inline fun <reified T : Trait> StructureShape.findMemberWithTrait(model: Model): MemberShape? {
+    return this.members().find { it.getMemberTrait(model, T::class.java).isPresent }
+}
+
+inline fun <reified T : Trait> UnionShape.findMemberWithTrait(model: Model): MemberShape? {
     return this.members().find { it.getMemberTrait(model, T::class.java).isPresent }
 }

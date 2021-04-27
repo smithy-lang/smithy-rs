@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
@@ -17,6 +18,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpTrait
+import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -46,6 +48,7 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormaliz
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
+import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.outputShape
 import java.util.logging.Logger
 
@@ -101,27 +104,86 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
 class AwsRestJsonGenerator(
     private val protocolConfig: ProtocolConfig
 ) : HttpProtocolGenerator(protocolConfig) {
-    // restJson1 requires all operations to use the HTTP trait
     private val logger = Logger.getLogger(javaClass.name)
-
+    private val symbolProvider = protocolConfig.symbolProvider
+    private val runtimeConfig = protocolConfig.runtimeConfig
+    private val httpIndex = HttpBindingIndex.of(protocolConfig.model)
+    private val requestBuilder = RuntimeType.Http("request::Builder")
+    private val sdkBody = RuntimeType.sdkBody(runtimeConfig)
     private val model = protocolConfig.model
+
     override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
         val operationName = symbolProvider.toSymbol(operationShape).name
+        // restJson1 requires all operations to use the HTTP trait
+        val httpTrait = operationShape.expectTrait(HttpTrait::class.java)
+
+        if (operationShape.outputShape(model).hasStreamingMember(model)) {
+            renderStreamingTraits(operationWriter, operationName, httpTrait, outputSymbol, operationShape)
+        } else {
+            renderNonStreamingTraits(operationWriter, operationName, httpTrait, outputSymbol, operationShape)
+        }
+    }
+
+    private fun renderNonStreamingTraits(
+        operationWriter: RustWriter,
+        operationName: String,
+        httpTrait: HttpTrait,
+        outputSymbol: Symbol,
+        operationShape: OperationShape
+    ) {
         operationWriter.rustTemplate(
             """
-            impl #{parse_strict} for $operationName {
-                type Output = Result<#{output}, #{error}>;
-                fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
-                    self.parse_response(response)
-                }
-            }
-        """,
+                impl #{parse_strict} for $operationName {
+                    type Output = Result<#{output}, #{error}>;
+                    fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
+                         if #{json_errors}::is_error(&response) && response.status().as_u16() != ${httpTrait.code} {
+                            self.parse_error(response)
+                         } else {
+                            self.parse_response(response)
+                         }
+                    }
+                }""",
             "parse_strict" to RuntimeType.parseStrict(symbolProvider.config().runtimeConfig),
             "output" to outputSymbol,
             "error" to operationShape.errorSymbol(symbolProvider),
             "response" to RuntimeType.Http("Response"),
-            "bytes" to RuntimeType.Bytes
+            "bytes" to RuntimeType.Bytes,
+            "json_errors" to RuntimeType.awsJsonErrors(runtimeConfig)
+        )
+    }
+
+    private fun renderStreamingTraits(
+        operationWriter: RustWriter,
+        operationName: String,
+        httpTrait: HttpTrait,
+        outputSymbol: Symbol,
+        operationShape: OperationShape
+    ) {
+        operationWriter.rustTemplate(
+            """
+                    impl #{parse}<#{sdk_body}> for $operationName {
+                        type Output = Result<#{output}, #{error}>;
+                        fn parse_unloaded(&self, response: &mut http::Response<#{sdk_body}>) -> Option<Self::Output> {
+                            // This is an error, defer to the non-streaming parser
+                            if #{json_errors}::is_error(&response) && response.status().as_u16() != ${httpTrait.code} {
+                                return None;
+                            }
+                            Some(self.parse_response(response))
+                        }
+                        fn parse_loaded(&self, response: &http::Response<#{bytes}>) -> Self::Output {
+                            // if streaming, we only hit this case if its an error
+                            self.parse_error(response)
+                        }
+                    }
+                """,
+            "parse" to RuntimeType.parseResponse(runtimeConfig),
+            "output" to outputSymbol,
+            "sdk_body" to sdkBody,
+            "error" to operationShape.errorSymbol(symbolProvider),
+            "response" to RuntimeType.Http("Response"),
+            "bytes" to RuntimeType.Bytes,
+            "json_errors" to RuntimeType.awsJsonErrors(runtimeConfig)
         )
     }
 
@@ -133,40 +195,8 @@ class AwsRestJsonGenerator(
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         val jsonErrors = RuntimeType.awsJsonErrors(runtimeConfig)
 
+        implBlockWriter.renderParseError(jsonErrors, operationShape, errorSymbol)
         fromResponseFun(implBlockWriter, operationShape) {
-            rustBlock("if #T::is_error(&response) && response.status().as_u16() != ${httpTrait.code}", jsonErrors) {
-                rustTemplate(
-                    """
-                    let body = #{sj}::from_slice(response.body().as_ref())
-                        .unwrap_or_else(|_|#{sj}::json!({}));
-                    let generic = #{aws_json_errors}::parse_generic_error(&response, &body);
-                    """,
-                    "aws_json_errors" to jsonErrors, "sj" to RuntimeType.SJ
-                )
-                if (operationShape.errors.isNotEmpty()) {
-                    rustTemplate(
-                        """
-
-                    let error_code = match generic.code() {
-                        Some(code) => code,
-                        None => return Err(#{error_symbol}::unhandled(generic))
-                    };""",
-                        "error_symbol" to errorSymbol
-                    )
-                    withBlock("return Err(match error_code {", "})") {
-                        // approx:
-                        /*
-                            match error_code {
-                                "Code1" => deserialize<Code1>(body),
-                                "Code2" => deserialize<Code2>(body)
-                            }
-                         */
-                        parseErrorVariants(operationShape, errorSymbol)
-                    }
-                } else {
-                    write("return Err(#T::generic(generic))", errorSymbol)
-                }
-            }
             withBlock("Ok({", "})") {
                 renderShapeParser(
                     operationShape,
@@ -175,6 +205,51 @@ class AwsRestJsonGenerator(
                     httpIndex.getResponseBindings(operationShape),
                     errorSymbol
                 )
+            }
+        }
+    }
+
+    private fun RustWriter.renderParseError(
+        jsonErrors: RuntimeType,
+        operationShape: OperationShape,
+        errorSymbol: RuntimeType
+    ) {
+        rustBlock(
+            "fn parse_error(&self, response: &http::Response<#T>) -> Result<#T, #T>",
+            RuntimeType.Bytes,
+            symbolProvider.toSymbol(operationShape.outputShape(model)),
+            errorSymbol
+        ) {
+            rustTemplate(
+                """
+                        let body = #{sj}::from_slice(response.body().as_ref())
+                            .unwrap_or_else(|_|#{sj}::json!({}));
+                        let generic = #{aws_json_errors}::parse_generic_error(&response, &body);
+                        """,
+                "aws_json_errors" to jsonErrors, "sj" to RuntimeType.SJ
+            )
+            if (operationShape.errors.isNotEmpty()) {
+                rustTemplate(
+                    """
+
+                        let error_code = match generic.code() {
+                            Some(code) => code,
+                            None => return Err(#{error_symbol}::unhandled(generic))
+                        };""",
+                    "error_symbol" to errorSymbol
+                )
+                withBlock("return Err(match error_code {", "})") {
+                    // approx:
+                    /*
+                            match error_code {
+                                "Code1" => deserialize<Code1>(body),
+                                "Code2" => deserialize<Code2>(body)
+                            }
+                         */
+                    parseErrorVariants(operationShape, errorSymbol)
+                }
+            } else {
+                rust("return Err(#T::generic(generic))", errorSymbol)
             }
         }
     }
@@ -311,7 +386,11 @@ class AwsRestJsonGenerator(
                     docHandler = docShapeHandler,
                     structuredHandler = structureShapeHandler
                 )
-                writable { rust("#T(response.body().as_ref())?", deserializer) }
+                return if (binding.member.getMemberTrait(model, StreamingTrait::class.java).isPresent) {
+                    writable { rust("#T(response.body_mut())?", deserializer) }
+                } else {
+                    writable { rust("#T(response.body().as_ref())?", deserializer) }
+                }
             }
             HttpBinding.Location.RESPONSE_CODE -> writable("Some(response.status().as_u16() as _)")
             HttpBinding.Location.PREFIX_HEADERS -> {
@@ -425,11 +504,6 @@ class AwsRestJsonGenerator(
             else -> TODO("Unexpected payload target type")
         }
     }
-
-    private val symbolProvider = protocolConfig.symbolProvider
-    private val runtimeConfig = protocolConfig.runtimeConfig
-    private val httpIndex = HttpBindingIndex.of(model)
-    private val requestBuilder = RuntimeType.Http("request::Builder")
 
     override fun toHttpRequestImpl(
         implBlockWriter: RustWriter,

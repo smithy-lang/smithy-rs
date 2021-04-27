@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 
@@ -105,15 +106,18 @@ abstract class HttpProtocolGenerator(
         operationWriter.implBlock(operationShape, symbolProvider) {
             builderGenerator.renderConvenienceMethod(this)
 
+            val responseTypes = responseBody(operationShape)
+            val mutability = responseTypes.mutability
+            val type = responseTypes.type
             fromResponseImpl(this, operationShape)
 
             rustBlock(
-                "pub fn parse_response(&self, response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+                "pub fn parse_response(&self, $mutability response: &$mutability #T<$type>) -> Result<#T, #T>",
                 RuntimeType.Http("response::Response"),
                 symbolProvider.toSymbol(operationShape.outputShape(model)),
                 operationShape.errorSymbol(symbolProvider)
             ) {
-                write("Self::from_response(&response)")
+                write("Self::from_response(&$mutability response)")
             }
 
             rustBlock("pub fn new() -> Self") {
@@ -123,6 +127,15 @@ abstract class HttpProtocolGenerator(
             customizations.forEach { customization -> customization.section(OperationSection.OperationImplBlock)(this) }
         }
         traitImplementations(operationWriter, operationShape)
+    }
+
+    data class ResponseBody(val type: String, val mutability: String)
+
+    private fun RustWriter.responseBody(operationShape: OperationShape): ResponseBody {
+        return when (operationShape.outputShape(model).hasStreamingMember(model)) {
+            true -> ResponseBody(this.format(RuntimeType.sdkBody(protocolConfig.runtimeConfig)), "mut")
+            false -> ResponseBody("impl AsRef<[u8]>", "")
+        }
     }
 
     protected fun httpBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
@@ -148,8 +161,9 @@ abstract class HttpProtocolGenerator(
         block: RustWriter.() -> Unit
     ) {
         Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
+        val responseBodyType = implBlockWriter.responseBody(operationShape)
         implBlockWriter.rustBlock(
-            "fn from_response(response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+            "fn from_response(response: & ${responseBodyType.mutability} #T<${responseBodyType.type}>) -> Result<#T, #T>",
             RuntimeType.Http("response::Response"),
             symbolProvider.toSymbol(operationShape.outputShape(model)),
             operationShape.errorSymbol(symbolProvider)
@@ -158,7 +172,12 @@ abstract class HttpProtocolGenerator(
         }
     }
 
-    private fun buildOperation(implBlockWriter: RustWriter, shape: OperationShape, features: List<OperationCustomization>, sdkId: String) {
+    private fun buildOperation(
+        implBlockWriter: RustWriter,
+        shape: OperationShape,
+        features: List<OperationCustomization>,
+        sdkId: String
+    ) {
         val runtimeConfig = protocolConfig.runtimeConfig
         val outputSymbol = symbolProvider.toSymbol(shape)
         val operationT = RuntimeType.operation(runtimeConfig)
@@ -175,7 +194,10 @@ abstract class HttpProtocolGenerator(
         val mut = features.any { it.mutSelf() }
         val consumes = features.any { it.consumesSelf() }
         val self = "self".letIf(mut) { "mut $it" }.letIf(!consumes) { "&$it" }
-        implBlockWriter.rustBlock("pub fn make_operation($self, _config: &#T::Config) -> $returnType", RuntimeType.Config) {
+        implBlockWriter.rustBlock(
+            "pub fn make_operation($self, _config: &#T::Config) -> $returnType",
+            RuntimeType.Config
+        ) {
             withBlock("Ok({", "})") {
                 features.forEach { it.section(OperationSection.MutateInput("self", "_config"))(this) }
                 rust("let request = Self::assemble(self.request_builder_base()?, self.build_body());")
