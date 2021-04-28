@@ -18,11 +18,14 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
@@ -225,18 +228,34 @@ class HttpProtocolTestGenerator(
         writeInline("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        write("let http_response = #T::new()", RuntimeType.HttpResponseBuilder)
+        write("let mut http_response = #T::new()", RuntimeType.HttpResponseBuilder)
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
         }
         rust(
             """
                 .status(${testCase.code})
-                .body(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"})
+                .body(#T::from(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"}))
                 .unwrap();
-            """
+            """,
+            RuntimeType.sdkBody(runtimeConfig = protocolConfig.runtimeConfig)
         )
-        write("let parsed = #T::from_response(&http_response);", operationSymbol)
+        rustTemplate(
+            """
+            use #{parse_http_response};
+            let parser = #{op}::new();
+            let parsed = parser.parse_unloaded(&mut http_response);
+            let http_response = http_response.map(|body|#{bytes}::copy_from_slice(body.bytes().unwrap()));
+            let parsed = parsed.unwrap_or_else(||
+                <#{op} as #{parse_http_response}<#{sdk_body}>>::parse_loaded(&parser, &http_response)
+            );
+        """,
+            "op" to operationSymbol,
+            "bytes" to RuntimeType.Bytes,
+            "parse_http_response" to CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType()
+                .member("response::ParseHttpResponse"),
+            "sdk_body" to RuntimeType.sdkBody(runtimeConfig = protocolConfig.runtimeConfig)
+        )
         if (expectedShape.hasTrait(ErrorTrait::class.java)) {
             val errorSymbol = operationShape.errorSymbol(protocolConfig.symbolProvider)
             val errorVariant = protocolConfig.symbolProvider.toSymbol(expectedShape).name
