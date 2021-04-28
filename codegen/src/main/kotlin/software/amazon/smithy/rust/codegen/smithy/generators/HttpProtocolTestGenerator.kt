@@ -261,13 +261,17 @@ class HttpProtocolTestGenerator(
             val errorVariant = protocolConfig.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")
             rustBlock("if let #TKind::$errorVariant(actual_error) = parsed.kind", errorSymbol) {
-                write("assert_eq!(expected_output, actual_error);")
+                rust("assert_eq!(expected_output, actual_error);")
             }
             rustBlock("else") {
-                write("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
+                rust("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
             }
         } else {
-            write("assert_eq!(parsed.unwrap(), expected_output);")
+            rust("let parsed = parsed.unwrap();")
+            outputShape.members().forEach { member ->
+                val memberName = protocolConfig.symbolProvider.toMemberName(member)
+                rust("""assert_eq!(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""")
+            }
         }
     }
 
