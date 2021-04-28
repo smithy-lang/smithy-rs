@@ -26,11 +26,11 @@ class IntegrationTestDecorator : RustCodegenDecorator {
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> = baseCustomizations.letIf(TestedServices.contains(protocolConfig.moduleName)) {
-        it + AwsHyperDevDep(protocolConfig.runtimeConfig)
+        it + IntegrationTestDependencies(protocolConfig.runtimeConfig)
     }
 }
 
-class AwsHyperDevDep(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
+class IntegrationTestDependencies(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection) = when (section) {
         LibRsSection.Body -> writable {
             addDependency(runtimeConfig.awsHyper().copy(scope = DependencyScope.Dev))

@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: RustWriter.() -> Unit) {
@@ -65,7 +66,7 @@ class StructureGenerator(
                 // If any members are not optional && we can't use a default, we need to
                 // generate a fallible builder
                 !it.isOptional() && !it.canUseDefault()
-            }
+            } || structureShape.hasTrait(SyntheticInputTrait::class.java)
     }
 
     /**
