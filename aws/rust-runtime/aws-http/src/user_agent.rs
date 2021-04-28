@@ -246,13 +246,10 @@ impl MapRequest for UserAgentStage {
                 .get::<AwsUserAgent>()
                 .ok_or(UserAgentStageError::UserAgentMissing)?;
             // TODO: consider optimizing by caching the user agent headers to avoid the alloc on every request
-            // NB: These are switched intentionally by request of metrics team
+            req.headers_mut()
+                .append(USER_AGENT, HeaderValue::try_from(ua.ua_header())?);
             req.headers_mut().append(
                 X_AMZ_USER_AGENT.clone(),
-                HeaderValue::try_from(ua.ua_header())?,
-            );
-            req.headers_mut().append(
-                USER_AGENT.clone(),
                 HeaderValue::try_from(ua.aws_ua_header())?,
             );
 
