@@ -157,6 +157,9 @@ data class RustMetadata(
     fun withDerives(vararg newDerive: RuntimeType): RustMetadata =
         this.copy(derives = derives.copy(derives = derives.derives + newDerive))
 
+    fun withoutDerives(vararg withoutDerives: RuntimeType) =
+        this.copy(derives = derives.copy(derives = derives.derives - withoutDerives))
+
     private fun attributes(): List<Attribute> = additionalAttributes + derives
 
     fun renderAttributes(writer: RustWriter): RustMetadata {
@@ -231,7 +234,11 @@ sealed class Attribute {
      * Finally, any symbols listed will be imported when this attribute is rendered. This enables using attributes like
      * `#[serde(Serialize)]` where `Serialize` is actually a symbol that must be imported.
      */
-    data class Custom(val annotation: String, val symbols: List<RuntimeType> = listOf(), val container: Boolean = false) : Attribute() {
+    data class Custom(
+        val annotation: String,
+        val symbols: List<RuntimeType> = listOf(),
+        val container: Boolean = false
+    ) : Attribute() {
         override fun render(writer: RustWriter) {
 
             val bang = if (container) "!" else ""
