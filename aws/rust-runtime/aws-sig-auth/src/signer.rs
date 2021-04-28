@@ -101,19 +101,15 @@ impl SigV4Signer {
     where
         B: AsRef<[u8]>,
     {
-        let sigv4_creds = aws_sigv4_poc::Credentials {
-            access_key: credentials.access_key_id().to_string(),
-            secret_key: credentials.secret_access_key().to_string(),
-            security_token: credentials.session_token().map(|s| s.to_string()),
+        let sigv4_config = aws_sigv4_poc::Config {
+            access_key: credentials.access_key_id(),
+            secret_key: credentials.secret_access_key(),
+            security_token: credentials.session_token(),
+            region: request_config.region.as_ref(),
+            svc: request_config.service.as_ref(),
+            date: request_config.request_ts,
         };
-        let date = request_config.request_ts;
-        for (key, value) in aws_sigv4_poc::sign_core(
-            request,
-            &sigv4_creds,
-            request_config.region.as_ref(),
-            request_config.service.as_ref(),
-            date,
-        ) {
+        for (key, value) in aws_sigv4_poc::sign_core(request, sigv4_config) {
             request
                 .headers_mut()
                 .append(key.header_name(), value.parse()?);
