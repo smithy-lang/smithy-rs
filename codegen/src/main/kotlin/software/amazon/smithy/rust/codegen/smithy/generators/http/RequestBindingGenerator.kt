@@ -28,7 +28,6 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
-import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 
@@ -70,7 +69,6 @@ class RequestBindingGenerator(
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
     private val index = HttpBindingIndex.of(model)
     private val buildError = runtimeConfig.operationBuildError()
-    private val instant = RuntimeType.Instant(runtimeConfig).toSymbol().rustType()
 
     /**
      * Generates `update_http_builder` and all necessary dependency functions into the impl block provided by
@@ -152,7 +150,13 @@ class RequestBindingGenerator(
                     let header_value = http::header::HeaderValue::try_from(header_value).map_err(|err| {
                         #{build_error}::InvalidField {
                             field: ${memberName.dq()},
-                            details: format!("`{}` cannot be used as a header value: {}", ${redactIfNecessary(memberShape, model,"v")}, err)}
+                            details: format!("`{}` cannot be used as a header value: {}", ${
+                redactIfNecessary(
+                    memberShape,
+                    model,
+                    "v"
+                )
+                }, err)}
                     })?;
                     builder = builder.header(header_name, header_value);
                 }
@@ -169,7 +173,7 @@ class RequestBindingGenerator(
         val memberSymbol = symbolProvider.toSymbol(memberShape)
         val memberName = symbolProvider.toMemberName(memberShape)
         ifSet(memberType, memberSymbol, "&self.$memberName") { field ->
-            ListForEach(memberType, field) { innerField, targetId ->
+            listForEach(memberType, field) { innerField, targetId ->
                 val innerMemberType = model.expectShape(targetId)
                 val formatted = headerFmtFun(innerMemberType, memberShape, innerField)
                 val safeName = safeName("formatted")
@@ -263,6 +267,7 @@ class RequestBindingGenerator(
     private fun uriQuery(writer: RustWriter): Boolean {
         // Don't bother generating the function if we aren't going to make a query string
         val dynamicParams = index.getRequestBindings(shape, HttpBinding.Location.QUERY)
+        val mapParams = index.getRequestBindings(shape, HttpBinding.Location.QUERY_PARAMS)
         val literalParams = httpTrait.uri.queryLiterals
         if (dynamicParams.isEmpty() && literalParams.isEmpty()) {
             return false
@@ -279,13 +284,29 @@ class RequestBindingGenerator(
                 }
             }
 
+            mapParams.forEach { param ->
+                val memberShape = param.member
+                val memberSymbol = symbolProvider.toSymbol(memberShape)
+                val memberName = symbolProvider.toMemberName(memberShape)
+                val targetShape = model.expectShape(memberShape.target, MapShape::class.java)
+                ifSet(model.expectShape(param.member.target), memberSymbol, "&self.$memberName") { field ->
+                    rustBlock("for (k, v) in $field") {
+                        // if v is a list, generate another level of iteration
+                        listForEach(model.expectShape(targetShape.value.target), "v") { innerField, _ ->
+                            rust("query.push_kv(k, $innerField);")
+                        }
+                    }
+                }
+            }
+
             dynamicParams.forEach { param ->
                 val memberShape = param.member
                 val memberSymbol = symbolProvider.toSymbol(memberShape)
                 val memberName = symbolProvider.toMemberName(memberShape)
                 val outerTarget = model.expectShape(memberShape.target)
                 ifSet(outerTarget, memberSymbol, "&self.$memberName") { field ->
-                    ListForEach(outerTarget, field) { innerField, targetId ->
+                    // if `param` is a list, generate another level of iteration
+                    listForEach(outerTarget, field) { innerField, targetId ->
                         val target = model.expectShape(targetId)
                         rust(
                             "query.push_kv(${param.locationName.dq()}, &${
