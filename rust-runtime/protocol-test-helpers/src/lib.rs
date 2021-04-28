@@ -94,17 +94,27 @@ pub fn validate_query_string<B>(
 
 pub fn forbid_query_params<B>(
     request: &Request<B>,
-    forbid_keys: &[&str],
+    forbid_params: &[&str],
 ) -> Result<(), ProtocolTestFailure> {
-    let actual_keys: HashSet<&str> = extract_params(request.uri())
+    let actual_params: HashSet<QueryParam> = extract_params(request.uri())
         .iter()
-        .map(|param| QueryParam::parse(param).key)
+        .map(|param| QueryParam::parse(param))
         .collect();
-    for key in forbid_keys {
-        if actual_keys.contains(*key) {
-            return Err(ProtocolTestFailure::ForbiddenQueryParam {
-                expected: key.to_string(),
-            });
+    let actual_keys: HashSet<&str> = actual_params.iter().map(|param| param.key).collect();
+    for param in forbid_params {
+        let parsed = QueryParam::parse(param);
+        if parsed.value.is_some() {
+            if actual_params.contains(&parsed) {
+                return Err(ProtocolTestFailure::ForbiddenQueryParam {
+                    expected: param.to_string(),
+                });
+            }
+        } else {
+            if actual_keys.contains(parsed.key) {
+                return Err(ProtocolTestFailure::ForbiddenQueryParam {
+                    expected: param.to_string(),
+                });
+            }
         }
     }
     Ok(())
@@ -309,7 +319,7 @@ mod tests {
             .unwrap();
         forbid_query_params(&request, &["a"]).expect_err("a is a query param");
         forbid_query_params(&request, &["not_included"]).expect("query param not included");
-        forbid_query_params(&request, &["a=b"]).expect("should be matching against keys");
+        forbid_query_params(&request, &["a=b"]).expect_err("if there is an `=`, match against KV");
         forbid_query_params(&request, &["c"]).expect_err("c is a query param");
     }
 
