@@ -99,7 +99,7 @@ abstract class HttpProtocolGenerator(
         }
         val operationName = symbolProvider.toSymbol(operationShape).name
         operationWriter.documentShape(operationShape, model)
-        Attribute.Derives(setOf(RuntimeType.Clone)).render(operationWriter)
+        Attribute.Derives(setOf(RuntimeType.Clone, RuntimeType.Default)).render(operationWriter)
         operationWriter.rustBlock("pub struct $operationName") {
             write("_private: ()")
         }

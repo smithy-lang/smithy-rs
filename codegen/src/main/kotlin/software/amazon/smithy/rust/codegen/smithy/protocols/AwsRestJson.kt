@@ -238,7 +238,7 @@ class AwsRestJsonGenerator(
                         };""",
                     "error_symbol" to errorSymbol
                 )
-                withBlock("return Err(match error_code {", "})") {
+                withBlock("Err(match error_code {", "})") {
                     // approx:
                     /*
                             match error_code {
@@ -249,7 +249,7 @@ class AwsRestJsonGenerator(
                     parseErrorVariants(operationShape, errorSymbol)
                 }
             } else {
-                rust("return Err(#T::generic(generic))", errorSymbol)
+                rust("Err(#T::generic(generic))", errorSymbol)
             }
         }
     }
