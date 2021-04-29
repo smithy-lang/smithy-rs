@@ -44,16 +44,8 @@ enum Inner {
 impl Debug for Inner {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self {
-            Inner::Once(once) => {
-                let mut dbg = f.debug_tuple("Once");
-                dbg.field(once);
-                dbg.finish()
-            }
-            Inner::Streaming(streaming) => {
-                let mut dbg = f.debug_tuple("Streaming");
-                dbg.field(streaming);
-                dbg.finish()
-            }
+            Inner::Once(once) => f.debug_tuple("Once").field(once).finish(),
+            Inner::Streaming(streaming) => f.debug_tuple("Streaming").field(streaming).finish(),
             Inner::Taken => f.debug_tuple("Taken").finish(),
             Inner::Dyn(_) => write!(f, "BoxBody"),
         }
