@@ -283,7 +283,7 @@ class RustWriter private constructor(
         }
     }
 
-    fun ListForEach(
+    fun listForEach(
         target: Shape,
         outerField: String,
         block: CodeWriter.(field: String, target: ShapeId) -> Unit
