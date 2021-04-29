@@ -114,6 +114,10 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                     &self.handle.conf
                 }
 
+                pub fn client(&self) -> &#{aws_hyper}::StandardClient {
+                    &self.handle.client
+                }
+
             """,
                 "aws_hyper" to hyperDep.asType()
             )
@@ -149,6 +153,10 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         Self { handle, inner: Default::default() }
                     }
 
+                    pub fn into_inner(self) -> (crate::Client, #{inner}) {
+                        (crate::Client { handle: self.handle }, self.inner )
+                    }
+
                     pub async fn send(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>> {
                         let input = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
                         let op = input.make_operation(&self.handle.conf)
@@ -156,6 +164,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         self.handle.client.call(op).await
                     }
                     """,
+                        "inner" to input.builderSymbol(symbolProvider),
                         "ok" to symbolProvider.toSymbol(operation.outputShape(model)),
                         "operation_err" to operation.errorSymbol(symbolProvider),
                         "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType().copy(name = "result::SdkError")

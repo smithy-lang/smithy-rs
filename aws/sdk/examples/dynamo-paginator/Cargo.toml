@@ -1,0 +1,16 @@
+[package]
+name = "dynamo-paginator"
+version = "0.1.0"
+authors = ["Russell Cohen <russell.r.cohen@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio-stream = "0"
+dynamodb = { package = "aws-sdk-dynamodb", path = "../../build/aws-sdk/dynamodb" }
+http = "0.2.4"
+smithy-http = { path = "../../build/aws-sdk/smithy-http" }
+aws-hyper = { path = "../../build/aws-sdk/aws-hyper" }
+tokio = { version = "1", features = ["full"] }
+pin-project = "1"
