@@ -44,7 +44,17 @@ enum Inner {
 impl Debug for Inner {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self {
-            i @ Inner::Once(_) | i @ Inner::Streaming(_) | i @ Inner::Taken => i.fmt(f),
+            Inner::Once(once) => {
+                let mut dbg = f.debug_tuple("Once");
+                dbg.field(once);
+                dbg.finish()
+            }
+            Inner::Streaming(streaming) => {
+                let mut dbg = f.debug_tuple("Streaming");
+                dbg.field(streaming);
+                dbg.finish()
+            }
+            Inner::Taken => f.debug_tuple("Taken").finish(),
             Inner::Dyn(_) => write!(f, "BoxBody"),
         }
     }
@@ -166,7 +176,7 @@ impl http_body::Body for SdkBody {
 
 #[cfg(test)]
 mod test {
-    use crate::body::SdkBody;
+    use crate::body::{BoxBody, SdkBody};
     use http_body::Body;
     use std::pin::Pin;
 
@@ -199,5 +209,28 @@ mod test {
         let mut body = Pin::new(&mut body);
         let data = body.data().await;
         assert!(data.is_none());
+    }
+
+    #[test]
+    fn sdkbody_debug_once() {
+        let body = SdkBody::from("123");
+        // actually don't really care what the debug impl is, just that it doesn't crash
+        let _ = format!("{:?}", body);
+    }
+
+    #[test]
+    fn sdkbody_debug_dyn() {
+        let hyper_body = hyper::Body::channel().1;
+        let body = SdkBody::from_dyn(BoxBody::new(hyper_body.map_err(|e| e.into())));
+        // actually don't really care what the debug impl is, just that it doesn't crash
+        let _ = format!("{:?}", body);
+    }
+
+    #[test]
+    fn sdkbody_debug_hyper() {
+        let hyper_body = hyper::Body::channel().1;
+        let body = SdkBody::from(hyper_body);
+        // actually don't really care what the debug impl is, just that it doesn't crash
+        let _ = format!("{:?}", body);
     }
 }
