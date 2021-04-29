@@ -31,7 +31,7 @@ struct Opt {
 #[tokio::main]
 async fn main() {
     let Opt {
-        mut length,
+        length, // 'mut length' if you trap out-of-range values later
         region,
         verbose,
     } = Opt::from_args();
@@ -41,12 +41,14 @@ async fn main() {
         .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
         .unwrap_or_else(|| Region::new("us-west-2"));
 
+    /* If you want to trap out-of-range-values:
     match length {
-        1...1034 => {
+        1...1024 => {
             // Within range
         }
         _ => length = 256,
     }
+    */
 
     if verbose {
         println!("KMS client version: {}\n", kms::PKG_VERSION);
