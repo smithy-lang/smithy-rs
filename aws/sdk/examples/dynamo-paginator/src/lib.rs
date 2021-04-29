@@ -1,12 +1,8 @@
 use async_stream::AsyncStream;
-use aws_hyper::test_connection::TestConnection;
+
 use dynamodb::{
-    error::ListTablesError, input::ListTablesInput, output::ListTablesOutput, Credentials, Region,
-    SdkError,
+    error::ListTablesError, input::ListTablesInput, output::ListTablesOutput, SdkError,
 };
-use smithy_http::body::SdkBody;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_stream::{Stream, StreamExt};
 
 trait PaginateListTables {
     fn paginate(self) -> ListTablesPaginator;
@@ -28,7 +24,7 @@ pub struct ListTablesPaginator {
 }
 
 impl ListTablesPaginator {
-    fn send(
+    pub fn send(
         self,
     ) -> impl tokio_stream::Stream<Item = Result<ListTablesOutput, SdkError<ListTablesError>>> {
         let (mut yield_tx, yield_rx) = async_stream::yielder::pair();
@@ -57,38 +53,49 @@ impl ListTablesPaginator {
     }
 }
 
-#[tokio::test]
-async fn main() -> Result<(), dynamodb::Error> {
-    let conn = TestConnection::new(vec![
-        (
-            http::Request::new(SdkBody::from("ignore me")),
-            http::Response::new(r#"{"TableNames": ["a","b","c"], "LastEvaluatedTableName": "c"}"#),
-        ),
-        (
-            http::Request::new(SdkBody::from(r#"{"ExclusiveStartTableName": "c"}"#)),
-            http::Response::new(r#"{"TableNames": ["d","e"], "LastEvaluatedTableName": null}"#),
-        ),
-    ]);
-    let client = dynamodb::Client::from_conf_conn(
-        dynamodb::Config::builder()
-            .region(Region::new("us-east-1"))
-            .credentials_provider(Credentials::from_keys("akid", "secret", None))
-            .build(),
-        aws_hyper::conn::Standard::new(conn),
-    );
+#[cfg(test)]
+mod tests {
+    use crate::PaginateListTables;
+    use aws_hyper::test_connection::TestConnection;
+    use dynamodb::{Credentials, Region};
+    use smithy_http::body::SdkBody;
+    use tokio_stream::StreamExt;
 
-    let mut tables = vec![];
-    let mut pages = client.list_tables().paginate().send();
-    while let Some(next_page) = pages.try_next().await? {
-        tables.extend(next_page.table_names.unwrap_or_default().into_iter());
+    #[tokio::test]
+    async fn test_paginators() -> Result<(), dynamodb::Error> {
+        let conn = TestConnection::new(vec![
+            (
+                http::Request::new(SdkBody::from("ignore me")),
+                http::Response::new(
+                    r#"{"TableNames": ["a","b","c"], "LastEvaluatedTableName": "c"}"#,
+                ),
+            ),
+            (
+                http::Request::new(SdkBody::from(r#"{"ExclusiveStartTableName": "c"}"#)),
+                http::Response::new(r#"{"TableNames": ["d","e"], "LastEvaluatedTableName": null}"#),
+            ),
+        ]);
+        let client = dynamodb::Client::from_conf_conn(
+            dynamodb::Config::builder()
+                .region(Region::new("us-east-1"))
+                .credentials_provider(Credentials::from_keys("akid", "secret", None))
+                .build(),
+            aws_hyper::conn::Standard::new(conn),
+        );
+
+        let mut tables = vec![];
+        let mut pages = client.list_tables().paginate().send();
+        while let Some(next_page) = pages.try_next().await? {
+            tables.extend(next_page.table_names.unwrap_or_default().into_iter());
+        }
+
+        assert_eq!(
+            tables,
+            vec!["a", "b", "c", "d", "e"]
+                .iter()
+                .map(|k| k.to_string())
+                .collect::<Vec<_>>()
+        );
+        Ok(())
     }
-
-    assert_eq!(
-        tables,
-        vec!["a", "b", "c", "d", "e"]
-            .iter()
-            .map(|k| k.to_string())
-            .collect::<Vec<_>>()
-    );
-    Ok(())
 }
