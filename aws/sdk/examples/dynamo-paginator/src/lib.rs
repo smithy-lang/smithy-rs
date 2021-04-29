@@ -1,6 +1,6 @@
 use async_stream::AsyncStream;
 
-use aws_hyper::StandardClient;
+
 use dynamodb::{
     error::ListTablesError, input::ListTablesInput, output::ListTablesOutput, SdkError,
 };
