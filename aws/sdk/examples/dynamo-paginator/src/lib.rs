@@ -1,3 +1,4 @@
+use async_stream::AsyncStream;
 use aws_hyper::test_connection::TestConnection;
 use dynamodb::{
     error::ListTablesError, input::ListTablesInput, output::ListTablesOutput, Credentials, Region,
@@ -5,7 +6,7 @@ use dynamodb::{
 };
 use smithy_http::body::SdkBody;
 use tokio_stream::wrappers::ReceiverStream;
-use tokio_stream::StreamExt;
+use tokio_stream::{Stream, StreamExt};
 
 trait PaginateListTables {
     fn paginate(self) -> ListTablesPaginator;
@@ -21,7 +22,7 @@ impl PaginateListTables for dynamodb::client::fluent_builders::ListTables {
     }
 }
 
-struct ListTablesPaginator {
+pub struct ListTablesPaginator {
     client: dynamodb::Client,
     inp: ListTablesInput,
 }
@@ -30,8 +31,10 @@ impl ListTablesPaginator {
     fn send(
         self,
     ) -> impl tokio_stream::Stream<Item = Result<ListTablesOutput, SdkError<ListTablesError>>> {
-        let (send, recv) = tokio::sync::mpsc::channel(1);
-        tokio::spawn(async move {
+        let (mut yield_tx, yield_rx) = async_stream::yielder::pair();
+        // Without this, customers will get a 500 line error message about pinning. I think
+        // one memory allocation for paginating a bunch of results from AWS is worth it.
+        Box::pin(AsyncStream::new(yield_rx, async move {
             let mut inp = self.inp;
             loop {
                 let rsp = self
@@ -42,16 +45,15 @@ impl ListTablesPaginator {
                 match rsp {
                     Ok(output) if output.last_evaluated_table_name.is_some() => {
                         inp.exclusive_start_table_name = output.last_evaluated_table_name.clone();
-                        let _ = send.send(Ok(output)).await;
+                        yield_tx.send(Ok(output)).await;
                     }
                     other => {
-                        let _ = send.send(other).await;
+                        yield_tx.send(other).await;
                         break;
                     }
                 }
             }
-        });
-        ReceiverStream::new(recv)
+        }))
     }
 }
 
@@ -80,6 +82,7 @@ async fn main() -> Result<(), dynamodb::Error> {
     while let Some(next_page) = pages.try_next().await? {
         tables.extend(next_page.table_names.unwrap_or_default().into_iter());
     }
+
     assert_eq!(
         tables,
         vec!["a", "b", "c", "d", "e"]
