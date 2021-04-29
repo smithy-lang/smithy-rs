@@ -39,6 +39,8 @@ async fn main() {
     let client = dynamodb::Client::from_conf_conn(conf, conn);
     let raw_client = aws_hyper::Client::https();
 
+    println!("Seeing if table {} exists", table_name);
+
     let table_exists = client
         .list_tables()
         .send()
@@ -50,16 +52,23 @@ async fn main() {
         .contains(&table_name.to_string());
 
     if !table_exists {
+        println!("Table does not exist, creating it");
         create_table(&client, table_name)
             .send()
             .await
             .expect("failed to create table");
+
+        println!("Waiting for table to be ready");
+
+        raw_client
+            .call(wait_for_ready_table(table_name, client.conf()))
+            .await
+            .expect("table should become ready");
+    } else {
+        println!("Table exists");
     }
 
-    raw_client
-        .call(wait_for_ready_table(table_name, client.conf()))
-        .await
-        .expect("table should become ready");
+    println!("Testing table");
 
     // data.json contains 2 movies from 2013
     let data = match serde_json::from_str(include_str!("data.json")).expect("should be valid JSON")
@@ -101,6 +110,8 @@ async fn main() {
             AttributeValue::S("Turn It Down, Or Else!".to_string())
         ]
     );
+
+    println!("Done");
 }
 
 fn create_table(
@@ -219,9 +230,9 @@ fn wait_for_ready_table(
 ) -> Operation<DescribeTable, WaitForReadyTable<AwsErrorRetryPolicy>> {
     let operation = DescribeTableInput::builder()
         .table_name(table_name)
-        .build()
-        .expect("valid input")
-        .make_operation(&conf)
+        .build(&conf)
+        //.expect("valid input")
+        //.make_operation(&conf)
         .expect("valid operation");
     let waiting_policy = WaitForReadyTable {
         inner: operation.retry_policy().clone(),
