@@ -1,9 +1,12 @@
 use async_stream::AsyncStream;
 
+use aws_hyper::StandardClient;
 use dynamodb::{
     error::ListTablesError, input::ListTablesInput, output::ListTablesOutput, SdkError,
 };
 
+// Trait exists only for example purposes to add a method to the existing struct. A production implementation
+// would add `paginate` directly to the client.
 trait PaginateListTables {
     fn paginate(self) -> ListTablesPaginator;
 }
@@ -19,6 +22,8 @@ impl PaginateListTables for dynamodb::client::fluent_builders::ListTables {
 }
 
 pub struct ListTablesPaginator {
+    // To make paginators usable with the raw API, these should probably hold conf/conn separately
+    // instead of holding a full client
     client: dynamodb::Client,
     inp: ListTablesInput,
 }
@@ -26,7 +31,8 @@ pub struct ListTablesPaginator {
 impl ListTablesPaginator {
     pub fn send(
         self,
-    ) -> impl tokio_stream::Stream<Item = Result<ListTablesOutput, SdkError<ListTablesError>>> {
+    ) -> impl tokio_stream::Stream<Item = Result<ListTablesOutput, SdkError<ListTablesError>>> + Unpin
+    {
         let (mut yield_tx, yield_rx) = async_stream::yielder::pair();
         // Without this, customers will get a 500 line error message about pinning. I think
         // one memory allocation for paginating a bunch of results from AWS is worth it.
