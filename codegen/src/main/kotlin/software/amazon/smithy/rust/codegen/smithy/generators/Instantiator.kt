@@ -29,7 +29,6 @@ import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
-import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
@@ -45,6 +44,7 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
+import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 /**
@@ -152,10 +152,8 @@ class Instantiator(
                         ctx.letIf(shape.getMemberTrait(model, HttpPrefixHeadersTrait::class.java).isPresent) {
                             it.copy(lowercaseMapKeys = true)
                         }.letIf(
-                            shape.getMemberTrait(
-                                model,
-                                StreamingTrait::class.java
-                            ).isPresent && model.expectShape(shape.container).hasTrait(SyntheticOutputTrait::class.java)
+                            shape.isStreaming(model) &&
+                                model.expectShape(shape.container).hasTrait(SyntheticOutputTrait::class.java)
                         ) {
                             it.copy(streaming = true)
                         }

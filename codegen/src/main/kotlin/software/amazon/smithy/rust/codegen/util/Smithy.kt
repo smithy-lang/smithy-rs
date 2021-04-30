@@ -38,6 +38,7 @@ fun UnionShape.expectMember(member: String): MemberShape =
 
 fun StructureShape.hasStreamingMember(model: Model) = this.findStreamingMember(model) != null
 fun UnionShape.hasStreamingMember(model: Model) = this.findMemberWithTrait<StreamingTrait>(model) != null
+fun MemberShape.isStreaming(model: Model) = this.getMemberTrait(model, StreamingTrait::class.java).isPresent
 
 /*
  * Returns the member of this structure targeted with streaming trait (if it exists).

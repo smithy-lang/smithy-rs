@@ -11,7 +11,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
-import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.protocoltests.traits.AppliesTo
 import software.amazon.smithy.protocoltests.traits.HttpMessageTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
@@ -35,6 +34,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -280,7 +280,7 @@ class HttpProtocolTestGenerator(
             rust("let parsed = parsed.unwrap();")
             outputShape.members().forEach { member ->
                 val memberName = protocolConfig.symbolProvider.toMemberName(member)
-                if (member.getMemberTrait(protocolConfig.model, StreamingTrait::class.java).isPresent) {
+                if (member.isStreaming(protocolConfig.model)) {
                     rust(
                         """assert_eq!(
                                         parsed.$memberName.collect().await.unwrap().into_bytes(),

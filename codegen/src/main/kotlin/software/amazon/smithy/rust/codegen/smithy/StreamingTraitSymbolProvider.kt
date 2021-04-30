@@ -13,10 +13,10 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.util.isStreaming
 
 /**
  * Wrapping symbol provider to change `Blob` to `ByteStream` when it targets a streaming member
@@ -38,7 +38,7 @@ class StreamingShapeSymbolProvider(private val base: RustSymbolProvider, private
         }
 
         // We are only targeting streaming blobs
-        return if (target is BlobShape && target.hasTrait(StreamingTrait::class.java)) {
+        return if (target is BlobShape && shape.isStreaming(model)) {
             RuntimeType.byteStream(config().runtimeConfig).toSymbol().toBuilder().setDefault(Default.RustDefault).build()
         } else {
             base.toSymbol(shape)

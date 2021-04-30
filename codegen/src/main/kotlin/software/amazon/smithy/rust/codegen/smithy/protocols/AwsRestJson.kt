@@ -18,7 +18,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpTrait
-import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -49,6 +48,7 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStream
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
 import java.util.logging.Logger
 
@@ -386,7 +386,7 @@ class AwsRestJsonGenerator(
                     docHandler = docShapeHandler,
                     structuredHandler = structureShapeHandler
                 )
-                return if (binding.member.getMemberTrait(model, StreamingTrait::class.java).isPresent) {
+                return if (binding.member.isStreaming(model)) {
                     writable { rust("#T(response.body_mut())?", deserializer) }
                 } else {
                     writable { rust("#T(response.body().as_ref())?", deserializer) }
