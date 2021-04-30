@@ -175,6 +175,7 @@ class BasicAwsJsonGenerator(
     ) {
         httpBuilderFun(implBlockWriter) {
             write("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
+            // rename safety: Operation shapes cannot be renamed
             rust(
                 """
                 Ok(
