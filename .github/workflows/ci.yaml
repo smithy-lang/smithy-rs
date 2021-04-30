@@ -112,6 +112,8 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
+    - name: Format Check
+      run: rustfmt --edition 2018 $(find -name '*.rs' -print)
     - name: execute runtime tests
       run: ./rust-runtime/test.sh
 
