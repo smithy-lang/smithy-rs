@@ -71,7 +71,8 @@ abstract class HttpProtocolGenerator(
         val inputShape = operationShape.inputShape(model)
         val sdkId =
             protocolConfig.serviceShape.getTrait(ServiceTrait::class.java)
-                .map { it.sdkId.toLowerCase().replace(" ", "") }.orElse(protocolConfig.serviceShape.id.name)
+                .map { it.sdkId.toLowerCase().replace(" ", "") }
+                .orElse(protocolConfig.serviceShape.id.getName(protocolConfig.serviceShape))
         val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model))
         builderGenerator.render(inputWriter)
         // impl OperationInputShape { ... }
@@ -158,7 +159,12 @@ abstract class HttpProtocolGenerator(
         }
     }
 
-    private fun buildOperation(implBlockWriter: RustWriter, shape: OperationShape, features: List<OperationCustomization>, sdkId: String) {
+    private fun buildOperation(
+        implBlockWriter: RustWriter,
+        shape: OperationShape,
+        features: List<OperationCustomization>,
+        sdkId: String
+    ) {
         val runtimeConfig = protocolConfig.runtimeConfig
         val outputSymbol = symbolProvider.toSymbol(shape)
         val operationT = RuntimeType.operation(runtimeConfig)
@@ -175,7 +181,10 @@ abstract class HttpProtocolGenerator(
         val mut = features.any { it.mutSelf() }
         val consumes = features.any { it.consumesSelf() }
         val self = "self".letIf(mut) { "mut $it" }.letIf(!consumes) { "&$it" }
-        implBlockWriter.rustBlock("pub fn make_operation($self, _config: &#T::Config) -> $returnType", RuntimeType.Config) {
+        implBlockWriter.rustBlock(
+            "pub fn make_operation($self, _config: &#T::Config) -> $returnType",
+            RuntimeType.Config
+        ) {
             withBlock("Ok({", "})") {
                 features.forEach { it.section(OperationSection.MutateInput("self", "_config"))(this) }
                 rust("let request = Self::assemble(self.request_builder_base()?, self.build_body());")
@@ -192,7 +201,9 @@ abstract class HttpProtocolGenerator(
                     let op = #1T::Operation::new(
                         request,
                         #2T::new()
-                    ).with_metadata(#1T::Metadata::new(${shape.id.name.dq()}, ${sdkId.dq()}));
+                    ).with_metadata(#1T::Metadata::new(${
+                    shape.id.getName(protocolConfig.serviceShape).dq()
+                    }, ${sdkId.dq()}));
                 """,
                     operationModule, symbolProvider.toSymbol(shape)
                 )
