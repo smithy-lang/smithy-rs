@@ -175,7 +175,7 @@ class AwsRestJsonGenerator(
                             }
                             Some(self.parse_response(response))
                         }
-                        fn parse_loaded(&self, response: &http::Response<#{bytes}>) -> Self::Output {
+                        fn parse_loaded(&self, response: &http::Response<#{Bytes}>) -> Self::Output {
                             // if streaming, we only hit this case if its an error
                             self.parse_error(response)
                         }
