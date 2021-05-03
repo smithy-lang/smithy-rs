@@ -11,9 +11,9 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 
 class RetryPolicyDecorator : RustCodegenDecorator {

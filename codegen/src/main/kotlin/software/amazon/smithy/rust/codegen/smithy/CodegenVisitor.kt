@@ -16,9 +16,9 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.ModelBuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ServiceGenerator
@@ -59,7 +59,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         ).protocolFor(context.model, service)
         protocolGenerator = generator
         model = generator.transformModel(baseModel)
-        val baseProvider = RustCodegenPlugin.BaseSymbolProvider(model, symbolVisitorConfig)
+        val baseProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
         symbolProvider = codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
         protocolConfig =
@@ -72,7 +72,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         httpGenerator = protocolGenerator.buildProtocolGenerator(protocolConfig)
     }
 
-    private fun baselineTransform(model: Model) = RecursiveShapeBoxer.transform(model)
+    private fun baselineTransform(model: Model) = model.let(RecursiveShapeBoxer::transform)
 
     fun execute() {
         logger.info("generating Rust client...")
@@ -104,7 +104,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         rustCrate.useShapeWriter(shape) { writer ->
             StructureGenerator(model, symbolProvider, writer, shape).render()
             if (!shape.hasTrait(SyntheticInputTrait::class.java)) {
-                val builderGenerator = ModelBuilderGenerator(protocolConfig.model, protocolConfig.symbolProvider, shape)
+                val builderGenerator = BuilderGenerator(protocolConfig.model, protocolConfig.symbolProvider, shape)
                 builderGenerator.render(writer)
                 writer.implBlock(shape, symbolProvider) {
                     builderGenerator.renderConvenienceMethod(this)
@@ -128,6 +128,12 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     }
 
     override fun serviceShape(shape: ServiceShape) {
-        ServiceGenerator(rustCrate, httpGenerator, protocolGenerator.support(), protocolConfig, codegenDecorator).render()
+        ServiceGenerator(
+            rustCrate,
+            httpGenerator,
+            protocolGenerator.support(),
+            protocolConfig,
+            codegenDecorator
+        ).render()
     }
 }

@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.smithy.transformers.StructureModifier
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -71,7 +72,7 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
         return OperationNormalizer(model).transformModel(
             inputBodyFactory = shapeIfHasMembers,
             outputBodyFactory = shapeIfHasMembers
-        )
+        ).let(RemoveEventStreamOperations::transform)
     }
 
     override fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider {
@@ -174,6 +175,7 @@ class BasicAwsJsonGenerator(
     ) {
         httpBuilderFun(implBlockWriter) {
             write("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
+            // rename safety: Operation shapes cannot be renamed
             rust(
                 """
                 Ok(
