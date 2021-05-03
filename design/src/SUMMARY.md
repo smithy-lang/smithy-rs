@@ -8,4 +8,6 @@
 
 - [Smithy](./smithy/overview.md)
     - [Simple Shapes](./smithy/simple_shapes.md)
+    - [Recursive Shapes](./smithy/recursive_shapes.md)
+    - [Aggregate Shapes](./smithy/aggregate_shapes.md)
     - [Endpoint Resolution](smithy/endpoint.md)
