@@ -23,7 +23,9 @@ class RustCodegenPlugin : SmithyBuildPlugin {
     companion object {
         fun baseSymbolProvider(model: Model, serviceShape: ServiceShape, symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig) =
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
+                .let { StreamingShapeSymbolProvider(it, model) }
                 .let { BaseSymbolMetadataProvider(it) }
+                .let { StreamingShapeMetadataProvider(it, model) }
                 .let { RustReservedWordSymbolProvider(it) }
     }
 }

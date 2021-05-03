@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 
@@ -99,22 +100,25 @@ abstract class HttpProtocolGenerator(
         }
         val operationName = symbolProvider.toSymbol(operationShape).name
         operationWriter.documentShape(operationShape, model)
-        Attribute.Derives(setOf(RuntimeType.Clone)).render(operationWriter)
+        Attribute.Derives(setOf(RuntimeType.Clone, RuntimeType.Default)).render(operationWriter)
         operationWriter.rustBlock("pub struct $operationName") {
             write("_private: ()")
         }
         operationWriter.implBlock(operationShape, symbolProvider) {
             builderGenerator.renderConvenienceMethod(this)
 
+            val responseTypes = responseBody(operationShape)
+            val mutability = responseTypes.mutability
+            val type = responseTypes.type
             fromResponseImpl(this, operationShape)
 
             rustBlock(
-                "pub fn parse_response(&self, response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+                "pub fn parse_response(&self, $mutability response: &$mutability #T<$type>) -> Result<#T, #T>",
                 RuntimeType.Http("response::Response"),
                 symbolProvider.toSymbol(operationShape.outputShape(model)),
                 operationShape.errorSymbol(symbolProvider)
             ) {
-                write("Self::from_response(&response)")
+                write("Self::from_response(&$mutability response)")
             }
 
             rustBlock("pub fn new() -> Self") {
@@ -124,6 +128,15 @@ abstract class HttpProtocolGenerator(
             customizations.forEach { customization -> customization.section(OperationSection.OperationImplBlock)(this) }
         }
         traitImplementations(operationWriter, operationShape)
+    }
+
+    data class ResponseBody(val type: String, val mutability: String)
+
+    private fun RustWriter.responseBody(operationShape: OperationShape): ResponseBody {
+        return when (operationShape.outputShape(model).hasStreamingMember(model)) {
+            true -> ResponseBody(this.format(RuntimeType.sdkBody(protocolConfig.runtimeConfig)), "mut")
+            false -> ResponseBody("impl AsRef<[u8]>", "")
+        }
     }
 
     protected fun httpBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
@@ -149,8 +162,9 @@ abstract class HttpProtocolGenerator(
         block: RustWriter.() -> Unit
     ) {
         Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
+        val responseBodyType = implBlockWriter.responseBody(operationShape)
         implBlockWriter.rustBlock(
-            "fn from_response(response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+            "fn from_response(response: & ${responseBodyType.mutability} #T<${responseBodyType.type}>) -> Result<#T, #T>",
             RuntimeType.Http("response::Response"),
             symbolProvider.toSymbol(operationShape.outputShape(model)),
             operationShape.errorSymbol(symbolProvider)

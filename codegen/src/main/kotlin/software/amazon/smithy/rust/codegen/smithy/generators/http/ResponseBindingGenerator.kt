@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val operationShape: OperationShape) {
@@ -129,15 +130,42 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         val outputT = symbolProvider.toSymbol(binding.member)
         val fnName = "deser_payload_${fnName(operationShape, binding)}"
         return RuntimeType.forInlineFun(fnName, "http_serde") { rustWriter ->
-            rustWriter.rustBlock("pub fn $fnName(body: &[u8]) -> Result<#T, #T>", outputT, errorT) {
-                deserializePayloadBody(
-                    binding,
-                    errorT,
-                    structuredHandler = structuredHandler,
-                    docShapeHandler = docHandler
-                )
+            if (binding.member.isStreaming(model)) {
+                rustWriter.rustBlock(
+                    "pub fn $fnName(body: &mut #T) -> Result<#T, #T>",
+                    RuntimeType.sdkBody(runtimeConfig),
+                    outputT,
+                    errorT
+                ) {
+                    deserializeStreamingBody(binding)
+                }
+            } else {
+                rustWriter.rustBlock("pub fn $fnName(body: &[u8]) -> Result<#T, #T>", outputT, errorT) {
+                    deserializePayloadBody(
+                        binding,
+                        errorT,
+                        structuredHandler = structuredHandler,
+                        docShapeHandler = docHandler
+                    )
+                }
             }
         }
+    }
+
+    private fun RustWriter.deserializeStreamingBody(
+        binding: HttpBinding,
+    ) {
+        val member = binding.member
+        val targetShape = model.expectShape(member.target)
+        check(targetShape is BlobShape)
+        rustTemplate(
+            """
+            // replace the body with an empty body
+            let body = std::mem::replace(body, #{sdk_body}::taken());
+            Ok(#{byte_stream}::new(body))
+        """,
+            "byte_stream" to RuntimeType.byteStream(runtimeConfig), "sdk_body" to RuntimeType.sdkBody(runtimeConfig)
+        )
     }
 
     private fun RustWriter.deserializePayloadBody(
