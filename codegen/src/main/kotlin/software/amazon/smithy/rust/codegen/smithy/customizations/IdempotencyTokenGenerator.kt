@@ -13,14 +13,14 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
-import software.amazon.smithy.rust.codegen.util.findMember
+import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 
 class IdempotencyTokenGenerator(protocolConfig: ProtocolConfig, private val operationShape: OperationShape) :
     OperationCustomization() {
     private val model = protocolConfig.model
     private val symbolProvider = protocolConfig.symbolProvider
-    private val idempotencyTokenMember = operationShape.inputShape(model).findMember<IdempotencyTokenTrait>(model)
+    private val idempotencyTokenMember = operationShape.inputShape(model).findMemberWithTrait<IdempotencyTokenTrait>(model)
     override fun section(section: OperationSection): Writable {
         if (idempotencyTokenMember == null) {
             return emptySection
