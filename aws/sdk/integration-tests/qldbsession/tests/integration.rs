@@ -27,7 +27,7 @@ async fn signv4_use_correct_service_name() {
     );
     let conn = TestConnection::new(vec![(
         http::Request::builder()
-            .header("content-type", "application/x-amz-json-1.0")
+            .header("content-type", "application/x-amz-json-1.1")
             .header("x-amz-target", "QLDBSession.SendCommand")
             .header("content-length", "49")
             .header("host", "session.qldb.us-east-1.amazonaws.com")
