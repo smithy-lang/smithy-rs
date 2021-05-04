@@ -5,13 +5,14 @@
 
 use aws_auth::Credentials;
 use aws_hyper::test_connection::TestConnection;
-use aws_hyper::{Client};
+use aws_hyper::Client;
 use aws_sdk_qldbsession as qldbsession;
 use http::Uri;
 use qldbsession::model::StartSessionRequest;
-use qldbsession::operation::{SendCommand};
+use qldbsession::operation::SendCommand;
 use qldbsession::{Config, Region};
 use smithy_http::body::SdkBody;
+use std::time::{Duration, UNIX_EPOCH};
 
 // TODO: having the full HTTP requests right in the code is a bit gross, consider something
 // like https://github.com/davidbarsky/sigv4/blob/master/aws-sigv4/src/lib.rs#L283-L315 to store
@@ -26,38 +27,42 @@ async fn signv4_use_correct_service_name() {
     );
     let conn = TestConnection::new(vec![(
         http::Request::builder()
-            .header("content-type", "application/x-amz-json-1.1")
-            .header("x-amz-target", "TrentService.GenerateRandom")
-            .header("content-length", "20")
-            .header("host", "qldbsession.us-east-1.amazonaws.com")
-            .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210305/us-east-1/qldb/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-target, Signature=750c6333c96dcbe4c4c11a9af8483ff68ac40e0e8ba8244772d981aab3cda703")
+            .header("content-type", "application/x-amz-json-1.0")
+            .header("x-amz-target", "QLDBSession.SendCommand")
+            .header("content-length", "49")
+            .header("host", "session.qldb.us-east-1.amazonaws.com")
+            .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210305/us-east-1/qldb/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-target, Signature=38be4a432384f4ee7fb9683a9d093cc636a86a4fa6e7e8a198f4437c8c7f596a")
             // qldbsession uses the service name 'qldb' in signature _________________________^^^^
             .header("x-amz-date", "20210305T134922Z")
             .header("x-amz-security-token", "notarealsessiontoken")
-            .header("user-agent", "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0")
-            .header("x-amz-user-agent", "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0")
-            .uri(Uri::from_static("https://qldbsession.us-east-1.amazonaws.com/"))
-            .body(SdkBody::from(r#"{"NumberOfBytes":64}"#)).unwrap(),
+            .header("user-agent", "aws-sdk-rust/0.1.0 os/macos lang/rust/1.51.0")
+            .header("x-amz-user-agent", "aws-sdk-rust/0.1.0 api/qldbsession/0.0.2 os/macos lang/rust/1.51.0")
+            .uri(Uri::from_static("https://session.qldb.us-east-1.amazonaws.com/"))
+            .body(SdkBody::from(r#"{"StartSession":{"LedgerName":"not-real-ledger"}}"#)).unwrap(),
         http::Response::builder()
             .status(http::StatusCode::from_u16(200).unwrap())
-            .body(r#"{"Plaintext":"6CG0fbzzhg5G2VcFCPmJMJ8Njv3voYCgrGlp3+BZe7eDweCXgiyDH9BnkKvLmS7gQhnYDUlyES3fZVGwv5+CxA=="}"#).unwrap())
+            .body(r#"{}"#).unwrap()),
     ]);
+
     let client = Client::new(conn.clone());
     let conf = Config::builder()
         .region(Region::new("us-east-1"))
         .credentials_provider(creds)
         .build();
 
-    let op = SendCommand::builder()
+    let mut op = SendCommand::builder()
         .start_session(
             StartSessionRequest::builder()
                 .ledger_name("not-real-ledger")
-                .build()
+                .build(),
         )
         .build()
         .unwrap()
         .make_operation(&conf)
         .expect("valid operation");
+    // Fix the request time so the signature is stable
+    op.config_mut()
+        .insert(UNIX_EPOCH + Duration::from_secs(1614952162));
 
     let _ = client.call(op).await.expect("request should succeed");
 
