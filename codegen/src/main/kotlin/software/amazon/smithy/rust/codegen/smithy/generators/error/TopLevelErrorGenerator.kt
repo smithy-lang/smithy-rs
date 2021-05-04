@@ -38,9 +38,9 @@ class TopLevelErrorGenerator(protocolConfig: ProtocolConfig, private val operati
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
 
-    private val allErrors = operations.flatMap { it.errors }.distinctBy { it.name }
+    private val allErrors = operations.flatMap { it.errors }.distinctBy { it.getName(protocolConfig.serviceShape) }
         .map { protocolConfig.model.expectShape(it, StructureShape::class.java) }
-        .sortedBy { it.id.name }
+        .sortedBy { it.id.getName(protocolConfig.serviceShape) }
 
     private val sdkError = CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType().member("result::SdkError")
     fun render(crate: RustCrate) {
@@ -91,7 +91,10 @@ class TopLevelErrorGenerator(protocolConfig: ProtocolConfig, private val operati
     }
 
     private fun RustWriter.renderDefinition() {
-        RustMetadata(additionalAttributes = listOf(Attribute.NonExhaustive), public = true).withDerives(RuntimeType.Debug).render(this)
+        RustMetadata(
+            additionalAttributes = listOf(Attribute.NonExhaustive),
+            public = true
+        ).withDerives(RuntimeType.Debug).render(this)
         rustBlock("enum Error") {
             allErrors.forEach { error ->
                 val sym = symbolProvider.toSymbol(error)

@@ -98,6 +98,7 @@ class OperationNormalizer(private val model: Model) {
     companion object {
         // Functions to construct synthetic shape IDs—Don't rely on these in external code: The attached traits
         // provide shape ids via `.body` on [SyntheticInputTrait] and [SyntheticOutputTrait]
+        // Rename safety: Operations cannot be renamed
         private fun OperationShape.inputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Input")
         private fun OperationShape.outputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Output")
         private fun OperationShape.inputBodyId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}InputBody")
