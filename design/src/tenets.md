@@ -14,11 +14,11 @@ Other customers will come to our SDK with specific requirements. Perhaps they’
 
 ### Make common problems easy to solve
 
-If solving a common problem isn’t obvious from the API, it should be obvious from the documentation. The SDK should guide users towards the best solutions for common tasks, **first** with well named methods, **second** with documentation, and **third** with real -world usage examples. Provide APIs are misuse resistant. Async Rust has the potential to introduce subtle bugs; we should do our best to help customers avoid them.
+If solving a common problem isn’t obvious from the API, it should be obvious from the documentation. The SDK should guide users towards the best solutions for common tasks, **first** with well named methods, **second** with documentation, and **third** with real -world usage examples. Provide misuse resistant APIs. Async Rust has the potential to introduce subtle bugs; we should do our best to help customers avoid them.
 
 ### Design for the Future
 
-APIs evolve in unpredictable ways, and it's crucial that we can evolve the SDK without breaking existing clients. This means designing the SDK so that fundamental changes to the internals can be made without altering the external interface we surface to customers:
+APIs evolve in unpredictable ways, and it's crucial that we can evolve the SDK without breaking existing customers. This means designing the SDK so that fundamental changes to the internals can be made without altering the external interface we surface to customers:
 
 * Keeping the shared core as small & opaque as possible.
 * Don’t leak our internal dependencies to customers
