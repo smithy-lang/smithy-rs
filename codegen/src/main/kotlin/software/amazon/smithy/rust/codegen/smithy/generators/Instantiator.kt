@@ -28,19 +28,23 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.model.traits.IdempotencyTokenTrait
+import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.smithy.letIf
+import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
+import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 /**
@@ -54,19 +58,28 @@ class Instantiator(
     private val runtimeConfig: RuntimeConfig
 ) {
 
-    fun render(writer: RustWriter, shape: Shape, arg: Node) {
+    // The Rust HTTP library lower cases headers but Smithy protocol tests
+    // contain httpPrefix headers with uppercase keys
+    data class Ctx(val lowercaseMapKeys: Boolean, val streaming: Boolean)
+
+    fun render(
+        writer: RustWriter,
+        shape: Shape,
+        arg: Node,
+        ctx: Ctx = Ctx(lowercaseMapKeys = false, streaming = false)
+    ) {
         when (shape) {
             // Compound Shapes
-            is StructureShape -> renderStructure(writer, shape, arg as ObjectNode)
-            is UnionShape -> renderUnion(writer, shape, arg as ObjectNode)
+            is StructureShape -> renderStructure(writer, shape, arg as ObjectNode, ctx)
+            is UnionShape -> renderUnion(writer, shape, arg as ObjectNode, ctx)
 
             // Collections
-            is ListShape -> renderList(writer, shape, arg as ArrayNode)
-            is MapShape -> renderMap(writer, shape, arg as ObjectNode)
-            is SetShape -> renderSet(writer, shape, arg as ArrayNode)
+            is ListShape -> renderList(writer, shape, arg as ArrayNode, ctx)
+            is MapShape -> renderMap(writer, shape, arg as ObjectNode, ctx)
+            is SetShape -> renderSet(writer, shape, arg as ArrayNode, ctx)
 
             // Members, supporting potentially optional members
-            is MemberShape -> renderMember(writer, shape, arg)
+            is MemberShape -> renderMember(writer, shape, arg, ctx)
 
             // Wrapped Shapes
             is TimestampShape -> writer.write(
@@ -79,10 +92,17 @@ class Instantiator(
              * Blob::new("arg")
              * ```
              */
-            is BlobShape -> writer.write(
-                "#T::new(${(arg as StringNode).value.dq()})",
-                RuntimeType.Blob(runtimeConfig)
-            )
+            is BlobShape -> if (ctx.streaming) {
+                writer.write(
+                    "#T::from_static(b${(arg as StringNode).value.dq()})",
+                    RuntimeType.byteStream(runtimeConfig)
+                )
+            } else {
+                writer.write(
+                    "#T::new(${(arg as StringNode).value.dq()})",
+                    RuntimeType.Blob(runtimeConfig)
+                )
+            }
 
             // Simple Shapes
             is StringShape -> renderString(writer, shape, arg as StringNode)
@@ -108,7 +128,8 @@ class Instantiator(
     private fun renderMember(
         writer: RustWriter,
         shape: MemberShape,
-        arg: Node
+        arg: Node,
+        ctx: Ctx
     ) {
         val target = model.expectShape(shape.target)
         val symbol = symbolProvider.toSymbol(shape)
@@ -119,13 +140,31 @@ class Instantiator(
             writer.write("None")
         } else {
             writer.conditionalBlock("Some(", ")", conditional = symbol.isOptional()) {
-                render(this, target, arg)
+                writer.conditionalBlock(
+                    "Box::new(",
+                    ")",
+                    conditional = symbol.rustType().stripOuter<RustType.Option>() is RustType.Box
+                ) {
+                    render(
+                        this,
+                        target,
+                        arg,
+                        ctx.letIf(shape.getMemberTrait(model, HttpPrefixHeadersTrait::class.java).isPresent) {
+                            it.copy(lowercaseMapKeys = true)
+                        }.letIf(
+                            shape.isStreaming(model) &&
+                                model.expectShape(shape.container).hasTrait(SyntheticOutputTrait::class.java)
+                        ) {
+                            it.copy(streaming = true)
+                        }
+                    )
+                }
             }
         }
     }
 
-    private fun renderSet(writer: RustWriter, shape: SetShape, data: ArrayNode) {
-        renderList(writer, shape, data)
+    private fun renderSet(writer: RustWriter, shape: SetShape, data: ArrayNode, ctx: Ctx) {
+        renderList(writer, shape, data, ctx)
     }
 
     /**
@@ -140,14 +179,19 @@ class Instantiator(
     private fun renderMap(
         writer: RustWriter,
         shape: MapShape,
-        data: ObjectNode
+        data: ObjectNode,
+        ctx: Ctx,
     ) {
+        val lowercase = when (ctx.lowercaseMapKeys) {
+            true -> ".to_ascii_lowercase()"
+            else -> ""
+        }
         if (data.members.isNotEmpty()) {
             writer.rustBlock("") {
                 write("let mut ret = #T::new();", RustType.HashMap.RuntimeType)
                 data.members.forEach { (k, v) ->
-                    withBlock("ret.insert(${k.value.dq()}.to_string(),", ");") {
-                        renderMember(this, shape.value, v)
+                    withBlock("ret.insert(${k.value.dq()}.to_string()$lowercase,", ");") {
+                        renderMember(this, shape.value, v, ctx)
                     }
                 }
                 write("ret")
@@ -165,7 +209,8 @@ class Instantiator(
     private fun renderUnion(
         writer: RustWriter,
         shape: UnionShape,
-        data: ObjectNode
+        data: ObjectNode,
+        ctx: Ctx
     ) {
         val unionSymbol = symbolProvider.toSymbol(shape)
         check(data.members.size == 1)
@@ -177,7 +222,7 @@ class Instantiator(
         writer.write("#T::${memberName.toPascalCase()}", unionSymbol)
         // unions should specify exactly one member
         writer.withBlock("(", ")") {
-            render(this, member, variant.value)
+            render(this, member, variant.value, ctx)
         }
     }
 
@@ -189,11 +234,12 @@ class Instantiator(
     private fun renderList(
         writer: RustWriter,
         shape: CollectionShape,
-        data: ArrayNode
+        data: ArrayNode,
+        ctx: Ctx
     ) {
         writer.withBlock("vec![", "]") {
             data.elements.forEach { v ->
-                renderMember(this, shape.member, v)
+                renderMember(this, shape.member, v, ctx)
                 write(",")
             }
         }
@@ -222,47 +268,24 @@ class Instantiator(
     private fun renderStructure(
         writer: RustWriter,
         shape: StructureShape,
-        data: ObjectNode
+        data: ObjectNode,
+        ctx: Ctx
     ) {
-        writer.rustBlock("") {
-            val isSyntheticInput = shape.hasTrait(SyntheticInputTrait::class.java)
-            if (isSyntheticInput) {
-                rust(
-                    """
-                let config = #T::Config::builder()
-            """,
-                    RuntimeType.Config
+        writer.write("#T::builder()", symbolProvider.toSymbol(shape))
+        data.members.forEach { (key, value) ->
+            val memberShape = shape.expectMember(key.value)
+            writer.withBlock(".${memberShape.setterName()}(", ")") {
+                renderMember(
+                    this,
+                    memberShape,
+                    value,
+                    ctx
                 )
-                if (shape.allMembers.values.any { it.hasTrait(IdempotencyTokenTrait::class.java) }) {
-                    rust(".make_token(\"00000000-0000-4000-8000-000000000000\")")
-                }
-                rust(".build();")
-            } else {
-                write("let _ = 5;")
-            }
-            writer.write("#T::builder()", symbolProvider.toSymbol(shape))
-            data.members.forEach { (key, value) ->
-                val (memberShape, targetShape) = getMember(shape, key)
-                val func = symbolProvider.toMemberName(memberShape)
-                if (!value.isNullNode) {
-                    writer.withBlock(".$func(", ")") {
-                        render(this, targetShape, value)
-                    }
-                }
-            }
-            if (isSyntheticInput) {
-                writer.write(".build(&config)")
-            } else {
-                writer.write(".build()")
-            }
-            if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
-                writer.write(".unwrap()")
             }
         }
-    }
-
-    private fun getMember(shape: StructureShape, key: StringNode): Pair<MemberShape, Shape> {
-        val memberShape = shape.expectMember(key.value)
-        return memberShape to model.expectShape(memberShape.target)
+        writer.write(".build()")
+        if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
+            writer.write(".unwrap()")
+        }
     }
 }

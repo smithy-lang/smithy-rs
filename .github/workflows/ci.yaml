@@ -3,8 +3,8 @@ on: [push]
 name: CI
 
 env:
-  rust_version: 1.50.0
-  java_version: 9
+  rust_version: 1.51.0
+  java_version: 11
 
 jobs:
   style:
@@ -112,6 +112,8 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
+    - name: Format Check
+      run: rustfmt --check --edition 2018 $(find -name '*.rs' -print)
     - name: execute runtime tests
       run: ./rust-runtime/test.sh
 
@@ -153,8 +155,6 @@ jobs:
       run: echo "name=${GITHUB_REF##*/}-$(date +'%Y-%m-%d')" >> $GITHUB_ENV
     - uses: actions/upload-artifact@v2
       name: Upload SDK Artifact
-        # Always upload the output even if the tests failed
-      if: ${{ always() }}
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
         path: |

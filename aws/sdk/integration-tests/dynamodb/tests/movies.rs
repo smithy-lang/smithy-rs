@@ -3,60 +3,67 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use aws_sdk_dynamodb as dynamodb;
+
 use aws_http::AwsErrorRetryPolicy;
 use aws_hyper::test_connection::TestConnection;
 use aws_hyper::{SdkError, SdkSuccess};
+use aws_sdk_dynamodb::input::CreateTableInput;
 use dynamodb::error::DescribeTableError;
-use dynamodb::input::{
-    create_table_input, put_item_input, query_input, DescribeTableInput, PutItemInput, QueryInput,
-};
+use dynamodb::input::{DescribeTableInput, PutItemInput, QueryInput};
 use dynamodb::model::{
     AttributeDefinition, AttributeValue, KeySchemaElement, KeyType, ProvisionedThroughput,
     ScalarAttributeType, TableStatus,
 };
 use dynamodb::operation::{CreateTable, DescribeTable};
 use dynamodb::output::DescribeTableOutput;
-use dynamodb::{Config, Region, Credentials};
+use dynamodb::{Config, Credentials, Region};
+use http::header::{HeaderName, AUTHORIZATION};
 use http::Uri;
 use serde_json::Value;
-use smithy_http::operation::Operation;
 use smithy_http::body::SdkBody;
+use smithy_http::operation::Operation;
 use smithy_http::retry::ClassifyResponse;
 use smithy_types::retry::RetryKind;
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::Instant;
-use http::header::{AUTHORIZATION, HeaderName};
 
-fn create_table(table_name: &str) -> create_table_input::Builder {
+fn create_table(table_name: &str) -> CreateTableInput {
     CreateTable::builder()
         .table_name(table_name)
-        .key_schema(vec![
+        .key_schema(
             KeySchemaElement::builder()
                 .attribute_name("year")
                 .key_type(KeyType::Hash)
                 .build(),
+        )
+        .key_schema(
             KeySchemaElement::builder()
                 .attribute_name("title")
                 .key_type(KeyType::Range)
                 .build(),
-        ])
-        .attribute_definitions(vec![
+        )
+        .attribute_definitions(
             AttributeDefinition::builder()
                 .attribute_name("year")
                 .attribute_type(ScalarAttributeType::N)
                 .build(),
+        )
+        .attribute_definitions(
             AttributeDefinition::builder()
                 .attribute_name("title")
                 .attribute_type(ScalarAttributeType::S)
                 .build(),
-        ])
+        )
         .provisioned_throughput(
             ProvisionedThroughput::builder()
                 .read_capacity_units(10)
                 .write_capacity_units(10)
                 .build(),
         )
+        .build()
+        .expect("valid operation")
 }
 
 fn value_to_item(value: Value) -> AttributeValue {
@@ -72,7 +79,7 @@ fn value_to_item(value: Value) -> AttributeValue {
     }
 }
 
-fn add_item(table_name: impl Into<String>, item: Value) -> put_item_input::Builder {
+fn add_item(table_name: impl Into<String>, item: Value) -> PutItemInput {
     let attribute_value = match value_to_item(item) {
         AttributeValue::M(map) => map,
         other => panic!("can only insert top level values, got {:?}", other),
@@ -80,10 +87,12 @@ fn add_item(table_name: impl Into<String>, item: Value) -> put_item_input::Build
 
     PutItemInput::builder()
         .table_name(table_name)
-        .item(attribute_value)
+        .set_item(Some(attribute_value))
+        .build()
+        .expect("valid operation")
 }
 
-fn movies_in_year(table_name: &str, year: u16) -> query_input::Builder {
+fn movies_in_year(table_name: &str, year: u16) -> QueryInput {
     let mut expr_attrib_names = HashMap::new();
     expr_attrib_names.insert("#yr".to_string(), "year".to_string());
     let mut expr_attrib_values = HashMap::new();
@@ -91,8 +100,10 @@ fn movies_in_year(table_name: &str, year: u16) -> query_input::Builder {
     QueryInput::builder()
         .table_name(table_name)
         .key_condition_expression("#yr = :yyyy")
-        .expression_attribute_names(expr_attrib_names)
-        .expression_attribute_values(expr_attrib_values)
+        .set_expression_attribute_names(Some(expr_attrib_names))
+        .set_expression_attribute_values(Some(expr_attrib_values))
+        .build()
+        .expect("valid operation")
 }
 
 /// Hand-written waiter to retry every second until the table is out of `Creating` state
@@ -143,13 +154,15 @@ fn wait_for_ready_table(
 ) -> Operation<DescribeTable, WaitForReadyTable<AwsErrorRetryPolicy>> {
     let operation = DescribeTableInput::builder()
         .table_name(table_name)
-        .build(&conf);
+        .build()
+        .unwrap()
+        .make_operation(&conf)
+        .expect("valid operation");
     let waiting_policy = WaitForReadyTable {
         inner: operation.retry_policy().clone(),
     };
     operation.with_retry_policy(waiting_policy)
 }
-
 
 /// Validate that time has passed with a 5ms tolerance
 ///
@@ -181,7 +194,11 @@ async fn movies_it() {
         .credentials_provider(Credentials::from_keys("AKNOTREAL", "NOT_A_SECRET", None))
         .build();
     client
-        .call(create_table(table_name).build(&conf))
+        .call(
+            create_table(table_name)
+                .make_operation(&conf)
+                .expect("valid request"),
+        )
         .await
         .expect("failed to create table");
 
@@ -200,24 +217,47 @@ async fn movies_it() {
     };
     for item in data {
         client
-            .call(add_item(table_name, item.clone()).build(&conf))
+            .call(
+                add_item(table_name, item.clone())
+                    .make_operation(&conf)
+                    .expect("valid request"),
+            )
             .await
             .expect("failed to insert item");
     }
     let films_2222 = client
-        .call(movies_in_year(table_name, 2222).build(&conf))
+        .call(
+            movies_in_year(table_name, 2222)
+                .make_operation(&conf)
+                .expect("valid request"),
+        )
         .await
         .expect("query should succeed");
     // this isn't back to the future, there are no movies from 2022
     assert_eq!(films_2222.count, 0);
 
     let films_2013 = client
-        .call(movies_in_year(table_name, 2013).build(&conf))
+        .call(
+            movies_in_year(table_name, 2013)
+                .make_operation(&conf)
+                .expect("valid request"),
+        )
         .await
         .expect("query should succeed");
     assert_eq!(films_2013.count, 2);
-    let titles: Vec<AttributeValue> = films_2013.items.unwrap().into_iter().map(|mut row|row.remove("title").expect("row should have title")).collect();
-    assert_eq!(titles, vec![AttributeValue::S("Rush".to_string()), AttributeValue::S("Turn It Down, Or Else!".to_string())]);
+    let titles: Vec<AttributeValue> = films_2013
+        .items
+        .unwrap()
+        .into_iter()
+        .map(|mut row| row.remove("title").expect("row should have title"))
+        .collect();
+    assert_eq!(
+        titles,
+        vec![
+            AttributeValue::S("Rush".to_string()),
+            AttributeValue::S("Turn It Down, Or Else!".to_string())
+        ]
+    );
 
     for req in conn.requests().iter() {
         req.assert_matches(vec![AUTHORIZATION, HeaderName::from_static("x-amz-date")]);

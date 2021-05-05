@@ -13,6 +13,8 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.StreamingTrait
+import software.amazon.smithy.model.traits.Trait
 
 inline fun <reified T : Shape> Model.lookup(shapeId: String): T {
     return this.expectShape(ShapeId.from(shapeId), T::class.java)
@@ -33,3 +35,24 @@ fun StructureShape.expectMember(member: String): MemberShape =
 
 fun UnionShape.expectMember(member: String): MemberShape =
     this.getMember(member).orElseThrow { CodegenException("$member did not exist on $this") }
+
+fun StructureShape.hasStreamingMember(model: Model) = this.findStreamingMember(model) != null
+fun UnionShape.hasStreamingMember(model: Model) = this.findMemberWithTrait<StreamingTrait>(model) != null
+fun MemberShape.isStreaming(model: Model) = this.getMemberTrait(model, StreamingTrait::class.java).isPresent
+
+/*
+ * Returns the member of this structure targeted with streaming trait (if it exists).
+ *
+ * A structure must have at most one streaming member.
+ */
+fun StructureShape.findStreamingMember(model: Model): MemberShape? {
+    return this.findMemberWithTrait<StreamingTrait>(model)
+}
+
+inline fun <reified T : Trait> StructureShape.findMemberWithTrait(model: Model): MemberShape? {
+    return this.members().find { it.getMemberTrait(model, T::class.java).isPresent }
+}
+
+inline fun <reified T : Trait> UnionShape.findMemberWithTrait(model: Model): MemberShape? {
+    return this.members().find { it.getMemberTrait(model, T::class.java).isPresent }
+}

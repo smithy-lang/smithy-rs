@@ -6,18 +6,16 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
@@ -126,6 +124,7 @@ class PubUseRegion(private val runtimeConfig: RuntimeConfig) : LibRsCustomizatio
     override fun section(section: LibRsSection): Writable {
         return when (section) {
             is LibRsSection.Body -> writable { rust("pub use #T::Region;", region(runtimeConfig)) }
+            else -> emptySection
         }
     }
 }
@@ -133,4 +132,4 @@ class PubUseRegion(private val runtimeConfig: RuntimeConfig) : LibRsCustomizatio
 fun region(runtimeConfig: RuntimeConfig) =
     RuntimeType("region", awsTypes(runtimeConfig), "aws_types")
 
-fun awsTypes(runtimeConfig: RuntimeConfig) = CargoDependency("aws-types", Local(runtimeConfig.relativePath))
+fun awsTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-types")

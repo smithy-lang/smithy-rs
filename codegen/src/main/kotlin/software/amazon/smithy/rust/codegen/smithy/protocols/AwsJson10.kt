@@ -24,17 +24,20 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.Serializers
 import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
-import software.amazon.smithy.rust.codegen.smithy.generators.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.locatedIn
+import software.amazon.smithy.rust.codegen.smithy.meta
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.smithy.transformers.StructureModifier
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -69,7 +72,7 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
         return OperationNormalizer(model).transformModel(
             inputBodyFactory = shapeIfHasMembers,
             outputBodyFactory = shapeIfHasMembers
-        )
+        ).let(RemoveEventStreamOperations::transform)
     }
 
     override fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider {
@@ -110,9 +113,15 @@ class SyntheticBodySymbolProvider(private val model: Model, private val base: Ru
     override fun toSymbol(shape: Shape): Symbol {
         val initialSymbol = base.toSymbol(shape)
         val override = when (shape) {
-            is StructureShape -> if (shape.hasTrait(InputBodyTrait::class.java) || shape.hasTrait(OutputBodyTrait::class.java)) {
-                initialSymbol.toBuilder().locatedIn(Serializers).build()
-            } else null
+            is StructureShape -> when {
+                shape.hasTrait(InputBodyTrait::class.java) ->
+                    initialSymbol.toBuilder().locatedIn(Serializers).build()
+                shape.hasTrait(OutputBodyTrait::class.java) ->
+                    initialSymbol.toBuilder().locatedIn(Serializers).meta(
+                        initialSymbol.expectRustMetadata().withDerives(RuntimeType("Default", null, "std::default"))
+                    ).build()
+                else -> null
+            }
             is MemberShape -> {
                 val container = model.expectShape(shape.container)
                 if (container.hasTrait(InputBodyTrait::class.java)) {
@@ -138,7 +147,6 @@ class BasicAwsJsonGenerator(
 ) : HttpProtocolGenerator(protocolConfig) {
     private val model = protocolConfig.model
     override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
-        // All AWS JSON protocols do NOT support streaming shapes
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
         val operationName = symbolProvider.toSymbol(operationShape).name
         operationWriter.rustTemplate(
@@ -167,12 +175,15 @@ class BasicAwsJsonGenerator(
     ) {
         httpBuilderFun(implBlockWriter) {
             write("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
+            // rename safety: Operation shapes cannot be renamed
             rust(
                 """
-                builder
-                   .method("POST")
-                   .header("Content-Type", "application/x-amz-json-${awsJsonVersion.value}")
-                   .header("X-Amz-Target", "${protocolConfig.serviceShape.id.name}.${operationShape.id.name}")
+                Ok(
+                    builder
+                       .method("POST")
+                       .header("Content-Type", "application/x-amz-json-${awsJsonVersion.value}")
+                       .header("X-Amz-Target", "${protocolConfig.serviceShape.id.name}.${operationShape.id.name}")
+               )
                """
             )
         }
@@ -213,8 +224,6 @@ class BasicAwsJsonGenerator(
         val jsonErrors = RuntimeType.awsJsonErrors(protocolConfig.runtimeConfig)
         fromResponseFun(implBlockWriter, operationShape) {
             rustBlock("if #T::is_error(&response)", jsonErrors) {
-                // TODO: experiment with refactoring this segment into `error_code.rs`. Currently it isn't
-                // to avoid the need to double deserialize the body.
                 rustTemplate(
                     """
                     let body = #{sj}::from_slice(response.body().as_ref())
@@ -293,6 +302,6 @@ class BasicAwsJsonGenerator(
                 write("Err(e) => #T::unhandled(e)", errorSymbol)
             }
         }
-        write("_ => #T::unhandled(generic)", errorSymbol)
+        write("_ => #T::generic(generic)", errorSymbol)
     }
 }

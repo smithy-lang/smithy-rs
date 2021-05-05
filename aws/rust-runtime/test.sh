@@ -13,7 +13,7 @@ do
     (cd "$crate" && cargo fmt)
     (cd "$crate" && cargo fmt -- --check)
     (cd "$crate" && cargo clippy -- -D warnings)
-    (cd "$crate" && cargo test)
-    (cd "$crate" && cargo doc --no-deps)
+    (cd "$crate" && cargo test --all-features)
+    (cd "$crate" && cargo doc --no-deps --all-features)
   fi
 done

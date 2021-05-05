@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
+import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -12,12 +13,21 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 
@@ -49,6 +59,7 @@ abstract class HttpProtocolGenerator(
 ) {
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
+    private val buildErrorT = protocolConfig.runtimeConfig.operationBuildError()
     fun renderOperation(
         operationWriter: RustWriter,
         inputWriter: RustWriter,
@@ -59,18 +70,16 @@ abstract class HttpProtocolGenerator(
             TODO("https://github.com/awslabs/smithy-rs/issues/197")
         } */
         val inputShape = operationShape.inputShape(model)
-        val inputSymbol = symbolProvider.toSymbol(inputShape)
-        val builderGenerator = OperationInputBuilderGenerator(
-            model,
-            symbolProvider,
-            operationShape,
-            protocolConfig.moduleName,
-            customizations
-        )
+        val sdkId =
+            protocolConfig.serviceShape.getTrait(ServiceTrait::class.java)
+                .map { it.sdkId.toLowerCase().replace(" ", "") }
+                .orElse(protocolConfig.serviceShape.id.getName(protocolConfig.serviceShape))
+        val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model))
         builderGenerator.render(inputWriter)
         // impl OperationInputShape { ... }
 
         inputWriter.implBlock(inputShape, symbolProvider) {
+            buildOperation(this, operationShape, customizations, sdkId)
             toHttpRequestImpl(this, operationShape, inputShape)
             val shapeId = inputShape.expectTrait(SyntheticInputTrait::class.java).body
             val body = shapeId?.let { model.expectShape(it, StructureShape::class.java) }
@@ -91,43 +100,49 @@ abstract class HttpProtocolGenerator(
         }
         val operationName = symbolProvider.toSymbol(operationShape).name
         operationWriter.documentShape(operationShape, model)
-        Attribute.Derives(setOf(RuntimeType.Clone)).render(operationWriter)
+        Attribute.Derives(setOf(RuntimeType.Clone, RuntimeType.Default)).render(operationWriter)
         operationWriter.rustBlock("pub struct $operationName") {
-            write("input: #T", inputSymbol)
+            write("_private: ()")
         }
         operationWriter.implBlock(operationShape, symbolProvider) {
             builderGenerator.renderConvenienceMethod(this)
 
-            rustBlock(
-                "pub fn build_http_request(&self) -> #T<Vec<u8>>", RuntimeType.Http("request::Request")
-            ) {
-                write("#T::assemble(self.input.request_builder_base(), self.input.build_body())", inputSymbol)
-            }
-
+            val responseTypes = responseBody(operationShape)
+            val mutability = responseTypes.mutability
+            val type = responseTypes.type
             fromResponseImpl(this, operationShape)
 
             rustBlock(
-                "pub fn parse_response(&self, response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+                "pub fn parse_response(&self, $mutability response: &$mutability #T<$type>) -> Result<#T, #T>",
                 RuntimeType.Http("response::Response"),
                 symbolProvider.toSymbol(operationShape.outputShape(model)),
                 operationShape.errorSymbol(symbolProvider)
             ) {
-                write("Self::from_response(&response)")
+                write("Self::from_response(&$mutability response)")
             }
 
-            rustBlock("pub fn new(input: #T) -> Self", inputSymbol) {
-                write("Self { input }")
+            rustBlock("pub fn new() -> Self") {
+                rust("Self { _private: () }")
             }
 
-            customizations.forEach { customization -> customization.section(OperationSection.ImplBlock)(this) }
+            customizations.forEach { customization -> customization.section(OperationSection.OperationImplBlock)(this) }
         }
         traitImplementations(operationWriter, operationShape)
     }
 
+    data class ResponseBody(val type: String, val mutability: String)
+
+    private fun RustWriter.responseBody(operationShape: OperationShape): ResponseBody {
+        return when (operationShape.outputShape(model).hasStreamingMember(model)) {
+            true -> ResponseBody(this.format(RuntimeType.sdkBody(protocolConfig.runtimeConfig)), "mut")
+            false -> ResponseBody("impl AsRef<[u8]>", "")
+        }
+    }
+
     protected fun httpBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
         implBlockWriter.rustBlock(
-            "pub fn request_builder_base(&self) -> #T",
-            RuntimeType.HttpRequestBuilder
+            "pub fn request_builder_base(&self) -> Result<#T, #T>",
+            RuntimeType.HttpRequestBuilder, buildErrorT
         ) {
             f(this)
         }
@@ -146,13 +161,69 @@ abstract class HttpProtocolGenerator(
         operationShape: OperationShape,
         block: RustWriter.() -> Unit
     ) {
+        Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
+        val responseBodyType = implBlockWriter.responseBody(operationShape)
         implBlockWriter.rustBlock(
-            "fn from_response(response: &#T<impl AsRef<[u8]>>) -> Result<#T, #T>",
+            "fn from_response(response: & ${responseBodyType.mutability} #T<${responseBodyType.type}>) -> Result<#T, #T>",
             RuntimeType.Http("response::Response"),
             symbolProvider.toSymbol(operationShape.outputShape(model)),
             operationShape.errorSymbol(symbolProvider)
         ) {
             block(this)
+        }
+    }
+
+    private fun buildOperation(
+        implBlockWriter: RustWriter,
+        shape: OperationShape,
+        features: List<OperationCustomization>,
+        sdkId: String
+    ) {
+        val runtimeConfig = protocolConfig.runtimeConfig
+        val outputSymbol = symbolProvider.toSymbol(shape)
+        val operationT = RuntimeType.operation(runtimeConfig)
+        val operationModule = RuntimeType.operationModule(runtimeConfig)
+        val sdkBody = RuntimeType.sdkBody(runtimeConfig)
+        val retryType = features.mapNotNull { it.retryType() }.firstOrNull()?.let { implBlockWriter.format(it) } ?: "()"
+
+        val baseReturnType = with(implBlockWriter) { "${format(operationT)}<${format(outputSymbol)}, $retryType>" }
+        val returnType = "Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
+
+        implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
+        // For codegen simplicity, allow `let x = ...; x`
+        implBlockWriter.rust("##[allow(clippy::let_and_return)]")
+        val mut = features.any { it.mutSelf() }
+        val consumes = features.any { it.consumesSelf() }
+        val self = "self".letIf(mut) { "mut $it" }.letIf(!consumes) { "&$it" }
+        implBlockWriter.rustBlock(
+            "pub fn make_operation($self, _config: &#T::Config) -> $returnType",
+            RuntimeType.Config
+        ) {
+            withBlock("Ok({", "})") {
+                features.forEach { it.section(OperationSection.MutateInput("self", "_config"))(this) }
+                rust("let request = Self::assemble(self.request_builder_base()?, self.build_body());")
+                rust(
+                    """
+                    ##[allow(unused_mut)]
+                    let mut request = #T::Request::new(request.map(#T::from));
+                """,
+                    operationModule, sdkBody
+                )
+                features.forEach { it.section(OperationSection.MutateRequest("request", "_config"))(this) }
+                rust(
+                    """
+                    let op = #1T::Operation::new(
+                        request,
+                        #2T::new()
+                    ).with_metadata(#1T::Metadata::new(${
+                    shape.id.getName(protocolConfig.serviceShape).dq()
+                    }, ${sdkId.dq()}));
+                """,
+                    operationModule, symbolProvider.toSymbol(shape)
+                )
+                features.forEach { it.section(OperationSection.FinalizeOperation("op", "_config"))(this) }
+                rust("op")
+            }
         }
     }
 

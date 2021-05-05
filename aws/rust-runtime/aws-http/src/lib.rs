@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 pub mod user_agent;
 
 use smithy_http::result::SdkError;
@@ -88,7 +93,7 @@ where
 #[cfg(test)]
 mod test {
     use crate::AwsErrorRetryPolicy;
-    use smithy_http::middleware::ResponseBody;
+    use smithy_http::body::SdkBody;
     use smithy_http::result::{SdkError, SdkSuccess};
     use smithy_http::retry::ClassifyResponse;
     use smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
@@ -126,7 +131,7 @@ mod test {
     ) -> Result<SdkSuccess<()>, SdkError<E>> {
         Err(SdkError::ServiceError {
             err,
-            raw: raw.map(|b| ResponseBody::from_static(b)),
+            raw: raw.map(|b| SdkBody::from(b)),
         })
     }
 

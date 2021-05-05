@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import java.util.Optional
 
 data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: String = "../") {
@@ -64,6 +65,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             namespace = "${runtimeConfig.cratePrefix}_types::retry"
         )
 
+        val Default: RuntimeType = RuntimeType("Default", dependency = null, namespace = "std::default")
         val From = RuntimeType("From", dependency = null, namespace = "std::convert")
         val AsRef = RuntimeType("AsRef", dependency = null, namespace = "std::convert")
         val std = RuntimeType(null, dependency = null, namespace = "std")
@@ -125,6 +127,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
                 func, CargoDependency.ProtocolTestHelpers(runtimeConfig), "protocol_test_helpers"
             )
 
+        val http = CargoDependency.Http.asType()
         fun Http(path: String): RuntimeType =
             RuntimeType(name = path, dependency = CargoDependency.Http, namespace = "http")
 
@@ -187,6 +190,15 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             name = name,
             dependency = InlineDependency(name, module, listOf(), func),
             namespace = "crate::$module"
+        )
+
+        fun byteStream(runtimeConfig: RuntimeConfig) =
+            CargoDependency.SmithyHttp(runtimeConfig).asType().member("byte_stream::ByteStream")
+
+        fun parseResponse(runtimeConfig: RuntimeConfig) = RuntimeType(
+            "ParseHttpResponse",
+            dependency = CargoDependency.SmithyHttp(runtimeConfig),
+            namespace = "smithy_http::response"
         )
     }
 }

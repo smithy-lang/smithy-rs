@@ -10,6 +10,7 @@ import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.protocoltests.traits.AppliesTo
 import software.amazon.smithy.protocoltests.traits.HttpMessageTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
@@ -17,15 +18,23 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -128,7 +137,14 @@ class HttpProtocolTestGenerator(
         }
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.setNewlinePrefix("")
-        testModuleWriter.writeWithNoFormatting("#[test]")
+        testModuleWriter.writeWithNoFormatting("#[tokio::test]")
+        val Tokio = CargoDependency(
+            "tokio",
+            CratesIo("1"),
+            features = listOf("macros", "test-util", "rt"),
+            scope = DependencyScope.Dev
+        )
+        testModuleWriter.addDependency(Tokio)
         val action = when (testCase) {
             is HttpResponseTestCase -> Action.Response
             is HttpRequestTestCase -> Action.Request
@@ -141,7 +157,7 @@ class HttpProtocolTestGenerator(
             is Action.Response -> "_response"
             is Action.Request -> "_request"
         }
-        testModuleWriter.rustBlock("fn ${testCase.id.toSnakeCase()}$fnName()") {
+        testModuleWriter.rustBlock("async fn ${testCase.id.toSnakeCase()}$fnName()") {
             block(this)
         }
     }
@@ -149,12 +165,20 @@ class HttpProtocolTestGenerator(
     private fun RustWriter.renderHttpRequestTestCase(
         httpRequestTestCase: HttpRequestTestCase
     ) {
+        val customToken = if (inputShape.findMemberWithTrait<IdempotencyTokenTrait>(protocolConfig.model) != null) {
+            """.make_token("00000000-0000-4000-8000-000000000000")"""
+        } else ""
+        rust(
+            """let config = #T::Config::builder()$customToken.build();""",
+            RuntimeType.Config
+        )
         writeInline("let input =")
         instantiator.render(this, inputShape, httpRequestTestCase.params)
-        write(";")
-        write("let (http_request, _) = input.into_request_response().0.into_parts();")
+
+        rust(""".make_operation(&config).expect("operation failed to build");""")
+        rust("let (http_request, _) = input.into_request_response().0.into_parts();")
         with(httpRequestTestCase) {
-            write(
+            rust(
                 """
                     assert_eq!(http_request.method(), ${method.dq()});
                     assert_eq!(http_request.uri().path(), ${uri.dq()});
@@ -214,30 +238,59 @@ class HttpProtocolTestGenerator(
         writeInline("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        write("let http_response = #T::new()", RuntimeType.HttpResponseBuilder)
+        write("let mut http_response = #T::new()", RuntimeType.HttpResponseBuilder)
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
         }
         rust(
             """
                 .status(${testCase.code})
-                .body(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"})
+                .body(#T::from(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"}))
                 .unwrap();
-            """
+            """,
+            RuntimeType.sdkBody(runtimeConfig = protocolConfig.runtimeConfig)
         )
-        write("let parsed = #T::from_response(&http_response);", operationSymbol)
+        rustTemplate(
+            """
+            use #{parse_http_response};
+            let parser = #{op}::new();
+            let parsed = parser.parse_unloaded(&mut http_response);
+            let parsed = parsed.unwrap_or_else(|| {
+                let http_response = http_response.map(|body|#{bytes}::copy_from_slice(body.bytes().unwrap()));
+                <#{op} as #{parse_http_response}<#{sdk_body}>>::parse_loaded(&parser, &http_response)
+            });
+        """,
+            "op" to operationSymbol,
+            "bytes" to RuntimeType.Bytes,
+            "parse_http_response" to CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType()
+                .member("response::ParseHttpResponse"),
+            "sdk_body" to RuntimeType.sdkBody(runtimeConfig = protocolConfig.runtimeConfig)
+        )
         if (expectedShape.hasTrait(ErrorTrait::class.java)) {
             val errorSymbol = operationShape.errorSymbol(protocolConfig.symbolProvider)
             val errorVariant = protocolConfig.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")
             rustBlock("if let #TKind::$errorVariant(actual_error) = parsed.kind", errorSymbol) {
-                write("assert_eq!(expected_output, actual_error);")
+                rust("assert_eq!(expected_output, actual_error);")
             }
             rustBlock("else") {
-                write("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
+                rust("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
             }
         } else {
-            write("assert_eq!(parsed.unwrap(), expected_output);")
+            rust("let parsed = parsed.unwrap();")
+            outputShape.members().forEach { member ->
+                val memberName = protocolConfig.symbolProvider.toMemberName(member)
+                if (member.isStreaming(protocolConfig.model)) {
+                    rust(
+                        """assert_eq!(
+                                        parsed.$memberName.collect().await.unwrap().into_bytes(),
+                                        expected_output.$memberName.collect().await.unwrap().into_bytes()
+                                    );"""
+                    )
+                } else {
+                    rust("""assert_eq!(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""")
+                }
+            }
         }
     }
 
@@ -355,18 +408,6 @@ class HttpProtocolTestGenerator(
         val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
         val RestJson = "aws.protocoltests.restjson#RestJson"
         private val ExpectFail = setOf(
-            // Misc:
-
-            // https://github.com/awslabs/smithy-rs/issues/35
-            FailingTest(
-                RestJson,
-                "RestJsonHttpPrefixHeadersArePresent",
-                Action.Request
-            ),
-
-            // Document deserialization:
-            FailingTest(AwsJson11, "PutAndGetInlineDocumentsInput", Action.Response),
-
             // Endpoint trait https://github.com/awslabs/smithy-rs/issues/197
             // This will also require running operations through the endpoint middleware (or moving endpoint middleware
             // into operation construction
@@ -375,7 +416,7 @@ class HttpProtocolTestGenerator(
             FailingTest(AwsJson11, "AwsJson11EndpointTrait", Action.Request),
             FailingTest(AwsJson11, "AwsJson11EndpointTraitWithHostLabel", Action.Request),
             FailingTest(RestJson, "RestJsonEndpointTrait", Action.Request),
-            FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request)
+            FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request),
         )
         private val RunOnly: Set<String>? = null
 

@@ -1,0 +1,19 @@
+# This Cargo.toml is unused in generated code. It exists solely to enable these tests to compile in-situ
+[package]
+name = "qldb-tests"
+version = "0.1.0"
+authors = ["Russell Cohen <rcoh@amazon.com>", "Shing Lyu <shinglyu@amazon.com"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aws-sdk-qldbsession = { path = "../../build/aws-sdk/qldbsession" }
+smithy-http = { path = "../../build/aws-sdk/smithy-http" }
+smithy-types = { path = "../../build/aws-sdk/smithy-types" }
+http = "0.2.3"
+aws-hyper = { path = "../../build/aws-sdk/aws-hyper", features = ["test-util"] }
+aws-auth = { path = "../../build/aws-sdk/aws-auth" }
+aws-http = { path = "../../build/aws-sdk/aws-http" }
+tokio = { version = "1", features = ["full"]}
+tracing-subscriber = "0.2.16"

@@ -66,6 +66,28 @@ impl Instant {
         }
     }
 
+    /// Read 1 date of `format` from `s`, expecting either `delim` or EOF
+    ///
+    /// Enable parsing multiple dates from the same string
+    pub fn read(s: &str, format: Format, delim: char) -> Result<(Self, &str), DateParseError> {
+        let (inst, next) = match format {
+            Format::DateTime => format::iso_8601::read(s)?,
+            Format::HttpDate => format::http_date::read(s)?,
+            Format::EpochSeconds => {
+                let split_point = s.find(delim).unwrap_or_else(|| s.len());
+                let (s, rest) = s.split_at(split_point);
+                (Self::from_str(s, format)?, rest)
+            }
+        };
+        if next.is_empty() {
+            Ok((inst, next))
+        } else if next.starts_with(delim) {
+            Ok((inst, &next[1..]))
+        } else {
+            Err(DateParseError::Invalid("didn't find expected delimiter"))
+        }
+    }
+
     fn to_chrono(&self) -> DateTime<Utc> {
         DateTime::<Utc>::from_utc(
             NaiveDateTime::from_timestamp(self.seconds, self.subsecond_nanos),
@@ -113,11 +135,13 @@ impl Instant {
     }
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub enum Format {
     DateTime,
     HttpDate,
     EpochSeconds,
 }
+
 #[cfg(test)]
 mod test {
     use crate::instant::Format;
@@ -140,5 +164,33 @@ mod test {
             instant.fmt(Format::HttpDate),
             "Mon, 16 Dec 2019 23:48:18.520 GMT"
         );
+    }
+
+    #[test]
+    fn test_read_single_http_date() {
+        let s = "Mon, 16 Dec 2019 23:48:18 GMT";
+        let (_, next) = Instant::read(s, Format::HttpDate, ',').expect("valid");
+        assert_eq!(next, "");
+    }
+
+    #[test]
+    fn test_read_single_float() {
+        let s = "1576540098.52";
+        let (_, next) = Instant::read(s, Format::EpochSeconds, ',').expect("valid");
+        assert_eq!(next, "");
+    }
+
+    #[test]
+    fn test_read_many_float() {
+        let s = "1576540098.52,1576540098.53";
+        let (_, next) = Instant::read(s, Format::EpochSeconds, ',').expect("valid");
+        assert_eq!(next, "1576540098.53");
+    }
+
+    #[test]
+    fn test_ready_many_http_date() {
+        let s = "Mon, 16 Dec 2019 23:48:18 GMT,Tue, 17 Dec 2019 23:48:18 GMT";
+        let (_, next) = Instant::read(s, Format::HttpDate, ',').expect("valid");
+        assert_eq!(next, "Tue, 17 Dec 2019 23:48:18 GMT");
     }
 }

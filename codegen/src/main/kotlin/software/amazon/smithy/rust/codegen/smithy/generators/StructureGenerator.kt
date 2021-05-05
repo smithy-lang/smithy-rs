@@ -21,8 +21,10 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: RustWriter.() -> Unit) {
@@ -31,8 +33,13 @@ fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, 
     }
 }
 
-fun StructureShape.hasSensitiveMember(model: Model) =
-    this.members().any { it.getMemberTrait(model, SensitiveTrait::class.java).isPresent }
+fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): String {
+    return if (member.getMemberTrait(model, SensitiveTrait::class.java).isPresent) {
+        "*** Sensitive Data Redacted ***".dq()
+    } else {
+        safeToPrint
+    }
+}
 
 class StructureGenerator(
     val model: Model,
@@ -59,7 +66,7 @@ class StructureGenerator(
                 // If any members are not optional && we can't use a default, we need to
                 // generate a fallible builder
                 !it.isOptional() && !it.canUseDefault()
-            }
+            } || structureShape.hasTrait(SyntheticInputTrait::class.java)
     }
 
     /**
@@ -89,11 +96,9 @@ class StructureGenerator(
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
-                    if (member.getMemberTrait(model, SensitiveTrait::class.java).isPresent) {
-                        rust("""formatter.field(${memberName.dq()}, &"*** Sensitive Data Redacted ***");""")
-                    } else {
-                        rust("formatter.field(${memberName.dq()}, &self.$memberName);")
-                    }
+                    rust(
+                        "formatter.field(${memberName.dq()}, &${redactIfNecessary(member, model, "self.$memberName")});",
+                    )
                 }
                 rust("formatter.finish()")
             }

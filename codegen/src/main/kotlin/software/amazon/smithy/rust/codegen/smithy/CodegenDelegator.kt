@@ -70,6 +70,12 @@ open class RustCrate(
         inner.useFileWriter("src/$moduleName.rs", "crate::$moduleName", moduleWriter)
         return this
     }
+
+    fun withFile(filename: String, fileWriter: (RustWriter) -> Unit) {
+        inner.useFileWriter(filename) {
+            fileWriter(it)
+        }
+    }
 }
 
 // TODO: this should _probably_ be configurable via RustSettings; 2h

@@ -26,12 +26,12 @@ buildscript {
     val smithyVersion: String by project
     dependencies {
         classpath("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+        classpath("software.amazon.smithy:smithy-cli:$smithyVersion")
     }
 }
 
 dependencies {
     implementation(project(":aws:sdk-codegen"))
-    implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
@@ -70,8 +70,10 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                         "relativePath": "../"
                       },
                       "service": "${it.service}",
-                      "module": "${it.module}",
+                      "module": "aws-sdk-${it.module}",
                       "moduleVersion": "0.0.2",
+                      "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
+                      "license": "Apache-2.0",
                       "build": {
                         "rootProject": true
                       }
@@ -164,8 +166,7 @@ fun generateCargoWorkspace(services: List<AwsService>): String {
     val examples = projectDir.resolve("examples").listFiles { file -> !file.name.startsWith(".") }?.toList()
         ?.map { "examples/${it.name}" }.orEmpty()
 
-    val modules = services.map(AwsService::module) + runtimeModules + awsModules + examples
-        ?.toList()
+    val modules = services.map(AwsService::module) + runtimeModules + awsModules + examples.toList()
     return """
     [workspace]
     members = [
@@ -222,8 +223,7 @@ tasks.register<Exec>("cargoDocs") {
 tasks.register<Exec>("cargoClippy") {
     workingDir(sdkOutputDir)
     // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
-    commandLine("cargo", "clippy")
+    commandLine("cargo", "clippy", "--", "-D", "warnings")
     dependsOn("assemble")
 }
 

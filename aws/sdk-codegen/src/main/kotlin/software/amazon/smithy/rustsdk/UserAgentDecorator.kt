@@ -8,17 +8,16 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.util.dq
 
@@ -55,10 +54,11 @@ class ApiVersion(private val runtimeConfig: RuntimeConfig, serviceTrait: Service
     override fun section(section: LibRsSection): Writable = when (section) {
         // PKG_VERSION comes from CrateVersionGenerator
         is LibRsSection.Body -> writable { rust("static API_METADATA: #1T::ApiMetadata = #1T::ApiMetadata::new(${serviceId.dq()}, PKG_VERSION);", runtimeConfig.userAgentModule()) }
+        else -> emptySection
     }
 }
 
-fun RuntimeConfig.awsHttp(): CargoDependency = CargoDependency("aws-http", Local(this.relativePath))
+fun RuntimeConfig.awsHttp(): CargoDependency = awsRuntimeDependency("aws-http")
 fun RuntimeConfig.userAgentModule() = awsHttp().asType().copy(name = "user_agent")
 
 class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {

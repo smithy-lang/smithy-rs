@@ -1,9 +1,14 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 use crate::body::SdkBody;
 use crate::property_bag::PropertyBag;
 use std::borrow::Cow;
-use std::cell::{Ref, RefCell, RefMut};
 use std::ops::DerefMut;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex, MutexGuard};
+use thiserror::Error;
 
 #[derive(Clone)]
 pub struct Metadata {
@@ -37,6 +42,26 @@ pub struct Parts<H, R> {
     pub response_handler: H,
     pub retry_policy: R,
     pub metadata: Option<Metadata>,
+}
+
+/// An error occured attempting to build an `Operation` from an input
+///
+/// These are almost always due to user error caused by limitations of specific fields due to
+/// protocol serialization (eg. fields that can only be a subset ASCII because they are serialized
+/// as the name of an HTTP header)
+#[non_exhaustive]
+#[derive(Debug, Error)]
+pub enum BuildError {
+    #[error("Invalid field in input: {field} (Details: {details})")]
+    InvalidField {
+        field: &'static str,
+        details: String,
+    },
+    #[error("{field} was missing. {details}")]
+    MissingField {
+        field: &'static str,
+        details: &'static str,
+    },
 }
 
 pub struct Operation<H, R> {
@@ -115,14 +140,14 @@ pub struct Request {
     /// configuration is stored in an `Rc<RefCell>>` to facilitate cloning requests during retries
     /// We should consider if this should instead be an `Arc<Mutex>`. I'm not aware of times where
     /// we'd need to modify the request concurrently, but perhaps such a thing may some day exist.
-    configuration: Rc<RefCell<PropertyBag>>,
+    configuration: Arc<Mutex<PropertyBag>>,
 }
 
 impl Request {
     pub fn new(base: http::Request<SdkBody>) -> Self {
         Request {
             inner: base,
-            configuration: Rc::new(RefCell::new(PropertyBag::new())),
+            configuration: Arc::new(Mutex::new(PropertyBag::new())),
         }
     }
 
@@ -131,7 +156,7 @@ impl Request {
         f: impl FnOnce(http::Request<SdkBody>, &mut PropertyBag) -> Result<http::Request<SdkBody>, T>,
     ) -> Result<Request, T> {
         let inner = {
-            let configuration: &mut PropertyBag = &mut self.configuration.as_ref().borrow_mut();
+            let configuration: &mut PropertyBag = &mut self.configuration.lock().unwrap();
             f(self.inner, configuration)?
         };
         Ok(Request {
@@ -140,12 +165,16 @@ impl Request {
         })
     }
 
-    pub fn config_mut(&mut self) -> RefMut<'_, PropertyBag> {
-        self.configuration.as_ref().borrow_mut()
+    pub fn config_mut(&mut self) -> MutexGuard<'_, PropertyBag> {
+        self.configuration.lock().unwrap()
     }
 
-    pub fn config(&self) -> Ref<'_, PropertyBag> {
-        self.configuration.as_ref().borrow()
+    pub fn config(&self) -> MutexGuard<'_, PropertyBag> {
+        self.configuration.lock().unwrap()
+    }
+
+    pub fn request_mut(&mut self) -> &mut http::Request<SdkBody> {
+        &mut self.inner
     }
 
     pub fn try_clone(&self) -> Option<Request> {
@@ -166,7 +195,7 @@ impl Request {
         })
     }
 
-    pub fn into_parts(self) -> (http::Request<SdkBody>, Rc<RefCell<PropertyBag>>) {
+    pub fn into_parts(self) -> (http::Request<SdkBody>, Arc<Mutex<PropertyBag>>) {
         (self.inner, self.configuration)
     }
 }
@@ -202,6 +231,6 @@ mod test {
         );
         assert_eq!(request.headers().get(CONTENT_LENGTH).unwrap(), "456");
         assert_eq!(request.body().bytes().unwrap(), "hello world!".as_bytes());
-        assert_eq!(config.as_ref().borrow().get::<&str>(), Some(&"hello"));
+        assert_eq!(config.lock().unwrap().get::<&str>(), Some(&"hello"));
     }
 }

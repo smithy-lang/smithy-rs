@@ -14,15 +14,20 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.nio.file.Path
 
@@ -115,9 +120,23 @@ class HttpProtocolTestGeneratorTest {
     ): Path {
 
         // A stubbed test protocol to do enable testing intentionally broken protocols
-        class TestProtocol(protocolConfig: ProtocolConfig) : HttpProtocolGenerator(protocolConfig) {
+        class TestProtocol(private val protocolConfig: ProtocolConfig) : HttpProtocolGenerator(protocolConfig) {
+            private val symbolProvider = protocolConfig.symbolProvider
             override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
-                // no trait implementations for tests
+                operationWriter.rustTemplate(
+                    """
+                    impl #{parse_strict} for ${operationShape.id.name}{
+                        type Output = Result<#{output}, #{error}>;
+                        fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
+                            self.parse_response(response)
+                        }
+                    }""",
+                    "parse_strict" to RuntimeType.parseStrict(protocolConfig.runtimeConfig),
+                    "output" to symbolProvider.toSymbol(operationShape.outputShape(protocolConfig.model)),
+                    "error" to operationShape.errorSymbol(symbolProvider),
+                    "response" to RuntimeType.Http("Response"),
+                    "bytes" to RuntimeType.Bytes
+                )
             }
 
             override fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape) {
@@ -143,8 +162,9 @@ class HttpProtocolTestGeneratorTest {
                 inputShape: StructureShape
             ) {
                 httpBuilderFun(implBlockWriter) {
-                    write("#T::new()", RuntimeType.HttpRequestBuilder)
-                    writeWithNoFormatting(httpRequestBuilder)
+                    withBlock("Ok(#T::new()", ")", RuntimeType.HttpRequestBuilder) {
+                        writeWithNoFormatting(httpRequestBuilder)
+                    }
                 }
             }
         }
@@ -158,7 +178,7 @@ class HttpProtocolTestGeneratorTest {
                 return OperationNormalizer(model).transformModel(
                     inputBodyFactory = OperationNormalizer.NoBody,
                     outputBodyFactory = OperationNormalizer.NoBody
-                )
+                ).let(RemoveEventStreamOperations::transform)
             }
 
             override fun support(): ProtocolSupport {

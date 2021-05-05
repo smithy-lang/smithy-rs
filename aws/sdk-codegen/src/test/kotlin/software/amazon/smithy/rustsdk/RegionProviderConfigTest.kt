@@ -6,12 +6,11 @@
 package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.validateConfigCustomizations
 
 internal class RegionProviderConfigTest {
     @Test
     fun `generates a valid config`() {
-        validateConfigCustomizations(RegionProviderConfig(TestRuntimeConfig))
+        validateConfigCustomizations(RegionProviderConfig(AwsTestRuntimeConfig))
     }
 }

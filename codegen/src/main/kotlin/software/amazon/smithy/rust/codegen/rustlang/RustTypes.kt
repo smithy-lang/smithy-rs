@@ -101,7 +101,7 @@ sealed class RustType {
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
 }
 
-fun RustType.render(fullyQualified: Boolean): String {
+fun RustType.render(fullyQualified: Boolean = true): String {
     val namespace = if (fullyQualified) {
         this.namespace?.let { "$it::" } ?: ""
     } else ""
@@ -157,6 +157,9 @@ data class RustMetadata(
     fun withDerives(vararg newDerive: RuntimeType): RustMetadata =
         this.copy(derives = derives.copy(derives = derives.derives + newDerive))
 
+    fun withoutDerives(vararg withoutDerives: RuntimeType) =
+        this.copy(derives = derives.copy(derives = derives.derives - withoutDerives))
+
     private fun attributes(): List<Attribute> = additionalAttributes + derives
 
     fun renderAttributes(writer: RustWriter): RustMetadata {
@@ -202,6 +205,7 @@ sealed class Attribute {
          */
         val NonExhaustive = Custom("non_exhaustive")
         val AllowUnused = Custom("allow(dead_code)")
+        val AllowUnusedMut = Custom("allow(unused_mut)")
     }
 
     data class Derives(val derives: Set<RuntimeType>) : Attribute() {
@@ -221,9 +225,24 @@ sealed class Attribute {
         }
     }
 
-    data class Custom(val annotation: String, val symbols: List<RuntimeType> = listOf()) : Attribute() {
+    /**
+     * A custom Attribute
+     *
+     * [annotation] represents the body of the attribute, eg. `cfg(foo)` in `#[cfg(foo)]`
+     * If [container] is set, this attribute refers to its container rather than its successor. This generates `#![cfg(foo)]`
+     *
+     * Finally, any symbols listed will be imported when this attribute is rendered. This enables using attributes like
+     * `#[serde(Serialize)]` where `Serialize` is actually a symbol that must be imported.
+     */
+    data class Custom(
+        val annotation: String,
+        val symbols: List<RuntimeType> = listOf(),
+        val container: Boolean = false
+    ) : Attribute() {
         override fun render(writer: RustWriter) {
-            writer.raw("#[$annotation]")
+
+            val bang = if (container) "!" else ""
+            writer.raw("#$bang[$annotation]")
             symbols.forEach {
                 writer.addDependency(it.dependency)
             }

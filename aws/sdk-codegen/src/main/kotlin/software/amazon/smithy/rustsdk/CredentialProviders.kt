@@ -6,8 +6,6 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.docs
@@ -15,11 +13,11 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.smithy.generators.OperationCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
@@ -75,8 +73,7 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                 self
             }
             """,
-                    credentialsProvider
-
+                    credentialsProvider,
                 )
             }
             ServiceConfig.BuilderBuild -> rust(
@@ -107,11 +104,14 @@ class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
     override fun section(section: LibRsSection): Writable {
         return when (section) {
             is LibRsSection.Body -> writable { rust("pub use #T::Credentials;", awsAuth(runtimeConfig).asType()) }
+            else -> emptySection
         }
     }
 }
 
-fun awsAuth(runtimeConfig: RuntimeConfig) = CargoDependency("aws-auth", Local(runtimeConfig.relativePath))
-fun credentialsProvider(runtimeConfig: RuntimeConfig) = RuntimeType("ProvideCredentials", awsAuth(runtimeConfig), "aws_auth")
+fun awsAuth(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-auth")
+fun credentialsProvider(runtimeConfig: RuntimeConfig) =
+    RuntimeType("ProvideCredentials", awsAuth(runtimeConfig), "aws_auth")
+
 fun defaultProvider(runtimeConfig: RuntimeConfig) = RuntimeType("default_provider", awsAuth(runtimeConfig), "aws_auth")
 fun setProvider(runtimeConfig: RuntimeConfig) = RuntimeType("set_provider", awsAuth(runtimeConfig), "aws_auth")
