@@ -4,6 +4,7 @@
  */
 
 use aws_auth::Credentials;
+use aws_http::user_agent::AwsUserAgent;
 use aws_hyper::test_connection::TestConnection;
 use aws_hyper::Client;
 use aws_sdk_qldbsession as qldbsession;
@@ -35,8 +36,7 @@ async fn signv4_use_correct_service_name() {
             // qldbsession uses the service name 'qldb' in signature _________________________^^^^
             .header("x-amz-date", "20210305T134922Z")
             .header("x-amz-security-token", "notarealsessiontoken")
-            .header("user-agent", "aws-sdk-rust/0.1.0 os/macos lang/rust/1.51.0")
-            .header("x-amz-user-agent", "aws-sdk-rust/0.1.0 api/qldbsession/0.0.2 os/macos lang/rust/1.51.0")
+            .header("user-agent", "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0")
             .uri(Uri::from_static("https://session.qldb.us-east-1.amazonaws.com/"))
             .body(SdkBody::from(r#"{"StartSession":{"LedgerName":"not-real-ledger"}}"#)).unwrap(),
         http::Response::builder()
@@ -60,9 +60,10 @@ async fn signv4_use_correct_service_name() {
         .unwrap()
         .make_operation(&conf)
         .expect("valid operation");
-    // Fix the request time so the signature is stable
+    // Fix the request time and user agent so the headers are stable
     op.config_mut()
         .insert(UNIX_EPOCH + Duration::from_secs(1614952162));
+    op.config_mut().insert(AwsUserAgent::for_tests());
 
     let _ = client.call(op).await.expect("request should succeed");
 
