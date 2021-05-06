@@ -91,6 +91,7 @@ class ErrorGenerator(
         writer.rustBlock("impl #T for ${symbol.name}", stdfmt.member("Display")) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 // If the error id and the Rust name don't match, print the actual error id for easy debugging
+                // Note: Exceptions cannot be renamed so it is OK to not call `getName(service)` here
                 val errorDesc = symbol.name.letIf(symbol.name != shape.id.name) { symbolName ->
                     "$symbolName [${shape.id.name}]"
                 }

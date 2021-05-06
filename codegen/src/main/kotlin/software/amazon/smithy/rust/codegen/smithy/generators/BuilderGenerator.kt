@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
@@ -23,6 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.defaultValue
+import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
@@ -100,8 +102,11 @@ class BuilderGenerator(
 
         val symbol = structureSymbol
         writer.docs("A builder for #D", symbol)
-        writer.write("##[non_exhaustive]")
-        writer.write("##[derive(Debug, Clone, Default)]")
+        Attribute.NonExhaustive.render(writer)
+        // Matching derives to the main structure + `Default` since we are a builder and everything is optional
+        val baseDerives = symbol.expectRustMetadata().derives
+        val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)) + RuntimeType.Default
+        baseDerives.copy(derives = derives).render(writer)
         writer.rustBlock("pub struct $builderName") {
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)

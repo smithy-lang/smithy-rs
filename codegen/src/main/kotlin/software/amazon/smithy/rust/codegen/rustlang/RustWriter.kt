@@ -74,7 +74,7 @@ fun <T : CodeWriter> T.rust(
 }
 
 /**
- * Experimental API for templating long blocks of Rust
+ * API for templating long blocks of Rust
  *
  * This enables writing code like:
  *
@@ -87,14 +87,17 @@ fun <T : CodeWriter> T.rust(
  *
  * Before being passed to the underlying code writer, this syntax is rewritten to match the slightly more verbose
  * `CodeWriter` formatting: `#{name:T}`
+ *
+ * Variables are lower cased so that they become valid identifiers for named Smithy parameters.
  */
 fun <T : CodeWriter> T.rustTemplate(
     @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
     vararg ctx: Pair<String, Any>
 ) {
+    check(ctx.distinctBy { it.first.toLowerCase() }.size == ctx.size) { "Duplicate cased keys not supported" }
     this.pushState()
-    this.putContext(ctx.toMap())
-    this.write(contents.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult -> "#{${matchResult.groupValues[1]}:T}" })
+    this.putContext(ctx.toMap().mapKeys { (k, _) -> k.toLowerCase() })
+    this.write(contents.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult -> "#{${matchResult.groupValues[1].toLowerCase()}:T}" })
     this.popState()
 }
 
@@ -283,7 +286,7 @@ class RustWriter private constructor(
         }
     }
 
-    fun ListForEach(
+    fun listForEach(
         target: Shape,
         outerField: String,
         block: CodeWriter.(field: String, target: ShapeId) -> Unit

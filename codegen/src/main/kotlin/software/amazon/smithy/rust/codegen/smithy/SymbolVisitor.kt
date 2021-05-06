@@ -122,6 +122,7 @@ interface RustSymbolProvider : SymbolProvider {
 
 class SymbolVisitor(
     private val model: Model,
+    private val serviceShape: ServiceShape?,
     private val config: SymbolVisitorConfig = DefaultConfig
 ) : RustSymbolProvider,
     ShapeVisitor<Symbol> {
@@ -130,6 +131,14 @@ class SymbolVisitor(
 
     override fun toSymbol(shape: Shape): Symbol {
         return shape.accept(this)
+    }
+
+    private fun Shape.contextName(): String {
+        return if (serviceShape != null) {
+            id.getName(serviceShape)
+        } else {
+            id.name
+        }
     }
 
     override fun toMemberName(shape: MemberShape): String = shape.memberName.toSnakeCase()
@@ -173,7 +182,7 @@ class SymbolVisitor(
     override fun doubleShape(shape: DoubleShape): Symbol = simpleShape(shape)
     override fun stringShape(shape: StringShape): Symbol {
         return if (shape.hasTrait(EnumTrait::class.java)) {
-            symbolBuilder(shape, RustType.Opaque(shape.id.name)).locatedIn(Models).build()
+            symbolBuilder(shape, RustType.Opaque(shape.contextName())).locatedIn(Models).build()
         } else {
             simpleShape(shape)
         }
@@ -218,7 +227,7 @@ class SymbolVisitor(
     }
 
     override fun operationShape(shape: OperationShape): Symbol {
-        return symbolBuilder(shape, RustType.Opaque(shape.id.name.capitalize())).locatedIn(Operations).build()
+        return symbolBuilder(shape, RustType.Opaque(shape.contextName().capitalize())).locatedIn(Operations).build()
     }
 
     override fun resourceShape(shape: ResourceShape?): Symbol {
@@ -234,7 +243,7 @@ class SymbolVisitor(
         val isInput = shape.hasTrait(SyntheticInputTrait::class.java)
         val isOutput = shape.hasTrait(SyntheticOutputTrait::class.java)
         val isBody = shape.hasTrait(InputBodyTrait::class.java) || shape.hasTrait(OutputBodyTrait::class.java)
-        val name = StringUtils.capitalize(shape.id.name).letIf(isError && config.codegenConfig.renameExceptions) {
+        val name = StringUtils.capitalize(shape.contextName()).letIf(isError && config.codegenConfig.renameExceptions) {
             // TODO: Do we want to do this?
             // https://github.com/awslabs/smithy-rs/issues/77
             it.replace("Exception", "Error")
@@ -250,7 +259,7 @@ class SymbolVisitor(
     }
 
     override fun unionShape(shape: UnionShape): Symbol {
-        val name = StringUtils.capitalize(shape.id.name)
+        val name = StringUtils.capitalize(shape.contextName())
         val builder = symbolBuilder(shape, RustType.Opaque(name)).locatedIn(Models)
 
         return builder.build()
@@ -284,7 +293,6 @@ class SymbolVisitor(
 // TODO(chore): Move this to a useful place
 private const val RUST_TYPE_KEY = "rusttype"
 private const val SHAPE_KEY = "shape"
-private const val CAN_USE_DEFAULT = "canusedefault"
 private const val SYMBOL_DEFAULT = "symboldefault"
 
 fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder {

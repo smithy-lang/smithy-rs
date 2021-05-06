@@ -34,12 +34,14 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val operationShape: OperationShape) {
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
+    private val service = protocolConfig.serviceShape
     private val index = HttpBindingIndex.of(model)
     private val headerUtil = CargoDependency.SmithyHttp(runtimeConfig).asType().member("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
@@ -60,7 +62,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
     fun generateDeserializeHeaderFn(binding: HttpBinding): RuntimeType {
         check(binding.location == HttpBinding.Location.HEADER)
         val outputT = symbolProvider.toSymbol(binding.member)
-        val fnName = "deser_header_${operationShape.id.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
+        val fnName = "deser_header_${fnName(operationShape, binding)}"
         return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
             writer.rustBlock(
                 "pub fn $fnName(header_map: &#T::HeaderMap) -> Result<#T, #T::ParseError>",
@@ -80,7 +82,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         check(outputT.rustType().stripOuter<RustType.Option>() is RustType.HashMap) { outputT.rustType() }
         val target = model.expectShape(binding.member.target)
         check(target is MapShape)
-        val fnName = "deser_prefix_header_${operationShape.id.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
+        val fnName = "deser_prefix_header_${fnName(operationShape, binding)}"
         val inner = RuntimeType.forInlineFun("${fnName}_inner", "http_serde_inner") {
             it.rustBlock(
                 "pub fn ${fnName}_inner(headers: #T::header::ValueIter<http::HeaderValue>) -> Result<Option<#T>, #T::ParseError>",
@@ -126,17 +128,44 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
     ): RuntimeType {
         check(binding.location == HttpBinding.Location.PAYLOAD)
         val outputT = symbolProvider.toSymbol(binding.member)
-        val fnName = "deser_payload_${operationShape.id.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
+        val fnName = "deser_payload_${fnName(operationShape, binding)}"
         return RuntimeType.forInlineFun(fnName, "http_serde") { rustWriter ->
-            rustWriter.rustBlock("pub fn $fnName(body: &[u8]) -> Result<#T, #T>", outputT, errorT) {
-                deserializePayloadBody(
-                    binding,
-                    errorT,
-                    structuredHandler = structuredHandler,
-                    docShapeHandler = docHandler
-                )
+            if (binding.member.isStreaming(model)) {
+                rustWriter.rustBlock(
+                    "pub fn $fnName(body: &mut #T) -> Result<#T, #T>",
+                    RuntimeType.sdkBody(runtimeConfig),
+                    outputT,
+                    errorT
+                ) {
+                    deserializeStreamingBody(binding)
+                }
+            } else {
+                rustWriter.rustBlock("pub fn $fnName(body: &[u8]) -> Result<#T, #T>", outputT, errorT) {
+                    deserializePayloadBody(
+                        binding,
+                        errorT,
+                        structuredHandler = structuredHandler,
+                        docShapeHandler = docHandler
+                    )
+                }
             }
         }
+    }
+
+    private fun RustWriter.deserializeStreamingBody(
+        binding: HttpBinding,
+    ) {
+        val member = binding.member
+        val targetShape = model.expectShape(member.target)
+        check(targetShape is BlobShape)
+        rustTemplate(
+            """
+            // replace the body with an empty body
+            let body = std::mem::replace(body, #{sdk_body}::taken());
+            Ok(#{byte_stream}::new(body))
+        """,
+            "byte_stream" to RuntimeType.byteStream(runtimeConfig), "sdk_body" to RuntimeType.sdkBody(runtimeConfig)
+        )
     }
 
     private fun RustWriter.deserializePayloadBody(
@@ -268,4 +297,10 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                 }
         }
     }
+
+    /**
+     * Generate a unique name for the deserializer function for a given operationShape -> member pair
+     */
+    // rename here technically not required, operations and members cannot be renamed
+    private fun fnName(operationShape: OperationShape, binding: HttpBinding) = "${operationShape.id.getName(service).toSnakeCase()}_${binding.memberName.toSnakeCase()}"
 }

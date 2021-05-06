@@ -65,6 +65,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             namespace = "${runtimeConfig.cratePrefix}_types::retry"
         )
 
+        val Default: RuntimeType = RuntimeType("Default", dependency = null, namespace = "std::default")
         val From = RuntimeType("From", dependency = null, namespace = "std::convert")
         val AsRef = RuntimeType("AsRef", dependency = null, namespace = "std::convert")
         val std = RuntimeType(null, dependency = null, namespace = "std")
@@ -189,6 +190,15 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             name = name,
             dependency = InlineDependency(name, module, listOf(), func),
             namespace = "crate::$module"
+        )
+
+        fun byteStream(runtimeConfig: RuntimeConfig) =
+            CargoDependency.SmithyHttp(runtimeConfig).asType().member("byte_stream::ByteStream")
+
+        fun parseResponse(runtimeConfig: RuntimeConfig) = RuntimeType(
+            "ParseHttpResponse",
+            dependency = CargoDependency.SmithyHttp(runtimeConfig),
+            namespace = "smithy_http::response"
         )
     }
 }
