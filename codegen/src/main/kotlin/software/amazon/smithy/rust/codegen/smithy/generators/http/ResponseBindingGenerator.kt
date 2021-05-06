@@ -83,7 +83,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         val target = model.expectShape(binding.member.target)
         check(target is MapShape)
         val fnName = "deser_prefix_header_${fnName(operationShape, binding)}"
-        val inner = RuntimeType.forInlineFun("${fnName}_inner", "http_serde_inner") {
+        val inner = RuntimeType.forInlineFun("${fnName}_inner", "http_serde") {
             it.rustBlock(
                 "pub fn ${fnName}_inner(headers: #T::header::ValueIter<http::HeaderValue>) -> Result<Option<#T>, #T::ParseError>",
                 RuntimeType.http,
