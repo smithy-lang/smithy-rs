@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 dynamodb = { package = "aws-sdk-dynamodb", path = "../../build/aws-sdk/dynamodb" }
+aws-hyper = { path = "../../build/aws-sdk/aws-hyper"}
 tokio = { version = "1", features = ["full"] }
 structopt = { version = "0.3", default-features = false }
 tracing-subscriber = { version = "0.2.16", features = ["fmt"] }

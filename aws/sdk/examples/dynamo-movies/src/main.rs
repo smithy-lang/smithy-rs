@@ -5,6 +5,7 @@
 
 use aws_http::AwsErrorRetryPolicy;
 use aws_hyper::{SdkError, SdkSuccess};
+use aws_types::region::ProvideRegion;
 use dynamodb::client::fluent_builders::Query;
 use dynamodb::error::DescribeTableError;
 use dynamodb::input::DescribeTableInput;
@@ -22,6 +23,15 @@ use smithy_types::retry::RetryKind;
 use std::collections::HashMap;
 use std::time::Duration;
 
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+struct Opt {
+    /// The region. Overrides environment variable AWS_DEFAULT_REGION.
+    #[structopt(short, long)]
+    default_region: Option<String>,
+}
+
 /// A partial reimplementation of https://docs.amazonaws.cn/en_us/amazondynamodb/latest/developerguide/GettingStarted.Ruby.html
 /// in Rust
 ///
@@ -32,12 +42,20 @@ use std::time::Duration;
 #[tokio::main]
 async fn main() {
     let table_name = "dynamo-movies-example";
-    let conf = dynamodb::Config::builder()
-        .region(Region::new("us-east-1"))
-        .build();
+    let Opt { default_region } = Opt::from_args();
+
+    let region = default_region
+        .as_ref()
+        .map(|region| Region::new(region.clone()))
+        .or_else(|| aws_types::region::default_provider().region())
+        .unwrap_or_else(|| Region::new("us-west-2"));
+
+    let conf = dynamodb::Config::builder().region(region).build();
     let conn = aws_hyper::conn::Standard::https();
     let client = dynamodb::Client::from_conf_conn(conf, conn);
     let raw_client = aws_hyper::Client::https();
+
+    println!("Seeing if table {} exists", table_name);
 
     let table_exists = client
         .list_tables()
@@ -56,10 +74,14 @@ async fn main() {
             .expect("failed to create table");
     }
 
+    println!("Waiting for table to be ready");
+
     raw_client
         .call(wait_for_ready_table(table_name, client.conf()))
         .await
         .expect("table should become ready");
+
+    println!("Testing table");
 
     // data.json contains 2 movies from 2013
     let data = match serde_json::from_str(include_str!("data.json")).expect("should be valid JSON")
@@ -101,6 +123,8 @@ async fn main() {
             AttributeValue::S("Turn It Down, Or Else!".to_string())
         ]
     );
+
+    println!("Done");
 }
 
 fn create_table(
@@ -219,9 +243,9 @@ fn wait_for_ready_table(
 ) -> Operation<DescribeTable, WaitForReadyTable<AwsErrorRetryPolicy>> {
     let operation = DescribeTableInput::builder()
         .table_name(table_name)
-        .build()
-        .expect("valid input")
-        .make_operation(&conf)
+        .build(&conf)
+        //.expect("valid input")
+        //.make_operation(&conf)
         .expect("valid operation");
     let waiting_policy = WaitForReadyTable {
         inner: operation.retry_policy().clone(),

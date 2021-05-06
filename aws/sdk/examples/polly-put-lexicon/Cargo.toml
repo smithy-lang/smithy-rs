@@ -8,8 +8,8 @@ edition = "2018"
 
 [dependencies]
 polly = { package = "aws-sdk-polly", path = "../../build/aws-sdk/polly" }
-aws-hyper = { path = "../../build/aws-sdk/aws-hyper"}
 tokio = { version = "1", features = ["full"] }
 structopt = { version = "0.3", default-features = false }
 tracing-subscriber = { version = "0.2.16", features = ["fmt"] }
+aws-hyper = { path = "../../build/aws-sdk/aws-hyper"}
 aws-types = { path = "../../build/aws-sdk/aws-types" }

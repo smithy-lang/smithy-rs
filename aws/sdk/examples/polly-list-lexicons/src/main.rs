@@ -7,7 +7,7 @@ use std::process;
 
 use polly::{Client, Config, Region};
 
-use aws_types::region::{EnvironmentProvider, ProvideRegion};
+use aws_types::region::ProvideRegion;
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -15,22 +15,33 @@ use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// The region
+    /// The region. Overrides environment variable AWS_DEFAULT_REGION.
     #[structopt(short, long)]
-    region: Option<String>,
+    default_region: Option<String>,
 
     /// Activate verbose mode
     #[structopt(short, long)]
     verbose: bool,
 }
 
+/// Lists the pronunciation lexicons that are available.
+/// # Arguments
+///
+/// * `[-d DEFAULT-REGION]` - The region in which the client is created.
+///    If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///    If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() {
-    let Opt { region, verbose } = Opt::from_args();
+    let Opt {
+        default_region,
+        verbose,
+    } = Opt::from_args();
 
-    let region = EnvironmentProvider::new()
-        .region()
-        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+    let region = default_region
+        .as_ref()
+        .map(|region| Region::new(region.clone()))
+        .or_else(|| aws_types::region::default_provider().region())
         .unwrap_or_else(|| Region::new("us-west-2"));
 
     if verbose {
@@ -43,9 +54,9 @@ async fn main() {
             .init();
     }
 
-    let config = Config::builder().region(region).build();
-
-    let client = Client::from_conf(config);
+    let conf = Config::builder().region(region).build();
+    let conn = aws_hyper::conn::Standard::https();
+    let client = Client::from_conf_conn(conf, conn);
 
     match client.list_lexicons().send().await {
         Ok(resp) => {

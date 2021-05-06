@@ -7,7 +7,7 @@ use std::process;
 
 use kinesis::{Client, Config, Region};
 
-use aws_types::region::{EnvironmentProvider, ProvideRegion};
+use aws_types::region::ProvideRegion;
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -15,12 +15,12 @@ use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// The region
+    /// The region. Overrides environment variable AWS_DEFAULT_REGION.
     #[structopt(short, long)]
-    region: Option<String>,
+    default_region: Option<String>,
 
     #[structopt(short, long)]
-    data: String,
+    content: String,
 
     #[structopt(short, long)]
     key: String,
@@ -32,26 +32,36 @@ struct Opt {
     verbose: bool,
 }
 
+/// Adds a record to an Amazon Kinesis data stream.
+/// # Arguments
+/// * `-c CONTENT` - The content of the record.
+/// * `-k KEY` - The content of the record.
+/// * `-n NAME` - The name of the data stream.
+/// * `[-d DEFAULT-REGION]` - The region in which the client is created.
+///   If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///   If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() {
     let Opt {
-        data,
+        content,
         key,
         name,
-        region,
+        default_region,
         verbose,
     } = Opt::from_args();
 
-    let region = EnvironmentProvider::new()
-        .region()
-        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+    let region = default_region
+        .as_ref()
+        .map(|region| Region::new(region.clone()))
+        .or_else(|| aws_types::region::default_provider().region())
         .unwrap_or_else(|| Region::new("us-west-2"));
 
     if verbose {
         println!("Kinesis client version: {}\n", kinesis::PKG_VERSION);
         println!("Region:      {:?}", &region);
-        println!("Data:");
-        println!("\n{}\n", data);
+        println!("Content:");
+        println!("\n{}\n", content);
         println!("Partition key: {}", key);
         println!("Stream name:   {}", name);
 
@@ -61,11 +71,11 @@ async fn main() {
             .init();
     }
 
-    let config = Config::builder().region(region).build();
+    let conf = Config::builder().region(region).build();
+    let conn = aws_hyper::conn::Standard::https();
+    let client = Client::from_conf_conn(conf, conn);
 
-    let client = Client::from_conf(config);
-
-    let blob = kinesis::Blob::new(data);
+    let blob = kinesis::Blob::new(content);
 
     match client
         .put_record()

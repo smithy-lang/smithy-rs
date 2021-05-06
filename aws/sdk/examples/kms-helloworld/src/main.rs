@@ -9,6 +9,7 @@ use kms::Region;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
 
+/// Creates a random, 64-byte string that is cryptographically secure.
 #[tokio::main]
 async fn main() {
     SubscriberBuilder::default()
