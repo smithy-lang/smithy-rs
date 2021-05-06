@@ -9,7 +9,7 @@ use std::process;
 
 use kms::{Blob, Client, Config, Region};
 
-use aws_types::region::{EnvironmentProvider, ProvideRegion};
+use aws_types::region::ProvideRegion;
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -17,9 +17,9 @@ use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// The region
+    /// The region. Overrides environment variable AWS_DEFAULT_REGION.
     #[structopt(short, long)]
-    region: Option<String>,
+    default_region: Option<String>,
 
     /// Specifies the encryption key
     #[structopt(short, long)]
@@ -38,19 +38,30 @@ struct Opt {
     verbose: bool,
 }
 
+/// Encrypts a string using an AWS KMS key.
+/// # Arguments
+///
+/// * `-k KEY` - The KMS key.
+/// * `-o OUT` - The name of the file to store the encryped key in.
+/// * `-t TEXT` - The string to encrypt.
+/// * `[-d DEFAULT-REGION]` - The region in which the client is created.
+///    If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///    If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() {
     let Opt {
         key,
         out,
-        region,
+        default_region,
         text,
         verbose,
     } = Opt::from_args();
 
-    let region = EnvironmentProvider::new()
-        .region()
-        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+    let region = default_region
+        .as_ref()
+        .map(|region| Region::new(region.clone()))
+        .or_else(|| aws_types::region::default_provider().region())
         .unwrap_or_else(|| Region::new("us-west-2"));
 
     if verbose {
@@ -66,9 +77,9 @@ async fn main() {
             .init();
     }
 
-    let config = Config::builder().region(region).build();
-
-    let client = Client::from_conf(config);
+    let conf = Config::builder().region(region).build();
+    let conn = aws_hyper::conn::Standard::https();
+    let client = Client::from_conf_conn(conf, conn);
 
     let blob = Blob::new(text.as_bytes());
 

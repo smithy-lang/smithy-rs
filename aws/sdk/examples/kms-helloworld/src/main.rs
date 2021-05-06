@@ -9,6 +9,7 @@ use kms::Region;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
 
+/// Creates a random, 64-byte string that is cryptographically secure.
 #[tokio::main]
 async fn main() {
     SubscriberBuilder::default()
@@ -21,12 +22,17 @@ async fn main() {
         // creds loaded from environment variables, or they can be hard coded.
         // Other credential providers not currently supported
         .build();
+    // NB: This example uses the "low level internal API" for demonstration purposes
+    // This is sometimes necessary to get precise control over behavior, but in most cases
+    // using `kms::Client` is recommended.
     let client: StandardClient = aws_hyper::Client::https();
     let data = client
         .call(
             GenerateRandom::builder()
                 .number_of_bytes(64)
-                .build(&config)
+                .build()
+                .expect("valid operation")
+                .make_operation(&config)
                 .expect("valid operation"),
         )
         .await

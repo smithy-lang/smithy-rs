@@ -7,7 +7,7 @@ use std::process;
 
 use kms::{Client, Config, Region};
 
-use aws_types::region::{EnvironmentProvider, ProvideRegion};
+use aws_types::region::ProvideRegion;
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -15,11 +15,11 @@ use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// The region
+    /// The region. Overrides environment variable AWS_DEFAULT_REGION.
     #[structopt(short, long)]
-    region: Option<String>,
+    default_region: Option<String>,
 
-    /// The # of bytes (64, 128, or 256)
+    /// The # of bytes. Must be less than 1024.
     #[structopt(short, long)]
     length: i32,
 
@@ -28,27 +28,38 @@ struct Opt {
     verbose: bool,
 }
 
+/// Creates a random byte string that is cryptographically secure.
+/// # Arguments
+///
+/// * `[-l LENGTH]` - The number of bytes to generate. Must be less than 1024.
+/// * `[-d DEFAULT-REGION]` - The region in which the client is created.
+///    If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///    If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() {
     let Opt {
-        length, // 'mut length' if you trap out-of-range values later
-        region,
+        length,
+        default_region,
         verbose,
     } = Opt::from_args();
 
-    let region = EnvironmentProvider::new()
-        .region()
-        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
+    let region = default_region
+        .as_ref()
+        .map(|region| Region::new(region.clone()))
+        .or_else(|| aws_types::region::default_provider().region())
         .unwrap_or_else(|| Region::new("us-west-2"));
 
-    /* If you want to trap out-of-range-values:
+    // Trap out-of-range-values:
     match length {
         1...1024 => {
-            // Within range
+            println!("Generating a {} byte random string", length);
         }
-        _ => length = 256,
+        _ => {
+            println!("Length {} is not within range 1-1024", length);
+            process::exit(1);
+        }
     }
-    */
 
     if verbose {
         println!("KMS client version: {}\n", kms::PKG_VERSION);
@@ -61,8 +72,9 @@ async fn main() {
             .init();
     }
 
-    let config = Config::builder().region(region).build();
-    let client = Client::from_conf(config);
+    let conf = Config::builder().region(region).build();
+    let conn = aws_hyper::conn::Standard::https();
+    let client = Client::from_conf_conn(conf, conn);
 
     let resp = match client
         .generate_random()
