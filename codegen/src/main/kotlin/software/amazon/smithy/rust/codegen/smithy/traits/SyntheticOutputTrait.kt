@@ -12,7 +12,7 @@ import software.amazon.smithy.model.traits.AnnotationTrait
 /**
  * Indicates that a shape is a synthetic input (see `OperationNormalizer.kt`)
  */
-class SyntheticOutputTrait constructor(val body: ShapeId?) :
+class SyntheticOutputTrait constructor(val operation: ShapeId, val body: ShapeId?, val originalId: ShapeId?) :
     AnnotationTrait(ID, ObjectNode.fromStringMap(mapOf("body" to body.toString()))) {
     companion object {
         val ID = ShapeId.from("smithy.api.internal#syntheticOutput")
