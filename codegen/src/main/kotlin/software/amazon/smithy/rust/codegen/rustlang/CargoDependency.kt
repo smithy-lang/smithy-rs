@@ -58,7 +58,8 @@ class InlineDependency(
     val renderer: (RustWriter) -> Unit
 ) : RustDependency(name) {
     override fun version(): String {
-        return renderer(RustWriter.forModule("_")).hashCode().toString()
+        // just need a version that won't crash
+        return renderer.hashCode().toString()
     }
 
     override fun dependencies(): List<RustDependency> {

@@ -30,6 +30,14 @@ impl AsRef<[u8]> for Blob {
     }
 }
 
+/* ANCHOR: document */
+
+/// Document Type
+///
+/// Document types represents protocol-agnostic open content that is accessed like JSON data.
+/// Open content is useful for modeling unstructured data that has no schema, data that can't be
+/// modeled using rigid types, or data that has a schema that evolves outside of the purview of a model.
+/// The serialization format of a document is an implementation detail of a protocol.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Document {
     Object(HashMap<String, Document>),
@@ -48,6 +56,8 @@ pub enum Number {
     NegInt(i64),
     Float(f64),
 }
+
+/* ANCHOR_END: document */
 
 /// Generic Error type
 ///

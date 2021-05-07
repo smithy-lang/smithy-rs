@@ -137,7 +137,7 @@ fun RustWriter.unitTest(
     @Language("Rust", prefix = "fn test() {", suffix = "}") test: String,
     name: String? = null
 ) {
-    val testName = name ?: safeName("test_")
+    val testName = name ?: safeName("test")
     raw("#[test]")
     rustBlock("fn $testName()") {
         writeWithNoFormatting(test)

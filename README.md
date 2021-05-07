@@ -3,6 +3,8 @@ Smithy code generators for Rust
 
 The nightly SDK build can be found under `Actions -> CI (take latest run) -> Artifacts`
 
+[Design documentation (WIP)](https://ubiquitous-robot-7dc8d16d.pages.github.io/)
+
 **All internal and external interfaces are considered unstable and subject to change without notice.**
 
 ## Setup
@@ -31,5 +33,10 @@ pre-commit install
 
 ### Project Layout
 * `aws`: AWS specific codegen & Rust code (signing, endpoints, customizations, etc.)
+  Common commands:
+     * `./gradlew :aws:sdk:assemble`: Generate (but do not test / compile etc.) a fresh SDK into `sdk/build/aws-sdk`
+     * `./gradlew :aws:sdk:test`: Generate & run all tests for a fresh SDK
+     * `./gradlew :aws:sdk:{cargoCheck, cargoTest, cargoDocs, cargoClippy}`: Generate & run specified cargo command.
 * `codegen`: Whitelabel Smithy code generation
 * `codegen-test`: Smithy protocol test generation & integration tests for Smithy whitelabel code
+* [`design`](design): Design documentation. See the [design/README.md](design/README.md) for details about building / viewing.

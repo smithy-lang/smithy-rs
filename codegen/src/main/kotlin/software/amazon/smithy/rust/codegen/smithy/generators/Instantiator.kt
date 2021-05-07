@@ -233,12 +233,11 @@ class Instantiator(
         val variant = data.members.iterator().next()
         val memberName = variant.key.value
         val member = shape.expectMember(memberName)
-            .let { model.expectShape(it.target) }
         // TODO: refactor this detail into UnionGenerator
         writer.write("#T::${memberName.toPascalCase()}", unionSymbol)
         // unions should specify exactly one member
         writer.withBlock("(", ")") {
-            render(this, member, variant.value, ctx)
+            renderMember(this, member, variant.value, ctx)
         }
     }
 
