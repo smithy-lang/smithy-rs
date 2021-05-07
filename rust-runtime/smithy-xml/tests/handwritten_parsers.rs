@@ -48,8 +48,8 @@ fn deserialize_xml_attribute(inp: &str) -> Result<XmlAttribute, XmlError> {
         }
     }
     Ok(XmlAttribute {
-        foo: foo.ok_or(XmlError::Other { msg: "missing foo" })?,
-        bar: bar.ok_or(XmlError::Other { msg: "missing bar" })?,
+        foo: foo.ok_or(XmlError::custom("missing foo"))?,
+        bar: bar.ok_or(XmlError::custom("missing bar"))?,
     })
 }
 
@@ -79,7 +79,7 @@ fn deserialize_xml_map(inp: &str) -> Result<XmlMap, XmlError> {
         }
     }
     Ok(XmlMap {
-        values: my_map.ok_or(XmlError::Other { msg: "missing map" })?,
+        values: my_map.ok_or(XmlError::custom("missing map"))?,
     })
 }
 
@@ -112,11 +112,7 @@ fn deserialize_foo_enum_map_entry(
         (Some(k), Some(v)) => {
             out.insert(k, v);
         }
-        _ => {
-            return Err(XmlError::Other {
-                msg: "missing key value in map",
-            })
-        }
+        _ => return Err(XmlError::custom("missing key value in map")),
     }
     Ok(())
 }
@@ -218,8 +214,8 @@ fn deserialize_flat_map_test() {
     out.insert("foo".to_string(), FooEnum::from("Foo"));
     out.insert("baz".to_string(), FooEnum::from("Baz"));
     assert_eq!(
-        deserialize_flat_xml_map(xml),
-        Ok(FlatXmlMap { my_map: out })
+        deserialize_flat_xml_map(xml).unwrap(),
+        FlatXmlMap { my_map: out }
     )
 }
 

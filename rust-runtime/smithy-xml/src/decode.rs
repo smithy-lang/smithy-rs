@@ -15,16 +15,23 @@ use xmlparser::{ElementEnd, Token, Tokenizer};
 
 pub type Depth = usize;
 
-#[derive(Eq, PartialEq, Debug, Error)]
+// in general, these errors are just for reporting what happened, there isn't
+// much value in lots of different match variants
+
+#[derive(Debug, Error)]
 pub enum XmlError {
     #[error("XML Parse Error")]
     InvalidXml(#[from] xmlparser::Error),
-    #[error("Other: {msg}")]
-    Other { msg: &'static str },
-    #[error("Expect a data element. Found: {found}")]
-    ExpectedData { found: String },
-    #[error("Custom: {0}")]
-    Custom(String),
+    #[error("Error parsing XML: {0}")]
+    Custom(Cow<'static, str>),
+    #[error("Encountered another error parsing XML: {0}")]
+    Unhandled(#[from] Box<dyn std::error::Error>),
+}
+
+impl XmlError {
+    pub fn custom(msg: impl Into<Cow<'static, str>>) -> Self {
+        XmlError::Custom(msg.into())
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -153,11 +160,9 @@ impl<'a> TryFrom<&'a [u8]> for Document<'a> {
     type Error = XmlError;
 
     fn try_from(value: &'a [u8]) -> Result<Self, Self::Error> {
-        Ok(Document::new(std::str::from_utf8(value).map_err(|_| {
-            XmlError::Other {
-                msg: "invalid utf8",
-            }
-        })?))
+        Ok(Document::new(
+            std::str::from_utf8(value).map_err(|err| XmlError::Unhandled(Box::new(err)))?,
+        ))
     }
 }
 
@@ -190,9 +195,9 @@ impl<'inp> Document<'inp> {
 
     /// A scoped reader for the entire document
     pub fn root_element<'a>(&'a mut self) -> Result<ScopedDecoder<'inp, 'a>, XmlError> {
-        let start_el = self.next_start_element().ok_or(XmlError::Other {
-            msg: "No root element",
-        })?;
+        let start_el = self
+            .next_start_element()
+            .ok_or(XmlError::custom("no root element"))?;
         Ok(ScopedDecoder {
             doc: self,
             start_el,
@@ -402,9 +407,10 @@ pub fn try_data<'a, 'inp>(
                 return Ok(text.as_str().trim())
             }
             Some(Ok(e @ Token::ElementStart { .. })) => {
-                return Err(XmlError::ExpectedData {
-                    found: format!("{:?}", e),
-                })
+                return Err(XmlError::custom(format!(
+                    "Looking for a data element, found: {:?}",
+                    e
+                )))
             }
             Some(Err(e)) => return Err(e),
             _ => {}

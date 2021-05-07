@@ -44,7 +44,9 @@ internal class XmlBindingTraitParserGeneratorTest {
 
             number: Double,
 
-            top: Top
+            top: Top,
+
+            blob: Blob
         }
 
         map MyMap {

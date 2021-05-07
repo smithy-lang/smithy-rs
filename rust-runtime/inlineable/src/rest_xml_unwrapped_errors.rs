@@ -22,9 +22,7 @@ pub fn body_is_error(body: &[u8]) -> Result<bool, XmlError> {
 pub fn error_scope<'a, 'b>(doc: &'a mut Document<'b>) -> Result<ScopedDecoder<'b, 'a>, XmlError> {
     let scoped = doc.root_element()?;
     if !scoped.start_el().matches("Error") {
-        return Err(XmlError::Other {
-            msg: "expected error as root",
-        });
+        return Err(XmlError::custom("expected error as root"));
     }
     Ok(scoped)
 }

@@ -130,7 +130,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                     let mut decoder = doc.root_element()?;
                     let start_el = decoder.start_el();
                     if !(${shapeName.compareTo("start_el")}) {
-                        return Err(#{XmlError}::Custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
+                        return Err(#{XmlError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
                     }
                     """,
                     *codegenScope
@@ -179,7 +179,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                     let mut decoder = doc.root_element()?;
                     let start_el = decoder.start_el();
                     if !(${shapeName.compareTo("start_el")}) {
-                        return Err(#{XmlError}::Custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
+                        return Err(#{XmlError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
                     }
                     """,
                     *codegenScope
@@ -333,7 +333,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                                     (match base.take() {
                                         None => None,
                                         Some(${format(symbol)}::$variantName(inner)) => Some(inner),
-                                        Some(_) => return Err(#{XmlError}::Other { msg: "mixed variants" })
+                                        Some(_) => return Err(#{XmlError}::custom("mixed variants"))
                                     })
                                 """
                             withBlock("let tmp = ", ";") {
@@ -343,7 +343,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                         }
                     }
                 }
-                rustTemplate("""base.ok_or(#{XmlError}::Other { msg: "expected union, got nothing..."})""", *codegenScope)
+                rustTemplate("""base.ok_or(#{XmlError}::custom("expected union, got nothing"))""", *codegenScope)
             }
         }
         rust("#T(&mut ${ctx.tag})", nestedParser)
@@ -377,7 +377,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                 parseStructureInner(members, "builder", Ctx(tag = "decoder", currentTarget = null))
                 withBlock("Ok(builder.build()", ")") {
                     if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
-                        rust(""".map_err(|_|{XmlError}::Other { msg: "missing field"})?""")
+                        rust(""".map_err(|_|{XmlError}::custom("missing field"))?""")
                     }
                 }
             }
@@ -487,8 +487,8 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
 
                 rustTemplate(
                     """
-                let k = k.ok_or(#{XmlError}::Other { msg: "missing key map entry"})?;
-                let v = v.ok_or(#{XmlError}::Other { msg: "missing value map entry"})?;
+                let k = k.ok_or(#{XmlError}::custom("missing key map entry"))?;
+                let v = v.ok_or(#{XmlError}::custom("missing value map entry"))?;
                 out.insert(k, v);
                 Ok(())
                         """,
@@ -512,7 +512,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                         provider()
                     }
                     rustTemplate(
-                        """.map_err(|_|#{XmlError}::Other { msg: "expected ${escape(shape.toString())}"})""",
+                        """.map_err(|_|#{XmlError}::custom("expected ${escape(shape.toString())}"))""",
                         *codegenScope
                     )
                 }
@@ -530,7 +530,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                     rust(", #T", timestampFormatType)
                 }
                 rustTemplate(
-                    """.map_err(|_|#{XmlError}::Other { msg: "expected ${escape(shape.toString())}"})""",
+                    """.map_err(|_|#{XmlError}::custom("expected ${escape(shape.toString())}"))""",
                     *codegenScope
                 )
             }
@@ -539,7 +539,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                     provider()
                 }
                 rustTemplate(
-                    """.map_err(|_|#{XmlError}::Other { msg: "invalid base64"}).map(#{Blob}::new)""",
+                    """.map_err(|err|#{XmlError}::custom("invalid base64")).map(#{Blob}::new)""",
                     *codegenScope
                 )
             }
