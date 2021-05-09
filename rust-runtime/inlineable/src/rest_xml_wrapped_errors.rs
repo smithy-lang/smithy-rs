@@ -42,7 +42,7 @@ pub fn parse_generic_error(body: &[u8]) -> Result<smithy_types::Error, XmlError>
 pub fn error_scope<'a, 'b>(doc: &'a mut Document<'b>) -> Result<ScopedDecoder<'b, 'a>, XmlError> {
     let root = doc
         .next_start_element()
-        .ok_or(XmlError::custom("no root found searching for an Error"))?;
+        .ok_or_else(|| XmlError::custom("no root found searching for an Error"))?;
     if !root.matches("ErrorResponse") {
         return Err(XmlError::custom("expected ErrorResponse as root"));
     }

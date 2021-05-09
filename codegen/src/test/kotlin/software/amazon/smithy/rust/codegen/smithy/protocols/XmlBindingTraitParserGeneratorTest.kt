@@ -7,8 +7,11 @@ package software.amazon.smithy.rust.codegen.smithy.protocols
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
@@ -40,6 +43,8 @@ internal class XmlBindingTraitParserGeneratorTest {
 
             s: String,
 
+            enum: FooEnum,
+
             date: Timestamp,
 
             number: Double,
@@ -48,6 +53,9 @@ internal class XmlBindingTraitParserGeneratorTest {
 
             blob: Blob
         }
+
+        @enum([{name: "FOO", value: "FOO"}])
+        string FooEnum
 
         map MyMap {
             @xmlName("Name")
@@ -163,6 +171,8 @@ internal class XmlBindingTraitParserGeneratorTest {
         project.withModule(RustModule.default("model", public = true)) {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
             UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice")).render()
+            val enum = model.lookup<StringShape>("test#FooEnum")
+            EnumGenerator(symbolProvider, it, enum, enum.expectTrait(EnumTrait::class.java)).render()
         }
 
         project.withModule(RustModule.default("output", public = true)) {

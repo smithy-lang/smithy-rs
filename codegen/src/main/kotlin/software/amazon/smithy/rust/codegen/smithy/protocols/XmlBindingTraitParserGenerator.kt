@@ -270,7 +270,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                     is StringShape, is BooleanShape, is NumberShape, is TimestampShape, is BlobShape -> parsePrimitiveInner(
                         memberShape
                     ) {
-                        rustTemplate("#{try_data}(&mut ${ctx.tag})?", *codegenScope)
+                        rustTemplate("#{try_data}(&mut ${ctx.tag})?.as_ref()", *codegenScope)
                     }
                     is MapShape -> if (memberShape.isFlattened()) {
                         parseFlatMap(target, ctx)
@@ -343,7 +343,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                         }
                     }
                 }
-                rustTemplate("""base.ok_or(#{XmlError}::custom("expected union, got nothing"))""", *codegenScope)
+                rustTemplate("""base.ok_or_else(||#{XmlError}::custom("expected union, got nothing"))""", *codegenScope)
             }
         }
         rust("#T(&mut ${ctx.tag})", nestedParser)
@@ -487,8 +487,8 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
 
                 rustTemplate(
                     """
-                let k = k.ok_or(#{XmlError}::custom("missing key map entry"))?;
-                let v = v.ok_or(#{XmlError}::custom("missing value map entry"))?;
+                let k = k.ok_or_else(||#{XmlError}::custom("missing key map entry"))?;
+                let v = v.ok_or_else(||#{XmlError}::custom("missing value map entry"))?;
                 out.insert(k, v);
                 Ok(())
                         """,
@@ -539,7 +539,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                     provider()
                 }
                 rustTemplate(
-                    """.map_err(|err|#{XmlError}::custom("invalid base64")).map(#{Blob}::new)""",
+                    """.map_err(|err|#{XmlError}::custom(format!("invalid base64: {:?}", err))).map(#{Blob}::new)""",
                     *codegenScope
                 )
             }
@@ -552,7 +552,8 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
             val enumTrait = shape.getTrait(EnumTrait::class.java).orElse(null)
             if (enumTrait == null) {
                 provider()
-                rust(".to_string()")
+                // if it's already `Cow::Owned` then `.into()` is free (vs. to_string())
+                rust(".into()")
             } else {
                 val enumSymbol = symbolProvider.toSymbol(shape)
                 withBlock("#T::from(", ")", enumSymbol) {

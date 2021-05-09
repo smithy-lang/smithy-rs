@@ -48,8 +48,8 @@ fn deserialize_xml_attribute(inp: &str) -> Result<XmlAttribute, XmlError> {
         }
     }
     Ok(XmlAttribute {
-        foo: foo.ok_or(XmlError::custom("missing foo"))?,
-        bar: bar.ok_or(XmlError::custom("missing bar"))?,
+        foo: foo.ok_or_else(|| XmlError::custom("missing foo"))?,
+        bar: bar.ok_or_else(|| XmlError::custom("missing bar"))?,
     })
 }
 
@@ -79,7 +79,7 @@ fn deserialize_xml_map(inp: &str) -> Result<XmlMap, XmlError> {
         }
     }
     Ok(XmlMap {
-        values: my_map.ok_or(XmlError::custom("missing map"))?,
+        values: my_map.ok_or_else(|| XmlError::custom("missing map"))?,
     })
 }
 
@@ -104,7 +104,7 @@ fn deserialize_foo_enum_map_entry(
     while let Some(mut tag) = decoder.next_tag() {
         match tag.start_el() {
             s if s.matches("key") => k = Some(try_data(&mut tag)?.to_string()),
-            s if s.matches("value") => v = Some(FooEnum::from(try_data(&mut tag)?)),
+            s if s.matches("value") => v = Some(FooEnum::from(try_data(&mut tag)?.as_ref())),
             _ => {}
         }
     }

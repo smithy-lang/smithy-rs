@@ -8,6 +8,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use crate::unescape::unescape;
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use thiserror::Error;
@@ -22,6 +23,10 @@ pub type Depth = usize;
 pub enum XmlError {
     #[error("XML Parse Error")]
     InvalidXml(#[from] xmlparser::Error),
+
+    #[error("Invalid XML Escape: {esc}")]
+    InvalidEscape { esc: String },
+
     #[error("Error parsing XML: {0}")]
     Custom(Cow<'static, str>),
     #[error("Encountered another error parsing XML: {0}")]
@@ -36,19 +41,19 @@ impl XmlError {
 
 #[derive(PartialEq, Debug)]
 pub struct Name<'a> {
-    pub prefix: Cow<'a, str>,
-    pub local: Cow<'a, str>,
+    pub prefix: &'a str,
+    pub local: &'a str,
 }
 
 impl Name<'_> {
     pub fn matches(&self, tag_name: &str) -> bool {
         let split = tag_name.find(':');
         match split {
-            None => tag_name == self.local.as_ref(),
+            None => tag_name == self.local,
             Some(idx) => {
                 let (prefix, local) = tag_name.split_at(idx);
                 let local = &local[1..];
-                self.local.as_ref() == local && self.prefix.as_ref() == prefix
+                self.local == local && self.prefix == prefix
             }
         }
     }
@@ -57,6 +62,7 @@ impl Name<'_> {
 #[derive(Debug, PartialEq)]
 pub struct Attr<'a> {
     name: Name<'a>,
+    // attribute values can be escaped (eg. with double quotes, so we need a Cow)
     value: Cow<'a, str>,
 }
 
@@ -74,22 +80,13 @@ pub struct StartEl<'a> {
 ///  ^^^   ^^^^^
 ///  name  attributes
 impl<'a> StartEl<'a> {
-    pub fn closed(local: &'a str, prefix: &'a str, depth: Depth) -> Self {
-        let mut s = Self::new(local, prefix, depth);
-        s.closed = true;
-        s
-    }
-
     pub fn depth(&self) -> Depth {
         self.depth
     }
 
-    pub fn new(local: &'a str, prefix: &'a str, depth: Depth) -> Self {
+    fn new(local: &'a str, prefix: &'a str, depth: Depth) -> Self {
         Self {
-            name: Name {
-                local: local.into(),
-                prefix: prefix.into(),
-            },
+            name: Name { local, prefix },
             attributes: vec![],
             closed: false,
             depth,
@@ -119,7 +116,7 @@ impl<'a> StartEl<'a> {
     ///      ^^^
     /// ```
     pub fn local(&self) -> &str {
-        self.name.local.as_ref()
+        self.name.local
     }
 
     /// Prefix component of this elements name (or empty string)
@@ -128,7 +125,7 @@ impl<'a> StartEl<'a> {
     ///  ^^^
     /// ```
     pub fn prefix(&self) -> &str {
-        self.name.local.as_ref()
+        self.name.prefix
     }
 }
 
@@ -197,7 +194,7 @@ impl<'inp> Document<'inp> {
     pub fn root_element<'a>(&'a mut self) -> Result<ScopedDecoder<'inp, 'a>, XmlError> {
         let start_el = self
             .next_start_element()
-            .ok_or(XmlError::custom("no root element"))?;
+            .ok_or_else(|| XmlError::custom("no root element"))?;
         Ok(ScopedDecoder {
             doc: self,
             start_el,
@@ -339,10 +336,6 @@ impl<'inp, 'a> Iterator for ScopedDecoder<'inp, 'a> {
     }
 }
 
-fn unescape(s: &str) -> Cow<str> {
-    s.into()
-}
-
 /// Load the next start element out of a depth-tagged token iterator
 fn next_start_element<'a, 'inp>(
     tokens: &'a mut impl Iterator<Item = Result<(Token<'inp>, Depth), XmlError>>,
@@ -351,8 +344,8 @@ fn next_start_element<'a, 'inp>(
     loop {
         match tokens.next()? {
             Ok((Token::ElementStart { local, prefix, .. }, depth)) => {
-                out.name.local = unescape(local.as_str());
-                out.name.prefix = unescape(prefix.as_str());
+                out.name.local = local.as_str();
+                out.name.prefix = prefix.as_str();
                 out.depth = depth;
             }
             Ok((
@@ -365,10 +358,10 @@ fn next_start_element<'a, 'inp>(
                 _,
             )) => out.attributes.push(Attr {
                 name: Name {
-                    local: unescape(local.as_str()),
-                    prefix: unescape(prefix.as_str()),
+                    local: local.as_str(),
+                    prefix: prefix.as_str(),
                 },
-                value: unescape(value.as_str()),
+                value: unescape(value.as_str()).ok()?,
             }),
             Ok((
                 Token::ElementEnd {
@@ -399,12 +392,12 @@ fn next_start_element<'a, 'inp>(
 /// will be returned
 pub fn try_data<'a, 'inp>(
     tokens: &'a mut impl Iterator<Item = Result<(Token<'inp>, Depth), XmlError>>,
-) -> Result<&'inp str, XmlError> {
+) -> Result<Cow<'inp, str>, XmlError> {
     loop {
         match tokens.next().map(|opt| opt.map(|opt| opt.0)) {
-            None => return Ok(""),
+            None => return Ok(Cow::Borrowed("")),
             Some(Ok(Token::Text { text })) if !text.as_str().trim().is_empty() => {
-                return Ok(text.as_str().trim())
+                return unescape(text.as_str().trim())
             }
             Some(Ok(e @ Token::ElementStart { .. })) => {
                 return Err(XmlError::custom(format!(
@@ -420,7 +413,14 @@ pub fn try_data<'a, 'inp>(
 
 #[cfg(test)]
 mod test {
-    use crate::decode::{try_data, Attr, Document, Name, StartEl};
+    use crate::decode::{try_data, Attr, Depth, Document, Name, StartEl};
+
+    // test helper to create a closed startel
+    fn closed<'a>(local: &'a str, prefix: &'a str, depth: Depth) -> StartEl<'a> {
+        let mut s = StartEl::new(local, prefix, depth);
+        s.closed = true;
+        s
+    }
 
     #[test]
     fn scoped_tokens() {
@@ -441,7 +441,7 @@ mod test {
             scoped.next_tag().unwrap().start_el(),
             &StartEl::new("Response", "", 1)
         );
-        let closed_a = StartEl::closed("A", "", 1);
+        let closed_a = closed("A", "", 1);
         assert_eq!(scoped.next_tag().unwrap().start_el(), &closed_a);
         assert!(scoped.next_tag().is_none())
     }
@@ -470,7 +470,7 @@ mod test {
         drop(struct_iter);
         assert_eq!(
             response_iter.next_tag().unwrap().start_el(),
-            &StartEl::closed("More", "", 1)
+            &closed("More", "", 1)
         );
     }
 
@@ -487,7 +487,7 @@ mod test {
         let xml = r#"<Response>hello</Response>"#;
         let mut doc = Document::new(xml);
         let mut scoped = doc.root_element().unwrap();
-        assert_eq!(try_data(&mut scoped), Ok("hello"));
+        assert_eq!(try_data(&mut scoped).unwrap(), "hello");
     }
 
     #[test]
@@ -509,12 +509,12 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn escape_data() {
-        let xml = r#"<Response>&gt;</Response>"#;
+        let xml = r#"<Response key="&quot;hey&quot;>">&gt;</Response>"#;
         let mut doc = Document::new(xml);
         let mut root = doc.root_element().unwrap();
-        assert_eq!(try_data(&mut root), Ok(">"));
+        assert_eq!(try_data(&mut root).unwrap(), ">");
+        assert_eq!(root.start_el().attr("key"), Some("\"hey\">"));
     }
 
     #[test]
@@ -526,10 +526,7 @@ mod test {
         let mut doc = Document::new(xml);
         let mut root = doc.root_element().unwrap();
         let mut string_list = root.next_tag().unwrap();
-        assert_eq!(
-            string_list.start_el(),
-            &StartEl::closed("stringList", "", 1)
-        );
+        assert_eq!(string_list.start_el(), &closed("stringList", "", 1));
         assert!(string_list.next_tag().is_none());
         drop(string_list);
         assert_eq!(
