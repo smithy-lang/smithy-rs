@@ -289,7 +289,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                         parseStructure(target, ctx)
                     }
                     is UnionShape -> parseUnion(target, ctx)
-                    else -> rust("todo!(${escape(target.toString()).dq()})")
+                    else -> TODO("Unhandled: $target")
                 }
                 // each internal `parseT` function writes an `Result<T, E>` expression, unwrap those:
                 rust("?")

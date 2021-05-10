@@ -29,6 +29,7 @@ pub fn unescape(s: &str) -> Result<Cow<str>, XmlError> {
         res.push_str(prefix);
     }
     for section in sections {
+        // entites look like &<somedata>;
         match section.find(';') {
             Some(idx) => {
                 let entity = &section[..idx];
@@ -39,9 +40,11 @@ pub fn unescape(s: &str) -> Result<Cow<str>, XmlError> {
                     "quot" => res.push('"'),
                     "apos" => res.push('\''),
                     entity => {
+                        // eg. &#xD;
                         let (entity, radix) = if let Some(entity) = entity.strip_prefix("#x") {
                             (entity, 16)
                         } else if let Some(entity) = entity.strip_prefix("#") {
+                            // eg. &#123;
                             (entity, 10)
                         } else {
                             return Err(XmlError::InvalidEscape {

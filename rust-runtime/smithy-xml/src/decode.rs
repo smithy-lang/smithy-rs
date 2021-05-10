@@ -46,6 +46,7 @@ pub struct Name<'a> {
 }
 
 impl Name<'_> {
+    /// Check if a given name matches a tag name composed of `prefix:local` or just `local`
     pub fn matches(&self, tag_name: &str) -> bool {
         let split = tag_name.find(':');
         match split {
@@ -76,9 +77,11 @@ pub struct StartEl<'a> {
 
 /// Xml Start Element
 ///
+/// ```
 /// <a:b   c="d">
 ///  ^^^   ^^^^^
 ///  name  attributes
+/// ```
 impl<'a> StartEl<'a> {
     pub fn depth(&self) -> Depth {
         self.depth
@@ -127,10 +130,7 @@ impl<'a> StartEl<'a> {
     pub fn prefix(&self) -> &str {
         self.name.prefix
     }
-}
 
-impl StartEl<'_> {
-    /// Returns if a given element closes this tag
     fn end_el(&self, el: ElementEnd, depth: Depth) -> bool {
         if depth != self.depth {
             return false;
@@ -147,7 +147,8 @@ impl StartEl<'_> {
 
 /// Xml Document abstraction
 ///
-/// This document wraps a lazy tokenizer. Constructing a document is essentially free.
+/// This document wraps a lazy tokenizer with depth tracking.
+/// Constructing a document is essentially free.
 pub struct Document<'a> {
     tokenizer: Tokenizer<'a>,
     depth: Depth,
@@ -542,7 +543,11 @@ mod test {
         let root_tags = &["a", "b", "c", "d"];
         let xml = r#"<XmlListsInputOutput>
                 <a/>
-                <b><c/><b></b><here/></b>
+                <b>
+                  <c/>
+                  <b></b>
+                  <here/>
+                </b>
                 <c></c>
                 <d>more</d>
         </XmlListsInputOutput>"#;
