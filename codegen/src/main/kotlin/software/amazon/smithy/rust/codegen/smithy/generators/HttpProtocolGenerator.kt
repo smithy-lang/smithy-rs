@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -25,7 +26,6 @@ import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomizati
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.letIf
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.inputShape
@@ -81,18 +81,22 @@ abstract class HttpProtocolGenerator(
         inputWriter.implBlock(inputShape, symbolProvider) {
             buildOperation(this, operationShape, customizations, sdkId)
             toHttpRequestImpl(this, operationShape, inputShape)
-            val shapeId = inputShape.expectTrait(SyntheticInputTrait::class.java).body
-            val body = shapeId?.let { model.expectShape(it, StructureShape::class.java) }
-            toBodyImpl(this, inputShape, body, operationShape)
             // TODO: streaming shapes need special support
             rustBlock(
-                "pub fn assemble(builder: #1T, body: #3T) -> #2T<#3T>",
+                "fn assemble(mut builder: #1T, body: #3T) -> #2T<#3T>",
                 RuntimeType.HttpRequestBuilder,
                 RuntimeType.Http("request::Request"),
-                RuntimeType.ByteSlab
+                RuntimeType.sdkBody(protocolConfig.runtimeConfig)
             ) {
-                write("builder.header(#T, body.len()).body(body)", RuntimeType.Http("header::CONTENT_LENGTH"))
-                write(""".expect("http request should be valid")""")
+                rustTemplate(
+                    """
+                    if let Some(content_length) = body.content_length() {
+                        builder = builder.header(#{http}::header::CONTENT_LENGTH, content_length)
+                    }
+                    builder.body(body).expect("should be valid request")
+                """,
+                    "http" to RuntimeType.http
+                )
             }
 
             // pub fn builder() -> ... { }
@@ -113,7 +117,7 @@ abstract class HttpProtocolGenerator(
             fromResponseImpl(this, operationShape)
 
             rustBlock(
-                "pub fn parse_response(&self, $mutability response: &$mutability #T<$type>) -> Result<#T, #T>",
+                "fn parse_response(&self, $mutability response: &$mutability #T<$type>) -> Result<#T, #T>",
                 RuntimeType.Http("response::Response"),
                 symbolProvider.toSymbol(operationShape.outputShape(model)),
                 operationShape.errorSymbol(symbolProvider)
@@ -141,20 +145,15 @@ abstract class HttpProtocolGenerator(
 
     protected fun httpBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
         implBlockWriter.rustBlock(
-            "pub fn request_builder_base(&self) -> Result<#T, #T>",
+            "fn request_builder_base(&self) -> Result<#T, #T>",
             RuntimeType.HttpRequestBuilder, buildErrorT
         ) {
             f(this)
         }
     }
 
-    protected fun bodyBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
-        implBlockWriter.rustBlock(
-            "pub fn build_body(&self) -> #T", RuntimeType.ByteSlab
-        ) {
-            f(this)
-        }
-    }
+    data class BodyMetadata(val takesOwnership: Boolean)
+    abstract fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata
 
     protected fun fromResponseFun(
         implBlockWriter: RustWriter,
@@ -192,8 +191,9 @@ abstract class HttpProtocolGenerator(
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
         // For codegen simplicity, allow `let x = ...; x`
         implBlockWriter.rust("##[allow(clippy::let_and_return)]")
+        val bodyMetadata = RustWriter.root().body("self", shape)
         val mut = features.any { it.mutSelf() }
-        val consumes = features.any { it.consumesSelf() }
+        val consumes = features.any { it.consumesSelf() } || bodyMetadata.takesOwnership
         val self = "self".letIf(mut) { "mut $it" }.letIf(!consumes) { "&$it" }
         implBlockWriter.rustBlock(
             "pub fn make_operation($self, _config: &#T::Config) -> $returnType",
@@ -201,7 +201,11 @@ abstract class HttpProtocolGenerator(
         ) {
             withBlock("Ok({", "})") {
                 features.forEach { it.section(OperationSection.MutateInput("self", "_config"))(this) }
-                rust("let request = Self::assemble(self.request_builder_base()?, self.build_body());")
+                rust("let request = self.request_builder_base()?;")
+                withBlock("let body = ", ";") {
+                    body("self", shape)
+                }
+                rust("let request = Self::assemble(request, body);")
                 rust(
                     """
                     ##[allow(unused_mut)]
@@ -230,18 +234,6 @@ abstract class HttpProtocolGenerator(
     abstract fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape)
 
     abstract fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape)
-
-    /**
-     * Add necessary methods to the impl block to generate the request body
-     *
-     * Your implementation MUST call [bodyBuilderFun] to create the public method.
-     */
-    abstract fun toBodyImpl(
-        implBlockWriter: RustWriter,
-        inputShape: StructureShape,
-        inputBody: StructureShape?,
-        operationShape: OperationShape
-    )
 
     /**
      * Add necessary methods to the impl block for the input shape.
