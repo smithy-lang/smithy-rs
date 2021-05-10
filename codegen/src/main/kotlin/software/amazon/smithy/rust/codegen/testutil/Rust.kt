@@ -57,7 +57,6 @@ object TestWorkspace {
 
     init {
         baseDir.mkdirs()
-        baseDir.listFiles()?.filter { it.isDirectory && it.resolve("Cargo.toml").exists() }?.forEach { subprojects.add(it.toString()) }
     }
 
     private fun generate() {
@@ -82,8 +81,6 @@ object TestWorkspace {
                 version = "0.0.1"
                 """.trimIndent()
             )
-            newProject.resolve("src").mkdirs()
-            newProject.resolve("src/lib.rs").createNewFile()
             subprojects.add(newProject.name)
             generate()
             return newProject
@@ -152,7 +149,7 @@ class TestWriterDelegator(fileManifest: FileManifest, symbolProvider: RustSymbol
     val baseDir: Path = fileManifest.baseDir
 }
 
-fun TestWriterDelegator.compileAndTest(): Path {
+fun TestWriterDelegator.compileAndTest() {
     val stubModel = """
     namespace fake
     service Fake {
@@ -173,8 +170,7 @@ fun TestWriterDelegator.compileAndTest(): Path {
         ),
         libRsCustomizations = listOf(),
     )
-    print("cargo test".runCommand(baseDir, mapOf("RUSTFLAGS" to "-A dead_code")))
-    return baseDir
+    "cargo test".runCommand(baseDir, mapOf("RUSTFLAGS" to "-A dead_code"))
 }
 
 // TODO: unify these test helpers a bit
