@@ -19,6 +19,8 @@ import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -30,8 +32,9 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.findMember
+import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -134,7 +137,14 @@ class HttpProtocolTestGenerator(
         }
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.setNewlinePrefix("")
-        testModuleWriter.writeWithNoFormatting("#[test]")
+        testModuleWriter.writeWithNoFormatting("#[tokio::test]")
+        val Tokio = CargoDependency(
+            "tokio",
+            CratesIo("1"),
+            features = listOf("macros", "test-util", "rt"),
+            scope = DependencyScope.Dev
+        )
+        testModuleWriter.addDependency(Tokio)
         val action = when (testCase) {
             is HttpResponseTestCase -> Action.Response
             is HttpRequestTestCase -> Action.Request
@@ -147,7 +157,7 @@ class HttpProtocolTestGenerator(
             is Action.Response -> "_response"
             is Action.Request -> "_request"
         }
-        testModuleWriter.rustBlock("fn ${testCase.id.toSnakeCase()}$fnName()") {
+        testModuleWriter.rustBlock("async fn ${testCase.id.toSnakeCase()}$fnName()") {
             block(this)
         }
     }
@@ -155,7 +165,7 @@ class HttpProtocolTestGenerator(
     private fun RustWriter.renderHttpRequestTestCase(
         httpRequestTestCase: HttpRequestTestCase
     ) {
-        val customToken = if (inputShape.findMember<IdempotencyTokenTrait>(protocolConfig.model) != null) {
+        val customToken = if (inputShape.findMemberWithTrait<IdempotencyTokenTrait>(protocolConfig.model) != null) {
             """.make_token("00000000-0000-4000-8000-000000000000")"""
         } else ""
         rust(
@@ -245,10 +255,10 @@ class HttpProtocolTestGenerator(
             use #{parse_http_response};
             let parser = #{op}::new();
             let parsed = parser.parse_unloaded(&mut http_response);
-            let http_response = http_response.map(|body|#{bytes}::copy_from_slice(body.bytes().unwrap()));
-            let parsed = parsed.unwrap_or_else(||
+            let parsed = parsed.unwrap_or_else(|| {
+                let http_response = http_response.map(|body|#{bytes}::copy_from_slice(body.bytes().unwrap()));
                 <#{op} as #{parse_http_response}<#{sdk_body}>>::parse_loaded(&parser, &http_response)
-            );
+            });
         """,
             "op" to operationSymbol,
             "bytes" to RuntimeType.Bytes,
@@ -270,7 +280,16 @@ class HttpProtocolTestGenerator(
             rust("let parsed = parsed.unwrap();")
             outputShape.members().forEach { member ->
                 val memberName = protocolConfig.symbolProvider.toMemberName(member)
-                rust("""assert_eq!(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""")
+                if (member.isStreaming(protocolConfig.model)) {
+                    rust(
+                        """assert_eq!(
+                                        parsed.$memberName.collect().await.unwrap().into_bytes(),
+                                        expected_output.$memberName.collect().await.unwrap().into_bytes()
+                                    );"""
+                    )
+                } else {
+                    rust("""assert_eq!(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""")
+                }
             }
         }
     }

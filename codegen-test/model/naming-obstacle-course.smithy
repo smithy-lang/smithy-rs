@@ -48,11 +48,10 @@ structure ReservedWords {
         protocol: awsJson1_1,
         params: {
             "regular_string": "hello!",
-            "punned_string": { "ps_member": true },
         },
         method: "POST",
         uri: "/",
-        body: "{\"regular_string\": \"hello!\", \"punned_string\": { \"ps_member\": true }}",
+        body: "{\"regular_string\": \"hello!\"}",
         bodyMediaType: "application/json"
     }
 ])
@@ -62,7 +61,6 @@ operation StructureNamePunning {
 
 structure StructureNamePunningInput {
     regular_string: smithy.api#String,
-    punned_string: crate#String,
     punned_vec: Vec
 }
 
@@ -70,9 +68,6 @@ structure Vec {
     pv_member: Boolean
 }
 
-structure String {
-    ps_member: Boolean
-}
 
 operation ErrCollisions {
     errors: [

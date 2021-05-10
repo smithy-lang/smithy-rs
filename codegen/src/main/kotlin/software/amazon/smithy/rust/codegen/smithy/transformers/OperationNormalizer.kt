@@ -70,7 +70,13 @@ class OperationNormalizer(private val model: Model) {
         val outputShapeBuilder = operation.output.map { shapeId ->
             model.expectShape(shapeId, StructureShape::class.java).toBuilder().rename(outputId)
         }.orElse(empty(outputId))
-        val outputShape = outputShapeBuilder.addTrait(SyntheticOutputTrait(outputBodyShape?.id)).build()
+        val outputShape = outputShapeBuilder.addTrait(
+            SyntheticOutputTrait(
+                operation = operation.id,
+                originalId = operation.output.orNull(),
+                body = outputBodyShape?.id
+            )
+        ).build()
         return listOf(outputShape, outputBodyShape).mapNotNull { it }
     }
 
@@ -89,7 +95,14 @@ class OperationNormalizer(private val model: Model) {
         val inputShapeBuilder = operation.input.map { shapeId ->
             model.expectShape(shapeId, StructureShape::class.java).toBuilder().rename(inputId)
         }.orElse(empty(inputId))
-        val inputShape = inputShapeBuilder.addTrait(SyntheticInputTrait(operation.id, inputBodyShape?.id)).build()
+        val inputShape =
+            inputShapeBuilder.addTrait(
+                SyntheticInputTrait(
+                    operation = operation.id,
+                    body = inputBodyShape?.id,
+                    originalId = operation.input.orNull()
+                )
+            ).build()
         return listOf(inputShape, inputBodyShape).mapNotNull { it }
     }
 
@@ -98,6 +111,7 @@ class OperationNormalizer(private val model: Model) {
     companion object {
         // Functions to construct synthetic shape IDs—Don't rely on these in external code: The attached traits
         // provide shape ids via `.body` on [SyntheticInputTrait] and [SyntheticOutputTrait]
+        // Rename safety: Operations cannot be renamed
         private fun OperationShape.inputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Input")
         private fun OperationShape.outputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Output")
         private fun OperationShape.inputBodyId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}InputBody")

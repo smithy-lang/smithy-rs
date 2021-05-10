@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.letIf
 
-val TestedServices = setOf("aws-sdk-kms", "aws-sdk-dynamodb")
+val TestedServices = setOf("aws-sdk-kms", "aws-sdk-dynamodb", "aws-sdk-qldbsession")
 
 class IntegrationTestDecorator : RustCodegenDecorator {
     override val name: String = "IntegrationTest"
