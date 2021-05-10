@@ -54,7 +54,6 @@ class BuilderGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         // TODO: figure out exactly what docs we want on a the builder module
         writer.docs("See #D", symbol)
-        // check(writer.namespace == shape.builderSymbol(symbolProvider).namespace)
         val segments = shape.builderSymbol(symbolProvider).namespace.split("::")
         writer.withModule(segments.last()) {
             renderBuilder(this)
@@ -112,8 +111,9 @@ class BuilderGenerator(
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional
                 val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
-                // TODO: should the builder members be public?
-                write("$memberName: #T,", memberSymbol)
+                // builder members are crate-public to enable using them
+                // directly in serializers/deserializers
+                write("pub(crate) $memberName: #T,", memberSymbol)
             }
         }
 
