@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
@@ -76,10 +77,12 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
      * Codegeneration Context
      *
      * [tag]: The symbol name of the current tag
-     * [currentTarget]: An expression that represents the symbol currently being written to. Required to support flattened
-     * structures.
+     * [accum]: Flattened lists and maps need to be written into an accumulator. When a flattened list / map
+     * is possible, `[accum]` contains an expression to mutably access the accumulator. Specifically, this is an
+     * option to the collection st. the caller can evaluate `accum.unwrap_or_default()` to get a collection to write
+     * data into.
      */
-    data class Ctx(val tag: String, val currentTarget: String?)
+    data class Ctx(val tag: String, val accum: String?)
 
     private val symbolProvider = protocolConfig.symbolProvider
     private val smithyXml = CargoDependency.smithyXml(protocolConfig.runtimeConfig).asType()
@@ -135,7 +138,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                     """,
                     *codegenScope
                 )
-                val ctx = Ctx("decoder", currentTarget = null)
+                val ctx = Ctx("decoder", accum = null)
                 withBlock("Ok(", ")") {
                     when (shape) {
                         is StructureShape -> {
@@ -185,7 +188,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                     *codegenScope
                 )
                 val members = operationShape.operationXmlMembers()
-                parseStructureInner(members, builder = "builder", Ctx(tag = "decoder", currentTarget = null))
+                parseStructureInner(members, builder = "builder", Ctx(tag = "decoder", accum = null))
                 rust("Ok(builder)")
             }
         }
@@ -209,7 +212,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                     "xml_errors" to xmlErrors
                 )
                 val members = errorShape.errorXmlMembers()
-                parseStructureInner(members, builder = "builder", Ctx(tag = "error_decoder", currentTarget = null))
+                parseStructureInner(members, builder = "builder", Ctx(tag = "error_decoder", accum = null))
                 rust("Ok(builder)")
             }
         }
@@ -233,7 +236,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                     withBlock("let $temp = ", ";") {
                         parseMember(
                             member,
-                            ctx.copy(currentTarget = "$builder.${symbolProvider.toMemberName(member)}.take()")
+                            ctx.copy(accum = "$builder.${symbolProvider.toMemberName(member)}.take()")
                         )
                     }
                     rust("$builder = $builder.${member.setterName()}($temp);")
@@ -324,7 +327,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
             ) {
                 val members = shape.members()
                 rustTemplate("let mut base: Option<#{Shape}> = None;", *codegenScope)
-                parseLoop(Ctx(tag = "decoder", currentTarget = null)) { ctx ->
+                parseLoop(Ctx(tag = "decoder", accum = null)) { ctx ->
                     members.forEach { member ->
                         val variantName = member.memberName.toPascalCase()
                         case(member) {
@@ -337,7 +340,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                                     })
                                 """
                             withBlock("let tmp = ", ";") {
-                                parseMember(member, ctx.copy(currentTarget = current))
+                                parseMember(member, ctx.copy(accum = current))
                             }
                             rust("base = Some(#T::$variantName(tmp));", symbol)
                         }
@@ -374,7 +377,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                     *codegenScope, "Shape" to symbol
                 )
                 val members = shape.xmlMembers()
-                parseStructureInner(members, "builder", Ctx(tag = "decoder", currentTarget = null))
+                parseStructureInner(members, "builder", Ctx(tag = "decoder", accum = null))
                 withBlock("Ok(builder.build()", ")") {
                     if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
                         rust(""".map_err(|_|{XmlError}::custom("missing field"))?""")
@@ -395,7 +398,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                 "List" to symbolProvider.toSymbol(target)
             ) {
                 rust("let mut out = std::vec::Vec::new();")
-                parseLoop(Ctx(tag = "decoder", currentTarget = null)) { ctx ->
+                parseLoop(Ctx(tag = "decoder", accum = null)) { ctx ->
                     case(member) {
                         withBlock("out.push(", ");") {
                             parseMember(member, ctx)
@@ -411,7 +414,8 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
     private fun RustWriter.parseFlatList(target: CollectionShape, ctx: Ctx) {
         val list = safeName("list")
         withBlock("Result::<#T, #T>::Ok({", "})", symbolProvider.toSymbol(target), xmlError) {
-            rustTemplate("let mut $list = ${ctx.currentTarget!!}.unwrap_or_default();", *codegenScope)
+            val accum = ctx.accum ?: throw CodegenException("Need accum to parse flat list")
+            rustTemplate("""let mut $list = $accum.unwrap_or_default();""", *codegenScope)
             withBlock("$list.push(", ");") {
                 parseMember(target.member, ctx)
             }
@@ -428,7 +432,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                 "Map" to symbolProvider.toSymbol(target)
             ) {
                 rust("let mut out = #T::new();", RustType.HashMap.RuntimeType)
-                parseLoop(Ctx(tag = "decoder", currentTarget = null)) { ctx ->
+                parseLoop(Ctx(tag = "decoder", accum = null)) { ctx ->
                     rustBlock("s if ${XmlName(local = "entry").compareTo("s")} => ") {
                         rust("#T(&mut ${ctx.tag}, &mut out)?;", mapEntryParser(target, ctx))
                     }
@@ -443,9 +447,10 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
         val map = safeName("map")
         val entryDecoder = mapEntryParser(target, ctx)
         withBlock("Result::<#T, #T>::Ok({", "})", symbolProvider.toSymbol(target), xmlError) {
+            val accum = ctx.accum ?: throw CodegenException("need accum to parse flat map")
             rustTemplate(
                 """
-            let mut $map = ${ctx.currentTarget!!}.unwrap_or_default();
+            let mut $map = $accum.unwrap_or_default();
             #{decoder}(&mut tag, &mut $map)?;
             $map
             """,
@@ -472,15 +477,15 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                     "let mut v: Option<#T> = None;",
                     symbolProvider.toSymbol(model.expectShape(target.value.target))
                 )
-                parseLoop(Ctx("decoder", currentTarget = null)) {
+                parseLoop(Ctx("decoder", accum = null)) {
                     case(target.key) {
                         withBlock("k = Some(", ")") {
-                            parseMember(target.key, ctx = ctx.copy(currentTarget = null))
+                            parseMember(target.key, ctx = ctx.copy(accum = null))
                         }
                     }
                     case(target.value) {
                         withBlock("v = Some(", ")") {
-                            parseMember(target.value, ctx = ctx.copy(currentTarget = "v"))
+                            parseMember(target.value, ctx = ctx.copy(accum = "v"))
                         }
                     }
                 }
