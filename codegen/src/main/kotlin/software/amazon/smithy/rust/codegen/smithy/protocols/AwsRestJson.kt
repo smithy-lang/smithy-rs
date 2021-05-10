@@ -540,6 +540,8 @@ class AwsRestJsonGenerator(
                 BodyMetadata(takesOwnership = false)
             }
 
+            // This works for streaming & non streaming blobs because they both have `into_inner()` which
+            // can be converted into an SDK body!
             is BlobShape -> {
                 // Write the raw blob to the payload
                 rust("$payloadName.into_inner()")

@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.isStreaming
@@ -33,7 +34,7 @@ class StreamingShapeSymbolProvider(private val base: RustSymbolProvider, private
         val container = model.expectShape(shape.container)
 
         // We are only targeting output shapes
-        if (!container.hasTrait(SyntheticOutputTrait::class.java)) {
+        if (!(container.hasTrait(SyntheticOutputTrait::class.java) || container.hasTrait(SyntheticInputTrait::class.java))) {
             return initial
         }
 
