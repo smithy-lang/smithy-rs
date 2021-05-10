@@ -84,7 +84,7 @@ impl<'a> StartEl<'a> {
 
     fn new(local: &'a str, prefix: &'a str, depth: Depth) -> Self {
         Self {
-            name: Name { local, prefix },
+            name: Name { prefix, local },
             attributes: vec![],
             closed: false,
             depth,
@@ -126,6 +126,7 @@ impl<'a> StartEl<'a> {
         self.name.prefix
     }
 
+    /// Returns true of `el` at `depth` is a match for this `start_el`
     fn end_el(&self, el: ElementEnd, depth: Depth) -> bool {
         if depth != self.depth {
             return false;
