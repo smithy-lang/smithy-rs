@@ -515,6 +515,9 @@ class AwsRestJsonGenerator(
                         "SdkBody" to sdkBody
                     )
                 }
+                // When the body is a streaming blob it _literally_ is a SdkBody already
+                // mute this clippy warning to make the codegen a little simpler
+                Attribute.Custom("allow(clippy::useless_conversion)").render(this)
                 withBlock("Ok(#T::from(", "))", sdkBody) {
                     renderPayload(targetShape, "payload")
                 }
