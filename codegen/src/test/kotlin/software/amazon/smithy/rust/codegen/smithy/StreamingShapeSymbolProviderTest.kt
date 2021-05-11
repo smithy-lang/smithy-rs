@@ -40,4 +40,17 @@ internal class StreamingShapeSymbolProviderTest {
         symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test#GenerateSpeechOutput\$data")).name shouldBe ("byte_stream::ByteStream")
         symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test#GenerateSpeechInput\$data")).name shouldBe ("byte_stream::ByteStream")
     }
+
+    @Test
+    fun `streaming members have a default`() {
+        val modelWithOperationTraits =
+            OperationNormalizer(model).transformModel(OperationNormalizer.NoBody, OperationNormalizer.NoBody)
+        val symbolProvider = testSymbolProvider(modelWithOperationTraits)
+
+        val outputSymbol = symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test#GenerateSpeechOutput\$data"))
+        val inputSymbol = symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test#GenerateSpeechInput\$data"))
+        // Ensure that users don't need to set an input
+        outputSymbol.defaultValue() shouldBe Default.RustDefault
+        inputSymbol.defaultValue() shouldBe Default.RustDefault
+    }
 }
