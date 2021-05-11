@@ -74,6 +74,24 @@ fun <T : CodeWriter> T.rust(
 }
 
 /**
+ * Sibling method to [rustBlock] that enables `#{variablename}` style templating
+ */
+fun <T : CodeWriter> T.rustBlockTemplate(
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
+    vararg ctx: Pair<String, Any>,
+    block: T.() -> Unit
+) {
+    check(ctx.distinctBy { it.first.toLowerCase() }.size == ctx.size) { "Duplicate cased keys not supported" }
+    this.pushState()
+    this.putContext(ctx.toMap().mapKeys { (k, _) -> k.toLowerCase() })
+    val header = contents.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult -> "#{${matchResult.groupValues[1].toLowerCase()}:T}" }
+    this.openBlock("$header {")
+    block(this)
+    closeBlock("}")
+    this.popState()
+}
+
+/**
  * API for templating long blocks of Rust
  *
  * This enables writing code like:
