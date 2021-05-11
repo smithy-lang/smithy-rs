@@ -144,6 +144,7 @@ abstract class HttpProtocolGenerator(
     }
 
     protected fun httpBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
+        Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
         implBlockWriter.rustBlock(
             "fn request_builder_base(&self) -> Result<#T, #T>",
             RuntimeType.HttpRequestBuilder, buildErrorT
