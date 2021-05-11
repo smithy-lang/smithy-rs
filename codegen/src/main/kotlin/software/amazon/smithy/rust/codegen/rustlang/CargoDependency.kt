@@ -182,6 +182,9 @@ data class CargoDependency(
             "protocol-test-helpers", Local(runtimeConfig.relativePath), scope = DependencyScope.Dev
         )
 
+        fun smithyXml(runtimeConfig: RuntimeConfig): CargoDependency =
+            CargoDependency("${runtimeConfig.cratePrefix}-xml", Local(runtimeConfig.relativePath))
+
         val SerdeJson: CargoDependency =
             CargoDependency("serde_json", CratesIo("1"), features = listOf("float_roundtrip"))
         val Serde = CargoDependency("serde", CratesIo("1"), features = listOf("derive"))
