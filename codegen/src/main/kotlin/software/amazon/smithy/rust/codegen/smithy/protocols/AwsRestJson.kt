@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -404,7 +405,11 @@ class AwsRestJsonGenerator(
                     writable { rust("#T(response.body().as_ref())?", deserializer) }
                 }
             }
-            HttpBinding.Location.RESPONSE_CODE -> writable("Some(response.status().as_u16() as _)")
+            HttpBinding.Location.RESPONSE_CODE -> writable {
+                conditionalBlock("Some(", ")", symbolProvider.toSymbol(member).isOptional()) {
+                    rust("response.status().as_u16() as _")
+                }
+            }
             HttpBinding.Location.PREFIX_HEADERS -> {
                 val sym = httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)
                 writable {
