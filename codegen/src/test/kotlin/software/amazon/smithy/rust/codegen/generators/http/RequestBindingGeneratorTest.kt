@@ -153,7 +153,7 @@ class RequestBindingGeneratorTest {
             assert_eq!(o.as_str(), "/somebucket%2Fok/1970-04-28T03%3A58%3A45Z");
             o.clear();
             inp.uri_query(&mut o);
-            assert_eq!(o.as_str(), "?paramName=svq!!%25%26&hello=0&hello=1&hello=2&hello=44")
+            assert_eq!(o.as_str(), "?paramName=svq%21%21%25%26&hello=0&hello=1&hello=2&hello=44")
             """
         )
     }
