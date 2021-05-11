@@ -4,6 +4,7 @@
  */
 
 use aws_auth::Credentials;
+use aws_sigv4_poc::{SigningSettings, UriEncoding};
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
 use std::error::Error;
@@ -45,7 +46,10 @@ impl OperationSigningConfig {
         OperationSigningConfig {
             algorithm: SigningAlgorithm::SigV4,
             signature_type: HttpSignatureType::HttpRequestHeaders,
-            signing_options: SigningOptions { _private: () },
+            signing_options: SigningOptions {
+                _private: (),
+                double_uri_encode: true,
+            },
         }
     }
 }
@@ -53,9 +57,9 @@ impl OperationSigningConfig {
 #[derive(Clone, Eq, PartialEq)]
 pub struct SigningOptions {
     _private: (),
+    pub double_uri_encode: bool,
     /*
     Currently unsupported:
-    pub double_uri_encode: bool,
     pub normalize_uri_path: bool,
     pub omit_session_token: bool,
      */
@@ -93,7 +97,7 @@ impl SigV4Signer {
     pub fn sign<B>(
         &self,
         // There is currently only 1 way to sign, so operation level configuration is unused
-        _operation_config: &OperationSigningConfig,
+        operation_config: &OperationSigningConfig,
         request_config: &RequestConfig<'_>,
         credentials: &Credentials,
         request: &mut http::Request<B>,
@@ -108,6 +112,13 @@ impl SigV4Signer {
             region: request_config.region.as_ref(),
             svc: request_config.service.as_ref(),
             date: request_config.request_ts,
+            settings: SigningSettings {
+                uri_encoding: if operation_config.signing_options.double_uri_encode {
+                    UriEncoding::Double
+                } else {
+                    UriEncoding::Single
+                },
+            },
         };
         for (key, value) in aws_sigv4_poc::sign_core(request, sigv4_config) {
             request
