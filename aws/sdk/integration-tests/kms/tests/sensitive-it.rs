@@ -5,12 +5,14 @@
 
 use aws_http::AwsErrorRetryPolicy;
 use aws_sdk_kms as kms;
+use bytes::Bytes;
 use kms::error::CreateAliasError;
 use kms::operation::{CreateAlias, GenerateRandom};
 use kms::output::GenerateRandomOutput;
 use kms::Blob;
 use smithy_http::body::SdkBody;
 use smithy_http::operation::Parts;
+use smithy_http::response::ParseStrictResponse;
 use smithy_http::result::SdkError;
 use smithy_http::retry::ClassifyResponse;
 use smithy_types::retry::{ErrorKind, RetryKind};
@@ -69,11 +71,13 @@ fn errors_are_retryable() {
     let op = create_alias_op();
     let http_response = http::Response::builder()
         .status(400)
-        .body(r#"{ "code": "LimitExceededException" }"#)
+        .body(Bytes::from_static(
+            br#"{ "code": "LimitExceededException" }"#,
+        ))
         .unwrap();
     let err = op
         .response_handler
-        .parse_response(&http_response)
+        .parse(&http_response)
         .map_err(|e| SdkError::ServiceError {
             err: e,
             raw: http_response.map(SdkBody::from),
@@ -87,11 +91,11 @@ fn unmodeled_errors_are_retryable() {
     let op = create_alias_op();
     let http_response = http::Response::builder()
         .status(400)
-        .body(r#"{ "code": "ThrottlingException" }"#)
+        .body(Bytes::from_static(br#"{ "code": "ThrottlingException" }"#))
         .unwrap();
     let err = op
         .response_handler
-        .parse_response(&http_response)
+        .parse(&http_response)
         .map_err(|e| SdkError::ServiceError {
             err: e,
             raw: http_response.map(SdkBody::from),

@@ -13,8 +13,10 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -30,17 +32,21 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.smithy.meta
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.smithy.transformers.StructureModifier
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
+import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 sealed class AwsJsonVersion {
     abstract val value: String
@@ -146,6 +152,8 @@ class BasicAwsJsonGenerator(
     private val awsJsonVersion: AwsJsonVersion
 ) : HttpProtocolGenerator(protocolConfig) {
     private val model = protocolConfig.model
+    private val runtimeConfig = protocolConfig.runtimeConfig
+
     override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
         val operationName = symbolProvider.toSymbol(operationShape).name
@@ -158,7 +166,7 @@ class BasicAwsJsonGenerator(
                 }
             }
         """,
-            "parse_strict" to RuntimeType.parseStrict(symbolProvider.config().runtimeConfig),
+            "parse_strict" to RuntimeType.parseStrict(runtimeConfig),
             "output" to outputSymbol,
             "error" to operationShape.errorSymbol(symbolProvider),
             "response" to RuntimeType.Http("Response"),
@@ -189,30 +197,47 @@ class BasicAwsJsonGenerator(
         }
     }
 
-    override fun toBodyImpl(
-        implBlockWriter: RustWriter,
-        inputShape: StructureShape,
-        inputBody: StructureShape?,
-        operationShape: OperationShape
-    ) {
+    override fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata {
+        val fnName = "${operationShape.id.name.toSnakeCase()}_mk_body"
+        val inputShape = operationShape.inputShape(model)
+        val inputBody = inputShape.expectTrait(SyntheticInputTrait::class.java).body?.let {
+            model.expectShape(
+                it,
+                StructureShape::class.java
+            )
+        }
+        val sdkBody = RuntimeType.sdkBody(runtimeConfig)
         if (inputBody == null) {
-            bodyBuilderFun(implBlockWriter) {
-                write("\"{}\".to_string().into()")
-            }
-            return
+            rustTemplate("""#{SdkBody}::from("{}")""", "SdkBody" to sdkBody)
+            return BodyMetadata(takesOwnership = false)
         }
-        val bodySymbol = protocolConfig.symbolProvider.toSymbol(inputBody)
-        implBlockWriter.rustBlock("fn body(&self) -> #T", bodySymbol) {
-            rustBlock("#T", bodySymbol) {
-                for (member in inputBody.members()) {
-                    val name = protocolConfig.symbolProvider.toMemberName(member)
-                    write("$name: &self.$name,")
+        val bodySer = RuntimeType.forInlineFun(fnName, "operation_ser") {
+            it.rustBlock(
+                "pub fn $fnName(input: &#T) -> Result<#T, #T>",
+                symbolProvider.toSymbol(inputShape),
+                RuntimeType.sdkBody(runtimeConfig),
+                runtimeConfig.operationBuildError()
+            ) {
+                withBlock("let body = ", ";") {
+                    rustBlock("#T", symbolProvider.toSymbol(inputBody)) {
+                        for (member in inputBody.members()) {
+                            val name = protocolConfig.symbolProvider.toMemberName(member)
+                            write("$name: &input.$name,")
+                        }
+                    }
                 }
+                rustTemplate(
+                    """#{serde_json}::to_vec(&body)
+                                  .map(#{SdkBody}::from)
+                                  .map_err(|err|#{BuildError}::SerializationError(err.into()))""",
+                    "serde_json" to CargoDependency.SerdeJson.asType(),
+                    "BuildError" to runtimeConfig.operationBuildError(),
+                    "SdkBody" to sdkBody
+                )
             }
         }
-        bodyBuilderFun(implBlockWriter) {
-            write("""#T(&self.body()).expect("serialization should succeed")""", RuntimeType.SerdeJson("to_vec"))
-        }
+        rust("#T(&$self)?", bodySer)
+        return BodyMetadata(takesOwnership = false)
     }
 
     override fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape) {

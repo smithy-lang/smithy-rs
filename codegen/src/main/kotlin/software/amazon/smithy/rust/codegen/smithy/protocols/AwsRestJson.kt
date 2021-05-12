@@ -11,6 +11,7 @@ import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.DocumentShape
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
@@ -24,6 +25,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -40,16 +42,20 @@ import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.http.RequestBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
+import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import java.util.logging.Logger
 
 class AwsRestJsonFactory : ProtocolGeneratorFactory<AwsRestJsonGenerator> {
@@ -399,7 +405,11 @@ class AwsRestJsonGenerator(
                     writable { rust("#T(response.body().as_ref())?", deserializer) }
                 }
             }
-            HttpBinding.Location.RESPONSE_CODE -> writable("Some(response.status().as_u16() as _)")
+            HttpBinding.Location.RESPONSE_CODE -> writable {
+                conditionalBlock("Some(", ")", symbolProvider.toSymbol(member).isOptional()) {
+                    rust("response.status().as_u16() as _")
+                }
+            }
             HttpBinding.Location.PREFIX_HEADERS -> {
                 val sym = httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)
                 writable {
@@ -421,93 +431,147 @@ class AwsRestJsonGenerator(
         }
     }
 
-    private fun serializeViaSyntheticBody(
-        implBlockWriter: RustWriter,
+    private fun RustWriter.serializeViaSyntheticBody(
+        self: String,
+        inputShape: StructureShape,
         inputBody: StructureShape
     ) {
-        val bodySymbol = protocolConfig.symbolProvider.toSymbol(inputBody)
-        implBlockWriter.rustBlock("fn body(&self) -> #T", bodySymbol) {
-            rustBlock("#T", bodySymbol) {
-                for (member in inputBody.members()) {
-                    val name = protocolConfig.symbolProvider.toMemberName(member)
-                    write("$name: &self.$name,")
+        val fnName = "synth_body_${inputBody.id.name.toSnakeCase()}"
+        val bodySer = RuntimeType.forInlineFun(fnName, "operation_ser") {
+            it.rustBlock(
+                "pub fn $fnName(input: &#T) -> Result<#T, #T>",
+                symbolProvider.toSymbol(inputShape),
+                RuntimeType.sdkBody(runtimeConfig),
+                runtimeConfig.operationBuildError()
+            ) {
+                withBlock("let body = ", ";") {
+                    rustBlock("#T", symbolProvider.toSymbol(inputBody)) {
+                        for (member in inputBody.members()) {
+                            val name = protocolConfig.symbolProvider.toMemberName(member)
+                            write("$name: &input.$name,")
+                        }
+                    }
                 }
+                rustTemplate(
+                    """#{serde_json}::to_vec(&body)
+                                  .map(#{SdkBody}::from)
+                                  .map_err(|err|#{BuildError}::SerializationError(err.into()))""",
+                    "serde_json" to CargoDependency.SerdeJson.asType(),
+                    "BuildError" to runtimeConfig.operationBuildError(),
+                    "SdkBody" to sdkBody
+                )
             }
         }
-        bodyBuilderFun(implBlockWriter) {
-            write("""#T(&self.body()).expect("serialization should succeed")""", RuntimeType.SerdeJson("to_vec"))
+        rust("#T(&$self)?", bodySer)
+    }
+
+    override fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata {
+        val inputShape = operationShape.inputShape(model)
+        val inputBody = inputShape.expectTrait(SyntheticInputTrait::class.java).body?.let {
+            model.expectShape(
+                it,
+                StructureShape::class.java
+            )
+        }
+        if (inputBody != null) {
+            serializeViaSyntheticBody(self, inputShape, inputBody)
+            return BodyMetadata(takesOwnership = false)
+        }
+        val bindings = httpIndex.getRequestBindings(operationShape).toList()
+        val payloadMemberName: String? =
+            bindings.firstOrNull { (_, binding) -> binding.location == HttpBinding.Location.PAYLOAD }?.first
+        if (payloadMemberName == null) {
+            rustTemplate("""#{SdkBody}::from("")""", "SdkBody" to sdkBody)
+            return BodyMetadata(takesOwnership = false)
+        } else {
+            val member = inputShape.expectMember(payloadMemberName)
+            return serializeViaPayload(member)
         }
     }
 
-    override fun toBodyImpl(
-        implBlockWriter: RustWriter,
-        inputShape: StructureShape,
-        inputBody: StructureShape?,
-        operationShape: OperationShape
-    ) {
-        // If we created a synthetic input body, serialize that
-        if (inputBody != null) {
-            return serializeViaSyntheticBody(implBlockWriter, inputBody)
+    private fun RustWriter.serializeViaPayload(member: MemberShape): BodyMetadata {
+        val fnName = "ser_payload_${member.container.name.toSnakeCase()}"
+        val targetShape = model.expectShape(member.target)
+        val bodyMetadata: BodyMetadata = RustWriter.root().renderPayload(targetShape, "payload")
+        val ref = when (bodyMetadata.takesOwnership) {
+            true -> ""
+            false -> "&"
         }
-
-        // Otherwise, we need to serialize via the HTTP payload trait
-        val bindings = httpIndex.getRequestBindings(operationShape).toList()
-        val payload: Pair<String, HttpBinding>? =
-            bindings.firstOrNull { (_, binding) -> binding.location == HttpBinding.Location.PAYLOAD }
-        val payloadSerde = payload?.let { (payloadMemberName, _) ->
-            val member = inputShape.expectMember(payloadMemberName)
-            val rustMemberName = "self.${symbolProvider.toMemberName(member)}"
-            val targetShape = model.expectShape(member.target)
-            writable {
-                val payloadName = safeName()
-                rust("let $payloadName = &$rustMemberName;")
+        val serializer = RuntimeType.forInlineFun(fnName, "operation_ser") {
+            it.rustBlock(
+                "pub fn $fnName(payload: $ref#T) -> Result<#T, #T>",
+                symbolProvider.toSymbol(member),
+                sdkBody,
+                runtimeConfig.operationBuildError()
+            ) {
                 // If this targets a member & the member is None, return an empty vec
+                val ref = when (bodyMetadata.takesOwnership) {
+                    false -> ".as_ref()"
+                    true -> ""
+                }
+
                 if (symbolProvider.toSymbol(member).isOptional()) {
-                    rust(
+                    rustTemplate(
                         """
-                        let $payloadName = match $payloadName.as_ref() {
+                        let payload = match payload$ref {
                             Some(t) => t,
-                            None => return vec![]
-                        };"""
+                            None => return Ok(#{SdkBody}::from(""))
+                        };""",
+                        "SdkBody" to sdkBody
                     )
                 }
-                renderPayload(targetShape, payloadName)
+                // When the body is a streaming blob it _literally_ is a SdkBody already
+                // mute this clippy warning to make the codegen a little simpler
+                Attribute.Custom("allow(clippy::useless_conversion)").render(this)
+                withBlock("Ok(#T::from(", "))", sdkBody) {
+                    renderPayload(targetShape, "payload")
+                }
             }
-            // body is null, no payload set, so this is empty
-        } ?: writable { rust("vec![]") }
-        bodyBuilderFun(implBlockWriter) {
-            payloadSerde(this)
         }
+        rust("#T($ref self.${symbolProvider.toMemberName(member)})?", serializer)
+        return bodyMetadata
     }
 
     private fun RustWriter.renderPayload(
         targetShape: Shape,
         payloadName: String,
-    ) {
+    ): BodyMetadata {
         val serdeToVec = RuntimeType.SerdeJson("to_vec")
-        when (targetShape) {
+        return when (targetShape) {
             // Write the raw string to the payload
-            is StringShape ->
+            is StringShape -> {
                 if (targetShape.hasTrait(EnumTrait::class.java)) {
-                    rust("$payloadName.as_str().into()")
+                    rust("$payloadName.as_str()")
                 } else {
-                    rust("""$payloadName.to_string().into()""")
+                    rust("""$payloadName.to_string()""")
                 }
-            is BlobShape ->
+                BodyMetadata(takesOwnership = false)
+            }
+
+            // This works for streaming & non streaming blobs because they both have `into_inner()` which
+            // can be converted into an SDK body!
+            is BlobShape -> {
                 // Write the raw blob to the payload
-                rust("$payloadName.as_ref().into()")
-            is StructureShape, is UnionShape ->
+                rust("$payloadName.into_inner()")
+                BodyMetadata(takesOwnership = true)
+            }
+            is StructureShape, is UnionShape -> {
                 // JSON serialize the structure or union targetted
                 rust(
-                    """#T(&$payloadName).expect("serialization should succeed")""",
-                    serdeToVec
+                    """#T(&$payloadName).map_err(|err|#T::SerializationError(err.into()))?""",
+                    serdeToVec, runtimeConfig.operationBuildError()
                 )
-            is DocumentShape ->
+                BodyMetadata(takesOwnership = false)
+            }
+            is DocumentShape -> {
                 rustTemplate(
-                    """#{to_vec}(&#{doc_json}::SerDoc(&$payloadName)).expect("serialization should succeed")""",
+                    """#{to_vec}(&#{doc_json}::SerDoc(&$payloadName)).map_err(|err|#{BuildError}::SerializationError(err.into()))?""",
                     "to_vec" to serdeToVec,
-                    "doc_json" to RuntimeType.DocJson
+                    "doc_json" to RuntimeType.DocJson,
+                    "BuildError" to runtimeConfig.operationBuildError()
                 )
+                BodyMetadata(takesOwnership = false)
+            }
             else -> TODO("Unexpected payload target type")
         }
     }
