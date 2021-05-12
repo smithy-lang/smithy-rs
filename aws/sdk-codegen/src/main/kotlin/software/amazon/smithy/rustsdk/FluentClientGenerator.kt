@@ -107,7 +107,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
 
                 pub fn from_conf_conn(conf: crate::Config, conn: #{aws_hyper}::conn::Standard) -> Self {
                     let client = #{aws_hyper}::Client::new(conn);
-                    Self { handle: std::sync::Arc::new(Handle { conf, client })}
+                    Self { handle: std::sync::Arc::new(Handle { client, conf })}
                 }
 
                 pub fn conf(&self) -> &crate::Config {
