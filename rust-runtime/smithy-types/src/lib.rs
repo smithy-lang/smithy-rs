@@ -22,6 +22,9 @@ impl Blob {
     pub fn new<T: Into<Vec<u8>>>(inp: T) -> Self {
         Blob { inner: inp.into() }
     }
+    pub fn into_inner(self) -> Vec<u8> {
+        self.inner
+    }
 }
 
 impl AsRef<[u8]> for Blob {
