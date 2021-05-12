@@ -200,5 +200,8 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             dependency = CargoDependency.SmithyHttp(runtimeConfig),
             namespace = "smithy_http::response"
         )
+
+        fun wrappedXmlErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.wrappedXmlErrors(runtimeConfig))
+        fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.unwrappedXmlErrors(runtimeConfig))
     }
 }
