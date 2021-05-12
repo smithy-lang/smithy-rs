@@ -13,6 +13,10 @@ mod idempotency_token;
 mod instant_epoch;
 mod instant_httpdate;
 mod instant_iso8601;
+#[allow(unused)]
+mod rest_xml_unwrapped_errors;
+#[allow(unused)]
+mod rest_xml_wrapped_errors;
 
 // This test is outside of uuid.rs to enable copying the entirety of uuid.rs into the SDK without
 // requiring a proptest dependency

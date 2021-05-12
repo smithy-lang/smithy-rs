@@ -122,6 +122,11 @@ class HttpProtocolTestGeneratorTest {
         // A stubbed test protocol to do enable testing intentionally broken protocols
         class TestProtocol(private val protocolConfig: ProtocolConfig) : HttpProtocolGenerator(protocolConfig) {
             private val symbolProvider = protocolConfig.symbolProvider
+            override fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata {
+                writeWithNoFormatting(body)
+                return BodyMetadata(takesOwnership = false)
+            }
+
             override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
                 operationWriter.rustTemplate(
                     """
@@ -142,17 +147,6 @@ class HttpProtocolTestGeneratorTest {
             override fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape) {
                 fromResponseFun(implBlockWriter, operationShape) {
                     writeWithNoFormatting(correctResponse)
-                }
-            }
-
-            override fun toBodyImpl(
-                implBlockWriter: RustWriter,
-                inputShape: StructureShape,
-                inputBody: StructureShape?,
-                operationShape: OperationShape
-            ) {
-                bodyBuilderFun(implBlockWriter) {
-                    writeWithNoFormatting(body)
                 }
             }
 

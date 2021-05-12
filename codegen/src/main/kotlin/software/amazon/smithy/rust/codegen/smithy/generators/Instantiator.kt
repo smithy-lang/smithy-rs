@@ -41,7 +41,6 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.isStreaming
@@ -152,8 +151,7 @@ class Instantiator(
                         ctx.letIf(shape.getMemberTrait(model, HttpPrefixHeadersTrait::class.java).isPresent) {
                             it.copy(lowercaseMapKeys = true)
                         }.letIf(
-                            shape.isStreaming(model) &&
-                                model.expectShape(shape.container).hasTrait(SyntheticOutputTrait::class.java)
+                            shape.isStreaming(model)
                         ) {
                             it.copy(streaming = true)
                         }
@@ -217,12 +215,11 @@ class Instantiator(
         val variant = data.members.iterator().next()
         val memberName = variant.key.value
         val member = shape.expectMember(memberName)
-            .let { model.expectShape(it.target) }
         // TODO: refactor this detail into UnionGenerator
         writer.write("#T::${memberName.toPascalCase()}", unionSymbol)
         // unions should specify exactly one member
         writer.withBlock("(", ")") {
-            render(this, member, variant.value, ctx)
+            renderMember(this, member, variant.value, ctx)
         }
     }
 

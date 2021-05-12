@@ -58,7 +58,8 @@ class InlineDependency(
     val renderer: (RustWriter) -> Unit
 ) : RustDependency(name) {
     override fun version(): String {
-        return renderer(RustWriter.forModule("_")).hashCode().toString()
+        // just need a version that won't crash
+        return renderer.hashCode().toString()
     }
 
     override fun dependencies(): List<RustDependency> {
@@ -180,6 +181,9 @@ data class CargoDependency(
         fun ProtocolTestHelpers(runtimeConfig: RuntimeConfig) = CargoDependency(
             "protocol-test-helpers", Local(runtimeConfig.relativePath), scope = DependencyScope.Dev
         )
+
+        fun smithyXml(runtimeConfig: RuntimeConfig): CargoDependency =
+            CargoDependency("${runtimeConfig.cratePrefix}-xml", Local(runtimeConfig.relativePath))
 
         val SerdeJson: CargoDependency =
             CargoDependency("serde_json", CratesIo("1"), features = listOf("float_roundtrip"))

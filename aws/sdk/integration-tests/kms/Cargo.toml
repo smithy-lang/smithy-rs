@@ -17,3 +17,4 @@ aws-auth = { path = "../../build/aws-sdk/aws-auth" }
 aws-http = { path = "../../build/aws-sdk/aws-http" }
 tokio = { version = "1", features = ["full"]}
 tracing-subscriber = "0.2.16"
+bytes = "1"
