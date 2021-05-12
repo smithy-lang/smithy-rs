@@ -176,7 +176,7 @@ class HttpProtocolTestGeneratorTest {
             }
 
             override fun support(): ProtocolSupport {
-                return ProtocolSupport(true, true, true)
+                return ProtocolSupport(true, true, true, true)
             }
         }
 

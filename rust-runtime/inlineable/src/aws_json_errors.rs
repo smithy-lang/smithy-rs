@@ -5,6 +5,8 @@
 
 use http::header::ToStrError;
 
+// currently only used by AwsJson
+#[allow(unused)]
 pub fn is_error<B>(response: &http::Response<B>) -> bool {
     !response.status().is_success()
 }
