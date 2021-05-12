@@ -6,10 +6,7 @@
 use smithy_xml::decode::{try_data, Document, ScopedDecoder, XmlError};
 use std::convert::TryFrom;
 
-pub fn is_error<B>(response: &http::Response<B>) -> bool {
-    !response.status().is_success()
-}
-
+#[allow(unused)]
 pub fn body_is_error(body: &[u8]) -> Result<bool, XmlError> {
     let mut doc = Document::try_from(body)?;
     let scoped = doc.root_element()?;
@@ -60,7 +57,7 @@ pub fn error_scope<'a, 'b>(doc: &'a mut Document<'b>) -> Result<ScopedDecoder<'b
 mod test {
     use super::{body_is_error, parse_generic_error};
     use crate::rest_xml_wrapped_errors::error_scope;
-    use smithy_types::Document;
+    use smithy_xml::decode::Document;
     use std::convert::TryFrom;
 
     #[test]
@@ -97,7 +94,7 @@ mod test {
     </Error>
     <RequestId>foo-id</RequestId>
 </ErrorResponse>"#;
-        let mut doc = smithy_xml::decode::Document::try_from(xml).expect("valid");
+        let mut doc = Document::try_from(xml).expect("valid");
         let mut error = error_scope(&mut doc).expect("contains error");
         let mut keys = vec![];
         while let Some(tag) = error.next_tag() {

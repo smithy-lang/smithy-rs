@@ -116,6 +116,7 @@ abstract class HttpProtocolGenerator(
             val type = responseTypes.type
             fromResponseImpl(this, operationShape)
 
+            Attribute.AllowUnused.render(this)
             rustBlock(
                 "fn parse_response(&self, $mutability response: &$mutability #T<$type>) -> Result<#T, #T>",
                 RuntimeType.Http("response::Response"),
@@ -163,6 +164,7 @@ abstract class HttpProtocolGenerator(
     ) {
         Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
         val responseBodyType = implBlockWriter.responseBody(operationShape)
+        Attribute.AllowUnused.render(implBlockWriter)
         implBlockWriter.rustBlock(
             "fn from_response(response: & ${responseBodyType.mutability} #T<${responseBodyType.type}>) -> Result<#T, #T>",
             RuntimeType.Http("response::Response"),

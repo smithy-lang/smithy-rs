@@ -62,7 +62,7 @@ class HttpTraitProtocolGenerator(
     )
 
     override fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata {
-        rust("todo!()")
+        rustTemplate("#{SdkBody}::from(\"\")", *codegenScope)
         return BodyMetadata(takesOwnership = false)
     }
 
@@ -240,6 +240,7 @@ class HttpTraitProtocolGenerator(
 
     override fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape) {
         fromResponseFun(implBlockWriter, operationShape) {
+            rust("let _ = response;")
             rust("todo!()")
         }
     }
@@ -267,11 +268,13 @@ class HttpTraitProtocolGenerator(
         // avoid non-usage warnings for response
         rust("let _ = response;")
         if (outputShape.id == operationShape.output.get() && !outputShape.hasStreamingMember(model)) {
-            rust(
-                "output = #T(response.body().as_ref(), output).map_err(#T::unhandled)?;",
-                structuredDataParser.operationParser(operationShape),
-                errorSymbol
-            )
+            structuredDataParser.operationParser(operationShape)?.also { parser ->
+                rust(
+                    "output = #T(response.body().as_ref(), output).map_err(#T::unhandled)?;",
+                    parser,
+                    errorSymbol
+                )
+            }
         } else {
             check(outputShape.hasTrait(ErrorTrait::class.java)) { "should only be called on outputs or errors" }
             rust(

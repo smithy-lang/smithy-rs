@@ -33,6 +33,7 @@ class RestXmlFactory : ProtocolGeneratorFactory<HttpTraitProtocolGenerator> {
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
+            requestSerialization = false,
             requestBodySerialization = false,
             responseDeserialization = true,
             errorDeserialization = true

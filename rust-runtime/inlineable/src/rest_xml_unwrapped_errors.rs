@@ -9,6 +9,7 @@
 use smithy_xml::decode::{try_data, Document, ScopedDecoder, XmlError};
 use std::convert::TryFrom;
 
+#[allow(unused)]
 pub fn body_is_error(body: &[u8]) -> Result<bool, XmlError> {
     let mut doc = Document::try_from(body)?;
     let scoped = doc.root_element()?;

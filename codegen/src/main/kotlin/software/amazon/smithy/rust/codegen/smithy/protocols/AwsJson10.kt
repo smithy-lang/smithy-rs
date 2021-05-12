@@ -90,6 +90,7 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
     }
 
     override fun support(): ProtocolSupport = ProtocolSupport(
+        requestSerialization = true,
         requestBodySerialization = true,
         responseDeserialization = true,
         errorDeserialization = true

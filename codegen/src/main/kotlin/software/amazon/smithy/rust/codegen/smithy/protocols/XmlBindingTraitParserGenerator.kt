@@ -73,7 +73,7 @@ interface StructuredDataParserGenerator {
      * }
      * ```
      */
-    fun operationParser(operationShape: OperationShape): RuntimeType
+    fun operationParser(operationShape: OperationShape): RuntimeType?
 
     /**
      * Because only a subset of fields of the operation may be impacted by the document, a builder is passed
@@ -212,20 +212,22 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
      * }
      * ```
      */
-    override fun operationParser(operationShape: OperationShape): RuntimeType {
+    override fun operationParser(operationShape: OperationShape): RuntimeType? {
         val outputShape = operationShape.outputShape(model)
         val fnName = operationShape.id.name.toString().toSnakeCase() + "_deser_operation"
+        val shapeName = operationXmlName(outputShape)
+        val members = operationShape.operationXmlMembers()
+        if (shapeName == null || !members.isNotEmpty()) {
+            return null
+        }
         return RuntimeType.forInlineFun(fnName, "xml_deser") {
             it.rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
                 outputShape.builderSymbol(symbolProvider),
                 xmlError
             ) {
-                val shapeName = operationXmlName(outputShape)
-                val members = operationShape.operationXmlMembers()
-                if (shapeName != null && members.isNotEmpty()) {
-                    rustTemplate(
-                        """
+                rustTemplate(
+                    """
                     use std::convert::TryFrom;
                     let mut doc = #{Document}::try_from(inp)?;
                     let mut decoder = doc.root_element()?;
@@ -234,10 +236,9 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
                         return Err(#{XmlError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
                     }
                     """,
-                        *codegenScope
-                    )
-                    parseStructureInner(members, builder = "builder", Ctx(tag = "decoder", accum = null))
-                }
+                    *codegenScope
+                )
+                parseStructureInner(members, builder = "builder", Ctx(tag = "decoder", accum = null))
                 rust("Ok(builder)")
             }
         }
