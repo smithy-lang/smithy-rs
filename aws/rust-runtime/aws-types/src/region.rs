@@ -70,12 +70,10 @@ impl Default for EnvironmentProvider {
 
 impl EnvironmentProvider {
     pub fn new() -> Self {
-        EnvironmentProvider { env: Box::new(var) }
+        EnvironmentProvider {
+            env: Box::new(|key| std::env::var(key)),
+        }
     }
-}
-
-fn var(key: &str) -> Result<String, VarError> {
-    std::env::var(key)
 }
 
 impl ProvideRegion for EnvironmentProvider {
