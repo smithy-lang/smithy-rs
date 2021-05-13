@@ -68,6 +68,7 @@ impl Default for EnvironmentProvider {
     }
 }
 
+#[allow(clippy::redundant_closure)] // https://github.com/rust-lang/rust-clippy/issues/7218
 impl EnvironmentProvider {
     pub fn new() -> Self {
         EnvironmentProvider {
