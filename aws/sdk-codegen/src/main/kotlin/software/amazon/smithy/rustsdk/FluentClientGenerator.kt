@@ -135,6 +135,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
 
                 rust(
                     """
+                ##[derive(std::fmt::Debug)]
                 pub struct $name {
                     handle: std::sync::Arc<super::Handle>,
                     inner: #T
