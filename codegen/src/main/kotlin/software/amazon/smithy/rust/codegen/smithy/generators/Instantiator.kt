@@ -162,23 +162,7 @@ class Instantiator(
     }
 
     private fun renderSet(writer: RustWriter, shape: SetShape, data: ArrayNode, ctx: Ctx) {
-        if (symbolProvider.toSymbol(shape).rustType() is RustType.HashSet) {
-            if (!data.isEmpty) {
-                writer.rustBlock("") {
-                    write("let mut ret = #T::new();", RustType.HashSet.RuntimeType)
-                    data.forEach { v ->
-                        withBlock("ret.insert(", ");") {
-                            renderMember(this, shape.member, v, ctx)
-                        }
-                    }
-                    write("ret")
-                }
-            } else {
-                writer.write("#T::new()", RustType.HashSet.RuntimeType)
-            }
-        } else {
-            renderList(writer, shape, data, ctx)
-        }
+        renderList(writer, shape, data, ctx)
     }
 
     /**
