@@ -134,7 +134,6 @@ class HttpProtocolTestGeneratorTest {
                     impl #{parse_strict} for ${operationShape.id.name}{
                         type Output = Result<#{output}, #{error}>;
                         fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
-                            self.parse_response(response)
                             ${operationWriter.escape(correctResponse)}
                         }
                     }""",
