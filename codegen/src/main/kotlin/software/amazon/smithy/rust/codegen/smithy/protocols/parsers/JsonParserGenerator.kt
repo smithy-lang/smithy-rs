@@ -9,8 +9,6 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -107,6 +105,7 @@ class JsonParserGenerator(protocolConfig: ProtocolConfig) : StructuredDataParser
     private val model = protocolConfig.model
     private val symbolProvider = protocolConfig.symbolProvider
     private val runtimeConfig = protocolConfig.runtimeConfig
+    private val codegenScope = arrayOf("Error" to RuntimeType.SerdeJson("Error"), "serde_json" to RuntimeType.serdeJson)
 
     override fun payloadParser(member: MemberShape): RuntimeType {
         val shape = model.expectShape(member.target)
@@ -114,13 +113,13 @@ class JsonParserGenerator(protocolConfig: ProtocolConfig) : StructuredDataParser
         val fnName =
             "parse_payload_" + shape.id.name.toString().toSnakeCase() + member.container.name.toString().toSnakeCase()
         return RuntimeType.forInlineFun(fnName, "json_deser") {
-            it.rustBlock(
-                "pub fn $fnName(inp: &[u8]) -> Result<#1T, #2T>",
-                symbolProvider.toSymbol(shape),
-                RuntimeType.SerdeJson("Error")
-            ) {
-                rust("#T(inp)", RuntimeType.SerdeJson("from_slice"))
-            }
+            it.rustTemplate(
+                """
+                    pub fn $fnName(inp: &[u8]) -> Result<#{Shape}, #{Error}> {
+                        #{serde_json}::from_slice(inp)
+                    }""",
+                *codegenScope, "Shape" to symbolProvider.toSymbol(shape)
+            )
         }
     }
 
@@ -135,24 +134,23 @@ class JsonParserGenerator(protocolConfig: ProtocolConfig) : StructuredDataParser
         }
 
         return RuntimeType.forInlineFun(fnName, "json_deser") {
-            it.rustBlock(
-                "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                outputShape.builderSymbol(symbolProvider),
-                RuntimeType.SerdeJson("Error")
+            it.rustBlockTemplate(
+                "pub fn $fnName(inp: &[u8], mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
+                "Builder" to outputShape.builderSymbol(symbolProvider),
+                *codegenScope
             ) {
                 rustTemplate(
                     """
-                    let parsed_body: #{Body} = if inp.is_empty() {
+                    let parsed_body: #{BodyShape} = if inp.is_empty() {
                         // To enable JSON parsing to succeed, replace an empty body
                         // with an empty JSON body. If a member was required, it will fail slightly later
-                        // during the operation construction phase.
-                        #{from_slice}(b"{}")?
+                        // during the operation construction phase when a required field was missing.
+                        #{serde_json}::from_slice(b"{}")?
                     } else {
-                        #{from_slice}(inp)?
+                        #{serde_json}::from_slice(inp)?
                     };
                 """,
-                    "Body" to body,
-                    "from_slice" to RuntimeType.SerdeJson("from_slice")
+                    "BodyShape" to body, *codegenScope
                 )
                 bodyShape.members().forEach { member ->
                     rust("builder = builder.${member.setterName()}(parsed_body.${symbolProvider.toMemberName(member)});")
@@ -168,24 +166,24 @@ class JsonParserGenerator(protocolConfig: ProtocolConfig) : StructuredDataParser
         }
         val fnName = errorShape.id.name.toString().toSnakeCase()
         return RuntimeType.forInlineFun(fnName, "json_deser") {
-            it.rustBlock(
-                "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                errorShape.builderSymbol(symbolProvider),
-                RuntimeType.SerdeJson("Error")
+            it.rustBlockTemplate(
+                "pub fn $fnName(inp: &[u8], mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
+                "Builder" to errorShape.builderSymbol(symbolProvider),
+                *codegenScope
             ) {
                 rustTemplate(
                     """
-                    let parsed_body: #{Body} = if inp.is_empty() {
+                    let parsed_body: #{BodyShape} = if inp.is_empty() {
                         // To enable JSON parsing to succeed, replace an empty body
                         // with an empty JSON body. If a member was required, it will fail slightly later
                         // during the operation construction phase.
-                        #{from_slice}(b"{}")?
+                        #{serde_json}::from_slice(b"{}")?
                     } else {
-                        #{from_slice}(inp)?
+                        #{serde_json}::from_slice(inp)?
                     };
                 """,
-                    "Body" to symbolProvider.toSymbol(errorShape),
-                    "from_slice" to RuntimeType.SerdeJson("from_slice")
+                    "BodyShape" to symbolProvider.toSymbol(errorShape),
+                    *codegenScope
                 )
                 errorShape.members().forEach { member ->
                     rust("builder = builder.${member.setterName()}(parsed_body.${symbolProvider.toMemberName(member)});")
@@ -198,19 +196,14 @@ class JsonParserGenerator(protocolConfig: ProtocolConfig) : StructuredDataParser
     override fun documentParser(operationShape: OperationShape): RuntimeType {
         val fnName = "parse_document"
         return RuntimeType.forInlineFun(fnName, "json_deser") {
-            it.rustBlock(
-                "pub fn $fnName(inp: &[u8]) -> Result<#1T, #2T>",
-                RuntimeType.Document(runtimeConfig),
-                RuntimeType.SerdeJson("Error")
-            ) {
-                rustTemplate(
-                    """
-                            #{serde_json}::from_slice::<#{doc_json}::DeserDoc>(inp).map(|d|d.0)
-                        """,
-                    "doc_json" to RuntimeType.DocJson,
-                    "serde_json" to CargoDependency.SerdeJson.asType(),
-                )
-            }
+            it.rustTemplate(
+                """
+                pub fn $fnName(inp: &[u8]) -> Result<#{Document}, #{Error}> {
+                    #{serde_json}::from_slice::<#{doc_json}::DeserDoc>(inp).map(|d|d.0)
+                }
+            """,
+                *codegenScope, "Document" to RuntimeType.Document(runtimeConfig), "doc_json" to RuntimeType.DocJson
+            )
         }
     }
 }
