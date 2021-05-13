@@ -41,7 +41,6 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.isStreaming
@@ -152,8 +151,7 @@ class Instantiator(
                         ctx.letIf(shape.getMemberTrait(model, HttpPrefixHeadersTrait::class.java).isPresent) {
                             it.copy(lowercaseMapKeys = true)
                         }.letIf(
-                            shape.isStreaming(model) &&
-                                model.expectShape(shape.container).hasTrait(SyntheticOutputTrait::class.java)
+                            shape.isStreaming(model)
                         ) {
                             it.copy(streaming = true)
                         }
@@ -164,23 +162,7 @@ class Instantiator(
     }
 
     private fun renderSet(writer: RustWriter, shape: SetShape, data: ArrayNode, ctx: Ctx) {
-        if (symbolProvider.toSymbol(shape).rustType() is RustType.HashSet) {
-            if (!data.isEmpty) {
-                writer.rustBlock("") {
-                    write("let mut ret = #T::new();", RustType.HashSet.RuntimeType)
-                    data.forEach { v ->
-                        withBlock("ret.insert(", ");") {
-                            renderMember(this, shape.member, v, ctx)
-                        }
-                    }
-                    write("ret")
-                }
-            } else {
-                writer.write("#T::new()", RustType.HashSet.RuntimeType)
-            }
-        } else {
-            renderList(writer, shape, data, ctx)
-        }
+        renderList(writer, shape, data, ctx)
     }
 
     /**

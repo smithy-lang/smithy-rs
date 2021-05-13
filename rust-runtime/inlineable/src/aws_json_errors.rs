@@ -49,6 +49,8 @@ pub fn parse_generic_error<B>(
         .map(|s| sanitize_error_code(s).to_string());
     let message = body
         .get("message")
+        .or_else(|| body.get("Message"))
+        .or_else(|| body.get("errorMessage"))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
     let request_id = response
@@ -133,5 +135,27 @@ mod test {
             sanitize_error_code("aws.protocoltests.restjson#FooError"),
             "FooError"
         );
+    }
+
+    // services like lambda use an alternate `Message` instead of `message`
+    #[test]
+    fn alternative_error_message_names() {
+        let response = http::Response::builder()
+            .header("x-amzn-errortype", "ResourceNotFoundException")
+            .body(json!({
+                "Type": "User",
+                "Message": "Functions from 'us-west-2' are not reachable from us-east-1"
+            }))
+            .unwrap();
+        assert_eq!(
+            parse_generic_error(&response, response.body()),
+            Error {
+                code: Some("ResourceNotFoundException".to_string()),
+                message: Some(
+                    "Functions from 'us-west-2' are not reachable from us-east-1".to_string()
+                ),
+                request_id: None,
+            }
+        )
     }
 }

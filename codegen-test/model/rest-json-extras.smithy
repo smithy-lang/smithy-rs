@@ -15,7 +15,7 @@ apply QueryPrecedence @httpRequestTests([
         method: "POST",
         uri: "/Precedence",
         body: "",
-        queryParams: ["bar=%26%F0%9F%90%B1", "hello%20there=how's%20your%20encoding?", "a%20%26%20b%20%26%20c=better%20encode%20%3D%20this"],
+        queryParams: ["bar=%26%F0%9F%90%B1", "hello%20there=how%27s%20your%20encoding%3F", "a%20%26%20b%20%26%20c=better%20encode%20%3D%20this"],
         params: {
             foo: "&🐱",
             baz: {
