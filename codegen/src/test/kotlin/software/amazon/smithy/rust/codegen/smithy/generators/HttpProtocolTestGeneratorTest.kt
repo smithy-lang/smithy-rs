@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
@@ -134,6 +135,7 @@ class HttpProtocolTestGeneratorTest {
                         type Output = Result<#{output}, #{error}>;
                         fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
                             self.parse_response(response)
+                            ${operationWriter.escape(correctResponse)}
                         }
                     }""",
                     "parse_strict" to RuntimeType.parseStrict(protocolConfig.runtimeConfig),
@@ -142,12 +144,6 @@ class HttpProtocolTestGeneratorTest {
                     "response" to RuntimeType.Http("Response"),
                     "bytes" to RuntimeType.Bytes
                 )
-            }
-
-            override fun operationImplBlock(implBlockWriter: RustWriter, operationShape: OperationShape) {
-                fromResponseFun(implBlockWriter, operationShape) {
-                    writeWithNoFormatting(correctResponse)
-                }
             }
 
             override fun toHttpRequestImpl(
