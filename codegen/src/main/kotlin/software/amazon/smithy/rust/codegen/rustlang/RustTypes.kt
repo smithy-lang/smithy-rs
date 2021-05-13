@@ -68,8 +68,8 @@ sealed class RustType {
         override val namespace = Namespace
 
         companion object {
-            const val Type = "BTreeSet"
-            const val Namespace = "std::collections"
+            const val Type = "Vec"
+            const val Namespace = "std::vec"
             val RuntimeType = RuntimeType(name = Type, namespace = Namespace, dependency = null)
         }
     }

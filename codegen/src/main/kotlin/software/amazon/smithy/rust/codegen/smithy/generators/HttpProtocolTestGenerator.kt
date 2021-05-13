@@ -422,11 +422,6 @@ class HttpProtocolTestGenerator(
 
         // These tests are not even attempted to be compiled, either because they will not compile
         // or because they are flaky
-        private val DisableTests = setOf(
-            // This test is flaky because of set ordering serialization https://github.com/awslabs/smithy-rs/issues/37
-            "AwsJson11Enums",
-            "RestJsonJsonEnums",
-            "RestJsonLists"
-        )
+        private val DisableTests = setOf<String>()
     }
 }
