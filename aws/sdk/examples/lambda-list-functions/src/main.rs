@@ -7,14 +7,13 @@ use std::process;
 
 use lambda::{Client, Config, Region};
 
-use aws_types::region::{ProvideRegion};
+use aws_types::region::ProvideRegion;
 
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[tokio::main]
 async fn main() {
-
     let region = aws_types::region::default_provider()
         .region()
         .unwrap_or_else(|| Region::new("us-west-2"));
