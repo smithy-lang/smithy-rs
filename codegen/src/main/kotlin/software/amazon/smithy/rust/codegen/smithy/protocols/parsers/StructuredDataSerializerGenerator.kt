@@ -29,7 +29,7 @@ interface StructuredDataSerializerGenerator {
      * }
      * ```
      */
-    fun operationSeralizer(operationShape: OperationShape): RuntimeType?
+    fun operationSerializer(operationShape: OperationShape): RuntimeType?
 
     /**
      * ```rust

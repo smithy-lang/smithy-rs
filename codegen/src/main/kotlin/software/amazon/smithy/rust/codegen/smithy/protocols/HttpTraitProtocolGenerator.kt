@@ -87,7 +87,7 @@ class HttpTraitProtocolGenerator(
         val payloadMemberName: String? =
             bindings.firstOrNull { (_, binding) -> binding.location == HttpBinding.Location.PAYLOAD }?.first
         if (payloadMemberName == null) {
-            serializerGenerator.operationSeralizer(operationShape)?.let { serializer ->
+            serializerGenerator.operationSerializer(operationShape)?.let { serializer ->
                 rust(
                     "#T(&self).map_err(|err|#T::SerializationError(err.into()))?",
                     serializer,

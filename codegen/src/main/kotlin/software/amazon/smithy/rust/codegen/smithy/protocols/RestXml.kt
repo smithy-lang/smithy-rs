@@ -110,7 +110,7 @@ class RestXmlSerializer(protocolConfig: ProtocolConfig) : StructuredDataSerializ
         }
     }
 
-    override fun operationSeralizer(operationShape: OperationShape): RuntimeType? {
+    override fun operationSerializer(operationShape: OperationShape): RuntimeType? {
         return null
     }
 

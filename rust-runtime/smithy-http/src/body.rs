@@ -62,6 +62,10 @@ impl SdkBody {
         Self(Inner::Taken)
     }
 
+    pub fn empty() -> Self {
+        Self(Inner::Once(None))
+    }
+
     fn poll_inner(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,

@@ -50,7 +50,7 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
         }
     }
 
-    override fun operationSeralizer(operationShape: OperationShape): RuntimeType? {
+    override fun operationSerializer(operationShape: OperationShape): RuntimeType? {
         // Currently, JSON shapes are serialized via a synthetic body structure that gets generated during model
         // transformation
         val inputShape = operationShape.inputShape(model)

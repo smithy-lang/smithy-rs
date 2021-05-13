@@ -403,7 +403,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
                 parseStructureInner(members, "builder", Ctx(tag = "decoder", accum = null))
                 withBlock("Ok(builder.build()", ")") {
                     if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
-                        rust(""".map_err(|_|{XmlError}::custom("missing field"))?""")
+                        rustTemplate(""".map_err(|_|{XmlError}::custom("missing field"))?""", *codegenScope)
                     }
                 }
             }
