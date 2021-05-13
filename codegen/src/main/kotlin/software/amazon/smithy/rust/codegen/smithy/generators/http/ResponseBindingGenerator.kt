@@ -248,6 +248,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                 rust("let $parsedValue = $parsedValue?;")
             }
         }
+        // TODO: this doesn't support non-optional vectors (which may be eventually added)
         when (rustType) {
             is RustType.Vec ->
                 rust(
