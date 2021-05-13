@@ -5,16 +5,15 @@
 
 use std::process;
 
-use lambda::{Client, Config, Region};
+use lambda::{error::InvokeErrorKind, Client, Config, Region, SdkError};
 
-use aws_types::region::{ProvideRegion};
+use aws_types::region::ProvideRegion;
 
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[tokio::main]
 async fn main() {
-
     let region = aws_types::region::default_provider()
         .region()
         .unwrap_or_else(|| Region::new("us-west-2"));
@@ -31,17 +30,25 @@ async fn main() {
 
     let client = Client::from_conf(config);
 
-    match client.invoke()
-        .function_name(String::from("arn:aws:lambda:us-west-2:892717189312:function:my-rusty-func"))
-        .send().await {
+    match client
+        .invoke()
+        .function_name("arn:aws:lambda:us-west-2:892717189312:function:my-rusty-func")
+        .send()
+        .await
+    {
         Ok(resp) => {
             println!("Response:");
             println!("  {:?}", resp.payload);
-
         }
-        Err(e) => {
+        Err(SdkError::ServiceError { err, .. })
+            if matches!(err.kind, InvokeErrorKind::ResourceNotFoundError(_)) =>
+        {
+            println!("This lambda function does not exist");
+            process::exit(1);
+        }
+        Err(err) => {
             println!("Got an error listing functions:");
-            println!("{}", e);
+            println!("{}", err);
             process::exit(1);
         }
     };
