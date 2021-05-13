@@ -47,7 +47,6 @@ impl OperationSigningConfig {
             algorithm: SigningAlgorithm::SigV4,
             signature_type: HttpSignatureType::HttpRequestHeaders,
             signing_options: SigningOptions {
-                _private: (),
                 double_uri_encode: true,
             },
         }
@@ -55,8 +54,8 @@ impl OperationSigningConfig {
 }
 
 #[derive(Clone, Eq, PartialEq)]
+#[non_exhaustive]
 pub struct SigningOptions {
-    _private: (),
     pub double_uri_encode: bool,
     /*
     Currently unsupported:
