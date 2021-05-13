@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.XmlBindingTraitParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig

@@ -38,6 +38,8 @@ import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindin
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember

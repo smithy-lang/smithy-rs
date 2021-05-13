@@ -18,8 +18,6 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
-import software.amazon.smithy.rust.codegen.smithy.protocols.StructuredDataParserGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
