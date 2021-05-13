@@ -367,13 +367,6 @@ class HttpTraitProtocolGenerator(
         }
     }
 
-    override fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape) {
-        fromResponseFun(implBlockWriter, operationShape) {
-            rust("let _ = response;")
-            rust("todo!()")
-        }
-    }
-
     override fun toHttpRequestImpl(
         implBlockWriter: RustWriter,
         operationShape: OperationShape,

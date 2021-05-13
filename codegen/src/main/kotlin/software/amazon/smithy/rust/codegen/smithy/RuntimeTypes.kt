@@ -145,7 +145,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun SerdeJson(path: String) =
             RuntimeType(path, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
 
-        val SJ = RuntimeType(null, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
+        val serdeJson = RuntimeType(null, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
 
         fun awsJsonErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.awsJsonErrors(runtimeConfig))

@@ -24,12 +24,9 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.inputShape
-import software.amazon.smithy.rust.codegen.util.outputShape
 
 /**
  * Configuration needed to generate the client for a given Service<->Protocol pair
@@ -111,20 +108,7 @@ abstract class HttpProtocolGenerator(
         operationWriter.implBlock(operationShape, symbolProvider) {
             builderGenerator.renderConvenienceMethod(this)
 
-            val responseTypes = responseBody(operationShape)
-            val mutability = responseTypes.mutability
-            val type = responseTypes.type
-            fromResponseImpl(this, operationShape)
-
-            Attribute.AllowUnused.render(this)
-            rustBlock(
-                "fn parse_response(&self, $mutability response: &$mutability #T<$type>) -> Result<#T, #T>",
-                RuntimeType.Http("response::Response"),
-                symbolProvider.toSymbol(operationShape.outputShape(model)),
-                operationShape.errorSymbol(symbolProvider)
-            ) {
-                write("Self::from_response(&$mutability response)")
-            }
+            operationImplBlock(this, operationShape)
 
             rustBlock("pub fn new() -> Self") {
                 rust("Self { _private: () }")
@@ -137,13 +121,6 @@ abstract class HttpProtocolGenerator(
 
     data class ResponseBody(val type: String, val mutability: String)
 
-    private fun RustWriter.responseBody(operationShape: OperationShape): ResponseBody {
-        return when (operationShape.outputShape(model).hasStreamingMember(model)) {
-            true -> ResponseBody(this.format(RuntimeType.sdkBody(protocolConfig.runtimeConfig)), "mut")
-            false -> ResponseBody("impl AsRef<[u8]>", "")
-        }
-    }
-
     protected fun httpBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
         Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
         implBlockWriter.rustBlock(
@@ -155,25 +132,8 @@ abstract class HttpProtocolGenerator(
     }
 
     data class BodyMetadata(val takesOwnership: Boolean)
-    abstract fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata
 
-    protected fun fromResponseFun(
-        implBlockWriter: RustWriter,
-        operationShape: OperationShape,
-        block: RustWriter.() -> Unit
-    ) {
-        Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
-        val responseBodyType = implBlockWriter.responseBody(operationShape)
-        Attribute.AllowUnused.render(implBlockWriter)
-        implBlockWriter.rustBlock(
-            "fn from_response(response: & ${responseBodyType.mutability} #T<${responseBodyType.type}>) -> Result<#T, #T>",
-            RuntimeType.Http("response::Response"),
-            symbolProvider.toSymbol(operationShape.outputShape(model)),
-            operationShape.errorSymbol(symbolProvider)
-        ) {
-            block(this)
-        }
-    }
+    abstract fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata
 
     private fun buildOperation(
         implBlockWriter: RustWriter,
@@ -236,7 +196,8 @@ abstract class HttpProtocolGenerator(
 
     abstract fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape)
 
-    abstract fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape)
+    /** Write code into the impl block for [operationShape] */
+    open fun operationImplBlock(implBlockWriter: RustWriter, operationShape: OperationShape) {}
 
     /**
      * Add necessary methods to the impl block for the input shape.

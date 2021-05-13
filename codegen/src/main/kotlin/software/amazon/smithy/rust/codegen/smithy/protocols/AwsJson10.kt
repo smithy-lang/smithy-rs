@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -184,7 +185,6 @@ class BasicAwsJsonGenerator(
     ) {
         httpBuilderFun(implBlockWriter) {
             write("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
-            // rename safety: Operation shapes cannot be renamed
             rust(
                 """
                 Ok(
@@ -241,13 +241,14 @@ class BasicAwsJsonGenerator(
         return BodyMetadata(takesOwnership = false)
     }
 
-    override fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape) {
+    override fun operationImplBlock(implBlockWriter: RustWriter, operationShape: OperationShape) {
         val outputShape = operationIndex.getOutput(operationShape).get()
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         val bodyId = outputShape.expectTrait(SyntheticOutputTrait::class.java).body
         val bodyShape = bodyId?.let { model.expectShape(bodyId, StructureShape::class.java) }
         val jsonErrors = RuntimeType.awsJsonErrors(protocolConfig.runtimeConfig)
+
         fromResponseFun(implBlockWriter, operationShape) {
             rustBlock("if #T::is_error(&response)", jsonErrors) {
                 rustTemplate(
@@ -256,7 +257,7 @@ class BasicAwsJsonGenerator(
                         .unwrap_or_else(|_|#{sj}::json!({}));
                     let generic = #{aws_json_errors}::parse_generic_error(&response, &body);
                     """,
-                    "aws_json_errors" to jsonErrors, "sj" to RuntimeType.SJ
+                    "aws_json_errors" to jsonErrors, "sj" to RuntimeType.serdeJson
                 )
                 if (operationShape.errors.isNotEmpty()) {
                     rustTemplate(
@@ -311,6 +312,24 @@ class BasicAwsJsonGenerator(
                     write("$name: body.$name,")
                 }
             }
+        }
+    }
+
+    private fun fromResponseFun(
+        implBlockWriter: RustWriter,
+        operationShape: OperationShape,
+        block: RustWriter.() -> Unit
+    ) {
+        Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
+        Attribute.AllowUnused.render(implBlockWriter)
+        implBlockWriter.rustBlock(
+            "fn parse_response(&self, response: & #T<#T>) -> Result<#T, #T>",
+            RuntimeType.Http("response::Response"),
+            RuntimeType.Bytes,
+            symbolProvider.toSymbol(operationShape.outputShape(model)),
+            operationShape.errorSymbol(symbolProvider)
+        ) {
+            block(this)
         }
     }
 

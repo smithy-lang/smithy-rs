@@ -144,7 +144,7 @@ class HttpProtocolTestGeneratorTest {
                 )
             }
 
-            override fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape) {
+            override fun operationImplBlock(implBlockWriter: RustWriter, operationShape: OperationShape) {
                 fromResponseFun(implBlockWriter, operationShape) {
                     writeWithNoFormatting(correctResponse)
                 }
