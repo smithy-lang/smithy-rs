@@ -220,14 +220,11 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
                     *codegenScope
                 )
                 val ctx = Ctx("decoder", accum = null)
-                withBlock("Ok(", ")") {
-                    when (shape) {
-                        is StructureShape -> {
-                            parseStructure(shape, ctx)
-                        }
-                        is UnionShape -> parseUnion(shape, ctx)
+                when (shape) {
+                    is StructureShape -> {
+                        parseStructure(shape, ctx)
                     }
-                    rust("?")
+                    is UnionShape -> parseUnion(shape, ctx)
                 }
             }
         }

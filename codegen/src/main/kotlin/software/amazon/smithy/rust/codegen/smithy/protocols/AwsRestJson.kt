@@ -98,7 +98,7 @@ class RestJson(private val protocolConfig: ProtocolConfig) : Protocol {
 
     override fun parseGenericError(operationShape: OperationShape): RuntimeType {
         val awsJsonErrors = RuntimeType.awsJsonErrors(runtimeConfig)
-        return RuntimeType.forInlineFun("parse_generic_error", "xml_deser") {
+        return RuntimeType.forInlineFun("parse_generic_error", "json_deser") {
             it.rustBlockTemplate(
                 "pub fn parse_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{SerdeError}>",
                 "Response" to RuntimeType.http.member("Response"),
