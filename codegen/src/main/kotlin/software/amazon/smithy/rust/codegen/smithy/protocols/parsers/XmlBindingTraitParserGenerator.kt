@@ -133,6 +133,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
                     """
                     use std::convert::TryFrom;
                     let mut doc = #{Document}::try_from(inp)?;
+                    ##[allow(unused_mut)]
                     let mut decoder = doc.root_element()?;
                     let start_el = decoder.start_el();
                     if !(${shapeName.compareTo("start_el")}) {
@@ -188,6 +189,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
                     """
                     use std::convert::TryFrom;
                     let mut doc = #{Document}::try_from(inp)?;
+                    ##[allow(unused_mut)]
                     let mut decoder = doc.root_element()?;
                     let start_el = decoder.start_el();
                     if !(${shapeName.compareTo("start_el")}) {
@@ -247,6 +249,10 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
                 parseAttributeMember(member, outerCtx)
             }
             rust("$builder.${symbolProvider.toMemberName(member)} = $temp;")
+        }
+        // No need to generate a parse loop if there are no non-attribute members
+        if (members.dataMembers.isEmpty()) {
+            return
         }
         parseLoop(outerCtx) { ctx ->
             members.dataMembers.forEach { member ->
