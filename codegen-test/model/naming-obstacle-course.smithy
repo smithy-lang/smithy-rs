@@ -92,3 +92,10 @@ structure CollidingException {
 // Fixing this is more refactoring than I want to get into right now
 // @error("client")
 // structure ErrCollisionsException { }
+
+// The "Unknown" value on this enum collides with the code generated "Unknown" variant used for backwards compatibility
+@enum([
+    { name: "Known", value: "Known" },
+    { name: "Unknown", value: "Unknown" },
+])
+string UnknownVariantCollidingEnum

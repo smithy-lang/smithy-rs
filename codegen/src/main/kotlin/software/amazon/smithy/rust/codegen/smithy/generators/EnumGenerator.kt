@@ -83,8 +83,14 @@ class EnumGenerator(
         // Because enum variants always start with an upper case letter, they will never
         // conflict with reserved words (which are always lower case), therefore, we never need
         // to fall back to raw identifiers
-        return name.orElse(null)?.toPascalCase()
+        val unescapedName = name.orElse(null)?.toPascalCase()
             ?: throw IllegalStateException("Enum variants must be named to derive a name. This is a bug.")
+        return when (unescapedName) {
+            // If there is a variant named "Unknown", then rename it to "UnknownValue" so that it
+            // doesn't conflict with the code generator's "Unknown" variant that exists for backwards compatibility.
+            "Unknown" -> "UnknownValue"
+            else -> unescapedName
+        }
     }
 
     private fun renderEnum() {
@@ -157,8 +163,7 @@ class EnumGenerator(
                     Ok($enumName::from(s))
                 }
             }
-
-        """
+            """
         )
     }
 }

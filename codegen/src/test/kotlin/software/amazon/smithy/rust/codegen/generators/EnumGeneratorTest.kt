@@ -152,4 +152,29 @@ class EnumGeneratorTest {
         """
         )
     }
+
+    @Test
+    fun `it escapes the Unknown variant if the enum has an unknown value in the model`() {
+        val model = """
+            namespace test
+            @enum([
+                { name: "Known", value: "Known" },
+                { name: "Unknown", value: "Unknown" },
+            ])
+            string SomeEnum
+        """.asSmithyModel()
+
+        val shape = model.expectShape(ShapeId.from("test#SomeEnum"), StringShape::class.java)
+        val trait = shape.expectTrait(EnumTrait::class.java)
+        val provider = testSymbolProvider(model)
+        val writer = RustWriter.forModule("model")
+        EnumGenerator(provider, writer, shape, trait).render()
+
+        writer.compileAndTest(
+            """
+            assert_eq!(SomeEnum::from("Unknown"), SomeEnum::UnknownValue);
+            assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown("SomethingNew".into()));
+            """
+        )
+    }
 }
