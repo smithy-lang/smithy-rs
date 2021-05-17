@@ -25,7 +25,7 @@ pub enum XmlError {
     #[error("Error parsing XML: {0}")]
     Custom(Cow<'static, str>),
     #[error("Encountered another error parsing XML: {0}")]
-    Unhandled(#[from] Box<dyn std::error::Error>),
+    Unhandled(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
 impl XmlError {

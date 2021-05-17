@@ -101,6 +101,11 @@ class InlineDependency(
             CargoDependency.Serde,
             CargoDependency.SmithyHttp(runtimeConfig)
         )
+
+        fun wrappedXmlErrors(runtimeConfig: RuntimeConfig): InlineDependency =
+            forRustFile("rest_xml_wrapped_errors", CargoDependency.smithyXml(runtimeConfig))
+        fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig): InlineDependency =
+            forRustFile("rest_xml_unwrapped_errors", CargoDependency.smithyXml(runtimeConfig))
     }
 }
 

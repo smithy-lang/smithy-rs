@@ -71,8 +71,9 @@ class ErrorGenerator(
 
     private fun renderError() {
         val symbol = symbolProvider.toSymbol(shape)
-        val messageShape = shape.getMember("message")
-        val message = messageShape.map { "self.message.as_deref()" }.orElse("None")
+        val messageShape =
+            shape.getMember("message").or { shape.getMember("Message") }.or { shape.getMember("errorMessage") }
+        val message = messageShape.map { "self.${symbolProvider.toMemberName(it)}.as_deref()" }.orElse("None")
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
         writer.rustBlock("impl ${symbol.name}") {
             val retryKindWriteable = shape.modeledRetryKind(error)?.writable(symbolProvider.config().runtimeConfig)

@@ -53,32 +53,8 @@ apply QueryPrecedence @httpRequestTests([
 @restJson1
 service RestJsonExtras {
     version: "2019-12-16",
-    operations: [EnumPayload, StringPayload, PrimitiveIntHeader, EnumQuery, StatusResponse]
+    operations: [StringPayload, PrimitiveIntHeader, EnumQuery, StatusResponse]
 }
-
-@http(uri: "/EnumPayload", method: "POST")
-@httpRequestTests([
-    {
-        id: "EnumPayload",
-        uri: "/EnumPayload",
-        body: "enumvalue",
-        params: { payload: "enumvalue" },
-        method: "POST",
-        protocol: "aws.protocols#restJson1"
-    }
-])
-operation EnumPayload {
-    input: EnumPayloadInput,
-    output: EnumPayloadInput
-}
-
-structure EnumPayloadInput {
-    @httpPayload
-    payload: StringEnum
-}
-
-@enum([{"value": "enumvalue", "name": "V"}])
-string StringEnum
 
 @http(uri: "/StringPayload", method: "POST")
 @httpRequestTests([
