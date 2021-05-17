@@ -11,7 +11,6 @@ use std::fmt::Write;
 ///
 /// This will normalize documents and attempts to determine if it is OK to sort members or not by
 /// using a heuristic to determine if the tag represents a list (which should not be reordered)
-#[must_use]
 pub fn try_xml_equivalent(d1: &str, d2: &str) -> Result<(), ProtocolTestFailure> {
     let norm_1 = normalize_xml(d1).map_err(|e| ProtocolTestFailure::InvalidBodyFormat {
         expected: "left document to be valid XML".to_string(),
@@ -60,7 +59,7 @@ fn unparse_tag(tag: Node, depth: usize) -> String {
         child_nodes.sort();
     }
     for node in child_nodes {
-        out.push_str("\n");
+        out.push('\n');
         for _ in 0..depth {
             out.push_str("  ");
         }
@@ -99,7 +98,7 @@ fn unparse_node(n: Node, depth: usize) -> Option<String> {
 /// Produces output like: `<a key="foo">`
 fn unparse_start_element(n: Node) -> String {
     let mut out = String::new();
-    out.push_str("<");
+    out.push('<');
     out.push_str(n.tag_name().name());
     if let Some(ns) = n.tag_name().namespace() {
         write!(&mut out, " xmlns=\"{}\"", ns).unwrap();
@@ -114,7 +113,7 @@ fn unparse_start_element(n: Node) -> String {
         write!(&mut out, "{}=\"{}\"", attribute.name(), attribute.value()).unwrap();
     }
 
-    out.push_str(">");
+    out.push('>');
     out
 }
 
