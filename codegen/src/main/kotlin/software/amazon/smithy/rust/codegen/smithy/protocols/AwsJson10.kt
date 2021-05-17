@@ -45,6 +45,7 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormaliz
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.smithy.transformers.StructureModifier
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.outputShape
 
 sealed class AwsJsonVersion {
@@ -120,9 +121,9 @@ class SyntheticBodySymbolProvider(private val model: Model, private val base: Ru
         val initialSymbol = base.toSymbol(shape)
         val override = when (shape) {
             is StructureShape -> when {
-                shape.hasTrait(InputBodyTrait::class.java) ->
+                shape.hasTrait<InputBodyTrait>() ->
                     initialSymbol.toBuilder().locatedIn(Serializers).build()
-                shape.hasTrait(OutputBodyTrait::class.java) ->
+                shape.hasTrait<OutputBodyTrait>() ->
                     initialSymbol.toBuilder().locatedIn(Serializers).meta(
                         initialSymbol.expectRustMetadata().withDerives(RuntimeType("Default", null, "std::default"))
                     ).build()
@@ -130,7 +131,7 @@ class SyntheticBodySymbolProvider(private val model: Model, private val base: Ru
             }
             is MemberShape -> {
                 val container = model.expectShape(shape.container)
-                if (container.hasTrait(InputBodyTrait::class.java)) {
+                if (container.hasTrait<InputBodyTrait>()) {
                     initialSymbol.toBuilder().rustType(
                         RustType.Reference(
                             lifetime = "a",

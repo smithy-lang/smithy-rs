@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
+import software.amazon.smithy.rust.codegen.util.hasTrait
 
 fun HttpTrait.uriFormatString(): String {
     val base = uri.segments.joinToString("/", prefix = "/") {
@@ -207,7 +208,7 @@ class RequestBindingGenerator(
     private fun headerFmtFun(target: Shape, member: MemberShape, targetName: String): String {
         return when {
             target.isStringShape -> {
-                if (target.hasTrait(MediaTypeTrait::class.java)) {
+                if (target.hasTrait<MediaTypeTrait>()) {
                     val func = writer.format(RuntimeType.Base64Encode(runtimeConfig))
                     "$func(&$targetName)"
                 } else {

@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.util.hasTrait
 
 /**
  * For a given Operation ([this]), return the symbol referring to the unified error? This can be used
@@ -103,7 +104,7 @@ class CombinedErrorGenerator(
             }
 
             rustBlock("fn retryable_error_kind(&self) -> Option<#T>", errorKindT) {
-                val retryableVariants = errors.filter { it.hasTrait(RetryableTrait::class.java) }
+                val retryableVariants = errors.filter { it.hasTrait<RetryableTrait>() }
                 if (retryableVariants.isEmpty()) {
                     rust("None")
                 } else {

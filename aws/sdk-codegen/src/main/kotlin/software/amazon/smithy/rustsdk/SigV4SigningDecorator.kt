@@ -21,6 +21,8 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustom
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.expectTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 
 /**
  * The SigV4SigningDecorator:
@@ -33,14 +35,14 @@ class SigV4SigningDecorator : RustCodegenDecorator {
     override val name: String = "SigV4Signing"
     override val order: Byte = 0
 
-    private fun applies(protocolConfig: ProtocolConfig): Boolean = protocolConfig.serviceShape.hasTrait(SigV4Trait::class.java)
+    private fun applies(protocolConfig: ProtocolConfig): Boolean = protocolConfig.serviceShape.hasTrait<SigV4Trait>()
 
     override fun configCustomizations(
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
         return baseCustomizations.letIf(applies(protocolConfig)) {
-            it + SigV4SigningConfig(protocolConfig.serviceShape.expectTrait(SigV4Trait::class.java))
+            it + SigV4SigningConfig(protocolConfig.serviceShape.expectTrait())
         }
     }
 
