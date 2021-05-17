@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.protocols
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
+import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.ServiceIndex
@@ -39,7 +40,8 @@ class ProtocolLoader(private val supportedProtocols: ProtocolMap) {
         val DefaultProtocols = mapOf(
             AwsJson1_0Trait.ID to BasicAwsJsonFactory(AwsJsonVersion.Json10),
             AwsJson1_1Trait.ID to BasicAwsJsonFactory(AwsJsonVersion.Json11),
-            RestJson1Trait.ID to AwsRestJsonFactory()
+            RestJson1Trait.ID to AwsRestJsonFactory(),
+            RestXmlTrait.ID to RestXmlFactory(),
         )
         val Default = ProtocolLoader(DefaultProtocols)
     }

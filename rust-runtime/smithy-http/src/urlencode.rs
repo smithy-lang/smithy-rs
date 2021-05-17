@@ -18,8 +18,7 @@ pub const BASE_SET: &AsciiSet = &CONTROLS
     .add(b'?')
     .add(b'#')
     .add(b'[')
-    .add(b')')
-    .add(b')')
+    .add(b']')
     .add(b'@')
     .add(b'!')
     .add(b'$')
@@ -32,3 +31,22 @@ pub const BASE_SET: &AsciiSet = &CONTROLS
     .add(b';')
     .add(b'=')
     .add(b'%');
+
+#[cfg(test)]
+mod test {
+    use crate::urlencode::BASE_SET;
+    use percent_encoding::utf8_percent_encode;
+
+    #[test]
+    fn set_includes_mandatory_characters() {
+        let chars = ":/?#[]@!$&'()*+,;=%";
+        let escaped = utf8_percent_encode(chars, BASE_SET).to_string();
+        assert_eq!(
+            escaped,
+            "%3A%2F%3F%23%5B%5D%40%21%24%26%27%28%29%2A%2B%2C%3B%3D%25"
+        );
+
+        // sanity check that every character is escaped
+        assert_eq!(escaped.len(), chars.len() * 3);
+    }
+}

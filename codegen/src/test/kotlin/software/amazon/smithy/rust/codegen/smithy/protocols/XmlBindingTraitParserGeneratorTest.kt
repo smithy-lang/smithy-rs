@@ -11,10 +11,13 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.XmlBindingTraitParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
+import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
@@ -90,11 +93,11 @@ internal class XmlBindingTraitParserGeneratorTest {
     fun `generates valid parsers`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer(baseModel).transformModel(OperationNormalizer.NoBody, OperationNormalizer.NoBody))
         val symbolProvider = testSymbolProvider(model)
-        val parserGenerator = XmlBindingTraitParserGenerator(testProtocolConfig(model))
-        val operationParser = parserGenerator.operationParser(model.lookup("test#Op"))
+        val parserGenerator = XmlBindingTraitParserGenerator(testProtocolConfig(model), RuntimeType.wrappedXmlErrors(TestRuntimeConfig))
+        val operationParser = parserGenerator.operationParser(model.lookup("test#Op"))!!
         val project = TestWorkspace.testProject(testSymbolProvider(model))
-        project.lib {
-            it.unitTest(
+        project.lib { writer ->
+            writer.unitTest(
                 name = "valid_input",
                 test = """
                 let xml = br#"<Top>
@@ -109,7 +112,7 @@ internal class XmlBindingTraitParserGeneratorTest {
                     <prefix:local>hey</prefix:local>
                 </Top>
                 "#;
-                let output = ${it.format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
+                let output = ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
                 let mut map = std::collections::HashMap::new();
                 map.insert("some key".to_string(), model::Choice::S("hello".to_string()));
                 assert_eq!(output.choice, Some(model::Choice::FlatMap(map)));
@@ -117,7 +120,7 @@ internal class XmlBindingTraitParserGeneratorTest {
             """
             )
 
-            it.unitTest(
+            writer.unitTest(
                 name = "ignore_extras",
                 test = """
                 let xml = br#"<Top>
@@ -137,14 +140,14 @@ internal class XmlBindingTraitParserGeneratorTest {
                     </choice>
                 </Top>
                 "#;
-                let output = ${it.format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
+                let output = ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
                 let mut map = std::collections::HashMap::new();
                 map.insert("some key".to_string(), model::Choice::S("hello".to_string()));
                 assert_eq!(output.choice, Some(model::Choice::FlatMap(map)));
             """
             )
 
-            it.unitTest(
+            writer.unitTest(
                 name = "nopanics_on_invalid",
                 test = """
                 let xml = br#"<Top>
@@ -164,7 +167,7 @@ internal class XmlBindingTraitParserGeneratorTest {
                     </choice>
                 </Top>
                 "#;
-                ${it.format(operationParser)}(xml, output::op_output::Builder::default()).expect_err("invalid input");
+                ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).expect_err("invalid input");
             """
             )
         }
