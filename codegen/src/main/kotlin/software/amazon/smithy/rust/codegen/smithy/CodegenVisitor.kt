@@ -29,6 +29,8 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.util.CommandFailed
+import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
 
@@ -103,7 +105,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         logger.fine("generating a structure...")
         rustCrate.useShapeWriter(shape) { writer ->
             StructureGenerator(model, symbolProvider, writer, shape).render()
-            if (!shape.hasTrait(SyntheticInputTrait::class.java)) {
+            if (!shape.hasTrait<SyntheticInputTrait>()) {
                 val builderGenerator = BuilderGenerator(protocolConfig.model, protocolConfig.symbolProvider, shape)
                 builderGenerator.render(writer)
                 writer.implBlock(shape, symbolProvider) {
@@ -114,7 +116,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     }
 
     override fun stringShape(shape: StringShape) {
-        shape.getTrait(EnumTrait::class.java).map { enum ->
+        shape.getTrait<EnumTrait>()?.also { enum ->
             rustCrate.useShapeWriter(shape) { writer ->
                 EnumGenerator(symbolProvider, writer, shape, enum).render()
             }

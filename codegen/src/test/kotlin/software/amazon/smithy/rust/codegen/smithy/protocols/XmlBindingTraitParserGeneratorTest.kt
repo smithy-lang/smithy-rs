@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
@@ -25,6 +24,7 @@ import software.amazon.smithy.rust.codegen.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.testutil.testProtocolConfig
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.unitTest
+import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.codegen.util.outputShape
 
@@ -175,7 +175,7 @@ internal class XmlBindingTraitParserGeneratorTest {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
             UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice")).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
-            EnumGenerator(symbolProvider, it, enum, enum.expectTrait(EnumTrait::class.java)).render()
+            EnumGenerator(symbolProvider, it, enum, enum.expectTrait()).render()
         }
 
         project.withModule(RustModule.default("output", public = true)) {

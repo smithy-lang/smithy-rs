@@ -29,6 +29,8 @@ import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 
 /**
  * JsonSerializerSymbolProvider annotates shapes and members with `serde` attributes
@@ -42,8 +44,7 @@ class JsonSerializerSymbolProvider(
 
     data class SerdeConfig(val serialize: Boolean, val deserialize: Boolean)
 
-    private fun MemberShape.serializedName() =
-        this.getTrait(JsonNameTrait::class.java).map { it.value }.orElse(this.memberName)
+    private fun MemberShape.serializedName() = this.getTrait<JsonNameTrait>()?.value ?: this.memberName
 
     private val serializerBuilder = CustomSerializerGenerator(base, model, defaultTimestampFormat)
     override fun memberMeta(memberShape: MemberShape): RustMetadata {
@@ -88,12 +89,12 @@ class JsonSerializerSymbolProvider(
 
     private fun serdeRequired(shape: Shape): SerdeConfig {
         return when {
-            shape.hasTrait(InputBodyTrait::class.java) -> SerdeConfig(serialize = true, deserialize = false)
-            shape.hasTrait(OutputBodyTrait::class.java) -> SerdeConfig(serialize = false, deserialize = true)
+            shape.hasTrait<InputBodyTrait>() -> SerdeConfig(serialize = true, deserialize = false)
+            shape.hasTrait<OutputBodyTrait>() -> SerdeConfig(serialize = false, deserialize = true)
 
             // The bodies must be serializable. The top level inputs are _not_
-            shape.hasTrait(SyntheticInputTrait::class.java) -> SerdeConfig(serialize = false, deserialize = false)
-            shape.hasTrait(SyntheticOutputTrait::class.java) -> SerdeConfig(serialize = false, deserialize = false)
+            shape.hasTrait<SyntheticInputTrait>() -> SerdeConfig(serialize = false, deserialize = false)
+            shape.hasTrait<SyntheticOutputTrait>() -> SerdeConfig(serialize = false, deserialize = false)
             else -> SerdeConfig(serialize = true, deserialize = true)
         }
     }

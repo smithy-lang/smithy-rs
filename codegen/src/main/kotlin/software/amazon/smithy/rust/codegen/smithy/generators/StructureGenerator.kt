@@ -26,6 +26,8 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: RustWriter.() -> Unit) {
     rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
@@ -52,10 +54,8 @@ class StructureGenerator(
 
     fun render() {
         renderStructure()
-        val errorTrait = shape.getTrait(ErrorTrait::class.java)
-        errorTrait.map {
-            val errorGenerator = ErrorGenerator(model, symbolProvider, writer, shape, it)
-            errorGenerator.render()
+        shape.getTrait<ErrorTrait>()?.also { errorTrait ->
+            ErrorGenerator(model, symbolProvider, writer, shape, errorTrait).render()
         }
     }
 
@@ -63,7 +63,7 @@ class StructureGenerator(
         /** Returns whether or not a structure shape requires a fallible builder to be generated. */
         fun fallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
             // All inputs should have fallible builders in case a new required field is added in the future
-            structureShape.hasTrait(SyntheticInputTrait::class.java) ||
+            structureShape.hasTrait<SyntheticInputTrait>() ||
                 structureShape
                     .allMembers
                     .values.map { symbolProvider.toSymbol(it) }.any {

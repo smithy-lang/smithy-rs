@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -186,7 +187,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                         "let body_str = std::str::from_utf8(&body).map_err(#{error_symbol}::unhandled)?;",
                         "error_symbol" to errorSymbol
                     )
-                    if (targetShape.hasTrait(EnumTrait::class.java)) {
+                    if (targetShape.hasTrait<EnumTrait>()) {
                         rust(
                             "Ok(#T::from(body_str))",
                             symbolProvider.toSymbol(targetShape)
@@ -235,7 +236,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                 "let $parsedValue: Vec<${coreType.render(true)}> = #T::read_many(headers)?;",
                 headerUtil
             )
-            if (coreShape.hasTrait(MediaTypeTrait::class.java)) {
+            if (coreShape.hasTrait<MediaTypeTrait>()) {
                 rustTemplate(
                     """let $parsedValue: Result<Vec<_>, _> = $parsedValue
                         .iter().map(|s|

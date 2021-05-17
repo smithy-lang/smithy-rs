@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.expectTrait
 
 class RequestBindingGeneratorTest {
     private val baseModel = """
@@ -106,7 +107,7 @@ class RequestBindingGeneratorTest {
 
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
     private val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
-    private val httpTrait = operationShape.expectTrait(HttpTrait::class.java)
+    private val httpTrait = operationShape.expectTrait<HttpTrait>()
 
     private val symbolProvider = testSymbolProvider(model)
     private fun renderOperation(writer: RustWriter) {

@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.lookup
 
 class EnumGeneratorTest {
@@ -42,7 +43,7 @@ class EnumGeneratorTest {
         val provider: SymbolProvider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")
         val shape = model.lookup<StringShape>("test#InstanceType")
-        val generator = EnumGenerator(provider, writer, shape, shape.expectTrait(EnumTrait::class.java))
+        val generator = EnumGenerator(provider, writer, shape, shape.expectTrait<EnumTrait>())
         generator.render()
         writer.compileAndTest(
             """
@@ -74,7 +75,7 @@ class EnumGeneratorTest {
             string FooEnum
             """.asSmithyModel()
         val shape: StringShape = model.lookup("test#FooEnum")
-        val trait = shape.expectTrait(EnumTrait::class.java)
+        val trait = shape.expectTrait<EnumTrait>()
         val writer = RustWriter.forModule("model")
         val generator = EnumGenerator(testSymbolProvider(model), writer, shape, trait)
         generator.render()
@@ -102,7 +103,7 @@ class EnumGeneratorTest {
             string FooEnum
             """.asSmithyModel()
         val shape: StringShape = model.lookup("test#FooEnum")
-        val trait = shape.expectTrait(EnumTrait::class.java)
+        val trait = shape.expectTrait<EnumTrait>()
         val writer = RustWriter.forModule("model")
         val generator = EnumGenerator(testSymbolProvider(model), writer, shape, trait)
         generator.render()
@@ -140,7 +141,7 @@ class EnumGeneratorTest {
         string FooEnum
         """.asSmithyModel()
         val shape = model.expectShape(ShapeId.from("test#FooEnum"), StringShape::class.java)
-        val trait = shape.expectTrait(EnumTrait::class.java)
+        val trait = shape.expectTrait<EnumTrait>()
         val provider: SymbolProvider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")
         val generator = EnumGenerator(provider, writer, shape, trait)

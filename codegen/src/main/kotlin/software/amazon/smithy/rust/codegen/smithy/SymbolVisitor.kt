@@ -45,6 +45,7 @@ import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import software.amazon.smithy.utils.StringUtils
 import kotlin.reflect.KClass
@@ -152,14 +153,14 @@ class SymbolVisitor(
         // If a field has the httpLabel trait and we are generating
         // an Input shape, then the field is _not optional_.
         val httpLabeledInput =
-            container.hasTrait(SyntheticInputTrait::class.java) && member.hasTrait(HttpLabelTrait::class.java)
+            container.hasTrait<SyntheticInputTrait>() && member.hasTrait<HttpLabelTrait>()
         return if (nullableIndex.isNullable(member) && !httpLabeledInput || model.expectShape(member.target).isDocumentShape) {
             symbol.makeOptional()
         } else symbol
     }
 
     private fun handleRustBoxing(symbol: Symbol, shape: Shape): Symbol {
-        return if (shape.hasTrait(RustBoxTrait::class.java)) {
+        return if (shape.hasTrait<RustBoxTrait>()) {
             val rustType = RustType.Box(symbol.rustType())
             with(Symbol.builder()) {
                 rustType(rustType)
@@ -182,7 +183,7 @@ class SymbolVisitor(
     override fun floatShape(shape: FloatShape): Symbol = simpleShape(shape)
     override fun doubleShape(shape: DoubleShape): Symbol = simpleShape(shape)
     override fun stringShape(shape: StringShape): Symbol {
-        return if (shape.hasTrait(EnumTrait::class.java)) {
+        return if (shape.hasTrait<EnumTrait>()) {
             symbolBuilder(shape, RustType.Opaque(shape.contextName())).locatedIn(Models).build()
         } else {
             simpleShape(shape)
@@ -240,10 +241,10 @@ class SymbolVisitor(
     }
 
     override fun structureShape(shape: StructureShape): Symbol {
-        val isError = shape.hasTrait(ErrorTrait::class.java)
-        val isInput = shape.hasTrait(SyntheticInputTrait::class.java)
-        val isOutput = shape.hasTrait(SyntheticOutputTrait::class.java)
-        val isBody = shape.hasTrait(InputBodyTrait::class.java) || shape.hasTrait(OutputBodyTrait::class.java)
+        val isError = shape.hasTrait<ErrorTrait>()
+        val isInput = shape.hasTrait<SyntheticInputTrait>()
+        val isOutput = shape.hasTrait<SyntheticOutputTrait>()
+        val isBody = shape.hasTrait<InputBodyTrait>() || shape.hasTrait<OutputBodyTrait>()
         val name = StringUtils.capitalize(shape.contextName()).letIf(isError && config.codegenConfig.renameExceptions) {
             // TODO: Do we want to do this?
             // https://github.com/awslabs/smithy-rs/issues/77

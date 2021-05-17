@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 
 object RecursiveShapeBoxer {
     /**
@@ -85,7 +86,7 @@ object RecursiveShapeBoxer {
                 is ListShape,
                 is MapShape,
                 is SetShape -> true
-                else -> it.hasTrait(RustBoxTrait::class.java)
+                else -> it.hasTrait<RustBoxTrait>()
             }
         } != null
     }

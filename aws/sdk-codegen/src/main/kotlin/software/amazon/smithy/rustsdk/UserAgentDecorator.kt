@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.expectTrait
 
 /**
  * Inserts a UserAgent configuration into the operation
@@ -33,7 +34,7 @@ class UserAgentDecorator : RustCodegenDecorator {
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         // We are generating an AWS SDK, the service needs to have the AWS service trait
-        val serviceTrait = protocolConfig.serviceShape.expectTrait(ServiceTrait::class.java)
+        val serviceTrait = protocolConfig.serviceShape.expectTrait<ServiceTrait>()
         return baseCustomizations + ApiVersion(protocolConfig.runtimeConfig, serviceTrait)
     }
 
