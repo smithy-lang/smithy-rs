@@ -145,7 +145,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun SerdeJson(path: String) =
             RuntimeType(path, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
 
-        val SJ = RuntimeType(null, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
+        val serdeJson = RuntimeType(null, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
 
         fun awsJsonErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.awsJsonErrors(runtimeConfig))
@@ -200,5 +200,8 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             dependency = CargoDependency.SmithyHttp(runtimeConfig),
             namespace = "smithy_http::response"
         )
+
+        fun wrappedXmlErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.wrappedXmlErrors(runtimeConfig))
+        fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.unwrappedXmlErrors(runtimeConfig))
     }
 }

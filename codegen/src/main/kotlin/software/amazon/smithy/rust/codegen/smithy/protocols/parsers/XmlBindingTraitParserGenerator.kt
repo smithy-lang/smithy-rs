@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.protocols
+package software.amazon.smithy.rust.codegen.smithy.protocols.parsers
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.knowledge.HttpBinding
@@ -50,7 +50,8 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
+class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val xmlErrors: RuntimeType) :
+    StructuredDataParserGenerator {
 
     /**
      * Abstraction to represent an XML element name:
@@ -113,19 +114,21 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
      * }
      * ```
      */
-    fun payloadParser(member: MemberShape): RuntimeType {
+    override fun payloadParser(member: MemberShape): RuntimeType {
         val shape = model.expectShape(member.target)
-        check(shape is UnionShape || shape is StructureShape) { "structure parser should only be used on structures & unions" }
-        val fnName = shape.id.name.toString().toSnakeCase()
+        check(shape is UnionShape || shape is StructureShape) { "payload parser should only be used on structures & unions" }
+        val fnName =
+            "parse_payload_" + shape.id.name.toString().toSnakeCase() + member.container.name.toString().toSnakeCase()
         return RuntimeType.forInlineFun(fnName, "xml_deser") {
             it.rustBlock(
                 "pub fn $fnName(inp: &[u8]) -> Result<#1T, #2T>",
                 symbolProvider.toSymbol(shape),
                 xmlError
             ) {
-                val shapeName =
-                    member.getMemberTrait(model, XmlNameTrait::class.java).orNull()?.let { XmlName.parse(it.value) }
-                        ?: XmlName(local = shape.id.name)
+                // for payloads, first look at the member trait
+                // next, look to see if this structure was renamed
+
+                val shapeName = payloadName(member)
                 rustTemplate(
                     """
                     use std::convert::TryFrom;
@@ -139,17 +142,22 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                     *codegenScope
                 )
                 val ctx = Ctx("decoder", accum = null)
-                withBlock("Ok(", ")") {
-                    when (shape) {
-                        is StructureShape -> {
-                            parseStructure(shape, ctx)
-                        }
-                        is UnionShape -> parseUnion(shape, ctx)
+                when (shape) {
+                    is StructureShape -> {
+                        parseStructure(shape, ctx)
                     }
-                    rust("?")
+                    is UnionShape -> parseUnion(shape, ctx)
                 }
             }
         }
+    }
+
+    private fun payloadName(member: MemberShape): XmlName {
+        val payloadShape = model.expectShape(member.target)
+        val xmlRename = member.getTrait(XmlNameTrait::class.java).orNull()
+            ?: payloadShape.getTrait(XmlNameTrait::class.java).orNull()
+
+        return xmlRename?.let { XmlName.parse(it.value) } ?: XmlName(local = payloadShape.id.name)
     }
 
     /** Generate a parser for operation input
@@ -162,19 +170,20 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
      * }
      * ```
      */
-    fun operationParser(operationShape: OperationShape): RuntimeType {
+    override fun operationParser(operationShape: OperationShape): RuntimeType? {
         val outputShape = operationShape.outputShape(model)
-        val fnName = outputShape.id.name.toString().toSnakeCase()
+        val fnName = operationShape.id.name.toString().toSnakeCase() + "_deser_operation"
+        val shapeName = operationXmlName(outputShape)
+        val members = operationShape.operationXmlMembers()
+        if (shapeName == null || !members.isNotEmpty()) {
+            return null
+        }
         return RuntimeType.forInlineFun(fnName, "xml_deser") {
             it.rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
                 outputShape.builderSymbol(symbolProvider),
                 xmlError
             ) {
-                val shapeName = XmlName(
-                    local = outputShape.expectTrait(SyntheticOutputTrait::class.java).originalId!!.name,
-                    prefix = null
-                )
                 rustTemplate(
                     """
                     use std::convert::TryFrom;
@@ -187,14 +196,20 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                     """,
                     *codegenScope
                 )
-                val members = operationShape.operationXmlMembers()
                 parseStructureInner(members, builder = "builder", Ctx(tag = "decoder", accum = null))
                 rust("Ok(builder)")
             }
         }
     }
 
-    fun errorParser(errorShape: StructureShape, xmlErrors: RuntimeType): RuntimeType {
+    private fun operationXmlName(outputShape: StructureShape): XmlName? {
+        return outputShape.getTrait(XmlNameTrait::class.java).orNull()?.let { XmlName.parse(it.value) }
+            ?: outputShape.expectTrait(SyntheticOutputTrait::class.java).originalId?.name?.let {
+                XmlName(local = it, prefix = null)
+            }
+    }
+
+    override fun errorParser(errorShape: StructureShape): RuntimeType {
         val fnName = errorShape.id.name.toString().toSnakeCase()
         return RuntimeType.forInlineFun(fnName, "xml_deser") {
             it.rustBlock(
@@ -216,6 +231,10 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                 rust("Ok(builder)")
             }
         }
+    }
+
+    override fun documentParser(operationShape: OperationShape): RuntimeType {
+        TODO("Document shapes are not supported by rest XML")
     }
 
     /**
@@ -356,7 +375,11 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
      * The match clause to check if the tag matches a given member
      */
     private fun RustWriter.case(member: MemberShape, inner: RustWriter.() -> Unit) {
-        rustBlock("s if ${member.xmlName().compareTo("s")} => ") {
+        rustBlock(
+            "s if ${
+            member.xmlName().compareTo("s")
+            } /* ${member.memberName} ${escape(member.id.toString())} */ => "
+        ) {
             inner()
         }
         rust(",")
@@ -380,7 +403,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                 parseStructureInner(members, "builder", Ctx(tag = "decoder", accum = null))
                 withBlock("Ok(builder.build()", ")") {
                     if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
-                        rust(""".map_err(|_|{XmlError}::custom("missing field"))?""")
+                        rustTemplate(""".map_err(|_|{XmlError}::custom("missing field"))?""", *codegenScope)
                     }
                 }
             }
@@ -569,7 +592,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
     }
 
     private fun MemberShape.xmlName(): XmlName {
-        val override = this.getMemberTrait(model, XmlNameTrait::class.java).orNull()
+        val override = this.getTrait(XmlNameTrait::class.java).orNull()
         return override?.let { XmlName.parse(it.value) } ?: XmlName(local = this.memberName)
     }
 
@@ -587,6 +610,8 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig) {
                 return XmlMemberIndex(data, attribute)
             }
         }
+
+        fun isNotEmpty() = dataMembers.isNotEmpty() || attributeMembers.isNotEmpty()
     }
 
     private fun OperationShape.operationXmlMembers(): XmlMemberIndex {

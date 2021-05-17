@@ -13,10 +13,9 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -31,22 +30,22 @@ import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerat
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.smithy.meta
+import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.JsonParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.smithy.transformers.StructureModifier
 import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
-import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 sealed class AwsJsonVersion {
     abstract val value: String
@@ -90,6 +89,7 @@ class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenerat
     }
 
     override fun support(): ProtocolSupport = ProtocolSupport(
+        requestSerialization = true,
         requestBodySerialization = true,
         responseDeserialization = true,
         errorDeserialization = true
@@ -183,7 +183,6 @@ class BasicAwsJsonGenerator(
     ) {
         httpBuilderFun(implBlockWriter) {
             write("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
-            // rename safety: Operation shapes cannot be renamed
             rust(
                 """
                 Ok(
@@ -198,55 +197,24 @@ class BasicAwsJsonGenerator(
     }
 
     override fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata {
-        val fnName = "${operationShape.id.name.toSnakeCase()}_mk_body"
-        val inputShape = operationShape.inputShape(model)
-        val inputBody = inputShape.expectTrait(SyntheticInputTrait::class.java).body?.let {
-            model.expectShape(
-                it,
-                StructureShape::class.java
+        val generator = JsonSerializerGenerator(protocolConfig)
+        val serializer = generator.operationSerializer(operationShape)
+        serializer?.also { sym ->
+            rustTemplate(
+                "#{serialize}(&$self).map_err(|err|#{BuildError}::SerializationError(err.into()))?",
+                "serialize" to sym,
+                "BuildError" to runtimeConfig.operationBuildError()
             )
-        }
-        val sdkBody = RuntimeType.sdkBody(runtimeConfig)
-        if (inputBody == null) {
-            rustTemplate("""#{SdkBody}::from("{}")""", "SdkBody" to sdkBody)
-            return BodyMetadata(takesOwnership = false)
-        }
-        val bodySer = RuntimeType.forInlineFun(fnName, "operation_ser") {
-            it.rustBlock(
-                "pub fn $fnName(input: &#T) -> Result<#T, #T>",
-                symbolProvider.toSymbol(inputShape),
-                RuntimeType.sdkBody(runtimeConfig),
-                runtimeConfig.operationBuildError()
-            ) {
-                withBlock("let body = ", ";") {
-                    rustBlock("#T", symbolProvider.toSymbol(inputBody)) {
-                        for (member in inputBody.members()) {
-                            val name = protocolConfig.symbolProvider.toMemberName(member)
-                            write("$name: &input.$name,")
-                        }
-                    }
-                }
-                rustTemplate(
-                    """#{serde_json}::to_vec(&body)
-                                  .map(#{SdkBody}::from)
-                                  .map_err(|err|#{BuildError}::SerializationError(err.into()))""",
-                    "serde_json" to CargoDependency.SerdeJson.asType(),
-                    "BuildError" to runtimeConfig.operationBuildError(),
-                    "SdkBody" to sdkBody
-                )
-            }
-        }
-        rust("#T(&$self)?", bodySer)
+        } ?: rustTemplate("""#{SdkBody}::from("{}")""", "SdkBody" to RuntimeType.sdkBody(runtimeConfig))
         return BodyMetadata(takesOwnership = false)
     }
 
-    override fun fromResponseImpl(implBlockWriter: RustWriter, operationShape: OperationShape) {
+    override fun operationImplBlock(implBlockWriter: RustWriter, operationShape: OperationShape) {
         val outputShape = operationIndex.getOutput(operationShape).get()
-        val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
-        val bodyId = outputShape.expectTrait(SyntheticOutputTrait::class.java).body
-        val bodyShape = bodyId?.let { model.expectShape(bodyId, StructureShape::class.java) }
         val jsonErrors = RuntimeType.awsJsonErrors(protocolConfig.runtimeConfig)
+        val generator = JsonParserGenerator(protocolConfig)
+
         fromResponseFun(implBlockWriter, operationShape) {
             rustBlock("if #T::is_error(&response)", jsonErrors) {
                 rustTemplate(
@@ -255,7 +223,7 @@ class BasicAwsJsonGenerator(
                         .unwrap_or_else(|_|#{sj}::json!({}));
                     let generic = #{aws_json_errors}::parse_generic_error(&response, &body);
                     """,
-                    "aws_json_errors" to jsonErrors, "sj" to RuntimeType.SJ
+                    "aws_json_errors" to jsonErrors, "sj" to RuntimeType.serdeJson
                 )
                 if (operationShape.errors.isNotEmpty()) {
                     rustTemplate(
@@ -281,35 +249,39 @@ class BasicAwsJsonGenerator(
                     write("return Err(#T::generic(generic))", errorSymbol)
                 }
             }
-            // let body: OperationOutputBody = serde_json::from_slice(response.body()...);
-            // Ok(OperationOutput {
-            //    field1: body.field1,
-            //    field2: body.field2
-            // });
-            deserializeBody(bodyShape, errorSymbol, outputSymbol)
+            val parser = generator.operationParser(operationShape)
+            Attribute.AllowUnusedMut.render(this)
+            rust("let mut builder = #T::default();", outputShape.builderSymbol(symbolProvider))
+            parser?.also {
+                rustTemplate(
+                    "builder = #{parse}(response.body().as_ref(), builder).map_err(#{error_symbol}::unhandled)?;",
+                    "parse" to it,
+                    "error_symbol" to errorSymbol
+                )
+            }
+            withBlock("Ok(builder.build()", ")") {
+                if (StructureGenerator.fallibleBuilder(outputShape, symbolProvider)) {
+                    rust(""".map_err(#T::unhandled)?""", errorSymbol)
+                }
+            }
         }
     }
 
-    private fun RustWriter.deserializeBody(
-        optionalBody: StructureShape?,
-        errorSymbol: RuntimeType,
-        outputSymbol: Symbol
+    private fun fromResponseFun(
+        implBlockWriter: RustWriter,
+        operationShape: OperationShape,
+        block: RustWriter.() -> Unit
     ) {
-        optionalBody?.also { bodyShape ->
-            rust(
-                "let body: #T = #T(response.body().as_ref()).map_err(#T::unhandled)?;",
-                symbolProvider.toSymbol(bodyShape),
-                RuntimeType.SerdeJson("from_slice"),
-                errorSymbol
-            )
-        }
-        withBlock("Ok(", ")") {
-            rustBlock("#T", outputSymbol) {
-                optionalBody?.members().orEmpty().forEach { member ->
-                    val name = symbolProvider.toMemberName(member)
-                    write("$name: body.$name,")
-                }
-            }
+        Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
+        Attribute.AllowUnused.render(implBlockWriter)
+        implBlockWriter.rustBlock(
+            "fn parse_response(&self, response: & #T<#T>) -> Result<#T, #T>",
+            RuntimeType.Http("response::Response"),
+            RuntimeType.Bytes,
+            symbolProvider.toSymbol(operationShape.outputShape(model)),
+            operationShape.errorSymbol(symbolProvider)
+        ) {
+            block(this)
         }
     }
 
