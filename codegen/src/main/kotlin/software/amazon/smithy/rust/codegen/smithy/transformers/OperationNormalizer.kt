@@ -41,17 +41,17 @@ class OperationNormalizer(private val model: Model) {
         val transformer = ModelTransformer.create()
         val operations = model.shapes(OperationShape::class.java).toList()
         val newShapes = operations.flatMap { operation ->
-            // Generate or modify the input of input `Operation` to be a unique shape
+            // Generate or modify the input and output of the given `Operation` to be a unique shape
             syntheticInputShapes(operation, inputBodyFactory) + syntheticOutputShapes(operation, outputBodyFactory)
         }
         val modelWithOperationInputs = model.toBuilder().addShapes(newShapes).build()
         return transformer.mapShapes(modelWithOperationInputs) {
-            // Update all operations to point to their new input shape
+            // Update all operations to point to their new input/output shapes
             val transformed: Optional<Shape> = it.asOperationShape().map { operation ->
-                modelWithOperationInputs.expectShape(operation.inputId())
+                modelWithOperationInputs.expectShape(operation.syntheticInputId())
                 operation.toBuilder()
-                    .input(operation.inputId())
-                    .output(operation.outputId())
+                    .input(operation.syntheticInputId())
+                    .output(operation.syntheticOutputId())
                     .build()
             }
             transformed.orElse(it)
@@ -62,11 +62,11 @@ class OperationNormalizer(private val model: Model) {
         operation: OperationShape,
         outputBodyFactory: StructureModifier
     ): List<StructureShape> {
-        val outputId = operation.outputId()
+        val outputId = operation.syntheticOutputId()
         val outputBodyShape = outputBodyFactory(
             operation,
             operation.output.map { model.expectShape(it, StructureShape::class.java) }.orNull()
-        )?.let { it.toBuilder().addTrait(OutputBodyTrait()).rename(operation.outputBodyId()).build() }
+        )?.let { it.toBuilder().addTrait(OutputBodyTrait()).rename(operation.syntheticOutputBodyId()).build() }
         val outputShapeBuilder = operation.output.map { shapeId ->
             model.expectShape(shapeId, StructureShape::class.java).toBuilder().rename(outputId)
         }.orElse(empty(outputId))
@@ -84,12 +84,12 @@ class OperationNormalizer(private val model: Model) {
         operation: OperationShape,
         inputBodyFactory: StructureModifier
     ): List<StructureShape> {
-        val inputId = operation.inputId()
+        val inputId = operation.syntheticInputId()
         val inputBodyShape = inputBodyFactory(
             operation,
             operation.input.map {
                 val inputShape = model.expectShape(it, StructureShape::class.java)
-                inputShape.toBuilder().addTrait(InputBodyTrait()).rename(operation.inputBodyId()).build()
+                inputShape.toBuilder().addTrait(InputBodyTrait()).rename(operation.syntheticInputBodyId()).build()
             }.orNull()
         )
         val inputShapeBuilder = operation.input.map { shapeId ->
@@ -112,10 +112,10 @@ class OperationNormalizer(private val model: Model) {
         // Functions to construct synthetic shape IDs—Don't rely on these in external code: The attached traits
         // provide shape ids via `.body` on [SyntheticInputTrait] and [SyntheticOutputTrait]
         // Rename safety: Operations cannot be renamed
-        private fun OperationShape.inputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Input")
-        private fun OperationShape.outputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Output")
-        private fun OperationShape.inputBodyId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}InputBody")
-        private fun OperationShape.outputBodyId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}OutputBody")
+        private fun OperationShape.syntheticInputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Input")
+        private fun OperationShape.syntheticOutputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Output")
+        private fun OperationShape.syntheticInputBodyId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}InputBody")
+        private fun OperationShape.syntheticOutputBodyId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}OutputBody")
 
         val NoBody: StructureModifier = { _: OperationShape, _: StructureShape? -> null }
     }
