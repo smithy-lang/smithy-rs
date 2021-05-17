@@ -102,7 +102,7 @@ async fn main() {
         }
 
         // If we want to handle a specific error in a specific way, we can
-        // match it here. The SDK will automatically attempt to rety errors
+        // match it here. The SDK will automatically attempt to retry errors
         // that are considered 'retryable'. These types of errors generally
         // include responses where a service would return an HTTP 500 code to
         // indicate a server-side error. This means that the errors received by
