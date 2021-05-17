@@ -60,13 +60,17 @@ class StructureGenerator(
     }
 
     companion object {
-        fun fallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean = structureShape
-            .allMembers
-            .values.map { symbolProvider.toSymbol(it) }.any {
-                // If any members are not optional && we can't use a default, we need to
-                // generate a fallible builder
-                !it.isOptional() && !it.canUseDefault()
-            } || structureShape.hasTrait(SyntheticInputTrait::class.java)
+        /** Returns whether or not a structure shape requires a fallible builder to be generated. */
+        fun fallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
+            // All inputs should have fallible builders in case a new required field is added in the future
+            structureShape.hasTrait(SyntheticInputTrait::class.java) ||
+                    structureShape
+                        .allMembers
+                        .values.map { symbolProvider.toSymbol(it) }.any {
+                            // If any members are not optional && we can't use a default, we need to
+                            // generate a fallible builder
+                            !it.isOptional() && !it.canUseDefault()
+                        }
     }
 
     /**
