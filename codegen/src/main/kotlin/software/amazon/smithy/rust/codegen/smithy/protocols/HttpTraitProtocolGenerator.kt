@@ -42,7 +42,9 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.StructuredDa
 import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
+import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -154,7 +156,7 @@ class HttpTraitProtocolGenerator(
         return when (targetShape) {
             // Write the raw string to the payload
             is StringShape -> {
-                if (targetShape.hasTrait(EnumTrait::class.java)) {
+                if (targetShape.hasTrait<EnumTrait>()) {
                     rust("$payloadName.as_str()")
                 } else {
                     rust("""$payloadName.to_string()""")
@@ -374,7 +376,7 @@ class HttpTraitProtocolGenerator(
         operationShape: OperationShape,
         inputShape: StructureShape
     ) {
-        val httpTrait = operationShape.expectTrait(HttpTrait::class.java)
+        val httpTrait = operationShape.expectTrait<HttpTrait>()
 
         val httpBindingGenerator = RequestBindingGenerator(
             model,
@@ -422,7 +424,7 @@ class HttpTraitProtocolGenerator(
                 )
             }
         } else {
-            check(outputShape.hasTrait(ErrorTrait::class.java)) { "should only be called on outputs or errors $outputShape" }
+            check(outputShape.hasTrait<ErrorTrait>()) { "should only be called on outputs or errors $outputShape" }
             structuredDataParser.errorParser(outputShape)?.also { parser ->
                 rust(
                     "output = #T(response.body().as_ref(), output).map_err(#T::unhandled)?;",
