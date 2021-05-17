@@ -32,6 +32,7 @@ import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
@@ -248,12 +249,12 @@ class Instantiator(
         arg: StringNode
     ) {
         val enumTrait = shape.getTrait(EnumTrait::class.java).orElse(null)
-        val data = arg.value.dq()
+        val data = writer.escape(arg.value).dq()
         if (enumTrait == null) {
-            writer.write("$data.to_string()")
+            writer.rust("$data.to_string()")
         } else {
             val enumSymbol = symbolProvider.toSymbol(shape)
-            writer.write("#T::from($data)", enumSymbol)
+            writer.rust("#T::from($data)", enumSymbol)
         }
     }
 

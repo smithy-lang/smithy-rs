@@ -41,6 +41,7 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import java.util.logging.Logger
 
 data class ProtocolSupport(
+    val requestSerialization: Boolean,
     val requestBodySerialization: Boolean,
     val responseDeserialization: Boolean,
     val errorDeserialization: Boolean
@@ -165,6 +166,10 @@ class HttpProtocolTestGenerator(
     private fun RustWriter.renderHttpRequestTestCase(
         httpRequestTestCase: HttpRequestTestCase
     ) {
+        if (!protocolSupport.requestSerialization) {
+            rust("/* test case disabled for this protocol (not yet supported) */")
+            return
+        }
         val customToken = if (inputShape.findMemberWithTrait<IdempotencyTokenTrait>(protocolConfig.model) != null) {
             """.make_token("00000000-0000-4000-8000-000000000000")"""
         } else ""
