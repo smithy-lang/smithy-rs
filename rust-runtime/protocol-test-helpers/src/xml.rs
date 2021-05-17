@@ -47,8 +47,7 @@ pub fn normalize_xml(s: &str) -> Result<String, roxmltree::Error> {
 /// then, assuming the node does not represent a list, it will simply lexicographically sort the fully
 /// rendered nodes themselves (avoiding the need to sort on keys then values then attributes, etc.).
 ///
-/// This is not a fast algorithm ;-), but the test data it's running on is
-/// not large.
+/// This is not a fast algorithm ;-), but the test data it's running on is not large.
 fn unparse_tag(tag: Node, depth: usize) -> String {
     let mut out = String::new();
     out.push_str(&unparse_start_element(tag));
