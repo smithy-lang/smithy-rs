@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -54,7 +55,7 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
         // Currently, JSON shapes are serialized via a synthetic body structure that gets generated during model
         // transformation
         val inputShape = operationShape.inputShape(model)
-        val inputBody = inputShape.expectTrait(SyntheticInputTrait::class.java).body?.let {
+        val inputBody = inputShape.expectTrait<SyntheticInputTrait>().body?.let {
             model.expectShape(
                 it,
                 StructureShape::class.java
@@ -124,7 +125,7 @@ class JsonParserGenerator(protocolConfig: ProtocolConfig) : StructuredDataParser
     override fun operationParser(operationShape: OperationShape): RuntimeType? {
         val outputShape = operationShape.outputShape(model)
         val fnName = operationShape.id.name.toString().toSnakeCase() + "_deser_operation"
-        val bodyId = outputShape.expectTrait(SyntheticOutputTrait::class.java).body
+        val bodyId = outputShape.expectTrait<SyntheticOutputTrait>().body
         val bodyShape = bodyId?.let { model.expectShape(bodyId, StructureShape::class.java) } ?: return null
         val body = symbolProvider.toSymbol(bodyShape)
         if (bodyShape.members().isEmpty()) {

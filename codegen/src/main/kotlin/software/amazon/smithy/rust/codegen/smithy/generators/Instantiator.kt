@@ -44,6 +44,7 @@ import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
+import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
@@ -248,7 +249,7 @@ class Instantiator(
         shape: StringShape,
         arg: StringNode
     ) {
-        val enumTrait = shape.getTrait(EnumTrait::class.java).orElse(null)
+        val enumTrait = shape.getTrait<EnumTrait>()
         val data = writer.escape(arg.value).dq()
         if (enumTrait == null) {
             writer.rust("$data.to_string()")

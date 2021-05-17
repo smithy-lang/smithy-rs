@@ -56,3 +56,12 @@ inline fun <reified T : Trait> StructureShape.findMemberWithTrait(model: Model):
 inline fun <reified T : Trait> UnionShape.findMemberWithTrait(model: Model): MemberShape? {
     return this.members().find { it.getMemberTrait(model, T::class.java).isPresent }
 }
+
+/** Kotlin sugar for hasTrait() check. e.g. shape.hasTrait<EnumTrait>() instead of shape.hasTrait(EnumTrait::class.java) */
+inline fun <reified T : Trait> Shape.hasTrait(): Boolean = hasTrait(T::class.java)
+
+/** Kotlin sugar for expectTrait() check. e.g. shape.expectTrait<EnumTrait>() instead of shape.expectTrait(EnumTrait::class.java) */
+inline fun <reified T : Trait> Shape.expectTrait(): T = expectTrait(T::class.java)
+
+/** Kotlin sugar for getTrait() check. e.g. shape.getTrait<EnumTrait>() instead of shape.getTrait(EnumTrait::class.java) */
+inline fun <reified T : Trait> Shape.getTrait(): T? = getTrait(T::class.java).orNull()
