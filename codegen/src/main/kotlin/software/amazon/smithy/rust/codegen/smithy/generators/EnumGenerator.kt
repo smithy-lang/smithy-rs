@@ -66,6 +66,7 @@ internal class EnumMemberModel(private val definition: EnumDefinition) {
 private fun RustWriter.docWithNote(doc: String?, note: String?) {
     doc?.also { docs(it) }
     note?.also {
+        // Add a blank line between the docs and the note to visually differentiate
         doc?.also { write("///") }
         docs("**NOTE:** $it")
     }
