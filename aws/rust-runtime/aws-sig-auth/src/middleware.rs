@@ -87,6 +87,8 @@ fn signing_config(
     Ok((operation_config, request_config, creds))
 }
 
+const UNSIGNED_PAYLOAD: &[u8] = b"UNSIGNED-PAYLOAD";
+
 impl MapRequest for SigV4SigningStage {
     type Error = SigningStageError;
 
@@ -99,7 +101,7 @@ impl MapRequest for SigV4SigningStage {
             // Streams must be signed with a different signing mode. Separate support will be added for
             // this at a later date.
             let (parts, body) = req.into_parts();
-            let signable_body = body.bytes().ok_or(SigningStageError::InvalidBodyType)?;
+            let signable_body = body.bytes().ok_or(UNSIGNED_PAYLOAD)?;
             let mut signable_request = http::Request::from_parts(parts, signable_body);
 
             self.signer
