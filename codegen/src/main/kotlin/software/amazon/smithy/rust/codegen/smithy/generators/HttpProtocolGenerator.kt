@@ -78,7 +78,6 @@ abstract class HttpProtocolGenerator(
         inputWriter.implBlock(inputShape, symbolProvider) {
             buildOperation(this, operationShape, customizations, sdkId)
             toHttpRequestImpl(this, operationShape, inputShape)
-            // TODO: streaming shapes need special support
             rustBlock(
                 "fn assemble(mut builder: #1T, body: #3T) -> #2T<#3T>",
                 RuntimeType.HttpRequestBuilder,

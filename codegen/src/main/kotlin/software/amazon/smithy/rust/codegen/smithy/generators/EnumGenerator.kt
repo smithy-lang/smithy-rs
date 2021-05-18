@@ -160,7 +160,6 @@ class EnumGenerator(
     }
 
     private fun implBlock() {
-        // TODO: should enums also implement AsRef<str>?
         writer.rustBlock("impl $enumName") {
             writer.rustBlock("pub fn as_str(&self) -> &str") {
                 writer.rustBlock("match self") {

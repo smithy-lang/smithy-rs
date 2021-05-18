@@ -39,7 +39,6 @@ fun HttpTrait.uriFormatString(): String {
             else -> it.content
         }
     }
-    // TODO: support query literals
     return base.dq()
 }
 
@@ -51,11 +50,6 @@ fun HttpTrait.uriFormatString(): String {
  *
  * This method takes a builder (perhaps pre configured with some headers) from the caller and sets the HTTP
  * headers & URL based on the HTTP trait implementation.
- *
- * More work is required to implement the entirety of https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
- * Specifically:
- * TODO: httpPrefixHeaders; 4h
- * TODO: Deserialization of all fields; 1w
  */
 class RequestBindingGenerator(
     val model: Model,
