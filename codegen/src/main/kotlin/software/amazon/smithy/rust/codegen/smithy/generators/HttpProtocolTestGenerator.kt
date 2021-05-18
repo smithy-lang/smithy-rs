@@ -33,6 +33,8 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
+import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.orNull
@@ -76,13 +78,13 @@ class HttpProtocolTestGenerator(
     }
 
     fun render() {
-        val requestTests = operationShape.getTrait(HttpRequestTestsTrait::class.java)
-            .orNull()?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.RequestTest(it) }
-        val responseTests = operationShape.getTrait(HttpResponseTestsTrait::class.java)
-            .orNull()?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.ResponseTest(it, outputShape) }
+        val requestTests = operationShape.getTrait<HttpRequestTestsTrait>()
+            ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.RequestTest(it) }
+        val responseTests = operationShape.getTrait<HttpResponseTestsTrait>()
+            ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.ResponseTest(it, outputShape) }
 
         val errorTests = operationIndex.getErrors(operationShape).flatMap { error ->
-            val testCases = error.getTrait(HttpResponseTestsTrait::class.java).orNull()?.testCases.orEmpty()
+            val testCases = error.getTrait<HttpResponseTestsTrait>()?.testCases.orEmpty()
             testCases.map { TestCase.ResponseTest(it, error) }
         }
         val allTests: List<TestCase> = (requestTests + responseTests + errorTests).filterMatching()
@@ -271,7 +273,7 @@ class HttpProtocolTestGenerator(
                 .member("response::ParseHttpResponse"),
             "sdk_body" to RuntimeType.sdkBody(runtimeConfig = protocolConfig.runtimeConfig)
         )
-        if (expectedShape.hasTrait(ErrorTrait::class.java)) {
+        if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = operationShape.errorSymbol(protocolConfig.symbolProvider)
             val errorVariant = protocolConfig.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")

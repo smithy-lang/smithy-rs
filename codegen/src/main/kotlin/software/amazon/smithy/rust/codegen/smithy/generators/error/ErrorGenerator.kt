@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.stdfmt
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.orNull
+import software.amazon.smithy.rust.codegen.util.getTrait
 
 sealed class ErrorKind {
     abstract fun writable(runtimeConfig: RuntimeConfig): Writable
@@ -48,7 +48,7 @@ sealed class ErrorKind {
  * This is _only_ non-null in cases where the @retryable trait has been applied.
  */
 fun StructureShape.modeledRetryKind(errorTrait: ErrorTrait): ErrorKind? {
-    val retryableTrait = this.getTrait(RetryableTrait::class.java).orNull() ?: return null
+    val retryableTrait = this.getTrait<RetryableTrait>() ?: return null
     return when {
         retryableTrait.throttling -> ErrorKind.Throttling
         errorTrait.isClientError -> ErrorKind.Client

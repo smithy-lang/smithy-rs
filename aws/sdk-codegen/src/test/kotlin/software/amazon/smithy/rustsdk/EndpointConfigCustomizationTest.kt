@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.stubConfigProject
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.testutil.validateConfigCustomizations
+import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.lookup
 
 internal class EndpointConfigCustomizationTest {
@@ -41,7 +42,7 @@ internal class EndpointConfigCustomizationTest {
     fun `generates valid code when no endpoint prefix is provided`() {
         val serviceShape = model.lookup<ServiceShape>("test#NoEndpointPrefix")
         validateConfigCustomizations(EndpointConfigCustomization(AwsTestRuntimeConfig, serviceShape))
-        serviceShape.expectTrait(ServiceTrait::class.java).endpointPrefix shouldBe "noendpointprefix"
+        serviceShape.expectTrait<ServiceTrait>().endpointPrefix shouldBe "noendpointprefix"
     }
 
     @Test

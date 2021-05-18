@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
+import software.amazon.smithy.rust.codegen.util.hasTrait
 
 /**
  * [ServiceConfig] is the parent type of sections that can be overridden when generating a config for a service.
@@ -68,7 +69,7 @@ sealed class ServiceConfig(name: String) : Section(name) {
 // TODO: if this becomes hot, it may need to be cached in a knowledge index
 fun ServiceShape.needsIdempotencyToken(model: Model): Boolean {
     val operationIndex = OperationIndex.of(model)
-    return this.allOperations.flatMap { operationIndex.getInputMembers(it).values }.any { it.hasTrait(IdempotencyTokenTrait::class.java) }
+    return this.allOperations.flatMap { operationIndex.getInputMembers(it).values }.any { it.hasTrait<IdempotencyTokenTrait>() }
 }
 
 typealias ConfigCustomization = NamedSectionGenerator<ServiceConfig>

@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DocumentationTrait
+import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.orNull
 import java.util.Optional
 import java.util.logging.Logger
@@ -72,10 +73,7 @@ class RustSettings(
     }
 
     val moduleDescription: String
-        get() {
-            val service = getService(model)
-            return service.getTrait(DocumentationTrait::class.java).map { it.value }.orElse(moduleName)
-        }
+        get() = getService(model).getTrait<DocumentationTrait>()?.value ?: moduleName
 
     companion object {
         private val LOGGER: Logger = Logger.getLogger(RustSettings::class.java.name)

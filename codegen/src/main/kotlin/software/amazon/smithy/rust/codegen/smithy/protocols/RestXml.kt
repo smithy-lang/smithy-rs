@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.XmlBindingTr
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
+import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class RestXmlFactory : ProtocolGeneratorFactory<HttpTraitProtocolGenerator> {
@@ -52,7 +53,7 @@ class RestXmlFactory : ProtocolGeneratorFactory<HttpTraitProtocolGenerator> {
 }
 
 class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
-    private val restXml = protocolConfig.serviceShape.expectTrait(RestXmlTrait::class.java)
+    private val restXml = protocolConfig.serviceShape.expectTrait<RestXmlTrait>()
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val restXmlErrors: RuntimeType = when (restXml.isNoErrorWrapping) {
         true -> RuntimeType.unwrappedXmlErrors(runtimeConfig)
