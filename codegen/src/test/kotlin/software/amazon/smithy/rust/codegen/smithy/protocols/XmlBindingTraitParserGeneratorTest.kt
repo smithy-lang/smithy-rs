@@ -175,7 +175,7 @@ internal class XmlBindingTraitParserGeneratorTest {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
             UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice")).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
-            EnumGenerator(symbolProvider, it, enum, enum.expectTrait()).render()
+            EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
         }
 
         project.withModule(RustModule.default("output", public = true)) {
