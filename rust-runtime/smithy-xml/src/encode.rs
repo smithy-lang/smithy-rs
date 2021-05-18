@@ -82,9 +82,9 @@ impl<'a, 'b> ElWriter<'a, 'b> {
         self
     }
 
-    pub fn finish(self) -> TagWriter<'a, 'b> {
+    pub fn finish(self) -> ScopeWriter<'a, 'b> {
         write!(self.doc, ">").unwrap();
-        TagWriter {
+        ScopeWriter {
             doc: self.doc,
             start: self.start,
         }
@@ -92,24 +92,24 @@ impl<'a, 'b> ElWriter<'a, 'b> {
 }
 
 /// Wrap the construction of a tag pair `<a></a>`
-pub struct TagWriter<'a, 'b> {
+pub struct ScopeWriter<'a, 'b> {
     doc: &'a mut String,
     start: &'b str,
 }
 
-impl Drop for TagWriter<'_, '_> {
+impl Drop for ScopeWriter<'_, '_> {
     fn drop(&mut self) {
         write!(self.doc, "</{}>", self.start).unwrap();
     }
 }
 
-impl TagWriter<'_, '_> {
+impl ScopeWriter<'_, '_> {
     pub fn data(&mut self, data: &str) {
         self.doc.write_str(escape(data).as_ref()).unwrap();
     }
 
     pub fn finish(self) {
-        // drop will be called which writes to the document
+        // drop will be called which writes the closer to the document
     }
 
     pub fn start_el<'b, 'c>(&'c mut self, tag: &'b str) -> ElWriter<'c, 'b> {

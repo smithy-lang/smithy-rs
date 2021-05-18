@@ -5,7 +5,7 @@
 
 use protocol_test_helpers::{validate_body, MediaType};
 use smithy_xml::encode;
-use smithy_xml::encode::TagWriter;
+use smithy_xml::encode::ScopeWriter;
 
 // @namespace http://www.example.com
 struct WithNamespace {
@@ -40,22 +40,22 @@ fn serialize_with_namespace(
         let mut writer = encode::XmlWriter::new(&mut out);
         let mut root = writer.start_el("MyStructure");
         root.write_ns("http://foo.com");
-        let mut tag = root.finish();
-        with_namespace_inner(&mut tag, with_namespace);
-        tag.finish();
+        let mut root_scope = root.finish();
+        with_namespace_inner(&mut root_scope, with_namespace);
+        root_scope.finish();
     }
 
     Ok(out)
 }
 
-fn with_namespace_inner(tag: &mut TagWriter, with_namespace: &WithNamespace) {
-    let mut foo_tag = tag.start_el("foo").finish();
-    foo_tag.data(&with_namespace.foo);
-    foo_tag.finish();
+fn with_namespace_inner(tag: &mut ScopeWriter, with_namespace: &WithNamespace) {
+    let mut foo_scope = tag.start_el("foo").finish();
+    foo_scope.data(&with_namespace.foo);
+    foo_scope.finish();
 
-    let mut bar_tag = tag.start_el("bar").finish();
-    bar_tag.data(&with_namespace.bar);
-    bar_tag.finish();
+    let mut bar_scope = tag.start_el("bar").finish();
+    bar_scope.data(&with_namespace.bar);
+    bar_scope.finish();
 }
 
 #[test]
