@@ -7,7 +7,7 @@ use smithy.test#httpResponseTests
 
 
 /// A REST XML service that sends XML requests and responses.
-@service(sdkId: "Rest Json Protocol")
+@service(sdkId: "Rest XML Protocol")
 @restXml
 service RestXmlExtras {
     version: "2019-12-16",
