@@ -16,7 +16,9 @@ val ClippyAllowLints = listOf(
     // Currently, we don't recase acronyms in models, eg. SSEVersion
     "upper_case_acronyms",
     // Large errors trigger this warning, we are unlikely to optimize this case currently
-    "large_enum_variant"
+    "large_enum_variant",
+    // Some models have members with `is` in the name, which leads to builder functions with the wrong self convention
+    "wrong_self_convention",
 )
 
 class AllowClippyLints() : LibRsCustomization() {
