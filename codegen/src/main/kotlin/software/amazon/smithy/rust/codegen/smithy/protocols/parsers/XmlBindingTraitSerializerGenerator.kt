@@ -60,7 +60,7 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
             "XmlWriter" to smithyXml.member("encode::XmlWriter"),
             "ElementWriter" to smithyXml.member("encode::ElWriter"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-            // TODO: currently this doesn't every actually fail, however, once unions have an unknown member
+            // TODO: currently this doesn't ever actually fail, however, once unions have an unknown member
             // serialization can fail here and we should replace this with a real error type.
             // Currently the serialization errors just get converted into `OperationBuildError` by the code
             // that calls this code
