@@ -71,8 +71,6 @@ class InstantiatorTest {
     private val symbolProvider = testSymbolProvider(model)
     private val runtimeConfig = TestRuntimeConfig
 
-    // TODO: test of recursive structures when supported
-
     fun RustWriter.test(block: RustWriter.() -> Unit) {
         raw("#[test]")
         rustBlock("fn inst()") {

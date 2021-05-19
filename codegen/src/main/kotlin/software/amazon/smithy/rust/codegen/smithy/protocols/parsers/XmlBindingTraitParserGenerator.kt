@@ -45,7 +45,9 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
-import software.amazon.smithy.rust.codegen.util.orNull
+import software.amazon.smithy.rust.codegen.util.expectTrait
+import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -155,8 +157,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
 
     private fun payloadName(member: MemberShape): XmlName {
         val payloadShape = model.expectShape(member.target)
-        val xmlRename = member.getTrait(XmlNameTrait::class.java).orNull()
-            ?: payloadShape.getTrait(XmlNameTrait::class.java).orNull()
+        val xmlRename = member.getTrait<XmlNameTrait>() ?: payloadShape.getTrait()
 
         return xmlRename?.let { XmlName.parse(it.value) } ?: XmlName(local = payloadShape.id.name)
     }
@@ -205,8 +206,8 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
     }
 
     private fun operationXmlName(outputShape: StructureShape): XmlName? {
-        return outputShape.getTrait(XmlNameTrait::class.java).orNull()?.let { XmlName.parse(it.value) }
-            ?: outputShape.expectTrait(SyntheticOutputTrait::class.java).originalId?.name?.let {
+        return outputShape.getTrait<XmlNameTrait>()?.let { XmlName.parse(it.value) }
+            ?: outputShape.expectTrait<SyntheticOutputTrait>().originalId?.name?.let {
                 XmlName(local = it, prefix = null)
             }
     }
@@ -583,8 +584,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
 
     private fun RustWriter.parseStringInner(shape: StringShape, provider: RustWriter.() -> Unit) {
         withBlock("Result::<#T, #T>::Ok(", ")", symbolProvider.toSymbol(shape), xmlError) {
-            val enumTrait = shape.getTrait(EnumTrait::class.java).orElse(null)
-            if (enumTrait == null) {
+            if (!shape.hasTrait<EnumTrait>()) {
                 provider()
                 // if it's already `Cow::Owned` then `.into()` is free (vs. to_string())
                 rust(".into()")
@@ -598,7 +598,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
     }
 
     private fun MemberShape.xmlName(): XmlName {
-        val override = this.getTrait(XmlNameTrait::class.java).orNull()
+        val override = this.getTrait<XmlNameTrait>()
         return override?.let { XmlName.parse(it.value) } ?: XmlName(local = this.memberName)
     }
 
@@ -612,7 +612,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
     data class XmlMemberIndex(val dataMembers: List<MemberShape>, val attributeMembers: List<MemberShape>) {
         companion object {
             fun fromMembers(members: List<MemberShape>): XmlMemberIndex {
-                val (attribute, data) = members.partition { it.hasTrait(XmlAttributeTrait::class.java) }
+                val (attribute, data) = members.partition { it.hasTrait<XmlAttributeTrait>() }
                 return XmlMemberIndex(data, attribute)
             }
         }

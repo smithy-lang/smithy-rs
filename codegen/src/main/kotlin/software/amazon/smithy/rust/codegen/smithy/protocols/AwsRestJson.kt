@@ -57,7 +57,6 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<HttpTraitProtocolGenerator> 
     }
 
     override fun support(): ProtocolSupport {
-        // TODO: Support body for RestJson
         return ProtocolSupport(
             requestSerialization = true,
             requestBodySerialization = true,

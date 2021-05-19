@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomizati
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 
 /**
@@ -63,22 +64,20 @@ abstract class HttpProtocolGenerator(
         operationShape: OperationShape,
         customizations: List<OperationCustomization>
     ) {
-        /* if (operationShape.hasTrait(EndpointTrait::class.java)) {
+        /* if (operationShape.hasTrait<EndpointTrait>()) {
             TODO("https://github.com/awslabs/smithy-rs/issues/197")
         } */
         val inputShape = operationShape.inputShape(model)
         val sdkId =
-            protocolConfig.serviceShape.getTrait(ServiceTrait::class.java)
-                .map { it.sdkId.toLowerCase().replace(" ", "") }
-                .orElse(protocolConfig.serviceShape.id.getName(protocolConfig.serviceShape))
+            protocolConfig.serviceShape.getTrait<ServiceTrait>()?.sdkId?.toLowerCase()?.replace(" ", "")
+                ?: protocolConfig.serviceShape.id.getName(protocolConfig.serviceShape)
         val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model))
         builderGenerator.render(inputWriter)
-        // impl OperationInputShape { ... }
 
+        // impl OperationInputShape { ... }
         inputWriter.implBlock(inputShape, symbolProvider) {
             buildOperation(this, operationShape, customizations, sdkId)
             toHttpRequestImpl(this, operationShape, inputShape)
-            // TODO: streaming shapes need special support
             rustBlock(
                 "fn assemble(mut builder: #1T, body: #3T) -> #2T<#3T>",
                 RuntimeType.HttpRequestBuilder,

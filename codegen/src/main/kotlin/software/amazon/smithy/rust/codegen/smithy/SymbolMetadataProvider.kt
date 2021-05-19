@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.Attribute.Companion.NonExhaustive
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.PartialEq
+import software.amazon.smithy.rust.codegen.util.hasTrait
 
 /**
  * Default delegator to enable easily decorating another symbol provider.
@@ -47,7 +48,7 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
             is MemberShape -> memberMeta(shape)
             is StructureShape -> structureMeta(shape)
             is UnionShape -> unionMeta(shape)
-            is StringShape -> if (shape.hasTrait(EnumTrait::class.java)) {
+            is StringShape -> if (shape.hasTrait<EnumTrait>()) {
                 enumMeta(shape)
             } else null
             else -> null

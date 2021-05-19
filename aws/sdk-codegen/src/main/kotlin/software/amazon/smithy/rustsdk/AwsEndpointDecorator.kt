@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.expectTrait
 
 class AwsEndpointDecorator : RustCodegenDecorator {
     override val name: String = "AwsEndpoint"
@@ -56,7 +57,7 @@ class AwsEndpointDecorator : RustCodegenDecorator {
 
 class EndpointConfigCustomization(private val runtimeConfig: RuntimeConfig, serviceShape: ServiceShape) :
     ConfigCustomization() {
-    private val endpointPrefix = serviceShape.expectTrait(ServiceTrait::class.java).endpointPrefix
+    private val endpointPrefix = serviceShape.expectTrait<ServiceTrait>().endpointPrefix
     private val resolveAwsEndpoint = runtimeConfig.awsEndpointDependency().asType().copy(name = "ResolveAwsEndpoint")
     override fun section(section: ServiceConfig): Writable = writable {
         when (section) {

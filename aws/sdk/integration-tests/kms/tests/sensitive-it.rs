@@ -30,6 +30,7 @@ fn validate_sensitive_trait() {
 
 fn assert_send_sync<T: Send + Sync + 'static>() {}
 fn assert_send_fut<T: Send + 'static>(_: T) {}
+fn assert_debug<T: std::fmt::Debug>() {}
 
 #[test]
 fn types_are_send_sync() {
@@ -52,6 +53,13 @@ fn client_is_debug() {
 fn client_is_clone() {
     let client = kms::Client::from_env();
     let _ = client.clone();
+}
+
+#[test]
+fn types_are_debug() {
+    assert_debug::<kms::Client>();
+    assert_debug::<kms::client::fluent_builders::GenerateRandom>();
+    assert_debug::<kms::client::fluent_builders::CreateAlias>();
 }
 
 fn create_alias_op() -> Parts<CreateAlias, AwsErrorRetryPolicy> {

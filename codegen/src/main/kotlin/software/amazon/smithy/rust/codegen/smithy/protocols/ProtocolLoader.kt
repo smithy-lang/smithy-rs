@@ -20,8 +20,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFa
 
 typealias ProtocolMap = Map<ShapeId, ProtocolGeneratorFactory<HttpProtocolGenerator>>
 
-// typealias ProtocolMap =
-// TODO: supportedProtocols must be runtime loadable via SPI; 2d
 class ProtocolLoader(private val supportedProtocols: ProtocolMap) {
     fun protocolFor(
         model: Model,

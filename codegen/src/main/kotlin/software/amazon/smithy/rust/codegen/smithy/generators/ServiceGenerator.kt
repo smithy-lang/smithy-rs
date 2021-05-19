@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.CombinedError
 import software.amazon.smithy.rust.codegen.smithy.generators.error.TopLevelErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 
 class ServiceGenerator(
@@ -63,14 +64,14 @@ class ServiceGenerator(
 
     private fun renderBodies(operations: List<OperationShape>) {
         val inputBodies = operations.map { config.model.expectShape(it.input.get()) }.map {
-            it.expectTrait(SyntheticInputTrait::class.java)
+            it.expectTrait<SyntheticInputTrait>()
         }.mapNotNull { // mapNotNull is flatMap but for null `map { it }.filter { it != null }`
             it.body
         }.map { // Lookup the Body structure by its id
             config.model.expectShape(it, StructureShape::class.java)
         }
         val outputBodies = operations.map { config.model.expectShape(it.output.get()) }.map {
-            it.expectTrait(SyntheticOutputTrait::class.java)
+            it.expectTrait<SyntheticOutputTrait>()
         }.mapNotNull { // mapNotNull is flatMap but for null `map { it }.filter { it != null }`
             it.body
         }.map { // Lookup the Body structure by its id
