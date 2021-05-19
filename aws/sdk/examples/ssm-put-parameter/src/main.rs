@@ -13,7 +13,8 @@ use aws_types::region::{self, ProvideRegion};
 #[tokio::main]
 async fn main() {
     // Determine the region from environment variables or default to us-east-1
-    let region = region::default_provider().region()
+    let region = region::default_provider()
+        .region()
         .unwrap_or_else(|| Region::new("us-east-1"));
 
     // Construct a client
