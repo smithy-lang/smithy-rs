@@ -11,7 +11,7 @@ use aws.api#service
 
 
 /// A REST XML service that sends XML requests and responses.
-@service(sdkId: "Rest Json Protocol")
+@service(sdkId: "Rest XML Protocol")
 @restXml(noErrorWrapping: true)
 service RestXmlExtrasUnwrappedErrors {
     version: "2019-12-16",
