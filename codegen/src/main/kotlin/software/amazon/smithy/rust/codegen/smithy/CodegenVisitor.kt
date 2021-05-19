@@ -82,7 +82,6 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
         codegenDecorator.extras(protocolConfig, rustCrate)
-        // TODO: if we end up with a lot of these on-by-default customizations, we may want to refactor them somewhere
         rustCrate.finalize(
             settings,
             codegenDecorator.libRsCustomizations(
@@ -118,7 +117,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     override fun stringShape(shape: StringShape) {
         shape.getTrait<EnumTrait>()?.also { enum ->
             rustCrate.useShapeWriter(shape) { writer ->
-                EnumGenerator(symbolProvider, writer, shape, enum).render()
+                EnumGenerator(model, symbolProvider, writer, shape, enum).render()
             }
         }
     }

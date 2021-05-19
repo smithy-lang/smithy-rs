@@ -27,9 +27,6 @@ abstract class Section(val name: String)
  * 1. Override section and use a `when` clause to handle each section individually
  * 2. Call `registerSection { ... }` to register individual sections on demand.
  *
- * TODO: Factory for creating named-section generators from ProtocolConfig
- *
- * TODO: Enable using partials as a named section generator to allow defining insertions from inlineable Rust code:
  * ```rust
  * struct Config {
  *    /* section:ConfigStruct */
