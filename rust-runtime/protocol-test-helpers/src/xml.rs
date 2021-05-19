@@ -100,7 +100,6 @@ fn unparse_start_element(n: Node) -> String {
     let mut out = String::new();
     out.push('<');
     out.push_str(n.tag_name().name());
-    println!("{:?}", n);
     for ns in n.namespaces() {
         out.push_str(" xmlns");
         if let Some(ns_name) = ns.name() {

@@ -60,7 +60,11 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
             "XmlWriter" to smithyXml.member("encode::XmlWriter"),
             "ElementWriter" to smithyXml.member("encode::ElWriter"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-            "Error" to RuntimeType("String", null, "std::string") // TODO :-)
+            // TODO: currently this doesn't every actually fail, however, once unions have an unknown member
+            // serialization can fail here and we should replace this with a real error type.
+            // Currently the serialization errors just get converted into `OperationBuildError` by the code
+            // that calls this code
+            "Error" to RuntimeType("String", null, "std::string")
         )
 
     private val xmlIndex = XmlNameIndex.of(model)
@@ -76,9 +80,9 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
         companion object {
             // Kotlin doesn't have a "This" type
             @Suppress("UNCHECKED_CAST")
-            fun <T : Ctx> updateInput(inp: T, newInput: String): T = when (inp) {
-                is Element -> inp.copy(input = newInput) as T
-                is Scope -> inp.copy(input = newInput) as T
+            fun <T : Ctx> updateInput(input: T, newInput: String): T = when (input) {
+                is Element -> input.copy(input = newInput) as T
+                is Scope -> input.copy(input = newInput) as T
                 else -> TODO()
             }
         }
@@ -163,12 +167,9 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
     }
 
     private fun XmlNamespaceTrait?.apply(): String {
-        return if (this == null) {
-            ""
-        } else {
-            val prefix = prefix.map { prefix -> "Some(${prefix.dq()})" }.orElse("None")
-            ".write_ns(${uri.dq()}, $prefix)"
-        }
+        this ?: return ""
+        val prefix = prefix.map { prefix -> "Some(${prefix.dq()})" }.orElse("None")
+        return ".write_ns(${uri.dq()}, $prefix)"
     }
 
     private fun RustWriter.structureInner(members: XmlMemberIndex, ctx: Ctx.Element) {

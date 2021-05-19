@@ -142,10 +142,6 @@ internal class XmlBindingTraitSerializerGeneratorTest {
             model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
         println("file:///${project.baseDir}/src/xml_ser.rs")
-        try {
-            project.compileAndTest()
-        } finally {
-            // "cargo fmt".runCommand(project.baseDir)
-        }
+        project.compileAndTest()
     }
 }

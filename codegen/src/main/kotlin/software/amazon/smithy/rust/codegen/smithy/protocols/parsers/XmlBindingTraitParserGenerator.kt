@@ -125,7 +125,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
                     ##[allow(unused_mut)]
                     let mut decoder = doc.root_element()?;
                     let start_el = decoder.start_el();
-                    if !(${shapeName.matches("start_el")}) {
+                    if !(${shapeName.matchExpression("start_el")}) {
                         return Err(#{XmlError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
                     }
                     """,
@@ -173,7 +173,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
                     ##[allow(unused_mut)]
                     let mut decoder = doc.root_element()?;
                     let start_el = decoder.start_el();
-                    if !(${XmlName(shapeName).matches("start_el")}) {
+                    if !(${XmlName(shapeName).matchExpression("start_el")}) {
                         return Err(#{XmlError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
                     }
                     """,
@@ -357,7 +357,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
     private fun RustWriter.case(member: MemberShape, inner: RustWriter.() -> Unit) {
         rustBlock(
             "s if ${
-            member.xmlName().matches("s")
+            member.xmlName().matchExpression("s")
             } /* ${member.memberName} ${escape(member.id.toString())} */ => "
         ) {
             inner()
@@ -436,7 +436,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
             ) {
                 rust("let mut out = #T::new();", RustType.HashMap.RuntimeType)
                 parseLoop(Ctx(tag = "decoder", accum = null)) { ctx ->
-                    rustBlock("s if ${XmlName("entry").matches("s")} => ") {
+                    rustBlock("s if ${XmlName("entry").matchExpression("s")} => ") {
                         rust("#T(&mut ${ctx.tag}, &mut out)?;", mapEntryParser(target, ctx))
                     }
                 }
@@ -578,7 +578,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
         return getMemberTrait(model, XmlFlattenedTrait::class.java).isPresent
     }
 
-    fun XmlName.matches(start_el: String) =
+    fun XmlName.matchExpression(start_el: String) =
         "$start_el.matches(${this.toString().dq()})"
 
     private fun OperationShape.operationXmlMembers(): XmlMemberIndex {
