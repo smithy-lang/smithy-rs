@@ -24,6 +24,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.model.traits.XmlNamespaceTrait
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -181,11 +182,13 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
                 }
             }
         }
+        Attribute.AllowUnusedMut.render(this)
         rust("let mut scope = ${ctx.elementWriter}.finish();")
         val scopeCtx = Ctx.Scope("scope", ctx.input)
         members.dataMembers.forEach { member ->
             serializeMember(member, scopeCtx.scopedTo(member), null)
         }
+        rust("scope.finish();")
     }
 
     private fun RustWriter.serializeRawMember(member: MemberShape, input: String) {
@@ -358,6 +361,6 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
     }
 
     private fun Shape.xmlNamespace(): XmlNamespaceTrait? {
-        return rootNamespace ?: this.getTrait()
+        return this.getTrait() ?: rootNamespace
     }
 }

@@ -11,13 +11,13 @@ use std::fmt::Write;
 ///
 /// This will normalize documents and attempts to determine if it is OK to sort members or not by
 /// using a heuristic to determine if the tag represents a list (which should not be reordered)
-pub fn try_xml_equivalent(d1: &str, d2: &str) -> Result<(), ProtocolTestFailure> {
-    let norm_1 = normalize_xml(d1).map_err(|e| ProtocolTestFailure::InvalidBodyFormat {
-        expected: "left document to be valid XML".to_string(),
-        found: format!("{}", e),
+pub fn try_xml_equivalent(actual: &str, expected: &str) -> Result<(), ProtocolTestFailure> {
+    let norm_1 = normalize_xml(actual).map_err(|e| ProtocolTestFailure::InvalidBodyFormat {
+        expected: "actual document to be valid XML".to_string(),
+        found: format!("{}\n{}", e, actual),
     })?;
-    let norm_2 = normalize_xml(d2).map_err(|e| ProtocolTestFailure::InvalidBodyFormat {
-        expected: "right document to be valid XML".to_string(),
+    let norm_2 = normalize_xml(expected).map_err(|e| ProtocolTestFailure::InvalidBodyFormat {
+        expected: "expected document to be valid XML".to_string(),
         found: format!("{}", e),
     })?;
     if norm_1 == norm_2 {
