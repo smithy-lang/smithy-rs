@@ -100,8 +100,13 @@ fn unparse_start_element(n: Node) -> String {
     let mut out = String::new();
     out.push('<');
     out.push_str(n.tag_name().name());
-    if let Some(ns) = n.tag_name().namespace() {
-        write!(&mut out, " xmlns=\"{}\"", ns).unwrap();
+    println!("{:?}", n);
+    for ns in n.namespaces() {
+        out.push_str(" xmlns");
+        if let Some(ns_name) = ns.name() {
+            write!(&mut out, ":{}", ns_name).unwrap();
+        }
+        write!(&mut out, "={}", ns.uri()).unwrap();
     }
     let mut attributes: Vec<_> = n.attributes().iter().collect();
     attributes.sort_by_key(|attrib| (attrib.name(), attrib.value(), attrib.namespace()));
@@ -304,5 +309,12 @@ mod test {
             <Nested xmlns:xsi="https://example3.com" xsi:someName="nestedAttrValue"></Nested>
         </root>"#;
         try_xml_equivalent(d1, d2).expect_err("namespaces differ");
+    }
+
+    #[test]
+    fn namespace_with_prefix() {
+        let d1 = r#"<PayloadWithXmlNamespaceAndPrefix xmlns:baz="http://foo.com" />"#;
+        let d2 = r#"<PayloadWithXmlNamespaceAndPrefix xmlns:baz="http://foo.com"></PayloadWithXmlNamespaceAndPrefix>"#;
+        try_xml_equivalent(d1, d2).expect("match")
     }
 }

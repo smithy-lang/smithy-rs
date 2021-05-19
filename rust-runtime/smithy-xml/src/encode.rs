@@ -77,8 +77,13 @@ impl<'a, 'b> ElWriter<'a, 'b> {
         self
     }
 
-    pub fn write_ns(&mut self, namespace: &str) -> &mut Self {
-        write!(self.doc, " xmlns=\"{}\"", escape(namespace)).unwrap();
+    pub fn write_ns(self, namespace: &str, prefix: Option<&str>) -> Self {
+        match prefix {
+            Some(prefix) => {
+                write!(self.doc, " xmlns:{}=\"{}\"", prefix, escape(namespace)).unwrap()
+            }
+            None => write!(self.doc, " xmlns=\"{}\"", escape(namespace)).unwrap(),
+        }
         self
     }
 
@@ -132,7 +137,7 @@ mod test {
         let mut start_el = doc_writer.start_el("Hello");
         start_el
             .write_attribute("key", "foo")
-            .write_ns("http://example.com");
+            .write_ns("http://example.com", None);
         let mut tag = start_el.finish();
         let mut inner = tag.start_el("inner").finish();
         inner.data("hello world!");
