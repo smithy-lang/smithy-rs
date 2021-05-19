@@ -37,8 +37,8 @@ impl Display for Error {
 /// use smithy_xml::encode::XmlWriter;
 /// let mut s = String::new();
 /// let mut doc = XmlWriter::new(&mut s);
-/// let mut start_el = doc.start_el("Root");
-/// start_el.write_ns("http://example.com");
+/// let mut start_el = doc.start_el("Root")
+///     .write_ns("http://example.com", None);
 /// let mut start_tag = start_el.finish();
 /// start_tag.data("hello");
 /// start_tag.finish();
@@ -77,8 +77,13 @@ impl<'a, 'b> ElWriter<'a, 'b> {
         self
     }
 
-    pub fn write_ns(&mut self, namespace: &str) -> &mut Self {
-        write!(self.doc, " xmlns=\"{}\"", escape(namespace)).unwrap();
+    pub fn write_ns(self, namespace: &str, prefix: Option<&str>) -> Self {
+        match prefix {
+            Some(prefix) => {
+                write!(self.doc, " xmlns:{}=\"{}\"", prefix, escape(namespace)).unwrap()
+            }
+            None => write!(self.doc, " xmlns=\"{}\"", escape(namespace)).unwrap(),
+        }
         self
     }
 
@@ -124,15 +129,16 @@ impl ScopeWriter<'_, '_> {
 #[cfg(test)]
 mod test {
     use crate::encode::XmlWriter;
+    use protocol_test_helpers::{assert_ok, validate_body, MediaType};
 
     #[test]
     fn basic_document_encoding() {
         let mut out = String::new();
         let mut doc_writer = XmlWriter::new(&mut out);
-        let mut start_el = doc_writer.start_el("Hello");
-        start_el
-            .write_attribute("key", "foo")
-            .write_ns("http://example.com");
+        let mut start_el = doc_writer
+            .start_el("Hello")
+            .write_ns("http://example.com", None);
+        start_el.write_attribute("key", "foo");
         let mut tag = start_el.finish();
         let mut inner = tag.start_el("inner").finish();
         inner.data("hello world!");
@@ -141,10 +147,14 @@ mod test {
         more_inner.finish();
         tag.finish();
 
-        assert_eq!(
+        assert_ok(validate_body(
             out,
-            "<Hello key=\"foo\" xmlns=\"http://example.com\"><inner>hello world!</inner><inner></inner></Hello>"
-        );
+            r#"<Hello key="foo" xmlns="http://example.com">
+                    <inner>hello world!</inner>
+                    <inner></inner>
+                </Hello>"#,
+            MediaType::Xml,
+        ));
     }
 
     #[test]

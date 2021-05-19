@@ -61,7 +61,7 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
                 StructureShape::class.java
             )
         } ?: return null
-        val fnName = "serialize_synthetic_${inputBody.id.name.toSnakeCase()}"
+        val fnName = "serialize_operation_${inputBody.id.name.toSnakeCase()}"
         return RuntimeType.forInlineFun(fnName, "operation_ser") {
             it.rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",

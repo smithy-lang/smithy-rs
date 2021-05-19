@@ -38,9 +38,8 @@ fn serialize_with_namespace(
     let mut out = String::new();
     {
         let mut writer = encode::XmlWriter::new(&mut out);
-        let mut root = writer.start_el("MyStructure");
-        root.write_ns("http://foo.com");
-        let mut root_scope = root.finish();
+        let root = writer.start_el("MyStructure");
+        let mut root_scope = root.write_ns("http://foo.com", None).finish();
         with_namespace_inner(&mut root_scope, with_namespace);
         root_scope.finish();
     }
