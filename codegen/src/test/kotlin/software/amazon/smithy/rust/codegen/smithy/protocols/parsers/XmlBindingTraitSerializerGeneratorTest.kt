@@ -127,8 +127,7 @@ internal class XmlBindingTraitSerializerGeneratorTest {
                 ).build().unwrap();
                 let serialized = ${writer.format(operationParser)}(&inp.payload.unwrap()).unwrap();
                 let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
-                assert_eq!(output, "<Top extra=\"45\">hello!</Top>");
-
+                assert_eq!(output, "<Top extra=\"45\"><field>hello!</field><recursive extra=\"55\"></recursive></Top>");
             """
             )
         }
@@ -136,7 +135,7 @@ internal class XmlBindingTraitSerializerGeneratorTest {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
             UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice")).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
-            EnumGenerator(symbolProvider, it, enum, enum.expectTrait()).render()
+            EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
         }
 
         project.withModule(RustModule.default("input", public = true)) {
