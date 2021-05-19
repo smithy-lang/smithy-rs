@@ -8,20 +8,19 @@ use std::process;
 use ssm::model::ParameterType;
 use ssm::{Client, Config, Region};
 
-use aws_types::region::{EnvironmentProvider, ProvideRegion};
+use aws_types::region::{self, ProvideRegion};
 
 #[tokio::main]
 async fn main() {
     // Determine the region from environment variables or default to us-east-1
-    let region = EnvironmentProvider::new()
-        .region()
+    let region = region::default_provider().region()
         .unwrap_or_else(|| Region::new("us-east-1"));
 
     // Construct a client
     let config = Config::builder().region(region).build();
     let client = Client::from_conf(config);
 
-    // Put a SSM application parameter named `test_parameter_name`
+    // Put an SSM application parameter named `test_parameter_name`
     match client
         .put_parameter()
         .overwrite(true)
