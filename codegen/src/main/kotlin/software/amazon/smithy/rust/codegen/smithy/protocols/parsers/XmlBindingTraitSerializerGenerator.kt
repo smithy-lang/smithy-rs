@@ -192,6 +192,17 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
         rust("scope.finish();")
     }
 
+    /**
+     * Dereference [input]
+     *
+     * Clippy is upset about `*&`, so if [input] is already referenced, simply strip the leading '&'
+     */
+    private fun autoDeref(input: String) = if (input.startsWith("&")) {
+        input.removePrefix("&")
+    } else {
+        "*$input"
+    }
+
     private fun RustWriter.serializeRawMember(member: MemberShape, input: String) {
         when (val shape = model.expectShape(member.target)) {
             is StringShape -> if (shape.hasTrait<EnumTrait>()) {
@@ -200,7 +211,7 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
                 rust("$input.as_ref()")
             }
             is NumberShape -> rust("$input.to_string().as_ref()")
-            is BooleanShape -> rust("""if *$input { "true" } else { "false" }""")
+            is BooleanShape -> rust("""if ${autoDeref(input)} { "true" } else { "false" }""")
             is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.Base64Encode(runtimeConfig))
             is TimestampShape -> {
                 val timestampFormat =
@@ -271,6 +282,10 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
                 "Shape" to structureSymbol,
                 *codegenScope
             ) {
+                if (!members.isNotEmpty()) {
+                    // removed unused warning if there are no fields we're going to read
+                    rust("let _ = input;")
+                }
                 structureInner(members, Ctx.Element("writer", "&input"))
             }
         }

@@ -22,6 +22,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -161,6 +162,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
             return null
         }
         return RuntimeType.forInlineFun(fnName, "xml_deser") {
+            Attribute.AllowUnusedMut.render(it)
             it.rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
                 outputShape.builderSymbol(symbolProvider),
@@ -188,22 +190,28 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
     override fun errorParser(errorShape: StructureShape): RuntimeType {
         val fnName = errorShape.id.name.toString().toSnakeCase()
         return RuntimeType.forInlineFun(fnName, "xml_deser") {
+            Attribute.AllowUnusedMut.render(it)
             it.rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
                 errorShape.builderSymbol(symbolProvider),
                 xmlError
             ) {
-                rustTemplate(
-                    """
+                val members = errorShape.errorXmlMembers()
+                if (members.isNotEmpty()) {
+                    rustTemplate(
+                        """
                     use std::convert::TryFrom;
                     let mut document = #{Document}::try_from(inp)?;
+                    ##[allow(unused_mut)]
                     let mut error_decoder = #{xml_errors}::error_scope(&mut document)?;
                     """,
-                    *codegenScope,
-                    "xml_errors" to xmlErrors
-                )
-                val members = errorShape.errorXmlMembers()
-                parseStructureInner(members, builder = "builder", Ctx(tag = "error_decoder", accum = null))
+                        *codegenScope,
+                        "xml_errors" to xmlErrors
+                    )
+                    parseStructureInner(members, builder = "builder", Ctx(tag = "error_decoder", accum = null))
+                } else {
+                    rust("let _ = inp;")
+                }
                 rust("Ok(builder)")
             }
         }
@@ -373,6 +381,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
                 "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Shape}, #{XmlError}>",
                 *codegenScope, "Shape" to symbol
             ) {
+                Attribute.AllowUnusedMut.render(this)
                 rustTemplate(
                     """
                     let mut builder = #{Shape}::builder();
@@ -380,7 +389,11 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
                     *codegenScope, "Shape" to symbol
                 )
                 val members = shape.xmlMembers()
-                parseStructureInner(members, "builder", Ctx(tag = "decoder", accum = null))
+                if (members.isNotEmpty()) {
+                    parseStructureInner(members, "builder", Ctx(tag = "decoder", accum = null))
+                } else {
+                    rust("let _ = decoder;")
+                }
                 withBlock("Ok(builder.build()", ")") {
                     if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
                         rustTemplate(""".map_err(|_|{XmlError}::custom("missing field"))?""", *codegenScope)
