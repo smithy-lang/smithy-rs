@@ -7,6 +7,7 @@ use aws_auth::Credentials;
 use aws_sigv4_poc::{SigningSettings, UriEncoding};
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
+use http::HeaderValue;
 use std::error::Error;
 use std::time::SystemTime;
 
@@ -120,9 +121,10 @@ impl SigV4Signer {
             },
         };
         for (key, value) in aws_sigv4_poc::sign_core(request, sigv4_config) {
-            request
-                .headers_mut()
-                .append(key.header_name(), value.parse()?);
+            let mut value = HeaderValue::from_str(&value)?;
+            value.set_sensitive(true); // Prevent Debug logging of signing headers in traces
+
+            request.headers_mut().append(key.header_name(), value);
         }
 
         Ok(())
