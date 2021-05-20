@@ -4,7 +4,7 @@
  */
 
 use aws_auth::Credentials;
-use aws_sigv4_poc::{SigningSettings, UriEncoding};
+use aws_sigv4_poc::{SignableBody, SignedBodyHeaderType, SigningSettings, UriEncoding};
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
 use std::error::Error;
@@ -48,6 +48,7 @@ impl OperationSigningConfig {
             signature_type: HttpSignatureType::HttpRequestHeaders,
             signing_options: SigningOptions {
                 double_uri_encode: true,
+                content_sha256_header: false,
             },
         }
     }
@@ -57,6 +58,7 @@ impl OperationSigningConfig {
 #[non_exhaustive]
 pub struct SigningOptions {
     pub double_uri_encode: bool,
+    pub content_sha256_header: bool,
     /*
     Currently unsupported:
     pub normalize_uri_path: bool,
@@ -104,6 +106,17 @@ impl SigV4Signer {
     where
         B: AsRef<[u8]>,
     {
+        let mut settings = SigningSettings::default();
+        settings.uri_encoding = if operation_config.signing_options.double_uri_encode {
+            UriEncoding::Double
+        } else {
+            UriEncoding::Single
+        };
+        settings.signed_body_header = if operation_config.signing_options.content_sha256_header {
+            SignedBodyHeaderType::XAmzSha256
+        } else {
+            SignedBodyHeaderType::NoHeader
+        };
         let sigv4_config = aws_sigv4_poc::Config {
             access_key: credentials.access_key_id(),
             secret_key: credentials.secret_access_key(),
@@ -111,15 +124,13 @@ impl SigV4Signer {
             region: request_config.region.as_ref(),
             svc: request_config.service.as_ref(),
             date: request_config.request_ts,
-            settings: SigningSettings {
-                uri_encoding: if operation_config.signing_options.double_uri_encode {
-                    UriEncoding::Double
-                } else {
-                    UriEncoding::Single
-                },
-            },
+            settings,
         };
-        for (key, value) in aws_sigv4_poc::sign_core(request, sigv4_config) {
+        for (key, value) in aws_sigv4_poc::sign_core(
+            request,
+            SignableBody::Bytes(request.body().as_ref()),
+            &sigv4_config,
+        ) {
             request
                 .headers_mut()
                 .append(key.header_name(), value.parse()?);
