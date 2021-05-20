@@ -21,6 +21,8 @@ pub struct DispatchService<S> {
     inner: S,
 }
 
+type BoxedResultFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>> + Send>>;
+
 impl<S> Service<operation::Request> for DispatchService<S>
 where
     S: Service<http::Request<SdkBody>> + Clone + Send + 'static,
@@ -29,7 +31,7 @@ where
 {
     type Response = S::Response;
     type Error = SendOperationError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+    type Future = BoxedResultFuture<Self::Response, Self::Error>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner
