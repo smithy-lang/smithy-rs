@@ -27,7 +27,7 @@ class LibRsGenerator(
     fun render(writer: RustWriter) {
         writer.first {
             customizations.forEach { it.section(LibRsSection.Attributes)(this) }
-            docs(escape(libraryDocs))
+            docs(escape(libraryDocs), newlinePrefix = "//! ")
         }
         modules.forEach { it.render(writer) }
         customizations.forEach { it.section(LibRsSection.Body)(writer) }
