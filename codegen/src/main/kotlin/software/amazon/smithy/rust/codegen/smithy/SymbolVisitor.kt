@@ -38,8 +38,6 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
@@ -315,15 +313,6 @@ sealed class Default {
      * This symbol should use the Rust `std::default::Default` when unset
      */
     object RustDefault : Default()
-
-    /**
-     * This symbol has a custom default implementation. This will be written into the block of `or_default(|| <block>)`
-     */
-    class Custom(val default: Writable) : Default() {
-        fun render(writer: RustWriter) {
-            default(writer)
-        }
-    }
 }
 
 /**
