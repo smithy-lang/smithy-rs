@@ -238,7 +238,7 @@ impl<Handler, R, T, E>
     tower::retry::Policy<operation::Operation<Handler, R>, SdkSuccess<T>, SdkError<E>>
     for RetryHandler
 where
-    E: ProvideErrorKind,
+    E: ProvideErrorKind + Clone,
     Handler: Clone,
     R: ClassifyResponse<SdkSuccess<T>, SdkError<E>>,
 {
