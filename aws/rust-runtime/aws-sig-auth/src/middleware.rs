@@ -94,11 +94,6 @@ impl MapRequest for SigV4SigningStage {
         req.augment(|mut req, config| {
             let (operation_config, request_config, creds) = signing_config(config)?;
 
-            // A short dance is required to extract a signable body from an SdkBody, which
-            // amounts to verifying that it a strict body based on a `Bytes` and not a stream.
-            // Streams must be signed with a different signing mode. Separate support will be added for
-            // this at a later date.
-
             self.signer
                 .sign(&operation_config, &request_config, &creds, &mut req)
                 .map_err(|err| SigningStageError::SigningFailure(err))?;
