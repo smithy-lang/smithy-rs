@@ -84,6 +84,13 @@ structure StringPayloadInput {
         code: 200,
         headers: { "x-field": "123" },
         params: { field: 123 }
+    },
+    {
+        id: "DeserPrimitiveHeaderMissing",
+        protocol: "aws.protocols#restJson1",
+        code: 200,
+        headers: { },
+        params: { field: 0 }
     }
 ])
 @http(uri: "/primitive", method: "POST")

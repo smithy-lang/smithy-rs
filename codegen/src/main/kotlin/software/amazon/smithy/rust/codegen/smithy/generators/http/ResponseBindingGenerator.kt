@@ -30,7 +30,9 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.Default
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
@@ -285,15 +287,21 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                         "header_util" to headerUtil
                     )
                 } else {
+                    val fallback = when (symbolProvider.toSymbol(memberShape).defaultValue()) {
+                        is Default.RustDefault -> "Ok(Default::default())"
+                        is Default.NoDefault -> "Err(${format(headerUtil)}::ParseError)"
+                    }
                     rustTemplate(
                         """
-                    if $parsedValue.len() > 1 {
-                        Err(#{header_util}::ParseError)
-                    } else {
+                        if $parsedValue.len() > 1 {
+                            return Err(#{header_util}::ParseError)
+                        }
                         let mut $parsedValue = $parsedValue;
-                        $parsedValue.pop().ok_or(#{header_util}::ParseError)
-                    }
-                """,
+                        match $parsedValue.pop() {
+                            None => $fallback,
+                            Some(item) => Ok(item),
+                        }
+                    """,
                         "header_util" to headerUtil
                     )
                 }

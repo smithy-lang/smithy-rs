@@ -219,9 +219,6 @@ class BuilderGenerator(
                             ".ok_or(",
                             ")?"
                         ) { missingRequiredField(memberName) }
-                        memberSymbol.isOptional() && default is Default.Custom -> {
-                            withBlock(".or_else(||Some(", "))") { default.render(this) }
-                        }
                     }
                 }
             }
