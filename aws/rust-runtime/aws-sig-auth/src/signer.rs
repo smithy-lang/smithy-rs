@@ -138,7 +138,7 @@ impl SigV4Signer {
         for (key, value) in aws_sigv4_poc::sign_core(request, signable_body, &sigv4_config)? {
             request
                 .headers_mut()
-                .append(HeaderName::from_static(dbg!(key)), value);
+                .append(HeaderName::from_static(key), value);
         }
 
         Ok(())
