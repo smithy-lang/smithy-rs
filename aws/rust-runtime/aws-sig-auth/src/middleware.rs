@@ -91,27 +91,18 @@ impl MapRequest for SigV4SigningStage {
     type Error = SigningStageError;
 
     fn apply(&self, req: Request) -> Result<Request, Self::Error> {
-        req.augment(|req, config| {
+        req.augment(|mut req, config| {
             let (operation_config, request_config, creds) = signing_config(config)?;
 
             // A short dance is required to extract a signable body from an SdkBody, which
             // amounts to verifying that it a strict body based on a `Bytes` and not a stream.
             // Streams must be signed with a different signing mode. Separate support will be added for
             // this at a later date.
-            let (parts, body) = req.into_parts();
-            let signable_body = body.bytes().ok_or(SigningStageError::InvalidBodyType)?;
-            let mut signable_request = http::Request::from_parts(parts, signable_body);
 
             self.signer
-                .sign(
-                    &operation_config,
-                    &request_config,
-                    &creds,
-                    &mut signable_request,
-                )
+                .sign(&operation_config, &request_config, &creds, &mut req)
                 .map_err(|err| SigningStageError::SigningFailure(err))?;
-            let (signed_parts, _) = signable_request.into_parts();
-            Ok(http::Request::from_parts(signed_parts, body))
+            Ok(req)
         })
     }
 }

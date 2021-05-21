@@ -7,6 +7,8 @@ use aws_auth::Credentials;
 use aws_sigv4_poc::{SignableBody, SignedBodyHeaderType, SigningSettings, UriEncoding};
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
+use http::header::HeaderName;
+use smithy_http::body::SdkBody;
 use std::error::Error;
 use std::time::SystemTime;
 
@@ -95,17 +97,14 @@ impl SigV4Signer {
     ///
     /// Although the direct signing implementation MAY be used directly. End users will not typically
     /// interact with this code. It is generally used via middleware in the request pipeline. See [`SigV4SigningStage`](crate::middleware::SigV4SigningStage).
-    pub fn sign<B>(
+    pub fn sign(
         &self,
         // There is currently only 1 way to sign, so operation level configuration is unused
         operation_config: &OperationSigningConfig,
         request_config: &RequestConfig<'_>,
         credentials: &Credentials,
-        request: &mut http::Request<B>,
-    ) -> Result<(), SigningError>
-    where
-        B: AsRef<[u8]>,
-    {
+        request: &mut http::Request<SdkBody>,
+    ) -> Result<(), SigningError> {
         let mut settings = SigningSettings::default();
         settings.uri_encoding = if operation_config.signing_options.double_uri_encode {
             UriEncoding::Double
@@ -126,14 +125,15 @@ impl SigV4Signer {
             date: request_config.request_ts,
             settings,
         };
-        for (key, value) in aws_sigv4_poc::sign_core(
-            request,
-            SignableBody::Bytes(request.body().as_ref()),
-            &sigv4_config,
-        ) {
+        let signable_body = request
+            .body()
+            .bytes()
+            .map(SignableBody::Bytes)
+            .unwrap_or(SignableBody::UnsignedPayload);
+        for (key, value) in aws_sigv4_poc::sign_core(request, signable_body, &sigv4_config)? {
             request
                 .headers_mut()
-                .append(key.header_name(), value.parse()?);
+                .append(HeaderName::from_static(dbg!(key)), value);
         }
 
         Ok(())
