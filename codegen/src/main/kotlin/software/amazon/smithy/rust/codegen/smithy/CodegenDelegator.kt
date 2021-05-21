@@ -46,15 +46,15 @@ open class RustCrate(
 
     private fun injectInlineDependencies() {
         val writtenDependencies = mutableSetOf<String>()
-        val unloadedDepdencies = {
+        val unloadedDependencies = {
             this
                 .inner.dependencies
                 .map { dep -> RustDependency.fromSymbolDependency(dep) }
                 .filterIsInstance<InlineDependency>().distinctBy { it.key() }
                 .filter { !writtenDependencies.contains(it.key()) }
         }
-        while (unloadedDepdencies().isNotEmpty()) {
-            unloadedDepdencies().forEach { dep ->
+        while (unloadedDependencies().isNotEmpty()) {
+            unloadedDependencies().forEach { dep ->
                 writtenDependencies.add(dep.key())
                 this.withModule(RustModule.default(dep.module, false)) {
                     dep.renderer(it)
