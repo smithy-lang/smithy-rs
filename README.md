@@ -3,7 +3,7 @@ Smithy code generators for Rust
 
 The nightly SDK build can be found under `Actions -> CI (take latest run) -> Artifacts`
 
-[Design documentation (WIP)](https://ubiquitous-robot-7dc8d16d.pages.github.io/)
+[Design documentation (WIP)](https://awslabs.github.io/smithy-rs/)
 
 **All internal and external interfaces are considered unstable and subject to change without notice.**
 
