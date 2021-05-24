@@ -4,6 +4,8 @@
  */
 
 use crate::escape::escape_string;
+use smithy_types::instant::Format;
+use smithy_types::{Instant, Number};
 
 pub struct JsonObjectWriter<'a> {
     json: &'a mut String,
@@ -43,10 +45,24 @@ impl<'a> JsonObjectWriter<'a> {
         self
     }
 
-    /// Writes a number `value` (already converted to string) with the given `key`.
-    pub fn number(&mut self, key: &str, value: &str) -> &mut Self {
+    /// Writes a string `value` with the given `key` without escaping it.
+    pub fn trusted_string(&mut self, key: &str, value: &str) -> &mut Self {
         self.key(key);
-        self.json.push_str(value);
+        append_string(&mut self.json, value);
+        self
+    }
+
+    /// Writes a number `value` with the given `key`.
+    pub fn number(&mut self, key: &str, value: Number) -> &mut Self {
+        self.key(key);
+        append_number(&mut self.json, value);
+        self
+    }
+
+    /// Writes an Instant `value` with the given `key` and `format`.
+    pub fn instant(&mut self, key: &str, instant: &Instant, format: Format) -> &mut Self {
+        self.key(key);
+        append_instant(&mut self.json, instant, format);
         self
     }
 
@@ -117,10 +133,24 @@ impl<'a> JsonArrayWriter<'a> {
         self
     }
 
-    /// Writes a number `value` (already converted to string).
-    pub fn number(&mut self, value: &str) -> &mut Self {
+    /// Writes a string `value` to the array without escaping it.
+    pub fn trusted_string(&mut self, value: &str) -> &mut Self {
         self.comma_delimit();
-        self.json.push_str(value);
+        append_string(&mut self.json, value);
+        self
+    }
+
+    /// Writes a number `value` to the array.
+    pub fn number(&mut self, value: Number) -> &mut Self {
+        self.comma_delimit();
+        append_number(&mut self.json, value);
+        self
+    }
+
+    /// Writes an Instant `value` with the given `key` and `format`.
+    pub fn instant(&mut self, instant: &Instant, format: Format) -> &mut Self {
+        self.comma_delimit();
+        append_instant(&mut self.json, instant, format);
         self
     }
 
@@ -150,14 +180,53 @@ impl<'a> JsonArrayWriter<'a> {
 }
 
 fn append_string(json: &mut String, value: &str) {
+    append_trusted_string(json, &escape_string(value));
+}
+
+fn append_trusted_string(json: &mut String, value: &str) {
     json.push('"');
-    json.push_str(&escape_string(value));
+    json.push_str(value);
     json.push('"');
+}
+
+fn append_instant(json: &mut String, value: &Instant, format: Format) {
+    let formatted = value.fmt(format);
+    match format {
+        Format::EpochSeconds => json.push_str(&formatted),
+        _ => append_string(json, &formatted),
+    }
+}
+
+const F64_EXPONENT_MASK: u64 = 0x7FF0000000000000;
+
+fn append_number(json: &mut String, value: Number) {
+    match value {
+        Number::PosInt(value) => {
+            json.push_str(itoa::Buffer::new().format(value));
+        }
+        Number::NegInt(value) => {
+            json.push_str(itoa::Buffer::new().format(value));
+        }
+        Number::Float(value) => {
+            // If the value is NaN, Infinity, or -Infinity
+            if value.to_bits() & F64_EXPONENT_MASK == F64_EXPONENT_MASK {
+                json.push_str("null");
+            } else {
+                let mut buffer = ryu::Buffer::new();
+                json.push_str(buffer.format_finite(value));
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{JsonArrayWriter, JsonObjectWriter};
+    use crate::serialize::append_number;
+    use proptest::proptest;
+    use serde::Serialize;
+    use smithy_types::instant::Format;
+    use smithy_types::{Instant, Number};
 
     #[test]
     fn empty() {
@@ -211,7 +280,7 @@ mod tests {
         let mut arr_1 = JsonArrayWriter::new(&mut output);
 
         let mut arr_2 = arr_1.start_array();
-        arr_2.number("5");
+        arr_2.number(Number::PosInt(5));
         arr_2.finish();
 
         arr_1.start_array().finish();
@@ -224,18 +293,159 @@ mod tests {
     fn object() {
         let mut output = String::new();
         let mut object = JsonObjectWriter::new(&mut output);
+        object.boolean("true_val", true);
+        object.boolean("false_val", false);
         object.string("some_string", "some\nstring\nvalue");
-        object.number("some_number", "3.5");
+        object.trusted_string("trusted_str", "trusted");
+        object.number("some_number", Number::Float(3.5));
+        object.null("some_null");
 
         let mut array = object.start_array("some_mixed_array");
-        array.string("1").number("2");
+        array
+            .string("1")
+            .number(Number::NegInt(-2))
+            .trusted_string("trusted")
+            .boolean(true)
+            .boolean(false)
+            .null();
         array.finish();
 
         object.finish();
 
         assert_eq!(
-            r#"{"some_string":"some\nstring\nvalue","some_number":3.5,"some_mixed_array":["1",2]}"#,
+            r#"{"true_val":true,"false_val":false,"some_string":"some\nstring\nvalue","trusted_str":"trusted","some_number":3.5,"some_null":null,"some_mixed_array":["1",-2,"trusted",true,false,null]}"#,
             &output
         );
+    }
+
+    #[test]
+    fn object_instants() {
+        let mut output = String::new();
+
+        let mut object = JsonObjectWriter::new(&mut output);
+        object.instant(
+            "epoch_seconds",
+            &Instant::from_f64(5.2),
+            Format::EpochSeconds,
+        );
+        object.instant(
+            "date_time",
+            &Instant::from_str("2021-05-24T15:34:50.123Z", Format::DateTime).unwrap(),
+            Format::DateTime,
+        );
+        object.instant(
+            "http_date",
+            &Instant::from_str("Wed, 21 Oct 2015 07:28:00 GMT", Format::HttpDate).unwrap(),
+            Format::HttpDate,
+        );
+        object.finish();
+
+        assert_eq!(
+            r#"{"epoch_seconds":5.2,"date_time":"2021-05-24T15:34:50.123Z","http_date":"Wed, 21 Oct 2015 07:28:00 GMT"}"#,
+            &output,
+        )
+    }
+
+    #[test]
+    fn array_instants() {
+        let mut output = String::new();
+
+        let mut array = JsonArrayWriter::new(&mut output);
+        array.instant(&Instant::from_f64(5.2), Format::EpochSeconds);
+        array.instant(
+            &Instant::from_str("2021-05-24T15:34:50.123Z", Format::DateTime).unwrap(),
+            Format::DateTime,
+        );
+        array.instant(
+            &Instant::from_str("Wed, 21 Oct 2015 07:28:00 GMT", Format::HttpDate).unwrap(),
+            Format::HttpDate,
+        );
+        array.finish();
+
+        assert_eq!(
+            r#"[5.2,"2021-05-24T15:34:50.123Z","Wed, 21 Oct 2015 07:28:00 GMT"]"#,
+            &output,
+        )
+    }
+
+    #[derive(Serialize)]
+    struct SpecialFloatStruct {
+        nan: f64,
+        inf: f64,
+        nnf: f64,
+    }
+
+    #[test]
+    fn number_formatting() {
+        let format = |n: Number| {
+            let mut buffer = String::new();
+            append_number(&mut buffer, n);
+            buffer
+        };
+
+        assert_eq!("1", format(Number::PosInt(1)));
+        assert_eq!("-1", format(Number::NegInt(-1)));
+        assert_eq!("1", format(Number::NegInt(1)));
+        assert_eq!("0.0", format(Number::Float(0.0)));
+        assert_eq!("10000000000.0", format(Number::Float(1e10)));
+        assert_eq!("-1.2", format(Number::Float(-1.2)));
+
+        // JSON doesn't support NaN, Infinity, or -Infinity, so we're matching
+        // the behavior of the serde_json crate in these cases.
+        let mut value = String::new();
+        value.push_str(r#"{"nan":"#);
+        append_number(&mut value, Number::Float(f64::NAN));
+        value.push_str(r#","inf":"#);
+        append_number(&mut value, Number::Float(f64::INFINITY));
+        value.push_str(r#","nnf":"#);
+        append_number(&mut value, Number::Float(f64::NEG_INFINITY));
+        value.push_str("}");
+
+        let serde_equivalent = serde_json::to_string(&SpecialFloatStruct {
+            nan: f64::NAN,
+            inf: f64::INFINITY,
+            nnf: f64::NEG_INFINITY,
+        })
+        .unwrap();
+        assert_eq!(serde_equivalent, value);
+    }
+
+    #[derive(Serialize)]
+    struct TestNumber<T> {
+        value: T,
+    }
+
+    fn format_test_number(number: Number) -> String {
+        let mut formatted = String::new();
+        formatted.push_str(r#"{"value":"#);
+        append_number(&mut formatted, number);
+        formatted.push_str("}");
+        formatted
+    }
+
+    proptest! {
+        #[test]
+        fn matches_serde_json_pos_int_format(value: u64) {
+            assert_eq!(
+                serde_json::to_string(&TestNumber { value }).unwrap(),
+                format_test_number(Number::PosInt(value)),
+            )
+        }
+
+        #[test]
+        fn matches_serde_json_neg_int_format(value: i64) {
+            assert_eq!(
+                serde_json::to_string(&TestNumber { value }).unwrap(),
+                format_test_number(Number::NegInt(value)),
+            )
+        }
+
+        #[test]
+        fn matches_serde_json_float_format(value: f64) {
+            assert_eq!(
+                serde_json::to_string(&TestNumber { value }).unwrap(),
+                format_test_number(Number::Float(value)),
+            )
+        }
     }
 }
