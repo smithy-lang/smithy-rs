@@ -11,7 +11,6 @@
 //!
 //! ### Writing a ByteStream into a file:
 //! ```rust
-//! use bytes::Buf;
 //! use smithy_http::byte_stream::ByteStream;
 //! use std::error::Error;
 //! use tokio::fs::File;
@@ -25,9 +24,7 @@
 //! ) -> Result<(), Box<dyn Error + Send + Sync>> {
 //!     let mut buf = output.audio_stream.collect().await?;
 //!     let mut file = File::open("audio.mp3").await?;
-//!     while buf.has_remaining() {
-//!         file.write_buf(&mut buf).await?;
-//!     }
+//!     file.write_all_buf(&mut buf).await?;
 //!     Ok(())
 //! }
 //! ```
