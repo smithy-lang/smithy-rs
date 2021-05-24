@@ -1,4 +1,4 @@
-Design docs are hosted [here](https://ubiquitous-robot-7dc8d16d.pages.github.io/).
+Design docs are hosted [here](https://awslabs.github.io/smithy-rs).
 
 To render design docs locally:
 ```
