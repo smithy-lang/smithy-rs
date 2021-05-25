@@ -6,6 +6,7 @@
 use crate::escape::escape_string;
 use smithy_types::instant::Format;
 use smithy_types::{Instant, Number};
+use std::borrow::Cow;
 
 pub struct JsonObjectWriter<'a> {
     json: &'a mut String,
@@ -180,10 +181,15 @@ impl<'a> JsonArrayWriter<'a> {
 }
 
 fn append_string(json: &mut String, value: &str) {
-    append_string_unchecked(json, &escape_string(value));
+    json.push('"');
+    json.push_str(&escape_string(value));
+    json.push('"');
 }
 
 fn append_string_unchecked(json: &mut String, value: &str) {
+    // Verify in debug builds that we don't actually need to escape the string
+    debug_assert!(matches!(escape_string(value), Cow::Borrowed(_)));
+
     json.push('"');
     json.push_str(value);
     json.push('"');
@@ -221,7 +227,7 @@ fn append_number(json: &mut String, value: Number) {
 #[cfg(test)]
 mod tests {
     use super::{JsonArrayWriter, JsonObjectWriter};
-    use crate::serialize::{append_number, append_string_unchecked};
+    use crate::serialize::append_number;
     use proptest::proptest;
     use smithy_types::instant::Format;
     use smithy_types::{Instant, Number};
@@ -364,13 +370,6 @@ mod tests {
             r#"[5.2,"2021-05-24T15:34:50.123Z","Wed, 21 Oct 2015 07:28:00 GMT"]"#,
             &output,
         )
-    }
-
-    #[test]
-    fn append_string_unchecked_no_escaping() {
-        let mut value = String::new();
-        append_string_unchecked(&mut value, "totally\ninvalid");
-        assert_eq!("\"totally\ninvalid\"", &value);
     }
 
     fn format_test_number(number: Number) -> String {
