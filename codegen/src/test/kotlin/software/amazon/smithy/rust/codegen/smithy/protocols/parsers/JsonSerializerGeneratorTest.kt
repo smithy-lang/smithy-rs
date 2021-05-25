@@ -26,15 +26,18 @@ class JsonSerializerGeneratorTest {
         use aws.protocols#restJson1
 
         union Choice {
-            map: MyMap,
-            list: SomeList,
-            s: String,
-            enum: FooEnum,
-            date: Timestamp,
-            number: Double,
-            top: Top,
             blob: Blob,
+            boolean: Boolean,
+            date: Timestamp,
             document: Document,
+            enum: FooEnum,
+            int: Integer,
+            list: SomeList,
+            long: Long,
+            map: MyMap,
+            number: Double,
+            s: String,
+            top: Top,
         }
 
         @enum([{name: "FOO", value: "FOO"}])

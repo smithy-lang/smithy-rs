@@ -369,10 +369,10 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
     }
 
     private fun OperationShape.operationXmlMembers(): XmlMemberIndex {
-        val outputShape = this.inputShape(model)
+        val inputShape = this.inputShape(model)
         val documentMembers =
             httpIndex.getRequestBindings(this).filter { it.value.location == HttpBinding.Location.DOCUMENT }
-                .keys.map { outputShape.expectMember(it) }
+                .keys.map { inputShape.expectMember(it) }
         return XmlMemberIndex.fromMembers(documentMembers)
     }
 
