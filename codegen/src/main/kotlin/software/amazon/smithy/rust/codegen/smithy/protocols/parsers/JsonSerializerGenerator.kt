@@ -117,6 +117,7 @@ private data class MemberContext(
 
 private enum class JsonWriterFn {
     BOOLEAN,
+    DOCUMENT,
     INSTANT,
     NUMBER,
     STRING,
@@ -137,6 +138,7 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
         "Error" to serializerError,
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "JsonObjectWriter" to smithyJson.member("serialize::JsonObjectWriter"),
+        "JsonValueWriter" to smithyJson.member("serialize::JsonValueWriter"),
     )
     private val httpIndex = HttpBindingIndex.of(model)
 
@@ -178,10 +180,11 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
         val fnName = "serialize_document"
         return RuntimeType.forInlineFun(fnName, "operation_ser") {
             it.rustTemplate(
-                // TODO: Implement document serialization
                 """
                 pub fn $fnName(input: &#{Document}) -> Result<#{SdkBody}, #{Error}> {
-                    unimplemented!();
+                    let mut out = String::new();
+                    #{JsonValueWriter}::new(&mut out).document(input);
+                    Ok(#{SdkBody}::from(out))
                 }
                 """,
                 "Document" to RuntimeType.Document(runtimeConfig), *codegenScope
@@ -253,9 +256,7 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
                 is UnionShape -> jsonObjectWriter(inner) { objectName ->
                     serializeUnion(SimpleContext(objectName, inner.valueExpression, target))
                 }
-                is DocumentShape -> {
-                    // TODO: Implement document shapes
-                }
+                is DocumentShape -> context.writeValue(this, JsonWriterFn.DOCUMENT, key, value)
                 else -> TODO(target.toString())
             }
         }

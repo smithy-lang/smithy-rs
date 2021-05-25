@@ -5,7 +5,7 @@
 
 use crate::escape::escape_string;
 use smithy_types::instant::Format;
-use smithy_types::{Instant, Number};
+use smithy_types::{Document, Instant, Number};
 use std::borrow::Cow;
 
 pub struct JsonValueWriter<'a> {
@@ -13,7 +13,7 @@ pub struct JsonValueWriter<'a> {
 }
 
 impl<'a> JsonValueWriter<'a> {
-    fn new(output: &'a mut String) -> Self {
+    pub fn new(output: &'a mut String) -> Self {
         JsonValueWriter { output }
     }
 
@@ -28,6 +28,30 @@ impl<'a> JsonValueWriter<'a> {
             true => "true",
             _ => "false",
         });
+    }
+
+    /// Writes a document `value`.
+    pub fn document(self, value: &Document) {
+        match value {
+            Document::Array(values) => {
+                let mut array = self.start_array();
+                for value in values {
+                    array.document(value);
+                }
+                array.finish();
+            }
+            Document::Bool(value) => self.boolean(*value),
+            Document::Null => self.null(),
+            Document::Number(value) => self.number(*value),
+            Document::Object(values) => {
+                let mut object = self.start_object();
+                for value in values {
+                    object.key(value.0).document(value.1);
+                }
+                object.finish();
+            }
+            Document::String(value) => self.string(&value),
+        }
     }
 
     /// Writes a string `value`.
@@ -155,6 +179,11 @@ impl<'a> JsonArrayWriter<'a> {
         self.write(|w| w.boolean(value))
     }
 
+    /// Writes a document `value`.
+    pub fn document(&mut self, value: &Document) -> &mut Self {
+        self.write(|w| w.document(value))
+    }
+
     /// Writes a string to the array.
     pub fn string(&mut self, value: &str) -> &mut Self {
         self.write(|w| w.string(value))
@@ -206,7 +235,7 @@ mod tests {
     use crate::serialize::JsonValueWriter;
     use proptest::proptest;
     use smithy_types::instant::Format;
-    use smithy_types::{Instant, Number};
+    use smithy_types::{Document, Instant, Number};
 
     #[test]
     fn empty() {
@@ -342,6 +371,59 @@ mod tests {
             r#"[5.2,"2021-05-24T15:34:50.123Z","Wed, 21 Oct 2015 07:28:00 GMT"]"#,
             &output,
         )
+    }
+
+    fn format_document(document: Document) -> String {
+        let mut output = String::new();
+        JsonValueWriter::new(&mut output).document(&document);
+        output
+    }
+
+    #[test]
+    fn document() {
+        assert_eq!("null", format_document(Document::Null));
+        assert_eq!("true", format_document(Document::Bool(true)));
+        assert_eq!("false", format_document(Document::Bool(false)));
+        assert_eq!("5", format_document(Document::Number(Number::PosInt(5))));
+        assert_eq!("\"test\"", format_document(Document::String("test".into())));
+        assert_eq!(
+            "[null,true,\"test\"]",
+            format_document(Document::Array(vec![
+                Document::Null,
+                Document::Bool(true),
+                Document::String("test".into())
+            ]))
+        );
+        assert_eq!(
+            r#"{"test":"foo"}"#,
+            format_document(Document::Object(
+                vec![("test".to_string(), Document::String("foo".into()))]
+                    .into_iter()
+                    .collect()
+            ))
+        );
+        assert_eq!(
+            r#"{"test1":[{"num":1},{"num":2}]}"#,
+            format_document(Document::Object(
+                vec![(
+                    "test1".to_string(),
+                    Document::Array(vec![
+                        Document::Object(
+                            vec![("num".to_string(), Document::Number(Number::PosInt(1))),]
+                                .into_iter()
+                                .collect()
+                        ),
+                        Document::Object(
+                            vec![("num".to_string(), Document::Number(Number::PosInt(2))),]
+                                .into_iter()
+                                .collect()
+                        ),
+                    ])
+                ),]
+                .into_iter()
+                .collect()
+            ))
+        );
     }
 
     fn format_test_number(number: Number) -> String {
