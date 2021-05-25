@@ -63,51 +63,65 @@ private data class StructContext(
     val symbolProvider: RustSymbolProvider,
 ) {
     fun member(member: MemberShape): MemberContext =
-        MemberContext(objectName, "$localName.${symbolProvider.toMemberName(member)}", member, structMember = true)
+        MemberContext(objectName, MemberDestination.Object(), "$localName.${symbolProvider.toMemberName(member)}", member)
+}
+
+private sealed class MemberDestination {
+    // Add unused parameter so that Kotlin generates equals/hashCode for us
+    data class Array(private val unused: Int = 0) : MemberDestination()
+    data class Object(val keyNameOverride: String? = null) : MemberDestination()
 }
 
 private data class MemberContext(
     /** Name of the JsonObjectWriter or JsonArrayWriter */
     val writerName: String,
+    val destination: MemberDestination,
     val valueExpression: String,
     val shape: MemberShape,
-    /** Whether we're working with a JsonObjectWriter (true) or JsonArrayWriter (false) */
-    val structMember: Boolean,
-    private val givenKeyExpression: String? = null,
 ) {
-    val wireName: String = shape.getTrait<JsonNameTrait>()?.value ?: shape.memberName
-    val keyExpression: String = when (givenKeyExpression) {
-        null -> wireName.dq()
-        else -> givenKeyExpression
+    val keyExpression: String = when (destination) {
+        is MemberDestination.Object ->
+            destination.keyNameOverride ?: (shape.getTrait<JsonNameTrait>()?.value ?: shape.memberName).dq()
+        is MemberDestination.Array -> ""
     }
 
     /** Generates an expression that serializes the given [value] expression to the object/array */
-    fun writeValue(w: RustWriter, jsonType: String, key: String, value: String) = when (structMember) {
-        true -> w.rust("$writerName.$jsonType($key, $value);")
-        else -> w.rust("$writerName.$jsonType($value);")
+    fun writeValue(w: RustWriter, writerFn: JsonWriterFn, key: String, value: String) = when (destination) {
+        is MemberDestination.Object -> w.rust("$writerName.$writerFn($key, $value);")
+        is MemberDestination.Array -> w.rust("$writerName.$writerFn($value);")
     }
 
     /** Generates an expression that serializes the given [inner] expression to the object/array */
-    fun writeInner(w: RustWriter, jsonType: String, key: String, inner: RustWriter.() -> Unit) {
-        w.rustInline("$writerName.$jsonType(")
-        if (structMember) {
-            w.writeInline("$key, ")
+    fun writeInner(w: RustWriter, writerFn: JsonWriterFn, key: String, inner: RustWriter.() -> Unit) {
+        w.withBlock("$writerName.$writerFn(", ");") {
+            if (destination is MemberDestination.Object) {
+                w.writeInline("$key, ")
+            }
+            inner(w)
         }
-        inner(w)
-        w.write(");")
     }
 
     /** Generates a mutable declaration for serializing a new object */
-    fun writeStartObject(w: RustWriter, decl: String, key: String) = when (structMember) {
-        true -> w.rust("let mut $decl = $writerName.start_object($key);")
-        else -> w.rust("let mut $decl = $writerName.start_object();")
+    fun writeStartObject(w: RustWriter, decl: String, key: String) = when (destination) {
+        is MemberDestination.Object -> w.rust("let mut $decl = $writerName.start_object($key);")
+        is MemberDestination.Array -> w.rust("let mut $decl = $writerName.start_object();")
     }
 
     /** Generates a mutable declaration for serializing a new array */
-    fun writeStartArray(w: RustWriter, decl: String, key: String) = when (structMember) {
-        true -> w.rust("let mut $decl = $writerName.start_array($key);")
-        else -> w.rust("let mut $decl = $writerName.start_array();")
+    fun writeStartArray(w: RustWriter, decl: String, key: String) = when (destination) {
+        is MemberDestination.Object -> w.rust("let mut $decl = $writerName.start_array($key);")
+        is MemberDestination.Array -> w.rust("let mut $decl = $writerName.start_array();")
     }
+}
+
+private enum class JsonWriterFn {
+    BOOLEAN,
+    INSTANT,
+    NUMBER,
+    STRING,
+    STRING_UNCHECKED;
+
+    override fun toString(): String = name.toLowerCase()
 }
 
 class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSerializerGenerator {
@@ -191,38 +205,38 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
                 }
             }
         }
-        rust("#T(${context.objectName.borrowMut()}, ${context.localName});", structureSerializer)
+        rust("#T(&mut ${context.objectName}, ${context.localName});", structureSerializer)
     }
 
     private fun RustWriter.serializeMember(context: MemberContext) {
         val target = model.expectShape(context.shape.target)
         handleOptional(context) { inner ->
             val key = inner.keyExpression
-            val value = inner.valueExpression.borrow()
+            val value = "&${inner.valueExpression}"
             when (target) {
                 is StringShape -> when (target.hasTrait<EnumTrait>()) {
-                    true -> context.writeValue(this, "string", key, "$value.as_str()")
-                    false -> context.writeValue(this, "string", key, value)
+                    true -> context.writeValue(this, JsonWriterFn.STRING, key, "$value.as_str()")
+                    false -> context.writeValue(this, JsonWriterFn.STRING, key, value)
                 }
-                is BooleanShape -> context.writeValue(this, "boolean", key, value)
+                is BooleanShape -> context.writeValue(this, JsonWriterFn.BOOLEAN, key, value)
                 is NumberShape -> {
                     val numberType = when (symbolProvider.toSymbol(target).rustType()) {
                         is RustType.Float -> "Float"
                         is RustType.Integer -> "NegInt"
                         else -> throw IllegalStateException("unreachable")
                     }
-                    context.writeInner(this, "number", key) {
+                    context.writeInner(this, JsonWriterFn.NUMBER, key) {
                         rustInline("#T::$numberType(*${inner.valueExpression})", smithyTypes.member("Number"))
                     }
                 }
-                is BlobShape -> context.writeInner(this, "string_unchecked", key) {
+                is BlobShape -> context.writeInner(this, JsonWriterFn.STRING_UNCHECKED, key) {
                     rustInline("&#T($value)", RuntimeType.Base64Encode(runtimeConfig))
                 }
                 is TimestampShape -> {
                     val timestampFormat =
                         httpIndex.determineTimestampFormat(context.shape, HttpBinding.Location.DOCUMENT, EPOCH_SECONDS)
                     val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                    context.writeInner(this, "instant", key) {
+                    context.writeInner(this, JsonWriterFn.INSTANT, key) {
                         rustInline("$value, #T", timestampFormatType)
                     }
                 }
@@ -265,7 +279,7 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
     private fun RustWriter.serializeCollection(context: SimpleContext<CollectionShape>) {
         val itemName = safeName("item")
         rustBlock("for $itemName in ${context.localName}") {
-            serializeMember(MemberContext(context.writerName, itemName, context.shape.member, structMember = false))
+            serializeMember(MemberContext(context.writerName, MemberDestination.Array(), itemName, context.shape.member))
         }
     }
 
@@ -275,13 +289,7 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
         val valueShape = context.shape.value
         rustBlock("for ($keyName, $valueName) in ${context.localName}") {
             serializeMember(
-                MemberContext(
-                    context.writerName,
-                    valueName,
-                    valueShape,
-                    structMember = true,
-                    givenKeyExpression = keyName
-                )
+                MemberContext(context.writerName, MemberDestination.Object(keyNameOverride = keyName), valueName, valueShape)
             )
         }
     }
@@ -299,19 +307,19 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
                     for (member in context.shape.members()) {
                         val variantName = member.memberName.toPascalCase()
                         withBlock("#T::$variantName(inner) => {", "},", unionSymbol) {
-                            serializeMember(MemberContext(context.writerName, "inner", member, true))
+                            serializeMember(MemberContext(context.writerName, MemberDestination.Object(), "inner", member))
                         }
                     }
                 }
             }
         }
-        rust("#T(${context.writerName.borrowMut()}, ${context.localName});", unionSerializer)
+        rust("#T(&mut ${context.writerName}, ${context.localName});", unionSerializer)
     }
 
     private fun RustWriter.handleOptional(context: MemberContext, inner: RustWriter.(MemberContext) -> Unit) {
         if (symbolProvider.toSymbol(context.shape).isOptional()) {
             safeName().also { localDecl ->
-                rustBlock("if let Some($localDecl) = ${context.valueExpression.borrow()}") {
+                rustBlock("if let Some($localDecl) = &${context.valueExpression}") {
                     inner(context.copy(valueExpression = localDecl))
                 }
             }
@@ -320,6 +328,3 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
         }
     }
 }
-
-private fun String.borrow(): String = "&$this"
-private fun String.borrowMut(): String = "&mut $this"

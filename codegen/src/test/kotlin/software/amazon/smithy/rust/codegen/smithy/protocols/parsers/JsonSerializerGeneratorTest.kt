@@ -53,6 +53,7 @@ class JsonSerializerGeneratorTest {
             choice: Choice,
             field: String,
             extra: Long,
+            @jsonName("rec")
             recursive: TopList
         }
 
@@ -106,7 +107,7 @@ class JsonSerializerGeneratorTest {
                 ).build().unwrap();
                 let serialized = ${writer.format(payloadGenerator)}(&inp.payload.unwrap()).unwrap();
                 let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
-                assert_eq!(output, r#"{"field":"hello!","extra":45,"recursive":[{"extra":55}]}"#);
+                assert_eq!(output, r#"{"field":"hello!","extra":45,"rec":[{"extra":55}]}"#);
                 """
             )
         }
@@ -120,9 +121,10 @@ class JsonSerializerGeneratorTest {
         project.withModule(RustModule.default("input", public = true)) {
             model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/operation_ser.rs")
         println("file:///${project.baseDir}/src/json_ser.rs")
         println("file:///${project.baseDir}/src/lib.rs")
+        println("file:///${project.baseDir}/src/model.rs")
+        println("file:///${project.baseDir}/src/operation_ser.rs")
         project.compileAndTest()
     }
 }
