@@ -39,7 +39,7 @@ impl Debug for SdkBody {
 type BoxBody = http_body::combinators::BoxBody<Bytes, Error>;
 
 #[pin_project(project = InnerProj)]
-pub(crate) enum Inner {
+enum Inner {
     Once(#[pin] Option<Bytes>),
     Streaming(#[pin] hyper::Body),
     Dyn(#[pin] BoxBody),

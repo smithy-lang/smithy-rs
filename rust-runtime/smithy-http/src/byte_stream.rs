@@ -230,6 +230,10 @@ impl ByteStream {
         Ok(ByteStream::new(SdkBody::retryable(body_loader)))
     }
 
+    /// Create a ByteStream from a file
+    ///
+    /// NOTE: This will NOT result in a retryable ByteStream. For a ByteStream that can be retried in the case of
+    /// upstream failures, use [`ByteStream::from_path`](ByteStream::from_path)
     #[cfg(feature = "bytestream-util")]
     pub async fn from_file(file: tokio::fs::File) -> Result<Self, Error> {
         let sz = file
