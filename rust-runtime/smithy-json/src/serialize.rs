@@ -8,6 +8,88 @@ use smithy_types::instant::Format;
 use smithy_types::{Instant, Number};
 use std::borrow::Cow;
 
+pub struct JsonValueWriter<'a> {
+    output: &'a mut String,
+}
+
+impl<'a> JsonValueWriter<'a> {
+    fn new(output: &'a mut String) -> Self {
+        JsonValueWriter { output }
+    }
+
+    /// Writes a null value.
+    pub fn null(self) {
+        self.output.push_str("null");
+    }
+
+    /// Writes the boolean `value`.
+    pub fn boolean(self, value: bool) {
+        self.output.push_str(match value {
+            true => "true",
+            _ => "false",
+        });
+    }
+
+    /// Writes a string `value`.
+    pub fn string(self, value: &str) {
+        self.output.push('"');
+        self.output.push_str(&escape_string(value));
+        self.output.push('"');
+    }
+
+    /// Writes a string `value` without escaping it.
+    pub fn string_unchecked(self, value: &str) {
+        // Verify in debug builds that we don't actually need to escape the string
+        debug_assert!(matches!(escape_string(value), Cow::Borrowed(_)));
+
+        self.output.push('"');
+        self.output.push_str(value);
+        self.output.push('"');
+    }
+
+    /// Writes a number `value`.
+    pub fn number(self, value: Number) {
+        match value {
+            Number::PosInt(value) => {
+                // itoa::Buffer is a fixed-size stack allocation, so this is cheap
+                self.output.push_str(itoa::Buffer::new().format(value));
+            }
+            Number::NegInt(value) => {
+                self.output.push_str(itoa::Buffer::new().format(value));
+            }
+            Number::Float(value) => {
+                // If the value is NaN, Infinity, or -Infinity
+                if value.is_nan() || value.is_infinite() {
+                    self.output.push_str("null");
+                } else {
+                    // ryu::Buffer is a fixed-size stack allocation, so this is cheap
+                    self.output
+                        .push_str(ryu::Buffer::new().format_finite(value));
+                }
+            }
+        }
+    }
+
+    /// Writes an Instant `value` with the given `format`.
+    pub fn instant(self, instant: &Instant, format: Format) {
+        let formatted = instant.fmt(format);
+        match format {
+            Format::EpochSeconds => self.output.push_str(&formatted),
+            _ => self.string(&formatted),
+        }
+    }
+
+    /// Starts an array.
+    pub fn start_array(self) -> JsonArrayWriter<'a> {
+        JsonArrayWriter::new(self.output)
+    }
+
+    /// Starts an object.
+    pub fn start_object(self) -> JsonObjectWriter<'a> {
+        JsonObjectWriter::new(self.output)
+    }
+}
+
 pub struct JsonObjectWriter<'a> {
     json: &'a mut String,
     started: bool,
@@ -22,69 +104,8 @@ impl<'a> JsonObjectWriter<'a> {
         }
     }
 
-    /// Writes a null value with the given `key`.
-    pub fn null(&mut self, key: &str) -> &mut Self {
-        self.key(key);
-        self.json.push_str("null");
-        self
-    }
-
-    /// Writes the boolean `value` with the given `key`.
-    pub fn boolean(&mut self, key: &str, value: bool) -> &mut Self {
-        self.key(key);
-        self.json.push_str(match value {
-            true => "true",
-            _ => "false",
-        });
-        self
-    }
-
-    /// Writes a string `value` with the given `key`.
-    pub fn string(&mut self, key: &str, value: &str) -> &mut Self {
-        self.key(key);
-        append_string(&mut self.json, value);
-        self
-    }
-
-    /// Writes a string `value` with the given `key` without escaping it.
-    pub fn string_unchecked(&mut self, key: &str, value: &str) -> &mut Self {
-        self.key(key);
-        append_string_unchecked(&mut self.json, value);
-        self
-    }
-
-    /// Writes a number `value` with the given `key`.
-    pub fn number(&mut self, key: &str, value: Number) -> &mut Self {
-        self.key(key);
-        append_number(&mut self.json, value);
-        self
-    }
-
-    /// Writes an Instant `value` with the given `key` and `format`.
-    pub fn instant(&mut self, key: &str, instant: &Instant, format: Format) -> &mut Self {
-        self.key(key);
-        append_instant(&mut self.json, instant, format);
-        self
-    }
-
-    /// Starts an array with the given `key`.
-    pub fn start_array(&mut self, key: &str) -> JsonArrayWriter {
-        self.key(key);
-        JsonArrayWriter::new(&mut self.json)
-    }
-
-    /// Starts an object with the given `key`.
-    pub fn start_object(&mut self, key: &str) -> JsonObjectWriter {
-        self.key(key);
-        JsonObjectWriter::new(&mut self.json)
-    }
-
-    /// Finishes the object.
-    pub fn finish(self) {
-        self.json.push('}');
-    }
-
-    fn key(&mut self, key: &str) {
+    /// Starts a value with the given `key`.
+    pub fn key(&mut self, key: &str) -> JsonValueWriter {
         if self.started {
             self.json.push(',');
         }
@@ -93,6 +114,13 @@ impl<'a> JsonObjectWriter<'a> {
         self.json.push('"');
         self.json.push_str(&escape_string(key));
         self.json.push_str("\":");
+
+        JsonValueWriter::new(&mut self.json)
+    }
+
+    /// Finishes the object.
+    pub fn finish(self) {
+        self.json.push('}');
     }
 }
 
@@ -110,49 +138,41 @@ impl<'a> JsonArrayWriter<'a> {
         }
     }
 
+    #[inline]
+    fn write<F: Fn(JsonValueWriter) -> ()>(&mut self, f: F) -> &mut Self {
+        self.comma_delimit();
+        f(JsonValueWriter::new(&mut self.json));
+        self
+    }
+
     /// Writes a null value to the array.
     pub fn null(&mut self) -> &mut Self {
-        self.comma_delimit();
-        self.json.push_str("null");
-        self
+        self.write(|w| w.null())
     }
 
     /// Writes the boolean `value` to the array.
     pub fn boolean(&mut self, value: bool) -> &mut Self {
-        self.comma_delimit();
-        self.json.push_str(match value {
-            true => "true",
-            _ => "false",
-        });
-        self
+        self.write(|w| w.boolean(value))
     }
 
     /// Writes a string to the array.
     pub fn string(&mut self, value: &str) -> &mut Self {
-        self.comma_delimit();
-        append_string(&mut self.json, value);
-        self
+        self.write(|w| w.string(value))
     }
 
     /// Writes a string `value` to the array without escaping it.
     pub fn string_unchecked(&mut self, value: &str) -> &mut Self {
-        self.comma_delimit();
-        append_string_unchecked(&mut self.json, value);
-        self
+        self.write(|w| w.string_unchecked(value))
     }
 
     /// Writes a number `value` to the array.
     pub fn number(&mut self, value: Number) -> &mut Self {
-        self.comma_delimit();
-        append_number(&mut self.json, value);
-        self
+        self.write(|w| w.number(value))
     }
 
     /// Writes an Instant `value` using `format` to the array.
     pub fn instant(&mut self, instant: &Instant, format: Format) -> &mut Self {
-        self.comma_delimit();
-        append_instant(&mut self.json, instant, format);
-        self
+        self.write(|w| w.instant(instant, format))
     }
 
     /// Starts a nested array inside of the array.
@@ -180,54 +200,10 @@ impl<'a> JsonArrayWriter<'a> {
     }
 }
 
-fn append_string(json: &mut String, value: &str) {
-    json.push('"');
-    json.push_str(&escape_string(value));
-    json.push('"');
-}
-
-fn append_string_unchecked(json: &mut String, value: &str) {
-    // Verify in debug builds that we don't actually need to escape the string
-    debug_assert!(matches!(escape_string(value), Cow::Borrowed(_)));
-
-    json.push('"');
-    json.push_str(value);
-    json.push('"');
-}
-
-fn append_instant(json: &mut String, value: &Instant, format: Format) {
-    let formatted = value.fmt(format);
-    match format {
-        Format::EpochSeconds => json.push_str(&formatted),
-        _ => append_string(json, &formatted),
-    }
-}
-
-fn append_number(json: &mut String, value: Number) {
-    match value {
-        Number::PosInt(value) => {
-            // itoa::Buffer is a fixed-size stack allocation, so this is cheap
-            json.push_str(itoa::Buffer::new().format(value));
-        }
-        Number::NegInt(value) => {
-            json.push_str(itoa::Buffer::new().format(value));
-        }
-        Number::Float(value) => {
-            // If the value is NaN, Infinity, or -Infinity
-            if value.is_nan() || value.is_infinite() {
-                json.push_str("null");
-            } else {
-                // ryu::Buffer is a fixed-size stack allocation, so this is cheap
-                json.push_str(ryu::Buffer::new().format_finite(value));
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{JsonArrayWriter, JsonObjectWriter};
-    use crate::serialize::append_number;
+    use crate::serialize::JsonValueWriter;
     use proptest::proptest;
     use smithy_types::instant::Format;
     use smithy_types::{Instant, Number};
@@ -259,8 +235,8 @@ mod tests {
         let mut output = String::new();
         let mut obj_1 = JsonObjectWriter::new(&mut output);
 
-        let mut obj_2 = obj_1.start_object("nested");
-        obj_2.string("test", "test");
+        let mut obj_2 = obj_1.key("nested").start_object();
+        obj_2.key("test").string("test");
         obj_2.finish();
 
         obj_1.finish();
@@ -271,8 +247,8 @@ mod tests {
     fn array_inside_object() {
         let mut output = String::new();
         let mut object = JsonObjectWriter::new(&mut output);
-        object.start_array("foo").finish();
-        object.start_array("ba\nr").finish();
+        object.key("foo").start_array().finish();
+        object.key("ba\nr").start_array().finish();
         object.finish();
         assert_eq!(r#"{"foo":[],"ba\nr":[]}"#, &output);
     }
@@ -297,14 +273,14 @@ mod tests {
     fn object() {
         let mut output = String::new();
         let mut object = JsonObjectWriter::new(&mut output);
-        object.boolean("true_val", true);
-        object.boolean("false_val", false);
-        object.string("some_string", "some\nstring\nvalue");
-        object.string_unchecked("unchecked_str", "unchecked");
-        object.number("some_number", Number::Float(3.5));
-        object.null("some_null");
+        object.key("true_val").boolean(true);
+        object.key("false_val").boolean(false);
+        object.key("some_string").string("some\nstring\nvalue");
+        object.key("unchecked_str").string_unchecked("unchecked");
+        object.key("some_number").number(Number::Float(3.5));
+        object.key("some_null").null();
 
-        let mut array = object.start_array("some_mixed_array");
+        let mut array = object.key("some_mixed_array").start_array();
         array
             .string("1")
             .number(Number::NegInt(-2))
@@ -327,18 +303,14 @@ mod tests {
         let mut output = String::new();
 
         let mut object = JsonObjectWriter::new(&mut output);
-        object.instant(
-            "epoch_seconds",
-            &Instant::from_f64(5.2),
-            Format::EpochSeconds,
-        );
-        object.instant(
-            "date_time",
+        object
+            .key("epoch_seconds")
+            .instant(&Instant::from_f64(5.2), Format::EpochSeconds);
+        object.key("date_time").instant(
             &Instant::from_str("2021-05-24T15:34:50.123Z", Format::DateTime).unwrap(),
             Format::DateTime,
         );
-        object.instant(
-            "http_date",
+        object.key("http_date").instant(
             &Instant::from_str("Wed, 21 Oct 2015 07:28:00 GMT", Format::HttpDate).unwrap(),
             Format::HttpDate,
         );
@@ -374,24 +346,18 @@ mod tests {
 
     fn format_test_number(number: Number) -> String {
         let mut formatted = String::new();
-        append_number(&mut formatted, number);
+        JsonValueWriter::new(&mut formatted).number(number);
         formatted
     }
 
     #[test]
     fn number_formatting() {
-        let format = |n: Number| {
-            let mut buffer = String::new();
-            append_number(&mut buffer, n);
-            buffer
-        };
-
-        assert_eq!("1", format(Number::PosInt(1)));
-        assert_eq!("-1", format(Number::NegInt(-1)));
-        assert_eq!("1", format(Number::NegInt(1)));
-        assert_eq!("0.0", format(Number::Float(0.0)));
-        assert_eq!("10000000000.0", format(Number::Float(1e10)));
-        assert_eq!("-1.2", format(Number::Float(-1.2)));
+        assert_eq!("1", format_test_number(Number::PosInt(1)));
+        assert_eq!("-1", format_test_number(Number::NegInt(-1)));
+        assert_eq!("1", format_test_number(Number::NegInt(1)));
+        assert_eq!("0.0", format_test_number(Number::Float(0.0)));
+        assert_eq!("10000000000.0", format_test_number(Number::Float(1e10)));
+        assert_eq!("-1.2", format_test_number(Number::Float(-1.2)));
 
         // JSON doesn't support NaN, Infinity, or -Infinity, so we're matching
         // the behavior of the serde_json crate in these cases.

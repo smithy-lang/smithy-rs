@@ -87,29 +87,30 @@ private data class MemberContext(
 
     /** Generates an expression that serializes the given [value] expression to the object/array */
     fun writeValue(w: RustWriter, writerFn: JsonWriterFn, key: String, value: String) = when (destination) {
-        is MemberDestination.Object -> w.rust("$writerName.$writerFn($key, $value);")
+        is MemberDestination.Object -> w.rust("$writerName.key($key).$writerFn($value);")
         is MemberDestination.Array -> w.rust("$writerName.$writerFn($value);")
     }
 
     /** Generates an expression that serializes the given [inner] expression to the object/array */
     fun writeInner(w: RustWriter, writerFn: JsonWriterFn, key: String, inner: RustWriter.() -> Unit) {
-        w.withBlock("$writerName.$writerFn(", ");") {
-            if (destination is MemberDestination.Object) {
-                w.writeInline("$key, ")
-            }
+        val keyExpression = when (destination) {
+            is MemberDestination.Object -> ".key($key)"
+            is MemberDestination.Array -> ""
+        }
+        w.withBlock("$writerName$keyExpression.$writerFn(", ");") {
             inner(w)
         }
     }
 
     /** Generates a mutable declaration for serializing a new object */
     fun writeStartObject(w: RustWriter, decl: String, key: String) = when (destination) {
-        is MemberDestination.Object -> w.rust("let mut $decl = $writerName.start_object($key);")
+        is MemberDestination.Object -> w.rust("let mut $decl = $writerName.key($key).start_object();")
         is MemberDestination.Array -> w.rust("let mut $decl = $writerName.start_object();")
     }
 
     /** Generates a mutable declaration for serializing a new array */
     fun writeStartArray(w: RustWriter, decl: String, key: String) = when (destination) {
-        is MemberDestination.Object -> w.rust("let mut $decl = $writerName.start_array($key);")
+        is MemberDestination.Object -> w.rust("let mut $decl = $writerName.key($key).start_array();")
         is MemberDestination.Array -> w.rust("let mut $decl = $writerName.start_array();")
     }
 }
@@ -177,7 +178,7 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
         val fnName = "serialize_document"
         return RuntimeType.forInlineFun(fnName, "operation_ser") {
             it.rustTemplate(
-                // TODO: Implement document parsing
+                // TODO: Implement document serialization
                 """
                 pub fn $fnName(input: &#{Document}) -> Result<#{SdkBody}, #{Error}> {
                     unimplemented!();
