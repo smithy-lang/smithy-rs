@@ -45,8 +45,8 @@ impl<'a> JsonValueWriter<'a> {
             Document::Number(value) => self.number(*value),
             Document::Object(values) => {
                 let mut object = self.start_object();
-                for value in values {
-                    object.key(value.0).document(value.1);
+                for (key, value) in values {
+                    object.key(key).document(value);
                 }
                 object.finish();
             }

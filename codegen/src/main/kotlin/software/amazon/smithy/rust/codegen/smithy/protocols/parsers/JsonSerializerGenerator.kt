@@ -44,7 +44,6 @@ import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
-import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 private data class SimpleContext<T : Shape>(
     /** Name of the JsonObjectWriter or JsonArrayWriter */
@@ -163,8 +162,8 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
     private val httpIndex = HttpBindingIndex.of(model)
 
     override fun payloadSerializer(member: MemberShape): RuntimeType {
+        val fnName = SerializeFunctionNamer.name(model, symbolProvider, member)
         val target = model.expectShape(member.target, StructureShape::class.java)
-        val fnName = "serialize_payload_${target.id.name.toSnakeCase()}_${member.container.name.toSnakeCase()}"
         return RuntimeType.forInlineFun(fnName, "operation_ser") { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
@@ -193,7 +192,7 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
             return null
         }
 
-        val fnName = "serialize_operation_${operationShape.id.name.toSnakeCase()}"
+        val fnName = SerializeFunctionNamer.name(model, symbolProvider, operationShape)
         return RuntimeType.forInlineFun(fnName, "operation_ser") {
             it.rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
@@ -225,12 +224,12 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
     }
 
     private fun RustWriter.serializeStructure(context: StructContext) {
-        val fnName = "serialize_structure_${context.shape.id.name.toSnakeCase()}"
+        val fnName = SerializeFunctionNamer.name(model, symbolProvider, context.shape)
         val structureSymbol = symbolProvider.toSymbol(context.shape)
         val structureSerializer = RuntimeType.forInlineFun(fnName, "json_ser") { writer ->
             writer.rustBlockTemplate(
-                "pub fn $fnName(object: &mut #{JsonObjectWriter}, input: &#{Shape})",
-                "Shape" to structureSymbol,
+                "pub fn $fnName(object: &mut #{JsonObjectWriter}, input: &#{Input})",
+                "Input" to structureSymbol,
                 *codegenScope,
             ) {
                 context.copy(objectName = "object", localName = "input").also { inner ->
@@ -344,12 +343,12 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
     }
 
     private fun RustWriter.serializeUnion(context: SimpleContext<UnionShape>) {
-        val fnName = "serialize_union_${context.shape.id.name.toSnakeCase()}"
+        val fnName = SerializeFunctionNamer.name(model, symbolProvider, context.shape)
         val unionSymbol = symbolProvider.toSymbol(context.shape)
         val unionSerializer = RuntimeType.forInlineFun(fnName, "json_ser") { writer ->
             writer.rustBlockTemplate(
-                "pub fn $fnName(${context.writerName}: &mut #{JsonObjectWriter}, input: &#{Shape})",
-                "Shape" to unionSymbol,
+                "pub fn $fnName(${context.writerName}: &mut #{JsonObjectWriter}, input: &#{Input})",
+                "Input" to unionSymbol,
                 *codegenScope,
             ) {
                 rustBlock("match input") {
