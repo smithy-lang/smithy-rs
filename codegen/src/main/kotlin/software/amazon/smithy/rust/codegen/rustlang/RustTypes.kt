@@ -128,22 +128,15 @@ fun RustType.render(fullyQualified: Boolean = true): String {
  * Option<Instant>.contains(Instant) would return true.
  * Option<Instant>.contains(Blob) would return false.
  */
-fun <T : RustType> RustType.contains(t: T): Boolean {
-    if (t == this) {
-        return true
-    }
-
-    return when (this) {
-        is RustType.Container -> this.member.contains(t)
-        else -> false
-    }
+fun <T : RustType> RustType.contains(t: T): Boolean = when (this) {
+    t -> true
+    is RustType.Container -> this.member.contains(t)
+    else -> false
 }
 
-inline fun <reified T : RustType.Container> RustType.stripOuter(): RustType {
-    return when (this) {
-        is T -> this.member
-        else -> this
-    }
+inline fun <reified T : RustType.Container> RustType.stripOuter(): RustType = when (this) {
+    is T -> this.member
+    else -> this
 }
 
 /**

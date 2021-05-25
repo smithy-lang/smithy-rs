@@ -65,16 +65,18 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             namespace = "${runtimeConfig.cratePrefix}_types::retry"
         )
 
-        val Default: RuntimeType = RuntimeType("Default", dependency = null, namespace = "std::default")
-        val From = RuntimeType("From", dependency = null, namespace = "std::convert")
-        val AsRef = RuntimeType("AsRef", dependency = null, namespace = "std::convert")
         val std = RuntimeType(null, dependency = null, namespace = "std")
         val stdfmt = std.member("fmt")
-        val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
+
+        val AsRef = RuntimeType("AsRef", dependency = null, namespace = "std::convert")
         val ByteSlab = RuntimeType("Vec<u8>", dependency = null, namespace = "std::vec")
-        val Debug = stdfmt.member("Debug")
-        val PartialEq = std.member("cmp::PartialEq")
         val Clone = std.member("clone::Clone")
+        val Debug = stdfmt.member("Debug")
+        val Default: RuntimeType = RuntimeType("Default", dependency = null, namespace = "std::default")
+        val From = RuntimeType("From", dependency = null, namespace = "std::convert")
+        val PartialEq = std.member("cmp::PartialEq")
+        val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
+        val String = RuntimeType("String", dependency = null, namespace = "std::string")
 
         fun Instant(runtimeConfig: RuntimeConfig) =
             RuntimeType("Instant", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.cratePrefix}_types")

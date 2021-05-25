@@ -114,6 +114,7 @@ class OperationNormalizer(private val model: Model) {
         // Rename safety: Operations cannot be renamed
         private fun OperationShape.syntheticInputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Input")
         private fun OperationShape.syntheticOutputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Output")
+        // TODO: Remove synthetic body when cleaning up serde json generators
         private fun OperationShape.syntheticInputBodyId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}InputBody")
         private fun OperationShape.syntheticOutputBodyId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}OutputBody")
 
