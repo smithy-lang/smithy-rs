@@ -41,6 +41,7 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -164,14 +165,27 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
         val inputShape = operationShape.inputShape(model)
         val inputShapeName = inputShape.expectTrait<SyntheticInputTrait>().originalId?.name
             ?: throw CodegenException("operation must have a name if it has members")
+
+        // Don't generate an operation JSON serializer if there is no JSON body
+        val documentMembers =
+            httpIndex.getRequestBindings(operationShape)
+                .filter { it.value.location == HttpBinding.Location.DOCUMENT }
+                .keys.map { inputShape.expectMember(it) }
+        if (documentMembers.isEmpty()) {
+            return null
+        }
+
         val fnName = "serialize_operation_${inputShapeName.toSnakeCase()}"
         return RuntimeType.forInlineFun(fnName, "operation_ser") {
             it.rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(inputShape)
             ) {
-                // TODO: Implement operation serialization
-                rust("unimplemented!()")
+                rust("let mut out = String::new();")
+                rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
+                serializeStructure(StructContext("object", "input", inputShape, symbolProvider))
+                rust("object.finish();")
+                rustTemplate("Ok(#{SdkBody}::from(out))", *codegenScope)
             }
         }
     }
@@ -197,15 +211,17 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
         val structureSymbol = symbolProvider.toSymbol(context.shape)
         val structureSerializer = RuntimeType.forInlineFun(fnName, "json_ser") { writer ->
             writer.rustBlockTemplate(
-                "pub fn $fnName(${context.objectName}: &mut #{JsonObjectWriter}, input: &#{Shape})",
+                "pub fn $fnName(object: &mut #{JsonObjectWriter}, input: &#{Shape})",
                 "Shape" to structureSymbol,
                 *codegenScope,
             ) {
-                if (context.shape.members().isEmpty()) {
-                    rust("let _ = input;") // Suppress an unused argument warning
-                }
-                for (member in context.shape.members()) {
-                    serializeMember(context.member(member))
+                context.copy(objectName = "object", localName = "input").also { inner ->
+                    if (inner.shape.members().isEmpty()) {
+                        rust("let _ = input;") // Suppress an unused argument warning
+                    }
+                    for (member in inner.shape.members()) {
+                        serializeMember(inner.member(member))
+                    }
                 }
             }
         }
