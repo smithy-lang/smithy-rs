@@ -31,7 +31,7 @@ pub struct SdkBody {
     ///
     /// In the event of retry, this function will be called to generate a new body. See
     /// [`try_clone()`](SdkBody::try_clone)
-    rebuild: Option<Arc<dyn Fn() -> Inner>>,
+    rebuild: Option<Arc<dyn (Fn() -> Inner) + Send + Sync>>,
 }
 
 impl Debug for SdkBody {
@@ -77,7 +77,7 @@ impl SdkBody {
         }
     }
 
-    pub fn retryable(f: impl Fn() -> SdkBody + 'static) -> Self {
+    pub fn retryable(f: impl Fn() -> SdkBody + Send + Sync + 'static) -> Self {
         let initial = f();
         SdkBody {
             inner: initial.inner,
@@ -286,5 +286,12 @@ mod test {
         let body = SdkBody::from(hyper_body);
         // actually don't really care what the debug impl is, just that it doesn't crash
         let _ = format!("{:?}", body);
+    }
+
+    fn is_send<T: Send + Sync>() {}
+
+    #[test]
+    fn sdk_body_is_send() {
+        is_send::<SdkBody>()
     }
 }
