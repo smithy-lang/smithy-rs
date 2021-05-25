@@ -33,8 +33,10 @@ class JsonSerializerGeneratorTest {
             enum: FooEnum,
             int: Integer,
             list: SomeList,
+            listSparse: SomeSparseList,
             long: Long,
             map: MyMap,
+            mapSparse: MySparseMap,
             number: Double,
             s: String,
             top: Top,
@@ -48,7 +50,18 @@ class JsonSerializerGeneratorTest {
             value: Choice,
         }
 
+        @sparse
+        map MySparseMap {
+            key: String,
+            value: Choice,
+        }
+
         list SomeList {
+            member: Choice
+        }
+
+        @sparse
+        list SomeSparseList {
             member: Choice
         }
 
