@@ -14,6 +14,7 @@ are to allow this crate to be compilable and testable in isolation, no client co
 "http" = "0.2.1"
 "smithy-types" = { version = "0.0.1", path = "../smithy-types" }
 "smithy-http" = { version = "0.0.1", path = "../smithy-http" }
+"smithy-json" = { path = "../smithy-json" }
 "smithy-xml" = { path = "../smithy-xml" }
 "fastrand" = "1"
 
