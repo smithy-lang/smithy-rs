@@ -27,12 +27,19 @@ pub type Error = Box<dyn StdError + Send + Sync>;
 pub struct SdkBody {
     #[pin]
     inner: Inner,
+    /// An optional function to recreate the inner body
+    ///
+    /// In the event of retry, this function will be called to generate a new body. See
+    /// [`try_clone()`](SdkBody::try_clone)
     rebuild: Option<Arc<dyn Fn() -> Inner>>,
 }
 
 impl Debug for SdkBody {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.inner)
+        f.debug_struct("SdkBody")
+            .field("inner", &self.inner)
+            .field("retryable", &self.rebuild.is_some())
+            .finish()
     }
 }
 

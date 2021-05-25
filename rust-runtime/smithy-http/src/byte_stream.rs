@@ -215,6 +215,7 @@ impl ByteStream {
     /// }
     /// ```
     #[cfg(feature = "bytestream-util")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "bytestream-util")))]
     pub async fn from_path(path: &Path) -> Result<Self, Error> {
         let path_buf = path.to_path_buf();
         let sz = tokio::fs::metadata(path)
@@ -235,6 +236,7 @@ impl ByteStream {
     /// NOTE: This will NOT result in a retryable ByteStream. For a ByteStream that can be retried in the case of
     /// upstream failures, use [`ByteStream::from_path`](ByteStream::from_path)
     #[cfg(feature = "bytestream-util")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "bytestream-util")))]
     pub async fn from_file(file: tokio::fs::File) -> Result<Self, Error> {
         let sz = file
             .metadata()
