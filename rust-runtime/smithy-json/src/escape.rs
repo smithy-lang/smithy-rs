@@ -39,7 +39,6 @@ pub fn escape_string(value: &str) -> Cow<str> {
 #[cfg(test)]
 mod test {
     use super::escape_string;
-    use serde::Serialize;
 
     #[test]
     fn escape() {
@@ -56,23 +55,13 @@ mod test {
         assert_eq!("\\\"test\\\"", escape_string("\"test\"").as_ref());
     }
 
-    #[derive(Serialize)]
-    struct TestStruct {
-        value: String,
-    }
-
     use proptest::proptest;
     proptest! {
         #[test]
         fn matches_serde_json(s: String) {
-            let mut formatted = String::new();
-            formatted.push_str(r#"{"value":""#);
-            formatted.push_str(&escape_string(&s));
-            formatted.push_str("\"}");
-
             assert_eq!(
-                serde_json::to_string(&TestStruct { value: s }).unwrap(),
-                formatted
+                serde_json::to_string(&s).unwrap(),
+                format!(r#""{}""#, escape_string(&s))
             )
         }
     }

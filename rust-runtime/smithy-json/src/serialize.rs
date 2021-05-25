@@ -46,9 +46,9 @@ impl<'a> JsonObjectWriter<'a> {
     }
 
     /// Writes a string `value` with the given `key` without escaping it.
-    pub fn trusted_string(&mut self, key: &str, value: &str) -> &mut Self {
+    pub fn string_unchecked(&mut self, key: &str, value: &str) -> &mut Self {
         self.key(key);
-        append_string(&mut self.json, value);
+        append_string_unchecked(&mut self.json, value);
         self
     }
 
@@ -134,9 +134,9 @@ impl<'a> JsonArrayWriter<'a> {
     }
 
     /// Writes a string `value` to the array without escaping it.
-    pub fn trusted_string(&mut self, value: &str) -> &mut Self {
+    pub fn string_unchecked(&mut self, value: &str) -> &mut Self {
         self.comma_delimit();
-        append_string(&mut self.json, value);
+        append_string_unchecked(&mut self.json, value);
         self
     }
 
@@ -147,7 +147,7 @@ impl<'a> JsonArrayWriter<'a> {
         self
     }
 
-    /// Writes an Instant `value` with the given `key` and `format`.
+    /// Writes an Instant `value` using `format` to the array.
     pub fn instant(&mut self, instant: &Instant, format: Format) -> &mut Self {
         self.comma_delimit();
         append_instant(&mut self.json, instant, format);
@@ -180,10 +180,10 @@ impl<'a> JsonArrayWriter<'a> {
 }
 
 fn append_string(json: &mut String, value: &str) {
-    append_trusted_string(json, &escape_string(value));
+    append_string_unchecked(json, &escape_string(value));
 }
 
-fn append_trusted_string(json: &mut String, value: &str) {
+fn append_string_unchecked(json: &mut String, value: &str) {
     json.push('"');
     json.push_str(value);
     json.push('"');
@@ -197,11 +197,10 @@ fn append_instant(json: &mut String, value: &Instant, format: Format) {
     }
 }
 
-const F64_EXPONENT_MASK: u64 = 0x7FF0000000000000;
-
 fn append_number(json: &mut String, value: Number) {
     match value {
         Number::PosInt(value) => {
+            // itoa::Buffer is a fixed-size stack allocation, so this is cheap
             json.push_str(itoa::Buffer::new().format(value));
         }
         Number::NegInt(value) => {
@@ -209,11 +208,11 @@ fn append_number(json: &mut String, value: Number) {
         }
         Number::Float(value) => {
             // If the value is NaN, Infinity, or -Infinity
-            if value.to_bits() & F64_EXPONENT_MASK == F64_EXPONENT_MASK {
+            if value.is_nan() || value.is_infinite() {
                 json.push_str("null");
             } else {
-                let mut buffer = ryu::Buffer::new();
-                json.push_str(buffer.format_finite(value));
+                // ryu::Buffer is a fixed-size stack allocation, so this is cheap
+                json.push_str(ryu::Buffer::new().format_finite(value));
             }
         }
     }
@@ -222,9 +221,8 @@ fn append_number(json: &mut String, value: Number) {
 #[cfg(test)]
 mod tests {
     use super::{JsonArrayWriter, JsonObjectWriter};
-    use crate::serialize::append_number;
+    use crate::serialize::{append_number, append_string_unchecked};
     use proptest::proptest;
-    use serde::Serialize;
     use smithy_types::instant::Format;
     use smithy_types::{Instant, Number};
 
@@ -296,7 +294,7 @@ mod tests {
         object.boolean("true_val", true);
         object.boolean("false_val", false);
         object.string("some_string", "some\nstring\nvalue");
-        object.trusted_string("trusted_str", "trusted");
+        object.string_unchecked("unchecked_str", "unchecked");
         object.number("some_number", Number::Float(3.5));
         object.null("some_null");
 
@@ -304,7 +302,7 @@ mod tests {
         array
             .string("1")
             .number(Number::NegInt(-2))
-            .trusted_string("trusted")
+            .string_unchecked("unchecked")
             .boolean(true)
             .boolean(false)
             .null();
@@ -313,7 +311,7 @@ mod tests {
         object.finish();
 
         assert_eq!(
-            r#"{"true_val":true,"false_val":false,"some_string":"some\nstring\nvalue","trusted_str":"trusted","some_number":3.5,"some_null":null,"some_mixed_array":["1",-2,"trusted",true,false,null]}"#,
+            r#"{"true_val":true,"false_val":false,"some_string":"some\nstring\nvalue","unchecked_str":"unchecked","some_number":3.5,"some_null":null,"some_mixed_array":["1",-2,"unchecked",true,false,null]}"#,
             &output
         );
     }
@@ -368,11 +366,17 @@ mod tests {
         )
     }
 
-    #[derive(Serialize)]
-    struct SpecialFloatStruct {
-        nan: f64,
-        inf: f64,
-        nnf: f64,
+    #[test]
+    fn append_string_unchecked_no_escaping() {
+        let mut value = String::new();
+        append_string_unchecked(&mut value, "totally\ninvalid");
+        assert_eq!("\"totally\ninvalid\"", &value);
+    }
+
+    fn format_test_number(number: Number) -> String {
+        let mut formatted = String::new();
+        append_number(&mut formatted, number);
+        formatted
     }
 
     #[test]
@@ -392,42 +396,25 @@ mod tests {
 
         // JSON doesn't support NaN, Infinity, or -Infinity, so we're matching
         // the behavior of the serde_json crate in these cases.
-        let mut value = String::new();
-        value.push_str(r#"{"nan":"#);
-        append_number(&mut value, Number::Float(f64::NAN));
-        value.push_str(r#","inf":"#);
-        append_number(&mut value, Number::Float(f64::INFINITY));
-        value.push_str(r#","nnf":"#);
-        append_number(&mut value, Number::Float(f64::NEG_INFINITY));
-        value.push_str("}");
-
-        let serde_equivalent = serde_json::to_string(&SpecialFloatStruct {
-            nan: f64::NAN,
-            inf: f64::INFINITY,
-            nnf: f64::NEG_INFINITY,
-        })
-        .unwrap();
-        assert_eq!(serde_equivalent, value);
-    }
-
-    #[derive(Serialize)]
-    struct TestNumber<T> {
-        value: T,
-    }
-
-    fn format_test_number(number: Number) -> String {
-        let mut formatted = String::new();
-        formatted.push_str(r#"{"value":"#);
-        append_number(&mut formatted, number);
-        formatted.push_str("}");
-        formatted
+        assert_eq!(
+            serde_json::to_string(&f64::NAN).unwrap(),
+            format_test_number(Number::Float(f64::NAN))
+        );
+        assert_eq!(
+            serde_json::to_string(&f64::INFINITY).unwrap(),
+            format_test_number(Number::Float(f64::INFINITY))
+        );
+        assert_eq!(
+            serde_json::to_string(&f64::NEG_INFINITY).unwrap(),
+            format_test_number(Number::Float(f64::NEG_INFINITY))
+        );
     }
 
     proptest! {
         #[test]
         fn matches_serde_json_pos_int_format(value: u64) {
             assert_eq!(
-                serde_json::to_string(&TestNumber { value }).unwrap(),
+                serde_json::to_string(&value).unwrap(),
                 format_test_number(Number::PosInt(value)),
             )
         }
@@ -435,7 +422,7 @@ mod tests {
         #[test]
         fn matches_serde_json_neg_int_format(value: i64) {
             assert_eq!(
-                serde_json::to_string(&TestNumber { value }).unwrap(),
+                serde_json::to_string(&value).unwrap(),
                 format_test_number(Number::NegInt(value)),
             )
         }
@@ -443,7 +430,7 @@ mod tests {
         #[test]
         fn matches_serde_json_float_format(value: f64) {
             assert_eq!(
-                serde_json::to_string(&TestNumber { value }).unwrap(),
+                serde_json::to_string(&value).unwrap(),
                 format_test_number(Number::Float(value)),
             )
         }
