@@ -187,6 +187,8 @@ data class CargoDependency(
             "protocol-test-helpers", Local(runtimeConfig.relativePath), scope = DependencyScope.Dev
         )
 
+        fun smithyJson(runtimeConfig: RuntimeConfig): CargoDependency =
+            CargoDependency("${runtimeConfig.cratePrefix}-json", Local(runtimeConfig.relativePath))
         fun smithyXml(runtimeConfig: RuntimeConfig): CargoDependency =
             CargoDependency("${runtimeConfig.cratePrefix}-xml", Local(runtimeConfig.relativePath))
 

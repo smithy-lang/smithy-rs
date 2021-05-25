@@ -44,9 +44,9 @@ class XmlNameIndex(private val model: Model) : KnowledgeIndex {
     }
 
     fun operationInputShapeName(operationShape: OperationShape): String? {
-        val outputShape = operationShape.inputShape(model)
-        val rename = outputShape.getTrait<XmlNameTrait>()?.value
-        return rename ?: outputShape.expectTrait<SyntheticInputTrait>().originalId?.name
+        val inputShape = operationShape.inputShape(model)
+        val rename = inputShape.getTrait<XmlNameTrait>()?.value
+        return rename ?: inputShape.expectTrait<SyntheticInputTrait>().originalId?.name
     }
 
     fun memberName(member: MemberShape): String {

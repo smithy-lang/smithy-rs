@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-class JsonParserGenerator(protocolConfig: ProtocolConfig) : StructuredDataParserGenerator {
+class SerdeJsonParserGenerator(protocolConfig: ProtocolConfig) : StructuredDataParserGenerator {
     private val model = protocolConfig.model
     private val symbolProvider = protocolConfig.symbolProvider
     private val runtimeConfig = protocolConfig.runtimeConfig

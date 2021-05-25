@@ -36,8 +36,8 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.smithy.meta
-import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.JsonParserGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.JsonSerializerGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.SerdeJsonParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.SerdeJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
@@ -198,7 +198,7 @@ class BasicAwsJsonGenerator(
     }
 
     override fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata {
-        val generator = JsonSerializerGenerator(protocolConfig)
+        val generator = SerdeJsonSerializerGenerator(protocolConfig)
         val serializer = generator.operationSerializer(operationShape)
         serializer?.also { sym ->
             rustTemplate(
@@ -214,7 +214,7 @@ class BasicAwsJsonGenerator(
         val outputShape = operationIndex.getOutput(operationShape).get()
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         val jsonErrors = RuntimeType.awsJsonErrors(protocolConfig.runtimeConfig)
-        val generator = JsonParserGenerator(protocolConfig)
+        val generator = SerdeJsonParserGenerator(protocolConfig)
 
         fromResponseFun(implBlockWriter, operationShape) {
             rustBlock("if #T::is_error(&response)", jsonErrors) {
