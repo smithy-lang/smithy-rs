@@ -41,6 +41,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlMemberIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlNameIndex
+import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
@@ -94,7 +95,7 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
         this.copy(input = "$input.${symbolProvider.toMemberName(member)}")
 
     override fun operationSerializer(operationShape: OperationShape): RuntimeType? {
-        val fnName = SerializeFunctionNamer.name(model, symbolProvider, operationShape)
+        val fnName = symbolProvider.serializeFunctionName(operationShape)
         val inputShape = operationShape.inputShape(model)
         val xmlMembers = operationShape.operationXmlMembers()
         if (!xmlMembers.isNotEmpty()) {
@@ -131,7 +132,7 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
     }
 
     override fun payloadSerializer(member: MemberShape): RuntimeType {
-        val fnName = SerializeFunctionNamer.name(model, symbolProvider, member)
+        val fnName = symbolProvider.serializeFunctionName(member)
         val target = model.expectShape(member.target, StructureShape::class.java)
         return RuntimeType.forInlineFun(fnName, "xml_ser") {
             val t = symbolProvider.toSymbol(member).rustType().stripOuter<RustType.Option>().render(true)
@@ -274,7 +275,7 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
         ctx: Ctx.Element
     ) {
         val structureSymbol = symbolProvider.toSymbol(structureShape)
-        val fnName = SerializeFunctionNamer.name(model, symbolProvider, structureShape)
+        val fnName = symbolProvider.serializeFunctionName(structureShape)
         val structureSerializer = RuntimeType.forInlineFun(fnName, "xml_ser") {
             it.rustBlockTemplate(
                 "pub fn $fnName(input: &#{Input}, writer: #{ElementWriter})",
@@ -292,7 +293,7 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
     }
 
     private fun RustWriter.serializeUnion(unionShape: UnionShape, ctx: Ctx.Element) {
-        val fnName = SerializeFunctionNamer.name(model, symbolProvider, unionShape)
+        val fnName = symbolProvider.serializeFunctionName(unionShape)
         val unionSymbol = symbolProvider.toSymbol(unionShape)
         val structureSerializer = RuntimeType.forInlineFun(fnName, "xml_ser") {
             it.rustBlockTemplate(

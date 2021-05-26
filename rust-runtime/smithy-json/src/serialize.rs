@@ -36,7 +36,7 @@ impl<'a> JsonValueWriter<'a> {
             Document::Array(values) => {
                 let mut array = self.start_array();
                 for value in values {
-                    array.document(value);
+                    array.value().document(value);
                 }
                 array.finish();
             }
@@ -162,58 +162,10 @@ impl<'a> JsonArrayWriter<'a> {
         }
     }
 
-    #[inline]
-    fn write<F: Fn(JsonValueWriter) -> ()>(&mut self, f: F) -> &mut Self {
+    /// Starts a new value in the array.
+    pub fn value(&mut self) -> JsonValueWriter {
         self.comma_delimit();
-        f(JsonValueWriter::new(&mut self.json));
-        self
-    }
-
-    /// Writes a null value to the array.
-    pub fn null(&mut self) -> &mut Self {
-        self.write(|w| w.null())
-    }
-
-    /// Writes the boolean `value` to the array.
-    pub fn boolean(&mut self, value: bool) -> &mut Self {
-        self.write(|w| w.boolean(value))
-    }
-
-    /// Writes a document `value`.
-    pub fn document(&mut self, value: &Document) -> &mut Self {
-        self.write(|w| w.document(value))
-    }
-
-    /// Writes a string to the array.
-    pub fn string(&mut self, value: &str) -> &mut Self {
-        self.write(|w| w.string(value))
-    }
-
-    /// Writes a string `value` to the array without escaping it.
-    pub fn string_unchecked(&mut self, value: &str) -> &mut Self {
-        self.write(|w| w.string_unchecked(value))
-    }
-
-    /// Writes a number `value` to the array.
-    pub fn number(&mut self, value: Number) -> &mut Self {
-        self.write(|w| w.number(value))
-    }
-
-    /// Writes an Instant `value` using `format` to the array.
-    pub fn instant(&mut self, instant: &Instant, format: Format) -> &mut Self {
-        self.write(|w| w.instant(instant, format))
-    }
-
-    /// Starts a nested array inside of the array.
-    pub fn start_array(&mut self) -> JsonArrayWriter {
-        self.comma_delimit();
-        JsonArrayWriter::new(&mut self.json)
-    }
-
-    /// Starts a nested object inside of the array.
-    pub fn start_object(&mut self) -> JsonObjectWriter {
-        self.comma_delimit();
-        JsonObjectWriter::new(&mut self.json)
+        JsonValueWriter::new(&mut self.json)
     }
 
     /// Finishes the array.
@@ -252,9 +204,9 @@ mod tests {
     fn object_inside_array() {
         let mut output = String::new();
         let mut array = JsonArrayWriter::new(&mut output);
-        array.start_object().finish();
-        array.start_object().finish();
-        array.start_object().finish();
+        array.value().start_object().finish();
+        array.value().start_object().finish();
+        array.value().start_object().finish();
         array.finish();
         assert_eq!("[{},{},{}]", &output);
     }
@@ -288,11 +240,11 @@ mod tests {
 
         let mut arr_1 = JsonArrayWriter::new(&mut output);
 
-        let mut arr_2 = arr_1.start_array();
-        arr_2.number(Number::PosInt(5));
+        let mut arr_2 = arr_1.value().start_array();
+        arr_2.value().number(Number::PosInt(5));
         arr_2.finish();
 
-        arr_1.start_array().finish();
+        arr_1.value().start_array().finish();
         arr_1.finish();
 
         assert_eq!("[[5],[]]", &output);
@@ -310,13 +262,12 @@ mod tests {
         object.key("some_null").null();
 
         let mut array = object.key("some_mixed_array").start_array();
-        array
-            .string("1")
-            .number(Number::NegInt(-2))
-            .string_unchecked("unchecked")
-            .boolean(true)
-            .boolean(false)
-            .null();
+        array.value().string("1");
+        array.value().number(Number::NegInt(-2));
+        array.value().string_unchecked("unchecked");
+        array.value().boolean(true);
+        array.value().boolean(false);
+        array.value().null();
         array.finish();
 
         object.finish();
@@ -356,12 +307,14 @@ mod tests {
         let mut output = String::new();
 
         let mut array = JsonArrayWriter::new(&mut output);
-        array.instant(&Instant::from_f64(5.2), Format::EpochSeconds);
-        array.instant(
+        array
+            .value()
+            .instant(&Instant::from_f64(5.2), Format::EpochSeconds);
+        array.value().instant(
             &Instant::from_str("2021-05-24T15:34:50.123Z", Format::DateTime).unwrap(),
             Format::DateTime,
         );
-        array.instant(
+        array.value().instant(
             &Instant::from_str("Wed, 21 Oct 2015 07:28:00 GMT", Format::HttpDate).unwrap(),
             Format::HttpDate,
         );
