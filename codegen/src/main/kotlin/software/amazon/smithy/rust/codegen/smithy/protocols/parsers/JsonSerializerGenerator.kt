@@ -39,7 +39,6 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
@@ -170,11 +169,9 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
 
         // Don't generate an operation JSON serializer if there is no JSON body
         val httpBindings = httpIndex.getRequestBindings(operationShape)
-        val hasDocumentHttpBindings = httpBindings
-            .filter { it.value.location == Location.DOCUMENT }
-            .keys.map { inputShape.expectMember(it) }
-            .isNotEmpty()
-        if (inputShape.members().isEmpty() || httpBindings.isNotEmpty() && !hasDocumentHttpBindings) {
+        val httpBound = httpBindings.isNotEmpty()
+        val httpDocumentMembers = httpBindings.filter { it.value.location == Location.DOCUMENT }.keys
+        if (inputShape.members().isEmpty() || httpBound && httpDocumentMembers.isEmpty()) {
             return null
         }
 
@@ -186,7 +183,9 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
             ) {
                 rust("let mut out = String::new();")
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
-                serializeStructure(StructContext("object", "input", inputShape))
+                serializeStructure(StructContext("object", "input", inputShape)) { member ->
+                    !httpBound || httpDocumentMembers.contains(member.memberName)
+                }
                 rust("object.finish();")
                 rustTemplate("Ok(#{SdkBody}::from(out))", *codegenScope)
             }
@@ -209,7 +208,10 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
         }
     }
 
-    private fun RustWriter.serializeStructure(context: StructContext) {
+    private fun RustWriter.serializeStructure(
+        context: StructContext,
+        includeMember: (MemberShape) -> Boolean = { true }
+    ) {
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val structureSymbol = symbolProvider.toSymbol(context.shape)
         val structureSerializer = RuntimeType.forInlineFun(fnName, "json_ser") { writer ->
@@ -219,10 +221,11 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
                 *codegenScope,
             ) {
                 context.copy(objectName = "object", localName = "input").also { inner ->
-                    if (inner.shape.members().isEmpty()) {
+                    val members = inner.shape.members().filter(includeMember)
+                    if (members.isEmpty()) {
                         rust("let (_, _) = (object, input);") // Suppress unused argument warnings
                     }
-                    for (member in inner.shape.members()) {
+                    for (member in members) {
                         serializeMember(MemberContext.structMember(inner, member, symbolProvider))
                     }
                 }
