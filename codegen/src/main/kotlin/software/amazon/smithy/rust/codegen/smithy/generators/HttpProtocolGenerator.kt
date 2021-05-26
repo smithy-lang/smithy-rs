@@ -100,7 +100,7 @@ abstract class HttpProtocolGenerator(
         }
         val operationName = symbolProvider.toSymbol(operationShape).name
         operationWriter.documentShape(operationShape, model)
-        Attribute.Derives(setOf(RuntimeType.Clone, RuntimeType.Default)).render(operationWriter)
+        Attribute.Derives(setOf(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
         operationWriter.rustBlock("pub struct $operationName") {
             write("_private: ()")
         }
@@ -117,8 +117,6 @@ abstract class HttpProtocolGenerator(
         }
         traitImplementations(operationWriter, operationShape)
     }
-
-    data class ResponseBody(val type: String, val mutability: String)
 
     protected fun httpBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
         Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
