@@ -77,7 +77,7 @@ class EndpointTraitBindings(
                     rust(
                         """
                     if $field.is_empty() {
-                        return Err($invalidFieldError.into())
+                        return Err($invalidFieldError)
                     }
                     """
                     )
