@@ -53,7 +53,7 @@ apply QueryPrecedence @httpRequestTests([
 @restJson1
 service RestJsonExtras {
     version: "2019-12-16",
-    operations: [StringPayload, PrimitiveIntHeader, EnumQuery, StatusResponse]
+    operations: [StringPayload, PrimitiveIntHeader, EnumQuery, StatusResponse, MapWithEnumKeyOp]
 }
 
 @http(uri: "/StringPayload", method: "POST")
@@ -134,4 +134,38 @@ operation StatusResponse {
 structure StatusOutput {
     @httpResponseCode
     field: PrimitiveInt
+}
+
+map MapWithEnumKey {
+    key: StringEnum,
+    value: String,
+}
+
+structure MapWithEnumKeyInputOutput {
+    map: MapWithEnumKey,
+}
+
+@http(uri: "/map-with-enum-key", method: "POST")
+@httpRequestTests([
+    {
+        id: "MapWithEnumKeyRequest",
+        uri: "/map-with-enum-key",
+        method: "POST",
+        protocol: "aws.protocols#restJson1",
+        body: "{\"map\":{\"enumvalue\":\"something\"}}",
+        params: { map: { "enumvalue": "something" } }
+    },
+])
+@httpResponseTests([
+    {
+        id: "MapWithEnumKeyResponse",
+        protocol: "aws.protocols#restJson1",
+        code: 200,
+        body: "{\"map\":{\"enumvalue\":\"something\"}}",
+        params: { map: { "enumvalue": "something" } },
+    },
+])
+operation MapWithEnumKeyOp {
+    input: MapWithEnumKeyInputOutput,
+    output: MapWithEnumKeyInputOutput,
 }

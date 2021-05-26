@@ -15,15 +15,12 @@ import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.rustlang.RustType
-import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
-import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
@@ -42,7 +39,7 @@ class JsonSerializerSymbolProvider(
 ) :
     SymbolMetadataProvider(base) {
 
-    data class SerdeConfig(val serialize: Boolean, val deserialize: Boolean)
+    data class SerdeConfig(val deserialize: Boolean)
 
     private fun MemberShape.serializedName() = this.getTrait<JsonNameTrait>()?.value ?: this.memberName
 
@@ -51,16 +48,8 @@ class JsonSerializerSymbolProvider(
         val currentMeta = base.toSymbol(memberShape).expectRustMetadata()
         val serdeConfig = serdeRequired(model.expectShape(memberShape.container))
         val attribs = mutableListOf<Attribute>()
-        if (serdeConfig.serialize || serdeConfig.deserialize) {
+        if (serdeConfig.deserialize) {
             attribs.add(Attribute.Custom("serde(rename = ${memberShape.serializedName().dq()})"))
-        }
-        if (serdeConfig.serialize) {
-            if (base.toSymbol(memberShape).rustType().stripOuter<RustType.Reference>() is RustType.Option) {
-                attribs.add(Attribute.Custom("serde(skip_serializing_if = \"Option::is_none\")"))
-            }
-            serializerBuilder.serializerFor(memberShape)?.also {
-                attribs.add(Attribute.Custom("serde(serialize_with = ${it.fullyQualifiedName().dq()})", listOf(it)))
-            }
         }
         if (serdeConfig.deserialize) {
             serializerBuilder.deserializerFor(memberShape)?.also {
@@ -82,20 +71,18 @@ class JsonSerializerSymbolProvider(
     private fun containerMeta(container: Shape): RustMetadata {
         val currentMeta = base.toSymbol(container).expectRustMetadata()
         val requiredSerde = serdeRequired(container)
-        return currentMeta
-            .letIf(requiredSerde.serialize) { it.withDerives(RuntimeType.Serialize) }
-            .letIf(requiredSerde.deserialize) { it.withDerives(RuntimeType.Deserialize) }
+        return currentMeta.letIf(requiredSerde.deserialize) { it.withDerives(RuntimeType.Deserialize) }
     }
 
     private fun serdeRequired(shape: Shape): SerdeConfig {
         return when {
-            shape.hasTrait<InputBodyTrait>() -> SerdeConfig(serialize = true, deserialize = false)
-            shape.hasTrait<OutputBodyTrait>() -> SerdeConfig(serialize = false, deserialize = true)
+            shape.hasTrait<InputBodyTrait>() -> SerdeConfig(deserialize = false)
+            shape.hasTrait<OutputBodyTrait>() -> SerdeConfig(deserialize = true)
 
             // The bodies must be serializable. The top level inputs are _not_
-            shape.hasTrait<SyntheticInputTrait>() -> SerdeConfig(serialize = false, deserialize = false)
-            shape.hasTrait<SyntheticOutputTrait>() -> SerdeConfig(serialize = false, deserialize = false)
-            else -> SerdeConfig(serialize = true, deserialize = true)
+            shape.hasTrait<SyntheticInputTrait>() -> SerdeConfig(deserialize = false)
+            shape.hasTrait<SyntheticOutputTrait>() -> SerdeConfig(deserialize = false)
+            else -> SerdeConfig(deserialize = true)
         }
     }
 }

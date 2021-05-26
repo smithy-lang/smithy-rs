@@ -176,12 +176,6 @@ class EnumGenerator(
     private fun renderSerde() {
         writer.rustTemplate(
             """
-                impl #{serialize} for $enumName {
-                    fn serialize<S>(&self, serializer: S) -> Result<<S as #{serializer}>::Ok, <S as #{serializer}>::Error> where S: #{serializer}{
-                        serializer.serialize_str(self.as_str())
-                    }
-                }
-
                 impl<'de> #{deserialize}<'de> for $enumName {
                     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: #{deserializer}<'de> {
                         let data = <&str>::deserialize(deserializer)?;
@@ -189,8 +183,6 @@ class EnumGenerator(
                     }
                 }
             """,
-            "serializer" to RuntimeType.Serializer,
-            "serialize" to RuntimeType.Serialize,
             "deserializer" to RuntimeType.Deserializer,
             "deserialize" to RuntimeType.Deserialize
         )
