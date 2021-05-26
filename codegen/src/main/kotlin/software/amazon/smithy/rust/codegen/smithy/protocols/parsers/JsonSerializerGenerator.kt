@@ -324,7 +324,12 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
         val keyName = safeName("key")
         val valueName = safeName("value")
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
-            serializeMember(MemberContext.mapMember(context, keyName, valueName))
+            val keyTarget = model.expectShape(context.shape.key.target)
+            val keyExpression = when (keyTarget.hasTrait<EnumTrait>()) {
+                true -> "$keyName.as_str()"
+                else -> keyName
+            }
+            serializeMember(MemberContext.mapMember(context, keyExpression, valueName))
         }
     }
 

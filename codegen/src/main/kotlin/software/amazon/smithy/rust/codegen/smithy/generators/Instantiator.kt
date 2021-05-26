@@ -45,6 +45,7 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
@@ -186,18 +187,24 @@ class Instantiator(
             true -> ".to_ascii_lowercase()"
             else -> ""
         }
-        if (data.members.isNotEmpty()) {
+        if (data.members.isEmpty()) {
+            writer.write("#T::new()", RustType.HashMap.RuntimeType)
+        } else {
             writer.rustBlock("") {
                 write("let mut ret = #T::new();", RustType.HashMap.RuntimeType)
                 data.members.forEach { (k, v) ->
-                    withBlock("ret.insert(${k.value.dq()}.to_string()$lowercase,", ");") {
+                    withBlock("ret.insert(", ");") {
+                        val keyTarget = model.expectShape(shape.key.target)
+                        when (keyTarget.hasTrait<EnumTrait>()) {
+                            true -> renderString(this, keyTarget as StringShape, k)
+                            else -> rust("${k.value.dq()}.to_string()$lowercase")
+                        }
+                        rust(", ")
                         renderMember(this, shape.value, v, ctx)
                     }
                 }
                 write("ret")
             }
-        } else {
-            writer.write("#T::new()", RustType.HashMap.RuntimeType)
         }
     }
 
