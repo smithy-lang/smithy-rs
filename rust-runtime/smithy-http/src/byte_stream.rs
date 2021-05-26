@@ -82,8 +82,9 @@
 //! }
 //!
 //! async fn bytestream_from_file() -> GetObjectInput {
-//!     let f = Path::new("docs/some-large-file.csv");
-//!     let bytestream = ByteStream::from_path(&f).await.expect("valid path");
+//!     let bytestream = ByteStream::from_path("docs/some-large-file.csv")
+//!         .await
+//!         .expect("valid path");
 //!     GetObjectInput { body: bytestream }
 //! }
 //! ```
@@ -211,12 +212,13 @@ impl ByteStream {
     /// use smithy_http::byte_stream::ByteStream;
     /// use std::path::Path;
     ///  async fn make_bytestream() -> ByteStream {
-    ///     ByteStream::from_path(&Path::new("docs/rows.csv")).await.expect("file should be readable")
+    ///     ByteStream::from_path("docs/rows.csv").await.expect("file should be readable")
     /// }
     /// ```
     #[cfg(feature = "bytestream-util")]
     #[cfg_attr(docsrs, doc(cfg(feature = "bytestream-util")))]
-    pub async fn from_path(path: &Path) -> Result<Self, Error> {
+    pub async fn from_path(path: impl AsRef<Path>) -> Result<Self, Error> {
+        let path = path.as_ref();
         let path_buf = path.to_path_buf();
         let sz = tokio::fs::metadata(path)
             .await
@@ -446,7 +448,7 @@ mod tests {
         for i in 0..10000 {
             writeln!(file, "Brian was here. Briefly. {}", i)?;
         }
-        let body = ByteStream::from_path(file.path()).await?.into_inner();
+        let body = ByteStream::from_path(&file).await?.into_inner();
         // assert that a valid size hint is immediately ready
         assert_eq!(body.size_hint().exact(), Some(298890));
         let mut body1 = body.try_clone().expect("retryable bodies are cloneable");
