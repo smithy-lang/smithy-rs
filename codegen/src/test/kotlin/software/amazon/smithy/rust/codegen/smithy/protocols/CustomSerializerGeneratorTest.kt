@@ -54,8 +54,6 @@ internal class CustomSerializerGeneratorTest {
     @Test
     fun `generate correct function names`() {
         val serializerBuilder = CustomSerializerGenerator(provider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
-        serializerBuilder.serializerFor(model.lookup("test#S\$timestamp"))!!.name shouldBe "stdoptionoptionsmithytypesinstant_epoch_seconds_ser"
-        serializerBuilder.serializerFor(model.lookup("test#S\$blob"))!!.name shouldBe "stdoptionoptionsmithytypesblob_ser"
         serializerBuilder.deserializerFor(model.lookup("test#S\$blob"))!!.name shouldBe "stdoptionoptionsmithytypesblob_deser"
         serializerBuilder.deserializerFor(model.lookup("test#S\$string")) shouldBe null
     }
@@ -63,12 +61,6 @@ internal class CustomSerializerGeneratorTest {
     private fun checkDeserializer(builder: CustomSerializerGenerator, shapeId: String) {
         val symbol = builder.deserializerFor(model.lookup(shapeId))
         check(symbol != null) { "For $shapeId, expected a custom deserializer" }
-        checkSymbol(symbol)
-    }
-
-    private fun checkSerializer(builder: CustomSerializerGenerator, shapeId: String) {
-        val symbol = builder.serializerFor(model.lookup(shapeId))
-        check(symbol != null) { "For $shapeId, expected a custom serializer" }
         checkSymbol(symbol)
     }
 
@@ -100,14 +92,12 @@ internal class CustomSerializerGeneratorTest {
     fun `generate basic deserializers that compile`(memberName: String) {
         val serializerBuilder = CustomSerializerGenerator(provider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
         checkDeserializer(serializerBuilder, "test#S\$$memberName")
-        checkSerializer(serializerBuilder, "test#S\$$memberName")
     }
 
     @Test
     fun `support deeply nested structures`() {
         val serializerBuilder = CustomSerializerGenerator(provider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
         checkDeserializer(serializerBuilder, "test#TopLevel\$member")
-        checkSerializer(serializerBuilder, "test#TopLevel\$member")
     }
 
     @Test
@@ -118,7 +108,6 @@ internal class CustomSerializerGeneratorTest {
             }
         }
         val serializerBuilder = CustomSerializerGenerator(boxingProvider, model, TimestampFormatTrait.Format.EPOCH_SECONDS)
-        checkSerializer(serializerBuilder, "test#S\$timestamp")
         checkDeserializer(serializerBuilder, "test#S\$timestamp")
     }
 }

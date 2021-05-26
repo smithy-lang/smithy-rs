@@ -18,8 +18,8 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.SerdeJsonParserGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.SerdeJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
@@ -81,7 +81,7 @@ class RestJson(private val protocolConfig: ProtocolConfig) : Protocol {
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator {
-        return SerdeJsonSerializerGenerator(protocolConfig)
+        return JsonSerializerGenerator(protocolConfig)
     }
 
     override fun parseGenericError(operationShape: OperationShape): RuntimeType {
