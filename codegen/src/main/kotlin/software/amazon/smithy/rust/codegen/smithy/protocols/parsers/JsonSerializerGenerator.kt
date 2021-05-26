@@ -268,7 +268,10 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
                     is RustType.Integer -> "NegInt"
                     else -> throw IllegalStateException("unreachable")
                 }
-                rust("$writer.number(#T::$numberType((${value.asValue()}).into()));", smithyTypes.member("Number"))
+                rust(
+                    "$writer.number(##[allow(clippy::useless_conversion)]#T::$numberType((${value.asValue()}).into()));",
+                    smithyTypes.member("Number")
+                )
             }
             is BlobShape -> rust(
                 "$writer.string_unchecked(&#T(${value.name}));",
