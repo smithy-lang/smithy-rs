@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.customize
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.smithy.customizations.AllowClippyLints
 import software.amazon.smithy.rust.codegen.smithy.customizations.CrateVersionGenerator
+import software.amazon.smithy.rust.codegen.smithy.customizations.EndpointPrefixGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.IdempotencyTokenGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.SmithyTypesPubUseGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
@@ -26,7 +27,10 @@ class RequiredCustomizations : RustCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations + IdempotencyTokenGenerator(protocolConfig, operation)
+        return baseCustomizations + IdempotencyTokenGenerator(protocolConfig, operation) + EndpointPrefixGenerator(
+            protocolConfig,
+            operation
+        )
     }
 
     override fun libRsCustomizations(

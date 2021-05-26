@@ -183,8 +183,19 @@ class HttpProtocolTestGenerator(
         instantiator.render(this, inputShape, httpRequestTestCase.params)
 
         rust(""".make_operation(&config).expect("operation failed to build");""")
-        rust("let (http_request, _) = input.into_request_response().0.into_parts();")
+        rust("let (http_request, parts) = input.into_request_response().0.into_parts();")
         with(httpRequestTestCase) {
+            host.orNull()?.also { host ->
+                val withScheme = "http://$host"
+                rust(
+                    """
+                    let mut http_request = http_request;
+                    let ep = #T::endpoint::Endpoint::mutable(#T::Uri::from_static(${withScheme.dq()}));
+                    ep.set_endpoint(http_request.uri_mut(), parts.lock().unwrap().get());
+                """,
+                    CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType(), CargoDependency.Http.asType()
+                )
+            }
             rust(
                 """
                     assert_eq!(http_request.method(), ${method.dq()});
@@ -415,23 +426,10 @@ class HttpProtocolTestGenerator(
         private val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
         private val RestJson = "aws.protocoltests.restjson#RestJson"
         private val RestXml = "aws.protocoltests.restxml#RestXml"
-        private val ExpectFail = setOf(
-            // Endpoint trait https://github.com/awslabs/smithy-rs/issues/197
-            // This will also require running operations through the endpoint middleware (or moving endpoint middleware
-            // into operation construction
-            FailingTest(JsonRpc10, "AwsJson10EndpointTrait", Action.Request),
-            FailingTest(JsonRpc10, "AwsJson10EndpointTraitWithHostLabel", Action.Request),
-            FailingTest(AwsJson11, "AwsJson11EndpointTrait", Action.Request),
-            FailingTest(AwsJson11, "AwsJson11EndpointTraitWithHostLabel", Action.Request),
-            FailingTest(RestJson, "RestJsonEndpointTrait", Action.Request),
-            FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request),
-            FailingTest(RestXml, "RestXmlEndpointTraitWithHostLabelAndHttpBinding", Action.Request),
-            FailingTest(RestXml, "RestXmlEndpointTraitWithHostLabel", Action.Request),
-            FailingTest(RestXml, "RestXmlEndpointTrait", Action.Request)
-        )
+        private val ExpectFail = setOf<FailingTest>()
         private val RunOnly: Set<String>? = null
 
-        // These tests are not even attempted to be compiled, either because they will not compile
+        // These tests are not even attempted to be generated, either because they will not compile
         // or because they are flaky
         private val DisableTests = setOf<String>()
     }
