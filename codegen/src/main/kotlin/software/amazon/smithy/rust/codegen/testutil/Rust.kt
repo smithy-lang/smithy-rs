@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.BuildSettings
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
+import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -126,7 +127,10 @@ fun generatePluginContext(model: Model): Pair<PluginContext, Path> {
         .withMember("moduleAuthors", Node.fromStrings("testgenerator@smithy.com"))
         .withMember(
             "runtimeConfig",
-            Node.objectNodeBuilder().withMember("relativePath", Node.from(TestRuntimeConfig.relativePath)).build()
+            Node.objectNodeBuilder().withMember(
+                "relativePath",
+                Node.from((TestRuntimeConfig.runtimeCrateLocation as RuntimeCrateLocation.Relative).relativePath)
+            ).build()
         )
         .build()
     val pluginContext = PluginContext.builder().model(model).fileManifest(manifest).settings(settings).build()

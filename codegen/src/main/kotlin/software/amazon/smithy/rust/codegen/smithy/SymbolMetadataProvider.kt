@@ -93,8 +93,10 @@ class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvi
     }
 
     companion object {
-        private val defaultDerives = with(RuntimeType) {
-            listOf(Debug, PartialEq, Clone)
+        private val defaultDerives by lazy {
+            with(RuntimeType) {
+                listOf(Debug, PartialEq, Clone)
+            }
         }
     }
 }

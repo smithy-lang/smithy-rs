@@ -93,7 +93,10 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
             "cargo fmt".runCommand(fileManifest.baseDir, timeout = 10)
         } catch (_: CommandFailed) {
             logger.warning("Generated output did not parse [${service.id}]")
+        } catch (ex: Exception) {
+            logger.warning("Other error trying to format: $ex")
         }
+
         logger.info("Rust Client generation complete!")
     }
 

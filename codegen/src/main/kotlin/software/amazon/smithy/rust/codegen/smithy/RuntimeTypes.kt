@@ -9,27 +9,51 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.rustlang.DependencyLocation
 import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import java.util.Optional
 
-data class RuntimeConfig(val cratePrefix: String = "smithy", val relativePath: String = "../") {
+sealed class RuntimeCrateLocation {
+    data class Relative(val relativePath: String) : RuntimeCrateLocation()
+    data class Versioned(val version: String) : RuntimeCrateLocation()
+}
+
+fun RuntimeCrateLocation.crateLocation(): DependencyLocation = when (this) {
+    is RuntimeCrateLocation.Relative -> Local(this.relativePath)
+    is RuntimeCrateLocation.Versioned -> CratesIo(this.version)
+}
+
+data class RuntimeConfig(
+    val cratePrefix: String = "smithy",
+    val runtimeCrateLocation: RuntimeCrateLocation = RuntimeCrateLocation.Relative("../")
+) {
     companion object {
 
         fun fromNode(node: Optional<ObjectNode>): RuntimeConfig {
             return if (node.isPresent) {
+                val runtimeCrateLocation = if (node.get().containsMember("version")) {
+                    RuntimeCrateLocation.Versioned(node.get().expectStringMember("version").value)
+                } else {
+                    RuntimeCrateLocation.Relative(node.get().getStringMemberOrDefault("relativePath", "../"))
+                }
                 RuntimeConfig(
                     node.get().getStringMemberOrDefault("cratePrefix", "smithy"),
-                    node.get().getStringMemberOrDefault("relativePath", "../")
+                    runtimeCrateLocation = runtimeCrateLocation
                 )
             } else {
                 RuntimeConfig()
             }
         }
     }
+
+    fun runtimeCrate(runtimeCrateName: String): CargoDependency =
+        CargoDependency("$cratePrefix-$runtimeCrateName", runtimeCrateLocation.crateLocation())
 }
 
 data class RuntimeType(val name: String?, val dependency: RustDependency?, val namespace: String) {
@@ -203,7 +227,10 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             namespace = "smithy_http::response"
         )
 
-        fun wrappedXmlErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.wrappedXmlErrors(runtimeConfig))
-        fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.unwrappedXmlErrors(runtimeConfig))
+        fun wrappedXmlErrors(runtimeConfig: RuntimeConfig) =
+            forInlineDependency(InlineDependency.wrappedXmlErrors(runtimeConfig))
+
+        fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig) =
+            forInlineDependency(InlineDependency.unwrappedXmlErrors(runtimeConfig))
     }
 }
