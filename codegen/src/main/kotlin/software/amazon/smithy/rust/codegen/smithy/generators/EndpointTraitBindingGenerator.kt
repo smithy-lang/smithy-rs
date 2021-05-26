@@ -59,7 +59,9 @@ class EndpointTraitBindings(
         } else {
             val operationBuildError = OperationBuildError(runtimeConfig)
             writer.rustBlock("") {
-                // build a list of args: `"labelname" = "field"`
+                // build a list of args: `labelname = "field"`
+                // these eventually end up in the format! macro invocation:
+                // ```format!("some.{endpoint}", endpoint = endpoint);```
                 val args = endpointTrait.hostPrefix.labels.map { label ->
                     val memberShape = inputShape.getMember(label.content).get()
                     val field = symbolProvider.toMemberName(memberShape)
