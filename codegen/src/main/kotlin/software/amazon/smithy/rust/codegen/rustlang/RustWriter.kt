@@ -74,16 +74,6 @@ fun <T : CodeWriter> T.rust(
 }
 
 /**
- * Convenience wrapper that tells Intellij that the contents of this block are Rust
- */
-fun <T : CodeWriter> T.rustInline(
-    @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
-    vararg args: Any
-) {
-    this.writeInline(contents, *args)
-}
-
-/**
  * Sibling method to [rustBlock] that enables `#{variablename}` style templating
  */
 fun <T : CodeWriter> T.rustBlockTemplate(
