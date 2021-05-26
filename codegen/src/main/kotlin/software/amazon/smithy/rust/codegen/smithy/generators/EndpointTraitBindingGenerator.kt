@@ -59,25 +59,20 @@ class EndpointTraitBindings(
         } else {
             val operationBuildError = OperationBuildError(runtimeConfig)
             writer.rustBlock("") {
+                // build a list of args: `"labelname" = "field"`
                 val args = endpointTrait.hostPrefix.labels.map { label ->
-                    val member = inputShape.getMember(label.content).get()
-                    val field = symbolProvider.toMemberName(member)
+                    val memberShape = inputShape.getMember(label.content).get()
+                    val field = symbolProvider.toMemberName(memberShape)
                     val invalidFieldError = operationBuildError.invalidField(
                         writer,
                         field,
-                        "$field was unset but must be set as part of the endpoint prefix"
+                        "$field was unset or empty but must be set as part of the endpoint prefix"
                     )
-                    if (symbolProvider.toSymbol(member).isOptional()) {
-                        rust(
-                            """
-                        let $field = match $input.$field.as_deref() {
-                            Some(field) => field,
-                            None => return Err($invalidFieldError.into())
-                        };
-                       """
-                        )
+                    if (symbolProvider.toSymbol(memberShape).isOptional()) {
+                        rust("let $field = $input.$field.as_deref().unwrap_or_default();")
                     } else {
-                        rust("let $field = input.$field;")
+                        // NOTE: this is dead code until we start respecting @required
+                        rust("let $field = &$input.$field;")
                     }
                     rust(
                         """
@@ -86,12 +81,10 @@ class EndpointTraitBindings(
                     }
                     """
                     )
-                    (label.content to field)
+                    "${label.content} = $field"
                 }
                 writer.rustTemplate(
-                    "#{EndpointPrefix}::new(format!($formatLiteral, ${
-                    args.joinToString { (member, field) -> "$member = $field" }
-                    }))",
+                    "#{EndpointPrefix}::new(format!($formatLiteral, ${args.joinToString()}))",
                     "EndpointPrefix" to endpointPrefix
                 )
             }

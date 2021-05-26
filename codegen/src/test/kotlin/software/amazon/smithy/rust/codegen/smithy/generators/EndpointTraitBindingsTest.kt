@@ -95,6 +95,14 @@ internal class EndpointTraitBindingsTest {
 
             it.unitTest(
                 """
+                // unset is invalid
+                let inp = GetStatusInput { foo: None };
+                inp.endpoint_prefix().expect_err("invalid uri component");
+            """
+            )
+
+            it.unitTest(
+                """
                 // empty is invalid
                 let inp = GetStatusInput { foo: Some("".to_string()) };
                 inp.endpoint_prefix().expect_err("empty label is invalid");
