@@ -33,7 +33,11 @@ import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
 
 fun HttpTrait.uriFormatString(): String {
-    val base = uri.segments.joinToString("/", prefix = "/") {
+    return uri.rustFormatString("/", "/")
+}
+
+fun SmithyPattern.rustFormatString(prefix: String, separator: String): String {
+    val base = segments.joinToString(separator = separator, prefix = prefix) {
         when {
             it.isLabel -> "{${it.content}}"
             else -> it.content

@@ -39,6 +39,12 @@ fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): RuntimeTyp
 
 fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).member("BuildError")
 
+class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
+    fun missingField(w: RustWriter, field: String, details: String) = "${w.format(runtimeConfig.operationBuildError())}::MissingField { field: ${field.dq()}, details: ${details.dq()} }"
+    fun invalidField(w: RustWriter, field: String, details: String) = "${w.format(runtimeConfig.operationBuildError())}::InvalidField { field: ${field.dq()}, details: ${details.dq()}.to_string() }"
+    fun serializationError(w: RustWriter, error: String) = "${w.format(runtimeConfig.operationBuildError())}::SerializationError($error.into())"
+}
+
 /** setter names will never hit a reserved word and therefore never need escaping */
 fun MemberShape.setterName(): String = "set_${this.memberName.toSnakeCase()}"
 
