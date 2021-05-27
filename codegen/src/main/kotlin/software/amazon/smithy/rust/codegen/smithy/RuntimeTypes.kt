@@ -150,12 +150,12 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun awsJsonErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.awsJsonErrors(runtimeConfig))
 
-        val DocJson = forInlineDependency(InlineDependency.docJson())
+        val DocJson by lazy { forInlineDependency(InlineDependency.docJson()) }
 
-        val InstantEpoch = forInlineDependency(InlineDependency.instantEpoch())
-        val InstantHttpDate = forInlineDependency(InlineDependency.instantHttpDate())
-        val Instant8601 = forInlineDependency(InlineDependency.instant8601())
-        val IdempotencyToken = forInlineDependency(InlineDependency.idempotencyToken())
+        val InstantEpoch by lazy { forInlineDependency(InlineDependency.instantEpoch()) }
+        val InstantHttpDate by lazy { forInlineDependency(InlineDependency.instantHttpDate()) }
+        val Instant8601 by lazy { forInlineDependency(InlineDependency.instant8601()) }
+        val IdempotencyToken by lazy { forInlineDependency(InlineDependency.idempotencyToken()) }
 
         val Config = RuntimeType("config", null, "crate")
 
@@ -183,7 +183,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val Bytes = RuntimeType("Bytes", dependency = CargoDependency.Bytes, namespace = "bytes")
         fun BlobSerde(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.blobSerde(runtimeConfig))
 
-        private fun forInlineDependency(inlineDependency: InlineDependency) =
+        fun forInlineDependency(inlineDependency: InlineDependency) =
             RuntimeType(inlineDependency.name, inlineDependency, namespace = "crate")
 
         fun forInlineFun(name: String, module: String, func: (RustWriter) -> Unit) = RuntimeType(

@@ -71,7 +71,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
             symbolProvider,
             DefaultPublicModules
         )
-        httpGenerator = protocolGenerator.buildProtocolGenerator(protocolConfig)
+        httpGenerator = protocolGenerator.buildProtocolGenerator(protocolConfig, codegenDecorator)
     }
 
     private fun baselineTransform(model: Model) = model.let(RecursiveShapeBoxer::transform)

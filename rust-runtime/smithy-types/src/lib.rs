@@ -153,6 +153,10 @@ pub mod error {
         pub fn builder() -> Builder {
             Builder::default()
         }
+
+        pub fn into_builder(self) -> Builder {
+            Builder { inner: self }
+        }
     }
 
     impl ProvideErrorKind for Error {

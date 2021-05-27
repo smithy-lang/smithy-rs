@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import java.io.File
 import java.nio.file.Path
 
@@ -20,6 +21,10 @@ fun RuntimeConfig.awsRoot(): String {
     }
     check(File(path).exists()) { "$path must exist to generate a working SDK" }
     return path
+}
+
+object AwsRuntimeType {
+    val S3Errors by lazy { RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("s3_errors")) }
 }
 
 fun RuntimeConfig.awsRuntimeDependency(name: String, features: List<String> = listOf()): CargoDependency =

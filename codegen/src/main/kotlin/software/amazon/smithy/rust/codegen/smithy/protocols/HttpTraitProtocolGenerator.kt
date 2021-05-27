@@ -28,6 +28,8 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
@@ -67,6 +69,7 @@ interface Protocol {
 class HttpTraitProtocolGenerator(
     private val protocolConfig: ProtocolConfig,
     private val protocol: Protocol,
+    private val decorator: RustCodegenDecorator,
 ) : HttpProtocolGenerator(protocolConfig) {
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
@@ -88,7 +91,7 @@ class HttpTraitProtocolGenerator(
         val bindings = httpIndex.getRequestBindings(operationShape).toList()
         val payloadMemberName: String? =
             bindings.firstOrNull { (_, binding) -> binding.location == HttpBinding.Location.PAYLOAD }?.first
-        if (payloadMemberName == null) {
+        return if (payloadMemberName == null) {
             serializerGenerator.operationSerializer(operationShape)?.let { serializer ->
                 rust(
                     "#T(&self).map_err(|err|#T::SerializationError(err.into()))?",
@@ -96,10 +99,10 @@ class HttpTraitProtocolGenerator(
                     runtimeConfig.operationBuildError()
                 )
             } ?: rustTemplate("#{SdkBody}::from(\"\")", *codegenScope)
-            return BodyMetadata(takesOwnership = false)
+            BodyMetadata(takesOwnership = false)
         } else {
             val member = inputShape.expectMember(payloadMemberName)
-            return serializeViaPayload(member, serializerGenerator)
+            serializeViaPayload(member, serializerGenerator)
         }
     }
 
@@ -285,6 +288,9 @@ class HttpTraitProtocolGenerator(
                     protocol.parseGenericError(operationShape),
                     errorSymbol
                 )
+                decorator.operationCustomizations(protocolConfig, operationShape, listOf()).forEach { customization ->
+                    customization.section(OperationSection.UpdateGenericError("generic", "response"))(this)
+                }
                 if (operationShape.errors.isNotEmpty()) {
                     rustTemplate(
                         """

@@ -67,7 +67,7 @@ class CombinedErrorGenerator(
             rust(
                 """
                 pub kind: ${symbol.name}Kind,
-                pub (crate) meta: #T
+                pub meta: #T
             """,
                 RuntimeType.GenericError(runtimeConfig)
             )

@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.Serializers
 import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
@@ -62,7 +63,8 @@ sealed class AwsJsonVersion {
 
 class BasicAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFactory<BasicAwsJsonGenerator> {
     override fun buildProtocolGenerator(
-        protocolConfig: ProtocolConfig
+        protocolConfig: ProtocolConfig,
+        decorator: RustCodegenDecorator
     ): BasicAwsJsonGenerator = BasicAwsJsonGenerator(protocolConfig, version)
 
     private val shapeIfHasMembers: StructureModifier = { _, shape: StructureShape? ->
