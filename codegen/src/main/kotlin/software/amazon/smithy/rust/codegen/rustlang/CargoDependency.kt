@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.SymbolDependency
 import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.crateLocation
 import software.amazon.smithy.rust.codegen.util.dq
 
 sealed class DependencyScope {
@@ -104,6 +105,7 @@ class InlineDependency(
 
         fun wrappedXmlErrors(runtimeConfig: RuntimeConfig): InlineDependency =
             forRustFile("rest_xml_wrapped_errors", CargoDependency.smithyXml(runtimeConfig))
+
         fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig): InlineDependency =
             forRustFile("rest_xml_unwrapped_errors", CargoDependency.smithyXml(runtimeConfig))
     }
@@ -176,21 +178,16 @@ data class CargoDependency(
     companion object {
         val FastRand = CargoDependency("fastrand", CratesIo("1"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2"))
-        fun SmithyTypes(runtimeConfig: RuntimeConfig) =
-            CargoDependency("${runtimeConfig.cratePrefix}-types", Local(runtimeConfig.relativePath))
+        fun SmithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("types")
 
-        fun SmithyHttp(runtimeConfig: RuntimeConfig) = CargoDependency(
-            "${runtimeConfig.cratePrefix}-http", Local(runtimeConfig.relativePath)
-        )
+        fun SmithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http")
 
         fun ProtocolTestHelpers(runtimeConfig: RuntimeConfig) = CargoDependency(
-            "protocol-test-helpers", Local(runtimeConfig.relativePath), scope = DependencyScope.Dev
+            "protocol-test-helpers", runtimeConfig.runtimeCrateLocation.crateLocation(), scope = DependencyScope.Dev
         )
 
-        fun smithyJson(runtimeConfig: RuntimeConfig): CargoDependency =
-            CargoDependency("${runtimeConfig.cratePrefix}-json", Local(runtimeConfig.relativePath))
-        fun smithyXml(runtimeConfig: RuntimeConfig): CargoDependency =
-            CargoDependency("${runtimeConfig.cratePrefix}-xml", Local(runtimeConfig.relativePath))
+        fun smithyJson(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("json")
+        fun smithyXml(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("xml")
 
         val SerdeJson: CargoDependency =
             CargoDependency("serde_json", CratesIo("1"), features = listOf("float_roundtrip"))
