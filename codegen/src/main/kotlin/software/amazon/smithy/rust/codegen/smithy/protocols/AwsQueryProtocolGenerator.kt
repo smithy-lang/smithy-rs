@@ -21,10 +21,10 @@ import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.AwsQueryParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.AwsQuerySerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.XmlBindingTraitParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.util.dq
@@ -233,11 +233,9 @@ class AwsQueryProtocolGenerator(private val protocolConfig: ProtocolConfig) : Ht
         rust("output.build()$err")
     }
 
-    private fun structuredDataParser(): StructuredDataParserGenerator {
-        return XmlBindingTraitParserGenerator(protocolConfig, awsQueryErrors, true)
-    }
+    private fun structuredDataParser(): StructuredDataParserGenerator =
+        AwsQueryParserGenerator(protocolConfig, awsQueryErrors)
 
-    private fun structuredDataSerializer(): StructuredDataSerializerGenerator {
-        return AwsQuerySerializerGenerator(protocolConfig)
-    }
+    private fun structuredDataSerializer(): StructuredDataSerializerGenerator =
+        AwsQuerySerializerGenerator(protocolConfig)
 }
