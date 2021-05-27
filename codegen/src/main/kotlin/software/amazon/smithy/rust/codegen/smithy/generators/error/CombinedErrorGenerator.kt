@@ -143,15 +143,15 @@ class CombinedErrorGenerator(
             // Consider if this should actually be `Option<Cow<&str>>`. This would enable us to use display as implemented
             // by std::Error to generate a message in that case.
             pub fn message(&self) -> Option<&str> {
-                self.meta.message.as_deref()
+                self.meta.message()
             }
 
             pub fn request_id(&self) -> Option<&str> {
-                self.meta.request_id.as_deref()
+                self.meta.request_id()
             }
 
             pub fn code(&self) -> Option<&str> {
-                self.meta.code.as_deref()
+                self.meta.code()
             }
         }
         """,
