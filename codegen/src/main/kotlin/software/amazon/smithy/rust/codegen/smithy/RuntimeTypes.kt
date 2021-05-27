@@ -20,18 +20,18 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import java.util.Optional
 
 sealed class RuntimeCrateLocation {
-    data class Relative(val relativePath: String) : RuntimeCrateLocation()
+    data class Path(val path: String) : RuntimeCrateLocation()
     data class Versioned(val version: String) : RuntimeCrateLocation()
 }
 
 fun RuntimeCrateLocation.crateLocation(): DependencyLocation = when (this) {
-    is RuntimeCrateLocation.Relative -> Local(this.relativePath)
+    is RuntimeCrateLocation.Path -> Local(this.path)
     is RuntimeCrateLocation.Versioned -> CratesIo(this.version)
 }
 
 data class RuntimeConfig(
     val cratePrefix: String = "smithy",
-    val runtimeCrateLocation: RuntimeCrateLocation = RuntimeCrateLocation.Relative("../")
+    val runtimeCrateLocation: RuntimeCrateLocation = RuntimeCrateLocation.Path("../")
 ) {
     companion object {
 
@@ -40,7 +40,7 @@ data class RuntimeConfig(
                 val runtimeCrateLocation = if (node.get().containsMember("version")) {
                     RuntimeCrateLocation.Versioned(node.get().expectStringMember("version").value)
                 } else {
-                    RuntimeCrateLocation.Relative(node.get().getStringMemberOrDefault("relativePath", "../"))
+                    RuntimeCrateLocation.Path(node.get().getStringMemberOrDefault("relativePath", "../"))
                 }
                 RuntimeConfig(
                     node.get().getStringMemberOrDefault("cratePrefix", "smithy"),

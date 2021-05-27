@@ -24,7 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.util.dq
 import java.io.File
 
-val TestRuntimeConfig = RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.Relative(File("../rust-runtime/").absolutePath))
+val TestRuntimeConfig = RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.Path(File("../rust-runtime/").absolutePath))
 val TestSymbolVisitorConfig = SymbolVisitorConfig(
     runtimeConfig = TestRuntimeConfig,
     codegenConfig = CodegenConfig(),
