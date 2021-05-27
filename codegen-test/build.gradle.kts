@@ -28,22 +28,11 @@ val CodegenTests = listOf(
     CodegenTest("com.amazonaws.dynamodb#DynamoDB_20120810", "dynamo"),
     CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
     CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
-    CodegenTest(
-        "aws.protocoltests.json#JsonProtocol",
-        "json_rpc11"
-    ),
-    CodegenTest(
-        "aws.protocoltests.restjson#RestJson",
-        "rest_json"
-    ),
-    CodegenTest(
-        "aws.protocoltests.restjson#RestJsonExtras",
-        "rest_json_extas"
-    ),
-    CodegenTest(
-        "aws.protocoltests.restxml#RestXml",
-        "rest_xml"
-    ),
+    CodegenTest("aws.protocoltests.json#JsonProtocol", "json_rpc11"),
+    CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
+    CodegenTest("aws.protocoltests.restjson#RestJsonExtras", "rest_json_extas"),
+    CodegenTest("aws.protocoltests.restxml#RestXml", "rest_xml"),
+    CodegenTest("aws.protocoltests.query#AwsQuery", "aws_query"),
     CodegenTest(
         "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
         "rest_xml_namespace"

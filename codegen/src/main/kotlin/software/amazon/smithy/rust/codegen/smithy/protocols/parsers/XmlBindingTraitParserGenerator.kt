@@ -43,6 +43,7 @@ import software.amazon.smithy.rust.codegen.smithy.isBoxed
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlMemberIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlNameIndex
+import software.amazon.smithy.rust.codegen.smithy.protocols.deserializeFunctionName
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -50,14 +51,31 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val xmlErrors: RuntimeType) :
-    StructuredDataParserGenerator {
-
+class XmlBindingTraitParserGenerator(
+    protocolConfig: ProtocolConfig,
+    private val xmlErrors: RuntimeType,
     /**
-     * Abstraction to represent an XML element name:
-     * `[prefix]:[local]`
+     * True indicates the response two tags that wrap the actual response data:
+     * ```
+     * <SomeOperationResponse>
+     *     <SomeOperationResult>
+     *         <ActualResponseData />
+     *     </SomeOperationResult>
+     * </SomeOperationResponse>
+     * ```
+     * False indicates there is no wrapper:
+     * ```
+     * <ActualResponseData />
+     * ```
      */
+    private val protocolHasResponseWrapper: Boolean,
+) : StructuredDataParserGenerator {
+
+    /** Abstraction to represent an XML element name */
     data class XmlName(val name: String) {
+        /** Generates an expression to match a given element against this XML tag name */
+        fun matchExpression(start_el: String) = "$start_el.matches(${this.toString().dq()})"
+
         override fun toString(): String {
             return name
         }
@@ -107,8 +125,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
     override fun payloadParser(member: MemberShape): RuntimeType {
         val shape = model.expectShape(member.target)
         check(shape is UnionShape || shape is StructureShape) { "payload parser should only be used on structures & unions" }
-        val fnName =
-            "parse_payload_" + shape.id.name.toString().toSnakeCase() + member.container.name.toString().toSnakeCase()
+        val fnName = symbolProvider.deserializeFunctionName(member)
         return RuntimeType.forInlineFun(fnName, "xml_deser") {
             it.rustBlock(
                 "pub fn $fnName(inp: &[u8]) -> Result<#1T, #2T>",
@@ -155,7 +172,7 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
      */
     override fun operationParser(operationShape: OperationShape): RuntimeType? {
         val outputShape = operationShape.outputShape(model)
-        val fnName = operationShape.id.name.toString().toSnakeCase() + "_deser_operation"
+        val fnName = symbolProvider.deserializeFunctionName(operationShape)
         val shapeName = xmlIndex.operationOutputShapeName(operationShape)
         val members = operationShape.operationXmlMembers()
         if (shapeName == null || !members.isNotEmpty()) {
@@ -175,16 +192,55 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
                     ##[allow(unused_mut)]
                     let mut decoder = doc.root_element()?;
                     let start_el = decoder.start_el();
-                    if !(${XmlName(shapeName).matchExpression("start_el")}) {
-                        return Err(#{XmlError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
-                    }
                     """,
                     *codegenScope
                 )
-                parseStructureInner(members, builder = "builder", Ctx(tag = "decoder", accum = null))
+                if (protocolHasResponseWrapper) {
+                    withResponseWrapper(operationShape) { tagName ->
+                        parseStructureInner(members, builder = "builder", Ctx(tag = tagName, accum = null))
+                    }
+                } else {
+                    rustTemplate(
+                        """
+                        if !(${XmlName(shapeName).matchExpression("start_el")}) {
+                            return Err(#{XmlError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
+                        }
+                        """,
+                        *codegenScope
+                    )
+                    parseStructureInner(members, builder = "builder", Ctx(tag = "decoder", accum = null))
+                }
                 rust("Ok(builder)")
             }
         }
+    }
+
+    private fun RustWriter.withResponseWrapper(operationShape: OperationShape, inner: RustWriter.(String) -> Unit) {
+        val operationName = symbolProvider.toSymbol(operationShape).name
+        val responseWrapperName = operationName + "Response"
+        val resultWrapperName = operationName + "Result"
+        rustTemplate(
+            """
+                        if !(${XmlName(responseWrapperName).matchExpression("start_el")}) {
+                            return Err(#{XmlError}::custom(format!("invalid root, expected $responseWrapperName got {:?}", start_el)))
+                        }
+                        if let Some(mut result_tag) = decoder.next_tag() {
+                            let start_el = result_tag.start_el();
+                            if !(${XmlName(resultWrapperName).matchExpression("start_el")}) {
+                                return Err(#{XmlError}::custom(format!("invalid result, expected $resultWrapperName got {:?}", start_el)))
+                            }
+                        """,
+            *codegenScope
+        )
+        inner("result_tag")
+        rustTemplate(
+            """
+                        } else {
+                            return Err(#{XmlError}::custom("expected $resultWrapperName tag"))
+                        };
+                        """,
+            *codegenScope
+        )
     }
 
     override fun errorParser(errorShape: StructureShape): RuntimeType {
@@ -591,22 +647,37 @@ class XmlBindingTraitParserGenerator(protocolConfig: ProtocolConfig, private val
         return getMemberTrait(model, XmlFlattenedTrait::class.java).isPresent
     }
 
-    fun XmlName.matchExpression(start_el: String) =
-        "$start_el.matches(${this.toString().dq()})"
-
     private fun OperationShape.operationXmlMembers(): XmlMemberIndex {
         val outputShape = this.outputShape(model)
-        val documentMembers =
-            index.getResponseBindings(this).filter { it.value.location == HttpBinding.Location.DOCUMENT }
-                .keys.map { outputShape.expectMember(it) }
-        return XmlMemberIndex.fromMembers(documentMembers)
+
+        // HTTP trait bound protocols, such as RestXml, need to restrict the members to DOCUMENT members,
+        // while protocols like AwsQuery do not support HTTP traits, and thus, all members are used.
+        val responseBindings = index.getResponseBindings(this)
+        return when (responseBindings.isEmpty()) {
+            true -> XmlMemberIndex.fromMembers(outputShape.members().toList())
+            else -> {
+                val documentMembers =
+                    responseBindings.filter { it.value.location == HttpBinding.Location.DOCUMENT }
+                        .keys.map { outputShape.expectMember(it) }
+                return XmlMemberIndex.fromMembers(documentMembers)
+            }
+        }
     }
 
     private fun StructureShape.errorXmlMembers(): XmlMemberIndex {
-        val documentMembers =
-            index.getResponseBindings(this).filter { it.value.location == HttpBinding.Location.DOCUMENT }
-                .keys.map { this.expectMember(it) }
-        return XmlMemberIndex.fromMembers(documentMembers)
+        val responseBindings = index.getResponseBindings(this)
+
+        // HTTP trait bound protocols, such as RestXml, need to restrict the members to DOCUMENT members,
+        // while protocols like AwsQuery do not support HTTP traits, and thus, all members are used.
+        return when (responseBindings.isEmpty()) {
+            true -> XmlMemberIndex.fromMembers(members().toList())
+            else -> {
+                val documentMembers =
+                    responseBindings.filter { it.value.location == HttpBinding.Location.DOCUMENT }
+                        .keys.map { this.expectMember(it) }
+                return XmlMemberIndex.fromMembers(documentMembers)
+            }
+        }
     }
 
     private fun StructureShape.xmlMembers(): XmlMemberIndex {

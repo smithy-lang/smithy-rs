@@ -55,7 +55,7 @@ class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
     }
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return XmlBindingTraitParserGenerator(protocolConfig, restXmlErrors)
+        return XmlBindingTraitParserGenerator(protocolConfig, restXmlErrors, false)
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator {
