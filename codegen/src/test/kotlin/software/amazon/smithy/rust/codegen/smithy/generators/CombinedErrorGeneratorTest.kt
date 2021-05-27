@@ -51,7 +51,7 @@ internal class CombinedErrorGeneratorTest {
         writer.compileAndTest(
             """
             let kind = GreetingErrorKind::InvalidGreeting(InvalidGreeting::builder().message("an error").build());
-            let error = GreetingError::new(kind, smithy_types::Error { code: Some("InvalidGreeting".to_string()), message: Some("an error".to_string()), request_id: None });
+            let error = GreetingError::new(kind, smithy_types::Error::builder().code("InvalidGreeting").message("an error").build());
             assert_eq!(format!("{}", error), "InvalidGreeting: an error");
             assert_eq!(error.message(), Some("an error"));
             assert_eq!(error.code(), Some("InvalidGreeting"));
@@ -60,11 +60,7 @@ internal class CombinedErrorGeneratorTest {
 
 
             // unhandled variants properly delegate message
-            let error = GreetingError::generic(smithy_types::Error {
-               code: None,
-               message: Some("hello".to_string()),
-               request_id: None
-            });
+            let error = GreetingError::generic(smithy_types::Error::builder().message("hello").build());
             assert_eq!(error.message(), Some("hello"));
 
             let error = GreetingError::unhandled("some other error");
