@@ -53,6 +53,30 @@ internal class ServiceConfigGeneratorTest {
     }
 
     @Test
+    fun `find idempotency token via resources`() {
+        val model = """
+            namespace com.example
+            service ResourceService {
+                resources: [Resource],
+                version: "1"
+            }
+
+            resource Resource {
+                operations: [CreateResource]
+            }
+            operation CreateResource {
+                input: IdempotentInput
+            }
+
+            structure IdempotentInput {
+                @idempotencyToken
+                tok: String
+            }
+        """.asSmithyModel()
+        model.lookup<ServiceShape>("com.example#ResourceService").needsIdempotencyToken(model) shouldBe true
+    }
+
+    @Test
     fun `generate customizations as specified`() {
         class ServiceCustomizer : NamedSectionGenerator<ServiceConfig>() {
             override fun section(section: ServiceConfig): Writable {
