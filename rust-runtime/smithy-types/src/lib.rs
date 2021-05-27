@@ -120,7 +120,7 @@ pub mod error {
         /// fn main() {
         ///     // Extension trait must be brought into scope
         ///     use S3ErrorExt;
-        ///     let sdk_response: Result<(), Error> = todo!();
+        ///     let sdk_response: Result<(), Error> = Err(Error::builder().custom(HOST_ID, "x-1234").build());
         ///     if let Err(err) = sdk_response {
         ///         println!("request id: {:?}, extended request id: {:?}", err.request_id(), err.extended_request_id());
         ///     }
