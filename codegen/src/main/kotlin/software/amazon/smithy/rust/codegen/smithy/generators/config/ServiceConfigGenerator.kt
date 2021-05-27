@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy.generators.config
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.OperationIndex
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -69,7 +70,8 @@ sealed class ServiceConfig(name: String) : Section(name) {
 // TODO: if this becomes hot, it may need to be cached in a knowledge index
 fun ServiceShape.needsIdempotencyToken(model: Model): Boolean {
     val operationIndex = OperationIndex.of(model)
-    return this.allOperations.flatMap { operationIndex.getInputMembers(it).values }.any { it.hasTrait<IdempotencyTokenTrait>() }
+    val topDownIndex = TopDownIndex.of(model)
+    return topDownIndex.getContainedOperations(this.id).flatMap { operationIndex.getInputMembers(it).values }.any { it.hasTrait<IdempotencyTokenTrait>() }
 }
 
 typealias ConfigCustomization = NamedSectionGenerator<ServiceConfig>
