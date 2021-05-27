@@ -152,8 +152,7 @@ class HttpTraitProtocolGenerator(
         payloadName: String,
         serializer: StructuredDataSerializerGenerator
     ): BodyMetadata {
-        val targetShape = model.expectShape(member.target)
-        return when (targetShape) {
+        return when (val targetShape = model.expectShape(member.target)) {
             // Write the raw string to the payload
             is StringShape -> {
                 if (targetShape.hasTrait<EnumTrait>()) {

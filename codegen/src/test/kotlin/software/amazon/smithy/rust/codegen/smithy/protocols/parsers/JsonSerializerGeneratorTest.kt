@@ -26,15 +26,20 @@ class JsonSerializerGeneratorTest {
         use aws.protocols#restJson1
 
         union Choice {
-            map: MyMap,
-            list: SomeList,
-            s: String,
-            enum: FooEnum,
-            date: Timestamp,
-            number: Double,
-            top: Top,
             blob: Blob,
+            boolean: Boolean,
+            date: Timestamp,
             document: Document,
+            enum: FooEnum,
+            int: Integer,
+            list: SomeList,
+            listSparse: SomeSparseList,
+            long: Long,
+            map: MyMap,
+            mapSparse: MySparseMap,
+            number: Double,
+            s: String,
+            top: Top,
         }
 
         @enum([{name: "FOO", value: "FOO"}])
@@ -45,7 +50,18 @@ class JsonSerializerGeneratorTest {
             value: Choice,
         }
 
+        @sparse
+        map MySparseMap {
+            key: String,
+            value: Choice,
+        }
+
         list SomeList {
+            member: Choice
+        }
+
+        @sparse
+        list SomeSparseList {
             member: Choice
         }
 
@@ -64,8 +80,8 @@ class JsonSerializerGeneratorTest {
         structure OpInput {
             @httpHeader("x-test")
             someHeader: String,
-            @httpPayload
-            payload: Top
+
+            top: Top
         }
 
         @http(uri: "/top", method: "POST")
@@ -84,7 +100,6 @@ class JsonSerializerGeneratorTest {
         )
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = JsonSerializerGenerator(testProtocolConfig(model))
-        val payloadGenerator = parserGenerator.payloadSerializer(model.lookup("test#OpInput\$payload"))
         val operationGenerator = parserGenerator.operationSerializer(model.lookup("test#Op"))
         val documentGenerator = parserGenerator.documentSerializer()
 
@@ -94,20 +109,19 @@ class JsonSerializerGeneratorTest {
                 """
                 use model::Top;
 
-                // Generate the operation/document serializers even if they're not directly tested
-                // ${writer.format(operationGenerator!!)}
+                // Generate the document serializer even though it's not tested directly
                 // ${writer.format(documentGenerator)}
 
-                let inp = crate::input::OpInput::builder().payload(
+                let input = crate::input::OpInput::builder().top(
                     Top::builder()
                         .field("hello!")
                         .extra(45)
                         .recursive(Top::builder().extra(55).build())
                         .build()
                 ).build().unwrap();
-                let serialized = ${writer.format(payloadGenerator)}(&inp.payload.unwrap()).unwrap();
+                let serialized = ${writer.format(operationGenerator!!)}(&input).unwrap();
                 let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
-                assert_eq!(output, r#"{"field":"hello!","extra":45,"rec":[{"extra":55}]}"#);
+                assert_eq!(output, r#"{"top":{"field":"hello!","extra":45,"rec":[{"extra":55}]}}"#);
                 """
             )
         }
