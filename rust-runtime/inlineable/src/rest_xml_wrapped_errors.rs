@@ -16,23 +16,29 @@ pub fn body_is_error(body: &[u8]) -> Result<bool, XmlError> {
 pub fn parse_generic_error(body: &[u8]) -> Result<smithy_types::Error, XmlError> {
     let mut doc = Document::try_from(body)?;
     let mut root = doc.root_element()?;
-    let mut err = smithy_types::Error::default();
+    let mut err_builder = smithy_types::Error::builder();
     while let Some(mut tag) = root.next_tag() {
         match tag.start_el().local() {
             "Error" => {
                 while let Some(mut error_field) = tag.next_tag() {
                     match error_field.start_el().local() {
-                        "Code" => err.code = Some(String::from(try_data(&mut error_field)?)),
-                        "Message" => err.message = Some(String::from(try_data(&mut error_field)?)),
+                        "Code" => {
+                            err_builder.code(try_data(&mut error_field)?);
+                        }
+                        "Message" => {
+                            err_builder.message(try_data(&mut error_field)?);
+                        }
                         _ => {}
                     }
                 }
             }
-            "RequestId" => err.request_id = Some(String::from(try_data(&mut tag)?)),
+            "RequestId" => {
+                err_builder.request_id(try_data(&mut tag)?);
+            }
             _ => {}
         }
     }
-    Ok(err)
+    Ok(err_builder.build())
 }
 
 #[allow(unused)]
