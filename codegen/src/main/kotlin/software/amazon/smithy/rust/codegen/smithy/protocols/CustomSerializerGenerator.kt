@@ -38,11 +38,9 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
  */
 class CustomSerializerGenerator(
     private val symbolProvider: RustSymbolProvider,
-    private val model: Model,
+    model: Model,
     private val defaultTimestampFormat: TimestampFormatTrait.Format
 ) {
-    private val inp = "_inp"
-    private val ser = "_serializer"
     private val httpBindingIndex = HttpBindingIndex.of(model)
     private val runtimeConfig = symbolProvider.config().runtimeConfig
 
@@ -50,46 +48,6 @@ class CustomSerializerGenerator(
     private val blob = RuntimeType.Blob(runtimeConfig).toSymbol().rustType()
     private val document = RuntimeType.Document(runtimeConfig).toSymbol().rustType()
     private val customShapes = setOf(instant, blob, document)
-
-    /**
-     * Generate a custom serialization function for [memberShape], suitable to be used
-     * in the serde annotation `serialize_with` (See [JsonSerializerSymbolProvider])
-     *
-     * The returned object is a RuntimeType, which generates and creates all necessary dependencies when used.
-     *
-     * If this shape does not require custom serialization, this function returns null.
-     *
-     * For Example, for `Option<Instant>` being serialized in Epoch seconds:
-     * To make it more readable, I've manually removed the fully qualified types.
-     *   ```rust
-     *   pub fn stdoptionoptioninstant_epoch_seconds_ser<S>(
-     *     _inp: &Option<Instant>,
-     *     _serializer: S,
-     *   ) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
-     *   where S: Serializer, {
-     *      use Serialize;
-     *      let el = _inp;
-     *      el.as_ref()
-     *          .map(|el| instant_epoch::InstantEpoch(*el))
-     *          .serialize(_serializer)
-     *   }
-     *  ```
-     *
-     */
-
-    fun serializerFor(memberShape: MemberShape): RuntimeType? {
-        val symbol = symbolProvider.toSymbol(memberShape)
-        val rustType = symbol.rustType()
-        if (customShapes.none { rustType.contains(it) }) {
-            return null
-        }
-        val fnName = serializerName(rustType, memberShape, "ser")
-        return RuntimeType.forInlineFun(fnName, "serde_util") { writer ->
-            serializeFn(writer, fnName, symbol) {
-                serializer(rustType, memberShape)
-            }
-        }
-    }
 
     /**
      * Generate a custom deserialization function for [memberShape], suitable to be used
@@ -123,60 +81,12 @@ class CustomSerializerGenerator(
         if (customShapes.none { rustType.contains(it) }) {
             return null
         }
-        val fnName = serializerName(rustType, memberShape, "deser")
+        val fnName = deserializerName(rustType, memberShape)
         return RuntimeType.forInlineFun(fnName, "serde_util") { writer ->
             deserializeFn(writer, fnName, symbol) {
                 deserializer(rustType, memberShape)
             }
         }
-    }
-
-    private fun rollSer(t: RustType, memberShape: MemberShape): Writable {
-        return when (t) {
-            is RustType.Option -> writable {
-                withBlock("el.as_ref().map(|el|", ")") {
-                    rollSer(t.member, memberShape)(this)
-                }
-            }
-            is RustType.Vec -> writable {
-                withBlock("el.iter().map(|el|", ").collect::<Vec<_>>()") {
-                    rollSer(t.member, memberShape)(this)
-                }
-            }
-            is RustType.HashMap -> writable {
-                withBlock("el.iter().map(|(k,el)|(k, ", ")).collect::<${t.namespace}::${t.name}<_, _>>()") {
-                    rollSer(t.member, memberShape)(this)
-                }
-            }
-            is RustType.Box -> writable {
-                // TODO: this only works for exterior boxes.
-                withBlock("let el = el.as_ref();", "") {
-                    rollSer(t.member, memberShape)(this)
-                }
-            }
-            is RustType.Reference -> writable {
-                rollSer(t.member, memberShape)(this)
-            }
-            else -> if (customShapes.contains(t)) {
-                writable {
-                    serdeType(t, memberShape, SerdeDirection.Serialize)(this)
-                    if (t == instant) {
-                        write("(*el)")
-                    } else {
-                        write("(el)")
-                    }
-                }
-            } else {
-                TODO("unsupported type $t")
-            }
-        }
-    }
-
-    private fun RustWriter.serializer(t: RustType, memberShape: MemberShape) {
-        write("use #T;", RuntimeType.Serialize)
-        write("let el = $inp;")
-        rollSer(t, memberShape)(this)
-        write(".serialize($ser)")
     }
 
     /**
@@ -197,7 +107,7 @@ class CustomSerializerGenerator(
     private fun RustWriter.deserializer(t: RustType, memberShape: MemberShape) {
         write("use #T;", RuntimeType.Deserialize)
         withBlock("Ok(", ")") {
-            serdeType(t, memberShape, SerdeDirection.Deserialize)(this)
+            serdeType(t, memberShape)(this)
             write("::deserialize(_deser)?")
             unrollDeser(t)
         }
@@ -238,13 +148,11 @@ class CustomSerializerGenerator(
             else -> "${realType.namespace}::${realType.name}::<"
         }
         withBlock(prefix, ">") {
-            serdeType(realType.member, memberShape, SerdeDirection.Deserialize)(this)
+            serdeType(realType.member, memberShape)(this)
         }
     }
 
-    enum class SerdeDirection { Serialize, Deserialize }
-
-    private fun serdeType(realType: RustType, memberShape: MemberShape, serdeDirection: SerdeDirection): Writable {
+    private fun serdeType(realType: RustType, memberShape: MemberShape): Writable {
         return when (realType) {
             instant -> writable {
                 val format = tsFormat(memberShape)
@@ -259,41 +167,20 @@ class CustomSerializerGenerator(
                 }
             }
             blob -> writable {
-                if (serdeDirection == SerdeDirection.Deserialize) {
-                    write("#T::BlobDeser", RuntimeType.BlobSerde(runtimeConfig))
-                } else {
-                    write("#T::BlobSer", RuntimeType.BlobSerde(runtimeConfig))
-                }
+                write("#T::BlobDeser", RuntimeType.BlobSerde(runtimeConfig))
             }
             document -> writable {
-                when (serdeDirection) {
-                    SerdeDirection.Serialize -> write("#T::SerDoc", RuntimeType.DocJson)
-                    SerdeDirection.Deserialize -> write("#T::DeserDoc", RuntimeType.DocJson)
-                }
+                write("#T::DeserDoc", RuntimeType.DocJson)
             }
             is RustType.Container -> writable { serdeContainerType(realType, memberShape) }
-            else -> TODO("$serdeDirection for $realType is not supported")
+            else -> TODO("Deserialize for $realType is not supported")
         }
-    }
-
-    /** correct argument type for the serde custom serializer */
-    private fun serializerType(symbol: Symbol): Symbol {
-        val unref = symbol.rustType().stripOuter<RustType.Reference>()
-
-        // Convert `Vec<T>` to `[T]` when present. This is needed to avoid
-        // Clippy complaining (and is also better in general).
-        val outType = when (unref) {
-            is RustType.Vec -> RustType.Slice(unref.member)
-            else -> unref
-        }
-        val referenced = RustType.Reference(member = outType, lifetime = null)
-        return symbol.toBuilder().rustType(referenced).build()
     }
 
     private fun tsFormat(memberShape: MemberShape) =
         httpBindingIndex.determineTimestampFormat(memberShape, HttpBinding.Location.PAYLOAD, defaultTimestampFormat)
 
-    private fun serializerName(rustType: RustType, memberShape: MemberShape, suffix: String): String {
+    private fun deserializerName(rustType: RustType, memberShape: MemberShape): String {
         val context = when {
             rustType.contains(instant) -> tsFormat(memberShape).name.replace('-', '_').toLowerCase()
             else -> null
@@ -301,23 +188,7 @@ class CustomSerializerGenerator(
         val typeToFnName =
             rustType.stripOuter<RustType.Reference>().render(fullyQualified = true).filter { it.isLetterOrDigit() }
                 .toLowerCase()
-        return listOfNotNull(typeToFnName, context, suffix).joinToString("_")
-    }
-
-    private fun serializeFn(
-        rustWriter: RustWriter,
-        functionName: String,
-        symbol: Symbol,
-        body: RustWriter.() -> Unit
-    ) {
-        rustWriter.rustBlock(
-            "pub fn $functionName<S>(_inp: #1T, _serializer: S) -> " +
-                "Result<<S as #2T>::Ok, <S as #2T>::Error> where S: #2T",
-            serializerType(symbol),
-            RuntimeType.Serializer
-        ) {
-            body(this)
-        }
+        return listOfNotNull(typeToFnName, context, "deser").joinToString("_")
     }
 
     private fun deserializeFn(

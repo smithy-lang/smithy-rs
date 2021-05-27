@@ -44,7 +44,7 @@ import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
-import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
@@ -126,12 +126,7 @@ class Instantiator(
      * If the shape is optional: `Some(inner)` or `None`
      * otherwise: `inner`
      */
-    private fun renderMember(
-        writer: RustWriter,
-        shape: MemberShape,
-        arg: Node,
-        ctx: Ctx
-    ) {
+    private fun renderMember(writer: RustWriter, shape: MemberShape, arg: Node, ctx: Ctx) {
         val target = model.expectShape(shape.target)
         val symbol = symbolProvider.toSymbol(shape)
         if (arg is NullNode) {
@@ -176,28 +171,24 @@ class Instantiator(
      *      ret
      * }
      */
-    private fun renderMap(
-        writer: RustWriter,
-        shape: MapShape,
-        data: ObjectNode,
-        ctx: Ctx,
-    ) {
-        val lowercase = when (ctx.lowercaseMapKeys) {
-            true -> ".to_ascii_lowercase()"
-            else -> ""
-        }
-        if (data.members.isNotEmpty()) {
+    private fun renderMap(writer: RustWriter, shape: MapShape, data: ObjectNode, ctx: Ctx) {
+        if (data.members.isEmpty()) {
+            writer.write("#T::new()", RustType.HashMap.RuntimeType)
+        } else {
             writer.rustBlock("") {
                 write("let mut ret = #T::new();", RustType.HashMap.RuntimeType)
-                data.members.forEach { (k, v) ->
-                    withBlock("ret.insert(${k.value.dq()}.to_string()$lowercase,", ");") {
-                        renderMember(this, shape.value, v, ctx)
+                for ((key, value) in data.members) {
+                    withBlock("ret.insert(", ");") {
+                        renderMember(this, shape.key, key, ctx)
+                        when (ctx.lowercaseMapKeys) {
+                            true -> rust(".to_ascii_lowercase(), ")
+                            else -> rust(", ")
+                        }
+                        renderMember(this, shape.value, value, ctx)
                     }
                 }
                 write("ret")
             }
-        } else {
-            writer.write("#T::new()", RustType.HashMap.RuntimeType)
         }
     }
 
@@ -206,12 +197,7 @@ class Instantiator(
      * MyUnion::Variant(...)
      * ```
      */
-    private fun renderUnion(
-        writer: RustWriter,
-        shape: UnionShape,
-        data: ObjectNode,
-        ctx: Ctx
-    ) {
+    private fun renderUnion(writer: RustWriter, shape: UnionShape, data: ObjectNode, ctx: Ctx) {
         val unionSymbol = symbolProvider.toSymbol(shape)
         check(data.members.size == 1)
         val variant = data.members.iterator().next()
@@ -230,12 +216,7 @@ class Instantiator(
      * vec![..., ..., ...]
      * ```
      */
-    private fun renderList(
-        writer: RustWriter,
-        shape: CollectionShape,
-        data: ArrayNode,
-        ctx: Ctx
-    ) {
+    private fun renderList(writer: RustWriter, shape: CollectionShape, data: ArrayNode, ctx: Ctx) {
         writer.withBlock("vec![", "]") {
             data.elements.forEach { v ->
                 renderMember(this, shape.member, v, ctx)
@@ -244,14 +225,9 @@ class Instantiator(
         }
     }
 
-    private fun renderString(
-        writer: RustWriter,
-        shape: StringShape,
-        arg: StringNode
-    ) {
-        val enumTrait = shape.getTrait<EnumTrait>()
+    private fun renderString(writer: RustWriter, shape: StringShape, arg: StringNode) {
         val data = writer.escape(arg.value).dq()
-        if (enumTrait == null) {
+        if (!shape.hasTrait<EnumTrait>()) {
             writer.rust("$data.to_string()")
         } else {
             val enumSymbol = symbolProvider.toSymbol(shape)
@@ -264,12 +240,7 @@ class Instantiator(
      * MyStruct::builder().field_1("hello").field_2(5).build()
      * ```
      */
-    private fun renderStructure(
-        writer: RustWriter,
-        shape: StructureShape,
-        data: ObjectNode,
-        ctx: Ctx
-    ) {
+    private fun renderStructure(writer: RustWriter, shape: StructureShape, data: ObjectNode, ctx: Ctx) {
         writer.write("#T::builder()", symbolProvider.toSymbol(shape))
         data.members.forEach { (key, value) ->
             val memberShape = shape.expectMember(key.value)
