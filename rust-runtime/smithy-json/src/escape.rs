@@ -20,21 +20,27 @@ pub fn escape_string(value: &str) -> Cow<str> {
 }
 
 fn escape_string_inner(start: &[u8], rest: &[u8]) -> String {
-    let mut escaped = start.to_vec();
+    let mut escaped = Vec::with_capacity(start.len() + rest.len() + 1);
+    escaped.extend(start);
+
     for byte in rest {
         match byte {
-            b'"' => escaped.extend("\\\"".bytes()),
-            b'\\' => escaped.extend("\\\\".bytes()),
-            0x08 => escaped.extend("\\b".bytes()),
-            0x0C => escaped.extend("\\f".bytes()),
-            b'\n' => escaped.extend("\\n".bytes()),
-            b'\r' => escaped.extend("\\r".bytes()),
-            b'\t' => escaped.extend("\\t".bytes()),
+            b'"' => escaped.extend(b"\\\""),
+            b'\\' => escaped.extend(b"\\\\"),
+            0x08 => escaped.extend(b"\\b"),
+            0x0C => escaped.extend(b"\\f"),
+            b'\n' => escaped.extend(b"\\n"),
+            b'\r' => escaped.extend(b"\\r"),
+            b'\t' => escaped.extend(b"\\t"),
             0..=0x1F => escaped.extend(format!("\\u{:04x}", byte).bytes()),
             _ => escaped.push(*byte),
         }
     }
-    // Our input was originally valid UTF-8, and we didn't do anything to invalidate it
+
+    // This is safe because:
+    // - The original input was valid UTF-8 since it came in as a `&str`
+    // - Only single-byte code points were escaped
+    // - The escape sequences are valid UTF-8
     debug_assert!(String::from_utf8(escaped.clone()).is_ok());
     unsafe { String::from_utf8_unchecked(escaped) }
 }
@@ -68,6 +74,20 @@ mod test {
                 serde_json::to_string(&s).unwrap(),
                 format!(r#""{}""#, escape_string(&s))
             )
+        }
+    }
+
+    #[test]
+    #[ignore] // This tests escaping of all codepoints, but can take a long time in debug builds
+    fn all_codepoints() {
+        for value in 0..u32::MAX {
+            if let Some(chr) = char::from_u32(value) {
+                let string = String::from(chr);
+                let escaped = escape_string(&string);
+                let serde_escaped = serde_json::to_string(&string).unwrap();
+                let serde_escaped = &serde_escaped[1..(serde_escaped.len() - 1)];
+                assert_eq!(&escaped, serde_escaped);
+            }
         }
     }
 }
