@@ -41,7 +41,7 @@ fn escape_string_inner(start: &[u8], rest: &[u8]) -> String {
     // - The original input was valid UTF-8 since it came in as a `&str`
     // - Only single-byte code points were escaped
     // - The escape sequences are valid UTF-8
-    debug_assert!(String::from_utf8(escaped.clone()).is_ok());
+    debug_assert!(std::str::from_utf8(&escaped).is_ok());
     unsafe { String::from_utf8_unchecked(escaped) }
 }
 
@@ -70,10 +70,9 @@ mod test {
     proptest! {
         #[test]
         fn matches_serde_json(s in ".*") {
-            assert_eq!(
-                serde_json::to_string(&s).unwrap(),
-                format!(r#""{}""#, escape_string(&s))
-            )
+            let serde_escaped = serde_json::to_string(&s).unwrap();
+            let serde_escaped = &serde_escaped[1..(serde_escaped.len() - 1)];
+            assert_eq!(serde_escaped,escape_string(&s))
         }
     }
 
