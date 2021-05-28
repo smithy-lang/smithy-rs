@@ -192,7 +192,7 @@ class XmlBindingTraitParserGenerator(
                 )
                 val context = OperationWrapperContext(operationShape, shapeName, xmlError)
                 writeOperationWrapper(context) { tagName ->
-                    parseStructureInner(this, members, builder = "builder", Ctx(tag = tagName, accum = null))
+                    parseStructureInner(members, builder = "builder", Ctx(tag = tagName, accum = null))
                 }
                 rust("Ok(builder)")
             }
@@ -220,7 +220,7 @@ class XmlBindingTraitParserGenerator(
                         *codegenScope,
                         "xml_errors" to xmlErrors
                     )
-                    parseStructureInner(this, members, builder = "builder", Ctx(tag = "error_decoder", accum = null))
+                    parseStructureInner(members, builder = "builder", Ctx(tag = "error_decoder", accum = null))
                 } else {
                     rust("let _ = inp;")
                 }
@@ -236,19 +236,19 @@ class XmlBindingTraitParserGenerator(
     /**
      * Update a structure builder based on the [members], specifying where to find each member (document vs. attributes)
      */
-    fun parseStructureInner(writer: RustWriter, members: XmlMemberIndex, builder: String, outerCtx: Ctx) {
+    fun RustWriter.parseStructureInner(members: XmlMemberIndex, builder: String, outerCtx: Ctx) {
         members.attributeMembers.forEach { member ->
-            val temp = writer.safeName("attrib")
-            writer.withBlock("let $temp = ", ";") {
+            val temp = safeName("attrib")
+            withBlock("let $temp = ", ";") {
                 parseAttributeMember(member, outerCtx)
             }
-            writer.rust("$builder.${symbolProvider.toMemberName(member)} = $temp;")
+            rust("$builder.${symbolProvider.toMemberName(member)} = $temp;")
         }
         // No need to generate a parse loop if there are no non-attribute members
         if (members.dataMembers.isEmpty()) {
             return
         }
-        writer.parseLoop(outerCtx) { ctx ->
+        parseLoop(outerCtx) { ctx ->
             members.dataMembers.forEach { member ->
                 case(member) {
                     val temp = safeName()
@@ -402,7 +402,7 @@ class XmlBindingTraitParserGenerator(
                 )
                 val members = shape.xmlMembers()
                 if (members.isNotEmpty()) {
-                    parseStructureInner(this, members, "builder", Ctx(tag = "decoder", accum = null))
+                    parseStructureInner(members, "builder", Ctx(tag = "decoder", accum = null))
                 } else {
                     rust("let _ = decoder;")
                 }
