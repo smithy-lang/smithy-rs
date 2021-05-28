@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -54,7 +53,6 @@ class RustSettings(
     val moduleAuthors: List<String>,
     val runtimeConfig: RuntimeConfig,
     val codegenConfig: CodegenConfig,
-    val build: BuildSettings,
     val license: String?,
     private val model: Model
 ) {
@@ -105,7 +103,6 @@ class RustSettings(
 
             val moduleName = config.expectStringMember(MODULE_NAME).value
             val version = config.expectStringMember(MODULE_VERSION).value
-            val build = config.getObjectMember(BUILD_SETTINGS)
             val runtimeConfig = config.getObjectMember(RUNTIME_CONFIG)
             val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
             val moduleAuthors = config.expectArrayMember(MODULE_AUTHORS).map { it.expectStringNode().value }
@@ -117,9 +114,8 @@ class RustSettings(
                 moduleAuthors = moduleAuthors,
                 runtimeConfig = RuntimeConfig.fromNode(runtimeConfig),
                 codegenConfig = CodegenConfig.fromNode(codegenSettings),
-                build = BuildSettings.fromNode(build),
-                model = model,
-                license = license
+                license = license,
+                model = model
             )
         }
 
@@ -151,44 +147,4 @@ class RustSettings(
             }
         }
     }
-
-    /**
-     * Resolves the highest priority protocol from a service shape that is
-     * supported by the generator.
-     *
-     * @param serviceIndex Service index containing the support
-     * @param service Service to get the protocols from if "protocols" is not set.
-     * @param supportedProtocolTraits The set of protocol traits supported by the generator.
-     * @return Returns the resolved protocol name.
-     * @throws UnresolvableProtocolException if no protocol could be resolved.
-     */
-    fun resolveServiceProtocol(
-        serviceIndex: ServiceIndex,
-        service: ServiceShape,
-        supportedProtocolTraits: Set<ShapeId>
-    ): ShapeId {
-        val resolvedProtocols: Set<ShapeId> = serviceIndex.getProtocols(service).keys
-        val protocol = resolvedProtocols.firstOrNull(supportedProtocolTraits::contains)
-        return protocol ?: throw UnresolvableProtocolException(
-            "The ${service.id} service supports the following unsupported protocols $resolvedProtocols. " +
-                "The following protocol generators were found on the class path: $supportedProtocolTraits"
-        )
-    }
 }
-
-data class BuildSettings(val rootProject: Boolean = false) {
-    companion object {
-        private const val ROOT_PROJECT = "rootProject"
-        fun fromNode(node: Optional<ObjectNode>): BuildSettings {
-            return if (node.isPresent) {
-                BuildSettings(node.get().getMember(BuildSettings.ROOT_PROJECT).get().asBooleanNode().get().value)
-            } else {
-                Default()
-            }
-        }
-
-        fun Default(): BuildSettings = BuildSettings(false)
-    }
-}
-
-class UnresolvableProtocolException(message: String) : CodegenException(message)
