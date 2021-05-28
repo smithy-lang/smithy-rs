@@ -341,9 +341,12 @@ fn rewrite_url_encoded_map_keys(input: &str) -> (String, String) {
 fn rewrite_url_encoded_body(input: &str) -> String {
     let mut entries: Vec<(String, String)> = input
         .split("\n&")
+        .filter(|s| !s.is_empty())
         .map(rewrite_url_encoded_map_keys)
         .collect();
-    entries[2..].sort_by(|a, b| a.1.cmp(&b.1));
+    if entries.len() > 2 {
+        entries[2..].sort_by(|a, b| a.1.cmp(&b.1));
+    }
     let entries: Vec<String> = entries
         .into_iter()
         .map(|kv| format!("{}={}", kv.0, kv.1))

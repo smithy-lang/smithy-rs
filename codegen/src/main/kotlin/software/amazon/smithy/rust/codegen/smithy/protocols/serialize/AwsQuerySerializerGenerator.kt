@@ -110,56 +110,52 @@ class AwsQuerySerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDa
             ) {
                 val action = operationShape.id.name
                 val version = serviceShape.version
+
+                if (inputShape.members().isEmpty()) {
+                    rust("let _ = input;")
+                }
                 rust("let mut out = String::new();")
+                Attribute.AllowUnusedMut.render(writer)
                 rustTemplate(
                     "let mut writer = #{QueryWriter}::new(&mut out, ${action.dq()}, ${version.dq()});",
                     *codegenScope
                 )
-                serializeStructure(Context("writer", ValueExpression.Reference("input"), inputShape), true)
+                serializeStructureInner(Context("writer", ValueExpression.Reference("input"), inputShape))
                 rust("writer.finish();")
                 rustTemplate("Ok(#{SdkBody}::from(out))", *codegenScope)
             }
         }
     }
 
-    private fun RustWriter.serializeStructure(context: Context<StructureShape>, topLevel: Boolean) {
+    private fun RustWriter.serializeStructure(context: Context<StructureShape>) {
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val structureSymbol = symbolProvider.toSymbol(context.shape)
         val structureSerializer = RuntimeType.forInlineFun(fnName, "query_ser") { writer ->
-            val writerMut = when (topLevel) {
-                true -> ""
-                else -> "mut "
-            }
-            val writerType = when (topLevel) {
-                true -> "&mut #{QueryWriter}"
-                false -> "#{QueryValueWriter}"
-            }
             Attribute.AllowUnusedMut.render(writer)
             writer.rustBlockTemplate(
-                "pub fn $fnName(${writerMut}writer: $writerType, input: &#{Input})",
+                "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input})",
                 "Input" to structureSymbol,
                 *codegenScope
             ) {
-                context.copy(writerExpression = "writer", valueExpression = ValueExpression.Reference("input"))
-                    .also { inner ->
-                        val members = inner.shape.members()
-                        if (members.isEmpty()) {
-                            rust("let (_, _) = (writer, input);") // Suppress unused argument warnings
-                        }
-                        for (member in members) {
-                            val memberContext = MemberContext.structMember(inner, member, symbolProvider)
-                            structWriter(memberContext) { writerExpression ->
-                                serializeMember(memberContext.copy(writerExpression = writerExpression))
-                            }
-                        }
-                    }
+                if (context.shape.members().isEmpty()) {
+                    rust("let (_, _) = (writer, input);") // Suppress unused argument warnings
+                }
+                serializeStructureInner(context)
             }
         }
-        val borrowType = when (topLevel) {
-            true -> "&mut "
-            else -> ""
-        }
-        rust("#T($borrowType${context.writerExpression}, ${context.valueExpression.name});", structureSerializer)
+        rust("#T(${context.writerExpression}, ${context.valueExpression.name});", structureSerializer)
+    }
+
+    private fun RustWriter.serializeStructureInner(context: Context<StructureShape>) {
+        context.copy(writerExpression = "writer", valueExpression = ValueExpression.Reference("input"))
+            .also { inner ->
+                for (member in inner.shape.members()) {
+                    val memberContext = MemberContext.structMember(inner, member, symbolProvider)
+                    structWriter(memberContext) { writerExpression ->
+                        serializeMember(memberContext.copy(writerExpression = writerExpression))
+                    }
+                }
+            }
     }
 
     private fun RustWriter.serializeMember(context: MemberContext) {
@@ -207,7 +203,7 @@ class AwsQuerySerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDa
             }
             is CollectionShape -> serializeCollection(context, Context(writer, context.valueExpression, target))
             is MapShape -> serializeMap(context, Context(writer, context.valueExpression, target))
-            is StructureShape -> serializeStructure(Context(writer, context.valueExpression, target), false)
+            is StructureShape -> serializeStructure(Context(writer, context.valueExpression, target))
             is UnionShape -> structWriter(context) { writerExpression ->
                 serializeUnion(Context(writerExpression, context.valueExpression, target))
             }
@@ -239,6 +235,7 @@ class AwsQuerySerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDa
             rust("let mut $listName = ${context.writerExpression}.start_list($flat, $memberOverride);")
             rustBlock("for $itemName in ${context.valueExpression.asRef()}") {
                 val entryName = safeName("entry")
+                Attribute.AllowUnusedMut.render(this)
                 rust("let mut $entryName = $listName.entry();")
                 val targetShape = model.expectShape(context.shape.member.target)
                 serializeMemberValue(
@@ -265,6 +262,7 @@ class AwsQuerySerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDa
                     else -> keyName
                 }
                 val entryName = safeName("entry")
+                Attribute.AllowUnusedMut.render(this)
                 rust("let mut $entryName = $mapName.entry($keyExpression);")
                 serializeMember(MemberContext(entryName, ValueExpression.Reference(valueName), context.shape.value))
             }
