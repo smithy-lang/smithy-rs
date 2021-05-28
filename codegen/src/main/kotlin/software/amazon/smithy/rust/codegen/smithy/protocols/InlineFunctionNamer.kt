@@ -24,6 +24,17 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  */
 fun RustSymbolProvider.serializeFunctionName(shape: Shape): String = shapeFunctionName("serialize", shape)
 
+/**
+ * Creates a unique name for a serialization function.
+ *
+ * The prefixes will look like the following (for grep):
+ * - deser_operation
+ * - deser_structure
+ * - deser_union
+ * - deser_payload
+ */
+fun RustSymbolProvider.deserializeFunctionName(shape: Shape): String = shapeFunctionName("deser", shape)
+
 private fun RustSymbolProvider.shapeFunctionName(prefix: String, shape: Shape): String {
     val symbolNameSnakeCase = toSymbol(shape).name.toSnakeCase()
     return prefix + "_" + when (shape) {

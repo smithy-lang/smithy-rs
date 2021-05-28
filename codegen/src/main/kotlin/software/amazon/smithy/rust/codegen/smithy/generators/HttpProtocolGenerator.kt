@@ -58,6 +58,7 @@ abstract class HttpProtocolGenerator(
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
     private val buildErrorT = protocolConfig.runtimeConfig.operationBuildError()
+
     fun renderOperation(
         operationWriter: RustWriter,
         inputWriter: RustWriter,

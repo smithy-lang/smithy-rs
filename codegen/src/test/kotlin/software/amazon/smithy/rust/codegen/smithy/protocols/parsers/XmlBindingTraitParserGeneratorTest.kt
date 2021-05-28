@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.protocols
+package software.amazon.smithy.rust.codegen.smithy.protocols.parsers
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.XmlBindingTraitParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
@@ -93,7 +92,10 @@ internal class XmlBindingTraitParserGeneratorTest {
     fun `generates valid parsers`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer(baseModel).transformModel(OperationNormalizer.NoBody, OperationNormalizer.NoBody))
         val symbolProvider = testSymbolProvider(model)
-        val parserGenerator = XmlBindingTraitParserGenerator(testProtocolConfig(model), RuntimeType.wrappedXmlErrors(TestRuntimeConfig))
+        val parserGenerator = XmlBindingTraitParserGenerator(
+            testProtocolConfig(model),
+            RuntimeType.wrappedXmlErrors(TestRuntimeConfig),
+        ) { _, inner -> inner("decoder") }
         val operationParser = parserGenerator.operationParser(model.lookup("test#Op"))!!
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
