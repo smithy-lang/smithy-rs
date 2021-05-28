@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.BuildSettings
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
@@ -164,12 +163,11 @@ fun TestWriterDelegator.compileAndTest() {
             ShapeId.from("fake#Fake"),
             "test_${baseDir.toFile().nameWithoutExtension}",
             "0.0.1",
+            moduleAuthors = listOf("test@module.com"),
             runtimeConfig = TestRuntimeConfig,
             codegenConfig = CodegenConfig(),
-            build = BuildSettings.Default(),
-            model = stubModel,
-            moduleAuthors = listOf("test@module.com"),
-            license = null
+            license = null,
+            model = stubModel
         ),
         libRsCustomizations = listOf(),
     )
