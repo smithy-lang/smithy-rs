@@ -22,13 +22,6 @@ sealed class OperationSection(name: String) : Section(name) {
     data class MutateRequest(val request: String, val config: String) : OperationSection("Feature")
 
     data class FinalizeOperation(val operation: String, val config: String) : OperationSection("Finalize")
-
-    /**
-     * Update the generic error for a protocol
-     *
-     * The resulting code must create a binding that shadows the original `genericError`
-     */
-    data class UpdateGenericError(val genericError: String, val httpResponse: String) : OperationSection("UpdateGenericError")
 }
 
 abstract class OperationCustomization : NamedSectionGenerator<OperationSection>() {

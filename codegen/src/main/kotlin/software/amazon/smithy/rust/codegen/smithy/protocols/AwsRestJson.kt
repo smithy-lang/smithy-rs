@@ -30,7 +30,7 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<HttpTraitProtocolGenerator> 
     override fun buildProtocolGenerator(
         protocolConfig: ProtocolConfig,
         decorator: RustCodegenDecorator
-    ): HttpTraitProtocolGenerator = HttpTraitProtocolGenerator(protocolConfig, RestJson(protocolConfig), decorator)
+    ): HttpTraitProtocolGenerator = HttpTraitProtocolGenerator(protocolConfig, RestJson(protocolConfig))
 
     /** Create a synthetic awsJsonInputBody if specified
      * A body is created if any member of [shape] is bound to the `DOCUMENT` section of the `bindings.

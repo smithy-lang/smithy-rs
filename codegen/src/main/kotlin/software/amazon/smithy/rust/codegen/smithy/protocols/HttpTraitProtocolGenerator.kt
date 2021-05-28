@@ -28,8 +28,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
@@ -69,7 +67,6 @@ interface Protocol {
 class HttpTraitProtocolGenerator(
     private val protocolConfig: ProtocolConfig,
     private val protocol: Protocol,
-    private val decorator: RustCodegenDecorator,
 ) : HttpProtocolGenerator(protocolConfig) {
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
@@ -288,9 +285,6 @@ class HttpTraitProtocolGenerator(
                     protocol.parseGenericError(operationShape),
                     errorSymbol
                 )
-                decorator.operationCustomizations(protocolConfig, operationShape, listOf()).forEach { customization ->
-                    customization.section(OperationSection.UpdateGenericError("generic", "response"))(this)
-                }
                 if (operationShape.errors.isNotEmpty()) {
                     rustTemplate(
                         """
