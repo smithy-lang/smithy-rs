@@ -250,7 +250,7 @@ open class RunExampleTask @javax.inject.Inject constructor() : Exec() {
         }
 }
 
-tasks["test"].finalizedBy("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs")
+tasks["test"].finalizedBy("cargoClippy", "cargoTest", "cargoDocs")
 
 tasks["clean"].doFirst {
     delete("smithy-build.json")

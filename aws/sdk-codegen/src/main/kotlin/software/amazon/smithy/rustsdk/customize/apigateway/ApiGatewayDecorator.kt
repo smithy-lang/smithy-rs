@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.letIf
 
-class ApiGatewayCustomizationDecorator : RustCodegenDecorator {
+class ApiGatewayDecorator : RustCodegenDecorator {
     override val name: String = "ApiGateway"
     override val order: Byte = 0
 

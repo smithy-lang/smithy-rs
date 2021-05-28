@@ -121,29 +121,34 @@ class CombinedErrorGenerator(
 
         writer.rustTemplate(
             """
-            impl ${symbol.name} {
-                pub fn new(kind: ${symbol.name}Kind, meta: #{generic_error}) -> Self {
-                    Self { kind, meta }
-                }
+        impl ${symbol.name} {
+            pub fn new(kind: ${symbol.name}Kind, meta: #{generic_error}) -> Self {
+                Self { kind, meta }
+            }
 
-                pub fn unhandled(err: impl Into<Box<dyn #{std_error} + Send + Sync + 'static>>) -> Self {
-                    Self {
-                        kind: ${symbol.name}Kind::Unhandled(err.into()),
-                        meta: Default::default()
-                    }
-                }
 
-                pub fn generic(err: #{generic_error}) -> Self {
-                    Self {
-                        meta: err.clone(),
-                        kind: ${symbol.name}Kind::Unhandled(err.into()),
-                    }
+            pub fn unhandled(err: impl Into<Box<dyn #{std_error} + Send + Sync + 'static>>) -> Self {
+                Self {
+                    kind: ${symbol.name}Kind::Unhandled(err.into()),
+                    meta: Default::default()
                 }
+            }
+
+            pub fn generic(err: #{generic_error}) -> Self {
+                Self {
+                    meta: err.clone(),
+                    kind: ${symbol.name}Kind::Unhandled(err.into()),
+                }
+            }
 
             // Consider if this should actually be `Option<Cow<&str>>`. This would enable us to use display as implemented
             // by std::Error to generate a message in that case.
             pub fn message(&self) -> Option<&str> {
                 self.meta.message()
+            }
+
+            pub fn meta(&self) -> &#{generic_error} {
+                &self.meta
             }
 
             pub fn request_id(&self) -> Option<&str> {

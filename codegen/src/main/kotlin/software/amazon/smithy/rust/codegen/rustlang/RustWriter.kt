@@ -70,7 +70,7 @@ fun <T : CodeWriter> T.rust(
     @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
     vararg args: Any
 ) {
-    this.write(contents, *args)
+    this.write(contents.trim(), *args)
 }
 
 /**
