@@ -129,7 +129,7 @@ impl Instant {
                     trimmed.push('Z');
                     trimmed
                 } else {
-                    rfc3339.to_owned()
+                    rfc3339
                 };
                 fixed_date
             }
