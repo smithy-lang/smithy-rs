@@ -19,7 +19,7 @@ plugins {
 val smithyVersion: String by project
 
 val sdkOutputDir = buildDir.resolve("aws-sdk")
-val runtimeModules = listOf("smithy-types", "smithy-json", "smithy-xml", "smithy-http", "smithy-http-tower", "protocol-test-helpers")
+val runtimeModules = listOf("smithy-types", "smithy-json", "smithy-query", "smithy-xml", "smithy-http", "smithy-http-tower", "protocol-test-helpers")
 val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types", "aws-hyper", "aws-sig-auth", "aws-http")
 
 buildscript {
