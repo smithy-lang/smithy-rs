@@ -16,9 +16,9 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.RestXmlParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.XmlBindingTraitParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.XmlBindingTraitSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
@@ -55,7 +55,7 @@ class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
     }
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return XmlBindingTraitParserGenerator(protocolConfig, restXmlErrors)
+        return RestXmlParserGenerator(protocolConfig, restXmlErrors)
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator {

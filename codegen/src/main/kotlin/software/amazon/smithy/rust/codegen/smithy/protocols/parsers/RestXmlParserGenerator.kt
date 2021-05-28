@@ -1,0 +1,26 @@
+package software.amazon.smithy.rust.codegen.smithy.protocols.parsers
+
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
+
+class RestXmlParserGenerator(
+    protocolConfig: ProtocolConfig,
+    xmlErrors: RuntimeType,
+    private val xmlBindingTraitParserGenerator: XmlBindingTraitParserGenerator =
+        XmlBindingTraitParserGenerator(
+            protocolConfig,
+            xmlErrors
+        ) { context, inner ->
+            val shapeName = context.outputShapeName
+            rustTemplate(
+                """
+                if !(${XmlBindingTraitParserGenerator.XmlName(shapeName).matchExpression("start_el")}) {
+                    return Err(#{XmlError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
+                }
+                """,
+                "XmlError" to context.xmlErrorType
+            )
+            inner("decoder")
+        }
+) : StructuredDataParserGenerator by xmlBindingTraitParserGenerator

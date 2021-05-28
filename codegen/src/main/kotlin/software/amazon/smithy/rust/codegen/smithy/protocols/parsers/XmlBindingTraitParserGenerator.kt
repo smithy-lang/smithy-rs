@@ -51,9 +51,18 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
+typealias OperationInnerWriteable = RustWriter.(String) -> Unit
+
+data class OperationWrapperContext(
+    val shape: OperationShape,
+    val outputShapeName: String,
+    val xmlErrorType: RuntimeType
+)
+
 class XmlBindingTraitParserGenerator(
     protocolConfig: ProtocolConfig,
     private val xmlErrors: RuntimeType,
+    private val writeOperationWrapper: RustWriter.(OperationWrapperContext, OperationInnerWriteable) -> Unit,
 ) : StructuredDataParserGenerator {
 
     /** Abstraction to represent an XML element name */
@@ -156,23 +165,37 @@ class XmlBindingTraitParserGenerator(
      * ```
      */
     override fun operationParser(operationShape: OperationShape): RuntimeType? {
-        return operationParserWithImpl(operationShape) { members ->
-            val shapeName = xmlIndex.operationOutputShapeName(operationShape)!!
-            rustTemplate(
-                """
+        val outputShape = operationShape.outputShape(model)
+        val fnName = symbolProvider.deserializeFunctionName(operationShape)
+        val shapeName = xmlIndex.operationOutputShapeName(operationShape)
+        val members = operationShape.operationXmlMembers()
+        if (shapeName == null || !members.isNotEmpty()) {
+            return null
+        }
+        return RuntimeType.forInlineFun(fnName, "xml_deser") {
+            Attribute.AllowUnusedMut.render(it)
+            it.rustBlock(
+                "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
+                outputShape.builderSymbol(symbolProvider),
+                xmlError
+            ) {
+                rustTemplate(
+                    """
                     use std::convert::TryFrom;
                     let mut doc = #{Document}::try_from(inp)?;
+
                     ##[allow(unused_mut)]
                     let mut decoder = doc.root_element()?;
                     let start_el = decoder.start_el();
-                    if !(${XmlName(shapeName).matchExpression("start_el")}) {
-                        return Err(#{XmlError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
-                    }
                     """,
-                *codegenScope
-            )
-            parseStructureInner(this, members, builder = "builder", Ctx(tag = "decoder", accum = null))
-            rust("Ok(builder)")
+                    *codegenScope
+                )
+                val context = OperationWrapperContext(operationShape, shapeName, xmlError)
+                writeOperationWrapper(context) { tagName ->
+                    parseStructureInner(this, members, builder = "builder", Ctx(tag = tagName, accum = null))
+                }
+                rust("Ok(builder)")
+            }
         }
     }
 
@@ -208,29 +231,6 @@ class XmlBindingTraitParserGenerator(
 
     override fun documentParser(operationShape: OperationShape): RuntimeType {
         TODO("Document shapes are not supported by rest XML")
-    }
-
-    fun operationParserWithImpl(
-        operationShape: OperationShape,
-        impl: RustWriter.(XmlMemberIndex) -> Unit
-    ): RuntimeType? {
-        val outputShape = operationShape.outputShape(model)
-        val fnName = symbolProvider.deserializeFunctionName(operationShape)
-        val shapeName = xmlIndex.operationOutputShapeName(operationShape)
-        val members = operationShape.operationXmlMembers()
-        if (shapeName == null || !members.isNotEmpty()) {
-            return null
-        }
-        return RuntimeType.forInlineFun(fnName, "xml_deser") {
-            Attribute.AllowUnusedMut.render(it)
-            it.rustBlock(
-                "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                outputShape.builderSymbol(symbolProvider),
-                xmlError
-            ) {
-                impl(members)
-            }
-        }
     }
 
     /**
