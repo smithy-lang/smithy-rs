@@ -69,8 +69,8 @@ class S3(protocolConfig: ProtocolConfig) : RestXml(protocolConfig) {
             ) {
                 rustTemplate(
                     """
-                    let base_err = #{base_errors}::parse_generic_error(response.body().as_ref());
-                    #{s3_errors}::parse_extended_error(base_err, &response)
+                    let base_err = #{base_errors}::parse_generic_error(response.body().as_ref())?;
+                    Ok(#{s3_errors}::parse_extended_error(base_err, &response))
                 """,
                     "base_errors" to restXmlErrors, "s3_errors" to AwsRuntimeType.S3Errors
                 )
