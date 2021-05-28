@@ -239,7 +239,7 @@ class XmlBindingTraitParserGenerator(
     fun RustWriter.parseStructureInner(members: XmlMemberIndex, builder: String, outerCtx: Ctx) {
         members.attributeMembers.forEach { member ->
             val temp = safeName("attrib")
-            withBlock("let $temp = ", ";") {
+            withBlock("let $temp =", ";") {
                 parseAttributeMember(member, outerCtx)
             }
             rust("$builder.${symbolProvider.toMemberName(member)} = $temp;")
@@ -252,7 +252,7 @@ class XmlBindingTraitParserGenerator(
             members.dataMembers.forEach { member ->
                 case(member) {
                     val temp = safeName()
-                    withBlock("let $temp = ", ";") {
+                    withBlock("let $temp =", ";") {
                         parseMember(
                             member,
                             ctx.copy(accum = "$builder.${symbolProvider.toMemberName(member)}.take()")
@@ -358,7 +358,7 @@ class XmlBindingTraitParserGenerator(
                                         Some(_) => return Err(#{XmlError}::custom("mixed variants"))
                                     })
                                 """
-                            withBlock("let tmp = ", ";") {
+                            withBlock("let tmp =", ";") {
                                 parseMember(member, ctx.copy(accum = current))
                             }
                             rust("base = Some(#T::$variantName(tmp));", symbol)

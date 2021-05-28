@@ -65,9 +65,6 @@ abstract class HttpProtocolGenerator(
         operationShape: OperationShape,
         customizations: List<OperationCustomization>
     ) {
-        /* if (operationShape.hasTrait<EndpointTrait>()) {
-            TODO("https://github.com/awslabs/smithy-rs/issues/197")
-        } */
         val inputShape = operationShape.inputShape(model)
         val sdkId =
             protocolConfig.serviceShape.getTrait<ServiceTrait>()?.sdkId?.toLowerCase()?.replace(" ", "")
@@ -163,7 +160,7 @@ abstract class HttpProtocolGenerator(
             withBlock("Ok({", "})") {
                 features.forEach { it.section(OperationSection.MutateInput("self", "_config"))(this) }
                 rust("let request = self.request_builder_base()?;")
-                withBlock("let body = ", ";") {
+                withBlock("let body =", ";") {
                     body("self", shape)
                 }
                 rust("let request = Self::assemble(request, body);")

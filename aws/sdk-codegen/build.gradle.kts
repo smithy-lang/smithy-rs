@@ -21,6 +21,7 @@ val kotestVersion: String by project
 
 dependencies {
     implementation(project(":codegen"))
+    runtimeOnly(project(":aws:rust-runtime"))
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
