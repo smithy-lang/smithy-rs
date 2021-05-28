@@ -36,9 +36,8 @@ class S3Decorator : RustCodegenDecorator {
         serviceId == ShapeId.from("com.amazonaws.s3#AmazonS3")
 
     override fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap {
-        val baseProtocols = super.protocols(serviceId, currentProtocols)
-        return baseProtocols.letIf(applies(serviceId)) {
-            baseProtocols + mapOf(
+        return currentProtocols.letIf(applies(serviceId)) {
+            it + mapOf(
                 RestXmlTrait.ID to RestXmlFactory { protocolConfig ->
                     S3(protocolConfig)
                 }

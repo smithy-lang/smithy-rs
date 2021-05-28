@@ -9,5 +9,6 @@ edition = "2018"
 
 [dependencies]
 aws-sdk-s3 = { path = "../../build/aws-sdk/s3" }
+smithy-http = { path = "../../build/aws-sdk/smithy-http" }
 http = "0.2.3"
 bytes = "1"

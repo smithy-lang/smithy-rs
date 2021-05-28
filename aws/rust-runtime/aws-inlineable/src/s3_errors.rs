@@ -57,4 +57,16 @@ mod test {
             "eftixk72aD6Ap51TnqcoF8eFidJG9Z/2mkiDFu8yU9AS1ed4OpIszj7UDNEHGran"
         );
     }
+
+    #[test]
+    fn handle_missing_header() {
+        let resp = http::Response::builder().status(400).body("").unwrap();
+        let error = smithy_types::Error::builder()
+            .message("123")
+            .request_id("456")
+            .build();
+
+        let error = parse_extended_error(error, &resp);
+        assert_eq!(error.extended_request_id(), None);
+    }
 }
