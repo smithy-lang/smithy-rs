@@ -1,6 +1,6 @@
 # This Cargo.toml is unused in generated code. It exists solely to enable these tests to compile in-situ
 [package]
-name = "kms-tests"
+name = "s3-tests"
 version = "0.1.0"
 authors = ["Russell Cohen <rcoh@amazon.com>"]
 edition = "2018"
