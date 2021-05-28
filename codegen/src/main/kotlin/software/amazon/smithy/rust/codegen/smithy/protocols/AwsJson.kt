@@ -36,8 +36,8 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.smithy.meta
-import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.JsonSerializerGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.SerdeJsonParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.parse.SerdeJsonParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait

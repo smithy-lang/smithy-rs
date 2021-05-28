@@ -1,4 +1,4 @@
-package software.amazon.smithy.rust.codegen.smithy.protocols.parsers
+package software.amazon.smithy.rust.codegen.smithy.protocols.parse
 
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
