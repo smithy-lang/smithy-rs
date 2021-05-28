@@ -184,6 +184,7 @@ class AwsQuerySerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDa
             is NumberShape -> {
                 val numberType = when (symbolProvider.toSymbol(target).rustType()) {
                     is RustType.Float -> "Float"
+                    // NegInt takes an i64 while PosInt takes u64. We need this to be signed here
                     is RustType.Integer -> "NegInt"
                     else -> throw IllegalStateException("unreachable")
                 }

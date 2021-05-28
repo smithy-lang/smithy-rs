@@ -3,16 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+mod urlencoded;
 mod xml;
 
 use crate::xml::try_xml_equivalent;
 use assert_json_diff::assert_json_eq_no_panic;
 use http::{Request, Uri};
 use pretty_assertions::Comparison;
-use regex::Regex;
 use std::collections::HashSet;
 use std::fmt::{self, Debug};
 use thiserror::Error;
+use urlencoded::try_url_encoded_form_equivalent;
 
 #[derive(Debug, PartialEq, Eq, Error)]
 pub enum ProtocolTestFailure {
@@ -321,61 +322,11 @@ fn try_json_eq(actual: &str, expected: &str) -> Result<(), ProtocolTestFailure> 
     }
 }
 
-fn rewrite_url_encoded_map_keys(input: &str) -> (String, String) {
-    let mut itr = input.split('=');
-    let (key, value) = (itr.next().unwrap(), itr.next().unwrap());
-
-    let regex = Regex::new(r"^(.+)\.\d+\.(.+)$").unwrap();
-    if let Some(captures) = regex.captures(key) {
-        let rewritten_key = format!(
-            "{}.N.{}",
-            captures.get(1).unwrap().as_str(),
-            captures.get(2).unwrap().as_str()
-        );
-        (rewritten_key, value.to_string())
-    } else {
-        (key.to_string(), value.to_string())
-    }
-}
-
-fn rewrite_url_encoded_body(input: &str) -> String {
-    let mut entries: Vec<(String, String)> = input
-        .split("\n&")
-        .filter(|s| !s.is_empty())
-        .map(rewrite_url_encoded_map_keys)
-        .collect();
-    if entries.len() > 2 {
-        entries[2..].sort_by(|a, b| a.1.cmp(&b.1));
-    }
-    let entries: Vec<String> = entries
-        .into_iter()
-        .map(|kv| format!("{}={}", kv.0, kv.1))
-        .collect();
-    entries.join("\n&")
-}
-
-fn try_url_encoded_form_equivalent(
-    actual: &str,
-    expected: &str,
-) -> Result<(), ProtocolTestFailure> {
-    let actual = rewrite_url_encoded_body(actual);
-    let expected = rewrite_url_encoded_body(expected);
-    if actual == expected {
-        Ok(())
-    } else {
-        Err(ProtocolTestFailure::BodyDidNotMatch {
-            comparison: pretty_comparison(&actual, &expected),
-            hint: "".into(),
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::{
-        forbid_headers, forbid_query_params, require_headers, require_query_params,
-        try_url_encoded_form_equivalent, validate_body, validate_headers, validate_query_string,
-        MediaType, ProtocolTestFailure,
+        forbid_headers, forbid_query_params, require_headers, require_query_params, validate_body,
+        validate_headers, validate_query_string, MediaType, ProtocolTestFailure,
     };
     use http::Request;
 
@@ -520,44 +471,5 @@ mod tests {
 
         validate_body(&expected, expected, MediaType::from("something/else"))
             .expect("inputs matched exactly")
-    }
-
-    #[test]
-    fn test_url_encoded_form_equivalent() {
-        assert_eq!(
-            Ok(()),
-            try_url_encoded_form_equivalent(
-                "Action=Something\n&Version=test",
-                "Action=Something\n&Version=test",
-            )
-        );
-
-        assert!(try_url_encoded_form_equivalent(
-            "Action=Something\n&Version=test\n&Property=foo",
-            "Action=Something\n&Version=test\n&Property=bar",
-        )
-        .is_err());
-
-        assert!(try_url_encoded_form_equivalent(
-            "Action=Something\n&Version=test\n&WrongProperty=foo",
-            "Action=Something\n&Version=test\n&Property=foo",
-        )
-        .is_err());
-
-        assert_eq!(
-            Ok(()),
-            try_url_encoded_form_equivalent(
-                "Action=Something\n&Version=test\
-            \n&SomeMap.1.key=foo\
-            \n&SomeMap.1.value=Foo\
-            \n&SomeMap.2.key=bar\
-            \n&SomeMap.2.value=Bar",
-                "Action=Something\n&Version=test\
-            \n&SomeMap.1.key=bar\
-            \n&SomeMap.1.value=Bar\
-            \n&SomeMap.2.key=foo\
-            \n&SomeMap.2.value=Foo",
-            )
-        );
     }
 }
