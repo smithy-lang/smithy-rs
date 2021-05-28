@@ -24,9 +24,12 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormaliz
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.util.expectTrait
 
-class RestXmlFactory : ProtocolGeneratorFactory<HttpTraitProtocolGenerator> {
-    override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): HttpTraitProtocolGenerator {
-        return HttpTraitProtocolGenerator(protocolConfig, RestXml(protocolConfig))
+class RestXmlFactory(private val generator: (ProtocolConfig) -> Protocol = { RestXml(it) }) :
+    ProtocolGeneratorFactory<HttpTraitProtocolGenerator> {
+    override fun buildProtocolGenerator(
+        protocolConfig: ProtocolConfig
+    ): HttpTraitProtocolGenerator {
+        return HttpTraitProtocolGenerator(protocolConfig, generator(protocolConfig))
     }
 
     override fun transformModel(model: Model): Model {
@@ -46,10 +49,10 @@ class RestXmlFactory : ProtocolGeneratorFactory<HttpTraitProtocolGenerator> {
     }
 }
 
-class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
+open class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
     private val restXml = protocolConfig.serviceShape.expectTrait<RestXmlTrait>()
     private val runtimeConfig = protocolConfig.runtimeConfig
-    private val restXmlErrors: RuntimeType = when (restXml.isNoErrorWrapping) {
+    protected val restXmlErrors: RuntimeType = when (restXml.isNoErrorWrapping) {
         true -> RuntimeType.unwrappedXmlErrors(runtimeConfig)
         false -> RuntimeType.wrappedXmlErrors(runtimeConfig)
     }

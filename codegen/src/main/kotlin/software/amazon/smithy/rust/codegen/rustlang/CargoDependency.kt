@@ -72,17 +72,21 @@ class InlineDependency(
     companion object {
         fun forRustFile(
             name: String,
+            baseDir: String,
             vararg additionalDependencies: RustDependency
         ): InlineDependency {
             val module = name
             val filename = "$name.rs"
             // The inline crate is loaded as a dependency on the runtime classpath
-            val rustFile = this::class.java.getResource("/inlineable/src/$filename")
-            check(rustFile != null) { "Rust file $filename was missing from the resource bundle!" }
+            val rustFile = this::class.java.getResource("/$baseDir/src/$filename")
+            check(rustFile != null) { "Rust file /$baseDir/src/$filename was missing from the resource bundle!" }
             return InlineDependency(name, module, additionalDependencies.toList()) { writer ->
                 writer.raw(rustFile.readText())
             }
         }
+
+        private fun forRustFile(name: String, vararg additionalDependencies: RustDependency) =
+            forRustFile(name, "inlineable", *additionalDependencies)
 
         fun awsJsonErrors(runtimeConfig: RuntimeConfig) =
             forRustFile("aws_json_errors", CargoDependency.Http, CargoDependency.SmithyTypes(runtimeConfig))

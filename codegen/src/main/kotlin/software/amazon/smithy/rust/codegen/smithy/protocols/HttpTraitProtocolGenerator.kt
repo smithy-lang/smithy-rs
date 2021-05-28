@@ -88,7 +88,7 @@ class HttpTraitProtocolGenerator(
         val bindings = httpIndex.getRequestBindings(operationShape).toList()
         val payloadMemberName: String? =
             bindings.firstOrNull { (_, binding) -> binding.location == HttpBinding.Location.PAYLOAD }?.first
-        if (payloadMemberName == null) {
+        return if (payloadMemberName == null) {
             serializerGenerator.operationSerializer(operationShape)?.let { serializer ->
                 rust(
                     "#T(&self).map_err(|err|#T::SerializationError(err.into()))?",
@@ -96,10 +96,10 @@ class HttpTraitProtocolGenerator(
                     runtimeConfig.operationBuildError()
                 )
             } ?: rustTemplate("#{SdkBody}::from(\"\")", *codegenScope)
-            return BodyMetadata(takesOwnership = false)
+            BodyMetadata(takesOwnership = false)
         } else {
             val member = inputShape.expectMember(payloadMemberName)
-            return serializeViaPayload(member, serializerGenerator)
+            serializeViaPayload(member, serializerGenerator)
         }
     }
 
@@ -470,8 +470,7 @@ class HttpTraitProtocolGenerator(
                 rust(
                     """
                         #T(response.headers())
-                            .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
-                        """,
+                            .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?""",
                     fnName, errorSymbol
                 )
             }
