@@ -18,10 +18,10 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
-import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.JsonSerializerGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.SerdeJsonParserGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.StructuredDataParserGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.parsers.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.parse.SerdeJsonParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 

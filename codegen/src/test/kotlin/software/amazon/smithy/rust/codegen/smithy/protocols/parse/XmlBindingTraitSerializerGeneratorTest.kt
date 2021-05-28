@@ -1,4 +1,9 @@
-package software.amazon.smithy.rust.codegen.smithy.protocols.parsers
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
+package software.amazon.smithy.rust.codegen.smithy.protocols.parse
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
@@ -7,6 +12,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.XmlBindingTraitSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -20,39 +26,43 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.lookup
 
-class JsonSerializerGeneratorTest {
+internal class XmlBindingTraitSerializerGeneratorTest {
     private val baseModel = """
         namespace test
-        use aws.protocols#restJson1
-
+        use aws.protocols#restXml
         union Choice {
-            blob: Blob,
-            boolean: Boolean,
-            date: Timestamp,
-            document: Document,
-            enum: FooEnum,
-            int: Integer,
-            list: SomeList,
-            listSparse: SomeSparseList,
-            long: Long,
-            map: MyMap,
-            mapSparse: MySparseMap,
-            number: Double,
+            @xmlFlattened
+            @xmlName("Hi")
+            flatMap: MyMap,
+
+            deepMap: MyMap,
+
+            @xmlFlattened
+            flatList: SomeList,
+
+            deepList: SomeList,
+
             s: String,
+
+            enum: FooEnum,
+
+            date: Timestamp,
+
+            number: Double,
+
             top: Top,
+
+            blob: Blob
         }
 
         @enum([{name: "FOO", value: "FOO"}])
         string FooEnum
 
         map MyMap {
+            @xmlName("Name")
             key: String,
-            value: Choice,
-        }
 
-        @sparse
-        map MySparseMap {
-            key: String,
+            @xmlName("Setting")
             value: Choice,
         }
 
@@ -60,16 +70,19 @@ class JsonSerializerGeneratorTest {
             member: Choice
         }
 
-        @sparse
-        list SomeSparseList {
-            member: Choice
-        }
 
         structure Top {
             choice: Choice,
+
             field: String,
+
+            @xmlAttribute
             extra: Long,
-            @jsonName("rec")
+
+            @xmlName("prefix:local")
+            renamedWithPrefix: String,
+
+            @xmlFlattened
             recursive: TopList
         }
 
@@ -78,10 +91,8 @@ class JsonSerializerGeneratorTest {
         }
 
         structure OpInput {
-            @httpHeader("x-test")
-            someHeader: String,
-
-            top: Top
+            @httpPayload
+            payload: Top
         }
 
         @http(uri: "/top", method: "POST")
@@ -99,30 +110,25 @@ class JsonSerializerGeneratorTest {
             )
         )
         val symbolProvider = testSymbolProvider(model)
-        val parserGenerator = JsonSerializerGenerator(testProtocolConfig(model))
-        val operationGenerator = parserGenerator.operationSerializer(model.lookup("test#Op"))
-        val documentGenerator = parserGenerator.documentSerializer()
+        val parserGenerator = XmlBindingTraitSerializerGenerator(testProtocolConfig(model))
+        val operationParser = parserGenerator.payloadSerializer(model.lookup("test#OpInput\$payload"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
             writer.unitTest(
                 """
-                use model::Top;
-
-                // Generate the document serializer even though it's not tested directly
-                // ${writer.format(documentGenerator)}
-
-                let input = crate::input::OpInput::builder().top(
+                 use model::Top;
+                let inp = crate::input::OpInput::builder().payload(
                     Top::builder()
                         .field("hello!")
                         .extra(45)
                         .recursive(Top::builder().extra(55).build())
                         .build()
                 ).build().unwrap();
-                let serialized = ${writer.format(operationGenerator!!)}(&input).unwrap();
+                let serialized = ${writer.format(operationParser)}(&inp.payload.unwrap()).unwrap();
                 let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
-                assert_eq!(output, r#"{"top":{"field":"hello!","extra":45,"rec":[{"extra":55}]}}"#);
-                """
+                assert_eq!(output, "<Top extra=\"45\"><field>hello!</field><recursive extra=\"55\"></recursive></Top>");
+            """
             )
         }
         project.withModule(RustModule.default("model", public = true)) {
@@ -135,10 +141,7 @@ class JsonSerializerGeneratorTest {
         project.withModule(RustModule.default("input", public = true)) {
             model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/json_ser.rs")
-        println("file:///${project.baseDir}/src/lib.rs")
-        println("file:///${project.baseDir}/src/model.rs")
-        println("file:///${project.baseDir}/src/operation_ser.rs")
+        println("file:///${project.baseDir}/src/xml_ser.rs")
         project.compileAndTest()
     }
 }
