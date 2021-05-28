@@ -44,93 +44,72 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
-private data class SimpleContext<T : Shape>(
-    /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
-    val writerExpression: String,
-    /** Expression representing the value to write to the JsonValueWriter */
-    val valueExpression: ValueExpression,
-    val shape: T,
-)
+class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSerializerGenerator {
+    private data class Context<T : Shape>(
+        /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
+        val writerExpression: String,
+        /** Expression representing the value to write to the JsonValueWriter */
+        val valueExpression: ValueExpression,
+        val shape: T,
+    )
 
-private typealias CollectionContext = SimpleContext<CollectionShape>
-private typealias MapContext = SimpleContext<MapShape>
-private typealias UnionContext = SimpleContext<UnionShape>
+    private data class MemberContext(
+        /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
+        val writerExpression: String,
+        /** Expression representing the value to write to the JsonValueWriter */
+        val valueExpression: ValueExpression,
+        val shape: MemberShape,
+        /** Whether or not to serialize null values if the type is optional */
+        val writeNulls: Boolean = false,
+    ) {
+        companion object {
+            fun collectionMember(context: Context<CollectionShape>, itemName: String): MemberContext =
+                MemberContext(
+                    "${context.writerExpression}.value()",
+                    ValueExpression.Reference(itemName),
+                    context.shape.member,
+                    writeNulls = true
+                )
 
-private data class MemberContext(
-    /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
-    val writerExpression: String,
-    /** Expression representing the value to write to the JsonValueWriter */
-    val valueExpression: ValueExpression,
-    val shape: MemberShape,
-    /** Whether or not to serialize null values if the type is optional */
-    val writeNulls: Boolean = false,
-) {
-    companion object {
-        fun collectionMember(context: CollectionContext, itemName: String): MemberContext =
-            MemberContext(
-                "${context.writerExpression}.value()",
-                ValueExpression.Reference(itemName),
-                context.shape.member,
-                writeNulls = true
-            )
+            fun mapMember(context: Context<MapShape>, key: String, value: String): MemberContext =
+                MemberContext(
+                    "${context.writerExpression}.key($key)",
+                    ValueExpression.Reference(value),
+                    context.shape.value,
+                    writeNulls = true
+                )
 
-        fun mapMember(context: MapContext, key: String, value: String): MemberContext =
-            MemberContext(
-                "${context.writerExpression}.key($key)",
-                ValueExpression.Reference(value),
-                context.shape.value,
-                writeNulls = true
-            )
+            fun structMember(context: StructContext, member: MemberShape, symProvider: RustSymbolProvider): MemberContext =
+                MemberContext(
+                    objectValueWriterExpression(context.objectName, member),
+                    ValueExpression.Value("${context.localName}.${symProvider.toMemberName(member)}"),
+                    member
+                )
 
-        fun structMember(context: StructContext, member: MemberShape, symProvider: RustSymbolProvider): MemberContext =
-            MemberContext(
-                objectValueWriterExpression(context.objectName, member),
-                ValueExpression.Value("${context.localName}.${symProvider.toMemberName(member)}"),
-                member
-            )
+            fun unionMember(context: Context<UnionShape>, variantReference: String, member: MemberShape): MemberContext =
+                MemberContext(
+                    objectValueWriterExpression(context.writerExpression, member),
+                    ValueExpression.Reference(variantReference),
+                    member
+                )
 
-        fun unionMember(context: UnionContext, variantReference: String, member: MemberShape): MemberContext =
-            MemberContext(
-                objectValueWriterExpression(context.writerExpression, member),
-                ValueExpression.Reference(variantReference),
-                member
-            )
-
-        /** Returns an expression to get a JsonValueWriter from a JsonObjectWriter */
-        private fun objectValueWriterExpression(objectWriterName: String, member: MemberShape): String {
-            val wireName = (member.getTrait<JsonNameTrait>()?.value ?: member.memberName).dq()
-            return "$objectWriterName.key($wireName)"
+            /** Returns an expression to get a JsonValueWriter from a JsonObjectWriter */
+            private fun objectValueWriterExpression(objectWriterName: String, member: MemberShape): String {
+                val wireName = (member.getTrait<JsonNameTrait>()?.value ?: member.memberName).dq()
+                return "$objectWriterName.key($wireName)"
+            }
         }
     }
-}
 
-// Specialized since it holds a JsonObjectWriter expression rather than a JsonValueWriter
-private data class StructContext(
-    /** Name of the JsonObjectWriter */
-    val objectName: String,
-    /** Name of the variable that holds the struct */
-    val localName: String,
-    val shape: StructureShape,
-)
+    // Specialized since it holds a JsonObjectWriter expression rather than a JsonValueWriter
+    private data class StructContext(
+        /** Name of the JsonObjectWriter */
+        val objectName: String,
+        /** Name of the variable that holds the struct */
+        val localName: String,
+        val shape: StructureShape,
+    )
 
-private sealed class ValueExpression {
-    abstract val name: String
-
-    data class Reference(override val name: String) : ValueExpression()
-    data class Value(override val name: String) : ValueExpression()
-
-    fun asValue(): String = when (this) {
-        is Reference -> "*$name"
-        is Value -> name
-    }
-
-    fun asRef(): String = when (this) {
-        is Reference -> name
-        is Value -> "&$name"
-    }
-}
-
-class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSerializerGenerator {
     private val model = protocolConfig.model
     private val symbolProvider = protocolConfig.symbolProvider
     private val runtimeConfig = protocolConfig.runtimeConfig
@@ -284,16 +263,16 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
                 rust("$writer.instant(${value.name}, #T);", timestampFormatType)
             }
             is CollectionShape -> jsonArrayWriter(context) { arrayName ->
-                serializeCollection(CollectionContext(arrayName, context.valueExpression, target))
+                serializeCollection(Context(arrayName, context.valueExpression, target))
             }
             is MapShape -> jsonObjectWriter(context) { objectName ->
-                serializeMap(MapContext(objectName, context.valueExpression, target))
+                serializeMap(Context(objectName, context.valueExpression, target))
             }
             is StructureShape -> jsonObjectWriter(context) { objectName ->
                 serializeStructure(StructContext(objectName, context.valueExpression.name, target))
             }
             is UnionShape -> jsonObjectWriter(context) { objectName ->
-                serializeUnion(UnionContext(objectName, context.valueExpression, target))
+                serializeUnion(Context(objectName, context.valueExpression, target))
             }
             is DocumentShape -> rust("$writer.document(${value.asRef()});")
             else -> TODO(target.toString())
@@ -316,14 +295,14 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
         }
     }
 
-    private fun RustWriter.serializeCollection(context: CollectionContext) {
+    private fun RustWriter.serializeCollection(context: Context<CollectionShape>) {
         val itemName = safeName("item")
         rustBlock("for $itemName in ${context.valueExpression.asRef()}") {
             serializeMember(MemberContext.collectionMember(context, itemName))
         }
     }
 
-    private fun RustWriter.serializeMap(context: MapContext) {
+    private fun RustWriter.serializeMap(context: Context<MapShape>) {
         val keyName = safeName("key")
         val valueName = safeName("value")
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
@@ -336,7 +315,7 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
         }
     }
 
-    private fun RustWriter.serializeUnion(context: UnionContext) {
+    private fun RustWriter.serializeUnion(context: Context<UnionShape>) {
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val unionSymbol = symbolProvider.toSymbol(context.shape)
         val unionSerializer = RuntimeType.forInlineFun(fnName, "json_ser") { writer ->
