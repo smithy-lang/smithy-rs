@@ -393,11 +393,11 @@ class HttpTraitProtocolGenerator(
         httpBuilderFun(implBlockWriter) {
             rust(
                 """
-            let builder = #T::new();
-            let builder = builder.header("Content-Type", ${contentType.dq()});
-            self.update_http_builder(builder)
-            """,
-                RuntimeType.Http("request::Builder")
+                let builder = #T::new();
+                let builder = builder.header("Content-Type", ${contentType.dq()});
+                self.update_http_builder(builder)
+                """,
+                RuntimeType.HttpRequestBuilder
             )
         }
     }

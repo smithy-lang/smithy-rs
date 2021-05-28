@@ -36,15 +36,25 @@ pub struct QueryMapWriter<'a> {
     output: &'a mut String,
     prefix: Cow<'a, str>,
     flatten: bool,
+    key_name: &'static str,
+    value_name: &'static str,
     next_index: usize,
 }
 
 impl<'a> QueryMapWriter<'a> {
-    fn new(output: &'a mut String, prefix: Cow<'a, str>, flatten: bool) -> QueryMapWriter<'a> {
+    fn new(
+        output: &'a mut String,
+        prefix: Cow<'a, str>,
+        flatten: bool,
+        key_name: &'static str,
+        value_name: &'static str,
+    ) -> QueryMapWriter<'a> {
         QueryMapWriter {
             prefix,
             output,
             flatten,
+            key_name,
+            value_name,
             next_index: 1,
         }
     }
@@ -52,13 +62,17 @@ impl<'a> QueryMapWriter<'a> {
     pub fn entry(&mut self, key: &str) -> QueryValueWriter {
         let entry = if self.flatten { "" } else { ".entry" };
         self.output.push_str(&format!(
-            "\n&{}{}.{}.key={}",
+            "\n&{}{}.{}.{}={}",
             self.prefix,
             entry,
             self.next_index,
+            self.key_name,
             encode(key)
         ));
-        let value_name = format!("{}{}.{}.value", self.prefix, entry, self.next_index);
+        let value_name = format!(
+            "{}{}.{}.{}",
+            self.prefix, entry, self.next_index, self.value_name
+        );
 
         self.next_index += 1;
         QueryValueWriter::new(self.output, Cow::Owned(value_name))
@@ -177,8 +191,13 @@ impl<'a> QueryValueWriter<'a> {
     }
 
     /// Starts a map.
-    pub fn start_map(self, flat: bool) -> QueryMapWriter<'a> {
-        QueryMapWriter::new(self.output, self.prefix, flat)
+    pub fn start_map(
+        self,
+        flat: bool,
+        key_name: &'static str,
+        value_name: &'static str,
+    ) -> QueryMapWriter<'a> {
+        QueryMapWriter::new(self.output, self.prefix, flat, key_name, value_name)
     }
 
     /// Starts a list.
@@ -212,14 +231,20 @@ mod tests {
         let mut out = String::new();
         let mut writer = QueryWriter::new(&mut out, "SomeAction", "1.0");
 
-        let mut map = writer.prefix("MapArg").start_map(false);
+        let mut map = writer.prefix("MapArg").start_map(false, "key", "value");
         map.entry("bar").string("Bar");
         map.entry("foo").string("Foo");
         map.finish();
 
-        let mut map = writer.prefix("Some.Flattened").start_map(true);
+        let mut map = writer
+            .prefix("Some.Flattened")
+            .start_map(true, "key", "value");
         map.entry("bar").string("Bar");
         map.entry("foo").string("Foo");
+        map.finish();
+
+        let mut map = writer.prefix("RenamedKVs").start_map(false, "K", "V");
+        map.entry("bar").string("Bar");
         map.finish();
 
         writer.finish();
@@ -235,6 +260,8 @@ mod tests {
             \n&Some.Flattened.1.value=Bar\
             \n&Some.Flattened.2.key=foo\
             \n&Some.Flattened.2.value=Foo\
+            \n&RenamedKVs.entry.1.K=bar\
+            \n&RenamedKVs.entry.1.V=Bar\
             ",
             out
         );

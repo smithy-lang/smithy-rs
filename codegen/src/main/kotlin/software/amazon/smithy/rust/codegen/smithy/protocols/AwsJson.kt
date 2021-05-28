@@ -154,6 +154,8 @@ class BasicAwsJsonGenerator(
 ) : HttpProtocolGenerator(protocolConfig) {
     private val model = protocolConfig.model
     private val runtimeConfig = protocolConfig.runtimeConfig
+    private val symbolProvider = protocolConfig.symbolProvider
+    private val operationIndex = OperationIndex.of(model)
 
     override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
@@ -175,8 +177,6 @@ class BasicAwsJsonGenerator(
         )
     }
 
-    private val symbolProvider = protocolConfig.symbolProvider
-    private val operationIndex = OperationIndex.of(model)
     override fun toHttpRequestImpl(
         implBlockWriter: RustWriter,
         operationShape: OperationShape,
