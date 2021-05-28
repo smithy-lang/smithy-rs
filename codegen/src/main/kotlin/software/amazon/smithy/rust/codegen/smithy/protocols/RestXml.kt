@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
@@ -28,8 +27,7 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
 class RestXmlFactory(private val generator: (ProtocolConfig) -> Protocol = { RestXml(it) }) :
     ProtocolGeneratorFactory<HttpTraitProtocolGenerator> {
     override fun buildProtocolGenerator(
-        protocolConfig: ProtocolConfig,
-        decorator: RustCodegenDecorator
+        protocolConfig: ProtocolConfig
     ): HttpTraitProtocolGenerator {
         return HttpTraitProtocolGenerator(protocolConfig, generator(protocolConfig))
     }

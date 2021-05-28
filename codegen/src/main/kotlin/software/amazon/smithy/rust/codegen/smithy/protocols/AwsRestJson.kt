@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
@@ -28,8 +27,7 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStream
 
 class AwsRestJsonFactory : ProtocolGeneratorFactory<HttpTraitProtocolGenerator> {
     override fun buildProtocolGenerator(
-        protocolConfig: ProtocolConfig,
-        decorator: RustCodegenDecorator
+        protocolConfig: ProtocolConfig
     ): HttpTraitProtocolGenerator = HttpTraitProtocolGenerator(protocolConfig, RestJson(protocolConfig))
 
     /** Create a synthetic awsJsonInputBody if specified

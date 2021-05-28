@@ -159,7 +159,7 @@ class HttpProtocolTestGeneratorTest {
         }
 
         class TestProtocolFactory : ProtocolGeneratorFactory<HttpProtocolGenerator> {
-            override fun buildProtocolGenerator(protocolConfig: ProtocolConfig, decorator: RustCodegenDecorator): HttpProtocolGenerator {
+            override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): HttpProtocolGenerator {
                 return TestProtocol(protocolConfig)
             }
 
