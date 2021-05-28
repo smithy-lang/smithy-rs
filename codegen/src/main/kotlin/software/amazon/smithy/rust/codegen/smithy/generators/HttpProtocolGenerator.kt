@@ -160,7 +160,7 @@ abstract class HttpProtocolGenerator(
             withBlock("Ok({", "})") {
                 features.forEach { it.section(OperationSection.MutateInput("self", "_config"))(this) }
                 rust("let request = self.request_builder_base()?;")
-                withBlock("let body = ", ";") {
+                withBlock("let body =", ";") {
                     body("self", shape)
                 }
                 rust("let request = Self::assemble(request, body);")
