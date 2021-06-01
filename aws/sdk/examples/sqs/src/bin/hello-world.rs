@@ -35,7 +35,8 @@ async fn main() -> Result<(), sqs::Error> {
 
     let rcv_message_output = client
         .receive_message()
-        .max_number_of_messages(5)
+        // TODO: this should not be required, https://github.com/awslabs/smithy-rs/issues/439
+        .max_number_of_messages(1)
         .queue_url(&queue_url)
         .send()
         .await?;
