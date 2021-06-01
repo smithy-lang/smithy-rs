@@ -183,10 +183,99 @@ jobs:
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
         path: aws-sdk
-    - name: debug
-      run: ls -R
     - name: Cargo Check
       run: cargo check
       working-directory: aws-sdk
       env:
-        RUSTFLAGS: -D WARNINGS
+        RUSTFLAGS: -D warnings
+  test-sdk:
+    name: cargo test AWS SDK
+    needs: generate-sdk
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargotest
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - uses: actions/download-artifact@v2
+      name: Download SDK Artifact
+      with:
+        name: aws-sdk-${{ env.name }}-${{ github.sha }}
+        path: aws-sdk
+    - name: Cargo Check
+      run: cargo test
+      working-directory: aws-sdk
+      env:
+        RUSTFLAGS: -D warnings
+  docs-sdk:
+    name: cargo docs AWS SDK
+    needs: generate-sdk
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargodocs
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - uses: actions/download-artifact@v2
+      name: Download SDK Artifact
+      with:
+        name: aws-sdk-${{ env.name }}-${{ github.sha }}
+        path: aws-sdk
+    - name: Cargo Docs
+      run: cargo doc --no-deps
+      working-directory: aws-sdk
+      env:
+        RUSTFLAGS: -D warnings
+  clippy-sdk:
+    name: cargo clippy AWS SDK
+    needs: generate-sdk
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargoclippy
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - uses: actions/download-artifact@v2
+      name: Download SDK Artifact
+      with:
+        name: aws-sdk-${{ env.name }}-${{ github.sha }}
+        path: aws-sdk
+    - name: Cargo Clippy
+      run: cargo clippy -- -D warnings
+      working-directory: aws-sdk
