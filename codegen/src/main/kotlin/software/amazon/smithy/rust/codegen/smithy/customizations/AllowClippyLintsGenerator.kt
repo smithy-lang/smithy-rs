@@ -19,6 +19,8 @@ val ClippyAllowLints = listOf(
     "large_enum_variant",
     // Some models have members with `is` in the name, which leads to builder functions with the wrong self convention
     "wrong_self_convention",
+    // models like ecs use method names like "add()" which confuses clippy
+    "should_implement_trait"
 )
 
 class AllowClippyLints() : LibRsCustomization() {
