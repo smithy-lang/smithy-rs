@@ -179,6 +179,8 @@ task("generateCargoWorkspace") {
 }
 
 task("finalizeSdk") {
+    dependsOn("assemble")
+    outputs.upToDateWhen { false }
     finalizedBy(
         "relocateServices",
         "relocateRuntime",
