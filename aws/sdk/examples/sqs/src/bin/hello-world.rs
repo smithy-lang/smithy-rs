@@ -4,14 +4,10 @@
  */
 
 use std::process::exit;
-use tracing_subscriber::fmt::SubscriberBuilder;
-use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<(), sqs::Error> {
-    SubscriberBuilder::default()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
+    tracing_subscriber::fmt::init();
     let client = sqs::Client::from_env();
     let queues = client.list_queues().send().await?;
     let mut queue_urls = queues.queue_urls.unwrap_or_default();
