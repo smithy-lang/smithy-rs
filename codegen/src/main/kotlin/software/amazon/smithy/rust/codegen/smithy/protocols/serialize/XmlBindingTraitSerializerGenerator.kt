@@ -6,8 +6,6 @@
 package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
 
 import software.amazon.smithy.codegen.core.CodegenException
-import software.amazon.smithy.model.knowledge.HttpBinding
-import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -39,18 +37,22 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlMemberIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlNameIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
-class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSerializerGenerator {
+class XmlBindingTraitSerializerGenerator(
+    protocolConfig: ProtocolConfig,
+    private val httpBindingResolver: HttpBindingResolver
+) : StructuredDataSerializerGenerator {
     private val symbolProvider = protocolConfig.symbolProvider
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val model = protocolConfig.model
@@ -68,7 +70,6 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
         )
 
     private val xmlIndex = XmlNameIndex.of(model)
-    private val httpIndex = HttpBindingIndex.of(model)
     private val rootNamespace = protocolConfig.serviceShape.getTrait<XmlNamespaceTrait>()
 
     sealed class Ctx {
@@ -215,9 +216,9 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
             is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.Base64Encode(runtimeConfig))
             is TimestampShape -> {
                 val timestampFormat =
-                    httpIndex.determineTimestampFormat(
+                    httpBindingResolver.timestampFormat(
                         member,
-                        HttpBinding.Location.DOCUMENT,
+                        HttpLocation.DOCUMENT,
                         TimestampFormatTrait.Format.DATE_TIME
                     )
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
@@ -368,13 +369,8 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
         }
     }
 
-    private fun OperationShape.operationXmlMembers(): XmlMemberIndex {
-        val inputShape = this.inputShape(model)
-        val documentMembers =
-            httpIndex.getRequestBindings(this).filter { it.value.location == HttpBinding.Location.DOCUMENT }
-                .keys.map { inputShape.expectMember(it) }
-        return XmlMemberIndex.fromMembers(documentMembers)
-    }
+    private fun OperationShape.operationXmlMembers(): XmlMemberIndex =
+        XmlMemberIndex.fromMembers(httpBindingResolver.requestMembers(this, HttpLocation.DOCUMENT))
 
     private fun Shape.xmlNamespace(): XmlNamespaceTrait? {
         return this.getTrait() ?: rootNamespace

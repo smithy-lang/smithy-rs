@@ -7,6 +7,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -99,7 +100,10 @@ class JsonSerializerGeneratorTest {
             )
         )
         val symbolProvider = testSymbolProvider(model)
-        val parserGenerator = JsonSerializerGenerator(testProtocolConfig(model))
+        val parserGenerator = JsonSerializerGenerator(
+            testProtocolConfig(model),
+            HttpTraitHttpBindingResolver(model, "application/json", null)
+        )
         val operationGenerator = parserGenerator.operationSerializer(model.lookup("test#Op"))
         val documentGenerator = parserGenerator.documentSerializer()
 

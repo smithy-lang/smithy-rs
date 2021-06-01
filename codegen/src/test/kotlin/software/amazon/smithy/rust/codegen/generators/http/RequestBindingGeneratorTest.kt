@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpTrait
+import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -117,7 +118,11 @@ class RequestBindingGeneratorTest {
             RequestBindingGenerator(
                 model,
                 symbolProvider,
-                TestRuntimeConfig, writer, operationShape, inputShape, httpTrait
+                TestRuntimeConfig,
+                TimestampFormatTrait.Format.EPOCH_SECONDS,
+                operationShape,
+                inputShape,
+                httpTrait
             ).renderUpdateHttpBuilder(this)
             rustBlock(
                 "pub fn request_builder_base(&self) -> Result<#T, #T>",

@@ -26,8 +26,10 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -59,15 +61,29 @@ class RequestBindingGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val runtimeConfig: RuntimeConfig,
-    private val writer: RustWriter,
+    private val defaultTimestampFormat: TimestampFormatTrait.Format,
     private val shape: OperationShape,
     private val inputShape: StructureShape,
-    private val httpTrait: HttpTrait
+    private val httpTrait: HttpTrait,
 ) {
-    // TODO: make defaultTimestampFormat configurable
-    private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
     private val index = HttpBindingIndex.of(model)
     private val buildError = runtimeConfig.operationBuildError()
+
+    constructor(
+        protocolConfig: ProtocolConfig,
+        defaultTimestampFormat: TimestampFormatTrait.Format,
+        httpBindingResolver: HttpBindingResolver,
+        shape: OperationShape,
+        inputShape: StructureShape,
+    ) : this(
+        protocolConfig.model,
+        protocolConfig.symbolProvider,
+        protocolConfig.runtimeConfig,
+        defaultTimestampFormat,
+        shape,
+        inputShape,
+        httpBindingResolver.httpTrait(shape),
+    )
 
     /**
      * Generates `update_http_builder` and all necessary dependency functions into the impl block provided by
@@ -145,7 +161,7 @@ class RequestBindingGenerator(
                         #{build_error}::InvalidField { field: ${memberName.dq()}, details: format!("`{}` cannot be used as a header name: {}", k, err)}
                     })?;
                     use std::convert::TryFrom;
-                    let header_value = ${headerFmtFun(target, memberShape, "v")};
+                    let header_value = ${headerFmtFun(this, target, memberShape, "v")};
                     let header_value = http::header::HeaderValue::try_from(header_value).map_err(|err| {
                         #{build_error}::InvalidField {
                             field: ${memberName.dq()},
@@ -174,7 +190,7 @@ class RequestBindingGenerator(
         ifSet(memberType, memberSymbol, "&self.$memberName") { field ->
             listForEach(memberType, field) { innerField, targetId ->
                 val innerMemberType = model.expectShape(targetId)
-                val formatted = headerFmtFun(innerMemberType, memberShape, innerField)
+                val formatted = headerFmtFun(this, innerMemberType, memberShape, innerField)
                 val safeName = safeName("formatted")
                 write("let $safeName = $formatted;")
                 rustBlock("if !$safeName.is_empty()") {
@@ -203,7 +219,7 @@ class RequestBindingGenerator(
     /**
      * Format [member] in the when used as an HTTP header
      */
-    private fun headerFmtFun(target: Shape, member: MemberShape, targetName: String): String {
+    private fun headerFmtFun(writer: RustWriter, target: Shape, member: MemberShape, targetName: String): String {
         return when {
             target.isStringShape -> {
                 if (target.hasTrait<MediaTypeTrait>()) {
@@ -238,7 +254,7 @@ class RequestBindingGenerator(
         val formatString = httpTrait.uriFormatString()
         val args = httpTrait.uri.labels.map { label ->
             val member = inputShape.expectMember(label.content)
-            "${label.content} = ${labelFmtFun(model.expectShape(member.target), member, label)}"
+            "${label.content} = ${labelFmtFun(writer, model.expectShape(member.target), member, label)}"
         }
         val combinedArgs = listOf(formatString, *args.toTypedArray())
         writer.addImport(RuntimeType.stdfmt.member("Write").toSymbol(), null)
@@ -316,11 +332,7 @@ class RequestBindingGenerator(
                         val target = model.expectShape(targetId)
                         rust(
                             "query.push_kv(${param.locationName.dq()}, &${
-                            paramFmtFun(
-                                target,
-                                memberShape,
-                                innerField
-                            )
+                            paramFmtFun(writer, target, memberShape, innerField)
                             });"
                         )
                     }
@@ -333,7 +345,7 @@ class RequestBindingGenerator(
     /**
      * Format [member] when used as a queryParam
      */
-    private fun paramFmtFun(target: Shape, member: MemberShape, targetName: String): String {
+    private fun paramFmtFun(writer: RustWriter, target: Shape, member: MemberShape, targetName: String): String {
         return when {
             target.isStringShape -> {
                 val func = writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_string"))
@@ -359,7 +371,7 @@ class RequestBindingGenerator(
     /**
      * Format [member] when used as an HTTP Label (`/bucket/{key}`)
      */
-    private fun labelFmtFun(target: Shape, member: MemberShape, label: SmithyPattern.Segment): String {
+    private fun labelFmtFun(writer: RustWriter, target: Shape, member: MemberShape, label: SmithyPattern.Segment): String {
         val memberName = symbolProvider.toMemberName(member)
         return when {
             target.isStringShape -> {

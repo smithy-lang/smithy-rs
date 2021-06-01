@@ -40,7 +40,7 @@ class ProtocolLoader(private val supportedProtocols: ProtocolMap) {
             AwsJson1_0Trait.ID to BasicAwsJsonFactory(AwsJsonVersion.Json10),
             AwsJson1_1Trait.ID to BasicAwsJsonFactory(AwsJsonVersion.Json11),
             AwsQueryTrait.ID to AwsQueryFactory(),
-            RestJson1Trait.ID to AwsRestJsonFactory(),
+            RestJson1Trait.ID to RestJsonFactory(),
             RestXmlTrait.ID to RestXmlFactory(),
         )
         val Default = ProtocolLoader(DefaultProtocols)

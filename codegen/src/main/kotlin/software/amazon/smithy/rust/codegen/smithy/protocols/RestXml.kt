@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.protocols
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -25,11 +26,11 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStream
 import software.amazon.smithy.rust.codegen.util.expectTrait
 
 class RestXmlFactory(private val generator: (ProtocolConfig) -> Protocol = { RestXml(it) }) :
-    ProtocolGeneratorFactory<HttpTraitProtocolGenerator> {
+    ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
     override fun buildProtocolGenerator(
         protocolConfig: ProtocolConfig
-    ): HttpTraitProtocolGenerator {
-        return HttpTraitProtocolGenerator(protocolConfig, generator(protocolConfig))
+    ): HttpBoundProtocolGenerator {
+        return HttpBoundProtocolGenerator(protocolConfig, generator(protocolConfig))
     }
 
     override fun transformModel(model: Model): Model {
@@ -52,17 +53,24 @@ class RestXmlFactory(private val generator: (ProtocolConfig) -> Protocol = { Res
 open class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
     private val restXml = protocolConfig.serviceShape.expectTrait<RestXmlTrait>()
     private val runtimeConfig = protocolConfig.runtimeConfig
+
     protected val restXmlErrors: RuntimeType = when (restXml.isNoErrorWrapping) {
         true -> RuntimeType.unwrappedXmlErrors(runtimeConfig)
         false -> RuntimeType.wrappedXmlErrors(runtimeConfig)
     }
+
+    override val httpBindingResolver: HttpBindingResolver =
+        HttpTraitHttpBindingResolver(protocolConfig.model, "application/xml", null)
+
+    override val defaultTimestampFormat: TimestampFormatTrait.Format =
+        TimestampFormatTrait.Format.DATE_TIME
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
         return RestXmlParserGenerator(protocolConfig, restXmlErrors)
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator {
-        return XmlBindingTraitSerializerGenerator(protocolConfig)
+        return XmlBindingTraitSerializerGenerator(protocolConfig, httpBindingResolver)
     }
 
     override fun parseGenericError(operationShape: OperationShape): RuntimeType {
@@ -81,10 +89,4 @@ open class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
             }
         }
     }
-
-    override fun documentContentType(): String? {
-        return null
-    }
-
-    override fun defaultContentType(): String = "application/xml"
 }
