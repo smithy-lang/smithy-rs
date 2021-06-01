@@ -172,14 +172,11 @@ fun TestWriterDelegator.compileAndTest() {
         libRsCustomizations = listOf(),
     )
     try {
-        "cargo test".runCommand(baseDir, mapOf("RUSTFLAGS" to "-A dead_code"))
-    } finally {
-        try {
-            "cargo fmt".runCommand(baseDir)
-        } catch (e: Exception) {
-            // cargo fmt errors are useless, ignore
-        }
+        "cargo fmt".runCommand(baseDir)
+    } catch (e: Exception) {
+        // cargo fmt errors are useless, ignore
     }
+    "cargo test".runCommand(baseDir, mapOf("RUSTFLAGS" to "-A dead_code"))
 }
 
 // TODO: unify these test helpers a bit

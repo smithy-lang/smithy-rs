@@ -46,8 +46,8 @@ class AwsQueryFactory : ProtocolGeneratorFactory<AwsQueryProtocolGenerator> {
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
-            requestSerialization = false,
-            requestBodySerialization = false,
+            requestSerialization = true,
+            requestBodySerialization = true,
             responseDeserialization = true,
             errorDeserialization = true,
         )
@@ -110,8 +110,16 @@ class AwsQueryProtocolGenerator(private val protocolConfig: ProtocolConfig) : Ht
         inputShape: StructureShape
     ) {
         httpBuilderFun(implBlockWriter) {
-            // TODO: Implement request building
-            rust("unimplemented!()")
+            rust(
+                """
+                Ok(
+                    #T::new()
+                        .method("POST")
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                )
+                """,
+                RuntimeType.HttpRequestBuilder
+            )
         }
     }
 
