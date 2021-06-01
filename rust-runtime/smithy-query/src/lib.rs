@@ -18,7 +18,7 @@ impl<'a> QueryWriter<'a> {
     pub fn new(output: &'a mut String, action: &str, version: &str) -> Self {
         output.push_str("Action=");
         output.push_str(&encode(action));
-        output.push_str("\n&Version=");
+        output.push_str("&Version=");
         output.push_str(&encode(version));
         QueryWriter { output }
     }
@@ -62,7 +62,7 @@ impl<'a> QueryMapWriter<'a> {
     pub fn entry(&mut self, key: &str) -> QueryValueWriter {
         let entry = if self.flatten { "" } else { ".entry" };
         self.output.push_str(&format!(
-            "\n&{}{}.{}.{}={}",
+            "&{}{}.{}.{}={}",
             self.prefix,
             entry,
             self.next_index,
@@ -206,7 +206,7 @@ impl<'a> QueryValueWriter<'a> {
     }
 
     fn write_param_name(&mut self) {
-        self.output.push_str("\n&");
+        self.output.push_str("&");
         self.output.push_str(&self.prefix);
         self.output.push('=');
     }
@@ -223,7 +223,7 @@ mod tests {
         let mut out = String::new();
         let writer = QueryWriter::new(&mut out, "SomeAction", "1.0");
         writer.finish();
-        assert_eq!("Action=SomeAction\n&Version=1.0", out);
+        assert_eq!("Action=SomeAction&Version=1.0", out);
     }
 
     #[test]
@@ -251,17 +251,17 @@ mod tests {
 
         assert_eq!(
             "Action=SomeAction\
-            \n&Version=1.0\
-            \n&MapArg.entry.1.key=bar\
-            \n&MapArg.entry.1.value=Bar\
-            \n&MapArg.entry.2.key=foo\
-            \n&MapArg.entry.2.value=Foo\
-            \n&Some.Flattened.1.key=bar\
-            \n&Some.Flattened.1.value=Bar\
-            \n&Some.Flattened.2.key=foo\
-            \n&Some.Flattened.2.value=Foo\
-            \n&RenamedKVs.entry.1.K=bar\
-            \n&RenamedKVs.entry.1.V=Bar\
+            &Version=1.0\
+            &MapArg.entry.1.key=bar\
+            &MapArg.entry.1.value=Bar\
+            &MapArg.entry.2.key=foo\
+            &MapArg.entry.2.value=Foo\
+            &Some.Flattened.1.key=bar\
+            &Some.Flattened.1.value=Bar\
+            &Some.Flattened.2.key=foo\
+            &Some.Flattened.2.value=Foo\
+            &RenamedKVs.entry.1.K=bar\
+            &RenamedKVs.entry.1.V=Bar\
             ",
             out
         );
@@ -292,14 +292,14 @@ mod tests {
 
         assert_eq!(
             "Action=SomeAction\
-            \n&Version=1.0\
-            \n&ListArg.member.1=foo\
-            \n&ListArg.member.2=bar\
-            \n&ListArg.member.3=baz\
-            \n&FlattenedListArg.1=A\
-            \n&FlattenedListArg.2=B\
-            \n&ItemList.item.1=foo\
-            \n&ItemList.item.2=bar\
+            &Version=1.0\
+            &ListArg.member.1=foo\
+            &ListArg.member.2=bar\
+            &ListArg.member.3=baz\
+            &FlattenedListArg.1=A\
+            &FlattenedListArg.2=B\
+            &ItemList.item.1=foo\
+            &ItemList.item.2=bar\
             ",
             out
         );
@@ -319,9 +319,9 @@ mod tests {
 
         assert_eq!(
             "Action=SomeAction\
-            \n&Version=1.0\
-            \n&first.second=second_val\
-            \n&first=first_val\
+            &Version=1.0\
+            &first.second=second_val\
+            &first=first_val\
             ",
             out
         );
@@ -347,10 +347,10 @@ mod tests {
 
         assert_eq!(
             "Action=SomeAction\
-            \n&Version=1.0\
-            \n&epoch_seconds=5.2\
-            \n&date_time=2021-05-24T15%3A34%3A50.123Z\
-            \n&http_date=Wed%2C%2021%20Oct%202015%2007%3A28%3A00%20GMT\
+            &Version=1.0\
+            &epoch_seconds=5.2\
+            &date_time=2021-05-24T15%3A34%3A50.123Z\
+            &http_date=Wed%2C%2021%20Oct%202015%2007%3A28%3A00%20GMT\
             ",
             out
         );
@@ -375,13 +375,13 @@ mod tests {
 
         assert_eq!(
             "Action=SomeAction\
-            \n&Version=1.0\
-            \n&PosInt=5\
-            \n&NegInt=-5\
-            \n&Infinity=\
-            \n&NegInfinity=\
-            \n&NaN=\
-            \n&Floating=5.2\
+            &Version=1.0\
+            &PosInt=5\
+            &NegInt=-5\
+            &Infinity=\
+            &NegInfinity=\
+            &NaN=\
+            &Floating=5.2\
             ",
             out
         );
@@ -398,9 +398,9 @@ mod tests {
 
         assert_eq!(
             "Action=SomeAction\
-            \n&Version=1.0\
-            \n&IsTrue=true\
-            \n&IsFalse=false\
+            &Version=1.0\
+            &IsTrue=true\
+            &IsFalse=false\
             ",
             out
         );
@@ -410,6 +410,6 @@ mod tests {
     fn action_version_escaping() {
         let mut out = String::new();
         QueryWriter::new(&mut out, "Some Action", "1 2").finish();
-        assert_eq!("Action=Some%20Action\n&Version=1%202", out);
+        assert_eq!("Action=Some%20Action&Version=1%202", out);
     }
 }

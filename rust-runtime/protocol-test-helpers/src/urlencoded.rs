@@ -25,8 +25,9 @@ fn rewrite_url_encoded_map_keys(input: &str) -> (String, String) {
 
 fn rewrite_url_encoded_body(input: &str) -> String {
     let mut entries: Vec<(String, String)> = input
-        .split("\n&")
-        .filter(|s| !s.trim().is_empty())
+        .split("&")
+        .map(|entry| entry.trim())
+        .filter(|s| !s.is_empty())
         .map(rewrite_url_encoded_map_keys)
         .collect();
     if entries.len() > 2 {
@@ -64,36 +65,36 @@ mod tests {
         assert_eq!(
             Ok(()),
             try_url_encoded_form_equivalent(
-                "Action=Something\n&Version=test",
-                "Action=Something\n&Version=test",
+                "Action=Something&Version=test",
+                "Action=Something&Version=test",
             )
         );
 
         assert!(try_url_encoded_form_equivalent(
-            "Action=Something\n&Version=test\n&Property=foo",
-            "Action=Something\n&Version=test\n&Property=bar",
+            "Action=Something&Version=test&Property=foo",
+            "Action=Something&Version=test&Property=bar",
         )
         .is_err());
 
         assert!(try_url_encoded_form_equivalent(
-            "Action=Something\n&Version=test\n&WrongProperty=foo",
-            "Action=Something\n&Version=test\n&Property=foo",
+            "Action=Something&Version=test&WrongProperty=foo",
+            "Action=Something&Version=test&Property=foo",
         )
         .is_err());
 
         assert_eq!(
             Ok(()),
             try_url_encoded_form_equivalent(
-                "Action=Something\n&Version=test\
-                \n&SomeMap.1.key=foo\
-                \n&SomeMap.1.value=Foo\
-                \n&SomeMap.2.key=bar\
-                \n&SomeMap.2.value=Bar",
-                "Action=Something\n&Version=test\
-                \n&SomeMap.1.key=bar\
-                \n&SomeMap.1.value=Bar\
-                \n&SomeMap.2.key=foo\
-                \n&SomeMap.2.value=Foo",
+                "Action=Something&Version=test\
+                &SomeMap.1.key=foo\
+                &SomeMap.1.value=Foo\
+                &SomeMap.2.key=bar\
+                &SomeMap.2.value=Bar",
+                "Action=Something&Version=test\
+                &SomeMap.1.key=bar\
+                &SomeMap.1.value=Bar\
+                &SomeMap.2.key=foo\
+                &SomeMap.2.value=Foo",
             )
         );
     }
