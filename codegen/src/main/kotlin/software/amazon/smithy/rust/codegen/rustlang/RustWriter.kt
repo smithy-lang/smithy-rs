@@ -53,12 +53,12 @@ fun <T : CodeWriter> T.conditionalBlock(
     block: T.() -> Unit
 ): T {
     if (conditional) {
-        openBlock(textBeforeNewLine, *args)
+        openBlock(textBeforeNewLine.trim(), *args)
     }
 
     block(this)
     if (conditional) {
-        closeBlock(textAfterNewLine)
+        closeBlock(textAfterNewLine.trim())
     }
     return this
 }
@@ -115,7 +115,7 @@ fun <T : CodeWriter> T.rustTemplate(
     check(ctx.distinctBy { it.first.toLowerCase() }.size == ctx.size) { "Duplicate cased keys not supported" }
     this.pushState()
     this.putContext(ctx.toMap().mapKeys { (k, _) -> k.toLowerCase() })
-    this.write(contents.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult -> "#{${matchResult.groupValues[1].toLowerCase()}:T}" })
+    this.write(contents.trim().replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult -> "#{${matchResult.groupValues[1].toLowerCase()}:T}" })
     this.popState()
 }
 

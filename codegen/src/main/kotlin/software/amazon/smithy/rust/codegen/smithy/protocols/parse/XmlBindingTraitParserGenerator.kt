@@ -501,7 +501,8 @@ class XmlBindingTraitParserGenerator(
                 *codegenScope,
                 "Map" to symbolProvider.toSymbol(target)
             ) {
-                rust("let mut k: Option<String> = None;")
+                val keySymbol = symbolProvider.toSymbol(target.key)
+                rust("let mut k: Option<#T> = None;", keySymbol)
                 rust(
                     "let mut v: Option<#T> = None;",
                     symbolProvider.toSymbol(model.expectShape(target.value.target))
