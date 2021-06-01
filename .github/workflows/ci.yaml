@@ -180,8 +180,12 @@ jobs:
       name: Download SDK Artifact
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
+        path: aws-sdk
+    - name: debug
+      run: ls -R
     - name: Cargo Check
       run: cargo check
+      working-directory: aws-sdk 
       env:
         RUSTFLAGS: -D WARNINGS
         
