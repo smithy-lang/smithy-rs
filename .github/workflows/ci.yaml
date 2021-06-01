@@ -135,14 +135,6 @@ jobs:
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
         restore-keys: |
           ${{ runner.os }}-gradle-
-    - uses: actions/cache@v2
-      name: Cargo Cache
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
@@ -152,11 +144,9 @@ jobs:
         java-version: ${{ env.java_version }}
     - name: Generate the SDK
       run: ./gradlew :aws:sdk:assemble
-    - name: Run tests, generate docs
-      run: ./gradlew :aws:sdk:build
-    - name: Get current date
-      id: date
-      run: echo "name=${GITHUB_REF##*/}-$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
     - uses: actions/upload-artifact@v2
       name: Upload SDK Artifact
       with:
@@ -164,3 +154,34 @@ jobs:
         path: |
           aws/sdk/build/aws-sdk/
           !aws/sdk/build/aws-sdk/target
+
+  check-sdk:
+    name: cargo check AWS SDK
+    needs: generate-sdk
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargocheck
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - uses: actions/download-artifact@v2
+      name: Download SDK Artifact
+      with:
+        name: aws-sdk-${{ env.name }}-${{ github.sha }}
+    - name: Cargo Check
+      run: cargo check
+      env:
+        RUSTFLAGS: -D WARNINGS
+        
