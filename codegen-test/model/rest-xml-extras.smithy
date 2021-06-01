@@ -4,6 +4,7 @@ namespace aws.protocoltests.restxml
 use aws.protocols#restXml
 use aws.api#service
 use smithy.test#httpResponseTests
+use smithy.test#httpRequestTests
 
 
 /// A REST XML service that sends XML requests and responses.
@@ -11,7 +12,7 @@ use smithy.test#httpResponseTests
 @restXml
 service RestXmlExtras {
     version: "2019-12-16",
-    operations: [AttributeParty, XmlMapsFlattenedNestedXmlNamespace]
+    operations: [AttributeParty, XmlMapsFlattenedNestedXmlNamespace, EnumKeys]
 }
 
 @enum([{"value": "enumvalue", "name": "V"}])
@@ -32,6 +33,42 @@ structure AttributePartyInputOutput {
 
     @xmlAttribute
     bool: Boolean
+}
+
+structure XmlMapEnumKeys {
+    data: EnumKeyMap
+}
+
+map EnumKeyMap {
+    key: StringEnum,
+    value: String
+}
+
+@httpResponseTests([{
+    id: "DeserEnumMap",
+    code: 200,
+    body: "<XmlMapEnumKeys><data><entry><key>enumvalue</key><value>hello</value></entry></data></XmlMapEnumKeys>",
+    params: {
+        data: { "enumvalue": "hello" }
+    },
+    bodyMediaType: "application/xml",
+    protocol: "aws.protocols#restXml"
+}])
+@httpRequestTests([{
+    id: "SerEnumMap",
+    method: "POST",
+    body: "<XmlMapEnumKeys><data><entry><key>enumvalue</key><value>hello</value></entry></data></XmlMapEnumKeys>",
+    uri: "/enumkeys",
+    bodyMediaType: "application/xml",
+    params: {
+        data: { "enumvalue": "hello" }
+    },
+    protocol: "aws.protocols#restXml"
+}])
+@http(uri: "/enumkeys", method: "POST")
+operation EnumKeys {
+    input: XmlMapEnumKeys,
+    output: XmlMapEnumKeys
 }
 
 @httpResponseTests([{
