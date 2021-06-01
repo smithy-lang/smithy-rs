@@ -1,9 +1,9 @@
-on:  
+on:
   push:
     tags:
-      - '*'
+    - '*'
   pull_request:
-  
+
 name: CI
 
 env:
@@ -144,6 +144,8 @@ jobs:
         java-version: ${{ env.java_version }}
     - name: Generate the SDK
       run: ./gradlew :aws:sdk:assemble
+    - name: Generate the SDK...again?
+      run: ./gradlew :aws:sdk:assemble
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
@@ -185,7 +187,6 @@ jobs:
       run: ls -R
     - name: Cargo Check
       run: cargo check
-      working-directory: aws-sdk 
+      working-directory: aws-sdk
       env:
         RUSTFLAGS: -D WARNINGS
-        
