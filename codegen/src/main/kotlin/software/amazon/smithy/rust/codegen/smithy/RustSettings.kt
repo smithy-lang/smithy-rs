@@ -24,7 +24,6 @@ private const val MODULE_NAME = "module"
 private const val MODULE_DESCRIPTION = "moduleDescription"
 private const val MODULE_VERSION = "moduleVersion"
 private const val MODULE_AUTHORS = "moduleAuthors"
-private const val BUILD_SETTINGS = "build"
 private const val RUNTIME_CONFIG = "runtimeConfig"
 private const val CODEGEN_SETTINGS = "codegen"
 private const val LICENSE = "license"
@@ -92,8 +91,8 @@ class RustSettings(
                     MODULE_DESCRIPTION,
                     MODULE_AUTHORS,
                     MODULE_VERSION,
-                    BUILD_SETTINGS,
-                    RUNTIME_CONFIG
+                    RUNTIME_CONFIG,
+                    LICENSE
                 )
             )
 
