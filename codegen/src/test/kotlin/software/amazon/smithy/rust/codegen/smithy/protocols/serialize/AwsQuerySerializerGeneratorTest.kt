@@ -114,11 +114,11 @@ class AwsQuerySerializerGeneratorTest {
                     output,
                     "\
                     Action=Op\
-                    \n&Version=test\
-                    \n&some_bool=true\
-                    \n&top.field=hello%21\
-                    \n&top.extra=45\
-                    \n&top.rec.item.1.extra=55\
+                    &Version=test\
+                    &some_bool=true\
+                    &top.field=hello%21\
+                    &top.extra=45\
+                    &top.rec.item.1.extra=55\
                     "
                 );
                 """
