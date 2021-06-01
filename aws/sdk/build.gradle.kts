@@ -179,13 +179,15 @@ task("generateCargoWorkspace") {
 }
 
 task("finalizeSdk") {
-    finalizedBy(
+    outputs.upToDateWhen { false }
+    dependsOn(
         "relocateServices",
         "relocateRuntime",
         "relocateAwsRuntime",
         "relocateExamples",
         "generateCargoWorkspace"
     )
+    doLast { println("SDK finalized") }
 }
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
