@@ -4,7 +4,6 @@
  */
 
 use std::process::exit;
-use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
 use tracing_subscriber::EnvFilter;
 
