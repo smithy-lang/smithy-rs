@@ -25,7 +25,7 @@ fn rewrite_url_encoded_map_keys(input: &str) -> (String, String) {
 
 fn rewrite_url_encoded_body(input: &str) -> String {
     let mut entries: Vec<(String, String)> = input
-        .split("&")
+        .split('&')
         .map(|entry| entry.trim())
         .filter(|s| !s.is_empty())
         .map(rewrite_url_encoded_map_keys)

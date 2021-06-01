@@ -206,7 +206,7 @@ impl<'a> QueryValueWriter<'a> {
     }
 
     fn write_param_name(&mut self) {
-        self.output.push_str("&");
+        self.output.push('&');
         self.output.push_str(&self.prefix);
         self.output.push('=');
     }
