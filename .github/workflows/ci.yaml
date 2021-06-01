@@ -214,7 +214,7 @@ jobs:
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
         path: aws-sdk
-    - name: Cargo Check
+    - name: Cargo Test
       run: cargo test
       working-directory: aws-sdk
       env:
