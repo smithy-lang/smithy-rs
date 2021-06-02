@@ -82,14 +82,22 @@ class JsonSerializerGenerator(
                     writeNulls = true
                 )
 
-            fun structMember(context: StructContext, member: MemberShape, symProvider: RustSymbolProvider): MemberContext =
+            fun structMember(
+                context: StructContext,
+                member: MemberShape,
+                symProvider: RustSymbolProvider
+            ): MemberContext =
                 MemberContext(
                     objectValueWriterExpression(context.objectName, member),
                     ValueExpression.Value("${context.localName}.${symProvider.toMemberName(member)}"),
                     member
                 )
 
-            fun unionMember(context: Context<UnionShape>, variantReference: String, member: MemberShape): MemberContext =
+            fun unionMember(
+                context: Context<UnionShape>,
+                variantReference: String,
+                member: MemberShape
+            ): MemberContext =
                 MemberContext(
                     objectValueWriterExpression(context.writerExpression, member),
                     ValueExpression.Reference(variantReference),
@@ -126,6 +134,7 @@ class JsonSerializerGenerator(
         "JsonObjectWriter" to smithyJson.member("serialize::JsonObjectWriter"),
         "JsonValueWriter" to smithyJson.member("serialize::JsonValueWriter"),
     )
+    private val serializerUtil = SerializerUtil(model)
 
     override fun payloadSerializer(member: MemberShape): RuntimeType {
         val fnName = symbolProvider.serializeFunctionName(member)
@@ -225,7 +234,11 @@ class JsonSerializerGenerator(
                 }
             }
         } else {
-            serializeMemberValue(context, targetShape)
+            with(serializerUtil) {
+                ignoreZeroValues(context.shape, context.valueExpression) {
+                    serializeMemberValue(context, targetShape)
+                }
+            }
         }
     }
 
