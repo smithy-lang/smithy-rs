@@ -5,9 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
-import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -17,21 +18,16 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
-import software.amazon.smithy.rust.codegen.smithy.protocols.parse.RestXmlParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.parse.AwsQueryParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.AwsQuerySerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.XmlBindingTraitSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
-import software.amazon.smithy.rust.codegen.util.expectTrait
 
-class RestXmlFactory(private val generator: (ProtocolConfig) -> Protocol = { RestXml(it) }) :
-    ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
-    override fun buildProtocolGenerator(
-        protocolConfig: ProtocolConfig
-    ): HttpBoundProtocolGenerator {
-        return HttpBoundProtocolGenerator(protocolConfig, generator(protocolConfig))
-    }
+class AwsQueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
+    override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): HttpBoundProtocolGenerator =
+        HttpBoundProtocolGenerator(protocolConfig, AwsQueryProtocol(protocolConfig))
 
     override fun transformModel(model: Model): Model {
         return OperationNormalizer(model).transformModel(
@@ -45,33 +41,31 @@ class RestXmlFactory(private val generator: (ProtocolConfig) -> Protocol = { Res
             requestSerialization = true,
             requestBodySerialization = true,
             responseDeserialization = true,
-            errorDeserialization = true
+            errorDeserialization = true,
         )
     }
 }
 
-open class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
-    private val restXml = protocolConfig.serviceShape.expectTrait<RestXmlTrait>()
+class AwsQueryProtocol(private val protocolConfig: ProtocolConfig) : Protocol {
     private val runtimeConfig = protocolConfig.runtimeConfig
+    private val awsQueryErrors: RuntimeType = RuntimeType.wrappedXmlErrors(runtimeConfig)
+    override val httpBindingResolver: HttpBindingResolver = StaticHttpBindingResolver(
+        protocolConfig.model,
+        HttpTrait.builder()
+            .code(200)
+            .method("POST")
+            .uri(UriPattern.parse("/"))
+            .build(),
+        "application/x-www-form-urlencoded"
+    )
 
-    protected val restXmlErrors: RuntimeType = when (restXml.isNoErrorWrapping) {
-        true -> RuntimeType.unwrappedXmlErrors(runtimeConfig)
-        false -> RuntimeType.wrappedXmlErrors(runtimeConfig)
-    }
+    override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.DATE_TIME
 
-    override val httpBindingResolver: HttpBindingResolver =
-        HttpTraitHttpBindingResolver(protocolConfig.model, "application/xml", null)
+    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
+        AwsQueryParserGenerator(protocolConfig, awsQueryErrors)
 
-    override val defaultTimestampFormat: TimestampFormatTrait.Format =
-        TimestampFormatTrait.Format.DATE_TIME
-
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return RestXmlParserGenerator(protocolConfig, restXmlErrors)
-    }
-
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator {
-        return XmlBindingTraitSerializerGenerator(protocolConfig, httpBindingResolver)
-    }
+    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+        AwsQuerySerializerGenerator(protocolConfig)
 
     override fun parseGenericError(operationShape: OperationShape): RuntimeType {
         /**
@@ -85,7 +79,7 @@ open class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
                 "Error" to RuntimeType.GenericError(runtimeConfig),
                 "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
             ) {
-                rust("#T::parse_generic_error(response.body().as_ref())", restXmlErrors)
+                rust("#T::parse_generic_error(response.body().as_ref())", awsQueryErrors)
             }
         }
     }
