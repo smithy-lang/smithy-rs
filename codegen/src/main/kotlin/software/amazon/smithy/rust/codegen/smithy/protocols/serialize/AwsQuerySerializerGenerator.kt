@@ -84,6 +84,7 @@ class AwsQuerySerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDa
     private val serializerError = RuntimeType.SerdeJson("error::Error")
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
     private val smithyQuery = CargoDependency.smithyQuery(runtimeConfig).asType()
+    private val serdeUtil = SerializerUtil(model)
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
         "Error" to serializerError,
@@ -168,7 +169,11 @@ class AwsQuerySerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDa
                 }
             }
         } else {
-            serializeMemberValue(context, targetShape)
+            with(serdeUtil) {
+                ignoreZeroValues(context.shape, context.valueExpression) {
+                    serializeMemberValue(context, targetShape)
+                }
+            }
         }
     }
 

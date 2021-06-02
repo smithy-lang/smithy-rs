@@ -5,6 +5,7 @@ namespace aws.protocoltests.restjson
 use aws.protocols#restJson1
 use aws.api#service
 use smithy.test#httpRequestTests
+use smithy.test#httpResponseTests
 
 apply QueryPrecedence @httpRequestTests([
     {

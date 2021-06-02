@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 
@@ -23,9 +24,13 @@ class SerializerUtil(private val model: Model) {
             else -> null
         }
 
-        // Required shapes should always be serialized
-        // See https://github.com/awslabs/smithy-rs/issues/230 and https://github.com/aws/aws-sdk-go-v2/pull/1129
-        if (expr == null || shape.isRequired) {
+        if (expr == null ||
+            // Required shapes should always be serialized
+            // See https://github.com/awslabs/smithy-rs/issues/230 and https://github.com/aws/aws-sdk-go-v2/pull/1129
+            shape.isRequired ||
+            // Zero values are always serialized in lists and collections, this only applies to structures
+            model.expectShape(shape.container) !is StructureShape
+        ) {
             rustBlock("") {
                 inner(this)
             }

@@ -237,13 +237,9 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
                 }
             }
         } else {
-            if (context.writeNulls) {
-                serializeMemberValue(context, targetShape)
-            } else {
-                with(serializerUtil) {
-                    ignoreZeroValues(context.shape, context.valueExpression) {
-                        serializeMemberValue(context, targetShape)
-                    }
+            with(serializerUtil) {
+                ignoreZeroValues(context.shape, context.valueExpression) {
+                    serializeMemberValue(context, targetShape)
                 }
             }
         }
