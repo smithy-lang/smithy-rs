@@ -15,9 +15,11 @@ import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.smithy.Default
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolMetadataProvider
+import software.amazon.smithy.rust.codegen.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
@@ -55,9 +57,8 @@ class JsonSerializerSymbolProvider(
             serializerBuilder.deserializerFor(memberShape)?.also {
                 attribs.add(Attribute.Custom("serde(deserialize_with = ${it.fullyQualifiedName().dq()})", listOf(it)))
             }
-            if (model.expectShape(memberShape.container) is StructureShape && base.toSymbol(memberShape)
-                .isOptional()
-            ) {
+            val memberSymbol = base.toSymbol(memberShape)
+            if (model.expectShape(memberShape.container) is StructureShape && (memberSymbol.isOptional() || memberSymbol.defaultValue() == Default.RustDefault)) {
                 attribs.add(Attribute.Custom("serde(default)"))
             }
         }

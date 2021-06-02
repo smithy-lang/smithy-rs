@@ -19,7 +19,15 @@ plugins {
 val smithyVersion: String by project
 
 val sdkOutputDir = buildDir.resolve("aws-sdk")
-val runtimeModules = listOf("smithy-types", "smithy-json", "smithy-query", "smithy-xml", "smithy-http", "smithy-http-tower", "protocol-test-helpers")
+val runtimeModules = listOf(
+    "smithy-types",
+    "smithy-json",
+    "smithy-query",
+    "smithy-xml",
+    "smithy-http",
+    "smithy-http-tower",
+    "protocol-test-helpers"
+)
 val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types", "aws-hyper", "aws-sig-auth", "aws-http")
 
 buildscript {
@@ -36,7 +44,15 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
 
-data class AwsService(val service: String, val module: String, val modelFile: File, val extraConfig: String? = null)
+data class AwsService(
+    val service: String,
+    val module: String,
+    val modelFile: File,
+    val extraConfig: String? = null,
+    val extraFiles: List<File>
+) {
+    fun files(): List<File> = listOf(modelFile) + extraFiles
+}
 
 val awsServices: Provider<List<AwsService>> = project.providers.provider { discoverServices() }
 
@@ -46,24 +62,42 @@ val awsServices: Provider<List<AwsService>> = project.providers.provider { disco
  * Do not invoke this function directly. Use the `awsServices` provider.
  */
 fun discoverServices(): List<AwsService> {
-    val models = project.file("models")
-    return fileTree(models).map { file ->
+    val models = project.file("aws-models")
+    return fileTree(models).mapNotNull { file ->
         val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
+        val testFile = file.parentFile.resolve(file.nameWithoutExtension + "-tests.smithy")
+        val extras = if (testFile.exists()) {
+            logger.warn("Discovered protocol tests for ${file.name}")
+            listOf(testFile)
+        } else {
+            listOf()
+        }
         val services: List<ServiceShape> = model.shapes(ServiceShape::class.java).sorted().toList()
-        if (services.size != 1) {
+        if (services.size > 1) {
             throw Exception("There must be exactly one service in each aws model file")
         }
-        val service = services[0]
-        val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId.toLowerCase().replace(" ", "")
-        AwsService(service = service.id.toString(), module = sdkId, modelFile = file)
+        if (services.isEmpty()) {
+            null
+        } else {
+            val service = services[0]
+            val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId.toLowerCase().replace(" ", "")
+            AwsService(service = service.id.toString(), module = sdkId, modelFile = file, extraFiles = extras)
+        }
     }
 }
 
 fun generateSmithyBuild(tests: List<AwsService>): String {
     val projections = tests.joinToString(",\n") {
+        val files = it.files().map { extraFile ->
+            software.amazon.smithy.utils.StringUtils.escapeJavaString(
+                extraFile.absolutePath,
+                ""
+            )
+        }
         """
             "${it.module}": {
-                "imports": ["${it.modelFile.absolutePath}"],
+                "imports": [${files.joinToString()}],
+
                 "plugins": {
                     "rust-codegen": {
                       "runtimeConfig": {
@@ -94,6 +128,8 @@ task("generateSmithyBuild") {
     doFirst {
         projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices.get()))
     }
+    inputs.dir(projectDir.resolve("aws-models"))
+    outputs.file(projectDir.resolve("smithy-build.json"))
 }
 
 task("relocateServices") {
@@ -190,10 +226,11 @@ task("finalizeSdk") {
     )
 }
 
+tasks["smithyBuildJar"].inputs.file(projectDir.resolve("smithy-build.json"))
+tasks["smithyBuildJar"].inputs.dir(projectDir.resolve("aws-models"))
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].dependsOn("smithyBuildJar")
 tasks["assemble"].finalizedBy("finalizeSdk")
-
 
 tasks.register<Exec>("cargoCheck") {
     workingDir(sdkOutputDir)
@@ -235,10 +272,10 @@ tasks.register<RunExampleTask>("runExample") {
 open class RunExampleTask @javax.inject.Inject constructor() : Exec() {
     @Option(option = "example", description = "Example to run")
     var example: String? = null
-    set(value) {
-        workingDir = workingDir.resolve(value!!)
-        field = value
-    }
+        set(value) {
+            workingDir = workingDir.resolve(value!!)
+            field = value
+        }
 
     @org.gradle.api.tasks.InputDirectory
     var outputDir: File? = null
