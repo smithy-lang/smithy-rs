@@ -70,12 +70,20 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
     private val xmlIndex = XmlNameIndex.of(model)
     private val httpIndex = HttpBindingIndex.of(model)
     private val rootNamespace = protocolConfig.serviceShape.getTrait<XmlNamespaceTrait>()
+    private val util = SerializerUtil(model)
 
     sealed class Ctx {
         abstract val input: String
+        abstract val serializeZeros: Boolean
 
-        data class Element(val elementWriter: String, override val input: String) : Ctx()
-        data class Scope(val scopeWriter: String, override val input: String) : Ctx()
+        data class Element(
+            val elementWriter: String,
+            override val input: String,
+            override val serializeZeros: Boolean
+        ) : Ctx()
+
+        data class Scope(val scopeWriter: String, override val input: String, override val serializeZeros: Boolean) :
+            Ctx()
 
         companion object {
             // Kotlin doesn't have a "This" type
@@ -120,7 +128,7 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
                     """,
                         *codegenScope
                     )
-                    serializeStructure(inputShape, xmlMembers, Ctx.Element("root", "&input"))
+                    serializeStructure(inputShape, xmlMembers, Ctx.Element("root", "&input", serializeZeros = false))
                 }
                 rustTemplate("Ok(#{SdkBody}::from(out))", *codegenScope)
             }
@@ -158,7 +166,7 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
                     serializeStructure(
                         target,
                         XmlMemberIndex.fromMembers(target.members().toList()),
-                        Ctx.Element("root", "&input")
+                        Ctx.Element("root", "&input", serializeZeros = false)
                     )
                 }
                 rustTemplate("Ok(#{SdkBody}::from(out))", *codegenScope)
@@ -185,7 +193,7 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
         }
         Attribute.AllowUnusedMut.render(this)
         rust("let mut scope = ${ctx.elementWriter}.finish();")
-        val scopeCtx = Ctx.Scope("scope", ctx.input)
+        val scopeCtx = Ctx.Scope("scope", ctx.input, serializeZeros = false)
         members.dataMembers.forEach { member ->
             serializeMember(member, scopeCtx.scopedTo(member), null)
         }
@@ -244,25 +252,25 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
                     serializeFlatList(memberShape, target, ctx)
                 } else {
                     rust("let mut inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns.finish();")
-                    serializeList(target, Ctx.Scope("inner_writer", ctx.input))
+                    serializeList(target, Ctx.Scope("inner_writer", ctx.input, serializeZeros = true))
                 }
                 is MapShape -> if (memberShape.hasTrait<XmlFlattenedTrait>()) {
                     serializeMap(target, xmlIndex.memberName(memberShape), ctx)
                 } else {
                     rust("let mut inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns.finish();")
-                    serializeMap(target, "entry", Ctx.Scope("inner_writer", ctx.input))
+                    serializeMap(target, "entry", Ctx.Scope("inner_writer", ctx.input, serializeZeros = true))
                 }
                 is StructureShape -> {
                     rust("let inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns;")
                     serializeStructure(
                         target,
                         XmlMemberIndex.fromMembers(target.members().toList()),
-                        Ctx.Element("inner_writer", ctx.input)
+                        Ctx.Element("inner_writer", ctx.input, serializeZeros = false)
                     )
                 }
                 is UnionShape -> {
                     rust("let inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns;")
-                    serializeUnion(target, Ctx.Element("inner_writer", ctx.input))
+                    serializeUnion(target, Ctx.Element("inner_writer", ctx.input, serializeZeros = true))
                 }
                 else -> TODO(target.toString())
             }
@@ -286,7 +294,7 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
                     // removed unused warning if there are no fields we're going to read
                     rust("let _ = input;")
                 }
-                structureInner(members, Ctx.Element("writer", "&input"))
+                structureInner(members, Ctx.Element("writer", "&input", serializeZeros = false))
             }
         }
         rust("#T(&${ctx.input}, ${ctx.elementWriter})", structureSerializer)
@@ -307,7 +315,7 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
                     members.forEach { member ->
                         val variantName = member.memberName.toPascalCase()
                         withBlock("#T::$variantName(inner) =>", ",", unionSymbol) {
-                            serializeMember(member, Ctx.Scope("scope_writer", "inner"))
+                            serializeMember(member, Ctx.Scope("scope_writer", "inner", serializeZeros = false))
                         }
                     }
                 }
@@ -354,7 +362,11 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
      * [inner] is passed a new `ctx` object to use for code generation which handles the
      * potentially new name of the input.
      */
-    private fun <T : Ctx> RustWriter.handleOptional(member: MemberShape, ctx: T, inner: RustWriter.(T) -> Unit) {
+    private fun <T : Ctx> RustWriter.handleOptional(
+        member: MemberShape,
+        ctx: T,
+        inner: RustWriter.(T) -> Unit
+    ) {
         val memberSymbol = symbolProvider.toSymbol(member)
         if (memberSymbol.isOptional()) {
             val tmp = safeName()
@@ -362,8 +374,16 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
                 inner(Ctx.updateInput(ctx, tmp))
             }
         } else {
-            rustBlock("") {
-                inner(ctx)
+            with(util) {
+                if (!ctx.serializeZeros) {
+                    ignoreZeroValues(member, ValueExpression.Reference(ctx.input)) {
+                        inner(ctx)
+                    }
+                } else {
+                    rustBlock("") {
+                        inner(ctx)
+                    }
+                }
             }
         }
     }

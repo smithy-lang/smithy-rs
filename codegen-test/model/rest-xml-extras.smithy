@@ -12,7 +12,36 @@ use smithy.test#httpRequestTests
 @restXml
 service RestXmlExtras {
     version: "2019-12-16",
-    operations: [AttributeParty, XmlMapsFlattenedNestedXmlNamespace, EnumKeys]
+    operations: [AttributeParty, XmlMapsFlattenedNestedXmlNamespace, EnumKeys, PrimitiveIntOpXml]
+}
+
+@httpRequestTests([{
+    id: "RestXmlSerPrimitiveIntUnset",
+    protocol: "aws.protocols#restXml",
+    documentation: "Primitive ints should not be serialized when they are unset",
+    uri: "/primitive-document",
+    method: "POST",
+    body: "<PrimitiveIntDocument/>",
+    bodyMediaType: "application/xml",
+    params: {}
+}, {
+       id: "RestXmlSerPrimitiveIntSet",
+       protocol: "aws.protocols#restXml",
+       documentation: "Primitive ints should not be serialized when they are unset",
+       uri: "/primitive-document",
+       method: "POST",
+       body: "<PrimitiveIntDocument><value>1</value></PrimitiveIntDocument>",
+       bodyMediaType: "application/xml",
+       params: { value: 1 }
+   }])
+@http(uri: "/primitive-document", method: "POST")
+operation PrimitiveIntOpXml {
+    input: PrimitiveIntDocument,
+    output: PrimitiveIntDocument
+}
+
+structure PrimitiveIntDocument {
+    value: PrimitiveInt
 }
 
 @enum([{"value": "enumvalue", "name": "V"}])

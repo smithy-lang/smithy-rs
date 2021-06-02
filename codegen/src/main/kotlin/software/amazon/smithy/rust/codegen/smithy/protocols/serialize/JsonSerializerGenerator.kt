@@ -79,14 +79,22 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
                     writeNulls = true
                 )
 
-            fun structMember(context: StructContext, member: MemberShape, symProvider: RustSymbolProvider): MemberContext =
+            fun structMember(
+                context: StructContext,
+                member: MemberShape,
+                symProvider: RustSymbolProvider
+            ): MemberContext =
                 MemberContext(
                     objectValueWriterExpression(context.objectName, member),
                     ValueExpression.Value("${context.localName}.${symProvider.toMemberName(member)}"),
                     member
                 )
 
-            fun unionMember(context: Context<UnionShape>, variantReference: String, member: MemberShape): MemberContext =
+            fun unionMember(
+                context: Context<UnionShape>,
+                variantReference: String,
+                member: MemberShape
+            ): MemberContext =
                 MemberContext(
                     objectValueWriterExpression(context.writerExpression, member),
                     ValueExpression.Reference(variantReference),
@@ -124,6 +132,7 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
         "JsonValueWriter" to smithyJson.member("serialize::JsonValueWriter"),
     )
     private val httpIndex = HttpBindingIndex.of(model)
+    private val serializerUtil = SerializerUtil(model)
 
     override fun payloadSerializer(member: MemberShape): RuntimeType {
         val fnName = symbolProvider.serializeFunctionName(member)
@@ -228,7 +237,15 @@ class JsonSerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSe
                 }
             }
         } else {
-            serializeMemberValue(context, targetShape)
+            if (context.writeNulls) {
+                serializeMemberValue(context, targetShape)
+            } else {
+                with(serializerUtil) {
+                    ignoreZeroValues(context.shape, context.valueExpression) {
+                        serializeMemberValue(context, targetShape)
+                    }
+                }
+            }
         }
     }
 
