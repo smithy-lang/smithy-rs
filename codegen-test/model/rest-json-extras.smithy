@@ -53,7 +53,7 @@ apply QueryPrecedence @httpRequestTests([
 @restJson1
 service RestJsonExtras {
     version: "2019-12-16",
-    operations: [StringPayload, PrimitiveIntHeader, EnumQuery, StatusResponse, MapWithEnumKeyOp]
+    operations: [StringPayload, PrimitiveIntHeader, EnumQuery, StatusResponse, MapWithEnumKeyOp, PrimitiveIntOp]
 }
 
 @http(uri: "/StringPayload", method: "POST")
@@ -75,6 +75,25 @@ operation StringPayload {
 structure StringPayloadInput {
     @httpPayload
     payload: String
+}
+
+@httpRequestTests([{
+    id: "SerPrimitiveInt",
+    protocol: "aws.protocols#restJson1",
+    documentation: "Primitive ints should not be serialized when they are unset",
+    uri: "/primitive-document",
+    method: "POST",
+    body: "{}",
+    params: {}
+}])
+@http(uri: "/primitive-document", method: "POST")
+operation PrimitiveIntOp {
+    input: PrimitiveIntDocument,
+    output: PrimitiveIntDocument
+}
+
+structure PrimitiveIntDocument {
+    value: PrimitiveInt
 }
 
 @httpResponseTests([
