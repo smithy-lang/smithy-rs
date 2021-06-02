@@ -88,13 +88,13 @@ class HttpTraitHttpBindingResolver(
     override fun httpTrait(operationShape: OperationShape): HttpTrait = operationShape.expectTrait()
 
     override fun requestBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
-        httpIndex.getRequestBindings(operationShape).values.map(::HttpBindingDescriptor)
+        mappedBindings(httpIndex.getRequestBindings(operationShape))
 
     override fun responseBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
-        httpIndex.getResponseBindings(operationShape).values.map(::HttpBindingDescriptor)
+        mappedBindings(httpIndex.getResponseBindings(operationShape))
 
     override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> =
-        httpIndex.getResponseBindings(errorShape).values.map(::HttpBindingDescriptor)
+        mappedBindings(httpIndex.getResponseBindings(errorShape))
 
     override fun timestampFormat(
         memberShape: MemberShape,
@@ -106,6 +106,10 @@ class HttpTraitHttpBindingResolver(
     override fun requestContentType(operationShape: OperationShape): String =
         httpIndex.determineRequestContentType(operationShape, documentRequestContentType)
             .orElse(defaultRequestContentType)
+
+    // Sort the members after extracting them from the map to have a consistent order
+    private fun mappedBindings(bindings: Map<String, HttpBinding>): List<HttpBindingDescriptor> =
+        bindings.values.map(::HttpBindingDescriptor).sortedBy { it.memberName }
 }
 
 /**
