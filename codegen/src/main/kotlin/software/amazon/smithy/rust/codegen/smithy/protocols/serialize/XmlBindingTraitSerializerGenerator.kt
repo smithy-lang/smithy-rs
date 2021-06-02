@@ -75,13 +75,9 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
     sealed class Ctx {
         abstract val input: String
 
-        data class Element(
-            val elementWriter: String,
-            override val input: String,
-        ) : Ctx()
+        data class Element(val elementWriter: String, override val input: String) : Ctx()
 
-        data class Scope(val scopeWriter: String, override val input: String) :
-            Ctx()
+        data class Scope(val scopeWriter: String, override val input: String) : Ctx()
 
         companion object {
             // Kotlin doesn't have a "This" type
