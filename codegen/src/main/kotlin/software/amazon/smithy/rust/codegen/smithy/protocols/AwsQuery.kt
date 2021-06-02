@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.smithy.protocols
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -25,7 +24,6 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.AwsQuerySe
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
-import software.amazon.smithy.rust.codegen.util.orNull
 
 class AwsQueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
     override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): HttpBoundProtocolGenerator =
@@ -48,37 +46,18 @@ class AwsQueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
     }
 }
 
-class AwsQueryHttpBindingResolver(private val model: Model) : HttpBindingResolver {
-    private val httpTrait = HttpTrait.builder()
-        .code(200)
-        .method("POST")
-        .uri(UriPattern.parse("/"))
-        .build()
-
-    private fun bindings(shape: ToShapeId?) =
-        shape?.let { model.expectShape(it.toShapeId()) }?.members()
-            ?.map { HttpBindingDescriptor(it, HttpLocation.DOCUMENT, "document") }
-            ?.toList()
-            ?: emptyList()
-
-    override fun httpTrait(operationShape: OperationShape): HttpTrait = httpTrait
-
-    override fun requestBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
-        bindings(operationShape.input.orNull())
-
-    override fun responseBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
-        bindings(operationShape.output.orNull())
-
-    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> =
-        bindings(errorShape)
-
-    override fun requestContentType(operationShape: OperationShape): String = "application/x-www-form-urlencoded"
-}
-
 class AwsQueryProtocol(private val protocolConfig: ProtocolConfig) : Protocol {
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val awsQueryErrors: RuntimeType = RuntimeType.wrappedXmlErrors(runtimeConfig)
-    override val httpBindingResolver: HttpBindingResolver = AwsQueryHttpBindingResolver(protocolConfig.model)
+    override val httpBindingResolver: HttpBindingResolver = StaticHttpBindingResolver(
+        protocolConfig.model,
+        HttpTrait.builder()
+            .code(200)
+            .method("POST")
+            .uri(UriPattern.parse("/"))
+            .build(),
+        "application/x-www-form-urlencoded"
+    )
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.DATE_TIME
 

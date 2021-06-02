@@ -10,6 +10,7 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.orNull
 
 typealias HttpLocation = HttpBinding.Location
 
@@ -105,4 +106,33 @@ class HttpTraitHttpBindingResolver(
     override fun requestContentType(operationShape: OperationShape): String =
         httpIndex.determineRequestContentType(operationShape, documentRequestContentType)
             .orElse(defaultRequestContentType)
+}
+
+/**
+ * Takes an [HttpTrait] value and content type, and provides bindings based on those.
+ * All members will end up being document members.
+ */
+class StaticHttpBindingResolver(
+    private val model: Model,
+    private val httpTrait: HttpTrait,
+    private val requestContentType: String,
+) : HttpBindingResolver {
+    private fun bindings(shape: ToShapeId?) =
+        shape?.let { model.expectShape(it.toShapeId()) }?.members()
+            ?.map { HttpBindingDescriptor(it, HttpLocation.DOCUMENT, "document") }
+            ?.toList()
+            ?: emptyList()
+
+    override fun httpTrait(operationShape: OperationShape): HttpTrait = httpTrait
+
+    override fun requestBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
+        bindings(operationShape.input.orNull())
+
+    override fun responseBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
+        bindings(operationShape.output.orNull())
+
+    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> =
+        bindings(errorShape)
+
+    override fun requestContentType(operationShape: OperationShape): String = requestContentType
 }
