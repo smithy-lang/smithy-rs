@@ -87,7 +87,13 @@ class HttpProtocolTestGenerator(
             val testCases = error.getTrait<HttpResponseTestsTrait>()?.testCases.orEmpty()
             testCases.map { TestCase.ResponseTest(it, error) }
         }
+        if (requestTests.isNotEmpty()) {
+            println(requestTests)
+        }
         val allTests: List<TestCase> = (requestTests + responseTests + errorTests).filterMatching()
+        if (requestTests.isNotEmpty() && allTests.isEmpty()) {
+            throw CodegenException("mm....")
+        }
         if (allTests.isNotEmpty()) {
             val operationName = operationSymbol.name
             val testModuleName = "${operationName.toSnakeCase()}_request_test"

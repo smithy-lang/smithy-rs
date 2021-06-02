@@ -22,12 +22,15 @@ class SerializerUtil(private val model: Model) {
             is BooleanShape -> value.asValue()
             else -> null
         }
-        if (expr != null) {
-            rustBlock("if $expr") {
+
+        // Required shapes should always be serialized
+        // See https://github.com/awslabs/smithy-rs/issues/230 and https://github.com/aws/aws-sdk-go-v2/pull/1129
+        if (expr == null || shape.isRequired) {
+            rustBlock("") {
                 inner(this)
             }
         } else {
-            rustBlock("") {
+            rustBlock("if $expr") {
                 inner(this)
             }
         }

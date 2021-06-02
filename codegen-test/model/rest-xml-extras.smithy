@@ -21,7 +21,11 @@ service RestXmlExtras {
     documentation: "Primitive ints should not be serialized when they are unset",
     uri: "/primitive-document",
     method: "POST",
-    body: "<PrimitiveIntDocument/>",
+   body: """
+        <PrimitiveIntDocument>
+            <requiredValue>0</requiredValue>
+        </PrimitiveIntDocument>
+    """,
     bodyMediaType: "application/xml",
     params: {}
 }, {
@@ -30,7 +34,12 @@ service RestXmlExtras {
        documentation: "Primitive ints should not be serialized when they are unset",
        uri: "/primitive-document",
        method: "POST",
-       body: "<PrimitiveIntDocument><value>1</value></PrimitiveIntDocument>",
+       body: """
+       <PrimitiveIntDocument>
+            <value>1</value>
+            <requiredValue>0</requiredValue>
+        </PrimitiveIntDocument>
+       """,
        bodyMediaType: "application/xml",
        params: { value: 1 }
    }])
@@ -41,7 +50,9 @@ operation PrimitiveIntOpXml {
 }
 
 structure PrimitiveIntDocument {
-    value: PrimitiveInt
+    value: PrimitiveInt,
+    @required
+    requiredValue: PrimitiveInt
 }
 
 @enum([{"value": "enumvalue", "name": "V"}])
