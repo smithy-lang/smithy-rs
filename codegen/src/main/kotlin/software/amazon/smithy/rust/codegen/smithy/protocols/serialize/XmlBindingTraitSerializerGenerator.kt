@@ -70,11 +70,13 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
     private val xmlIndex = XmlNameIndex.of(model)
     private val httpIndex = HttpBindingIndex.of(model)
     private val rootNamespace = protocolConfig.serviceShape.getTrait<XmlNamespaceTrait>()
+    private val util = SerializerUtil(model)
 
     sealed class Ctx {
         abstract val input: String
 
         data class Element(val elementWriter: String, override val input: String) : Ctx()
+
         data class Scope(val scopeWriter: String, override val input: String) : Ctx()
 
         companion object {
@@ -354,7 +356,11 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
      * [inner] is passed a new `ctx` object to use for code generation which handles the
      * potentially new name of the input.
      */
-    private fun <T : Ctx> RustWriter.handleOptional(member: MemberShape, ctx: T, inner: RustWriter.(T) -> Unit) {
+    private fun <T : Ctx> RustWriter.handleOptional(
+        member: MemberShape,
+        ctx: T,
+        inner: RustWriter.(T) -> Unit
+    ) {
         val memberSymbol = symbolProvider.toSymbol(member)
         if (memberSymbol.isOptional()) {
             val tmp = safeName()
@@ -362,8 +368,10 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
                 inner(Ctx.updateInput(ctx, tmp))
             }
         } else {
-            rustBlock("") {
-                inner(ctx)
+            with(util) {
+                ignoreZeroValues(member, ValueExpression.Value(autoDeref(ctx.input))) {
+                    inner(ctx)
+                }
             }
         }
     }
