@@ -369,7 +369,7 @@ class XmlBindingTraitSerializerGenerator(protocolConfig: ProtocolConfig) : Struc
             }
         } else {
             with(util) {
-                ignoreZeroValues(member, ValueExpression.Reference(ctx.input)) {
+                ignoreZeroValues(member, ValueExpression.Value(autoDeref(ctx.input))) {
                     inner(ctx)
                 }
             }
