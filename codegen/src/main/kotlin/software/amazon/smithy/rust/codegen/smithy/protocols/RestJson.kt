@@ -25,10 +25,10 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.Structured
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 
-class AwsRestJsonFactory : ProtocolGeneratorFactory<HttpTraitProtocolGenerator> {
+class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
     override fun buildProtocolGenerator(
         protocolConfig: ProtocolConfig
-    ): HttpTraitProtocolGenerator = HttpTraitProtocolGenerator(protocolConfig, RestJson(protocolConfig))
+    ): HttpBoundProtocolGenerator = HttpBoundProtocolGenerator(protocolConfig, RestJson(protocolConfig))
 
     /** Create a synthetic awsJsonInputBody if specified
      * A body is created if any member of [shape] is bound to the `DOCUMENT` section of the `bindings.
@@ -76,12 +76,18 @@ class AwsRestJsonFactory : ProtocolGeneratorFactory<HttpTraitProtocolGenerator> 
 
 class RestJson(private val protocolConfig: ProtocolConfig) : Protocol {
     private val runtimeConfig = protocolConfig.runtimeConfig
+
+    override val httpBindingResolver: HttpBindingResolver =
+        HttpTraitHttpBindingResolver(protocolConfig.model, "application/json", "application/json")
+
+    override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
+
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
         return SerdeJsonParserGenerator(protocolConfig)
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator {
-        return JsonSerializerGenerator(protocolConfig)
+        return JsonSerializerGenerator(protocolConfig, httpBindingResolver)
     }
 
     override fun parseGenericError(operationShape: OperationShape): RuntimeType {
@@ -105,8 +111,4 @@ class RestJson(private val protocolConfig: ProtocolConfig) : Protocol {
             }
         }
     }
-
-    override fun documentContentType(): String = "application/json"
-
-    override fun defaultContentType(): String = "application/json"
 }

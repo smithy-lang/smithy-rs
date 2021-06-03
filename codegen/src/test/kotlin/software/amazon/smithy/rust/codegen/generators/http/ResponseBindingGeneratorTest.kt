@@ -6,8 +6,6 @@
 package software.amazon.smithy.rust.codegen.generators.http
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.knowledge.HttpBinding
-import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
@@ -16,6 +14,8 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -76,9 +76,10 @@ class ResponseBindingGeneratorTest {
     private fun RustWriter.renderOperation() {
         operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
         rustBlock("impl PutObjectOutput") {
-            val bindings = HttpBindingIndex.of(model).getResponseBindings(operationShape, HttpBinding.Location.HEADER)
+            val bindings = HttpTraitHttpBindingResolver(model, "dont-care", "dont-care")
+                .responseBindings(operationShape)
+                .filter { it.location == HttpLocation.HEADER }
             bindings.forEach { binding ->
-
                 val runtimeType = ResponseBindingGenerator(
                     testProtocolConfig, operationShape
                 ).generateDeserializeHeaderFn(binding)
