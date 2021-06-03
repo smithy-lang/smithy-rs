@@ -52,8 +52,8 @@ data class RuntimeConfig(
         }
     }
 
-    fun runtimeCrate(runtimeCrateName: String): CargoDependency =
-        CargoDependency("$cratePrefix-$runtimeCrateName", runtimeCrateLocation.crateLocation())
+    fun runtimeCrate(runtimeCrateName: String, optional: Boolean = false): CargoDependency =
+        CargoDependency("$cratePrefix-$runtimeCrateName", runtimeCrateLocation.crateLocation(), optional = optional)
 }
 
 data class RuntimeType(val name: String?, val dependency: RustDependency?, val namespace: String) {

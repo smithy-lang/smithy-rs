@@ -72,6 +72,12 @@ abstract class HttpProtocolGenerator(
         val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model))
         builderGenerator.render(inputWriter)
 
+	// TODO: One day, it should be possible for callers to invoke
+	// buildOperationType directly to get the type rather than depending on
+	// this alias.
+        val baseReturnType = buildOperationType(inputWriter, operationShape, customizations)
+        inputWriter.rust("pub type ${inputShape.id.name}OperationAlias = $baseReturnType;")
+
         // impl OperationInputShape { ... }
         inputWriter.implBlock(inputShape, symbolProvider) {
             buildOperation(this, operationShape, customizations, sdkId)
@@ -130,6 +136,19 @@ abstract class HttpProtocolGenerator(
 
     abstract fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata
 
+    private fun buildOperationType(
+        writer: RustWriter,
+        shape: OperationShape,
+        features: List<OperationCustomization>,
+    ): String {
+        val runtimeConfig = protocolConfig.runtimeConfig
+        val outputSymbol = symbolProvider.toSymbol(shape)
+        val operationT = RuntimeType.operation(runtimeConfig)
+        val retryType = features.mapNotNull { it.retryType() }.firstOrNull()?.let { writer.format(it) } ?: "()"
+
+        return with(writer) { "${format(operationT)}<${format(outputSymbol)}, $retryType>" };
+    }
+
     private fun buildOperation(
         implBlockWriter: RustWriter,
         shape: OperationShape,
@@ -138,12 +157,10 @@ abstract class HttpProtocolGenerator(
     ) {
         val runtimeConfig = protocolConfig.runtimeConfig
         val outputSymbol = symbolProvider.toSymbol(shape)
-        val operationT = RuntimeType.operation(runtimeConfig)
         val operationModule = RuntimeType.operationModule(runtimeConfig)
         val sdkBody = RuntimeType.sdkBody(runtimeConfig)
-        val retryType = features.mapNotNull { it.retryType() }.firstOrNull()?.let { implBlockWriter.format(it) } ?: "()"
 
-        val baseReturnType = with(implBlockWriter) { "${format(operationT)}<${format(outputSymbol)}, $retryType>" }
+        val baseReturnType = buildOperationType(implBlockWriter, shape, features)
         val returnType = "Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
