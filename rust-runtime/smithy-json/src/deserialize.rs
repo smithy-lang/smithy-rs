@@ -3,14 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use crate::escape::unescape_string;
 use smithy_types::Number;
+use std::borrow::Cow;
 use std::fmt;
 use std::str::Utf8Error;
+
+pub use crate::escape::Error as EscapeError;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ErrorReason {
     InvalidUtf8,
-    InvalidUnicodeEscape(String),
     InvalidEscape(char),
     InvalidNumber,
     ExpectedLiteral(String),
@@ -33,7 +36,6 @@ impl fmt::Display for Error {
         write!(f, "Error at offset {}: ", self.offset)?;
         match &self.reason {
             InvalidUtf8 => write!(f, "invalid UTF-8 codepoint in JSON stream"),
-            InvalidUnicodeEscape(escape) => write!(f, "invalid JSON Unicode escape: \\u{}", escape),
             InvalidEscape(escape) => write!(f, "invalid JSON escape: \\{}", escape),
             InvalidNumber => write!(f, "invalid number"),
             ExpectedLiteral(literal) => write!(f, "expected literal: {}", literal),
@@ -58,18 +60,40 @@ impl From<Utf8Error> for ErrorReason {
     }
 }
 
+/// New-type around `&str` that indicates the string is an escaped JSON string.
+/// Provides functions for retrieving the string in either form.
+#[derive(Debug, PartialEq, Eq)]
+pub struct EscapedStr<'a>(&'a str);
+
+impl<'a> EscapedStr<'a> {
+    pub fn new(value: &'a str) -> EscapedStr<'a> {
+        EscapedStr(value)
+    }
+
+    /// Returns the escaped string value
+    pub fn as_escaped_str(&self) -> &str {
+        self.0
+    }
+
+    /// Consumes self and returns the string unescaped.
+    /// If the string doesn't need unescaping, it will be returned directly.
+    pub fn into_unescaped(self) -> Result<Cow<'a, str>, EscapeError> {
+        unescape_string(self.0)
+    }
+}
+
 /// Enum representing the different JSON tokens that can be returned by [json_token_iter].
 #[derive(Debug, PartialEq)]
-pub enum Token {
+pub enum Token<'a> {
     StartArray,
     EndArray,
-    ObjectKey(String),
+    ObjectKey(EscapedStr<'a>),
     StartObject,
     EndObject,
     ValueBool(bool),
     ValueNull,
     ValueNumber(Number),
-    ValueString(String),
+    ValueString(EscapedStr<'a>),
 }
 
 /// Returns an Iterator of `Result<Token, Error>` over an slice of bytes.
@@ -176,7 +200,7 @@ impl<'a> JsonTokenIterator<'a> {
     }
 
     /// Discards the '{' character and pushes the `ObjectFirstKeyOrEnd` state.
-    fn start_object(&mut self) -> Token {
+    fn start_object(&mut self) -> Token<'a> {
         let byte = self.next_byte();
         debug_assert_eq!(byte, Some(b'{'));
         self.state_stack.push(State::ObjectFirstKeyOrEnd);
@@ -184,7 +208,7 @@ impl<'a> JsonTokenIterator<'a> {
     }
 
     /// Discards the '}' character and pops the current state.
-    fn end_object(&mut self) -> Token {
+    fn end_object(&mut self) -> Token<'a> {
         let (byte, state) = (self.next_byte(), self.state_stack.pop());
         debug_assert_eq!(byte, Some(b'}'));
         debug_assert!(
@@ -194,7 +218,7 @@ impl<'a> JsonTokenIterator<'a> {
     }
 
     /// Discards the '[' character and pushes the `ArrayFirstValueOrEnd` state.
-    fn start_array(&mut self) -> Token {
+    fn start_array(&mut self) -> Token<'a> {
         let byte = self.next_byte();
         debug_assert_eq!(byte, Some(b'['));
         self.state_stack.push(State::ArrayFirstValueOrEnd);
@@ -202,7 +226,7 @@ impl<'a> JsonTokenIterator<'a> {
     }
 
     /// Discards the ']' character and pops the current state.
-    fn end_array(&mut self) -> Token {
+    fn end_array(&mut self) -> Token<'a> {
         let (byte, state) = (self.next_byte(), self.state_stack.pop());
         debug_assert_eq!(byte, Some(b']'));
         debug_assert!(
@@ -211,52 +235,34 @@ impl<'a> JsonTokenIterator<'a> {
         Token::EndArray
     }
 
-    /// Reads a JSON Unicode escape sequence (i.e., "\u1234").
-    fn read_unicode_escape(&mut self, into: &mut Vec<u8>) -> Result<(), Error> {
-        let (start, end) = (self.index, self.index + 4);
-        if end > self.input.len() {
-            return Err(self.error(UnexpectedEOS));
-        }
-
-        let codepoint_str =
-            std::str::from_utf8(&self.input[start..end]).map_err(|err| self.error(err.into()))?;
-        let codepoint = u32::from_str_radix(codepoint_str, 16)
-            .map_err(|_| self.error(ErrorReason::InvalidUnicodeEscape(codepoint_str.into())))?;
-        let codepoint = char::from_u32(codepoint)
-            .ok_or_else(|| self.error(InvalidUnicodeEscape(codepoint_str.into())))?;
-        match codepoint.len_utf8() {
-            1 => into.push(codepoint as u8),
-            _ => into.extend_from_slice(codepoint.encode_utf8(&mut [0; 4]).as_bytes()),
-        }
-        self.index = end;
-        Ok(())
-    }
-
     /// Reads a JSON string out of the stream.
-    fn read_string(&mut self) -> Result<String, Error> {
+    fn read_string(&mut self) -> Result<&'a str, Error> {
         // Skip the starting quote
         let quote_byte = self.next_byte();
         debug_assert_eq!(quote_byte, Some(b'\"'));
 
         // Read bytes until a non-escaped end-quote, unescaping sequences as needed on the fly
-        let mut value = Vec::new();
+        let start = self.index;
         loop {
-            match self.next_expect()? {
-                b'"' => return String::from_utf8(value).map_err(|_| self.error(InvalidUtf8)),
+            match self.peek_expect()? {
+                b'"' => {
+                    let value = std::str::from_utf8(&self.input[start..self.index])
+                        .map_err(|_| self.error(InvalidUtf8))?;
+                    self.advance();
+                    return Ok(value);
+                }
                 b'\\' => match self.next_expect()? {
-                    b'\\' => value.push(b'\\'),
-                    b'/' => value.push(b'/'),
-                    b'"' => value.push(b'"'),
-                    b'b' => value.push(0x08),
-                    b'f' => value.push(0x0C),
-                    b'n' => value.push(b'\n'),
-                    b'r' => value.push(b'\r'),
-                    b't' => value.push(b'\t'),
-                    b'u' => self.read_unicode_escape(&mut value)?,
+                    b'\\' | b'/' | b'"' | b'b' | b'f' | b'n' | b'r' | b't' => self.advance(),
+                    b'u' => {
+                        if self.index + 4 > self.input.len() {
+                            return Err(self.error_at(self.input.len(), UnexpectedEOS));
+                        }
+                        self.index += 4;
+                    }
                     byte => return Err(self.error(InvalidEscape(byte.into()))),
                 },
                 byte @ 0x00..=0x1F => return Err(self.error(UnexpectedControlCharacter(byte))),
-                byte => value.push(byte),
+                _ => self.advance(),
             }
         }
     }
@@ -278,13 +284,13 @@ impl<'a> JsonTokenIterator<'a> {
     }
 
     /// Expects a literal `null` next in the stream.
-    fn expect_null(&mut self) -> Result<Token, Error> {
+    fn expect_null(&mut self) -> Result<Token<'a>, Error> {
         self.expect_literal(b"null")?;
         Ok(Token::ValueNull)
     }
 
     /// Expects a boolean `true` / `false` to be next in the stream and returns its value.
-    fn expect_bool(&mut self) -> Result<Token, Error> {
+    fn expect_bool(&mut self) -> Result<Token<'a>, Error> {
         match self.peek_expect()? {
             b't' => {
                 self.expect_literal(b"true")?;
@@ -356,7 +362,7 @@ impl<'a> JsonTokenIterator<'a> {
     }
 
     /// Expects a number in the stream, and returns its value.
-    fn expect_number(&mut self) -> Result<Token, Error> {
+    fn expect_number(&mut self) -> Result<Token<'a>, Error> {
         let (start, end, negative, floating) = self.scan_number();
         let number_slice = &self.input[start..end];
 
@@ -389,12 +395,14 @@ impl<'a> JsonTokenIterator<'a> {
     /// Reads a value from the stream and returns the next token. For objects and arrays,
     /// the entire object or array will not be ready, but rather, a [StartObject]/[StartArray]
     /// will be returned.
-    fn read_value(&mut self) -> Result<Token, Error> {
+    fn read_value(&mut self) -> Result<Token<'a>, Error> {
         self.discard_whitespace();
         match self.peek_expect()? {
             b'{' => Ok(self.start_object()),
             b'[' => Ok(self.start_array()),
-            b'"' => self.read_string().map(Token::ValueString),
+            b'"' => self
+                .read_string()
+                .map(|s| Token::ValueString(EscapedStr(s))),
             byte => {
                 let value = match byte {
                     b'n' => self.expect_null(),
@@ -423,7 +431,7 @@ impl<'a> JsonTokenIterator<'a> {
     }
 
     /// Handles the [ArrayFirstValueOrEnd] state.
-    fn state_array_first_value_or_end(&mut self) -> Result<Token, Error> {
+    fn state_array_first_value_or_end(&mut self) -> Result<Token<'a>, Error> {
         match self.peek_expect()? {
             b']' => Ok(self.end_array()),
             _ => {
@@ -434,7 +442,7 @@ impl<'a> JsonTokenIterator<'a> {
     }
 
     /// Handles the [ArrayNextValueOrEnd] state.
-    fn state_array_next_value_or_end(&mut self) -> Result<Token, Error> {
+    fn state_array_next_value_or_end(&mut self) -> Result<Token<'a>, Error> {
         match self.peek_expect()? {
             b']' => Ok(self.end_array()),
             b',' => {
@@ -446,18 +454,18 @@ impl<'a> JsonTokenIterator<'a> {
     }
 
     /// Expects an object key.
-    fn object_key(&mut self) -> Result<Token, Error> {
+    fn object_key(&mut self) -> Result<Token<'a>, Error> {
         match self.peek_expect()? {
             b'"' => {
                 self.replace_state(State::ObjectFieldValue);
-                self.read_string().map(Token::ObjectKey)
+                self.read_string().map(|s| Token::ObjectKey(EscapedStr(s)))
             }
             byte => Err(self.error(UnexpectedToken(byte.into(), "'\"'"))),
         }
     }
 
     /// Handles the [ObjectFirstKeyOrEnd] state.
-    fn state_object_first_key_or_end(&mut self) -> Result<Token, Error> {
+    fn state_object_first_key_or_end(&mut self) -> Result<Token<'a>, Error> {
         match self.peek_expect()? {
             b'}' => Ok(self.end_object()),
             _ => self.object_key(),
@@ -465,7 +473,7 @@ impl<'a> JsonTokenIterator<'a> {
     }
 
     /// Handles the [ObjectNextKeyOrEnd] state.
-    fn state_object_next_key_or_end(&mut self) -> Result<Token, Error> {
+    fn state_object_next_key_or_end(&mut self) -> Result<Token<'a>, Error> {
         match self.peek_expect()? {
             b'}' => Ok(self.end_object()),
             b',' => {
@@ -478,7 +486,7 @@ impl<'a> JsonTokenIterator<'a> {
     }
 
     /// Handles the [ObjectFieldValue] state.
-    fn state_object_field_value(&mut self) -> Result<Token, Error> {
+    fn state_object_field_value(&mut self) -> Result<Token<'a>, Error> {
         match self.peek_expect()? {
             b':' => {
                 self.advance();
@@ -491,7 +499,7 @@ impl<'a> JsonTokenIterator<'a> {
 }
 
 impl<'a> Iterator for JsonTokenIterator<'a> {
-    type Item = Result<Token, Error>;
+    type Item = Result<Token<'a>, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         debug_assert!(self.index <= self.input.len());
@@ -518,8 +526,7 @@ impl<'a> Iterator for JsonTokenIterator<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::deserialize::{json_token_iter, Error, ErrorReason, Token};
-    use crate::escape::escape_string;
+    use crate::deserialize::{json_token_iter, Error, ErrorReason, EscapedStr, Token};
     use proptest::prelude::*;
     use smithy_types::Number;
 
@@ -533,11 +540,11 @@ mod tests {
     #[test]
     fn test_empty_string() {
         let mut iter = json_token_iter(b"\"\"");
-        assert_eq!(Some(Ok(Token::ValueString("".into()))), iter.next());
+        assert_eq!(Some(Ok(Token::ValueString(EscapedStr("")))), iter.next());
         assert_eq!(None, iter.next());
 
         let mut iter = json_token_iter(b" \r\n\t \"\"  ");
-        assert_eq!(Some(Ok(Token::ValueString("".into()))), iter.next());
+        assert_eq!(Some(Ok(Token::ValueString(EscapedStr("")))), iter.next());
         assert_eq!(None, iter.next());
     }
 
@@ -611,12 +618,10 @@ mod tests {
     proptest! {
         #[test]
         fn string_prop_test(input in ".*") {
-            let json = format!("\"{}\"", escape_string(&input));
-
-            let serde_string: String = serde_json::from_str(&json).unwrap();
+            let json: String = serde_json::to_string(&input).unwrap();
 
             let mut iter = json_token_iter(json.as_bytes());
-            assert_eq!(Some(Ok(Token::ValueString(serde_string))), iter.next());
+            assert_eq!(Some(Ok(Token::ValueString(EscapedStr(&json[1..(json.len()-1)])))), iter.next());
             assert_eq!(None, iter.next());
         }
 
@@ -757,7 +762,7 @@ mod tests {
                 Token::EndArray,
                 Token::StartObject,
                 Token::EndObject,
-                Token::ValueString("test".into()),
+                Token::ValueString(EscapedStr("test")),
                 Token::EndArray,
             ],
             tokens.unwrap()
@@ -781,25 +786,25 @@ mod tests {
         assert_eq!(
             vec![
                 Token::StartObject,
-                Token::ObjectKey("some_int".into()),
+                Token::ObjectKey(EscapedStr("some_int")),
                 Token::ValueNumber(Number::PosInt(5)),
-                Token::ObjectKey("some_float".into()),
+                Token::ObjectKey(EscapedStr("some_float")),
                 Token::ValueNumber(Number::Float(5.2)),
-                Token::ObjectKey("some_negative".into()),
+                Token::ObjectKey(EscapedStr("some_negative")),
                 Token::ValueNumber(Number::NegInt(-5)),
-                Token::ObjectKey("some_negative_float".into()),
+                Token::ObjectKey(EscapedStr("some_negative_float")),
                 Token::ValueNumber(Number::Float(-2.4)),
-                Token::ObjectKey("some_string".into()),
-                Token::ValueString("test".into()),
-                Token::ObjectKey("some_struct".into()),
+                Token::ObjectKey(EscapedStr("some_string")),
+                Token::ValueString(EscapedStr("test")),
+                Token::ObjectKey(EscapedStr("some_struct")),
                 Token::StartObject,
-                Token::ObjectKey("nested".into()),
-                Token::ValueString("asdf".into()),
+                Token::ObjectKey(EscapedStr("nested")),
+                Token::ValueString(EscapedStr("asdf")),
                 Token::EndObject,
-                Token::ObjectKey("some_array".into()),
+                Token::ObjectKey(EscapedStr("some_array")),
                 Token::StartArray,
-                Token::ValueString("one".into()),
-                Token::ValueString("two".into()),
+                Token::ValueString(EscapedStr("one")),
+                Token::ValueString(EscapedStr("two")),
                 Token::EndArray,
                 Token::EndObject,
             ],
@@ -811,8 +816,11 @@ mod tests {
     fn test_object_trailing_comma() {
         let mut iter = json_token_iter(br#" { "test": "trailing", } "#);
         assert_eq!(Some(Ok(Token::StartObject)), iter.next());
-        assert_eq!(Some(Ok(Token::ObjectKey("test".into()))), iter.next());
-        assert_eq!(Some(Ok(Token::ValueString("trailing".into()))), iter.next());
+        assert_eq!(Some(Ok(Token::ObjectKey(EscapedStr("test")))), iter.next());
+        assert_eq!(
+            Some(Ok(Token::ValueString(EscapedStr("trailing")))),
+            iter.next()
+        );
         assert_eq!(
             Some(Err(Error {
                 reason: ErrorReason::UnexpectedToken('}', "'\"'"),
@@ -827,7 +835,7 @@ mod tests {
     fn test_object_no_colon() {
         let mut iter = json_token_iter(br#" {"test" "#);
         assert_eq!(Some(Ok(Token::StartObject)), iter.next());
-        assert_eq!(Some(Ok(Token::ObjectKey("test".into()))), iter.next());
+        assert_eq!(Some(Ok(Token::ObjectKey(EscapedStr("test")))), iter.next());
         assert_eq!(
             Some(Err(Error {
                 reason: ErrorReason::UnexpectedEOS,
@@ -846,5 +854,12 @@ mod tests {
             .is_err());
         assert!(json_token_iter(b"\"test\ntest\"").next().unwrap().is_err());
         assert!(json_token_iter(b"\"test\ttest\"").next().unwrap().is_err());
+    }
+
+    #[test]
+    fn escaped_str() {
+        let escaped = EscapedStr::new("foo\\nbar");
+        assert_eq!("foo\\nbar", escaped.as_escaped_str());
+        assert_eq!("foo\nbar", escaped.into_unescaped().unwrap());
     }
 }
