@@ -6,8 +6,6 @@
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.knowledge.HttpBinding
-import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -17,7 +15,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.model.traits.HttpTrait
+import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
@@ -42,7 +40,6 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredData
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
-import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
@@ -51,6 +48,10 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 interface Protocol {
+    val httpBindingResolver: HttpBindingResolver
+
+    val defaultTimestampFormat: TimestampFormatTrait.Format
+
     fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator
 
     fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator
@@ -59,19 +60,16 @@ interface Protocol {
      fn parse_generic(response: &Response<Bytes>) -> smithy_types::error::Error
      **/
     fun parseGenericError(operationShape: OperationShape): RuntimeType
-
-    fun documentContentType(): String?
-    fun defaultContentType(): String
 }
 
-class HttpTraitProtocolGenerator(
+class HttpBoundProtocolGenerator(
     private val protocolConfig: ProtocolConfig,
     private val protocol: Protocol,
 ) : HttpProtocolGenerator(protocolConfig) {
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
     private val runtimeConfig = protocolConfig.runtimeConfig
-    private val httpIndex = HttpBindingIndex.of(model)
+    private val httpBindingResolver = protocol.httpBindingResolver
 
     private val codegenScope = arrayOf(
         "ParseStrict" to RuntimeType.parseStrict(runtimeConfig),
@@ -85,9 +83,8 @@ class HttpTraitProtocolGenerator(
     override fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata {
         val serializerGenerator = protocol.structuredDataSerializer(operationShape)
         val inputShape = operationShape.inputShape(model)
-        val bindings = httpIndex.getRequestBindings(operationShape).toList()
-        val payloadMemberName: String? =
-            bindings.firstOrNull { (_, binding) -> binding.location == HttpBinding.Location.PAYLOAD }?.first
+        val payloadMemberName =
+            httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
         return if (payloadMemberName == null) {
             serializerGenerator.operationSerializer(operationShape)?.let { serializer ->
                 rust(
@@ -193,34 +190,33 @@ class HttpTraitProtocolGenerator(
     override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
         val operationName = symbolProvider.toSymbol(operationShape).name
-        val httpTrait = operationShape.expectTrait(HttpTrait::class.java)
 
         // For streaming response bodies, we need to generate a different implementation of the parse traits.
         // These will first offer the streaming input to the parser & potentially read the body into memory
         // if an error occurred or if the streaming parser indicates that it needs the full data to proceed.
         if (operationShape.outputShape(model).hasStreamingMember(model)) {
             with(operationWriter) {
-                renderStreamingTraits(operationName, httpTrait, outputSymbol, operationShape)
+                renderStreamingTraits(operationName, outputSymbol, operationShape)
             }
         } else {
             with(operationWriter) {
-                renderNonStreamingTraits(operationName, httpTrait, outputSymbol, operationShape)
+                renderNonStreamingTraits(operationName, outputSymbol, operationShape)
             }
         }
     }
 
     private fun RustWriter.renderNonStreamingTraits(
         operationName: String?,
-        httpTrait: HttpTrait,
         outputSymbol: Symbol,
         operationShape: OperationShape
     ) {
+        val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
                 impl #{ParseStrict} for $operationName {
                     type Output = Result<#{O}, #{E}>;
                     fn parse(&self, response: &#{Response}<#{Bytes}>) -> Self::Output {
-                         if !response.status().is_success() && response.status().as_u16() != ${httpTrait.code} {
+                         if !response.status().is_success() && response.status().as_u16() != $successCode {
                             #{parse_error}(response)
                          } else {
                             #{parse_response}(response)
@@ -237,17 +233,17 @@ class HttpTraitProtocolGenerator(
 
     private fun RustWriter.renderStreamingTraits(
         operationName: String,
-        httpTrait: HttpTrait,
         outputSymbol: Symbol,
         operationShape: OperationShape
     ) {
+        val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
                     impl #{ParseResponse}<#{SdkBody}> for $operationName {
                         type Output = Result<#{O}, #{E}>;
                         fn parse_unloaded(&self, response: &mut http::Response<#{SdkBody}>) -> Option<Self::Output> {
                             // This is an error, defer to the non-streaming parser
-                            if !response.status().is_success() && response.status().as_u16() != ${httpTrait.code} {
+                            if !response.status().is_success() && response.status().as_u16() != $successCode {
                                 return None;
                             }
                             Some(#{parse_streaming_response}(response))
@@ -306,7 +302,7 @@ class HttpTraitProtocolGenerator(
                                 renderShapeParser(
                                     operationShape,
                                     errorShape,
-                                    httpIndex.getResponseBindings(errorShape),
+                                    httpBindingResolver.errorResponseBindings(errorShape),
                                     errorSymbol
                                 )
                             }
@@ -337,7 +333,7 @@ class HttpTraitProtocolGenerator(
                     renderShapeParser(
                         operationShape,
                         outputShape,
-                        httpIndex.getResponseBindings(operationShape),
+                        httpBindingResolver.responseBindings(operationShape),
                         errorSymbol
                     )
                 }
@@ -362,7 +358,7 @@ class HttpTraitProtocolGenerator(
                     renderShapeParser(
                         operationShape,
                         outputShape,
-                        httpIndex.getResponseBindings(operationShape),
+                        httpBindingResolver.responseBindings(operationShape),
                         errorSymbol
                     )
                 }
@@ -375,20 +371,14 @@ class HttpTraitProtocolGenerator(
         operationShape: OperationShape,
         inputShape: StructureShape
     ) {
-        val httpTrait = operationShape.expectTrait<HttpTrait>()
-
         val httpBindingGenerator = RequestBindingGenerator(
-            model,
-            symbolProvider,
-            runtimeConfig,
-            implBlockWriter,
+            protocolConfig,
+            protocol.defaultTimestampFormat,
+            httpBindingResolver,
             operationShape,
             inputShape,
-            httpTrait
         )
-        val contentType =
-            httpIndex.determineRequestContentType(operationShape, protocol.documentContentType())
-                .orElse(protocol.defaultContentType())
+        val contentType = httpBindingResolver.requestContentType(operationShape)
         httpBindingGenerator.renderUpdateHttpBuilder(implBlockWriter)
         httpBuilderFun(implBlockWriter) {
             rust(
@@ -405,7 +395,7 @@ class HttpTraitProtocolGenerator(
     private fun RustWriter.renderShapeParser(
         operationShape: OperationShape,
         outputShape: StructureShape,
-        bindings: Map<String, HttpBinding>,
+        bindings: List<HttpBindingDescriptor>,
         errorSymbol: RuntimeType,
     ) {
         val httpBindingGenerator = ResponseBindingGenerator(protocolConfig, operationShape)
@@ -431,13 +421,9 @@ class HttpTraitProtocolGenerator(
                 )
             }
         }
-        outputShape.members().forEach { member ->
-            val parsedValue = renderBindingParser(
-                bindings[member.memberName]!!,
-                operationShape,
-                httpBindingGenerator,
-                structuredDataParser
-            )
+        for (binding in bindings) {
+            val member = binding.member
+            val parsedValue = renderBindingParser(binding, operationShape, httpBindingGenerator, structuredDataParser)
             if (parsedValue != null) {
                 withBlock("output = output.${member.setterName()}(", ");") {
                     parsedValue(this)
@@ -457,7 +443,7 @@ class HttpTraitProtocolGenerator(
      * Returns a map with key = memberName, value = parsedValue
      */
     private fun renderBindingParser(
-        binding: HttpBinding,
+        binding: HttpBindingDescriptor,
         operationShape: OperationShape,
         httpBindingGenerator: ResponseBindingGenerator,
         structuredDataParser: StructuredDataParserGenerator,
@@ -465,7 +451,7 @@ class HttpTraitProtocolGenerator(
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         val member = binding.member
         return when (binding.location) {
-            HttpBinding.Location.HEADER -> writable {
+            HttpLocation.HEADER -> writable {
                 val fnName = httpBindingGenerator.generateDeserializeHeaderFn(binding)
                 rust(
                     """
@@ -474,11 +460,11 @@ class HttpTraitProtocolGenerator(
                     fnName, errorSymbol
                 )
             }
-            HttpBinding.Location.DOCUMENT -> {
+            HttpLocation.DOCUMENT -> {
                 // document is handled separately
                 null
             }
-            HttpBinding.Location.PAYLOAD -> {
+            HttpLocation.PAYLOAD -> {
                 val docShapeHandler: RustWriter.(String) -> Unit = { body ->
                     rust(
                         "#T($body).map_err(#T::unhandled)",
@@ -501,12 +487,12 @@ class HttpTraitProtocolGenerator(
                     writable { rust("#T(response.body().as_ref())?", deserializer) }
                 }
             }
-            HttpBinding.Location.RESPONSE_CODE -> writable {
+            HttpLocation.RESPONSE_CODE -> writable {
                 conditionalBlock("Some(", ")", symbolProvider.toSymbol(member).isOptional()) {
                     rust("response.status().as_u16() as _")
                 }
             }
-            HttpBinding.Location.PREFIX_HEADERS -> {
+            HttpLocation.PREFIX_HEADERS -> {
                 val sym = httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)
                 writable {
                     rustTemplate(

@@ -8,10 +8,13 @@ package software.amazon.smithy.rust.codegen.smithy.protocols
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.OperationIndex
+import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.ToShapeId
+import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustType
@@ -46,6 +49,7 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStream
 import software.amazon.smithy.rust.codegen.smithy.transformers.StructureModifier
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 
 sealed class AwsJsonVersion {
@@ -148,6 +152,38 @@ class SyntheticBodySymbolProvider(private val model: Model, private val base: Ru
     }
 }
 
+class AwsJsonHttpBindingResolver(
+    private val model: Model,
+    private val awsJsonVersion: AwsJsonVersion,
+) : HttpBindingResolver {
+    private val httpTrait = HttpTrait.builder()
+        .code(200)
+        .method("POST")
+        .uri(UriPattern.parse("/"))
+        .build()
+
+    private fun bindings(shape: ToShapeId?) =
+        shape?.let { model.expectShape(it.toShapeId()) }?.members()
+            ?.map { HttpBindingDescriptor(it, HttpLocation.DOCUMENT, "document") }
+            ?.toList()
+            ?: emptyList()
+
+    override fun httpTrait(operationShape: OperationShape): HttpTrait = httpTrait
+
+    override fun requestBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
+        bindings(operationShape.input.orNull())
+
+    override fun responseBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
+        bindings(operationShape.output.orNull())
+
+    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> =
+        bindings(errorShape)
+
+    override fun requestContentType(operationShape: OperationShape): String =
+        "application/x-amz-json-${awsJsonVersion.value}"
+}
+
+// TODO: Refactor to use HttpBoundProtocolGenerator
 class BasicAwsJsonGenerator(
     private val protocolConfig: ProtocolConfig,
     private val awsJsonVersion: AwsJsonVersion
@@ -198,7 +234,7 @@ class BasicAwsJsonGenerator(
     }
 
     override fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata {
-        val generator = JsonSerializerGenerator(protocolConfig)
+        val generator = JsonSerializerGenerator(protocolConfig, AwsJsonHttpBindingResolver(model, awsJsonVersion))
         val serializer = generator.operationSerializer(operationShape)
         serializer?.also { sym ->
             rustTemplate(

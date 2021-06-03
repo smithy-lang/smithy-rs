@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -109,7 +110,10 @@ internal class XmlBindingTraitSerializerGeneratorTest {
             )
         )
         val symbolProvider = testSymbolProvider(model)
-        val parserGenerator = XmlBindingTraitSerializerGenerator(testProtocolConfig(model))
+        val parserGenerator = XmlBindingTraitSerializerGenerator(
+            testProtocolConfig(model),
+            HttpTraitHttpBindingResolver(model, "application/xml", null)
+        )
         val operationParser = parserGenerator.payloadSerializer(model.lookup("test#OpInput\$payload"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
