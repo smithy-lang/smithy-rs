@@ -34,6 +34,8 @@ import software.amazon.smithy.rust.codegen.smithy.Default
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -62,8 +64,8 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
      * }
      * ```
      */
-    fun generateDeserializeHeaderFn(binding: HttpBinding): RuntimeType {
-        check(binding.location == HttpBinding.Location.HEADER)
+    fun generateDeserializeHeaderFn(binding: HttpBindingDescriptor): RuntimeType {
+        check(binding.location == HttpLocation.HEADER)
         val outputT = symbolProvider.toSymbol(binding.member)
         val fnName = "deser_header_${fnName(operationShape, binding)}"
         return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
@@ -79,7 +81,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         }
     }
 
-    fun generateDeserializePrefixHeaderFn(binding: HttpBinding): RuntimeType {
+    fun generateDeserializePrefixHeaderFn(binding: HttpBindingDescriptor): RuntimeType {
         check(binding.location == HttpBinding.Location.PREFIX_HEADERS)
         val outputT = symbolProvider.toSymbol(binding.member)
         check(outputT.rustType().stripOuter<RustType.Option>() is RustType.HashMap) { outputT.rustType() }
@@ -122,7 +124,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
      * Generate a function to deserialize `[binding]` from the response payload
      */
     fun generateDeserializePayloadFn(
-        binding: HttpBinding,
+        binding: HttpBindingDescriptor,
         errorT: RuntimeType,
         // Deserialize a single structure or union member marked as a payload
         structuredHandler: RustWriter.(String) -> Unit,
@@ -156,7 +158,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
     }
 
     private fun RustWriter.deserializeStreamingBody(
-        binding: HttpBinding,
+        binding: HttpBindingDescriptor,
     ) {
         val member = binding.member
         val targetShape = model.expectShape(member.target)
@@ -172,7 +174,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
     }
 
     private fun RustWriter.deserializePayloadBody(
-        binding: HttpBinding,
+        binding: HttpBindingDescriptor,
         errorSymbol: RuntimeType,
         structuredHandler: RustWriter.(String) -> Unit,
         docShapeHandler: RustWriter.(String) -> Unit
@@ -312,5 +314,6 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
      * Generate a unique name for the deserializer function for a given operationShape -> member pair
      */
     // rename here technically not required, operations and members cannot be renamed
-    private fun fnName(operationShape: OperationShape, binding: HttpBinding) = "${operationShape.id.getName(service).toSnakeCase()}_${binding.memberName.toSnakeCase()}"
+    private fun fnName(operationShape: OperationShape, binding: HttpBindingDescriptor) =
+        "${operationShape.id.getName(service).toSnakeCase()}_${binding.memberName.toSnakeCase()}"
 }
