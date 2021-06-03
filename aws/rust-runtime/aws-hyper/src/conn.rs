@@ -8,12 +8,13 @@ use http::Request;
 use hyper::client::ResponseFuture;
 use hyper::Response;
 use smithy_http::body::SdkBody;
+use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tower::Service;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Standard(Connector);
 
 impl Standard {
@@ -87,6 +88,22 @@ enum Connector {
     /// This enables using any implementation of the HttpService trait. This allows using a totally
     /// separate HTTP stack or your own custom `TestConnection`.
     Dyn(Box<dyn HttpService>),
+}
+
+impl fmt::Debug for Connector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            #[cfg(feature = "native-tls")]
+            Connector::NativeHttps(tls) => {
+                f.debug_tuple("Connector::NativeHttps").field(tls).finish()
+            }
+            #[cfg(feature = "rustls")]
+            Connector::RustlsHttps(tls) => {
+                f.debug_tuple("Connector::RustlsHttps").field(tls).finish()
+            }
+            Connector::Dyn(_) => f.debug_tuple("Connector::Dyn").finish(),
+        }
+    }
 }
 
 impl Clone for Box<dyn HttpService> {
