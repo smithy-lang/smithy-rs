@@ -4,14 +4,12 @@
  */
 
 pub mod conn;
-mod retry;
 #[cfg(feature = "test-util")]
 pub mod test_connection;
 
-pub use retry::RetryConfig;
+pub use smithy_hyper::retry::Config as RetryConfig;
 
 use crate::conn::Standard;
-use crate::retry::RetryHandlerFactory;
 use aws_endpoint::AwsEndpointStage;
 use aws_http::user_agent::UserAgentStage;
 use aws_sig_auth::middleware::SigV4SigningStage;
@@ -21,17 +19,42 @@ use smithy_http::operation::Operation;
 use smithy_http::response::ParseHttpResponse;
 pub use smithy_http::result::{SdkError, SdkSuccess};
 use smithy_http::retry::ClassifyResponse;
-use smithy_http_tower::dispatch::DispatchLayer;
 use smithy_http_tower::map_request::MapRequestLayer;
-use smithy_http_tower::parse_response::ParseResponseLayer;
 use smithy_types::retry::ProvideErrorKind;
 use std::error::Error;
-use std::fmt;
-use std::fmt::{Debug, Formatter};
-use tower::{Service, ServiceBuilder, ServiceExt};
+use std::fmt::Debug;
+use tower::layer::util::Stack;
+use tower::{Service, ServiceBuilder};
 
 type BoxError = Box<dyn Error + Send + Sync>;
 pub type StandardClient = Client<conn::Standard>;
+
+type AwsMiddleware = Stack<
+    MapRequestLayer<SigV4SigningStage>,
+    Stack<MapRequestLayer<UserAgentStage>, MapRequestLayer<AwsEndpointStage>>,
+>;
+
+#[derive(Debug)]
+struct AwsMiddlewareLayer;
+impl<S> tower::Layer<S> for AwsMiddlewareLayer {
+    type Service = <AwsMiddleware as tower::Layer<S>>::Service;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
+        let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);
+        let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new());
+        // These layers can be considered as occuring in order, that is:
+        // 1. Resolve an endpoint
+        // 2. Add a user agent
+        // 3. Sign
+        // (4. Dispatch over the wire)
+        ServiceBuilder::new()
+            .layer(endpoint_resolver)
+            .layer(user_agent)
+            .layer(signer)
+            .service(inner)
+    }
+}
 
 /// AWS Service Client
 ///
@@ -48,30 +71,24 @@ pub type StandardClient = Client<conn::Standard>;
 ///    S::Error: Into<BoxError> + Send + Sync + 'static,
 ///    S::Future: Send + 'static,
 /// ```
+#[derive(Debug)]
 pub struct Client<S> {
-    inner: S,
-    retry_handler: RetryHandlerFactory,
-}
-
-impl<S> Debug for Client<S> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut formatter = f.debug_struct("Client");
-        formatter.field("retry_handler", &self.retry_handler);
-        formatter.finish()
-    }
+    inner: smithy_hyper::Client<S, AwsMiddlewareLayer>,
 }
 
 impl<S> Client<S> {
     /// Construct a new `Client` with a custom connector
     pub fn new(connector: S) -> Self {
         Client {
-            inner: connector,
-            retry_handler: RetryHandlerFactory::new(RetryConfig::default()),
+            inner: smithy_hyper::Builder::new()
+                .connector(connector)
+                .middleware(AwsMiddlewareLayer)
+                .build(),
         }
     }
 
     pub fn with_retry_config(mut self, retry_config: RetryConfig) -> Self {
-        self.retry_handler.with_config(retry_config);
+        self.inner.set_retry_config(retry_config);
         self
     }
 }
@@ -81,8 +98,10 @@ impl Client<Standard> {
     #[cfg(any(feature = "native-tls", feature = "rustls"))]
     pub fn https() -> StandardClient {
         Client {
-            inner: Standard::https(),
-            retry_handler: RetryHandlerFactory::new(RetryConfig::default()),
+            inner: smithy_hyper::Builder::new()
+                .connector(Standard::https())
+                .middleware(AwsMiddlewareLayer)
+                .build(),
         }
     }
 }
@@ -119,25 +138,7 @@ where
         E: Error + ProvideErrorKind,
         Retry: ClassifyResponse<SdkSuccess<R>, SdkError<E>>,
     {
-        let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
-        let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);
-        let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new());
-        let inner = self.inner.clone();
-        let mut svc = ServiceBuilder::new()
-            // Create a new request-scoped policy
-            .retry(self.retry_handler.new_handler())
-            .layer(ParseResponseLayer::<O, Retry>::new())
-            // These layers can be considered as occuring in order, that is:
-            // 1. Resolve an endpoint
-            // 2. Add a user agent
-            // 3. Sign
-            // 4. Dispatch over the wire
-            .layer(endpoint_resolver)
-            .layer(user_agent)
-            .layer(signer)
-            .layer(DispatchLayer::new())
-            .service(inner);
-        svc.ready().await?.call(input).await
+        self.inner.call_raw(input).await
     }
 }
 
