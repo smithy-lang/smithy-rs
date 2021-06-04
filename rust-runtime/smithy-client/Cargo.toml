@@ -1,5 +1,5 @@
 [package]
-name = "smithy-hyper"
+name = "smithy-client"
 version = "0.1.0"
 authors = ["Russell Cohen <rcoh@amazon.com>"]
 edition = "2018"

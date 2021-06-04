@@ -187,7 +187,7 @@ data class CargoDependency(
 
         fun SmithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http")
         fun SmithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-tower")
-        fun SmithyHyper(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("hyper", true)
+        fun SmithyClient(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("client", true)
 
         fun ProtocolTestHelpers(runtimeConfig: RuntimeConfig) = CargoDependency(
             "protocol-test-helpers", runtimeConfig.runtimeCrateLocation.crateLocation(), scope = DependencyScope.Dev

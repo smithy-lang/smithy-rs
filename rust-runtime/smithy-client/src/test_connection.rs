@@ -67,7 +67,7 @@ impl ValidateRequest {
 /// For more complex use cases, see [Tower Test](https://docs.rs/tower-test/0.4.0/tower_test/)
 /// Usage example:
 /// ```rust
-/// use smithy_hyper::test_connection::TestConnection;
+/// use smithy_client::test_connection::TestConnection;
 /// use smithy_http::body::SdkBody;
 /// let events = vec![(
 ///    http::Request::new(SdkBody::from("request body")),
@@ -77,7 +77,7 @@ impl ValidateRequest {
 ///        .unwrap(),
 /// )];
 /// let conn = TestConnection::new(events);
-/// let client = smithy_hyper::Client::from(conn);
+/// let client = smithy_client::Client::from(conn);
 /// ```
 #[derive(Debug)]
 pub struct TestConnection<B> {

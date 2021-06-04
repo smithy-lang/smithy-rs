@@ -26,7 +26,7 @@ val runtimeModules = listOf(
     "smithy-xml",
     "smithy-http",
     "smithy-http-tower",
-    "smithy-hyper",
+    "smithy-client",
     "protocol-test-helpers"
 )
 val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types", "aws-hyper", "aws-sig-auth", "aws-http")

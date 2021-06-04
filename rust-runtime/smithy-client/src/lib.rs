@@ -165,7 +165,7 @@ impl<C, M, R> Builder<C, M, R> {
     /// Use a connector that directly maps each request to a response.
     ///
     /// ```rust
-    /// use smithy_hyper::Builder;
+    /// use smithy_client::Builder;
     /// use smithy_http::body::SdkBody;
     /// let client = Builder::new()
     /// # /*

@@ -7,7 +7,7 @@ pub mod conn;
 #[cfg(feature = "test-util")]
 pub mod test_connection;
 
-pub use smithy_hyper::retry::Config as RetryConfig;
+pub use smithy_client::retry::Config as RetryConfig;
 
 use crate::conn::Standard;
 use aws_endpoint::AwsEndpointStage;
@@ -73,14 +73,14 @@ impl<S> tower::Layer<S> for AwsMiddlewareLayer {
 /// ```
 #[derive(Debug)]
 pub struct Client<S> {
-    inner: smithy_hyper::Client<S, AwsMiddlewareLayer>,
+    inner: smithy_client::Client<S, AwsMiddlewareLayer>,
 }
 
 impl<S> Client<S> {
     /// Construct a new `Client` with a custom connector
     pub fn new(connector: S) -> Self {
         Client {
-            inner: smithy_hyper::Builder::new()
+            inner: smithy_client::Builder::new()
                 .connector(connector)
                 .middleware(AwsMiddlewareLayer)
                 .build(),
@@ -98,7 +98,7 @@ impl Client<Standard> {
     #[cfg(any(feature = "native-tls", feature = "rustls"))]
     pub fn https() -> StandardClient {
         Client {
-            inner: smithy_hyper::Builder::new()
+            inner: smithy_client::Builder::new()
                 .connector(Standard::https())
                 .middleware(AwsMiddlewareLayer)
                 .build(),

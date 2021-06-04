@@ -62,7 +62,7 @@ impl Config {
     /// By default, `base` is a randomly generated value between 0 and 1. In tests, it can
     /// be helpful to override this:
     /// ```rust
-    /// use smithy_hyper::retry::Config;
+    /// use smithy_client::retry::Config;
     /// let conf = Config::default().with_base(||1_f64);
     /// ```
     pub fn with_base(mut self, base: fn() -> f64) -> Self {

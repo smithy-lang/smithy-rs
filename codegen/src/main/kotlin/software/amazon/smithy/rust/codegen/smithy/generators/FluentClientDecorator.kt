@@ -53,10 +53,10 @@ class FluentClientDecorator : RustCodegenDecorator {
         rustCrate.withModule(RustModule("client", module)) { writer ->
             FluentClientGenerator(protocolConfig).render(writer)
         }
-        val smithyHyper = CargoDependency.SmithyHyper(protocolConfig.runtimeConfig)
-        rustCrate.addFeature(Feature("client", true, listOf(smithyHyper.name)))
-        rustCrate.addFeature(Feature("rustls", default = true, listOf("smithy-hyper/rustls")))
-        rustCrate.addFeature(Feature("native-tls", default = false, listOf("smithy-hyper/native-tls")))
+        val smithyClient = CargoDependency.SmithyClient(protocolConfig.runtimeConfig)
+        rustCrate.addFeature(Feature("client", true, listOf(smithyClient.name)))
+        rustCrate.addFeature(Feature("rustls", default = true, listOf("smithy-client/rustls")))
+        rustCrate.addFeature(Feature("native-tls", default = false, listOf("smithy-client/native-tls")))
     }
 
     override fun libRsCustomizations(
@@ -85,7 +85,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
         TopDownIndex.of(protocolConfig.model).getContainedOperations(serviceShape).sortedBy { it.id }
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
-    private val hyperDep = CargoDependency.SmithyHyper(protocolConfig.runtimeConfig).copy(optional = true)
+    private val clientDep = CargoDependency.SmithyClient(protocolConfig.runtimeConfig).copy(optional = true)
     private val runtimeConfig = protocolConfig.runtimeConfig
 
     fun render(writer: RustWriter) {
@@ -93,23 +93,23 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             """
             ##[derive(std::fmt::Debug)]
             pub(crate) struct Handle<C, M, R> {
-                client: #{hyper}::Client<C, M, R>,
+                client: #{client}::Client<C, M, R>,
                 conf: crate::Config,
             }
 
             ##[derive(Clone, std::fmt::Debug)]
-            pub struct Client<C, M, R = #{hyper}::retry::Standard> {
+            pub struct Client<C, M, R = #{client}::retry::Standard> {
                 handle: std::sync::Arc<Handle<C, M, R>>
             }
 
-            impl<C, M, R> From<#{hyper}::Client<C, M, R>> for Client<C, M, R> {
-                fn from(client: #{hyper}::Client<C, M, R>) -> Self {
+            impl<C, M, R> From<#{client}::Client<C, M, R>> for Client<C, M, R> {
+                fn from(client: #{client}::Client<C, M, R>) -> Self {
                     Self::with_config(client, crate::Config::builder().build())
                 }
             }
 
             impl<C, M, R> Client<C, M, R> {
-                pub fn with_config(client: #{hyper}::Client<C, M, R>, conf: crate::Config) -> Self {
+                pub fn with_config(client: #{client}::Client<C, M, R>, conf: crate::Config) -> Self {
                     Self {
                         handle: std::sync::Arc::new(Handle {
                             client,
@@ -123,17 +123,17 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                 }
             }
         """,
-            "hyper" to hyperDep.asType()
+            "client" to clientDep.asType()
         )
         writer.rustBlockTemplate(
             """
             impl<C, M, R> Client<C, M, R>
               where
-                C: #{hyper}::bounds::SmithyConnector,
-                M: #{hyper}::bounds::SmithyMiddleware<C>,
-                R: #{hyper}::retry::NewRequestPolicy,
+                C: #{client}::bounds::SmithyConnector,
+                M: #{client}::bounds::SmithyMiddleware<C>,
+                R: #{client}::retry::NewRequestPolicy,
             """,
-                "hyper" to hyperDep.asType(),
+                "client" to clientDep.asType(),
         ) {
             operations.forEach { operation ->
                 val name = symbolProvider.toSymbol(operation).name
@@ -165,11 +165,11 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                     """
                     impl<C, M, R> $name<C, M, R>
                       where
-                        C: #{hyper}::bounds::SmithyConnector,
-                        M: #{hyper}::bounds::SmithyMiddleware<C>,
-                        R: #{hyper}::retry::NewRequestPolicy,
+                        C: #{client}::bounds::SmithyConnector,
+                        M: #{client}::bounds::SmithyMiddleware<C>,
+                        R: #{client}::retry::NewRequestPolicy,
                     """,
-                        "hyper" to CargoDependency.SmithyHyper(runtimeConfig).asType(),
+                        "client" to CargoDependency.SmithyClient(runtimeConfig).asType(),
                 ) {
                     rustTemplate(
                         """
@@ -178,7 +178,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                     }
 
                     pub async fn send(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>> where
-                        R::Policy: #{hyper}::bounds::SmithyRetryPolicy<#{input}OperationOutputAlias, #{ok}, #{operation_err}, #{input}OperationRetryAlias>,
+                        R::Policy: #{client}::bounds::SmithyRetryPolicy<#{input}OperationOutputAlias, #{ok}, #{operation_err}, #{input}OperationRetryAlias>,
                     {
                         let input = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
                         let op = input.make_operation(&self.handle.conf)
@@ -190,7 +190,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         "ok" to symbolProvider.toSymbol(operation.outputShape(model)),
                         "operation_err" to operation.errorSymbol(symbolProvider),
                         "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType().copy(name = "result::SdkError"),
-                        "hyper" to CargoDependency.SmithyHyper(runtimeConfig).asType(),
+                        "client" to CargoDependency.SmithyClient(runtimeConfig).asType(),
                     )
                     members.forEach { member ->
                         val memberName = symbolProvider.toMemberName(member)
