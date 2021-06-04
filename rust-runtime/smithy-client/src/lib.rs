@@ -71,7 +71,11 @@ type BoxError = Box<dyn Error + Send + Sync>;
 /// features to construct a Client against a standard HTTPS endpoint using [`Builder::rustls`] and
 /// [`Builder::native_tls`] respectively.
 #[derive(Debug)]
-pub struct Client<Connector, Middleware = DynMiddleware<Connector>, RetryPolicy = retry::Standard> {
+pub struct Client<
+    Connector = DynConnector,
+    Middleware = DynMiddleware<Connector>,
+    RetryPolicy = retry::Standard,
+> {
     connector: Connector,
     middleware: Middleware,
     retry_policy: RetryPolicy,
@@ -224,6 +228,37 @@ impl<C, M, R> Builder<C, M, R> {
     }
 }
 
+impl<C, M, R> Builder<C, M, R>
+where
+    C: bounds::SmithyConnector,
+    M: bounds::SmithyMiddleware<DynConnector> + Send + 'static,
+    R: retry::NewRequestPolicy,
+{
+    /// Build a type-erased Smithy service [`Client`].
+    ///
+    /// Note that if you're using the standard retry mechanism, [`retry::Standard`], `DynClient<R>`
+    /// is equivalent to [`Client`] with no type arguments.
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "https")]
+    /// # fn not_main() {
+    /// use smithy_client::{Builder, Client};
+    /// struct MyClient {
+    ///     client: smithy_client::Client,
+    /// }
+    ///
+    /// let client = Builder::new()
+    ///     .https()
+    ///     .middleware(tower::layer::util::Identity::new())
+    ///     .build_dyn();
+    /// let client = MyClient { client };
+    /// # client.client.check();
+    /// # }
+    pub fn build_dyn(self) -> DynClient<R> {
+        self.build().simplify()
+    }
+}
+
 impl<C, M, R> Client<C, M, R>
 where
     C: bounds::SmithyConnector,
@@ -320,10 +355,10 @@ where
     ///     .https()
     ///     .middleware(tower::layer::util::Identity::new())
     ///     .build();
-    /// let client = MyClient { client: client.simplify() };
+    /// let client = MyClient { client: client.erase_middleware() };
     /// # client.client.check();
     /// # }
-    pub fn simplify(self) -> Client<C, DynMiddleware<C>, R> {
+    pub fn erase_middleware(self) -> Client<C, DynMiddleware<C>, R> {
         Client {
             connector: self.connector,
             middleware: DynMiddleware::new(self.middleware),
@@ -332,10 +367,130 @@ where
     }
 }
 
+impl<C, M, R> Client<C, M, R>
+where
+    C: bounds::SmithyConnector,
+    M: bounds::SmithyMiddleware<DynConnector> + Send + 'static,
+    R: retry::NewRequestPolicy,
+{
+    /// Erase the connector type from the client type signature.
+    ///
+    /// This makes the final client type easier to name, at the cost of a marginal increase in
+    /// runtime performance. See [`DynConnector`] for details.
+    ///
+    /// In practice, you'll use this method once you've constructed a client to your liking:
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "https")]
+    /// # fn not_main() {
+    /// # type MyMiddleware = smithy_client::DynMiddleware<smithy_client::DynConnector>;
+    /// use smithy_client::{Builder, Client};
+    /// struct MyClient {
+    ///     client: Client<smithy_client::DynConnector, MyMiddleware>,
+    /// }
+    ///
+    /// let client = Builder::new()
+    ///     .https()
+    ///     .middleware(tower::layer::util::Identity::new())
+    ///     .build();
+    /// let client = MyClient { client: client.erase_connector() };
+    /// # client.client.check();
+    /// # }
+    pub fn erase_connector(self) -> Client<DynConnector, M, R> {
+        Client {
+            connector: DynConnector::new(self.connector),
+            middleware: self.middleware,
+            retry_policy: self.retry_policy,
+        }
+    }
+
+    /// Erase the connector and middleware types from the client type signature.
+    ///
+    /// This makes the final client type easier to name, at the cost of a marginal increase in
+    /// runtime performance. See [`DynConnector`] and [`DynMiddleware`] for details.
+    ///
+    /// Note that if you're using the standard retry mechanism, [`retry::Standard`], `DynClient<R>`
+    /// is equivalent to `Client` with no type arguments.
+    ///
+    /// In practice, you'll use this method once you've constructed a client to your liking:
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "https")]
+    /// # fn not_main() {
+    /// use smithy_client::{Builder, Client};
+    /// struct MyClient {
+    ///     client: smithy_client::Client,
+    /// }
+    ///
+    /// let client = Builder::new()
+    ///     .https()
+    ///     .middleware(tower::layer::util::Identity::new())
+    ///     .build();
+    /// let client = MyClient { client: client.simplify() };
+    /// # client.client.check();
+    /// # }
+    pub fn simplify(self) -> DynClient<R> {
+        self.erase_connector().erase_middleware()
+    }
+}
+
 // These types are technically public in that they're reachable from the public trait impls on
 // DynMiddleware, but no-one should ever look at them or use them.
 #[doc(hidden)]
 pub mod erase;
+
+/// A [`Client`] whose connector and middleware types have been erased.
+///
+/// Mainly useful if you need to name `R` in a type-erased client. If you do not, you can instead
+/// just use `Client` with no type parameters, which ends up being the same type.
+pub type DynClient<R = retry::Standard> = Client<DynConnector, DynMiddleware<DynConnector>, R>;
+
+/// A Smithy connector that uses dynamic dispatch.
+///
+/// This type allows you to pay a small runtime cost to avoid having to name the exact connector
+/// you're using anywhere you want to hold a [`Client`]. Specifically, this will use `Box` to
+/// enable dynamic dispatch for every request that goes through the connector, which increases
+/// memory pressure and suffers an additional vtable indirection for each request, but is unlikely
+/// to matter in all but the highest-performance settings.
+#[non_exhaustive]
+#[derive(Clone)]
+pub struct DynConnector(
+    erase::BoxCloneService<http::Request<SdkBody>, http::Response<SdkBody>, BoxError>,
+);
+
+impl fmt::Debug for DynConnector {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt.debug_struct("DynConnector").finish()
+    }
+}
+
+impl DynConnector {
+    /// Construct a new dynamically-dispatched Smithy middleware.
+    pub fn new<E, C>(connector: C) -> Self
+    where
+        C: bounds::SmithyConnector<Error = E> + Send + 'static,
+        E: Into<BoxError>,
+    {
+        Self(erase::BoxCloneService::new(connector.map_err(|e| e.into())))
+    }
+}
+
+impl Service<http::Request<SdkBody>> for DynConnector {
+    type Response = http::Response<SdkBody>;
+    type Error = BoxError;
+    type Future = erase::BoxFuture<Self::Response, Self::Error>;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.0.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: http::Request<SdkBody>) -> Self::Future {
+        self.0.call(req)
+    }
+}
 
 /// A Smithy middleware that uses dynamic dispatch.
 ///
@@ -344,6 +499,7 @@ pub mod erase;
 /// enable dynamic dispatch for every request that goes through the middleware, which increases
 /// memory pressure and suffers an additional vtable indirection for each request, but is unlikely
 /// to matter in all but the highest-performance settings.
+#[non_exhaustive]
 pub struct DynMiddleware<C>(
     erase::BoxCloneLayer<
         smithy_http_tower::dispatch::DispatchService<C>,
@@ -595,14 +751,25 @@ pub mod static_tests {
             .check();
     }
 
-    // Statically check that a type-erased client (dynclient) is actually a valid Client.
+    // Statically check that a type-erased middleware client is actually a valid Client.
     #[allow(dead_code)]
-    fn sanity_simplify() {
+    fn sanity_erase_middleware() {
         Builder::new()
             .middleware(tower::layer::util::Identity::new())
             .map_connector(|_| async { unreachable!() })
             .build()
-            .simplify()
+            .erase_middleware()
+            .check();
+    }
+
+    // Statically check that a type-erased connector client is actually a valid Client.
+    #[allow(dead_code)]
+    fn sanity_erase_connector() {
+        Builder::new()
+            .middleware(tower::layer::util::Identity::new())
+            .map_connector(|_| async { unreachable!() })
+            .build()
+            .erase_connector()
             .check();
     }
 }

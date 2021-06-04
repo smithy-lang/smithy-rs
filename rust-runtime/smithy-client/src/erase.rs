@@ -75,7 +75,7 @@ where
     }
 }
 
-type BoxFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>> + Send>>;
+pub type BoxFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>> + Send>>;
 pub struct BoxCloneService<T, U, E> {
     inner: Box<
         dyn CloneService<T, Response = U, Error = E, Future = BoxFuture<U, E>> + Send + 'static,
