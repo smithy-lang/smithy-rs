@@ -43,7 +43,7 @@ pub type ValidTestOperation = Operation<TestOperation, ()>;
 fn sanity_retry() {
     Builder::new()
         .middleware(tower::layer::util::Identity::new())
-        .map_connector(|_| async { unreachable!() })
+        .connector_fn(|_| async { unreachable!() })
         .build()
         .check();
 }
@@ -67,7 +67,7 @@ where
 fn sanity_erase_middleware() {
     Builder::new()
         .middleware(tower::layer::util::Identity::new())
-        .map_connector(|_| async { unreachable!() })
+        .connector_fn(|_| async { unreachable!() })
         .build()
         .erase_middleware()
         .check();
@@ -78,7 +78,7 @@ fn sanity_erase_middleware() {
 fn sanity_erase_connector() {
     Builder::new()
         .middleware(tower::layer::util::Identity::new())
-        .map_connector(|_| async { unreachable!() })
+        .connector_fn(|_| async { unreachable!() })
         .build()
         .erase_connector()
         .check();

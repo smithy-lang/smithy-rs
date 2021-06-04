@@ -37,7 +37,7 @@ impl<C> From<hyper::Client<C, SdkBody>> for HyperAdapter<C> {
     }
 }
 
-impl<C, M, R> Builder<C, M, R> {
+impl<M, R> Builder<(), M, R> {
     /// Connect to the service using the provided `hyper` client.
     pub fn hyper<HC>(self, connector: hyper::Client<HC, SdkBody>) -> Builder<HyperAdapter<HC>, M, R>
     where
@@ -57,7 +57,7 @@ impl<M> crate::Client<HyperAdapter<hyper_rustls::HttpsConnector<hyper::client::H
 }
 
 #[cfg(feature = "rustls")]
-impl<C, M, R> Builder<C, M, R> {
+impl<M, R> Builder<(), M, R> {
     /// Connect to the service over HTTPS using Rustls.
     pub fn rustls(
         self,
@@ -80,7 +80,7 @@ impl<C, M, R> Builder<C, M, R> {
     }
 }
 #[cfg(feature = "native-tls")]
-impl<C, M, R> Builder<C, M, R> {
+impl<M, R> Builder<(), M, R> {
     /// Connect to the service over HTTPS using the native TLS library on your platform.
     pub fn native_tls(
         self,
