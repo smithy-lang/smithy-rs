@@ -75,9 +75,9 @@ impl<'a> EscapedStr<'a> {
         self.0
     }
 
-    /// Consumes self and returns the string unescaped.
+    /// Unescapes the string and returns it.
     /// If the string doesn't need unescaping, it will be returned directly.
-    pub fn into_unescaped(self) -> Result<Cow<'a, str>, EscapeError> {
+    pub fn to_unescaped(&self) -> Result<Cow<'a, str>, EscapeError> {
         unescape_string(self.0)
     }
 }
@@ -860,6 +860,6 @@ mod tests {
     fn escaped_str() {
         let escaped = EscapedStr::new("foo\\nbar");
         assert_eq!("foo\\nbar", escaped.as_escaped_str());
-        assert_eq!("foo\nbar", escaped.into_unescaped().unwrap());
+        assert_eq!("foo\nbar", escaped.to_unescaped().unwrap());
     }
 }
