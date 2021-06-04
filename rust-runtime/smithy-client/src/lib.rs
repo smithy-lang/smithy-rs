@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 //! A Hyper-based Smithy service client.
-#![warn(missing_debug_implementations, missing_docs, rustdoc::all)]
+#![warn(
+    missing_debug_implementations,
+    missing_docs,
+    rustdoc::all,
+    rust_2018_idioms
+)]
 
 pub mod retry;
 
