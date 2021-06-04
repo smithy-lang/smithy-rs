@@ -61,7 +61,7 @@ where
     /// For convenience, this constructor type-erases the concrete TLS connector backend used using
     /// dynamic dispatch. This comes at a slight runtime performance cost. See
     /// [`DynConnector`](crate::erase::DynConnector) for details. To avoid that overhead, use
-    /// [`Builder::rustls`] or [`Builder::native_tls`] instead.
+    /// [`Builder::rustls`] or `Builder::native_tls` instead.
     pub fn https() -> Self {
         #[cfg(feature = "rustls")]
         let with_https = |b: Builder<_>| b.rustls();
@@ -91,7 +91,7 @@ impl<M, R> Builder<(), M, R> {
     /// Connect to the service over HTTPS using Rustls.
     ///
     /// This is exactly equivalent to [`Builder::rustls`]. If you instead wish to use `native_tls`,
-    /// use [`Builder::native_tls`].
+    /// use `Builder::native_tls`.
     pub fn https(
         self,
     ) -> Builder<HyperAdapter<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>, M, R>
