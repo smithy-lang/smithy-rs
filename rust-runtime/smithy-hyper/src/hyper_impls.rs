@@ -48,6 +48,14 @@ impl<C, M, R> Builder<C, M, R> {
 }
 
 #[cfg(feature = "rustls")]
+impl<M> crate::Client<HyperAdapter<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>, M> {
+    /// Create a Smithy client that uses HTTPS and the [standard retry policy](retry::Standard).
+    pub fn new(middleware: M) -> Self {
+        Builder::new().https().middleware(middleware).build()
+    }
+}
+
+#[cfg(feature = "rustls")]
 impl<C, M, R> Builder<C, M, R> {
     /// Connect to the service over HTTPS using Rustls.
     pub fn rustls(

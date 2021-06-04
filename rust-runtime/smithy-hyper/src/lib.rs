@@ -11,7 +11,6 @@ pub mod retry;
 pub mod test_connection;
 
 mod hyper_impls;
-use hyper_impls::HyperAdapter;
 
 use smithy_http::body::SdkBody;
 use smithy_http::operation::Operation;
@@ -46,13 +45,6 @@ pub struct Client<Connector, Middleware, RetryPolicy = retry::Standard> {
     connector: Connector,
     middleware: Middleware,
     retry_policy: RetryPolicy,
-}
-
-impl<M> Client<HyperAdapter<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>, M> {
-    /// Create a Smithy client that uses HTTPS and the [standard retry policy](retry::Standard).
-    pub fn new(middleware: M) -> Self {
-        Builder::new().https().middleware(middleware).build()
-    }
 }
 
 impl<C, M> Client<C, M> {
@@ -204,19 +196,9 @@ impl<C, M, R> Builder<C, M, R> {
 
 impl<C, M, R> Client<C, M, R>
 where
-    C: Service<http::Request<SdkBody>, Response = http::Response<SdkBody>> + Send + Clone + 'static,
-    C::Error: Into<BoxError> + Send + Sync + 'static,
-    C::Future: Send + 'static,
+    C: bounds::SmithyConnector,
+    M: bounds::SmithyMiddleware<C>,
     R: retry::NewRequestPolicy,
-    M: Layer<smithy_http_tower::dispatch::DispatchService<C>>,
-    M::Service: Service<
-            smithy_http::operation::Request,
-            Response = http::Response<SdkBody>,
-            Error = smithy_http_tower::SendOperationError,
-        > + Send
-        + Clone
-        + 'static,
-    <M::Service as Service<smithy_http::operation::Request>>::Future: Send + 'static,
 {
     /// Dispatch this request to the network
     ///
@@ -224,10 +206,9 @@ where
     /// access the raw response use `call_raw`.
     pub async fn call<O, T, E, Retry>(&self, input: Operation<O, Retry>) -> Result<T, SdkError<E>>
     where
-        O: ParseHttpResponse<SdkBody, Output = Result<T, E>> + Send + Sync + Clone + 'static,
-        E: Error + ProvideErrorKind,
-        R::Policy: tower::retry::Policy<Operation<O, Retry>, SdkSuccess<T>, SdkError<E>> + Clone,
-        Retry: ClassifyResponse<SdkSuccess<T>, SdkError<E>>,
+        R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
+        bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
+            Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
     {
         self.call_raw(input).await.map(|res| res.parsed)
     }
@@ -241,10 +222,15 @@ where
         input: Operation<O, Retry>,
     ) -> Result<SdkSuccess<T>, SdkError<E>>
     where
-        O: ParseHttpResponse<SdkBody, Output = Result<T, E>> + Send + Sync + Clone + 'static,
-        E: Error + ProvideErrorKind,
-        R::Policy: tower::retry::Policy<Operation<O, Retry>, SdkSuccess<T>, SdkError<E>> + Clone,
-        Retry: ClassifyResponse<SdkSuccess<T>, SdkError<E>>,
+        R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
+        // This bound is not _technically_ inferred by all the previous bounds, but in practice it
+        // is because _we_ know that there is only implementation of Service for Parsed
+        // (ParsedResponseService), and it will apply as long as the bounds on C, M, and R hold,
+        // and will produce (as expected) Response = SdkSuccess<T>, Error = SdkError<E>. But Rust
+        // doesn't know that -- there _could_ theoretically be other implementations of Service for
+        // Parsed that don't return those same types. So, we must give the bound.
+        bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
+            Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
     {
         let connector = self.connector.clone();
         let mut svc = ServiceBuilder::new()
@@ -255,7 +241,6 @@ where
             // customer-provided middleware, then dispatch dispatch over the wire.
             .layer(&self.middleware)
             .layer(DispatchLayer::new())
-            .check_service()
             .service(connector);
         svc.ready().await?.call(input).await
     }
@@ -277,6 +262,155 @@ where
         let _ = |o: static_tests::ValidTestOperation| {
             let _ = self.call_raw(o);
         };
+    }
+}
+
+/// This module holds convenient short-hands for the otherwise fairly extensive trait bounds
+/// required for `call` and friends.
+///
+/// The short-hands will one day be true [trait aliases], but for now they are traits with blanket
+/// implementations. Also, due to [compiler limitations], the bounds repeat a nubmer of associated
+/// types with bounds so that those bounds [do not need to be repeated] at the call site. It's a
+/// bit of a mess to define, but _should_ be invisible to callers.
+///
+/// [trait aliases]: https://rust-lang.github.io/rfcs/1733-trait-alias.html
+/// [compiler limitations]: https://github.com/rust-lang/rust/issues/20671
+/// [do not need to be repeated]: https://github.com/rust-lang/rust/issues/20671#issuecomment-529752828
+pub mod bounds {
+    use super::*;
+
+    /// A service that has parsed a raw Smithy response.
+    pub type Parsed<S, O, Retry> =
+        smithy_http_tower::parse_response::ParseResponseService<S, O, Retry>;
+
+    /// A low-level Smithy connector that maps from [`http::Request`] to [`http::Response`].
+    ///
+    /// This trait has a blanket implementation for all compatible types, and should never need to
+    /// be implemented.
+    pub trait SmithyConnector:
+        Service<
+            http::Request<SdkBody>,
+            Response = http::Response<SdkBody>,
+            Error = <Self as SmithyConnector>::Error,
+            Future = <Self as SmithyConnector>::Future,
+        > + Send
+        + Clone
+        + 'static
+    {
+        /// Forwarding type to `<Self as Service>::Error` for bound inference.
+        ///
+        /// See module-level docs for details.
+        type Error: Into<BoxError> + Send + Sync + 'static;
+
+        /// Forwarding type to `<Self as Service>::Future` for bound inference.
+        ///
+        /// See module-level docs for details.
+        type Future: Send + 'static;
+    }
+
+    impl<T> SmithyConnector for T
+    where
+        T: Service<http::Request<SdkBody>, Response = http::Response<SdkBody>>
+            + Send
+            + Clone
+            + 'static,
+        T::Error: Into<BoxError> + Send + Sync + 'static,
+        T::Future: Send + 'static,
+    {
+        type Error = T::Error;
+        type Future = T::Future;
+    }
+
+    /// A Smithy middleware service that adjusts [`smithy_http::operation::Request`]s.
+    ///
+    /// This trait has a blanket implementation for all compatible types, and should never need to
+    /// be implemented.
+    pub trait SmithyMiddlewareService:
+        Service<
+        smithy_http::operation::Request,
+        Response = http::Response<SdkBody>,
+        Error = smithy_http_tower::SendOperationError,
+        Future = <Self as SmithyMiddlewareService>::Future,
+    >
+    {
+        /// Forwarding type to `<Self as Service>::Future` for bound inference.
+        ///
+        /// See module-level docs for details.
+        type Future: Send + 'static;
+    }
+
+    impl<T> SmithyMiddlewareService for T
+    where
+        T: Service<
+            smithy_http::operation::Request,
+            Response = http::Response<SdkBody>,
+            Error = smithy_http_tower::SendOperationError,
+        >,
+        T::Future: Send + 'static,
+    {
+        type Future = T::Future;
+    }
+
+    /// A Smithy middleware layer (i.e., factory).
+    ///
+    /// This trait has a blanket implementation for all compatible types, and should never need to
+    /// be implemented.
+    pub trait SmithyMiddleware<C>:
+        Layer<
+        smithy_http_tower::dispatch::DispatchService<C>,
+        Service = <Self as SmithyMiddleware<C>>::Service,
+    >
+    {
+        /// Forwarding type to `<Self as Layer>::Service` for bound inference.
+        ///
+        /// See module-level docs for details.
+        type Service: SmithyMiddlewareService + Send + Clone + 'static;
+    }
+
+    impl<T, C> SmithyMiddleware<C> for T
+    where
+        T: Layer<smithy_http_tower::dispatch::DispatchService<C>>,
+        T::Service: SmithyMiddlewareService + Send + Clone + 'static,
+    {
+        type Service = T::Service;
+    }
+
+    /// A Smithy retry policy.
+    ///
+    /// This trait has a blanket implementation for all compatible types, and should never need to
+    /// be implemented.
+    pub trait SmithyRetryPolicy<O, T, E, Retry>:
+        tower::retry::Policy<Operation<O, Retry>, SdkSuccess<T>, SdkError<E>> + Clone
+    {
+        /// Forwarding type to `O` for bound inference.
+        ///
+        /// See module-level docs for details.
+        type O: ParseHttpResponse<SdkBody, Output = Result<T, Self::E>>
+            + Send
+            + Sync
+            + Clone
+            + 'static;
+        /// Forwarding type to `E` for bound inference.
+        ///
+        /// See module-level docs for details.
+        type E: Error + ProvideErrorKind;
+
+        /// Forwarding type to `Retry` for bound inference.
+        ///
+        /// See module-level docs for details.
+        type Retry: ClassifyResponse<SdkSuccess<T>, SdkError<Self::E>>;
+    }
+
+    impl<R, O, T, E, Retry> SmithyRetryPolicy<O, T, E, Retry> for R
+    where
+        R: tower::retry::Policy<Operation<O, Retry>, SdkSuccess<T>, SdkError<E>> + Clone,
+        O: ParseHttpResponse<SdkBody, Output = Result<T, E>> + Send + Sync + Clone + 'static,
+        E: Error + ProvideErrorKind,
+        Retry: ClassifyResponse<SdkSuccess<T>, SdkError<E>>,
+    {
+        type O = O;
+        type E = E;
+        type Retry = Retry;
     }
 }
 

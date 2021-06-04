@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
@@ -53,7 +54,7 @@ class FluentClientDecorator : RustCodegenDecorator {
             FluentClientGenerator(protocolConfig).render(writer)
         }
         val smithyHyper = CargoDependency.SmithyHyper(protocolConfig.runtimeConfig)
-        rustCrate.addFeature(Feature("client", true, listOf(smithyHyper.name, CargoDependency.Tower.name)))
+        rustCrate.addFeature(Feature("client", true, listOf(smithyHyper.name)))
         rustCrate.addFeature(Feature("rustls", default = true, listOf("smithy-hyper/rustls")))
         rustCrate.addFeature(Feature("native-tls", default = false, listOf("smithy-hyper/native-tls")))
     }
@@ -92,27 +93,23 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             """
             ##[derive(std::fmt::Debug)]
             pub(crate) struct Handle<C, M, R> {
-                client: #{smithy_hyper}::Client<C, M, R>,
+                client: #{hyper}::Client<C, M, R>,
                 conf: crate::Config,
             }
 
             ##[derive(Clone, std::fmt::Debug)]
-            pub struct Client<C, M, R = #{smithy_hyper}::retry::Standard> {
+            pub struct Client<C, M, R = #{hyper}::retry::Standard> {
                 handle: std::sync::Arc<Handle<C, M, R>>
             }
 
-            impl<C, M, R> From<#{smithy_hyper}::Client<C, M, R>> for Client<C, M, R> {
-                fn from(client: #{smithy_hyper}::Client<C, M, R>) -> Self {
+            impl<C, M, R> From<#{hyper}::Client<C, M, R>> for Client<C, M, R> {
+                fn from(client: #{hyper}::Client<C, M, R>) -> Self {
                     Self::with_config(client, crate::Config::builder().build())
                 }
             }
-        """,
-            "smithy_hyper" to hyperDep.asType()
-        )
-        writer.rustBlock("impl<C, M, R> Client<C, M, R>") {
-            rustTemplate(
-                """
-                pub fn with_config(client: #{smithy_hyper}::Client<C, M, R>, conf: crate::Config) -> Self {
+
+            impl<C, M, R> Client<C, M, R> {
+                pub fn with_config(client: #{hyper}::Client<C, M, R>, conf: crate::Config) -> Self {
                     Self {
                         handle: std::sync::Arc::new(Handle {
                             client,
@@ -124,10 +121,20 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                 pub fn conf(&self) -> &crate::Config {
                     &self.handle.conf
                 }
-
+            }
+        """,
+            "hyper" to hyperDep.asType()
+        )
+        writer.rustBlockTemplate(
+            """
+            impl<C, M, R> Client<C, M, R>
+              where
+                C: #{hyper}::bounds::SmithyConnector,
+                M: #{hyper}::bounds::SmithyMiddleware<C>,
+                R: #{hyper}::retry::NewRequestPolicy,
             """,
-                "smithy_hyper" to hyperDep.asType()
-            )
+                "hyper" to hyperDep.asType(),
+        ) {
             operations.forEach { operation ->
                 val name = symbolProvider.toSymbol(operation).name
                 rust(
@@ -154,7 +161,16 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                     input.builderSymbol(symbolProvider)
                 )
 
-                rustBlock("impl<C, M, R> $name<C, M, R>") {
+                rustBlockTemplate(
+                    """
+                    impl<C, M, R> $name<C, M, R>
+                      where
+                        C: #{hyper}::bounds::SmithyConnector,
+                        M: #{hyper}::bounds::SmithyMiddleware<C>,
+                        R: #{hyper}::retry::NewRequestPolicy,
+                    """,
+                        "hyper" to CargoDependency.SmithyHyper(runtimeConfig).asType(),
+                ) {
                     rustTemplate(
                         """
                     pub(crate) fn new(handle: std::sync::Arc<super::Handle<C, M, R>>) -> Self {
@@ -162,20 +178,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                     }
 
                     pub async fn send(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>> where
-                         C: #{tower_service}<#{http}::Request<#{sdk_body}>, Response = #{http}::Response<#{sdk_body}>> + Send + Clone + 'static,
-                         C::Error: Into<Box<dyn std::error::Error + Send + Sync>> + Send + Sync + 'static,
-                         C::Future: Send + 'static,
-                         R: #{nrpolicy},
-                         M: #{tower_layer}<#{http_tower}::dispatch::DispatchService<C>>,
-                         M::Service: #{tower_service}<
-                                 #{opreq},
-                                 Response = #{http}::Response<#{sdk_body}>,
-                                 Error = #{http_tower}::SendOperationError,
-                             > + Send
-                             + Clone
-                             + 'static,
-                         <M::Service as #{tower_service}<#{opreq}>>::Future: Send + 'static,
-                         R::Policy: #{tower_retry_Policy}<#{opmod}OperationAlias, #{sdk_ok}<#{ok}>, #{sdk_err}<#{operation_err}>> + Clone,
+                        R::Policy: #{hyper}::bounds::SmithyRetryPolicy<#{input}OperationOutputAlias, #{ok}, #{operation_err}, #{input}OperationRetryAlias>,
                     {
                         let input = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
                         let op = input.make_operation(&self.handle.conf)
@@ -183,20 +186,11 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         self.handle.client.call(op).await
                     }
                     """,
+                        "input" to symbolProvider.toSymbol(operation.inputShape(model)),
                         "ok" to symbolProvider.toSymbol(operation.outputShape(model)),
-                        "opmod" to symbolProvider.toSymbol(operation.inputShape(model)),
                         "operation_err" to operation.errorSymbol(symbolProvider),
-                        "sdk_ok" to CargoDependency.SmithyHttp(runtimeConfig).asType().copy(name = "result::SdkSuccess"),
                         "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType().copy(name = "result::SdkError"),
-                        "sdk_body" to CargoDependency.SmithyHttp(runtimeConfig).asType().copy(name = "body::SdkBody"),
-                        "opreq" to CargoDependency.SmithyHttp(runtimeConfig).asType().copy(name = "operation::Request"),
-                        "op_t" to RuntimeType.operation(runtimeConfig),
-                        "http_tower" to CargoDependency.SmithyHttpTower(runtimeConfig).asType(),
-                        "nrpolicy" to CargoDependency.SmithyHyper(runtimeConfig).asType().copy(name = "retry::NewRequestPolicy"),
-                        "tower_service" to CargoDependency.Tower.asType().copy(name = "Service"),
-                        "tower_layer" to CargoDependency.Tower.asType().copy(name = "layer::Layer"),
-                        "tower_retry_policy" to CargoDependency.Tower.asType().copy(name = "retry::Policy"),
-                        "http" to CargoDependency.Http.asType(),
+                        "hyper" to CargoDependency.SmithyHyper(runtimeConfig).asType(),
                     )
                     members.forEach { member ->
                         val memberName = symbolProvider.toMemberName(member)

@@ -72,11 +72,13 @@ abstract class HttpProtocolGenerator(
         val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model))
         builderGenerator.render(inputWriter)
 
-	// TODO: One day, it should be possible for callers to invoke
-	// buildOperationType directly to get the type rather than depending on
-	// this alias.
-        val baseReturnType = buildOperationType(inputWriter, operationShape, customizations)
-        inputWriter.rust("pub type ${inputShape.id.name}OperationAlias = $baseReturnType;")
+        // TODO: One day, it should be possible for callers to invoke
+        // buildOperationType* directly to get the type rather than depending
+        // on these aliases.
+        val operationTypeOutput = buildOperationTypeOutput(inputWriter, operationShape)
+        val operationTypeRetry = buildOperationTypeRetry(inputWriter, customizations)
+        inputWriter.rust("pub type ${inputShape.id.name}OperationOutputAlias= $operationTypeOutput;")
+        inputWriter.rust("pub type ${inputShape.id.name}OperationRetryAlias = $operationTypeRetry;")
 
         // impl OperationInputShape { ... }
         inputWriter.implBlock(inputShape, symbolProvider) {
@@ -142,11 +144,28 @@ abstract class HttpProtocolGenerator(
         features: List<OperationCustomization>,
     ): String {
         val runtimeConfig = protocolConfig.runtimeConfig
-        val outputSymbol = symbolProvider.toSymbol(shape)
         val operationT = RuntimeType.operation(runtimeConfig)
+        val output = buildOperationTypeOutput(writer, shape)
+        val retry = buildOperationTypeRetry(writer, features)
+
+        return with(writer) { "${format(operationT)}<$output, $retry>" };
+    }
+
+    private fun buildOperationTypeOutput(
+        writer: RustWriter,
+        shape: OperationShape,
+    ): String {
+        val outputSymbol = symbolProvider.toSymbol(shape)
+        return with(writer) { "${format(outputSymbol)}" };
+    }
+
+    private fun buildOperationTypeRetry(
+        writer: RustWriter,
+        features: List<OperationCustomization>,
+    ): String {
         val retryType = features.mapNotNull { it.retryType() }.firstOrNull()?.let { writer.format(it) } ?: "()"
 
-        return with(writer) { "${format(operationT)}<${format(outputSymbol)}, $retryType>" };
+        return with(writer) { "$retryType" };
     }
 
     private fun buildOperation(
