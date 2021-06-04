@@ -47,12 +47,30 @@ impl<M, R> Builder<(), M, R> {
     }
 }
 
-#[cfg(feature = "rustls")]
-impl<M> crate::Client<HyperAdapter<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>, M> {
+#[cfg(any(feature = "rustls", feature = "native_tls"))]
+impl<M> crate::Client<crate::erase::DynConnector, M>
+where
+    M: Default,
+    M: crate::bounds::SmithyMiddleware<crate::erase::DynConnector> + Send + Sync + 'static,
+{
     /// Create a Smithy client that uses HTTPS and the [standard retry
-    /// policy](crate::retry::Standard).
-    pub fn new(middleware: M) -> Self {
-        Builder::new().https().middleware(middleware).build()
+    /// policy](crate::retry::Standard) over the default middleware implementation.
+    ///
+    /// For convenience, this constructor type-erases the concrete TLS connector backend used using
+    /// dynamic dispatch. This comes at a slight runtime performance cost. See
+    /// [`DynConnector`](crate::erase::DynConnector) for details. To avoid that overhead, use
+    /// [`Builder::rustls`] or [`Builder::native_tls`] instead.
+    pub fn https() -> Self {
+        #[cfg(feature = "rustls")]
+        let with_https = |b: Builder<_>| b.rustls();
+        // If we are compiling this function & rustls is not enabled, then native-tls MUST be enabled
+        #[cfg(not(feature = "rustls"))]
+        let with_https = |b: Builder<_>| b.native_tls();
+
+        with_https(Builder::new())
+            .middleware(M::default())
+            .build()
+            .erase_connector()
     }
 }
 

@@ -9,15 +9,15 @@ use tower::layer::{layer_fn, Layer};
 use tower::Service;
 
 pub(super) struct BoxCloneLayer<In, T, U, E> {
-    boxed: Box<dyn Layer<In, Service = BoxCloneService<T, U, E>>>,
+    boxed: Box<dyn Layer<In, Service = BoxCloneService<T, U, E>> + Send + Sync>,
 }
 
 impl<In, T, U, E> BoxCloneLayer<In, T, U, E> {
     /// Create a new [`BoxLayer`].
     pub fn new<L>(inner_layer: L) -> Self
     where
-        L: Layer<In> + Send + 'static,
-        L::Service: Service<T, Response = U, Error = E> + Clone + Send + 'static,
+        L: Layer<In> + Send + Sync + 'static,
+        L::Service: Service<T, Response = U, Error = E> + Clone + Send + Sync + 'static,
         <L::Service as Service<T>>::Future: Send + 'static,
     {
         let layer = layer_fn(move |inner: In| {
@@ -51,13 +51,14 @@ trait CloneService<T>: Service<T> {
     ) -> Box<
         dyn CloneService<T, Response = Self::Response, Error = Self::Error, Future = Self::Future>
             + Send
+            + Sync
             + 'static,
     >;
 }
 
 impl<T, Request> CloneService<Request> for T
 where
-    T: Service<Request> + Clone + Send + 'static,
+    T: Service<Request> + Clone + Send + Sync + 'static,
 {
     fn clone_box(
         &self,
@@ -69,7 +70,8 @@ where
                 Future = Self::Future,
             >
             + 'static
-            + Send,
+            + Send
+            + Sync,
     > {
         Box::new(self.clone())
     }
@@ -78,7 +80,10 @@ where
 pub type BoxFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>> + Send>>;
 pub struct BoxCloneService<T, U, E> {
     inner: Box<
-        dyn CloneService<T, Response = U, Error = E, Future = BoxFuture<U, E>> + Send + 'static,
+        dyn CloneService<T, Response = U, Error = E, Future = BoxFuture<U, E>>
+            + Send
+            + Sync
+            + 'static,
     >,
 }
 
@@ -91,7 +96,7 @@ impl<T, U, E> BoxCloneService<T, U, E> {
     #[allow(missing_docs)]
     pub fn new<S>(inner: S) -> Self
     where
-        S: Service<T, Response = U, Error = E> + Send + 'static + Clone,
+        S: Service<T, Response = U, Error = E> + Send + Sync + 'static + Clone,
         S::Future: Send + 'static,
     {
         let inner = Box::new(Boxed { inner });

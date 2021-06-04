@@ -174,7 +174,7 @@ impl<C, M, R> Builder<C, M, R> {
 impl<C, M, R> Builder<C, M, R>
 where
     C: bounds::SmithyConnector,
-    M: bounds::SmithyMiddleware<erase::DynConnector> + Send + 'static,
+    M: bounds::SmithyMiddleware<erase::DynConnector> + Send + Sync + 'static,
     R: retry::NewRequestPolicy,
 {
     /// Build a type-erased Smithy service [`Client`].

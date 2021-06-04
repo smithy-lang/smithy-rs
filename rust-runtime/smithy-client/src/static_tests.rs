@@ -83,3 +83,31 @@ fn sanity_erase_connector() {
         .erase_connector()
         .check();
 }
+
+// Statically check that a fully type-erased client is actually a valid Client.
+#[allow(dead_code)]
+fn sanity_erase_full() {
+    Builder::new()
+        .middleware(tower::layer::util::Identity::new())
+        .connector_fn(|_| async { unreachable!() })
+        .build()
+        .simplify()
+        .check();
+}
+
+fn is_send_sync<T: Send + Sync>(_: T) {}
+fn noarg_is_send_sync<T: Send + Sync>() {}
+
+// Statically check that a fully type-erased client is still Send + Sync.
+#[allow(dead_code)]
+fn erased_is_send_sync() {
+    noarg_is_send_sync::<crate::erase::DynConnector>();
+    noarg_is_send_sync::<crate::erase::DynMiddleware<()>>();
+    is_send_sync(
+        Builder::new()
+            .middleware(tower::layer::util::Identity::new())
+            .connector_fn(|_| async { unreachable!() })
+            .build()
+            .simplify(),
+    );
+}

@@ -26,6 +26,7 @@ pub trait SmithyConnector:
         Error = <Self as SmithyConnector>::Error,
         Future = <Self as SmithyConnector>::Future,
     > + Send
+    + Sync
     + Clone
     + 'static
 {
@@ -42,7 +43,11 @@ pub trait SmithyConnector:
 
 impl<T> SmithyConnector for T
 where
-    T: Service<http::Request<SdkBody>, Response = http::Response<SdkBody>> + Send + Clone + 'static,
+    T: Service<http::Request<SdkBody>, Response = http::Response<SdkBody>>
+        + Send
+        + Sync
+        + Clone
+        + 'static,
     T::Error: Into<BoxError> + Send + Sync + 'static,
     T::Future: Send + 'static,
 {
@@ -93,13 +98,13 @@ pub trait SmithyMiddleware<C>:
     /// Forwarding type to `<Self as Layer>::Service` for bound inference.
     ///
     /// See module-level docs for details.
-    type Service: SmithyMiddlewareService + Send + Clone + 'static;
+    type Service: SmithyMiddlewareService + Send + Sync + Clone + 'static;
 }
 
 impl<T, C> SmithyMiddleware<C> for T
 where
     T: Layer<smithy_http_tower::dispatch::DispatchService<C>>,
-    T::Service: SmithyMiddlewareService + Send + Clone + 'static,
+    T::Service: SmithyMiddlewareService + Send + Sync + Clone + 'static,
 {
     type Service = T::Service;
 }

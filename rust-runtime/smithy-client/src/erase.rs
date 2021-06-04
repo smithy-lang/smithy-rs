@@ -20,7 +20,7 @@ pub type DynClient<R = retry::Standard> = Client<DynConnector, DynMiddleware<Dyn
 impl<C, M, R> Client<C, M, R>
 where
     C: bounds::SmithyConnector,
-    M: bounds::SmithyMiddleware<C> + Send + 'static,
+    M: bounds::SmithyMiddleware<C> + Send + Sync + 'static,
     R: retry::NewRequestPolicy,
 {
     /// Erase the middleware type from the client type signature.
@@ -57,7 +57,7 @@ where
 impl<C, M, R> Client<C, M, R>
 where
     C: bounds::SmithyConnector,
-    M: bounds::SmithyMiddleware<DynConnector> + Send + 'static,
+    M: bounds::SmithyMiddleware<DynConnector> + Send + Sync + 'static,
     R: retry::NewRequestPolicy,
 {
     /// Erase the connector type from the client type signature.
@@ -191,7 +191,7 @@ impl<C> fmt::Debug for DynMiddleware<C> {
 
 impl<C> DynMiddleware<C> {
     /// Construct a new dynamically-dispatched Smithy middleware.
-    pub fn new<M: bounds::SmithyMiddleware<C> + Send + 'static>(middleware: M) -> Self {
+    pub fn new<M: bounds::SmithyMiddleware<C> + Send + Sync + 'static>(middleware: M) -> Self {
         Self(BoxCloneLayer::new(middleware))
     }
 }

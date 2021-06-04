@@ -91,10 +91,31 @@ pub struct Client<
     retry_policy: RetryPolicy,
 }
 
+// Quick-create for people who just want "the default".
+impl<C, M> Client<C, M>
+where
+    M: Default,
+{
+    /// Create a Smithy client that the given connector, a middleware default, and the [standard
+    /// retry policy](crate::retry::Standard).
+    pub fn new(connector: C) -> Self {
+        Builder::new()
+            .connector(connector)
+            .middleware(M::default())
+            .build()
+    }
+}
+
 impl<C, M> Client<C, M> {
     /// Set the standard retry policy's configuration.
     pub fn set_retry_config(&mut self, config: retry::Config) {
         self.retry_policy.with_config(config);
+    }
+
+    /// Adjust a standard retry client with the given policy configuration.
+    pub fn with_retry_config(mut self, config: retry::Config) -> Self {
+        self.set_retry_config(config);
+        self
     }
 }
 
