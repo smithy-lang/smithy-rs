@@ -158,11 +158,8 @@ fn read_codepoint(rest: &[u8]) -> Result<u16, Error> {
     let codepoint_str = std::str::from_utf8(&rest[2..6]).map_err(|_| Error::InvalidUtf8)?;
 
     // Error on characters `u16::from_str_radix` would otherwise accept, such as `+`
-    for byte in codepoint_str.bytes() {
-        match byte {
-            b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' => {}
-            _ => return Err(Error::InvalidUnicodeEscape(codepoint_str.into())),
-        }
+    if codepoint_str.bytes().any(|byte| !matches!(byte, b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F')) {
+        return Err(Error::InvalidUnicodeEscape(codepoint_str.into()))
     }
     Ok(u16::from_str_radix(codepoint_str, 16).expect("hex string is valid 16-bit value"))
 }

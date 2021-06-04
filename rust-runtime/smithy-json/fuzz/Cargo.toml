@@ -1,8 +1,7 @@
-
 [package]
 name = "smithy-json-fuzz"
 version = "0.0.0"
-authors = ["Automatically generated"]
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "John DiSanti <jdisanti@amazon.com>"]
 publish = false
 edition = "2018"
 

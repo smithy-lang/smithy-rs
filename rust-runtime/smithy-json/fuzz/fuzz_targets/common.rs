@@ -6,6 +6,7 @@
 use serde_json::{Map, Value};
 use smithy_json::deserialize::{Error, Token};
 use smithy_types::Number;
+use std::iter::Peekable;
 
 pub fn run_data(data: &[u8]) {
     // Parse through with smithy-json first to make sure it doesn't panic on invalid inputs
@@ -37,45 +38,15 @@ pub fn run_data(data: &[u8]) {
         let tokens = smithy_json::deserialize::json_token_iter(json.as_bytes())
             .collect::<Result<Vec<Token>, Error>>()
             .unwrap();
-        let mut token_iter = RewindingTokenIter::new(tokens);
+        let mut token_iter = tokens.into_iter().peekable();
         let converted_value = convert_tokens(&mut token_iter);
         assert_eq!(None, token_iter.next());
         assert_eq!(value, converted_value);
     }
 }
 
-/// Utility for iterating over the tokens while being able to rewind
-struct RewindingTokenIter<'a> {
-    tokens: Vec<Token<'a>>,
-    position: usize,
-}
-
-impl<'a> RewindingTokenIter<'a> {
-    fn new(tokens: Vec<Token<'a>>) -> RewindingTokenIter<'a> {
-        RewindingTokenIter {
-            tokens,
-            position: 0,
-        }
-    }
-
-    fn next(&mut self) -> Option<&Token<'a>> {
-        if self.position < self.tokens.len() {
-            let value = &self.tokens[self.position];
-            self.position += 1;
-            Some(value)
-        } else {
-            None
-        }
-    }
-
-    fn rewind_once(&mut self) {
-        assert!(self.position > 0);
-        self.position -= 1;
-    }
-}
-
 /// Converts a token stream into a Serde [Value]
-fn convert_tokens(tokens: &mut RewindingTokenIter) -> Value {
+fn convert_tokens<'a, I: Iterator<Item = Token<'a>>>(tokens: &mut Peekable<I>) -> Value {
     match tokens.next().unwrap() {
         Token::StartObject => {
             let mut map = Map::new();
@@ -96,10 +67,12 @@ fn convert_tokens(tokens: &mut RewindingTokenIter) -> Value {
         Token::StartArray => {
             let mut list = Vec::new();
             loop {
-                match tokens.next() {
-                    Some(Token::EndArray) => break,
+                match tokens.peek() {
+                    Some(Token::EndArray) => {
+                        tokens.next();
+                        break;
+                    }
                     Some(_) => {
-                        tokens.rewind_once();
                         list.push(convert_tokens(tokens));
                     }
                     None => panic!("should have encountered EndArray before end of stream"),
@@ -109,12 +82,12 @@ fn convert_tokens(tokens: &mut RewindingTokenIter) -> Value {
         }
         Token::ValueNull => Value::Null,
         Token::ValueNumber(num) => Value::Number(match num {
-            Number::NegInt(value) => serde_json::Number::from(*value),
-            Number::PosInt(value) => serde_json::Number::from(*value),
-            Number::Float(value) => serde_json::Number::from_f64(*value).unwrap(),
+            Number::NegInt(value) => serde_json::Number::from(value),
+            Number::PosInt(value) => serde_json::Number::from(value),
+            Number::Float(value) => serde_json::Number::from_f64(value).unwrap(),
         }),
         Token::ValueString(string) => Value::String(string.to_unescaped().unwrap().into()),
-        Token::ValueBool(bool) => Value::Bool(*bool),
+        Token::ValueBool(bool) => Value::Bool(bool),
         _ => unreachable!(),
     }
 }
