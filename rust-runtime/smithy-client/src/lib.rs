@@ -14,6 +14,8 @@ pub mod bounds;
 pub mod erase;
 pub mod retry;
 
+// https://github.com/rust-lang/rust/issues/72081
+#[allow(rustdoc::private_doc_tests)]
 mod builder;
 pub use builder::Builder;
 
