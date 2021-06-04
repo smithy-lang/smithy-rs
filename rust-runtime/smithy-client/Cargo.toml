@@ -9,7 +9,7 @@ license = "Apache-2.0"
 
 [features]
 test-util = ["protocol-test-helpers"]
-default = ["test-util", "hyper"]
+default = ["test-util", "hyper", "rustls"]
 native-tls = ["hyper", "hyper-tls"]
 rustls = ["hyper", "hyper-rustls"]
 
