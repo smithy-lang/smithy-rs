@@ -18,6 +18,25 @@ pub mod test_connection;
 #[cfg(feature = "hyper")]
 mod hyper_impls;
 
+/// Type aliases for standard connection types.
+#[cfg(feature = "hyper")]
+#[allow(missing_docs)]
+pub mod conns {
+    #[cfg(feature = "rustls")]
+    pub type Https = crate::hyper_impls::HyperAdapter<
+        hyper_rustls::HttpsConnector<hyper::client::HttpConnector>,
+    >;
+
+    #[cfg(feature = "native-tls")]
+    pub type NativeTls =
+        crate::hyper_impls::HyperAdapter<hyper_tls::HttpsConnector<hyper::client::HttpConnector>>;
+
+    #[cfg(feature = "rustls")]
+    pub type Rustls = crate::hyper_impls::HyperAdapter<
+        hyper_rustls::HttpsConnector<hyper::client::HttpConnector>,
+    >;
+}
+
 use smithy_http::body::SdkBody;
 use smithy_http::operation::Operation;
 use smithy_http::response::ParseHttpResponse;
@@ -27,7 +46,7 @@ use smithy_http_tower::dispatch::DispatchLayer;
 use smithy_http_tower::parse_response::ParseResponseLayer;
 use smithy_types::retry::ProvideErrorKind;
 use std::error::Error;
-use std::fmt::Debug;
+use std::fmt;
 use tower::{Layer, Service, ServiceBuilder, ServiceExt};
 
 type BoxError = Box<dyn Error + Send + Sync>;
@@ -52,7 +71,7 @@ type BoxError = Box<dyn Error + Send + Sync>;
 /// features to construct a Client against a standard HTTPS endpoint using [`Builder::rustls`] and
 /// [`Builder::native_tls`] respectively.
 #[derive(Debug)]
-pub struct Client<Connector, Middleware, RetryPolicy = retry::Standard> {
+pub struct Client<Connector, Middleware = DynMiddleware<Connector>, RetryPolicy = retry::Standard> {
     connector: Connector,
     middleware: Middleware,
     retry_policy: RetryPolicy,
@@ -276,6 +295,89 @@ where
     }
 }
 
+impl<C, M, R> Client<C, M, R>
+where
+    C: bounds::SmithyConnector,
+    M: bounds::SmithyMiddleware<C> + Send + 'static,
+    R: retry::NewRequestPolicy,
+{
+    /// Erase the middleware type from the client type signature.
+    ///
+    /// This makes the final client type easier to name, at the cost of a marginal increase in
+    /// runtime performance. See [`DynMiddleware`] for details.
+    ///
+    /// In practice, you'll use this method once you've constructed a client to your liking:
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "https")]
+    /// # fn not_main() {
+    /// use smithy_client::{Builder, Client};
+    /// struct MyClient {
+    ///     client: Client<smithy_client::conns::Https>,
+    /// }
+    ///
+    /// let client = Builder::new()
+    ///     .https()
+    ///     .middleware(tower::layer::util::Identity::new())
+    ///     .build();
+    /// let client = MyClient { client: client.simplify() };
+    /// # client.client.check();
+    /// # }
+    pub fn simplify(self) -> Client<C, DynMiddleware<C>, R> {
+        Client {
+            connector: self.connector,
+            middleware: DynMiddleware::new(self.middleware),
+            retry_policy: self.retry_policy,
+        }
+    }
+}
+
+// These types are technically public in that they're reachable from the public trait impls on
+// DynMiddleware, but no-one should ever look at them or use them.
+#[doc(hidden)]
+pub mod erase;
+
+/// A Smithy middleware that uses dynamic dispatch.
+///
+/// This type allows you to pay a small runtime cost to avoid having to name the exact middleware
+/// you're using anywhere you want to hold a [`Client`]. Specifically, this will use `Box` to
+/// enable dynamic dispatch for every request that goes through the middleware, which increases
+/// memory pressure and suffers an additional vtable indirection for each request, but is unlikely
+/// to matter in all but the highest-performance settings.
+pub struct DynMiddleware<C>(
+    erase::BoxCloneLayer<
+        smithy_http_tower::dispatch::DispatchService<C>,
+        smithy_http::operation::Request,
+        http::Response<SdkBody>,
+        smithy_http_tower::SendOperationError,
+    >,
+);
+
+impl<C> fmt::Debug for DynMiddleware<C> {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt.debug_struct("DynMiddleware").finish()
+    }
+}
+
+impl<C> DynMiddleware<C> {
+    /// Construct a new dynamically-dispatched Smithy middleware.
+    pub fn new<M: bounds::SmithyMiddleware<C> + Send + 'static>(middleware: M) -> Self {
+        Self(erase::BoxCloneLayer::new(middleware))
+    }
+}
+
+impl<C> Layer<smithy_http_tower::dispatch::DispatchService<C>> for DynMiddleware<C> {
+    type Service = erase::BoxCloneService<
+        smithy_http::operation::Request,
+        http::Response<SdkBody>,
+        smithy_http_tower::SendOperationError,
+    >;
+
+    fn layer(&self, inner: smithy_http_tower::dispatch::DispatchService<C>) -> Self::Service {
+        self.0.layer(inner)
+    }
+}
+
 /// This module holds convenient short-hands for the otherwise fairly extensive trait bounds
 /// required for `call` and friends.
 ///
@@ -490,6 +592,17 @@ pub mod static_tests {
             .middleware(tower::layer::util::Identity::new())
             .hyper(hc)
             .build()
+            .check();
+    }
+
+    // Statically check that a type-erased client (dynclient) is actually a valid Client.
+    #[allow(dead_code)]
+    fn sanity_simplify() {
+        Builder::new()
+            .middleware(tower::layer::util::Identity::new())
+            .map_connector(|_| async { unreachable!() })
+            .build()
+            .simplify()
             .check();
     }
 }
