@@ -1,151 +1,209 @@
-// This is an adaptation of tower::util::{BoxLayer, BoxService} that includes Clone and doesn't
-// include Sync.
+//! Type-erased variants of [`Client`] and friends.
 
+// These types are technically public in that they're reachable from the public trait impls on
+// DynMiddleware, but no-one should ever look at them or use them.
+#[doc(hidden)]
+pub mod boxclone;
+use boxclone::*;
+
+use crate::{bounds, retry, BoxError, Client};
+use smithy_http::body::SdkBody;
 use std::fmt;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use tower::layer::{layer_fn, Layer};
-use tower::Service;
+use tower::{Layer, Service, ServiceExt};
 
-pub(super) struct BoxCloneLayer<In, T, U, E> {
-    boxed: Box<dyn Layer<In, Service = BoxCloneService<T, U, E>>>,
-}
+/// A [`Client`] whose connector and middleware types have been erased.
+///
+/// Mainly useful if you need to name `R` in a type-erased client. If you do not, you can instead
+/// just use `Client` with no type parameters, which ends up being the same type.
+pub type DynClient<R = retry::Standard> = Client<DynConnector, DynMiddleware<DynConnector>, R>;
 
-impl<In, T, U, E> BoxCloneLayer<In, T, U, E> {
-    /// Create a new [`BoxLayer`].
-    pub fn new<L>(inner_layer: L) -> Self
-    where
-        L: Layer<In> + Send + 'static,
-        L::Service: Service<T, Response = U, Error = E> + Clone + Send + 'static,
-        <L::Service as Service<T>>::Future: Send + 'static,
-    {
-        let layer = layer_fn(move |inner: In| {
-            let out = inner_layer.layer(inner);
-            BoxCloneService::new(out)
-        });
-
-        Self {
-            boxed: Box::new(layer),
+impl<C, M, R> Client<C, M, R>
+where
+    C: bounds::SmithyConnector,
+    M: bounds::SmithyMiddleware<C> + Send + 'static,
+    R: retry::NewRequestPolicy,
+{
+    /// Erase the middleware type from the client type signature.
+    ///
+    /// This makes the final client type easier to name, at the cost of a marginal increase in
+    /// runtime performance. See [`DynMiddleware`] for details.
+    ///
+    /// In practice, you'll use this method once you've constructed a client to your liking:
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "https")]
+    /// # fn not_main() {
+    /// use smithy_client::{Builder, Client};
+    /// struct MyClient {
+    ///     client: Client<smithy_client::conns::Https>,
+    /// }
+    ///
+    /// let client = Builder::new()
+    ///     .https()
+    ///     .middleware(tower::layer::util::Identity::new())
+    ///     .build();
+    /// let client = MyClient { client: client.erase_middleware() };
+    /// # client.client.check();
+    /// # }
+    pub fn erase_middleware(self) -> Client<C, DynMiddleware<C>, R> {
+        Client {
+            connector: self.connector,
+            middleware: DynMiddleware::new(self.middleware),
+            retry_policy: self.retry_policy,
         }
     }
 }
 
-impl<In, T, U, E> Layer<In> for BoxCloneLayer<In, T, U, E> {
-    type Service = BoxCloneService<T, U, E>;
-
-    fn layer(&self, inner: In) -> Self::Service {
-        self.boxed.layer(inner)
-    }
-}
-
-impl<In, T, U, E> fmt::Debug for BoxCloneLayer<In, T, U, E> {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt.debug_struct("BoxCloneLayer").finish()
-    }
-}
-
-trait CloneService<T>: Service<T> {
-    fn clone_box(
-        &self,
-    ) -> Box<
-        dyn CloneService<T, Response = Self::Response, Error = Self::Error, Future = Self::Future>
-            + Send
-            + 'static,
-    >;
-}
-
-impl<T, Request> CloneService<Request> for T
+impl<C, M, R> Client<C, M, R>
 where
-    T: Service<Request> + Clone + Send + 'static,
+    C: bounds::SmithyConnector,
+    M: bounds::SmithyMiddleware<DynConnector> + Send + 'static,
+    R: retry::NewRequestPolicy,
 {
-    fn clone_box(
-        &self,
-    ) -> Box<
-        dyn CloneService<
-                Request,
-                Response = Self::Response,
-                Error = Self::Error,
-                Future = Self::Future,
-            >
-            + 'static
-            + Send,
-    > {
-        Box::new(self.clone())
+    /// Erase the connector type from the client type signature.
+    ///
+    /// This makes the final client type easier to name, at the cost of a marginal increase in
+    /// runtime performance. See [`DynConnector`] for details.
+    ///
+    /// In practice, you'll use this method once you've constructed a client to your liking:
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "https")]
+    /// # fn not_main() {
+    /// # type MyMiddleware = smithy_client::DynMiddleware<smithy_client::DynConnector>;
+    /// use smithy_client::{Builder, Client};
+    /// struct MyClient {
+    ///     client: Client<smithy_client::DynConnector, MyMiddleware>,
+    /// }
+    ///
+    /// let client = Builder::new()
+    ///     .https()
+    ///     .middleware(tower::layer::util::Identity::new())
+    ///     .build();
+    /// let client = MyClient { client: client.erase_connector() };
+    /// # client.client.check();
+    /// # }
+    pub fn erase_connector(self) -> Client<DynConnector, M, R> {
+        Client {
+            connector: DynConnector::new(self.connector),
+            middleware: self.middleware,
+            retry_policy: self.retry_policy,
+        }
+    }
+
+    /// Erase the connector and middleware types from the client type signature.
+    ///
+    /// This makes the final client type easier to name, at the cost of a marginal increase in
+    /// runtime performance. See [`DynConnector`] and [`DynMiddleware`] for details.
+    ///
+    /// Note that if you're using the standard retry mechanism, [`retry::Standard`], `DynClient<R>`
+    /// is equivalent to `Client` with no type arguments.
+    ///
+    /// In practice, you'll use this method once you've constructed a client to your liking:
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "https")]
+    /// # fn not_main() {
+    /// use smithy_client::{Builder, Client};
+    /// struct MyClient {
+    ///     client: smithy_client::Client,
+    /// }
+    ///
+    /// let client = Builder::new()
+    ///     .https()
+    ///     .middleware(tower::layer::util::Identity::new())
+    ///     .build();
+    /// let client = MyClient { client: client.simplify() };
+    /// # client.client.check();
+    /// # }
+    pub fn simplify(self) -> DynClient<R> {
+        self.erase_connector().erase_middleware()
     }
 }
 
-pub type BoxFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>> + Send>>;
-pub struct BoxCloneService<T, U, E> {
-    inner: Box<
-        dyn CloneService<T, Response = U, Error = E, Future = BoxFuture<U, E>> + Send + 'static,
+/// A Smithy connector that uses dynamic dispatch.
+///
+/// This type allows you to pay a small runtime cost to avoid having to name the exact connector
+/// you're using anywhere you want to hold a [`Client`]. Specifically, this will use `Box` to
+/// enable dynamic dispatch for every request that goes through the connector, which increases
+/// memory pressure and suffers an additional vtable indirection for each request, but is unlikely
+/// to matter in all but the highest-performance settings.
+#[non_exhaustive]
+#[derive(Clone)]
+pub struct DynConnector(BoxCloneService<http::Request<SdkBody>, http::Response<SdkBody>, BoxError>);
+
+impl fmt::Debug for DynConnector {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt.debug_struct("DynConnector").finish()
+    }
+}
+
+impl DynConnector {
+    /// Construct a new dynamically-dispatched Smithy middleware.
+    pub fn new<E, C>(connector: C) -> Self
+    where
+        C: bounds::SmithyConnector<Error = E> + Send + 'static,
+        E: Into<BoxError>,
+    {
+        Self(BoxCloneService::new(connector.map_err(|e| e.into())))
+    }
+}
+
+impl Service<http::Request<SdkBody>> for DynConnector {
+    type Response = http::Response<SdkBody>;
+    type Error = BoxError;
+    type Future = BoxFuture<Self::Response, Self::Error>;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.0.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: http::Request<SdkBody>) -> Self::Future {
+        self.0.call(req)
+    }
+}
+
+/// A Smithy middleware that uses dynamic dispatch.
+///
+/// This type allows you to pay a small runtime cost to avoid having to name the exact middleware
+/// you're using anywhere you want to hold a [`Client`]. Specifically, this will use `Box` to
+/// enable dynamic dispatch for every request that goes through the middleware, which increases
+/// memory pressure and suffers an additional vtable indirection for each request, but is unlikely
+/// to matter in all but the highest-performance settings.
+#[non_exhaustive]
+pub struct DynMiddleware<C>(
+    BoxCloneLayer<
+        smithy_http_tower::dispatch::DispatchService<C>,
+        smithy_http::operation::Request,
+        http::Response<SdkBody>,
+        smithy_http_tower::SendOperationError,
     >,
-}
+);
 
-#[derive(Debug, Clone)]
-struct Boxed<S> {
-    inner: S,
-}
-
-impl<T, U, E> BoxCloneService<T, U, E> {
-    #[allow(missing_docs)]
-    pub fn new<S>(inner: S) -> Self
-    where
-        S: Service<T, Response = U, Error = E> + Send + 'static + Clone,
-        S::Future: Send + 'static,
-    {
-        let inner = Box::new(Boxed { inner });
-        BoxCloneService { inner }
-    }
-}
-
-impl<T, U, E> Clone for BoxCloneService<T, U, E>
-where
-    T: 'static,
-    U: 'static,
-    E: 'static,
-{
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.clone_box(),
-        }
-    }
-}
-
-impl<T, U, E> Service<T> for BoxCloneService<T, U, E> {
-    type Response = U;
-    type Error = E;
-    type Future = BoxFuture<U, E>;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), E>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, request: T) -> BoxFuture<U, E> {
-        self.inner.call(request)
-    }
-}
-
-impl<T, U, E> fmt::Debug for BoxCloneService<T, U, E> {
+impl<C> fmt::Debug for DynMiddleware<C> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt.debug_struct("BoxCloneService").finish()
+        fmt.debug_struct("DynMiddleware").finish()
     }
 }
 
-impl<S, Request> Service<Request> for Boxed<S>
-where
-    S: Service<Request> + 'static,
-    S::Future: Send + 'static,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = Pin<Box<dyn Future<Output = Result<S::Response, S::Error>> + Send>>;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
+impl<C> DynMiddleware<C> {
+    /// Construct a new dynamically-dispatched Smithy middleware.
+    pub fn new<M: bounds::SmithyMiddleware<C> + Send + 'static>(middleware: M) -> Self {
+        Self(BoxCloneLayer::new(middleware))
     }
+}
 
-    fn call(&mut self, request: Request) -> Self::Future {
-        Box::pin(self.inner.call(request))
+impl<C> Layer<smithy_http_tower::dispatch::DispatchService<C>> for DynMiddleware<C> {
+    type Service = BoxCloneService<
+        smithy_http::operation::Request,
+        http::Response<SdkBody>,
+        smithy_http_tower::SendOperationError,
+    >;
+
+    fn layer(&self, inner: smithy_http_tower::dispatch::DispatchService<C>) -> Self::Service {
+        self.0.layer(inner)
     }
 }
