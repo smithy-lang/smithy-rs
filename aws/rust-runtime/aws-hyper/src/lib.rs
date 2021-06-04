@@ -15,8 +15,6 @@ use std::fmt::Debug;
 use tower::layer::util::Stack;
 use tower::ServiceBuilder;
 
-pub type StandardClient = smithy_client::Client<smithy_client::erase::DynConnector, AwsMiddleware>;
-
 type AwsMiddlewareStack = Stack<
     MapRequestLayer<SigV4SigningStage>,
     Stack<MapRequestLayer<UserAgentStage>, MapRequestLayer<AwsEndpointStage>>,
@@ -62,6 +60,13 @@ impl<S> tower::Layer<S> for AwsMiddleware {
 /// ```
 #[doc(inline)]
 pub type Client<C> = smithy_client::Client<C, AwsMiddleware>;
+
+#[doc(inline)]
+pub use smithy_client::erase::DynConnector;
+pub type StandardClient = Client<DynConnector>;
+
+#[doc(inline)]
+pub use smithy_client::bounds::SmithyConnector;
 
 #[doc(inline)]
 pub type Builder<C> = smithy_client::Builder<C, AwsMiddleware>;

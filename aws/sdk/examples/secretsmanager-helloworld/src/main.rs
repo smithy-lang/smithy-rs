@@ -2,7 +2,6 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-use aws_hyper::conn::Standard;
 use secretsmanager::Client;
 use secretsmanager::Region;
 use secretsmanager::SdkError;
@@ -23,8 +22,7 @@ async fn main() {
         // creds loaded from environment variables, or they can be hard coded.
         // Other credential providers not currently supported
         .build();
-    let conn = Standard::https();
-    let client = Client::from_conf_conn(config, conn);
+    let client = Client::from_conf(config);
 
     // attempt to create a secret,
     // need to find a better way to handle failure such as ResourceExistsException
