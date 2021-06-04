@@ -17,8 +17,8 @@ pub type Parsed<S, O, Retry> = smithy_http_tower::parse_response::ParseResponseS
 
 /// A low-level Smithy connector that maps from [`http::Request`] to [`http::Response`].
 ///
-/// This trait has a blanket implementation for all compatible types, and should never need to
-/// be implemented.
+/// This trait has a blanket implementation for all compatible types, and should never be
+/// implemented.
 pub trait SmithyConnector:
     Service<
         http::Request<SdkBody>,
@@ -57,8 +57,8 @@ where
 
 /// A Smithy middleware service that adjusts [`smithy_http::operation::Request`]s.
 ///
-/// This trait has a blanket implementation for all compatible types, and should never need to
-/// be implemented.
+/// This trait has a blanket implementation for all compatible types, and should never be
+/// implemented.
 pub trait SmithyMiddlewareService:
     Service<
     smithy_http::operation::Request,
@@ -87,8 +87,8 @@ where
 
 /// A Smithy middleware layer (i.e., factory).
 ///
-/// This trait has a blanket implementation for all compatible types, and should never need to
-/// be implemented.
+/// This trait has a blanket implementation for all compatible types, and should never be
+/// implemented.
 pub trait SmithyMiddleware<C>:
     Layer<
     smithy_http_tower::dispatch::DispatchService<C>,
@@ -111,8 +111,8 @@ where
 
 /// A Smithy retry policy.
 ///
-/// This trait has a blanket implementation for all compatible types, and should never need to
-/// be implemented.
+/// This trait has a blanket implementation for all compatible types, and should never be
+/// implemented.
 pub trait SmithyRetryPolicy<O, T, E, Retry>:
     tower::retry::Policy<Operation<O, Retry>, SdkSuccess<T>, SdkError<E>> + Clone
 {
