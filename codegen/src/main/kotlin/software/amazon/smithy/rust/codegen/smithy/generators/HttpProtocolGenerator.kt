@@ -148,7 +148,7 @@ abstract class HttpProtocolGenerator(
         val output = buildOperationTypeOutput(writer, shape)
         val retry = buildOperationTypeRetry(writer, features)
 
-        return with(writer) { "${format(operationT)}<$output, $retry>" };
+        return with(writer) { "${format(operationT)}<$output, $retry>" }
     }
 
     private fun buildOperationTypeOutput(
@@ -156,7 +156,7 @@ abstract class HttpProtocolGenerator(
         shape: OperationShape,
     ): String {
         val outputSymbol = symbolProvider.toSymbol(shape)
-        return with(writer) { "${format(outputSymbol)}" };
+        return with(writer) { "${format(outputSymbol)}" }
     }
 
     private fun buildOperationTypeRetry(
@@ -165,7 +165,7 @@ abstract class HttpProtocolGenerator(
     ): String {
         val retryType = features.mapNotNull { it.retryType() }.firstOrNull()?.let { writer.format(it) } ?: "()"
 
-        return with(writer) { "$retryType" };
+        return with(writer) { "$retryType" }
     }
 
     private fun buildOperation(

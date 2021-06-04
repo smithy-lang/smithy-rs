@@ -26,13 +26,7 @@ import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
-import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.smithy.generators.setterName
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -46,7 +40,7 @@ class FluentClientDecorator : RustCodegenDecorator {
 
     override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
         if (!applies(protocolConfig)) {
-            return;
+            return
         }
 
         val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("client")), public = true)
@@ -64,7 +58,7 @@ class FluentClientDecorator : RustCodegenDecorator {
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         if (!applies(protocolConfig)) {
-            return baseCustomizations;
+            return baseCustomizations
         }
 
         return baseCustomizations + object : LibRsCustomization() {
@@ -133,7 +127,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                 M: #{client}::bounds::SmithyMiddleware<C>,
                 R: #{client}::retry::NewRequestPolicy,
             """,
-                "client" to clientDep.asType(),
+            "client" to clientDep.asType(),
         ) {
             operations.forEach { operation ->
                 val name = symbolProvider.toSymbol(operation).name
@@ -169,7 +163,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         M: #{client}::bounds::SmithyMiddleware<C>,
                         R: #{client}::retry::NewRequestPolicy,
                     """,
-                        "client" to CargoDependency.SmithyClient(runtimeConfig).asType(),
+                    "client" to CargoDependency.SmithyClient(runtimeConfig).asType(),
                 ) {
                     rustTemplate(
                         """
