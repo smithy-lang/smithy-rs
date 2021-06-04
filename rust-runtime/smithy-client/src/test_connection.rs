@@ -128,7 +128,7 @@ where
                 .lock()
                 .unwrap()
                 .push(ValidateRequest { expected, actual });
-            std::future::ready(Ok(resp.map(|body| SdkBody::from(body))))
+            std::future::ready(Ok(resp.map(SdkBody::from)))
         } else {
             std::future::ready(Err("No more data".into()))
         }

@@ -14,6 +14,8 @@ where
 {
     type Response = http::Response<SdkBody>;
     type Error = hyper::Error;
+
+    #[allow(clippy::type_complexity)]
     type Future = std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>,
     >;

@@ -144,6 +144,8 @@ where
 {
     type Response = S::Response;
     type Error = S::Error;
+
+    #[allow(clippy::type_complexity)]
     type Future = Pin<Box<dyn Future<Output = Result<S::Response, S::Error>> + Send>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
