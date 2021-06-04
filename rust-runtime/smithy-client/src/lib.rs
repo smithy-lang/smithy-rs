@@ -10,6 +10,7 @@ pub mod retry;
 #[cfg(feature = "test-util")]
 pub mod test_connection;
 
+#[cfg(feature = "hyper")]
 mod hyper_impls;
 
 use smithy_http::body::SdkBody;
@@ -26,7 +27,7 @@ use tower::{Layer, Service, ServiceBuilder, ServiceExt};
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
-/// Hyper-based Smithy Service Client.
+/// Smithy service client.
 ///
 /// The service client is customizeable in a number of ways (see [`Builder`]), but most customers
 /// can stick with the standard constructor provided by [`Client::new`]. It takes only a single
@@ -40,6 +41,11 @@ type BoxError = Box<dyn Error + Send + Sync>;
 /// [`smithy_http::operation::Request`] and return responses of the type
 /// [`http::Response<SdkBody>`], most likely by modifying the provided request in place, passing it
 /// to the inner service, and then ultimately returning the inner service's response.
+///
+/// With the `hyper` feature enabled, you can construct a `Client` directly from a
+/// [`hyper::Client`] using [`Builder::hyper`]. You can also enable the `rustls` or `native-tls`
+/// features to construct a Client against a standard HTTPS endpoint using [`Builder::rustls`] and
+/// [`Builder::native_tls`] respectively.
 #[derive(Debug)]
 pub struct Client<Connector, Middleware, RetryPolicy = retry::Standard> {
     connector: Connector,
@@ -470,7 +476,7 @@ pub mod static_tests {
 
     // Statically check that a hyper client can actually be used to build a Client.
     #[allow(dead_code)]
-    #[cfg(test)]
+    #[cfg(all(test, feature = "hyper"))]
     fn sanity_hyper<C>(hc: hyper::Client<C, SdkBody>)
     where
         C: hyper::client::connect::Connect + Clone + Send + Sync + 'static,

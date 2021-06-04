@@ -57,7 +57,7 @@ impl ValidateRequest {
     }
 }
 
-/// TestConnection for use with a [`smithy_hyper::Client`](crate::Client)
+/// TestConnection for use with a [`Client`](crate::Client).
 ///
 /// A basic test connection. It will:
 /// - Response to requests with a preloaded series of responses
@@ -109,7 +109,10 @@ impl<B> TestConnection<B> {
     }
 }
 
-impl<B: Into<hyper::Body>> tower::Service<http::Request<SdkBody>> for TestConnection<B> {
+impl<B> tower::Service<http::Request<SdkBody>> for TestConnection<B>
+where
+    SdkBody: From<B>,
+{
     type Response = http::Response<SdkBody>;
     type Error = BoxError;
     type Future = Ready<Result<Self::Response, Self::Error>>;
@@ -125,7 +128,7 @@ impl<B: Into<hyper::Body>> tower::Service<http::Request<SdkBody>> for TestConnec
                 .lock()
                 .unwrap()
                 .push(ValidateRequest { expected, actual });
-            std::future::ready(Ok(resp.map(|body| SdkBody::from(body.into()))))
+            std::future::ready(Ok(resp.map(|body| SdkBody::from(body))))
         } else {
             std::future::ready(Err("No more data".into()))
         }
@@ -134,7 +137,8 @@ impl<B: Into<hyper::Body>> tower::Service<http::Request<SdkBody>> for TestConnec
 
 impl<B> From<TestConnection<B>> for crate::Client<TestConnection<B>, tower::layer::util::Identity>
 where
-    B: Into<hyper::Body> + Send + 'static,
+    B: Send + 'static,
+    SdkBody: From<B>,
 {
     fn from(tc: TestConnection<B>) -> Self {
         crate::Builder::new()
