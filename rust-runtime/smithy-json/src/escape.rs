@@ -156,8 +156,15 @@ fn read_codepoint(rest: &[u8]) -> Result<u16, Error> {
     }
 
     let codepoint_str = std::str::from_utf8(&rest[2..6]).map_err(|_| Error::InvalidUtf8)?;
-    u16::from_str_radix(codepoint_str, 16)
-        .map_err(|_| Error::InvalidUnicodeEscape(codepoint_str.into()))
+
+    // Error on characters `u16::from_str_radix` would otherwise accept, such as `+`
+    for byte in codepoint_str.bytes() {
+        match byte {
+            b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' => {}
+            _ => return Err(Error::InvalidUnicodeEscape(codepoint_str.into())),
+        }
+    }
+    Ok(u16::from_str_radix(codepoint_str, 16).expect("hex string is valid 16-bit value"))
 }
 
 /// Reads JSON Unicode escape sequences (i.e., "\u1234"). Will also read
@@ -251,6 +258,11 @@ mod test {
         assert_eq!(
             Err(Error::InvalidSurrogatePair(0xD801, 0xC501)),
             unescape_string("\\uD801\\uC501")
+        );
+
+        assert_eq!(
+            Err(Error::InvalidUnicodeEscape("+04D".into())),
+            unescape_string("\\u+04D")
         );
     }
 
