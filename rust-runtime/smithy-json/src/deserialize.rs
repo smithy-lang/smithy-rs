@@ -393,7 +393,7 @@ impl<'a> JsonTokenIterator<'a> {
     }
 
     /// Reads a value from the stream and returns the next token. For objects and arrays,
-    /// the entire object or array will not be ready, but rather, a [StartObject]/[StartArray]
+    /// the entire object or array will not be ready, but rather, a [Token::StartObject]/[Token::StartArray]
     /// will be returned.
     fn read_value(&mut self) -> Result<Token<'a>, Error> {
         self.discard_whitespace();
@@ -430,7 +430,7 @@ impl<'a> JsonTokenIterator<'a> {
         }
     }
 
-    /// Handles the [ArrayFirstValueOrEnd] state.
+    /// Handles the [State::ArrayFirstValueOrEnd] state.
     fn state_array_first_value_or_end(&mut self) -> Result<Token<'a>, Error> {
         match self.peek_expect()? {
             b']' => Ok(self.end_array()),
@@ -441,7 +441,7 @@ impl<'a> JsonTokenIterator<'a> {
         }
     }
 
-    /// Handles the [ArrayNextValueOrEnd] state.
+    /// Handles the [State::ArrayNextValueOrEnd] state.
     fn state_array_next_value_or_end(&mut self) -> Result<Token<'a>, Error> {
         match self.peek_expect()? {
             b']' => Ok(self.end_array()),
@@ -464,7 +464,7 @@ impl<'a> JsonTokenIterator<'a> {
         }
     }
 
-    /// Handles the [ObjectFirstKeyOrEnd] state.
+    /// Handles the [State::ObjectFirstKeyOrEnd] state.
     fn state_object_first_key_or_end(&mut self) -> Result<Token<'a>, Error> {
         match self.peek_expect()? {
             b'}' => Ok(self.end_object()),
@@ -472,7 +472,7 @@ impl<'a> JsonTokenIterator<'a> {
         }
     }
 
-    /// Handles the [ObjectNextKeyOrEnd] state.
+    /// Handles the [State::ObjectNextKeyOrEnd] state.
     fn state_object_next_key_or_end(&mut self) -> Result<Token<'a>, Error> {
         match self.peek_expect()? {
             b'}' => Ok(self.end_object()),
@@ -485,7 +485,7 @@ impl<'a> JsonTokenIterator<'a> {
         }
     }
 
-    /// Handles the [ObjectFieldValue] state.
+    /// Handles the [State::ObjectFieldValue] state.
     fn state_object_field_value(&mut self) -> Result<Token<'a>, Error> {
         match self.peek_expect()? {
             b':' => {
