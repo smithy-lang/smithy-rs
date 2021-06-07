@@ -89,7 +89,7 @@ pub fn https() -> StandardClient {
 
     with_https(smithy_client::Builder::new())
         .build()
-        .erase_connector()
+        .into_dyn_connector()
 }
 
 mod static_tests {
