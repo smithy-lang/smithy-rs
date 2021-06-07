@@ -49,8 +49,8 @@ impl<S> tower::Layer<S> for AwsMiddleware {
 /// AWS Service Client
 ///
 /// Hyper-based AWS Service Client. Most customers will want to construct a client with
-/// [`Client::https()`](Client::https). For testing & other more advanced use cases, a custom
-/// connector may be used via [`Client::new(connector)`](Client::new).
+/// [`Client::https`](smithy_client::Client::https). For testing & other more advanced use cases, a
+/// custom connector may be used via [`Client::new(connector)`](smithy_client::Client::new).
 ///
 /// The internal connector must implement the following trait bound to be used to dispatch requests:
 /// ```rust,ignore
