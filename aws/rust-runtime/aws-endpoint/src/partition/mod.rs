@@ -239,7 +239,7 @@ mod test {
                 },
             )
             .endpoint(
-                "service-fips",
+                "cn-fips-1",
                 Metadata {
                     uri_template: "fips.amazonaws.cn",
                     protocol: Https,
@@ -319,7 +319,7 @@ mod test {
 
     /// Validates non-regionalized endpoints still use endpoints
     const NON_REGIONALIZED_EXACT_MATCH: TestCase = TestCase {
-        region: "service-fips",
+        region: "cn-fips-1",
         uri: "https://fips.amazonaws.cn",
         signing_region: "cn-fips",
         signing_service: None,

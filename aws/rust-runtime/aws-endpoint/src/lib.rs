@@ -145,7 +145,7 @@ impl ResolveAwsEndpoint for Endpoint {
 }
 
 type AwsEndpointResolver = Arc<dyn ResolveAwsEndpoint>;
-fn get_endpoint_resolver(config: &PropertyBag) -> Option<&AwsEndpointResolver> {
+pub fn get_endpoint_resolver(config: &PropertyBag) -> Option<&AwsEndpointResolver> {
     config.get()
 }
 

@@ -3,9 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use http::Uri;
-use iam::Endpoint;
-
 #[tokio::main]
 async fn main() -> Result<(), iam::Error> {
     tracing_subscriber::fmt::init();

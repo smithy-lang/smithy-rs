@@ -16,10 +16,10 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -150,7 +150,9 @@ class EndpointResolverGenerator(protocolConfig: ProtocolConfig, private val endp
             "CredentialScope" to awsEndpoint.member("CredentialScope"),
             "Regionalized" to awsEndpoint.member("partition::Regionalized"),
             "Protocol" to awsEndpoint.member("partition::endpoint::Protocol"),
-            "SignatureVersion" to awsEndpoint.member("partition::endpoint::SignatureVersion")
+            "SignatureVersion" to awsEndpoint.member("partition::endpoint::SignatureVersion"),
+            "PartitionResolver" to awsEndpoint.member("PartitionResolver"),
+            "ResolveAwsEndpoint" to awsEndpoint.member("ResolveAwsEndpoint")
         )
 
     fun resolver(): RuntimeType {
@@ -171,8 +173,8 @@ class EndpointResolverGenerator(protocolConfig: ProtocolConfig, private val endp
         val rest = partitions.drop(1)
         val fnName = "endpoint_resolver"
         return RuntimeType.forInlineFun(fnName, "aws_endpoint") {
-            it.rustBlock("pub fn $fnName() -> impl #T", awsEndpoint.member("ResolveAwsEndpoint")) {
-                withBlock("#T::new(", ")", awsEndpoint.member("PartitionResolver")) {
+            it.rustBlockTemplate("pub fn $fnName() -> impl #{ResolveAwsEndpoint}", *codegenScope) {
+                withBlockTemplate("#{PartitionResolver}::new(", ")", *codegenScope) {
                     renderPartition(base)
                     rust(",")
                     withBlock("vec![", "]") {
@@ -299,9 +301,14 @@ class EndpointResolverGenerator(protocolConfig: ProtocolConfig, private val endp
             val partitionDefaults = config.expectObjectMember("defaults")
             val serviceDefaults = service.getObjectMember("defaults").orElse(Node.objectNode())
             val mergedDefaults = partitionDefaults.merge(serviceDefaults)
-            endpoints = service.getObjectMember("endpoints").orElse(Node.objectNode()).members.map { (k, v) ->
+            endpoints = service.getObjectMember("endpoints").orElse(Node.objectNode()).members.mapNotNull { (k, v) ->
                 val endpointObject = mergedDefaults.merge(v.expectObjectNode())
-                k.value to EndpointMeta(endpointObject, endpointPrefix, dnsSuffix)
+                // There is no point in generating lots of endpoints that are just empty
+                if (endpointObject != mergedDefaults) {
+                    k.value to EndpointMeta(endpointObject, endpointPrefix, dnsSuffix)
+                } else {
+                    null
+                }
             }
 
             defaults = EndpointMeta(mergedDefaults, endpointPrefix, dnsSuffix)
