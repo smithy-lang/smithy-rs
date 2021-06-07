@@ -148,6 +148,9 @@ impl Partition {
 
 impl ResolveAwsEndpoint for Partition {
     fn resolve_endpoint(&self, region: &Region) -> Result<AwsEndpoint, BoxError> {
+        if let Some(endpoint) = self.endpoints.get(region) {
+            return endpoint.resolve_endpoint(region);
+        }
         let resolved_region = match self.regionalized {
             Regionalized::NotRegionalized => self.partition_endpoint.as_ref(),
             Regionalized::Regionalized => Some(region),
@@ -235,6 +238,18 @@ mod test {
                     signature_versions: SignatureVersion::V4,
                 },
             )
+            .endpoint(
+                "service-fips",
+                Metadata {
+                    uri_template: "fips.amazonaws.cn",
+                    protocol: Https,
+                    credential_scope: CredentialScope {
+                        region: Some(SigningRegion::from_static("cn-fips")),
+                        service: None,
+                    },
+                    signature_versions: SignatureVersion::V4,
+                },
+            )
             .build()
             .expect("valid partition")
     }
@@ -302,6 +317,14 @@ mod test {
         signing_service: Some("foo"),
     };
 
+    /// Validates non-regionalized endpoints still use endpoints
+    const NON_REGIONALIZED_EXACT_MATCH: TestCase = TestCase {
+        region: "service-fips",
+        uri: "https://fips.amazonaws.cn",
+        signing_region: "cn-fips",
+        signing_service: None,
+    };
+
     const DEFAULT_ENDPOINT: TestCase = TestCase {
         region: "eu-west-1",
         uri: "https://service.eu-west-1.amazonaws.com",
@@ -315,6 +338,7 @@ mod test {
         FALLBACK_REGION,
         PARTITION_NAME,
         DEFAULT_ENDPOINT,
+        NON_REGIONALIZED_EXACT_MATCH,
     ];
 
     #[test]
@@ -329,6 +353,7 @@ mod test {
     fn validate_global_partition() {
         let partition = global_partition();
         check_endpoint(&partition, &PARTITION_NAME);
+        check_endpoint(&partition, &NON_REGIONALIZED_EXACT_MATCH)
     }
 
     #[test]
