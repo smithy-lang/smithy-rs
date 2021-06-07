@@ -82,6 +82,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
     private val clientDep = CargoDependency.SmithyClient(protocolConfig.runtimeConfig).copy(optional = true)
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val moduleName = protocolConfig.moduleName
+    private val humanName = serviceShape.id.name
 
     fun render(writer: RustWriter) {
         writer.rustTemplate(
@@ -92,9 +93,9 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                 conf: crate::Config,
             }
 
-            /// An ergonomic service client for $moduleName.
+            /// An ergonomic service client for `$humanName`.
             /// 
-            /// This client allows ergonomic access to a $moduleName-shaped service.
+            /// This client allows ergonomic access to a `$humanName`-shaped service.
             /// Each method corresponds to an endpoint defined in the service's Smithy model,
             /// and the request and response shapes are auto-generated from that same model.
             /// 
