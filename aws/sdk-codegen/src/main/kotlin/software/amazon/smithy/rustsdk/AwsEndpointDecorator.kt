@@ -158,17 +158,16 @@ class EndpointResolverGenerator(protocolConfig: ProtocolConfig, private val endp
     fun resolver(): RuntimeType {
         val partitionsData = endpointData.expectArrayMember("partitions").getElementsAs(Node::expectObjectNode)
 
-        val comparePartitions = object : Comparator<PartitionNode> {
-            override fun compare(x: PartitionNode, y: PartitionNode): Int {
-                // always sort standard aws partition first
-                if (x.id == "aws") return -1
-                return x.id.compareTo(y.id)
-            }
-        }
-
         val partitions = partitionsData.map {
             PartitionNode(endpointPrefix, it)
-        }.sortedWith(comparePartitions)
+        }.sortedWith { x, y ->
+            // always put the aws constructor first
+            if (x.id == "aws") {
+                -1
+            } else {
+                x.id.compareTo(y.id)
+            }
+        }
         val base = partitions.first()
         val rest = partitions.drop(1)
         val fnName = "endpoint_resolver"
@@ -240,7 +239,9 @@ class EndpointResolverGenerator(protocolConfig: ProtocolConfig, private val endp
                 .value
                 .replace("{service}", service)
                 .replace("{dnsSuffix}", dnsSuffix)
-        private val credentialScope = CredentialScope(endpoint.getObjectMember("credentialScope").orElse(Node.objectNode()))
+        private val credentialScope =
+            CredentialScope(endpoint.getObjectMember("credentialScope").orElse(Node.objectNode()))
+
         private fun protocol(): String {
             val protocols = endpoint.expectArrayMember("protocols").map { it.expectStringNode().value }
             return if (protocols.contains("https")) {
