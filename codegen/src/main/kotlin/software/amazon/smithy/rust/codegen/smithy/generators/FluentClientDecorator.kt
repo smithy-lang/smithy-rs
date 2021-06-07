@@ -82,6 +82,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
     private val clientDep = CargoDependency.SmithyClient(protocolConfig.runtimeConfig).copy(optional = true)
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val moduleName = protocolConfig.moduleName
+    private val moduleUseName = moduleName.replace("-", "_")
     private val humanName = serviceShape.id.name
 
     fun render(writer: RustWriter) {
@@ -134,7 +135,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             /// to construct a client:
             ///
             /// ```
-            /// use $moduleName::{Builder, Client};
+            /// use $moduleUseName::{Builder, Client, Config};
             /// let raw_client =
             ///     Builder::new()
             ///       .https()
@@ -143,9 +144,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             /// ##     */
             /// ##     .middleware_fn(|r| r)
             ///       .build();
-            /// let config =
-            ///     $moduleName::Config::builder()
-            ///       .build();
+            /// let config = Config::builder().build();
             /// let client = Client::with_config(raw_client, config);
             /// ```
             ///
