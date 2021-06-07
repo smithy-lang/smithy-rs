@@ -9,8 +9,8 @@ use smithy_http::endpoint::Endpoint;
 
 /// Endpoint metadata
 ///
-/// T & P exist to support optional vs. non optional values for Protocol and URI template during
-/// merging
+/// Unlike other endpoint implementations, no merging occurs in here. All Endpoint merging occurs
+/// during code generation allowing us to generate fully formed endpoints.
 #[derive(Debug)]
 pub struct Metadata {
     /// URI for the endpoint.
