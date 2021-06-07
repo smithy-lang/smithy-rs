@@ -44,6 +44,7 @@ import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import software.amazon.smithy.utils.StringUtils
 import kotlin.reflect.KClass
@@ -182,7 +183,7 @@ class SymbolVisitor(
     override fun doubleShape(shape: DoubleShape): Symbol = simpleShape(shape)
     override fun stringShape(shape: StringShape): Symbol {
         return if (shape.hasTrait<EnumTrait>()) {
-            symbolBuilder(shape, RustType.Opaque(shape.contextName())).locatedIn(Models).build()
+            symbolBuilder(shape, RustType.Opaque(shape.contextName().toPascalCase())).locatedIn(Models).build()
         } else {
             simpleShape(shape)
         }

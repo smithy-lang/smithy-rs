@@ -285,7 +285,7 @@ class RustWriter private constructor(
      * - If the field is an unboxed primitive, it will only be called if the field is non-zero
      *
      */
-    fun ifSet(shape: Shape, member: Symbol, outerField: String, block: CodeWriter.(field: String) -> Unit) {
+    fun ifSet(shape: Shape, member: Symbol, outerField: String, block: RustWriter.(field: String) -> Unit) {
         // TODO: this API should be refactored so that we don't need to strip `&` to get reference comparisons to work.
         when {
             member.isOptional() -> {
@@ -307,7 +307,7 @@ class RustWriter private constructor(
     fun listForEach(
         target: Shape,
         outerField: String,
-        block: CodeWriter.(field: String, target: ShapeId) -> Unit
+        block: RustWriter.(field: String, target: ShapeId) -> Unit
     ) {
         if (target is CollectionShape) {
             val derefName = safeName("inner")

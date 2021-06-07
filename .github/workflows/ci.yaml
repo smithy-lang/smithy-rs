@@ -246,10 +246,10 @@ jobs:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
         path: aws-sdk
     - name: Cargo Docs
-      run: cargo doc --no-deps
+      run: cargo doc --no-deps --document-private-items
       working-directory: aws-sdk
       env:
-        RUSTFLAGS: -D warnings
+        RUSTDOCFLAGS: -D warnings
   clippy-sdk:
     name: cargo clippy AWS SDK
     needs: generate-sdk
