@@ -65,7 +65,7 @@ class FluentClientDecorator : RustCodegenDecorator {
             override fun section(section: LibRsSection) = when (section) {
                 is LibRsSection.Body -> writable {
                     Attribute.Cfg.feature("client").render(this)
-                    rust("pub use client::Client;")
+                    rust("pub use client::{Client, Builder};")
                 }
                 else -> emptySection
             }
@@ -81,20 +81,135 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
     private val model = protocolConfig.model
     private val clientDep = CargoDependency.SmithyClient(protocolConfig.runtimeConfig).copy(optional = true)
     private val runtimeConfig = protocolConfig.runtimeConfig
+    private val moduleName = protocolConfig.moduleName
 
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
-            ##[derive(std::fmt::Debug)]
+            ##[derive(Debug)]
             pub(crate) struct Handle<C, M, R> {
                 client: #{client}::Client<C, M, R>,
                 conf: crate::Config,
             }
 
+            /// An ergonomic service client for $moduleName.
+            /// 
+            /// This client allows ergonomic access to a $moduleName-shaped service.
+            /// Each method corresponds to an endpoint defined in the service's Smithy model,
+            /// and the request and response shapes are auto-generated from that same model.
+            /// 
+            /// ## Constructing a Client
+            ///
+            /// To construct a client, you need a few different things:
+            ///
+            /// - A [`Config`](crate::Config) that specifies additional configuration
+            ///   required by the service.
+            /// - A connector (`C`) that specifies how HTTP requests are translated
+            ///   into HTTP responses. This will typically be an HTTP client (like
+            ///   `hyper`), though you can also substitute in your own, like a mock
+            ///   mock connector for testing.
+            /// - A "middleware" (`M`) that modifies requests prior to them being
+            ///   sent to the request. Most commonly, middleware will decide what
+            ///   endpoint the requests should be sent to, as well as perform
+            ///   authentcation and authorization of requests (such as SigV4).
+            ///   You can also have middleware that performs request/response
+            ///   tracing, throttling, or other middleware-like tasks.
+            /// - A retry policy (`R`) that dictates the behavior for requests that
+            ///   fail and should (potentially) be retried. The default type is
+            ///   generally what you want, as it implements a well-vetted retry
+            ///   policy described in TODO.
+            ///
+            /// To construct a client, you will generally want to call
+            /// [`Client::with_config`], which takes a [`#{client}::Client`] (a
+            /// Smithy client that isn't specialized to a particular service),
+            /// and a [`Config`](crate::Config). Both of these are constructed using
+            /// the [builder pattern] where you first construct a `Builder` type,
+            /// then configure it with the necessary parameters, and then call
+            /// `build` to construct the finalized output type. The
+            /// [`#{client}::Client`] builder is re-exported in this crate as
+            /// [`Builder`] for convenience.
+            /// 
+            /// In _most_ circumstances, you will want to use the following pattern
+            /// to construct a client:
+            ///
+            /// ```
+            /// use $moduleName::{Builder, Client};
+            /// let raw_client =
+            ///     Builder::new()
+            ///       .https()
+            /// ##     /*
+            ///       .middleware(/* discussed below */)
+            /// ##     */
+            /// ##     .middleware_fn(|r| r)
+            ///       .build();
+            /// let config =
+            ///     $moduleName::Config::builder()
+            ///       .build();
+            /// let client = Client::with_config(raw_client, config);
+            /// ```
+            ///
+            /// For the middleware, you'll want to use whatever matches the
+            /// routing, authentication and authorization required by the target
+            /// service. For example, for the standard AWS SDK which uses
+            /// [SigV4-signed requests], the middleware looks like this:
+            ///
+            // Ignored as otherwise we'd need to pull in all these dev-dependencies.
+            /// ```rust,ignore
+            /// use aws_endpoint::AwsEndpointStage;
+            /// use aws_http::user_agent::UserAgentStage;
+            /// use aws_sig_auth::middleware::SigV4SigningStage;
+            /// use aws_sig_auth::signer::SigV4Signer;
+            /// use smithy_http_tower::map_request::MapRequestLayer;
+            /// use tower::layer::util::Stack;
+            /// use tower::ServiceBuilder;
+            ///
+            /// type AwsMiddlewareStack = 
+            ///     Stack<MapRequestLayer<SigV4SigningStage>,
+            ///         Stack<MapRequestLayer<UserAgentStage>,
+            ///             MapRequestLayer<AwsEndpointStage>>>,
+            ///
+            /// ##[derive(Debug, Default)]
+            /// pub struct AwsMiddleware;
+            /// impl<S> tower::Layer<S> for AwsMiddleware {
+            ///     type Service = <AwsMiddlewareStack as tower::Layer<S>>::Service;
+            ///
+            ///     fn layer(&self, inner: S) -> Self::Service {
+            ///         let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new())); _signer: MapRequestLaye
+            ///         let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage); _endpoint_resolver: MapRequestLayer<Aw
+            ///         let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new()); _user_agent: MapRequestLayer<UserAgentSt
+            ///         // These layers can be considered as occuring in order, that is:
+            ///         // 1. Resolve an endpoint
+            ///         // 2. Add a user agent
+            ///         // 3. Sign
+            ///         // (4. Dispatch over the wire)
+            ///         ServiceBuilder::new() _ServiceBuilder<Identity>
+            ///             .layer(endpoint_resolver) _ServiceBuilder<Stack<MapRequestLayer<_>, _>>
+            ///             .layer(user_agent) _ServiceBuilder<Stack<MapRequestLayer<_>, _>>
+            ///             .layer(signer) _ServiceBuilder<Stack<MapRequestLayer<_>, _>>
+            ///             .service(inner)
+            ///     }
+            /// }
+            /// ```
+            /// 
+            /// ## Using a Client
+            ///
+            /// Once you have a client set up, you can access the service's endpoints
+            /// by calling the appropriate method on [`Client`]. Each such method
+            /// returns a request builder for that endpoint, with methods for setting
+            /// the various fields of the request. Once your request is complete, use
+            /// the `send` method to send the request. `send` returns a future, which
+            /// you then have to `.await` to get the service's response.
+            /// 
+            /// [builder pattern]: https://rust-lang.github.io/api-guidelines/type-safety.html##c-builder
+            /// [SigV4-signed requests]: https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html
             ##[derive(Clone, std::fmt::Debug)]
             pub struct Client<C, M, R = #{client}::retry::Standard> {
+                // TODO: Why Arc<>?
                 handle: std::sync::Arc<Handle<C, M, R>>
             }
+
+            ##[doc(inline)]
+            pub type Builder = #{client}::Builder;
 
             impl<C, M, R> From<#{client}::Client<C, M, R>> for Client<C, M, R> {
                 fn from(client: #{client}::Client<C, M, R>) -> Self {
