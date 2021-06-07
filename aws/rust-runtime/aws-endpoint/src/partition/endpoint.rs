@@ -7,14 +7,12 @@ use crate::{AwsEndpoint, BoxError, CredentialScope, ResolveAwsEndpoint};
 use aws_types::region::Region;
 use smithy_http::endpoint::Endpoint;
 
-pub type CompleteEndpoint = Definition;
-
 /// Endpoint metadata
 ///
 /// T & P exist to support optional vs. non optional values for Protocol and URI template during
 /// merging
 #[derive(Debug)]
-pub struct Definition {
+pub struct Metadata {
     /// URI for the endpoint.
     ///
     /// May contain `{region}` which will replaced with the region during endpoint construction
@@ -52,7 +50,7 @@ pub enum SignatureVersion {
     V4,
 }
 
-impl ResolveAwsEndpoint for CompleteEndpoint {
+impl ResolveAwsEndpoint for Metadata {
     fn resolve_endpoint(&self, region: &Region) -> Result<AwsEndpoint, BoxError> {
         let uri = self.uri_template.replace("{region}", region.as_ref());
         let uri = format!("{}://{}", self.protocol.as_str(), uri);

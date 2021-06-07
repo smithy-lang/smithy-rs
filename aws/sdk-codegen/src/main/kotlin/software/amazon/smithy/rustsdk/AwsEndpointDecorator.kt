@@ -146,8 +146,7 @@ class EndpointResolverGenerator(protocolConfig: ProtocolConfig, private val endp
     private val codegenScope =
         arrayOf(
             "Partition" to awsEndpoint.member("Partition"),
-            "CompleteEndpoint" to awsEndpoint.member("partition::endpoint::CompleteEndpoint"),
-            "PartialEndpoint" to awsEndpoint.member("partition::endpoint::PartialEndpoint"),
+            "endpoint" to awsEndpoint.member("partition::endpoint"),
             "CredentialScope" to awsEndpoint.member("CredentialScope"),
             "Regionalized" to awsEndpoint.member("partition::Regionalized"),
             "Protocol" to awsEndpoint.member("partition::endpoint::Protocol"),
@@ -188,6 +187,22 @@ class EndpointResolverGenerator(protocolConfig: ProtocolConfig, private val endp
     }
 
     private fun RustWriter.renderPartition(partition: PartitionNode) {
+        /* Example:
+        Partition::builder()
+            .id("part-id-3")
+            .region_regex(r#"^(eu)-\w+-\d+$"#)
+            .default_endpoint(endpoint::Metadata {
+                uri_template: "service.{region}.amazonaws.com",
+                protocol: Https,
+                signature_versions: &[V4],
+                credential_scope: CredentialScope::builder()
+                    .service("foo")
+                    .build()
+            })
+            .endpoint(...)
+            .build()
+            .expect("valid partition")
+         */
         rustTemplate(
             """
             #{Partition}::builder()
@@ -215,32 +230,15 @@ class EndpointResolverGenerator(protocolConfig: ProtocolConfig, private val endp
             }
         }
         rust(""".build().expect("invalid partition")""")
-
-        /*
-        Partition::builder()
-            .id("part-id-3")
-            .region_regex(r#"^(eu)-\w+-\d+$"#)
-            .default_endpoint(CompleteEndpoint {
-                uri_template: "service.{region}.amazonaws.com",
-                protocol: Https,
-                signature_versions: &[V4],
-                credential_scope: CredentialScope {
-                    service: Some(SigningService::from_static("foo")),
-                    ..Default::default()
-                },
-            })
-            .build()
-            .expect("valid partition")
-         */
     }
 
     inner class EndpointMeta(private val endpoint: ObjectNode, service: String, dnsSuffix: String) {
-        val uriTemplate =
+        private val uriTemplate =
             (endpoint.getStringMember("hostname").orNull() ?: throw CodegenException("endpoint must be defined"))
                 .value
                 .replace("{service}", service)
                 .replace("{dnsSuffix}", dnsSuffix)
-        val credentialScope = CredentialScope(endpoint.getObjectMember("credentialScope").orElse(Node.objectNode()))
+        private val credentialScope = CredentialScope(endpoint.getObjectMember("credentialScope").orElse(Node.objectNode()))
         private fun protocol(): String {
             val protocols = endpoint.expectArrayMember("protocols").map { it.expectStringNode().value }
             return if (protocols.contains("https")) {
@@ -254,7 +252,7 @@ class EndpointResolverGenerator(protocolConfig: ProtocolConfig, private val endp
 
         private fun signatureVersion(): String {
             val signatureVersions = endpoint.expectArrayMember("signatureVersions").map { it.expectStringNode().value }
-            // TODO: we can use this to change the signing options
+            // TODO: we can use this to change the signing options instead of customizing S3 specifically
             if (!(signatureVersions.contains("v4") || signatureVersions.contains("s3v4"))) {
                 throw CodegenException("endpoint does not support sigv4, unsupported: $signatureVersions")
             }
@@ -262,7 +260,7 @@ class EndpointResolverGenerator(protocolConfig: ProtocolConfig, private val endp
         }
 
         fun RustWriter.render() {
-            rustBlockTemplate("#{CompleteEndpoint}", *codegenScope) {
+            rustBlockTemplate("#{endpoint}::Metadata", *codegenScope) {
                 rust("uri_template: ${uriTemplate.dq()},")
                 rustTemplate("protocol: #{Protocol}::${protocol()},", *codegenScope)
                 rustTemplate("signature_versions: #{SignatureVersion}::${signatureVersion()},", *codegenScope)
@@ -280,7 +278,7 @@ class EndpointResolverGenerator(protocolConfig: ProtocolConfig, private val endp
      */
     private inner class PartitionNode(endpointPrefix: String, val config: ObjectNode) {
         // the partition id/name (e.g. "aws")
-        val id = config.expectStringMember("partition").value
+        val id: String = config.expectStringMember("partition").value
 
         // the node associated with [endpointPrefix] (or empty node)
         val service: ObjectNode = config
@@ -309,7 +307,7 @@ class EndpointResolverGenerator(protocolConfig: ProtocolConfig, private val endp
             defaults = EndpointMeta(mergedDefaults, endpointPrefix, dnsSuffix)
         }
 
-        val regionalized = service.getBooleanMemberOrDefault("isRegionalized", true)
+        val regionalized: Boolean = service.getBooleanMemberOrDefault("isRegionalized", true)
 
         // regionalized services always use regionalized endpoints
         val partitionEndpoint: String? = if (regionalized) {
@@ -318,7 +316,7 @@ class EndpointResolverGenerator(protocolConfig: ProtocolConfig, private val endp
             service.getStringMember("partitionEndpoint").map(StringNode::getValue).orNull()
         }
 
-        val regionRegex = config.expectStringMember("regionRegex").value
+        val regionRegex: String = config.expectStringMember("regionRegex").value
     }
 
     inner class CredentialScope(private val objectNode: ObjectNode) {

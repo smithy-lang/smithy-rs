@@ -14,10 +14,9 @@ pub use partition::PartitionResolver;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
-use std::str::FromStr;
 use std::sync::Arc;
 
-use http::{HeaderValue, Uri};
+use http::HeaderValue;
 
 use aws_types::region::{Region, SigningRegion};
 use aws_types::SigningService;
@@ -83,21 +82,6 @@ pub trait ResolveAwsEndpoint: Send + Sync {
     fn resolve_endpoint(&self, region: &Region) -> Result<AwsEndpoint, BoxError>;
 }
 
-/// Default AWS Endpoint Implementation
-///
-/// This is used as a temporary stub. Prior to GA, this will be replaced with specifically generated endpoint
-/// resolvers for each service that model the endpoints for each service correctly. Some services differ
-/// from the standard endpoint pattern.
-pub struct DefaultAwsEndpointResolver {
-    service: &'static str,
-}
-
-impl DefaultAwsEndpointResolver {
-    pub fn for_service(service: &'static str) -> Self {
-        Self { service }
-    }
-}
-
 #[derive(Clone, Default, Debug)]
 pub struct CredentialScope {
     region: Option<SigningRegion>,
@@ -156,23 +140,6 @@ impl ResolveAwsEndpoint for Endpoint {
         Ok(AwsEndpoint {
             endpoint: self.clone(),
             credential_scope: Default::default(),
-        })
-    }
-}
-
-impl ResolveAwsEndpoint for DefaultAwsEndpointResolver {
-    fn resolve_endpoint(&self, region: &Region) -> Result<AwsEndpoint, BoxError> {
-        let uri = Uri::from_str(&format!(
-            "https://{}.{}.amazonaws.com",
-            self.service,
-            region.as_ref(),
-        ))?;
-        Ok(AwsEndpoint {
-            endpoint: Endpoint::mutable(uri),
-            credential_scope: CredentialScope {
-                region: Some(region.clone().into()),
-                service: None,
-            },
         })
     }
 }
@@ -260,16 +227,18 @@ mod test {
     use smithy_http::middleware::MapRequest;
     use smithy_http::operation;
 
-    use crate::{
-        set_endpoint_resolver, AwsEndpoint, AwsEndpointStage, BoxError, CredentialScope,
-        DefaultAwsEndpointResolver, ResolveAwsEndpoint,
-    };
+    use crate::partition::endpoint::{Metadata, Protocol, SignatureVersion};
+    use crate::{set_endpoint_resolver, AwsEndpointStage, CredentialScope};
     use http::header::HOST;
-    use smithy_http::endpoint::Endpoint;
 
     #[test]
     fn default_endpoint_updates_request() {
-        let provider = Arc::new(DefaultAwsEndpointResolver::for_service("kinesis"));
+        let provider = Arc::new(Metadata {
+            uri_template: "kinesis.{region}.amazonaws.com",
+            protocol: Protocol::Https,
+            credential_scope: Default::default(),
+            signature_versions: SignatureVersion::V4,
+        });
         let req = http::Request::new(SdkBody::from(""));
         let region = Region::new("us-east-1");
         let mut req = operation::Request::new(req);
@@ -302,19 +271,15 @@ mod test {
 
     #[test]
     fn sets_service_override_when_set() {
-        struct ServiceOverrideResolver;
-        impl ResolveAwsEndpoint for ServiceOverrideResolver {
-            fn resolve_endpoint(&self, _region: &Region) -> Result<AwsEndpoint, BoxError> {
-                Ok(AwsEndpoint {
-                    endpoint: Endpoint::immutable(Uri::from_static("http://www.service.com")),
-                    credential_scope: CredentialScope {
-                        service: Some(SigningService::from_static("qldb-override")),
-                        region: Some(SigningRegion::from(Region::new("us-east-override"))),
-                    },
-                })
-            }
-        }
-        let provider = Arc::new(ServiceOverrideResolver);
+        let provider = Arc::new(Metadata {
+            uri_template: "www.service.com",
+            protocol: Protocol::Http,
+            credential_scope: CredentialScope::builder()
+                .service("qldb-override")
+                .region("us-east-override")
+                .build(),
+            signature_versions: SignatureVersion::V4,
+        });
         let req = http::Request::new(SdkBody::from(""));
         let region = Region::new("us-east-1");
         let mut req = operation::Request::new(req);

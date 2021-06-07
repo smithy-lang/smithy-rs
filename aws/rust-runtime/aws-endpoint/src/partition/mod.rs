@@ -43,8 +43,7 @@ impl ResolveAwsEndpoint for PartitionResolver {
     fn resolve_endpoint(&self, region: &Region) -> Result<AwsEndpoint, BoxError> {
         let matching_partition = self
             .partitions()
-            .filter(|partition| partition.can_resolve(region))
-            .next()
+            .find(|partition| partition.can_resolve(region))
             .unwrap_or(&self.base);
         matching_partition.resolve_endpoint(region)
     }
@@ -56,8 +55,8 @@ pub struct Partition {
     region_regex: Regex,
     partition_endpoint: Option<Region>,
     regionalized: Regionalized,
-    default_endpoint: endpoint::CompleteEndpoint,
-    endpoints: HashMap<Region, endpoint::CompleteEndpoint>,
+    default_endpoint: endpoint::Metadata,
+    endpoints: HashMap<Region, endpoint::Metadata>,
 }
 
 #[derive(Default)]
@@ -66,8 +65,8 @@ pub struct Builder {
     region_regex: Option<Regex>,
     partition_endpoint: Option<Region>,
     regionalized: Option<Regionalized>,
-    default_endpoint: Option<endpoint::CompleteEndpoint>,
-    endpoints: HashMap<Region, endpoint::CompleteEndpoint>,
+    default_endpoint: Option<endpoint::Metadata>,
+    endpoints: HashMap<Region, endpoint::Metadata>,
 }
 
 impl Builder {
@@ -76,7 +75,7 @@ impl Builder {
         self
     }
 
-    pub fn default_endpoint(mut self, default: endpoint::CompleteEndpoint) -> Self {
+    pub fn default_endpoint(mut self, default: endpoint::Metadata) -> Self {
         self.default_endpoint = Some(default);
         self
     }
@@ -101,7 +100,7 @@ impl Builder {
         self
     }
 
-    pub fn endpoint(mut self, region: &'static str, endpoint: endpoint::CompleteEndpoint) -> Self {
+    pub fn endpoint(mut self, region: &'static str, endpoint: endpoint::Metadata) -> Self {
         self.endpoints.insert(Region::new(region), endpoint);
         self
     }
@@ -118,7 +117,7 @@ impl Builder {
             id: self.id?,
             region_regex: self.region_regex?,
             partition_endpoint: self.partition_endpoint,
-            regionalized: self.regionalized.unwrap_or(Regionalized::default()),
+            regionalized: self.regionalized.unwrap_or_default(),
             default_endpoint,
             endpoints,
         })
@@ -162,9 +161,9 @@ impl ResolveAwsEndpoint for Partition {
 
 #[cfg(test)]
 mod test {
+    use crate::partition::endpoint::Metadata;
     use crate::partition::endpoint::Protocol::{Http, Https};
-    use crate::partition::endpoint::SignatureVersion::V4;
-    use crate::partition::endpoint::{CompleteEndpoint, SignatureVersion};
+    use crate::partition::endpoint::SignatureVersion::{self, V4};
     use crate::partition::{endpoint, Partition};
     use crate::partition::{PartitionResolver, Regionalized};
     use crate::{CredentialScope, ResolveAwsEndpoint};
@@ -176,7 +175,7 @@ mod test {
         Partition::builder()
             .id("part-id-1")
             .region_regex(r#"^(us)-\w+-\d+$"#)
-            .default_endpoint(endpoint::CompleteEndpoint {
+            .default_endpoint(endpoint::Metadata {
                 uri_template: "service.{region}.amazonaws.com",
                 protocol: Https,
                 credential_scope: CredentialScope::default(),
@@ -186,7 +185,7 @@ mod test {
             .regionalized(Regionalized::Regionalized)
             .endpoint(
                 "us-west-1",
-                endpoint::CompleteEndpoint {
+                endpoint::Metadata {
                     uri_template: "service.{region}.amazonaws.com",
                     protocol: Https,
                     credential_scope: CredentialScope::default(),
@@ -195,7 +194,7 @@ mod test {
             )
             .endpoint(
                 "us-west-1-alt",
-                CompleteEndpoint {
+                Metadata {
                     uri_template: "service-alt.us-west-1.amazonaws.com",
                     protocol: Http,
                     credential_scope: CredentialScope {
@@ -213,7 +212,7 @@ mod test {
         Partition::builder()
             .id("part-id-1")
             .region_regex(r#"^(cn)-\w+-\d+$"#)
-            .default_endpoint(CompleteEndpoint {
+            .default_endpoint(Metadata {
                 uri_template: "service.{region}.amazonaws.com",
                 protocol: Https,
                 credential_scope: CredentialScope {
@@ -226,7 +225,7 @@ mod test {
             .regionalized(Regionalized::NotRegionalized)
             .endpoint(
                 "partition",
-                CompleteEndpoint {
+                Metadata {
                     uri_template: "some-global-thing.amazonaws.cn",
                     protocol: Https,
                     credential_scope: CredentialScope {
@@ -251,7 +250,7 @@ mod test {
         Partition::builder()
             .id("part-id-3")
             .region_regex(r#"^(eu)-\w+-\d+$"#)
-            .default_endpoint(CompleteEndpoint {
+            .default_endpoint(Metadata {
                 uri_template: "service.{region}.amazonaws.com",
                 protocol: Https,
                 signature_versions: V4,
