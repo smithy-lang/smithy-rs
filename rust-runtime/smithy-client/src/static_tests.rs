@@ -69,7 +69,7 @@ fn sanity_erase_middleware() {
         .middleware(tower::layer::util::Identity::new())
         .connector_fn(|_| async { unreachable!() })
         .build()
-        .erase_middleware()
+        .into_dyn_middleware()
         .check();
 }
 
@@ -80,7 +80,7 @@ fn sanity_erase_connector() {
         .middleware(tower::layer::util::Identity::new())
         .connector_fn(|_| async { unreachable!() })
         .build()
-        .erase_connector()
+        .into_dyn_connector()
         .check();
 }
 
@@ -91,7 +91,7 @@ fn sanity_erase_full() {
         .middleware(tower::layer::util::Identity::new())
         .connector_fn(|_| async { unreachable!() })
         .build()
-        .simplify()
+        .into_dyn()
         .check();
 }
 
@@ -108,6 +108,6 @@ fn erased_is_send_sync() {
             .middleware(tower::layer::util::Identity::new())
             .connector_fn(|_| async { unreachable!() })
             .build()
-            .simplify(),
+            .into_dyn(),
     );
 }

@@ -72,7 +72,7 @@ where
         with_https(Builder::new())
             .middleware(M::default())
             .build()
-            .erase_connector()
+            .into_dyn_connector()
     }
 }
 

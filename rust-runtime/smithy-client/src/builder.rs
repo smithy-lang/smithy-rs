@@ -198,6 +198,6 @@ where
     /// # client.client.check();
     /// # }
     pub fn build_dyn(self) -> erase::DynClient<R> {
-        self.build().simplify()
+        self.build().into_dyn()
     }
 }

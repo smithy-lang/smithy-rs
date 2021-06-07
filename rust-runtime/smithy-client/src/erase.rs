@@ -42,10 +42,10 @@ where
     ///     .https()
     ///     .middleware(tower::layer::util::Identity::new())
     ///     .build();
-    /// let client = MyClient { client: client.erase_middleware() };
+    /// let client = MyClient { client: client.into_dyn_middleware() };
     /// # client.client.check();
     /// # }
-    pub fn erase_middleware(self) -> Client<C, DynMiddleware<C>, R> {
+    pub fn into_dyn_middleware(self) -> Client<C, DynMiddleware<C>, R> {
         Client {
             connector: self.connector,
             middleware: DynMiddleware::new(self.middleware),
@@ -80,10 +80,10 @@ where
     ///     .https()
     ///     .middleware(tower::layer::util::Identity::new())
     ///     .build();
-    /// let client = MyClient { client: client.erase_connector() };
+    /// let client = MyClient { client: client.into_dyn_connector() };
     /// # client.client.check();
     /// # }
-    pub fn erase_connector(self) -> Client<DynConnector, M, R> {
+    pub fn into_dyn_connector(self) -> Client<DynConnector, M, R> {
         Client {
             connector: DynConnector::new(self.connector),
             middleware: self.middleware,
@@ -113,11 +113,11 @@ where
     ///     .https()
     ///     .middleware(tower::layer::util::Identity::new())
     ///     .build();
-    /// let client = MyClient { client: client.simplify() };
+    /// let client = MyClient { client: client.into_dyn() };
     /// # client.client.check();
     /// # }
-    pub fn simplify(self) -> DynClient<R> {
-        self.erase_connector().erase_middleware()
+    pub fn into_dyn(self) -> DynClient<R> {
+        self.into_dyn_connector().into_dyn_middleware()
     }
 }
 
