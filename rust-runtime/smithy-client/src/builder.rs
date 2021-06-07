@@ -79,6 +79,8 @@ impl<M, R> Builder<(), M, R> {
     where
         F: Fn(http::Request<SdkBody>) -> FF + Send,
         FF: std::future::Future<Output = Result<http::Response<SdkBody>, BoxError>>,
+        // NOTE: The extra bound here is to help the type checker give better errors earlier.
+        tower::util::ServiceFn<F>: bounds::SmithyConnector,
     {
         self.connector(tower::service_fn(map))
     }
@@ -107,6 +109,32 @@ impl<C, R> Builder<C, (), R> {
             retry_policy: self.retry_policy,
             middleware,
         }
+    }
+
+    /// Use a function-like middleware that directly maps each request.
+    ///
+    /// ```rust
+    /// use smithy_client::Builder;
+    /// use smithy_http::body::SdkBody;
+    /// let client = Builder::new()
+    ///   .https()
+    ///   .middleware_fn(|req: smithy_http::operation::Request| {
+    ///     req
+    ///   })
+    ///   .build();
+    /// # client.check();
+    /// ```
+    pub fn middleware_fn<F>(self, map: F) -> Builder<C, tower::util::MapRequestLayer<F>, R>
+    where
+        F: Fn(smithy_http::operation::Request) -> smithy_http::operation::Request
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+        // NOTE: The extra bound here is to help the type checker give better errors earlier.
+        tower::util::MapRequestLayer<F>: bounds::SmithyMiddleware<C>,
+    {
+        self.middleware(tower::util::MapRequestLayer::new(map))
     }
 }
 
