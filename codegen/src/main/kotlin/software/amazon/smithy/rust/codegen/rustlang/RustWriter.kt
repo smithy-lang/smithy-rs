@@ -73,6 +73,20 @@ fun <T : CodeWriter> T.rust(
     this.write(contents.trim(), *args)
 }
 
+private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>): String {
+    return template.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult ->
+        val keyName = matchResult.groupValues[1]
+        if (!scope.toMap().keys.contains(keyName)) {
+            throw CodegenException(
+                "Rust block template expected `$keyName` but was not present in template.\n  hint: Template contains: ${
+                scope.map { it.first }
+                }"
+            )
+        }
+        "#{${keyName.toLowerCase()}:T}"
+    }.trim()
+}
+
 /**
  * Sibling method to [rustBlock] that enables `#{variablename}` style templating
  */
@@ -84,7 +98,7 @@ fun <T : CodeWriter> T.rustBlockTemplate(
     check(ctx.distinctBy { it.first.toLowerCase() }.size == ctx.size) { "Duplicate cased keys not supported" }
     this.pushState()
     this.putContext(ctx.toMap().mapKeys { (k, _) -> k.toLowerCase() })
-    val header = contents.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult -> "#{${matchResult.groupValues[1].toLowerCase()}:T}" }
+    val header = transformTemplate(contents, ctx).trim()
     this.openBlock("$header {")
     block(this)
     closeBlock("}")
@@ -115,7 +129,8 @@ fun <T : CodeWriter> T.rustTemplate(
     check(ctx.distinctBy { it.first.toLowerCase() }.size == ctx.size) { "Duplicate cased keys not supported" }
     this.pushState()
     this.putContext(ctx.toMap().mapKeys { (k, _) -> k.toLowerCase() })
-    this.write(contents.trim().replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult -> "#{${matchResult.groupValues[1].toLowerCase()}:T}" })
+    val smithyTemplate = transformTemplate(contents, ctx)
+    this.write(smithyTemplate)
     this.popState()
 }
 

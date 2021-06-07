@@ -346,7 +346,7 @@ class XmlBindingTraitParserGenerator(
                 *codegenScope, "Shape" to symbol
             ) {
                 val members = shape.members()
-                rustTemplate("let mut base: Option<#{Shape}> = None;", *codegenScope)
+                rustTemplate("let mut base: Option<#{Shape}> = None;", *codegenScope, "Shape" to symbol)
                 parseLoop(Ctx(tag = "decoder", accum = null)) { ctx ->
                     members.forEach { member ->
                         val variantName = member.memberName.toPascalCase()

@@ -57,7 +57,7 @@ internal class EndpointConfigCustomizationTest {
                 use http::Uri;
                 let conf = crate::config::Config::builder().build();
                 let endpoint = conf.endpoint_resolver
-                    .endpoint(&Region::new("us-east-1")).expect("default resolver produces a valid endpoint");
+                    .resolve_endpoint(&Region::new("us-east-1")).expect("default resolver produces a valid endpoint");
                 let mut uri = Uri::from_static("/?k=v");
                 endpoint.set_endpoint(&mut uri, None);
                 assert_eq!(uri, Uri::from_static("https://differentprefix.us-east-1.amazonaws.com/?k=v"));

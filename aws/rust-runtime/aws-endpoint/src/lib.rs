@@ -3,6 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#[doc(hidden)]
+pub mod partition;
+
+#[doc(hidden)]
+pub use partition::Partition;
+#[doc(hidden)]
+pub use partition::PartitionResolver;
+
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -29,8 +37,7 @@ use std::convert::TryFrom;
 #[derive(Clone)]
 pub struct AwsEndpoint {
     endpoint: Endpoint,
-    signing_service: Option<SigningService>,
-    signing_region: Option<SigningRegion>,
+    credential_scope: CredentialScope,
 }
 
 impl AwsEndpoint {
@@ -73,7 +80,7 @@ pub type BoxError = Box<dyn Error + Send + Sync + 'static>;
 /// will be codegenerated from `endpoints.json`.
 pub trait ResolveAwsEndpoint: Send + Sync {
     // TODO: consider if we want modeled error variants here
-    fn endpoint(&self, region: &Region) -> Result<AwsEndpoint, BoxError>;
+    fn resolve_endpoint(&self, region: &Region) -> Result<AwsEndpoint, BoxError>;
 }
 
 /// Default AWS Endpoint Implementation
@@ -91,19 +98,70 @@ impl DefaultAwsEndpointResolver {
     }
 }
 
+#[derive(Clone, Default, Debug)]
+pub struct CredentialScope {
+    region: Option<SigningRegion>,
+    service: Option<SigningService>,
+}
+
+impl CredentialScope {
+    pub fn builder() -> credential_scope::Builder {
+        credential_scope::Builder::default()
+    }
+}
+
+pub mod credential_scope {
+    use crate::CredentialScope;
+    use aws_types::region::SigningRegion;
+    use aws_types::SigningService;
+
+    #[derive(Debug, Default)]
+    pub struct Builder {
+        region: Option<SigningRegion>,
+        service: Option<SigningService>,
+    }
+
+    impl Builder {
+        pub fn region(mut self, region: &'static str) -> Self {
+            self.region = Some(SigningRegion::from_static(region));
+            self
+        }
+
+        pub fn service(mut self, service: &'static str) -> Self {
+            self.service = Some(SigningService::from_static(service));
+            self
+        }
+
+        pub fn build(self) -> CredentialScope {
+            CredentialScope {
+                region: self.region,
+                service: self.service,
+            }
+        }
+    }
+}
+
+impl CredentialScope {
+    pub fn merge(&self, other: &CredentialScope) -> CredentialScope {
+        CredentialScope {
+            region: self.region.clone().or_else(|| other.region.clone()),
+            service: self.service.clone().or_else(|| other.service.clone()),
+        }
+    }
+}
+
 /// An `Endpoint` can be its own resolver to support static endpoints
 impl ResolveAwsEndpoint for Endpoint {
-    fn endpoint(&self, _region: &Region) -> Result<AwsEndpoint, BoxError> {
+    fn resolve_endpoint(&self, _region: &Region) -> Result<AwsEndpoint, BoxError> {
         Ok(AwsEndpoint {
             endpoint: self.clone(),
-            signing_service: None,
-            signing_region: None,
+            credential_scope: Default::default(),
         })
     }
 }
 
 impl ResolveAwsEndpoint for DefaultAwsEndpointResolver {
-    fn endpoint(&self, region: &Region) -> Result<AwsEndpoint, BoxError> {
+    fn resolve_endpoint(&self, region: &Region) -> Result<AwsEndpoint, BoxError> {
         let uri = Uri::from_str(&format!(
             "https://{}.{}.amazonaws.com",
             self.service,
@@ -111,8 +169,10 @@ impl ResolveAwsEndpoint for DefaultAwsEndpointResolver {
         ))?;
         Ok(AwsEndpoint {
             endpoint: Endpoint::mutable(uri),
-            signing_region: Some(region.clone().into()),
-            signing_service: None,
+            credential_scope: CredentialScope {
+                region: Some(region.clone().into()),
+                service: None,
+            },
         })
     }
 }
@@ -162,13 +222,14 @@ impl MapRequest for AwsEndpointStage {
                 .get::<Region>()
                 .ok_or(AwsEndpointStageError::NoRegion)?;
             let endpoint = provider
-                .endpoint(region)
+                .resolve_endpoint(region)
                 .map_err(AwsEndpointStageError::EndpointResolutionError)?;
             let signing_region = endpoint
-                .signing_region
+                .credential_scope
+                .region
                 .unwrap_or_else(|| region.clone().into());
             config.insert::<SigningRegion>(signing_region);
-            if let Some(signing_service) = endpoint.signing_service {
+            if let Some(signing_service) = endpoint.credential_scope.service {
                 config.insert::<SigningService>(signing_service);
             }
             endpoint
@@ -200,8 +261,8 @@ mod test {
     use smithy_http::operation;
 
     use crate::{
-        set_endpoint_resolver, AwsEndpoint, AwsEndpointStage, BoxError, DefaultAwsEndpointResolver,
-        ResolveAwsEndpoint,
+        set_endpoint_resolver, AwsEndpoint, AwsEndpointStage, BoxError, CredentialScope,
+        DefaultAwsEndpointResolver, ResolveAwsEndpoint,
     };
     use http::header::HOST;
     use smithy_http::endpoint::Endpoint;
@@ -243,11 +304,13 @@ mod test {
     fn sets_service_override_when_set() {
         struct ServiceOverrideResolver;
         impl ResolveAwsEndpoint for ServiceOverrideResolver {
-            fn endpoint(&self, _region: &Region) -> Result<AwsEndpoint, BoxError> {
+            fn resolve_endpoint(&self, _region: &Region) -> Result<AwsEndpoint, BoxError> {
                 Ok(AwsEndpoint {
                     endpoint: Endpoint::immutable(Uri::from_static("http://www.service.com")),
-                    signing_service: Some(SigningService::from_static("qldb-override")),
-                    signing_region: Some(SigningRegion::from(Region::new("us-east-override"))),
+                    credential_scope: CredentialScope {
+                        service: Some(SigningService::from_static("qldb-override")),
+                        region: Some(SigningRegion::from(Region::new("us-east-override"))),
+                    },
                 })
             }
         }

@@ -77,6 +77,33 @@ class HttpProtocolTestGenerator(
             TestCase()
     }
 
+    companion object {
+        sealed class Action {
+            object Request : Action()
+            object Response : Action()
+        }
+
+        data class FailingTest(val service: String, val id: String, val action: Action)
+
+        // These tests fail due to shortcomings in our implementation.
+        // These could be configured via runtime configuration, but since this won't be long-lasting,
+        // it makes sense to do the simplest thing for now.
+        // The test will _fail_ if these pass, so we will discover & remove if we fix them by accident
+        private const val JsonRpc10 = "aws.protocoltests.json10#JsonRpc10"
+        private const val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
+        private const val RestJson = "aws.protocoltests.restjson#RestJson"
+        private const val RestXml = "aws.protocoltests.restxml#RestXml"
+        private const val AwsQuery = "aws.protocoltests.query#AwsQuery"
+        private val ExpectFail = setOf<FailingTest>(
+            FailingTest(AwsQuery, "QueryCustomizedError", Action.Response)
+        )
+        private val RunOnly: Set<String>? = null
+
+        // These tests are not even attempted to be generated, either because they will not compile
+        // or because they are flaky
+        private val DisableTests = setOf<String>()
+    }
+
     fun render() {
         val requestTests = operationShape.getTrait<HttpRequestTestsTrait>()
             ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.RequestTest(it) }
@@ -408,29 +435,5 @@ class HttpProtocolTestGenerator(
         writer.withBlock("&[", "]") {
             write(args.joinToString(",") { it.dq() })
         }
-    }
-
-    companion object {
-        sealed class Action {
-            object Request : Action()
-            object Response : Action()
-        }
-
-        data class FailingTest(val service: String, val id: String, val action: Action)
-
-        // These tests fail due to shortcomings in our implementation.
-        // These could be configured via runtime configuration, but since this won't be long-lasting,
-        // it makes sense to do the simplest thing for now.
-        // The test will _fail_ if these pass, so we will discover & remove if we fix them by accident
-        private val JsonRpc10 = "aws.protocoltests.json10#JsonRpc10"
-        private val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
-        private val RestJson = "aws.protocoltests.restjson#RestJson"
-        private val RestXml = "aws.protocoltests.restxml#RestXml"
-        private val ExpectFail = setOf<FailingTest>()
-        private val RunOnly: Set<String>? = null
-
-        // These tests are not even attempted to be generated, either because they will not compile
-        // or because they are flaky
-        private val DisableTests = setOf<String>()
     }
 }
