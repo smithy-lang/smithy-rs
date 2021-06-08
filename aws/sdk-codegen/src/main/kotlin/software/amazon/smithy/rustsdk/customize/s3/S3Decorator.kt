@@ -68,10 +68,20 @@ class S3(protocolConfig: ProtocolConfig) : RestXml(protocolConfig) {
             ) {
                 rustTemplate(
                     """
-                    let base_err = #{base_errors}::parse_generic_error(response.body().as_ref())?;
-                    Ok(#{s3_errors}::parse_extended_error(base_err, &response))
+                    if response.body().is_empty() {
+                        let mut err = #{Error}::builder();
+                        if response.status().as_u16() == 404 {
+                            err.code("NotFound");
+                        }
+                        Ok(err.build())
+                    } else {
+                        let base_err = #{base_errors}::parse_generic_error(response.body().as_ref())?;
+                        Ok(#{s3_errors}::parse_extended_error(base_err, &response))
+                    }
                 """,
-                    "base_errors" to restXmlErrors, "s3_errors" to AwsRuntimeType.S3Errors
+                    "base_errors" to restXmlErrors,
+                    "s3_errors" to AwsRuntimeType.S3Errors,
+                    "Error" to RuntimeType.GenericError(runtimeConfig)
                 )
             }
         }
