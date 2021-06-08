@@ -5,6 +5,10 @@ authors = ["rcoh@amazon.com"]
 edition = "2018"
 license = "Apache-2.0"
 
+[features]
+chrono-conversions = []
+default = ["chrono-conversions"]
+
 [dependencies]
 # alloc can be removed if we implement our own date formatting, TBD if this is worthwhile
 chrono = { version = "0.4", default-features = false, features = ["alloc"] }
