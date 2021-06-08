@@ -33,6 +33,30 @@ fun <T : CodeWriter> T.withBlock(
     return conditionalBlock(textBeforeNewLine, textAfterNewLine, conditional = true, block = block, args = args)
 }
 
+fun <T : CodeWriter> T.withBlockTemplate(
+    textBeforeNewLine: String,
+    textAfterNewLine: String,
+    vararg ctx: Pair<String, RuntimeType>,
+    block: T.() -> Unit
+): T {
+    return withTemplate(textBeforeNewLine, ctx) { header ->
+        conditionalBlock(header, textAfterNewLine, conditional = true, block = block)
+    }
+}
+
+private fun <T : CodeWriter, U> T.withTemplate(
+    template: String,
+    scope: Array<out Pair<String, Any>>,
+    f: T.(String) -> U
+): U {
+    val contents = transformTemplate(template, scope)
+    pushState()
+    this.putContext(scope.toMap().mapKeys { (k, _) -> k.toLowerCase() })
+    val out = f(contents)
+    this.popState()
+    return out
+}
+
 /**
  * Write a block to the writer.
  * If [conditional] is true, the [textBeforeNewLine], followed by [block], followed by [textAfterNewLine]
@@ -73,6 +97,21 @@ fun <T : CodeWriter> T.rust(
     this.write(contents.trim(), *args)
 }
 
+private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>): String {
+    check(scope.distinctBy { it.first.toLowerCase() }.size == scope.size) { "Duplicate cased keys not supported" }
+    return template.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult ->
+        val keyName = matchResult.groupValues[1]
+        if (!scope.toMap().keys.contains(keyName)) {
+            throw CodegenException(
+                "Rust block template expected `$keyName` but was not present in template.\n  hint: Template contains: ${
+                scope.map { it.first }
+                }"
+            )
+        }
+        "#{${keyName.toLowerCase()}:T}"
+    }.trim()
+}
+
 /**
  * Sibling method to [rustBlock] that enables `#{variablename}` style templating
  */
@@ -81,14 +120,11 @@ fun <T : CodeWriter> T.rustBlockTemplate(
     vararg ctx: Pair<String, Any>,
     block: T.() -> Unit
 ) {
-    check(ctx.distinctBy { it.first.toLowerCase() }.size == ctx.size) { "Duplicate cased keys not supported" }
-    this.pushState()
-    this.putContext(ctx.toMap().mapKeys { (k, _) -> k.toLowerCase() })
-    val header = contents.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult -> "#{${matchResult.groupValues[1].toLowerCase()}:T}" }
-    this.openBlock("$header {")
-    block(this)
-    closeBlock("}")
-    this.popState()
+    withTemplate(contents, ctx) { header ->
+        this.openBlock("$header {")
+        block(this)
+        closeBlock("}")
+    }
 }
 
 /**
@@ -112,11 +148,9 @@ fun <T : CodeWriter> T.rustTemplate(
     @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
     vararg ctx: Pair<String, Any>
 ) {
-    check(ctx.distinctBy { it.first.toLowerCase() }.size == ctx.size) { "Duplicate cased keys not supported" }
-    this.pushState()
-    this.putContext(ctx.toMap().mapKeys { (k, _) -> k.toLowerCase() })
-    this.write(contents.trim().replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult -> "#{${matchResult.groupValues[1].toLowerCase()}:T}" })
-    this.popState()
+    withTemplate(contents, ctx) { template ->
+        write(template)
+    }
 }
 
 /*
