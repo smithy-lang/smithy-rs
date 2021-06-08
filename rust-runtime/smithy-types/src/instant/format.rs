@@ -35,7 +35,7 @@ pub mod http_date {
     /// - If subsecond nanos are 0, no fractional seconds are added
     /// - If subsecond nanos are nonzero, 3 digits of fractional seconds are added
     pub fn format(instant: &Instant) -> String {
-        let structured = instant.to_chrono();
+        let structured = instant.to_chrono_internal();
         let weekday = match structured.weekday() {
             Weekday::Mon => "Mon",
             Weekday::Tue => "Tue",

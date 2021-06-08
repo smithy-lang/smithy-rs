@@ -92,7 +92,12 @@ impl Instant {
         }
     }
 
-    fn to_chrono(&self) -> DateTime<Utc> {
+    #[cfg(feature = "chrono-conversions")]
+    pub fn to_chrono(&self) -> DateTime<Utc> {
+        self.to_chrono_internal()
+    }
+
+    fn to_chrono_internal(&self) -> DateTime<Utc> {
         DateTime::<Utc>::from_utc(
             NaiveDateTime::from_timestamp(self.seconds, self.subsecond_nanos),
             Utc,
@@ -132,7 +137,7 @@ impl Instant {
             Format::DateTime => {
                 // TODO: hand write rfc3339 formatter & remove Chrono alloc feature
                 let rfc3339 = self
-                    .to_chrono()
+                    .to_chrono_internal()
                     .to_rfc3339_opts(SecondsFormat::AutoSi, true);
                 // If the date ends in `:00` eg. 2019-12-16T23:48:00Z we don't want to strip
                 // those 0s. We only need to strip subsecond zeros when they appear
