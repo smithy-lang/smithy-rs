@@ -77,8 +77,8 @@ abstract class HttpProtocolGenerator(
         // on these aliases.
         val operationTypeOutput = buildOperationTypeOutput(inputWriter, operationShape)
         val operationTypeRetry = buildOperationTypeRetry(inputWriter, customizations)
-        inputWriter.rust("pub type ${inputShape.id.name}OperationOutputAlias= $operationTypeOutput;")
-        inputWriter.rust("pub type ${inputShape.id.name}OperationRetryAlias = $operationTypeRetry;")
+        inputWriter.rust("##[doc(hidden)] pub type ${inputShape.id.name}OperationOutputAlias= $operationTypeOutput;")
+        inputWriter.rust("##[doc(hidden)] pub type ${inputShape.id.name}OperationRetryAlias = $operationTypeRetry;")
 
         // impl OperationInputShape { ... }
         inputWriter.implBlock(inputShape, symbolProvider) {
