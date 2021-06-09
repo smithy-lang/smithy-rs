@@ -34,9 +34,9 @@ impl<'a> EscapedStr<'a> {
 
 /// Represents the location of a token
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct TokenOffset(pub usize);
+pub struct Offset(pub usize);
 
-impl TokenOffset {
+impl Offset {
     /// Creates a custom error from the offset
     pub fn error(&self, msg: Cow<'static, str>) -> Error {
         Error::new(ErrorReason::Custom(msg), Some(self.0))
@@ -47,40 +47,40 @@ impl TokenOffset {
 #[derive(Debug, PartialEq)]
 pub enum Token<'a> {
     StartArray {
-        offset: TokenOffset,
+        offset: Offset,
     },
     EndArray {
-        offset: TokenOffset,
+        offset: Offset,
     },
     ObjectKey {
-        offset: TokenOffset,
+        offset: Offset,
         key: EscapedStr<'a>,
     },
     StartObject {
-        offset: TokenOffset,
+        offset: Offset,
     },
     EndObject {
-        offset: TokenOffset,
+        offset: Offset,
     },
     ValueBool {
-        offset: TokenOffset,
+        offset: Offset,
         value: bool,
     },
     ValueNull {
-        offset: TokenOffset,
+        offset: Offset,
     },
     ValueNumber {
-        offset: TokenOffset,
+        offset: Offset,
         value: Number,
     },
     ValueString {
-        offset: TokenOffset,
+        offset: Offset,
         value: EscapedStr<'a>,
     },
 }
 
 impl<'a> Token<'a> {
-    pub fn offset(&self) -> TokenOffset {
+    pub fn offset(&self) -> Offset {
         use Token::*;
         *match self {
             StartArray { offset } => offset,
@@ -121,7 +121,7 @@ macro_rules! expect_fn {
 expect_fn!(expect_start_object, StartObject);
 expect_fn!(expect_start_array, StartArray);
 
-/// Expects a string or null token, and if its a string, returns its unescaped value.
+/// Expects a string or null token. If the value was a string, its **unescaped** value will be returned.
 pub fn expect_string_or_null(
     token: Option<Result<Token<'_>, Error>>,
 ) -> Result<Option<String>, Error> {
@@ -189,58 +189,58 @@ pub mod test {
 
     pub fn start_array<'a>(offset: usize) -> Option<Result<Token<'a>, Error>> {
         Some(Ok(Token::StartArray {
-            offset: TokenOffset(offset),
+            offset: Offset(offset),
         }))
     }
 
     pub fn end_array<'a>(offset: usize) -> Option<Result<Token<'a>, Error>> {
         Some(Ok(Token::EndArray {
-            offset: TokenOffset(offset),
+            offset: Offset(offset),
         }))
     }
 
     pub fn start_object<'a>(offset: usize) -> Option<Result<Token<'a>, Error>> {
         Some(Ok(Token::StartObject {
-            offset: TokenOffset(offset),
+            offset: Offset(offset),
         }))
     }
 
     pub fn end_object<'a>(offset: usize) -> Option<Result<Token<'a>, Error>> {
         Some(Ok(Token::EndObject {
-            offset: TokenOffset(offset),
+            offset: Offset(offset),
         }))
     }
 
     pub fn object_key<'a>(offset: usize, key: &'a str) -> Option<Result<Token<'a>, Error>> {
         Some(Ok(Token::ObjectKey {
-            offset: TokenOffset(offset),
+            offset: Offset(offset),
             key: EscapedStr::new(key),
         }))
     }
 
     pub fn value_bool<'a>(offset: usize, boolean: bool) -> Option<Result<Token<'a>, Error>> {
         Some(Ok(Token::ValueBool {
-            offset: TokenOffset(offset),
+            offset: Offset(offset),
             value: boolean,
         }))
     }
 
     pub fn value_number<'a>(offset: usize, number: Number) -> Option<Result<Token<'a>, Error>> {
         Some(Ok(Token::ValueNumber {
-            offset: TokenOffset(offset),
+            offset: Offset(offset),
             value: number,
         }))
     }
 
     pub fn value_null<'a>(offset: usize) -> Option<Result<Token<'a>, Error>> {
         Some(Ok(Token::ValueNull {
-            offset: TokenOffset(offset),
+            offset: Offset(offset),
         }))
     }
 
     pub fn value_string<'a>(offset: usize, string: &'a str) -> Option<Result<Token<'a>, Error>> {
         Some(Ok(Token::ValueString {
-            offset: TokenOffset(offset),
+            offset: Offset(offset),
             value: EscapedStr::new(string),
         }))
     }
