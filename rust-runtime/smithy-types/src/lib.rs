@@ -17,8 +17,10 @@ pub struct Blob {
 }
 
 impl Blob {
-    pub fn new<T: Into<Vec<u8>>>(inp: T) -> Self {
-        Blob { inner: inp.into() }
+    pub fn new<T: Into<Vec<u8>>>(input: T) -> Self {
+        Blob {
+            inner: input.into(),
+        }
     }
     pub fn into_inner(self) -> Vec<u8> {
         self.inner

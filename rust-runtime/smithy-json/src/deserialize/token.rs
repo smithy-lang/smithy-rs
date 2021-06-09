@@ -5,14 +5,15 @@
 
 use crate::deserialize::error::{Error, ErrorReason};
 use crate::escape::unescape_string;
-use smithy_types::Number;
+use smithy_types::instant::Format;
+use smithy_types::{base64, Blob, Instant, Number};
 use std::borrow::Cow;
 
 pub use crate::escape::Error as EscapeError;
 
 /// New-type around `&str` that indicates the string is an escaped JSON string.
 /// Provides functions for retrieving the string in either form.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct EscapedStr<'a>(&'a str);
 
 impl<'a> EscapedStr<'a> {
@@ -102,15 +103,16 @@ impl<'a> Token<'a> {
 }
 
 macro_rules! expect_fn {
-    ($name:ident, $typ:ident) => {
+    ($name:ident, $token:ident, $doc:tt) => {
+        #[doc=$doc]
         pub fn $name(token_result: Option<Result<Token<'_>, Error>>) -> Result<(), Error> {
             match token_result.transpose()? {
-                Some(Token::$typ { .. }) => Ok(()),
+                Some(Token::$token { .. }) => Ok(()),
                 Some(token) => {
-                    Err(token.error(Cow::Borrowed(concat!("expected ", stringify!($typ)))))
+                    Err(token.error(Cow::Borrowed(concat!("expected ", stringify!($token)))))
                 }
                 None => Err(Error::new(
-                    ErrorReason::Custom(Cow::Borrowed(concat!("expected ", stringify!($typ)))),
+                    ErrorReason::Custom(Cow::Borrowed(concat!("expected ", stringify!($token)))),
                     None,
                 )),
             }
@@ -118,29 +120,84 @@ macro_rules! expect_fn {
     };
 }
 
-expect_fn!(expect_start_object, StartObject);
-expect_fn!(expect_start_array, StartArray);
+expect_fn!(
+    expect_start_object,
+    StartObject,
+    "Expects a [Token::StartObject] token and returns an error if it's not present."
+);
+expect_fn!(
+    expect_start_array,
+    StartArray,
+    "Expects a [Token::StartArray] token and returns an error if it's not present."
+);
 
-/// Expects a string or null token. If the value was a string, its **unescaped** value will be returned.
-pub fn expect_string_or_null(
-    token: Option<Result<Token<'_>, Error>>,
-) -> Result<Option<String>, Error> {
-    match token.transpose()? {
-        Some(Token::ValueNull { .. }) => Ok(None),
-        Some(Token::ValueString { value, .. }) => Ok(Some(value.to_unescaped()?.to_string())),
-        _ => Err(Error::custom("expected null or string value")),
-    }
+macro_rules! expect_value_or_null_fn {
+    ($name:ident, $token:ident, $typ:ident, $doc:tt) => {
+        #[doc=$doc]
+        pub fn $name(token: Option<Result<Token, Error>>) -> Result<Option<$typ>, Error> {
+            match token.transpose()? {
+                Some(Token::ValueNull { .. }) => Ok(None),
+                Some(Token::$token { value, .. }) => Ok(Some(value)),
+                _ => Err(Error::custom(concat!(
+                    "expected ",
+                    stringify!($token),
+                    " or ValueNull"
+                ))),
+            }
+        }
+    };
 }
 
-/// Expects a number or null token, and if its a number, returns it.
-pub fn expect_number_or_null(
+expect_value_or_null_fn!(expect_bool_or_null, ValueBool, bool, "Expects a [Token::ValueBool] or [Token::ValueNull], and returns the bool value if it's not null.");
+expect_value_or_null_fn!(expect_number_or_null, ValueNumber, Number, "Expects a [Token::ValueNumber] or [Token::ValueNull], and returns the [Number] value if it's not null.");
+expect_value_or_null_fn!(expect_string_or_null, ValueString, EscapedStr, "Expects a [Token::ValueString] or [Token::ValueNull], and returns the [EscapedStr] value if it's not null.");
+
+/// Expects a [Token::ValueString] or [Token::ValueNull]. If the value is a string, its **unescaped** value will be returned.
+pub fn expect_unescaped_string_or_null(
     token: Option<Result<Token<'_>, Error>>,
-) -> Result<Option<Number>, Error> {
-    match token.transpose()? {
-        Some(Token::ValueNull { .. }) => Ok(None),
-        Some(Token::ValueNumber { value, .. }) => Ok(Some(value)),
-        _ => Err(Error::custom("expected null or number value")),
-    }
+) -> Result<Option<String>, Error> {
+    Ok(match expect_string_or_null(token)? {
+        Some(value) => Some(value.to_unescaped()?.to_string()),
+        None => None,
+    })
+}
+
+/// Expects a [Token::ValueString] or [Token::ValueNull]. If the value is a string, it interprets it as a base64 encoded [Blob] value.
+pub fn expect_blob_or_null(token: Option<Result<Token<'_>, Error>>) -> Result<Option<Blob>, Error> {
+    Ok(match expect_string_or_null(token)? {
+        Some(value) => Some(Blob::new(base64::decode(value.as_escaped_str()).map_err(
+            |err| {
+                Error::new(
+                    ErrorReason::Custom(Cow::Owned(format!("failed to decode base64: {}", err))),
+                    None,
+                )
+            },
+        )?)),
+        None => None,
+    })
+}
+
+/// Expects a [Token::ValueNull], [Token::ValueString], or [Token::ValueNumber] depending
+/// on the passed in `timestamp_format`. If there is a non-null value, it interprets it as an
+/// [Instant] in the requested format.
+pub fn expect_timestamp_or_null(
+    token: Option<Result<Token<'_>, Error>>,
+    timestamp_format: Format,
+) -> Result<Option<Instant>, Error> {
+    Ok(match timestamp_format {
+        Format::EpochSeconds => {
+            expect_number_or_null(token)?.map(|v| Instant::from_f64(v.to_f64()))
+        }
+        Format::DateTime | Format::HttpDate => expect_string_or_null(token)?
+            .map(|v| Instant::from_str(v.as_escaped_str(), timestamp_format))
+            .transpose()
+            .map_err(|err| {
+                Error::new(
+                    ErrorReason::Custom(Cow::Owned(format!("failed to parse timestamp: {}", err))),
+                    None,
+                )
+            })?,
+    })
 }
 
 /// Skips an entire value in the token stream. Errors if it isn't a value.
@@ -211,7 +268,7 @@ pub mod test {
         }))
     }
 
-    pub fn object_key<'a>(offset: usize, key: &'a str) -> Option<Result<Token<'a>, Error>> {
+    pub fn object_key(offset: usize, key: &str) -> Option<Result<Token, Error>> {
         Some(Ok(Token::ObjectKey {
             offset: Offset(offset),
             key: EscapedStr::new(key),
@@ -238,7 +295,7 @@ pub mod test {
         }))
     }
 
-    pub fn value_string<'a>(offset: usize, string: &'a str) -> Option<Result<Token<'a>, Error>> {
+    pub fn value_string(offset: usize, string: &str) -> Option<Result<Token, Error>> {
         Some(Ok(Token::ValueString {
             offset: Offset(offset),
             value: EscapedStr::new(string),
@@ -338,12 +395,25 @@ pub mod test {
     fn test_expect_string_or_null() {
         assert_eq!(Ok(None), expect_string_or_null(value_null(0)));
         assert_eq!(
-            Ok(Some("test\n".to_string())),
+            Ok(Some(EscapedStr("test\\n"))),
             expect_string_or_null(value_string(0, "test\\n"))
         );
         assert_eq!(
-            Err(Error::custom("expected null or string value")),
+            Err(Error::custom("expected ValueString or ValueNull")),
             expect_string_or_null(value_bool(0, true))
+        );
+    }
+
+    #[test]
+    fn test_expect_unescaped_string_or_null() {
+        assert_eq!(Ok(None), expect_unescaped_string_or_null(value_null(0)));
+        assert_eq!(
+            Ok(Some("test\n".to_string())),
+            expect_unescaped_string_or_null(value_string(0, "test\\n"))
+        );
+        assert_eq!(
+            Err(Error::custom("expected ValueString or ValueNull")),
+            expect_unescaped_string_or_null(value_bool(0, true))
         );
     }
 
@@ -355,8 +425,52 @@ pub mod test {
             expect_number_or_null(value_number(0, Number::PosInt(5)))
         );
         assert_eq!(
-            Err(Error::custom("expected null or number value")),
+            Err(Error::custom("expected ValueNumber or ValueNull")),
             expect_number_or_null(value_bool(0, true))
+        );
+    }
+
+    #[test]
+    fn test_expect_blob_or_null() {
+        assert_eq!(Ok(None), expect_blob_or_null(value_null(0)));
+        assert_eq!(
+            Ok(Some(Blob::new(b"hello!".to_vec()))),
+            expect_blob_or_null(value_string(0, "aGVsbG8h"))
+        );
+        assert_eq!(
+            Err(Error::custom("expected ValueString or ValueNull")),
+            expect_blob_or_null(value_bool(0, true))
+        );
+    }
+
+    #[test]
+    fn test_expect_timestamp_or_null() {
+        assert_eq!(
+            Ok(None),
+            expect_timestamp_or_null(value_null(0), Format::HttpDate)
+        );
+        assert_eq!(
+            Ok(Some(Instant::from_f64(2048.0))),
+            expect_timestamp_or_null(value_number(0, Number::Float(2048.0)), Format::EpochSeconds)
+        );
+        assert_eq!(
+            Ok(Some(Instant::from_f64(1445412480.0))),
+            expect_timestamp_or_null(
+                value_string(0, "Wed, 21 Oct 2015 07:28:00 GMT"),
+                Format::HttpDate
+            )
+        );
+        assert_eq!(
+            Ok(Some(Instant::from_f64(1445412480.0))),
+            expect_timestamp_or_null(value_string(0, "2015-10-21T07:28:00Z"), Format::DateTime)
+        );
+        assert_eq!(
+            Err(Error::custom("expected ValueNumber or ValueNull")),
+            expect_timestamp_or_null(value_string(0, "wrong"), Format::EpochSeconds)
+        );
+        assert_eq!(
+            Err(Error::custom("expected ValueString or ValueNull")),
+            expect_timestamp_or_null(value_number(0, Number::Float(0.0)), Format::DateTime)
         );
     }
 }
