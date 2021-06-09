@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+pub mod base64;
 pub mod instant;
 pub mod retry;
 
