@@ -107,6 +107,9 @@ class InlineDependency(
             CargoDependency.SmithyHttp(runtimeConfig)
         )
 
+        fun ec2QueryErrors(runtimeConfig: RuntimeConfig): InlineDependency =
+            forRustFile("ec2_query_errors", CargoDependency.smithyXml(runtimeConfig))
+
         fun wrappedXmlErrors(runtimeConfig: RuntimeConfig): InlineDependency =
             forRustFile("rest_xml_wrapped_errors", CargoDependency.smithyXml(runtimeConfig))
 
