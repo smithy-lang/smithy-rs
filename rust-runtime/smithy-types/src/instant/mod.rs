@@ -4,7 +4,7 @@
  */
 
 use crate::instant::format::DateParseError;
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -61,7 +61,7 @@ impl Instant {
 
     pub fn from_str(s: &str, format: Format) -> Result<Self, DateParseError> {
         match format {
-            Format::DateTime => format::iso_8601::parse(s),
+            Format::DateTime => format::rfc3339::parse(s),
             Format::HttpDate => format::http_date::parse(s),
             Format::EpochSeconds => <f64>::from_str(s)
                 // TODO: Parse base & fraction separately to achieve higher precision
@@ -75,7 +75,7 @@ impl Instant {
     /// Enable parsing multiple dates from the same string
     pub fn read(s: &str, format: Format, delim: char) -> Result<(Self, &str), DateParseError> {
         let (inst, next) = match format {
-            Format::DateTime => format::iso_8601::read(s)?,
+            Format::DateTime => format::rfc3339::read(s)?,
             Format::HttpDate => format::http_date::read(s)?,
             Format::EpochSeconds => {
                 let split_point = s.find(delim).unwrap_or_else(|| s.len());
@@ -97,6 +97,7 @@ impl Instant {
         self.to_chrono_internal()
     }
 
+    #[cfg(feature = "chrono-conversions")]
     fn to_chrono_internal(&self) -> DateTime<Utc> {
         DateTime::<Utc>::from_utc(
             NaiveDateTime::from_timestamp(self.seconds, self.subsecond_nanos),
@@ -134,7 +135,7 @@ impl Instant {
 
     pub fn fmt(&self, format: Format) -> String {
         match format {
-            Format::DateTime => format::iso_8601::format(&self),
+            Format::DateTime => format::rfc3339::format(&self),
             Format::EpochSeconds => {
                 if self.subsecond_nanos == 0 {
                     format!("{}", self.seconds)
@@ -145,6 +146,20 @@ impl Instant {
             }
             Format::HttpDate => format::http_date::format(&self),
         }
+    }
+}
+
+#[cfg(feature = "chrono-conversions")]
+impl From<DateTime<Utc>> for Instant {
+    fn from(value: DateTime<Utc>) -> Instant {
+        Instant::from_secs_and_nanos(value.timestamp(), value.timestamp_subsec_nanos())
+    }
+}
+
+#[cfg(feature = "chrono-conversions")]
+impl From<DateTime<FixedOffset>> for Instant {
+    fn from(value: DateTime<FixedOffset>) -> Instant {
+        value.with_timezone(&Utc).into()
     }
 }
 
@@ -216,5 +231,13 @@ mod test {
         let s = "Mon, 16 Dec 2019 23:48:18 GMT,Tue, 17 Dec 2019 23:48:18 GMT";
         let (_, next) = Instant::read(s, Format::HttpDate, ',').expect("valid");
         assert_eq!(next, "Tue, 17 Dec 2019 23:48:18 GMT");
+    }
+
+    #[test]
+    fn chrono_conversions_round_trip() {
+        let instant = Instant::from_secs_and_nanos(1234, 56789);
+        let chrono = instant.to_chrono();
+        let instant_again: Instant = chrono.into();
+        assert_eq!(instant, instant_again);
     }
 }
