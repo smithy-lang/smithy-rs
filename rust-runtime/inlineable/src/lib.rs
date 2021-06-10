@@ -9,6 +9,8 @@ mod blob_serde;
 #[allow(dead_code)]
 mod doc_json;
 #[allow(dead_code)]
+mod ec2_query_errors;
+#[allow(dead_code)]
 mod idempotency_token;
 mod instant_epoch;
 mod instant_httpdate;

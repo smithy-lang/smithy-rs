@@ -225,6 +225,9 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             namespace = "smithy_http::response"
         )
 
+        fun ec2QueryErrors(runtimeConfig: RuntimeConfig) =
+            forInlineDependency(InlineDependency.ec2QueryErrors(runtimeConfig))
+
         fun wrappedXmlErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.wrappedXmlErrors(runtimeConfig))
 
