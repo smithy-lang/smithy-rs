@@ -439,7 +439,7 @@ pub mod rfc3339 {
         // This is stated in the assumptions for RFC-3339. ISO-8601 allows for years
         // between -99,999 and 99,999 inclusive, but RFC-3339 is bound between 0 and 9,999.
         assert!(
-            year >= 0 && year <= 9_999,
+            (0..=9_999).contains(&year),
             "years must be between 0 and 9,999 in RFC-3339"
         );
 
