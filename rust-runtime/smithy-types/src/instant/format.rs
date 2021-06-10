@@ -442,7 +442,7 @@ pub mod iso_8601 {
         );
 
         let mut out = String::with_capacity(33);
-        if year >= 0 && year <= 9999 {
+        if (0..=9999).contains(&year) {
             write!(out, "{:04}", year).unwrap();
         } else if year < 0 {
             write!(out, "{:05}", year).unwrap();
