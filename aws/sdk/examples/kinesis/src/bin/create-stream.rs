@@ -54,7 +54,13 @@ async fn main() {
 
     let client = Client::from_conf(config);
 
-    match client.create_stream().stream_name(name).send().await {
+    match client
+        .create_stream()
+        .stream_name(name)
+        .shard_count(4)
+        .send()
+        .await
+    {
         Ok(_) => println!("Created stream"),
         Err(e) => {
             println!("Got an error creating stream");

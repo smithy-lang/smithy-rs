@@ -4,7 +4,7 @@
  */
 
 use crate::instant::format::DateParseError;
-use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -134,26 +134,7 @@ impl Instant {
 
     pub fn fmt(&self, format: Format) -> String {
         match format {
-            Format::DateTime => {
-                // TODO: hand write rfc3339 formatter & remove Chrono alloc feature
-                let rfc3339 = self
-                    .to_chrono_internal()
-                    .to_rfc3339_opts(SecondsFormat::AutoSi, true);
-                // If the date ends in `:00` eg. 2019-12-16T23:48:00Z we don't want to strip
-                // those 0s. We only need to strip subsecond zeros when they appear
-                let fixed_date = if !rfc3339.ends_with(":00Z") {
-                    // There's a bug(?) where trailing 0s aren't trimmed
-                    let mut trimmed = rfc3339
-                        .trim_end_matches('Z')
-                        .trim_end_matches('0')
-                        .to_owned();
-                    trimmed.push('Z');
-                    trimmed
-                } else {
-                    rfc3339
-                };
-                fixed_date
-            }
+            Format::DateTime => format::iso_8601::format(&self),
             Format::EpochSeconds => {
                 if self.subsecond_nanos == 0 {
                     format!("{}", self.seconds)
