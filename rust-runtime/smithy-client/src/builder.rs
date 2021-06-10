@@ -131,8 +131,6 @@ impl<C, R> Builder<C, (), R> {
             + Send
             + Sync
             + 'static,
-        // NOTE: The extra bound here is to help the type checker give better errors earlier.
-        tower::util::MapRequestLayer<F>: bounds::SmithyMiddleware<C>,
     {
         self.middleware(tower::util::MapRequestLayer::new(map))
     }
