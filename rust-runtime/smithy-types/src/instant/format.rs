@@ -238,7 +238,7 @@ pub mod http_date {
 }
 
 #[cfg(test)]
-mod test {
+mod test_http_date {
     use proptest::prelude::*;
 
     use crate::instant::format::{http_date, iso_8601, DateParseError};
@@ -391,6 +391,7 @@ pub mod iso_8601 {
 
     use crate::instant::format::DateParseError;
     use crate::Instant;
+    use chrono::{Datelike, Timelike};
 
     // OK: 1985-04-12T23:20:50.52Z
     // OK: 1985-04-12T23:20:50Z
@@ -417,5 +418,153 @@ pub mod iso_8601 {
         let delim = s.find('Z').map(|idx| idx + 1).unwrap_or_else(|| s.len());
         let (head, rest) = s.split_at(delim);
         Ok((parse(head)?, &rest))
+    }
+
+    /// Format an [Instant] in the ISO-8601 date format
+    pub fn format(instant: &Instant) -> String {
+        use std::fmt::Write;
+        let (year, month, day, hour, minute, second, nanos) = {
+            let s = instant.to_chrono_internal();
+            (
+                s.year(),
+                s.month(),
+                s.day(),
+                s.time().hour(),
+                s.time().minute(),
+                s.time().second(),
+                s.timestamp_subsec_nanos(),
+            )
+        };
+
+        assert!(
+            year.abs() <= 99_999,
+            "years greater than 5 digits are not supported by ISO-8601"
+        );
+
+        let mut out = String::with_capacity(33);
+        if year >= 0 && year <= 9999 {
+            write!(out, "{:04}", year).unwrap();
+        } else if year < 0 {
+            write!(out, "{:05}", year).unwrap();
+        } else {
+            write!(out, "+{:05}", year).unwrap();
+        }
+        write!(
+            out,
+            "-{:02}-{:02}T{:02}:{:02}:{:02}",
+            month, day, hour, minute, second
+        )
+        .unwrap();
+        format_nanos(&mut out, nanos);
+        out.push('Z');
+        out
+    }
+
+    fn format_nanos(into: &mut String, nanos: u32) {
+        if nanos > 0 {
+            into.push('.');
+            let mut place = 100_000_000;
+            let mut pushed_non_zero = false;
+            while place > 0 {
+                let digit = (nanos / place) % 10;
+                if pushed_non_zero && digit == 0 {
+                    return;
+                }
+                pushed_non_zero = digit > 0;
+                into.push(char::from(b'0' + (digit as u8)));
+                place /= 10;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_iso_8601 {
+    use super::iso_8601::format;
+    use crate::Instant;
+    use chrono::SecondsFormat;
+    use proptest::proptest;
+
+    #[test]
+    fn year_edge_cases() {
+        assert_eq!(
+            "-0001-12-31T18:22:50Z",
+            format(&Instant::from_epoch_seconds(-62167239430))
+        );
+        assert_eq!(
+            "0001-05-06T02:15:00Z",
+            format(&Instant::from_epoch_seconds(-62124788700))
+        );
+        assert_eq!(
+            "+33658-09-27T01:46:40Z",
+            format(&Instant::from_epoch_seconds(1_000_000_000_000))
+        );
+        assert_eq!(
+            "-29719-04-05T22:13:20Z",
+            format(&Instant::from_epoch_seconds(-1_000_000_000_000))
+        );
+        assert_eq!(
+            "-1199-02-15T14:13:20Z",
+            format(&Instant::from_epoch_seconds(-100_000_000_000))
+        );
+    }
+
+    #[test]
+    fn no_nanos() {
+        assert_eq!(
+            "1970-01-01T00:00:00Z",
+            format(&Instant::from_epoch_seconds(0))
+        );
+        assert_eq!(
+            "2021-06-09T23:17:26Z",
+            format(&Instant::from_epoch_seconds(1623280646))
+        );
+        assert_eq!(
+            "1969-12-31T18:22:50Z",
+            format(&Instant::from_epoch_seconds(-20230))
+        );
+    }
+
+    #[test]
+    fn with_nanos() {
+        assert_eq!(
+            "1970-01-01T00:00:00.987Z",
+            format(&Instant::from_secs_and_nanos(0, 987_000_000))
+        );
+        assert_eq!(
+            "1970-01-01T00:00:00.1Z",
+            format(&Instant::from_secs_and_nanos(0, 100_000_000))
+        );
+        assert_eq!(
+            "1970-01-01T00:00:00.01Z",
+            format(&Instant::from_secs_and_nanos(0, 10_000_000))
+        );
+        assert_eq!(
+            "1970-01-01T00:00:00.001Z",
+            format(&Instant::from_secs_and_nanos(0, 1_000_000))
+        );
+        assert_eq!(
+            "1970-01-01T00:00:00.987654Z",
+            format(&Instant::from_secs_and_nanos(0, 987_654_000))
+        );
+        assert_eq!(
+            "1970-01-01T00:00:00.987654321Z",
+            format(&Instant::from_secs_and_nanos(0, 987_654_321))
+        );
+        assert_eq!(
+            "1970-01-01T00:00:00.000000001Z",
+            format(&Instant::from_secs_and_nanos(0, 000_000_001))
+        );
+    }
+
+    proptest! {
+        // Sanity test against chrono (excluding nanos, which format differently)
+        #[test]
+        fn proptest_iso_8601(seconds in -1_000_000_000_000..1_000_000_000_000i64) {
+            let instant = Instant::from_epoch_seconds(seconds);
+            let chrono_formatted = instant.to_chrono_internal().to_rfc3339_opts(SecondsFormat::AutoSi, true);
+            let formatted = format(&instant);
+            assert_eq!(chrono_formatted, formatted);
+        }
     }
 }
