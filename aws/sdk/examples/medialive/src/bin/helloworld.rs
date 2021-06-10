@@ -1,3 +1,9 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
+/// Lists your AWS Elemental MediaLive input names and ARNs.
 #[tokio::main]
 async fn main() -> Result<(), medialive::Error> {
     let client = medialive::Client::from_env();
