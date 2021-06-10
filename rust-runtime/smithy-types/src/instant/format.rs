@@ -473,9 +473,8 @@ pub mod rfc3339 {
 mod test {
     use super::rfc3339::format;
     use crate::Instant;
-    use chrono::{DateTime, SecondsFormat};
+    use chrono::DateTime;
     use proptest::proptest;
-    use std::str::FromStr;
 
     #[test]
     fn no_nanos() {
