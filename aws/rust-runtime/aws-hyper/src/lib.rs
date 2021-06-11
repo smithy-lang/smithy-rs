@@ -61,7 +61,6 @@ impl<S> tower::Layer<S> for AwsMiddleware {
 ///    S::Error: Into<BoxError> + Send + Sync + 'static,
 ///    S::Future: Send + 'static,
 /// ```
-#[doc(inline)]
 pub type Client<C> = smithy_client::Client<C, AwsMiddleware>;
 
 #[doc(inline)]
@@ -71,7 +70,9 @@ pub type StandardClient = Client<DynConnector>;
 #[doc(inline)]
 pub use smithy_client::bounds::SmithyConnector;
 
-#[doc(inline)]
+/// AWS Service Client builder.
+///
+/// See [`smithy_client::Builder`] for details.
 pub type Builder<C> = smithy_client::Builder<C, AwsMiddleware>;
 
 /// Construct an `https` based client
