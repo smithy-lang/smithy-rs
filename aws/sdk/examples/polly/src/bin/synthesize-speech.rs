@@ -30,6 +30,15 @@ struct Opt {
     verbose: bool,
 }
 
+/// Synthesizes UTF-8 input, plain text or SSML, to a stream of bytes in a file.
+/// # Arguments
+///
+/// * `-f FILENAME` - The name of the file containing the text to synthesize.
+///    The output is saved in MP3 format in a file with the same basename, but with an __mp3__ extension.
+/// * `[-d DEFAULT-REGION]` - The region in which the client is created.
+///    If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///    If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() {
     let Opt {
