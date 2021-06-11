@@ -24,19 +24,29 @@ struct Opt {
 
     /// The value of the secret
     #[structopt(short, long)]
-    value: String,
+    secret_value: String,
+
     /// Whether to display additonal runtime information
     #[structopt(short, long)]
-    info: bool,
+    verbose: bool,
 }
 
+/// Creates a secret.
+/// # Arguments
+///
+/// * `-n NAME` - The name of the secret.
+/// * `-s SECRET_VALUE` - The secret value.
+/// * `[-d DEFAULT-REGION]` - The region in which the client is created.
+///    If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///    If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() {
     let Opt {
-        info,
         name,
         region,
-        value,
+        secret_value,
+        verbose,
     } = Opt::from_args();
 
     let region = EnvironmentProvider::new()
@@ -44,14 +54,14 @@ async fn main() {
         .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
         .unwrap_or_else(|| Region::new("us-west-2"));
 
-    if info {
+    if verbose {
         println!(
             "SecretsManager client version: {}\n",
             secretsmanager::PKG_VERSION
         );
         println!("Region:       {:?}", &region);
         println!("Secret name:  {}", name);
-        println!("Secret value: {}", value);
+        println!("Secret value: {}", secret_value);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -66,7 +76,7 @@ async fn main() {
     match client
         .create_secret()
         .name(name)
-        .secret_string(value)
+        .secret_string(secret_value)
         .send()
         .await
     {
