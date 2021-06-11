@@ -112,7 +112,7 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            inner: self.clone_box(),
+            inner: self.inner.clone_box(),
         }
     }
 }
