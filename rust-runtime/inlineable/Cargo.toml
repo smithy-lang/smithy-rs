@@ -9,8 +9,7 @@ are to allow this crate to be compilable and testable in isolation, no client co
 """
 
 [dependencies]
-"serde" = { version = "1", features = ["derive"] }
-"serde_json" = "1"
+"bytes" = "1"
 "http" = "0.2.1"
 "smithy-types" = { version = "0.0.1", path = "../smithy-types" }
 "smithy-http" = { version = "0.0.1", path = "../smithy-http" }
