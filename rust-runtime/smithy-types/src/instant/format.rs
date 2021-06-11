@@ -455,7 +455,10 @@ pub mod rfc3339 {
         out
     }
 
+    /// Formats sub-second nanos for RFC-3339 (including the '.').
+    /// Expects to be called with a number of `nanos` between 0 and 999_999_999 inclusive.
     fn format_nanos(into: &mut String, nanos: u32) {
+        debug_assert!(nanos < 1_000_000_000);
         if nanos > 0 {
             into.push('.');
             let (mut remaining, mut place) = (nanos, 100_000_000);
