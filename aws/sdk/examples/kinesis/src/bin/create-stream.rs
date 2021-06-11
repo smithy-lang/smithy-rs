@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use secretsmanager::{Client, Config, Region};
+use std::process;
+
+use kinesis::{Client, Config, Region};
 
 use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
 use structopt::StructOpt;
-
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
 
@@ -18,25 +19,19 @@ struct Opt {
     #[structopt(short, long)]
     region: Option<String>,
 
-    /// The name of the secret
     #[structopt(short, long)]
     name: String,
 
-    /// The value of the secret
     #[structopt(short, long)]
-    value: String,
-    /// Whether to display additonal runtime information
-    #[structopt(short, long)]
-    info: bool,
+    verbose: bool,
 }
 
 #[tokio::main]
 async fn main() {
     let Opt {
-        info,
         name,
         region,
-        value,
+        verbose,
     } = Opt::from_args();
 
     let region = EnvironmentProvider::new()
@@ -44,14 +39,10 @@ async fn main() {
         .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
         .unwrap_or_else(|| Region::new("us-west-2"));
 
-    if info {
-        println!(
-            "SecretsManager client version: {}\n",
-            secretsmanager::PKG_VERSION
-        );
-        println!("Region:       {:?}", &region);
-        println!("Secret name:  {}", name);
-        println!("Secret value: {}", value);
+    if verbose {
+        println!("Kinesis client version: {}\n", kinesis::PKG_VERSION);
+        println!("Region:      {:?}", &region);
+        println!("Stream name: {}", name);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -64,13 +55,17 @@ async fn main() {
     let client = Client::from_conf(config);
 
     match client
-        .create_secret()
-        .name(name)
-        .secret_string(value)
+        .create_stream()
+        .stream_name(name)
+        .shard_count(4)
         .send()
         .await
     {
-        Ok(_) => println!("Created secret"),
-        Err(e) => panic!("Failed to create secret: {}", e),
+        Ok(_) => println!("Created stream"),
+        Err(e) => {
+            println!("Got an error creating stream");
+            println!("{}", e);
+            process::exit(1);
+        }
     };
 }

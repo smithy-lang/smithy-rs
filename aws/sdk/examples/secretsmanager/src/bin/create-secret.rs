@@ -2,7 +2,6 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-use std::process;
 
 use secretsmanager::{Client, Config, Region};
 
@@ -22,16 +21,31 @@ struct Opt {
     /// The name of the secret
     #[structopt(short, long)]
     name: String,
+
+    /// The value of the secret
+    #[structopt(short, long)]
+    secret_value: String,
+
     /// Whether to display additonal runtime information
     #[structopt(short, long)]
     verbose: bool,
 }
 
+/// Creates a secret.
+/// # Arguments
+///
+/// * `-n NAME` - The name of the secret.
+/// * `-s SECRET_VALUE` - The secret value.
+/// * `[-d DEFAULT-REGION]` - The region in which the client is created.
+///    If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///    If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() {
     let Opt {
         name,
         region,
+        secret_value,
         verbose,
     } = Opt::from_args();
 
@@ -45,8 +59,9 @@ async fn main() {
             "SecretsManager client version: {}\n",
             secretsmanager::PKG_VERSION
         );
-        println!("Region:      {:?}", &region);
-        println!("Secret name: {}", name);
+        println!("Region:       {:?}", &region);
+        println!("Secret name:  {}", name);
+        println!("Secret value: {}", secret_value);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -55,19 +70,17 @@ async fn main() {
     }
 
     let config = Config::builder().region(region).build();
+
     let client = Client::from_conf(config);
 
-    match client.get_secret_value().secret_id(name).send().await {
-        Ok(resp) => {
-            println!(
-                "Value: {}",
-                resp.secret_string.as_deref().unwrap_or("No value!")
-            );
-        }
-        Err(e) => {
-            println!("Got an error listing secrets:");
-            println!("{}", e);
-            process::exit(1);
-        }
+    match client
+        .create_secret()
+        .name(name)
+        .secret_string(secret_value)
+        .send()
+        .await
+    {
+        Ok(_) => println!("Created secret"),
+        Err(e) => panic!("Failed to create secret: {}", e),
     };
 }
