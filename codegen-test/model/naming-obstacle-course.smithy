@@ -39,7 +39,11 @@ operation ReservedWordsAsMembers {
 
 structure ReservedWords {
     as: Integer,
-    async: Boolean
+    async: Boolean,
+    enum: UnknownVariantCollidingEnum,
+    self: Boolean,
+    crate: Boolean,
+    super: Boolean
 }
 
 @httpRequestTests([
@@ -97,5 +101,8 @@ structure CollidingException {
 @enum([
     { name: "Known", value: "Known" },
     { name: "Unknown", value: "Unknown" },
+    { name: "Self", value: "Self" },
+    { name: "UnknownValue", value: "UnknownValue" },
+    { name: "SelfValue", value: "SelfValue" }
 ])
 string UnknownVariantCollidingEnum
