@@ -209,7 +209,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             }
 
             ##[doc(inline)]
-            pub type Builder = #{client}::Builder;
+            pub use #{client}::Builder;
 
             impl<C, M, R> From<#{client}::Client<C, M, R>> for Client<C, M, R> {
                 fn from(client: #{client}::Client<C, M, R>) -> Self {
