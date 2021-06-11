@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.rustlang
 
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.codegen.core.ReservedWords
 import software.amazon.smithy.codegen.core.Symbol
@@ -28,8 +27,8 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider) : Wra
 
     override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
         val baseName = base.toEnumVariantName(definition) ?: return null
-        if (baseName.renamedFrom != null) {
-            throw CodegenException("hmm")
+        check(baseName.renamedFrom != null) {
+            "definitions should only pass through the renamer once"
         }
         return when (baseName.name) {
             // Self cannot be used as a raw identifier, so we can't use the normal escaping strategy
