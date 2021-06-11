@@ -17,7 +17,7 @@ import kotlin.io.path.writeText
 internal class TopLevelErrorGeneratorTest {
     @ExperimentalPathApi
     @Test
-    fun `top level errors are send + sync`() {
+    fun `top level errors are sync + sync`() {
         val model = """
         namespace com.example
 

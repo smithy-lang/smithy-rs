@@ -28,13 +28,12 @@ private const val RUNTIME_CONFIG = "runtimeConfig"
 private const val CODEGEN_SETTINGS = "codegen"
 private const val LICENSE = "license"
 
-data class CodegenConfig(val renameExceptions: Boolean = true, val includeFluentClient: Boolean = true) {
+data class CodegenConfig(val renameExceptions: Boolean = true) {
     companion object {
         fun fromNode(node: Optional<ObjectNode>): CodegenConfig {
             return if (node.isPresent) {
                 CodegenConfig(
-                    node.get().getBooleanMemberOrDefault("renameErrors", true),
-                    node.get().getBooleanMemberOrDefault("includeFluentClient", true)
+                    node.get().getBooleanMemberOrDefault("renameErrors", true)
                 )
             } else {
                 CodegenConfig()
