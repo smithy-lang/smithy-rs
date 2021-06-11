@@ -1370,7 +1370,7 @@
                 "ec2InstanceId": {
                     "target": "com.amazonaws.ecs#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>The EC2 instance ID of the container instance.</p>"
+                        "smithy.api#documentation": "<p>The ID of the container instance. For Amazon EC2 instances, this value is the Amazon EC2\n\t\t\tinstance ID. For external instances, this value is the AWS Systems Manager managed instance ID.</p>"
                     }
                 },
                 "capacityProviderName": {
@@ -2891,7 +2891,7 @@
                 "include": {
                     "target": "com.amazonaws.ecs#ClusterFieldList",
                     "traits": {
-                        "smithy.api#documentation": "<p>Whether to include additional information about your clusters in the response. If this\n\t\t\tfield is omitted, the attachments, statistics, and tags are not included.</p>\n\t\t       <p>If <code>ATTACHMENTS</code> is specified, the attachments for the container instances\n\t\t\tor tasks within the cluster are included.</p>\n\t\t       <p>If <code>SETTINGS</code> is specified, the settings for the cluster are\n\t\t\tincluded.</p>\n\t\t       <p>If <code>STATISTICS</code> is specified, the following additional information,\n\t\t\tseparated by launch type, is included:</p>\n\t\t       <ul>\n            <li>\n\t\t\t\t           <p>runningEC2TasksCount</p>\n\t\t\t         </li>\n            <li>\n\t\t\t\t           <p>runningFargateTasksCount</p>\n\t\t\t         </li>\n            <li>\n\t\t\t\t           <p>pendingEC2TasksCount</p>\n\t\t\t         </li>\n            <li>\n\t\t\t\t           <p>pendingFargateTasksCount</p>\n\t\t\t         </li>\n            <li>\n\t\t\t\t           <p>activeEC2ServiceCount</p>\n\t\t\t         </li>\n            <li>\n\t\t\t\t           <p>activeFargateServiceCount</p>\n\t\t\t         </li>\n            <li>\n\t\t\t\t           <p>drainingEC2ServiceCount</p>\n\t\t\t         </li>\n            <li>\n\t\t\t\t           <p>drainingFargateServiceCount</p>\n\t\t\t         </li>\n         </ul>\n\t\t       <p>If <code>TAGS</code> is specified, the metadata tags associated with the cluster are\n\t\t\tincluded.</p>"
+                        "smithy.api#documentation": "<p>Whether to include additional information about the clusters in the response. If this\n\t\t\tfield is omitted, this information isn't included.</p>\n\t\t       <p>If <code>ATTACHMENTS</code> is specified, the attachments for the container instances\n\t\t\tor tasks within the cluster are included.</p>\n\t\t       <p>If <code>SETTINGS</code> is specified, the settings for the cluster are\n\t\t\tincluded.</p>\n\t\t       <p>If <code>STATISTICS</code> is specified, the task and service count is included,\n\t\t\tseparated by launch type.</p>\n\t\t       <p>If <code>TAGS</code> is specified, the metadata tags associated with the cluster are\n\t\t\tincluded.</p>"
                     }
                 }
             }
@@ -2936,7 +2936,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Describes Amazon Elastic Container Service container instances. Returns metadata about registered and\n\t\t\tremaining resources on each container instance requested.</p>"
+                "smithy.api#documentation": "<p>Describes one or more container instances. Returns metadata about each container\n\t\t\tinstance requested.</p>"
             }
         },
         "com.amazonaws.ecs#DescribeContainerInstancesRequest": {
