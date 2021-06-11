@@ -10,8 +10,8 @@ license = "Apache-2.0"
 [features]
 test-util = ["protocol-test-helpers"]
 default = ["test-util"]
-native-tls = ["hyper-tls", "smithy-client/native-tls"]
-rustls = ["hyper-rustls", "smithy-client/rustls"]
+native-tls = ["hyper-tls"]
+rustls = ["hyper-rustls"]
 
 [dependencies]
 hyper = { version = "0.14.2", features = ["client", "http1", "http2", "tcp", "runtime"] }
@@ -28,7 +28,6 @@ http-body = "0.4.0"
 smithy-http = { path = "../../../rust-runtime/smithy-http" }
 smithy-types = { path = "../../../rust-runtime/smithy-types" }
 smithy-http-tower = { path = "../../../rust-runtime/smithy-http-tower" }
-smithy-client = { path = "../../../rust-runtime/smithy-client" }
 fastrand = "1.4.0"
 tokio = { version = "1", features = ["time"] }
 

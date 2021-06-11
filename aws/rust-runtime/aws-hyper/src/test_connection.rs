@@ -2,10 +2,6 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-//! Module with client connectors usefule for testing.
-
-// TODO
-#![allow(missing_docs)]
 
 use http::header::{HeaderName, CONTENT_TYPE};
 use http::Request;
@@ -19,7 +15,6 @@ use tower::BoxError;
 
 type ConnectVec<B> = Vec<(http::Request<SdkBody>, http::Response<B>)>;
 
-#[derive(Debug)]
 pub struct ValidateRequest {
     pub expected: http::Request<SdkBody>,
     pub actual: http::Request<SdkBody>,
@@ -57,7 +52,7 @@ impl ValidateRequest {
     }
 }
 
-/// TestConnection for use with a [`Client`](crate::Client).
+/// TestConnection for use with a [`aws_hyper::Client`](crate::Client)
 ///
 /// A basic test connection. It will:
 /// - Response to requests with a preloaded series of responses
@@ -67,7 +62,7 @@ impl ValidateRequest {
 /// For more complex use cases, see [Tower Test](https://docs.rs/tower-test/0.4.0/tower_test/)
 /// Usage example:
 /// ```rust
-/// use smithy_client::test_connection::TestConnection;
+/// use aws_hyper::test_connection::TestConnection;
 /// use smithy_http::body::SdkBody;
 /// let events = vec![(
 ///    http::Request::new(SdkBody::from("request body")),
@@ -77,9 +72,8 @@ impl ValidateRequest {
 ///        .unwrap(),
 /// )];
 /// let conn = TestConnection::new(events);
-/// let client = smithy_client::Client::from(conn);
+/// let client = aws_hyper::Client::new(conn);
 /// ```
-#[derive(Debug)]
 pub struct TestConnection<B> {
     data: Arc<Mutex<ConnectVec<B>>>,
     requests: Arc<Mutex<Vec<ValidateRequest>>>,
@@ -109,10 +103,7 @@ impl<B> TestConnection<B> {
     }
 }
 
-impl<B> tower::Service<http::Request<SdkBody>> for TestConnection<B>
-where
-    SdkBody: From<B>,
-{
+impl<B: Into<hyper::Body>> tower::Service<http::Request<SdkBody>> for TestConnection<B> {
     type Response = http::Response<SdkBody>;
     type Error = BoxError;
     type Future = Ready<Result<Self::Response, Self::Error>>;
@@ -128,37 +119,24 @@ where
                 .lock()
                 .unwrap()
                 .push(ValidateRequest { expected, actual });
-            std::future::ready(Ok(resp.map(SdkBody::from)))
+            std::future::ready(Ok(resp.map(|body| SdkBody::from(body.into()))))
         } else {
             std::future::ready(Err("No more data".into()))
         }
     }
 }
 
-impl<B> From<TestConnection<B>> for crate::Client<TestConnection<B>, tower::layer::util::Identity>
-where
-    B: Send + 'static,
-    SdkBody: From<B>,
-{
-    fn from(tc: TestConnection<B>) -> Self {
-        crate::Builder::new()
-            .middleware(tower::layer::util::Identity::new())
-            .connector(tc)
-            .build()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::test_connection::TestConnection;
-    use crate::Client;
+    use crate::{conn, Client};
 
     fn is_send_sync<T: Send + Sync>(_: T) {}
 
     #[test]
     fn construct_test_client() {
         let test_conn = TestConnection::<String>::new(vec![]);
-        let client: Client<_, _, _> = test_conn.into();
+        let client = Client::new(conn::Standard::new(test_conn));
         is_send_sync(client);
     }
 }

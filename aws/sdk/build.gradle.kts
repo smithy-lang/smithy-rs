@@ -26,7 +26,6 @@ val runtimeModules = listOf(
     "smithy-xml",
     "smithy-http",
     "smithy-http-tower",
-    "smithy-client",
     "protocol-test-helpers"
 )
 val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types", "aws-hyper", "aws-sig-auth", "aws-http")
@@ -103,9 +102,6 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                     "rust-codegen": {
                       "runtimeConfig": {
                         "relativePath": "../"
-                      },
-                      "codegen": {
-                        "includeFluentClient": false
                       },
                       "service": "${it.service}",
                       "module": "aws-sdk-${it.module}",
