@@ -60,6 +60,12 @@ interface HttpBindingResolver {
         requestBindings(operationShape).filter { it.location == location }.map { it.member }
 
     /**
+     * Returns a list of member shapes bound to a given response [location] for a given [operationShape]
+     */
+    fun responseMembers(operationShape: OperationShape, location: HttpLocation): List<MemberShape> =
+        responseBindings(operationShape).filter { it.location == location }.map { it.member }
+
+    /**
      * Determine the timestamp format based on the input parameters.
      */
     fun timestampFormat(

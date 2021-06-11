@@ -394,12 +394,7 @@ class XmlBindingTraitParserGenerator(
                 *codegenScope, "Shape" to symbol
             ) {
                 Attribute.AllowUnusedMut.render(this)
-                rustTemplate(
-                    """
-                    let mut builder = #{Shape}::builder();
-                """,
-                    *codegenScope, "Shape" to symbol
-                )
+                rustTemplate("let mut builder = #{Shape}::builder();", *codegenScope, "Shape" to symbol)
                 val members = shape.xmlMembers()
                 if (members.isNotEmpty()) {
                     parseStructureInner(members, "builder", Ctx(tag = "decoder", accum = null))

@@ -6,10 +6,12 @@
 use crate::deserialize::error::{Error, ErrorReason};
 use crate::escape::unescape_string;
 use smithy_types::instant::Format;
-use smithy_types::{base64, Blob, Instant, Number};
+use smithy_types::{base64, Blob, Document, Instant, Number};
 use std::borrow::Cow;
 
 pub use crate::escape::Error as EscapeError;
+use std::collections::HashMap;
+use std::iter::Peekable;
 
 /// New-type around `&str` that indicates the string is an escaped JSON string.
 /// Provides functions for retrieving the string in either form.
@@ -198,6 +200,54 @@ pub fn expect_timestamp_or_null(
                 )
             })?,
     })
+}
+
+/// Expects and parses a complete document value.
+pub fn expect_document<'a, I>(tokens: &mut Peekable<I>) -> Result<Document, Error>
+where
+    I: Iterator<Item = Result<Token<'a>, Error>>,
+{
+    match tokens.next().transpose()? {
+        Some(Token::ValueNull { .. }) => Ok(Document::Null),
+        Some(Token::ValueBool { value, .. }) => Ok(Document::Bool(value)),
+        Some(Token::ValueNumber { value, .. }) => Ok(Document::Number(value)),
+        Some(Token::ValueString { value, .. }) => {
+            Ok(Document::String(value.to_unescaped()?.into_owned()))
+        }
+        Some(Token::StartObject { .. }) => {
+            let mut object = HashMap::new();
+            loop {
+                match tokens.next().transpose()? {
+                    Some(Token::EndObject { .. }) => break,
+                    Some(Token::ObjectKey { key, .. }) => {
+                        let key = key.to_unescaped()?.into_owned();
+                        let value = expect_document(tokens)?;
+                        object.insert(key, value);
+                    }
+                    _ => return Err(Error::custom("expected object key or end object")),
+                }
+            }
+            Ok(Document::Object(object))
+        }
+        Some(Token::StartArray { .. }) => {
+            let mut array = Vec::new();
+            loop {
+                match tokens.peek() {
+                    Some(Ok(Token::EndArray { .. })) => {
+                        tokens.next().transpose().unwrap();
+                        break;
+                    }
+                    _ => array.push(expect_document(tokens)?),
+                }
+            }
+            Ok(Document::Array(array))
+        }
+        Some(Token::EndObject { .. }) | Some(Token::ObjectKey { .. }) => {
+            unreachable!("end object and object key are handled in start object")
+        }
+        Some(Token::EndArray { .. }) => unreachable!("end array is handled in start array"),
+        None => Err(Error::custom("expected value")),
+    }
 }
 
 /// Skips an entire value in the token stream. Errors if it isn't a value.
@@ -471,6 +521,72 @@ pub mod test {
         assert_eq!(
             Err(Error::custom("expected ValueString or ValueNull")),
             expect_timestamp_or_null(value_number(0, Number::Float(0.0)), Format::DateTime)
+        );
+    }
+
+    #[test]
+    fn test_expect_document() {
+        let test = |value| expect_document(&mut json_token_iter(value).peekable()).unwrap();
+        assert_eq!(Document::Null, test(b"null"));
+        assert_eq!(Document::Bool(true), test(b"true"));
+        assert_eq!(Document::Number(Number::Float(3.2)), test(b"3.2"));
+        assert_eq!(Document::String("Foo\nBar".into()), test(b"\"Foo\\nBar\""));
+        assert_eq!(Document::Array(Vec::new()), test(b"[]"));
+        assert_eq!(Document::Object(HashMap::new()), test(b"{}"));
+        assert_eq!(
+            Document::Array(vec![
+                Document::Number(Number::PosInt(1)),
+                Document::Bool(false),
+                Document::String("s".into()),
+                Document::Array(Vec::new()),
+                Document::Object(HashMap::new()),
+            ]),
+            test(b"[1,false,\"s\",[],{}]")
+        );
+        assert_eq!(
+            Document::Object(
+                vec![
+                    ("num".to_string(), Document::Number(Number::PosInt(1))),
+                    ("bool".to_string(), Document::Bool(true)),
+                    ("string".to_string(), Document::String("s".into())),
+                    (
+                        "array".to_string(),
+                        Document::Array(vec![
+                            Document::Object(
+                                vec![("foo".to_string(), Document::Bool(false))]
+                                    .into_iter()
+                                    .collect(),
+                            ),
+                            Document::Object(
+                                vec![("bar".to_string(), Document::Bool(true))]
+                                    .into_iter()
+                                    .collect(),
+                            ),
+                        ])
+                    ),
+                    (
+                        "nested".to_string(),
+                        Document::Object(
+                            vec![("test".to_string(), Document::Null),]
+                                .into_iter()
+                                .collect()
+                        )
+                    ),
+                ]
+                .into_iter()
+                .collect()
+            ),
+            test(
+                br#"
+                { "num": 1,
+                  "bool": true,
+                  "string": "s",
+                  "array":
+                      [{ "foo": false },
+                       { "bar": true }],
+                  "nested": { "test": null } }
+                "#
+            )
         );
     }
 }

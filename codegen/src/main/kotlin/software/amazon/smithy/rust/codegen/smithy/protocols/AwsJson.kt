@@ -39,7 +39,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.smithy.meta
-import software.amazon.smithy.rust.codegen.smithy.protocols.parse.SerdeJsonParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
@@ -250,7 +250,7 @@ class BasicAwsJsonGenerator(
         val outputShape = operationIndex.getOutput(operationShape).get()
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         val jsonErrors = RuntimeType.awsJsonErrors(protocolConfig.runtimeConfig)
-        val generator = SerdeJsonParserGenerator(protocolConfig)
+        val generator = JsonParserGenerator(protocolConfig, AwsJsonHttpBindingResolver(model, awsJsonVersion))
 
         fromResponseFun(implBlockWriter, operationShape) {
             rustBlock("if #T::is_error(&response)", jsonErrors) {
