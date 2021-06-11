@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use std::error::Error;
+use std::fmt;
+
 const NANOS_PER_SECOND: u32 = 1_000_000_000;
 
 #[non_exhaustive]
@@ -10,6 +13,18 @@ const NANOS_PER_SECOND: u32 = 1_000_000_000;
 pub enum DateParseError {
     Invalid(&'static str),
     IntParseError,
+}
+
+impl Error for DateParseError {}
+
+impl fmt::Display for DateParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use DateParseError::*;
+        match self {
+            Invalid(msg) => write!(f, "invalid date: {}", msg),
+            IntParseError => write!(f, "failed to parse int"),
+        }
+    }
 }
 
 pub mod http_date {

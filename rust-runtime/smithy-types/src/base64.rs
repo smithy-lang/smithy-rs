@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-/// A correct, small, but not especially fast
-/// base64 implementation
+//! A correct, small, but not especially fast base64 implementation
+
+use std::error::Error;
+use std::fmt;
 
 const BASE64_ENCODE_TABLE: &[u8; 64] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -84,6 +86,19 @@ pub enum DecodeError {
     InvalidByte,
     InvalidPadding,
     InvalidLength,
+}
+
+impl Error for DecodeError {}
+
+impl fmt::Display for DecodeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use DecodeError::*;
+        match self {
+            InvalidByte => write!(f, "invalid byte"),
+            InvalidPadding => write!(f, "invalid padding"),
+            InvalidLength => write!(f, "invalid length"),
+        }
+    }
 }
 
 fn decode_inner(inp: &str) -> Result<Vec<u8>, DecodeError> {
