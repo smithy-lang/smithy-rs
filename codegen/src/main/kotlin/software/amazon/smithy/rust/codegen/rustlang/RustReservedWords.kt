@@ -5,15 +5,18 @@
 
 package software.amazon.smithy.rust.codegen.rustlang
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.codegen.core.ReservedWords
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.traits.EnumDefinition
+import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
 
-class RustReservedWordSymbolProvider(base: RustSymbolProvider) : WrappingSymbolProvider(base) {
+class RustReservedWordSymbolProvider(private val base: RustSymbolProvider) : WrappingSymbolProvider(base) {
     private val internal = ReservedWordSymbolProvider.builder().symbolProvider(base).memberReservedWords(RustReservedWords).build()
     override fun toMemberName(shape: MemberShape): String {
         return internal.toMemberName(shape)
@@ -21,6 +24,25 @@ class RustReservedWordSymbolProvider(base: RustSymbolProvider) : WrappingSymbolP
 
     override fun toSymbol(shape: Shape): Symbol {
         return internal.toSymbol(shape)
+    }
+
+    override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
+        val baseName = base.toEnumVariantName(definition) ?: return null
+        if (baseName.renamedFrom != null) {
+            throw CodegenException("hmm")
+        }
+        return when (baseName.name) {
+            // Self cannot be used as a raw identifier, so we can't use the normal escaping strategy
+            // https://internals.rust-lang.org/t/raw-identifiers-dont-work-for-all-identifiers/9094/4
+            "Self" -> MaybeRenamed("SelfValue", "Self")
+            // Real models won't end in `_` so it's safe to stop here
+            "SelfValue" -> MaybeRenamed("SelfValue_", "SelfValue")
+            // Unknown is used as the name of the variant containing unexpected values
+            "Unknown" -> MaybeRenamed("UnknownValue", "Unknown")
+            // Real models won't end in `_` so it's safe to stop here
+            "UnknownValue" -> MaybeRenamed("UnknownValue_", "UnknownValue")
+            else -> baseName
+        }
     }
 }
 
