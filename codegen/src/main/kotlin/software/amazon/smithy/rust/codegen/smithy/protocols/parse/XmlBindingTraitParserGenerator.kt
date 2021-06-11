@@ -200,7 +200,7 @@ class XmlBindingTraitParserGenerator(
     }
 
     override fun errorParser(errorShape: StructureShape): RuntimeType {
-        val fnName = symbolProvider.deserializeFunctionName(errorShape)
+        val fnName = symbolProvider.deserializeFunctionName(errorShape) + "_xml_err"
         return RuntimeType.forInlineFun(fnName, "xml_deser") {
             Attribute.AllowUnusedMut.render(it)
             it.rustBlock(
