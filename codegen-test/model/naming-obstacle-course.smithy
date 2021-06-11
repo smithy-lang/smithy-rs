@@ -40,7 +40,10 @@ operation ReservedWordsAsMembers {
 structure ReservedWords {
     as: Integer,
     async: Boolean,
-    enum: UnknownVariantCollidingEnum
+    enum: UnknownVariantCollidingEnum,
+    self: Boolean,
+    crate: Boolean,
+    super: Boolean
 }
 
 @httpRequestTests([

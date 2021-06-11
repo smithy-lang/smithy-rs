@@ -14,9 +14,12 @@ import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 class RustReservedWordSymbolProvider(private val base: RustSymbolProvider) : WrappingSymbolProvider(base) {
-    private val internal = ReservedWordSymbolProvider.builder().symbolProvider(base).memberReservedWords(RustReservedWords).build()
+    private val internal =
+        ReservedWordSymbolProvider.builder().symbolProvider(base).memberReservedWords(RustReservedWords).build()
+
     override fun toMemberName(shape: MemberShape): String {
         return internal.toMemberName(shape)
     }
@@ -27,7 +30,10 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider) : Wra
 
     override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
         val baseName = base.toEnumVariantName(definition) ?: return null
-        check(baseName.renamedFrom != null) {
+        check(baseName.name.toPascalCase() == baseName.name) {
+            "Enum variants must already be in pascal case"
+        }
+        check(baseName.renamedFrom == null) {
             "definitions should only pass through the renamer once"
         }
         return when (baseName.name) {
@@ -102,7 +108,12 @@ object RustReservedWords : ReservedWords {
         "try"
     )
 
-    override fun escape(word: String): String = "r##$word"
+    private val cantBeRaw = setOf("self", "crate", "super")
+
+    override fun escape(word: String): String = when {
+        cantBeRaw.contains(word) -> "${word}_"
+        else -> "r##$word"
+    }
 
     override fun isReserved(word: String): Boolean = RustKeywords.contains(word)
 }
