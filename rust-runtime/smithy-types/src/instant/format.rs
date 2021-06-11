@@ -476,7 +476,6 @@ pub mod rfc3339 {
 mod test {
     use super::rfc3339::format;
     use crate::Instant;
-    use chrono::DateTime;
     use proptest::proptest;
 
     #[test]
@@ -534,10 +533,13 @@ mod test {
     proptest! {
         // Sanity test against chrono
         #[test]
+        #[cfg(feature = "chrono-conversions")]
         fn proptest_rfc3339(
             seconds in 0..253_402_300_799i64, // 0 to 9999-12-31T23:59:59
             nanos in 0..1_000_000_000u32
         ) {
+            use chrono::DateTime;
+
             let instant = Instant::from_secs_and_nanos(seconds, nanos);
             let formatted = format(&instant);
             let parsed: Instant = DateTime::parse_from_rfc3339(&formatted).unwrap().into();

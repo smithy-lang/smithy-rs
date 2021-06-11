@@ -4,7 +4,7 @@
  */
 
 use crate::instant::format::DateParseError;
-use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -97,7 +97,6 @@ impl Instant {
         self.to_chrono_internal()
     }
 
-    #[cfg(feature = "chrono-conversions")]
     fn to_chrono_internal(&self) -> DateTime<Utc> {
         DateTime::<Utc>::from_utc(
             NaiveDateTime::from_timestamp(self.seconds, self.subsecond_nanos),
@@ -157,8 +156,8 @@ impl From<DateTime<Utc>> for Instant {
 }
 
 #[cfg(feature = "chrono-conversions")]
-impl From<DateTime<FixedOffset>> for Instant {
-    fn from(value: DateTime<FixedOffset>) -> Instant {
+impl From<DateTime<chrono::FixedOffset>> for Instant {
+    fn from(value: DateTime<chrono::FixedOffset>) -> Instant {
         value.with_timezone(&Utc).into()
     }
 }
@@ -234,6 +233,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "chrono-conversions")]
     fn chrono_conversions_round_trip() {
         let instant = Instant::from_secs_and_nanos(1234, 56789);
         let chrono = instant.to_chrono();
