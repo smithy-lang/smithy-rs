@@ -216,7 +216,7 @@ impl Display for ExecEnvMetadata {
 }
 
 #[non_exhaustive]
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone)]
 pub struct UserAgentStage;
 
 impl UserAgentStage {

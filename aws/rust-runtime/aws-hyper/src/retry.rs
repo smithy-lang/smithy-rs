@@ -10,11 +10,12 @@
 //! implementation is intended to be _correct_ but not especially long lasting.
 //!
 //! Components:
-//! - [`Standard`]: Top level manager, intended to be associated with a [`Client`](crate::Client).
-//!   Its sole purpose in life is to create a [`RetryHandler`] for individual requests.
-//! - [`RetryHandler`]: A request-scoped retry policy, backed by request-local state and shared
-//!   state contained within [`Standard`].
-//! - [`Config`]: Static configuration (max retries, max backoff etc.)
+//! - [`RetryHandlerFactory`](crate::retry::RetryHandlerFactory): Top level manager, intended
+//! to be associated with a [`Client`](crate::Client). Its sole purpose in life is to create a RetryHandler
+//! for individual requests.
+//! - [`RetryHandler`](crate::retry::RetryHandler): A request-scoped retry policy,
+//! backed by request-local state and shared state contained within [`RetryHandlerFactory`](crate::retry::RetryHandlerFactory)
+//! - [`RetryConfig`](crate::retry::RetryConfig): Static configuration (max retries, max backoff etc.)
 
 use crate::{SdkError, SdkSuccess};
 use smithy_http::operation;
@@ -27,26 +28,13 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing::Instrument;
 
-/// A policy instantiator.
-///
-/// Implementors are essentially "policy factories" that can produce a new instance of a retry
-/// policy mechanism for each request, which allows both shared global state _and_ per-request
-/// local state.
-pub trait NewRequestPolicy {
-    /// The type of the per-request policy mechanism.
-    type Policy;
-
-    /// Create a new policy mechanism instance.
-    fn new_request_policy(&self) -> Self::Policy;
-}
-
 /// Retry Policy Configuration
 ///
-/// Without specific use cases, users should generally rely on the default values set by `[Config::default]`(Config::default).`
+/// Without specific use cases, users should generally rely on the default values set by `[RetryConfig::default]`(RetryConfig::default).`
 ///
 /// Currently these fields are private and no setters provided. As needed, this configuration will become user-modifiable in the future..
 #[derive(Clone, Debug)]
-pub struct Config {
+pub struct RetryConfig {
     initial_retry_tokens: usize,
     retry_cost: usize,
     no_retry_increment: usize,
@@ -56,14 +44,14 @@ pub struct Config {
     base: fn() -> f64,
 }
 
-impl Config {
+impl RetryConfig {
     /// Override `b` in the exponential backoff computation
     ///
     /// By default, `base` is a randomly generated value between 0 and 1. In tests, it can
     /// be helpful to override this:
     /// ```rust
-    /// use smithy_client::retry::Config;
-    /// let conf = Config::default().with_base(||1_f64);
+    /// use aws_hyper::RetryConfig;
+    /// let conf = RetryConfig::default().with_base(||1_f64);
     /// ```
     pub fn with_base(mut self, base: fn() -> f64) -> Self {
         self.base = base;
@@ -71,7 +59,7 @@ impl Config {
     }
 }
 
-impl Default for Config {
+impl Default for RetryConfig {
     fn default() -> Self {
         Self {
             initial_retry_tokens: INITIAL_RETRY_TOKENS,
@@ -93,38 +81,31 @@ const RETRY_COST: usize = 5;
 /// Manage retries for a service
 ///
 /// An implementation of the `standard` AWS retry strategy as specified in the SEP. A `Strategy` is scoped to a client.
-/// For an individual request, call [`Standard::new_request_policy()`](Standard::new_request_policy)
+/// For an individual request, call [`RetryHandlerFactory::new_handler()`](RetryHandlerFactory::new_handler)
 ///
 /// In the future, adding support for the adaptive retry strategy will be added by adding a `TokenBucket` to
 /// `CrossRequestRetryState`
-/// Its main functionality is via `new_request_policy` which creates a `RetryHandler` to manage the retry for
+/// Its main functionality is via `new_handler` which creates a `RetryHandler` to manage the retry for
 /// an individual request.
 #[derive(Debug)]
-pub struct Standard {
-    config: Config,
+pub struct RetryHandlerFactory {
+    config: RetryConfig,
     shared_state: CrossRequestRetryState,
 }
 
-impl Standard {
-    /// Construct a new standard retry policy from the given policy configuration.
-    pub fn new(config: Config) -> Self {
+impl RetryHandlerFactory {
+    pub fn new(config: RetryConfig) -> Self {
         Self {
             shared_state: CrossRequestRetryState::new(config.initial_retry_tokens),
             config,
         }
     }
 
-    /// Set the configuration for this retry policy.
-    pub fn with_config(&mut self, config: Config) -> &mut Self {
+    pub fn with_config(&mut self, config: RetryConfig) {
         self.config = config;
-        self
     }
-}
 
-impl NewRequestPolicy for Standard {
-    type Policy = RetryHandler;
-
-    fn new_request_policy(&self) -> Self::Policy {
+    pub(crate) fn new_handler(&self) -> RetryHandler {
         RetryHandler {
             local: RequestLocalRetryState::new(),
             shared: self.shared_state.clone(),
@@ -133,13 +114,7 @@ impl NewRequestPolicy for Standard {
     }
 }
 
-impl Default for Standard {
-    fn default() -> Self {
-        Self::new(Config::default())
-    }
-}
-
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone)]
 struct RequestLocalRetryState {
     attempts: u32,
     last_quota_usage: Option<usize>,
@@ -173,7 +148,7 @@ impl CrossRequestRetryState {
         }
     }
 
-    fn quota_release(&self, value: Option<usize>, config: &Config) {
+    fn quota_release(&self, value: Option<usize>, config: &RetryConfig) {
         let mut quota = self.quota_available.lock().unwrap();
         *quota += value.unwrap_or(config.no_retry_increment);
     }
@@ -182,7 +157,7 @@ impl CrossRequestRetryState {
     ///
     /// If quota is available, the amount of quota consumed is returned
     /// If no quota is available, `None` is returned.
-    fn quota_acquire(&self, err: &ErrorKind, config: &Config) -> Option<usize> {
+    fn quota_acquire(&self, err: &ErrorKind, config: &RetryConfig) -> Option<usize> {
         let mut quota = self.quota_available.lock().unwrap();
         let retry_cost = if err == &ErrorKind::TransientError {
             config.timeout_retry_cost
@@ -203,11 +178,11 @@ impl CrossRequestRetryState {
 /// Implement retries for an individual request.
 /// It is intended to be used as a [Tower Retry Policy](tower::retry::Policy) for use in tower-based
 /// middleware stacks.
-#[derive(Clone, Debug)]
-pub struct RetryHandler {
+#[derive(Clone)]
+pub(crate) struct RetryHandler {
     local: RequestLocalRetryState,
     shared: CrossRequestRetryState,
-    config: Config,
+    config: RetryConfig,
 }
 
 #[cfg(test)]
@@ -222,7 +197,7 @@ impl RetryHandler {
     ///
     /// If a retry is specified, this function returns `(next, backoff_duration)`
     /// If no retry is specified, this function returns None
-    fn attempt_retry(&self, retry_kind: Result<(), ErrorKind>) -> Option<(Self, Duration)> {
+    pub fn attempt_retry(&self, retry_kind: Result<(), ErrorKind>) -> Option<(Self, Duration)> {
         let quota_used = match retry_kind {
             Ok(_) => {
                 self.shared
@@ -302,14 +277,14 @@ fn check_send_sync<T: Send>(t: T) -> T {
 
 #[cfg(test)]
 mod test {
-    use crate::retry::{Config, NewRequestPolicy, RetryHandler, Standard};
+    use crate::retry::{RetryConfig, RetryHandler, RetryHandlerFactory};
     use smithy_types::retry::ErrorKind;
     use std::time::Duration;
 
     fn assert_send_sync<T: Send + Sync>() {}
 
-    fn test_config() -> Config {
-        Config::default().with_base(|| 1_f64)
+    fn test_config() -> RetryConfig {
+        RetryConfig::default().with_base(|| 1_f64)
     }
 
     #[test]
@@ -319,7 +294,7 @@ mod test {
 
     #[test]
     fn eventual_success() {
-        let policy = Standard::new(test_config()).new_request_policy();
+        let policy = RetryHandlerFactory::new(test_config()).new_handler();
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
@@ -339,7 +314,7 @@ mod test {
 
     #[test]
     fn no_more_attempts() {
-        let policy = Standard::new(test_config()).new_request_policy();
+        let policy = RetryHandlerFactory::new(test_config()).new_handler();
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
@@ -361,7 +336,7 @@ mod test {
     fn no_quota() {
         let mut conf = test_config();
         conf.initial_retry_tokens = 5;
-        let policy = Standard::new(conf).new_request_policy();
+        let policy = RetryHandlerFactory::new(conf).new_handler();
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
@@ -376,7 +351,7 @@ mod test {
     fn backoff_timing() {
         let mut conf = test_config();
         conf.max_retries = 5;
-        let policy = Standard::new(conf).new_request_policy();
+        let policy = RetryHandlerFactory::new(conf).new_handler();
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
@@ -411,7 +386,7 @@ mod test {
         let mut conf = test_config();
         conf.max_retries = 5;
         conf.max_backoff = Duration::from_secs(3);
-        let policy = Standard::new(conf).new_request_policy();
+        let policy = RetryHandlerFactory::new(conf).new_handler();
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
