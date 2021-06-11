@@ -303,6 +303,17 @@ fn pause() {
     stdin().read_exact(&mut [0]).unwrap();
 }
 
+/// Performs CRUD (create, read, update, delete) operations on a DynamoDB table and table item.
+/// It creates a table, adds an item to the table, updates the item, deletes the item, and deletes the table.
+/// The table name, primary key, and primary key value are all created as random strings.
+///
+/// # Arguments
+///
+/// * `[-i]` - Whether to pause between operations.
+/// * `[-d DEFAULT-REGION]` - The region in which the client is created.
+///    If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///    If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() {
     let Opt {

@@ -26,7 +26,7 @@ struct Opt {
     #[structopt(short, long)]
     table: String,
 
-    /// The region
+    /// The primary key
     #[structopt(short, long)]
     key: String,
 
@@ -35,6 +35,15 @@ struct Opt {
     verbose: bool,
 }
 
+/// Creates a DynamoDB table.
+/// # Arguments
+///
+/// * `-k KEY` - The primary key for the table.
+/// * `-t TABLE` - The name of the table.
+/// * `[-d DEFAULT-REGION]` - The region in which the client is created.
+///    If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///    If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() {
     let Opt {
