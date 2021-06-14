@@ -33,6 +33,7 @@ val CodegenTests = listOf(
     CodegenTest("aws.protocoltests.restjson#RestJsonExtras", "rest_json_extas"),
     CodegenTest("aws.protocoltests.restxml#RestXml", "rest_xml"),
     CodegenTest("aws.protocoltests.query#AwsQuery", "aws_query"),
+    CodegenTest("aws.protocoltests.ec2#AwsEc2", "ec2_query"),
     CodegenTest(
         "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
         "rest_xml_namespace"
