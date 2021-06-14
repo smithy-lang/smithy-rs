@@ -66,20 +66,9 @@ async fn main() {
 
     match client.list_objects().bucket(&bucket).send().await {
         Ok(resp) => {
-            match resp.contents {
-                None => {}
-                Some(objects) => {
-                    // vector of Object items
-                    println!("Objects:");
-                    for (_, x) in objects.iter().enumerate() {
-                        match &x.key {
-                            None => {}
-                            Some(k) => {
-                                println!("  {}", k);
-                            }
-                        }
-                    }
-                }
+            println!("Objects:");
+            for object in resp.contents.unwrap_or_default() {
+                println!(" {}", object.key.expect("objects have keys"));
             }
         }
         Err(e) => {
