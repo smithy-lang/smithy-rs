@@ -363,8 +363,7 @@ async fn main() {
     let r = region.clone();
 
     let conf = Config::builder().region(&r).build();
-    let conn = aws_hyper::conn::Standard::https();
-    let client = Client::from_conf_conn(conf, conn);
+    let client = Client::from_conf(conf);
 
     /* Create table */
     println!();
