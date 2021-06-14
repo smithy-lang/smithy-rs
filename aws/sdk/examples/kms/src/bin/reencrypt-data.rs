@@ -82,8 +82,7 @@ async fn main() {
     }
 
     let conf = Config::builder().region(region).build();
-    let conn = aws_hyper::conn::Standard::https();
-    let client = Client::from_conf_conn(conf, conn);
+    let client = Client::from_conf(conf);
 
     // Get blob from input file
     // Open input text file and get contents as a string
