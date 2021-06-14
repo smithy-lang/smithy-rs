@@ -5,7 +5,6 @@
 
 use aws_types::region::ProvideRegion;
 
-//use qldbsession::model::StartSessionRequest;
 use qldb::model::PermissionsMode;
 use qldb::{Client, Config, Error, Region};
 
@@ -51,7 +50,7 @@ async fn main() -> Result<(), Error> {
         .unwrap_or_else(|| Region::new("us-west-2"));
 
     if verbose {
-        println!("OLDB client version: {}\n", qldb::PKG_VERSION);
+        println!("QLDB client version: {}\n", qldb::PKG_VERSION);
         println!("Region:              {:?}", &region);
 
         SubscriberBuilder::default()
@@ -70,12 +69,7 @@ async fn main() -> Result<(), Error> {
         .send()
         .await?;
 
-    match result.arn {
-        None => {}
-        Some(a) => {
-            println!("Ledger ARN: {}", a);
-        }
-    }
+    println!("ARN: {}", result.arn.unwrap());
 
     Ok(())
 }
