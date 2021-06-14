@@ -1,5 +1,5 @@
 [package]
-name = "rds-code-examples"
+name = "rdsdata-code-examples"
 authors = ["LMJW <heysuperming@gmail.com>", "Doug Schwartz <dougsch@amazon.com>"]
 edition = "2018"
 version = "0.1.0"
@@ -7,7 +7,7 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rds = {package = "aws-sdk-rds", path = "../../build/aws-sdk/rds"}
+rdsdata = {package = "aws-sdk-rdsdata", path = "../../build/aws-sdk/rdsdata"}
 aws-types = { path = "../../build/aws-sdk/aws-types" }
 
 tokio = {version = "1", features = ["full"]}
