@@ -4,7 +4,7 @@ async fn main() -> Result<(), cloudformation::Error> {
     let stacks = client.list_stacks().send().await?;
 
     for s in stacks.stack_summaries.unwrap_or_default() {
-        let deets = format!(
+        let details = format!(
             "{}\t{}\t{:#?}\t{}",
             s.stack_id.as_deref().unwrap_or_default(),
             s.stack_name.as_deref().unwrap_or_default(),
@@ -12,7 +12,7 @@ async fn main() -> Result<(), cloudformation::Error> {
             s.stack_status_reason.as_deref().unwrap_or_default()
         );
 
-        println!("{}", deets);
+        println!("{}", details);
     }
 
     Ok(())
