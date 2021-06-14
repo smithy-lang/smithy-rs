@@ -9,9 +9,11 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.generators.StructureGeneratorTest
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.Default
+import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.setDefault
@@ -52,6 +54,10 @@ internal class BuilderGeneratorTest {
             object : RustSymbolProvider {
                 override fun config(): SymbolVisitorConfig {
                     return baseProvider.config()
+                }
+
+                override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
+                    return baseProvider.toEnumVariantName(definition)
                 }
 
                 override fun toSymbol(shape: Shape?): Symbol {
