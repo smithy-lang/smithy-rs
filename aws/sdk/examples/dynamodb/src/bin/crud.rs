@@ -5,6 +5,7 @@
 
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
+use std::collections::HashMap;
 use std::io::{stdin, Read};
 use std::time::Duration;
 use std::{iter, process};
@@ -136,34 +137,39 @@ async fn add_item(client: &dynamodb::Client, item: Item) {
     }
 }
 
-/// Scan the table for an item matching the input values.
-async fn scan(client: &dynamodb::Client, item: Item) {
-    let user_av = AttributeValue::S(item.value);
+/// Query the table for an item matching the input values.
+async fn query(client: &dynamodb::Client, item: Item) {
+    let value = &item.value;
+    let key = &item.key;
+    let user_av = AttributeValue::S(value.to_string());
+    let userav = AttributeValue::S(value.to_string());
     let type_av = AttributeValue::S(item.utype);
     let age_av = AttributeValue::S(item.age);
     let first_av = AttributeValue::S(item.first_name);
     let last_av = AttributeValue::S(item.last_name);
-
     let mut found_match = true;
-
-    let resp = client
-        .scan()
+    let mut cond = HashMap::new();
+    cond.insert("#key".to_string(), key.to_string());
+    let mut expr = HashMap::new();
+    expr.insert(":value".to_string(), user_av);
+    match client
+        .query()
         .table_name(item.table)
+        .set_key_condition_expression(Some("#key = :value".to_string()))
+        .set_expression_attribute_names(Some(cond))
+        .set_expression_attribute_values(Some(expr))
         .select(Select::AllAttributes)
         .send()
-        .await;
-
-    let key = &item.key;
-
-    match resp {
-        Ok(r) => {
-            let items = r.items.unwrap_or_default();
+        .await
+    {
+        Ok(resp) => {
+            let items = resp.items.unwrap_or_default();
             for item in items {
                 // Do key values match?
                 match item.get(&String::from(key)) {
                     None => found_match = false,
                     Some(v) => {
-                        if v != &user_av {
+                        if v != &userav {
                             found_match = false;
                         }
                     }
@@ -211,7 +217,7 @@ async fn scan(client: &dynamodb::Client, item: Item) {
             }
         }
         Err(e) => {
-            println!("Got an error scanning the table:");
+            println!("Got an error querying the table:");
             println!("{}", e);
             process::exit(1);
         }
@@ -345,7 +351,7 @@ async fn main() {
     if verbose {
         println!("DynamoDB client version: {}\n", dynamodb::PKG_VERSION);
         println!("Table:  {}", table);
-        println!("Key:    {}\n", key);
+        println!("Key:    {}", key);
         println!("Value:  {}", value);
 
         SubscriberBuilder::default()
@@ -413,7 +419,7 @@ async fn main() {
     /* Get item and compare it with the one we added */
     println!("Comparing table item to original value");
 
-    scan(&client, item).await;
+    query(&client, item).await;
 
     if interactive {
         pause();
