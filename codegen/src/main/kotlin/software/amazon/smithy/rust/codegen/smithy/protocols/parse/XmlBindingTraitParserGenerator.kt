@@ -49,7 +49,6 @@ import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
-import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 // The string argument is the name of the XML ScopedDecoder to continue parsing from
 typealias OperationInnerWriteable = RustWriter.(String) -> Unit
@@ -201,7 +200,7 @@ class XmlBindingTraitParserGenerator(
     }
 
     override fun errorParser(errorShape: StructureShape): RuntimeType {
-        val fnName = errorShape.id.name.toString().toSnakeCase()
+        val fnName = symbolProvider.deserializeFunctionName(errorShape) + "_xml_err"
         return RuntimeType.forInlineFun(fnName, "xml_deser") {
             Attribute.AllowUnusedMut.render(it)
             it.rustBlock(
@@ -338,7 +337,7 @@ class XmlBindingTraitParserGenerator(
     }
 
     private fun RustWriter.parseUnion(shape: UnionShape, ctx: Ctx) {
-        val fnName = shape.id.name.toString().toSnakeCase() + "_inner"
+        val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
         val nestedParser = RuntimeType.forInlineFun(fnName, "xml_deser") {
             it.rustBlockTemplate(
@@ -387,7 +386,7 @@ class XmlBindingTraitParserGenerator(
     }
 
     private fun RustWriter.parseStructure(shape: StructureShape, ctx: Ctx) {
-        val fnName = shape.id.name.toString().toSnakeCase() + "_inner"
+        val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
         val nestedParser = RuntimeType.forInlineFun(fnName, "xml_deser") {
             it.rustBlockTemplate(
@@ -418,7 +417,7 @@ class XmlBindingTraitParserGenerator(
     }
 
     private fun RustWriter.parseList(target: CollectionShape, ctx: Ctx) {
-        val fnName = "deserialize_${target.member.id.name.toSnakeCase()}"
+        val fnName = symbolProvider.deserializeFunctionName(target)
         val member = target.member
         val listParser = RuntimeType.forInlineFun(fnName, "xml_deser") {
             it.rustBlockTemplate(
@@ -453,7 +452,7 @@ class XmlBindingTraitParserGenerator(
     }
 
     private fun RustWriter.parseMap(target: MapShape, ctx: Ctx) {
-        val fnName = "deserialize_${target.value.id.name.toSnakeCase()}"
+        val fnName = symbolProvider.deserializeFunctionName(target)
         val mapParser = RuntimeType.forInlineFun(fnName, "xml_deser") {
             it.rustBlockTemplate(
                 "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Map}, #{XmlError}>",
@@ -489,12 +488,8 @@ class XmlBindingTraitParserGenerator(
         }
     }
 
-    private fun mapEntryParser(
-        target: MapShape,
-        ctx: Ctx
-    ): RuntimeType {
-
-        val fnName = target.value.id.name.toSnakeCase() + "_entry"
+    private fun mapEntryParser(target: MapShape, ctx: Ctx): RuntimeType {
+        val fnName = symbolProvider.deserializeFunctionName(target) + "_entry"
         return RuntimeType.forInlineFun(fnName, "xml_deser") {
             it.rustBlockTemplate(
                 "pub fn $fnName(decoder: &mut #{ScopedDecoder}, out: &mut #{Map}) -> Result<(), #{XmlError}>",

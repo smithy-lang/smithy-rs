@@ -10,8 +10,9 @@ chrono-conversions = []
 default = ["chrono-conversions"]
 
 [dependencies]
-# alloc can be removed if we implement our own date formatting, TBD if this is worthwhile
-chrono = { version = "0.4", default-features = false, features = ["alloc"] }
+chrono = { version = "0.4", default-features = false, features = [] }
 
 [dev-dependencies]
+base64 = "0.13.0"
+chrono = { version = "0.4", default-features = false, features = ["alloc"] }
 proptest = "1"

@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
@@ -80,32 +81,22 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
         writer.rustTemplate(
             """
             ##[derive(std::fmt::Debug)]
-            pub(crate) struct Handle {
-                client: #{aws_hyper}::Client<#{aws_hyper}::conn::Standard>,
+            pub(crate) struct Handle<C = #{aws_hyper}::DynConnector> {
+                client: #{aws_hyper}::Client<C>,
                 conf: crate::Config
             }
 
             ##[derive(Clone, std::fmt::Debug)]
-            pub struct Client {
-                handle: std::sync::Arc<Handle>
+            pub struct Client<C = #{aws_hyper}::DynConnector> {
+                handle: std::sync::Arc<Handle<C>>
             }
         """,
             "aws_hyper" to hyperDep.asType()
         )
-        writer.rustBlock("impl Client") {
+        writer.rustBlock("impl<C> Client<C>") {
             rustTemplate(
                 """
-                ##[cfg(any(feature = "rustls", feature = "native-tls"))]
-                pub fn from_env() -> Self {
-                    Self::from_conf_conn(crate::Config::builder().build(), #{aws_hyper}::conn::Standard::https())
-                }
-
-                ##[cfg(any(feature = "rustls", feature = "native-tls"))]
-                pub fn from_conf(conf: crate::Config) -> Self {
-                    Self::from_conf_conn(conf, #{aws_hyper}::conn::Standard::https())
-                }
-
-                pub fn from_conf_conn(conf: crate::Config, conn: #{aws_hyper}::conn::Standard) -> Self {
+                pub fn from_conf_conn(conf: crate::Config, conn: C) -> Self {
                     let client = #{aws_hyper}::Client::new(conn);
                     Self { handle: std::sync::Arc::new(Handle { client, conf })}
                 }
@@ -117,11 +108,37 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             """,
                 "aws_hyper" to hyperDep.asType()
             )
+        }
+        writer.rustBlock("impl Client") {
+            rustTemplate(
+                """
+                ##[cfg(any(feature = "rustls", feature = "native-tls"))]
+                pub fn from_env() -> Self {
+                    Self::from_conf(crate::Config::builder().build())
+                }
+
+                ##[cfg(any(feature = "rustls", feature = "native-tls"))]
+                pub fn from_conf(conf: crate::Config) -> Self {
+                    let client = #{aws_hyper}::Client::https();
+                    Self { handle: std::sync::Arc::new(Handle { client, conf })}
+                }
+
+            """,
+                "aws_hyper" to hyperDep.asType()
+            )
+        }
+        writer.rustBlockTemplate(
+            """
+            impl<C> Client<C>
+                where C: #{aws_hyper}::SmithyConnector,
+            """,
+                "aws_hyper" to hyperDep.asType()
+            ) {
             operations.forEach { operation ->
                 val name = symbolProvider.toSymbol(operation).name
                 rust(
                     """
-                    pub fn ${name.toSnakeCase()}(&self) -> fluent_builders::$name {
+                    pub fn ${name.toSnakeCase()}(&self) -> fluent_builders::$name<C> {
                         fluent_builders::$name::new(self.handle.clone())
                     }"""
                 )
@@ -133,24 +150,27 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                 val input = operation.inputShape(model)
                 val members: List<MemberShape> = input.allMembers.values.toList()
 
-                rust(
+                rustTemplate(
                     """
                 ##[derive(std::fmt::Debug)]
-                pub struct $name {
-                    handle: std::sync::Arc<super::Handle>,
-                    inner: #T
+                pub struct $name<C = #{aws_hyper}::DynConnector> {
+                    handle: std::sync::Arc<super::Handle<C>>,
+                    inner: #{ty}
                 }""",
-                    input.builderSymbol(symbolProvider)
+                    "ty" to input.builderSymbol(symbolProvider),
+                    "aws_hyper" to hyperDep.asType()
                 )
 
-                rustBlock("impl $name") {
+                rustBlock("impl<C> $name<C>") {
                     rustTemplate(
                         """
-                    pub(crate) fn new(handle: std::sync::Arc<super::Handle>) -> Self {
+                    pub(crate) fn new(handle: std::sync::Arc<super::Handle<C>>) -> Self {
                         Self { handle, inner: Default::default() }
                     }
 
-                    pub async fn send(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>> {
+                    pub async fn send(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>>
+                      where C: #{aws_hyper}::SmithyConnector,
+                    {
                         let input = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
                         let op = input.make_operation(&self.handle.conf)
                             .map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
@@ -159,7 +179,8 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                     """,
                         "ok" to symbolProvider.toSymbol(operation.outputShape(model)),
                         "operation_err" to operation.errorSymbol(symbolProvider),
-                        "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType().copy(name = "result::SdkError")
+                        "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType().copy(name = "result::SdkError"),
+                        "aws_hyper" to hyperDep.asType()
                     )
                     members.forEach { member ->
                         val memberName = symbolProvider.toMemberName(member)
