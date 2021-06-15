@@ -37,7 +37,7 @@ where:
 
 This code example creates a low-level Amazon QLDB session against a ledger.
 
-Avoid using the QldbSession API directly. Instead, use a higher-level driver, such as the Amazon QLDB Driver for Rust.
+The QldbSession API is not intended to be used directly. Instead, we recommend using a higher-level driver, such as the Amazon QLDB Driver for Rust.
 
 ### Usage
 
