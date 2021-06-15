@@ -27,7 +27,7 @@ struct Opt {
     verbose: bool,
 }
 
-/// Creates a low-level Amazon QLDB session.
+/// Creates a low-level Amazon QLDB session against a ledger.
 /// # Arguments
 ///
 /// * `-l LEDGER` - The name of the ledger to start a new session against.
