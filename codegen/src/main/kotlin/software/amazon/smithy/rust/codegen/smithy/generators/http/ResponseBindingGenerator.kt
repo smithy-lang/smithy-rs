@@ -30,10 +30,9 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.smithy.Default
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -66,7 +65,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
      */
     fun generateDeserializeHeaderFn(binding: HttpBindingDescriptor): RuntimeType {
         check(binding.location == HttpLocation.HEADER)
-        val outputT = symbolProvider.toSymbol(binding.member)
+        val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
         val fnName = "deser_header_${fnName(operationShape, binding)}"
         return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
             writer.rustBlock(
@@ -113,7 +112,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                         #T(values.iter()).map(|v| (key.to_string(), v.unwrap()))
                     }).collect();
                     out.map(Some)
-                """,
+                    """,
                     headerUtil, inner
                 )
             }
@@ -157,9 +156,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         }
     }
 
-    private fun RustWriter.deserializeStreamingBody(
-        binding: HttpBindingDescriptor,
-    ) {
+    private fun RustWriter.deserializeStreamingBody(binding: HttpBindingDescriptor) {
         val member = binding.member
         val targetShape = model.expectShape(member.target)
         check(targetShape is BlobShape)
@@ -168,7 +165,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
             // replace the body with an empty body
             let body = std::mem::replace(body, #{sdk_body}::taken());
             Ok(#{byte_stream}::new(body))
-        """,
+            """,
             "byte_stream" to RuntimeType.byteStream(runtimeConfig), "sdk_body" to RuntimeType.sdkBody(runtimeConfig)
         )
     }
@@ -215,7 +212,6 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
      */
     private fun RustWriter.deserializeFromHeader(targetType: Shape, memberShape: MemberShape) {
         val rustType = symbolProvider.toSymbol(targetType).rustType().stripOuter<RustType.Option>()
-        val fieldRequired = symbolProvider.toSymbol(memberShape).rustType() !is RustType.Option
         val (coreType, coreShape) = if (targetType is CollectionShape) {
             rustType.stripOuter<RustType.Container>() to model.expectShape(targetType.member.target)
         } else {
@@ -258,55 +254,34 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
             is RustType.Vec ->
                 rust(
                     """
-                Ok(if !$parsedValue.is_empty() {
-                    Some($parsedValue)
-                } else {
-                    None
-                })
-                """
+                    Ok(if !$parsedValue.is_empty() {
+                        Some($parsedValue)
+                    } else {
+                        None
+                    })
+                    """
                 )
             is RustType.HashSet ->
                 rust(
                     """
-                Ok(if !$parsedValue.is_empty() {
-                    Some($parsedValue.into_iter().collect())
-                } else {
-                    None
-                })
-                """
-                )
-            else ->
-                if (!fieldRequired) {
-                    rustTemplate(
-                        """
-                    if $parsedValue.len() > 1 {
-                        Err(#{header_util}::ParseError)
+                    Ok(if !$parsedValue.is_empty() {
+                        Some($parsedValue.into_iter().collect())
                     } else {
-                        let mut $parsedValue = $parsedValue;
-                        Ok($parsedValue.pop())
-                    }
-                """,
-                        "header_util" to headerUtil
-                    )
+                        None
+                    })
+                    """
+                )
+            else -> rustTemplate(
+                """
+                if $parsedValue.len() > 1 {
+                    Err(#{header_util}::ParseError)
                 } else {
-                    val fallback = when (symbolProvider.toSymbol(memberShape).defaultValue()) {
-                        is Default.RustDefault -> "Ok(Default::default())"
-                        is Default.NoDefault -> "Err(${format(headerUtil)}::ParseError)"
-                    }
-                    rustTemplate(
-                        """
-                        if $parsedValue.len() > 1 {
-                            return Err(#{header_util}::ParseError)
-                        }
-                        let mut $parsedValue = $parsedValue;
-                        match $parsedValue.pop() {
-                            None => $fallback,
-                            Some(item) => Ok(item),
-                        }
-                    """,
-                        "header_util" to headerUtil
-                    )
+                    let mut $parsedValue = $parsedValue;
+                    Ok($parsedValue.pop())
                 }
+                """,
+                "header_util" to headerUtil
+            )
         }
     }
 

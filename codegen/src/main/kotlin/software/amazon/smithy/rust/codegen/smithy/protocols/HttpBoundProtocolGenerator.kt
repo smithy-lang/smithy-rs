@@ -19,7 +19,6 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -404,7 +403,7 @@ class HttpBoundProtocolGenerator(
         rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
         // avoid non-usage warnings for response
         rust("let _ = response;")
-        if (outputShape.id == operationShape.output.get()) { // && !outputShape.hasStreamingMember(model)) {
+        if (outputShape.id == operationShape.output.get()) {
             structuredDataParser.operationParser(operationShape)?.also { parser ->
                 rust(
                     "output = #T(response.body().as_ref(), output).map_err(#T::unhandled)?;",
@@ -456,7 +455,8 @@ class HttpBoundProtocolGenerator(
                 rust(
                     """
                         #T(response.headers())
-                            .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?""",
+                            .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
+                    """,
                     fnName, errorSymbol
                 )
             }
@@ -482,15 +482,13 @@ class HttpBoundProtocolGenerator(
                     structuredHandler = structureShapeHandler
                 )
                 return if (binding.member.isStreaming(model)) {
-                    writable { rust("#T(response.body_mut())?", deserializer) }
+                    writable { rust("Some(#T(response.body_mut())?)", deserializer) }
                 } else {
                     writable { rust("#T(response.body().as_ref())?", deserializer) }
                 }
             }
             HttpLocation.RESPONSE_CODE -> writable {
-                conditionalBlock("Some(", ")", symbolProvider.toSymbol(member).isOptional()) {
-                    rust("response.status().as_u16() as _")
-                }
+                rust("Some(response.status().as_u16() as _)")
             }
             HttpLocation.PREFIX_HEADERS -> {
                 val sym = httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)

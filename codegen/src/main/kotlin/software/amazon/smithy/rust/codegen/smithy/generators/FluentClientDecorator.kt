@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.contains
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
@@ -95,11 +96,11 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             }
 
             /// An ergonomic service client for `$humanName`.
-            /// 
+            ///
             /// This client allows ergonomic access to a `$humanName`-shaped service.
             /// Each method corresponds to an endpoint defined in the service's Smithy model,
             /// and the request and response shapes are auto-generated from that same model.
-            /// 
+            ///
             /// ## Constructing a Client
             ///
             /// To construct a client, you need a few different things:
@@ -130,7 +131,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             /// `build` to construct the finalized output type. The
             /// [`#{client}::Client`] builder is re-exported in this crate as
             /// [`Builder`] for convenience.
-            /// 
+            ///
             /// In _most_ circumstances, you will want to use the following pattern
             /// to construct a client:
             ///
@@ -163,7 +164,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             /// use tower::layer::util::Stack;
             /// use tower::ServiceBuilder;
             ///
-            /// type AwsMiddlewareStack = 
+            /// type AwsMiddlewareStack =
             ///     Stack<MapRequestLayer<SigV4SigningStage>,
             ///         Stack<MapRequestLayer<UserAgentStage>,
             ///             MapRequestLayer<AwsEndpointStage>>>,
@@ -190,7 +191,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             ///     }
             /// }
             /// ```
-            /// 
+            ///
             /// ## Using a Client
             ///
             /// Once you have a client set up, you can access the service's endpoints
@@ -199,7 +200,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             /// the various fields of the request. Once your request is complete, use
             /// the `send` method to send the request. `send` returns a future, which
             /// you then have to `.await` to get the service's response.
-            /// 
+            ///
             /// [builder pattern]: https://rust-lang.github.io/api-guidelines/type-safety.html##c-builder
             /// [SigV4-signed requests]: https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html
             ##[derive(Clone, std::fmt::Debug)]
@@ -306,8 +307,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         // All fields in the builder are optional
                         val memberSymbol = symbolProvider.toSymbol(member)
                         val outerType = memberSymbol.rustType()
-                        val coreType = outerType.stripOuter<RustType.Option>()
-                        when (coreType) {
+                        when (val coreType = outerType.stripOuter<RustType.Option>()) {
                             is RustType.Vec -> renderVecHelper(member, memberName, coreType)
                             is RustType.HashMap -> renderMapHelper(member, memberName, coreType)
                             else -> {
@@ -324,10 +324,11 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                             }
                         }
                         // pure setter
-                        rustBlock("pub fn ${member.setterName()}(mut self, inp: ${outerType.render(true)}) -> Self") {
+                        val inputType = outerType.asOptional()
+                        rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
                             rust(
                                 """
-                                self.inner = self.inner.${member.setterName()}(inp);
+                                self.inner = self.inner.${member.setterName()}(input);
                                 self
                                 """
                             )

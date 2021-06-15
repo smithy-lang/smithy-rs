@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
@@ -26,7 +27,6 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.isOptional
-import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
@@ -125,8 +125,8 @@ class BuilderGenerator(
 
         fun builderConverter(coreType: RustType) = when (coreType) {
             is RustType.String,
-            is RustType.Box -> "inp.into()"
-            else -> "inp"
+            is RustType.Box -> "input.into()"
+            else -> "input"
         }
 
         writer.rustBlock("impl $builderName") {
@@ -144,8 +144,8 @@ class BuilderGenerator(
                     else -> {
                         val signature = when (coreType) {
                             is RustType.String,
-                            is RustType.Box -> "(mut self, inp: impl Into<${coreType.render(true)}>) -> Self"
-                            else -> "(mut self, inp: ${coreType.render(true)}) -> Self"
+                            is RustType.Box -> "(mut self, input: impl Into<${coreType.render(true)}>) -> Self"
+                            else -> "(mut self, input: ${coreType.render(true)}) -> Self"
                         }
                         writer.documentShape(member, model)
                         writer.rustBlock("pub fn $memberName$signature") {
@@ -156,12 +156,10 @@ class BuilderGenerator(
                 }
 
                 // Render a `set_foo` method. This is useful as a target for code generation, because the argument type
-                // is exactly the same as the resulting member type.
-                writer.rustBlock("pub fn ${member.setterName()}(mut self, inp: ${outerType.render(true)}) -> Self") {
-                    val v = "inp".letIf(outerType !is RustType.Option) {
-                        "Some($it)"
-                    }
-                    rust("self.$memberName = $v; self")
+                // is the same as the resulting member type, and is always optional.
+                val inputType = outerType.asOptional()
+                writer.rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
+                    rust("self.$memberName = input; self")
                 }
             }
             buildFn(this)
@@ -169,14 +167,14 @@ class BuilderGenerator(
     }
 
     private fun RustWriter.renderVecHelper(memberName: String, coreType: RustType.Vec) {
-        rustBlock("pub fn $memberName(mut self, inp: impl Into<${coreType.member.render(true)}>) -> Self") {
+        rustBlock("pub fn $memberName(mut self, input: impl Into<${coreType.member.render(true)}>) -> Self") {
             rust(
                 """
                 let mut v = self.$memberName.unwrap_or_default();
-                v.push(inp.into());
+                v.push(input.into());
                 self.$memberName = Some(v);
                 self
-            """
+                """
             )
         }
     }
@@ -195,7 +193,7 @@ class BuilderGenerator(
                 hash_map.insert(k.into(), v.into());
                 self.$memberName = Some(hash_map);
                 self
-            """
+                """
             )
         }
     }
@@ -210,6 +208,7 @@ class BuilderGenerator(
      *    field3: builder.field3.unwrap_or_default()
      *    field4: builder.field4.ok_or("field4 is required when building SomeStruct")?
      * }
+     * ```
      */
     protected fun coreBuilder(writer: RustWriter) {
         writer.rustBlock("#T", structureSymbol) {

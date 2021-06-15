@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.contains
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
@@ -132,8 +133,8 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             impl<C> Client<C>
                 where C: #{aws_hyper}::SmithyConnector,
             """,
-                "aws_hyper" to hyperDep.asType()
-            ) {
+            "aws_hyper" to hyperDep.asType()
+        ) {
             operations.forEach { operation ->
                 val name = symbolProvider.toSymbol(operation).name
                 rust(
@@ -152,11 +153,11 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
 
                 rustTemplate(
                     """
-                ##[derive(std::fmt::Debug)]
-                pub struct $name<C = #{aws_hyper}::DynConnector> {
-                    handle: std::sync::Arc<super::Handle<C>>,
-                    inner: #{ty}
-                }""",
+                    ##[derive(std::fmt::Debug)]
+                    pub struct $name<C = #{aws_hyper}::DynConnector> {
+                        handle: std::sync::Arc<super::Handle<C>>,
+                        inner: #{ty}
+                    }""",
                     "ty" to input.builderSymbol(symbolProvider),
                     "aws_hyper" to hyperDep.asType()
                 )
@@ -164,19 +165,19 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                 rustBlock("impl<C> $name<C>") {
                     rustTemplate(
                         """
-                    pub(crate) fn new(handle: std::sync::Arc<super::Handle<C>>) -> Self {
-                        Self { handle, inner: Default::default() }
-                    }
+                        pub(crate) fn new(handle: std::sync::Arc<super::Handle<C>>) -> Self {
+                            Self { handle, inner: Default::default() }
+                        }
 
-                    pub async fn send(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>>
-                      where C: #{aws_hyper}::SmithyConnector,
-                    {
-                        let input = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
-                        let op = input.make_operation(&self.handle.conf)
-                            .map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
-                        self.handle.client.call(op).await
-                    }
-                    """,
+                        pub async fn send(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>>
+                          where C: #{aws_hyper}::SmithyConnector,
+                        {
+                            let input = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
+                            let op = input.make_operation(&self.handle.conf)
+                                .map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
+                            self.handle.client.call(op).await
+                        }
+                        """,
                         "ok" to symbolProvider.toSymbol(operation.outputShape(model)),
                         "operation_err" to operation.errorSymbol(symbolProvider),
                         "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType().copy(name = "result::SdkError"),
@@ -187,28 +188,28 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         // All fields in the builder are optional
                         val memberSymbol = symbolProvider.toSymbol(member)
                         val outerType = memberSymbol.rustType()
-                        val coreType = outerType.stripOuter<RustType.Option>()
-                        when (coreType) {
+                        when (val coreType = outerType.stripOuter<RustType.Option>()) {
                             is RustType.Vec -> renderVecHelper(member, memberName, coreType)
                             is RustType.HashMap -> renderMapHelper(member, memberName, coreType)
                             else -> {
                                 val signature = when (coreType) {
                                     is RustType.String,
-                                    is RustType.Box -> "(mut self, inp: impl Into<${coreType.render(true)}>) -> Self"
-                                    else -> "(mut self, inp: ${coreType.render(true)}) -> Self"
+                                    is RustType.Box -> "(mut self, input: impl Into<${coreType.render(true)}>) -> Self"
+                                    else -> "(mut self, input: ${coreType.render(true)}) -> Self"
                                 }
                                 documentShape(member, model)
                                 rustBlock("pub fn $memberName$signature") {
-                                    write("self.inner = self.inner.$memberName(inp);")
+                                    write("self.inner = self.inner.$memberName(input);")
                                     write("self")
                                 }
                             }
                         }
                         // pure setter
-                        rustBlock("pub fn ${member.setterName()}(mut self, inp: ${outerType.render(true)}) -> Self") {
+                        val inputType = outerType.asOptional()
+                        rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
                             rust(
                                 """
-                                self.inner = self.inner.${member.setterName()}(inp);
+                                self.inner = self.inner.${member.setterName()}(input);
                                 self
                                 """
                             )
