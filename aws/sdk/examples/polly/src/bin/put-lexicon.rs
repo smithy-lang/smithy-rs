@@ -36,6 +36,16 @@ struct Opt {
     verbose: bool,
 }
 
+/// Stores a pronunciation lexicon in an AWS Region.
+/// # Arguments
+///
+/// * `-f FROM` - The original text to customize.
+/// * `-n NAME` - The name of the lexicon.
+/// * `-t TO` - The customized version of the original text.
+/// * `[-d DEFAULT-REGION]` - The region in which the client is created.
+///    If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///    If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() {
     let Opt {

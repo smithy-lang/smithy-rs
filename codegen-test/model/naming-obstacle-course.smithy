@@ -14,7 +14,9 @@ service Config {
     operations: [
        ReservedWordsAsMembers,
        StructureNamePunning,
-       ErrCollisions
+       ErrCollisions,
+       Result,
+       Option,
     ]
 }
 
@@ -72,6 +74,13 @@ structure Vec {
     pv_member: Boolean
 }
 
+structure Some {
+    pv_member: Boolean
+}
+
+structure None {
+}
+
 
 operation ErrCollisions {
     errors: [
@@ -79,6 +88,16 @@ operation ErrCollisions {
         CollidingException
         // , ErrCollisionsException
     ]
+}
+
+operation Result {
+    input: Vec,
+    output: Some
+}
+
+operation Option {
+    input: Vec,
+    output: None
 }
 
 @error("client")

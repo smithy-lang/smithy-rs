@@ -19,11 +19,18 @@ struct Opt {
     #[structopt(short, long)]
     region: Option<String>,
 
-    /// Display additional information
+    /// Activate verbose mode
     #[structopt(short, long)]
     verbose: bool,
 }
 
+/// Displays a list of the lexicons in the region.
+/// # Arguments
+///
+/// * `[-d DEFAULT-REGION]` - The region in which the client is created.
+///    If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///    If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() {
     let Opt { region, verbose } = Opt::from_args();
@@ -35,7 +42,7 @@ async fn main() {
 
     if verbose {
         println!("polly client version: {}\n", polly::PKG_VERSION);
-        println!("Region: {:?}", &region);
+        println!("Region:      {:?}", &region);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -44,27 +51,35 @@ async fn main() {
     }
 
     let config = Config::builder().region(region).build();
+
     let client = Client::from_conf(config);
 
-    match client.describe_voices().send().await {
+    match client.list_lexicons().send().await {
         Ok(resp) => {
-            println!("Voices:");
-            let voices = resp.voices.unwrap_or_default();
-            for voice in &voices {
+            println!("Lexicons:");
+            let lexicons = resp.lexicons.unwrap_or_default();
+
+            for lexicon in &lexicons {
                 println!(
                     "  Name:     {}",
-                    voice.name.as_deref().unwrap_or("No name!")
+                    lexicon.name.as_deref().unwrap_or_default()
                 );
                 println!(
-                    "  Language:     {}",
-                    voice.language_name.as_deref().unwrap_or("No language!")
+                    "  Language: {:?}\n",
+                    lexicon
+                        .attributes
+                        .as_ref()
+                        .map(|attrib| attrib
+                            .language_code
+                            .as_ref()
+                            .expect("languages must have language codes"))
+                        .expect("languages must have attributes")
                 );
             }
-
-            println!("\nFound {} voices\n", voices.len());
+            println!("\nFound {} lexicons.\n", lexicons.len());
         }
         Err(e) => {
-            println!("Got an error describing voices:");
+            println!("Got an error listing lexicons:");
             println!("{}", e);
             process::exit(1);
         }

@@ -111,7 +111,7 @@ class HttpBoundProtocolGenerator(
         }
         val serializer = RuntimeType.forInlineFun(fnName, "operation_ser") {
             it.rustBlockTemplate(
-                "pub fn $fnName(payload: $ref #{Member}) -> Result<#{SdkBody}, #{BuildError}>",
+                "pub fn $fnName(payload: $ref #{Member}) -> std::result::Result<#{SdkBody}, #{BuildError}>",
                 "Member" to symbolProvider.toSymbol(member),
                 *codegenScope
             ) {
@@ -213,7 +213,7 @@ class HttpBoundProtocolGenerator(
         rustTemplate(
             """
                 impl #{ParseStrict} for $operationName {
-                    type Output = Result<#{O}, #{E}>;
+                    type Output = std::result::Result<#{O}, #{E}>;
                     fn parse(&self, response: &#{Response}<#{Bytes}>) -> Self::Output {
                          if !response.status().is_success() && response.status().as_u16() != $successCode {
                             #{parse_error}(response)
@@ -239,7 +239,7 @@ class HttpBoundProtocolGenerator(
         rustTemplate(
             """
                     impl #{ParseResponse}<#{SdkBody}> for $operationName {
-                        type Output = Result<#{O}, #{E}>;
+                        type Output = std::result::Result<#{O}, #{E}>;
                         fn parse_unloaded(&self, response: &mut http::Response<#{SdkBody}>) -> Option<Self::Output> {
                             // This is an error, defer to the non-streaming parser
                             if !response.status().is_success() && response.status().as_u16() != $successCode {
@@ -269,7 +269,7 @@ class HttpBoundProtocolGenerator(
         return RuntimeType.forInlineFun(fnName, "operation_deser") {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(response: &#{Response}<#{Bytes}>) -> Result<#{O}, #{E}>",
+                "pub fn $fnName(response: &#{Response}<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol
@@ -323,7 +323,7 @@ class HttpBoundProtocolGenerator(
         return RuntimeType.forInlineFun(fnName, "operation_deser") {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(response: &mut #{Response}<#{SdkBody}>) -> Result<#{O}, #{E}>",
+                "pub fn $fnName(response: &mut #{Response}<#{SdkBody}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol
@@ -348,7 +348,7 @@ class HttpBoundProtocolGenerator(
         return RuntimeType.forInlineFun(fnName, "operation_deser") {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(response: &#{Response}<#{Bytes}>) -> Result<#{O}, #{E}>",
+                "pub fn $fnName(response: &#{Response}<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol
