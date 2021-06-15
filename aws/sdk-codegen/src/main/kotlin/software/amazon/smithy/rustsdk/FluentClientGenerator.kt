@@ -132,8 +132,8 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             impl<C> Client<C>
                 where C: #{aws_hyper}::SmithyConnector,
             """,
-                "aws_hyper" to hyperDep.asType()
-            ) {
+            "aws_hyper" to hyperDep.asType()
+        ) {
             operations.forEach { operation ->
                 val name = symbolProvider.toSymbol(operation).name
                 rust(
@@ -168,7 +168,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         Self { handle, inner: Default::default() }
                     }
 
-                    pub async fn send(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>>
+                    pub async fn send(self) -> std::result::Result#{ok}, #{sdk_err}<#{operation_err}>>
                       where C: #{aws_hyper}::SmithyConnector,
                     {
                         let input = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;

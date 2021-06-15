@@ -69,7 +69,7 @@ internal class EndpointTraitBindingsTest {
             )
             it.implBlock(model.lookup("test#GetStatusInput"), sym) {
                 it.rustBlock(
-                    "fn endpoint_prefix(&self) -> Result<#T::endpoint::EndpointPrefix, #T>",
+                    "fn endpoint_prefix(&self) -> std::result::Result#T::endpoint::EndpointPrefix, #T>",
                     TestRuntimeConfig.smithyHttp(),
                     TestRuntimeConfig.operationBuildError()
                 ) {
