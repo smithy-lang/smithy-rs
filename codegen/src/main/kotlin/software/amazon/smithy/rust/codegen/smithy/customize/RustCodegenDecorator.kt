@@ -6,10 +6,13 @@
 package software.amazon.smithy.rust.codegen.smithy.customize
 
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
@@ -54,6 +57,8 @@ interface RustCodegenDecorator {
     fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {}
 
     fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap = currentProtocols
+
+    fun transformModel(service: ServiceShape, model: Model): Model = model
 
     fun symbolProvider(baseProvider: RustSymbolProvider): RustSymbolProvider = baseProvider
 }
@@ -115,6 +120,10 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
         return orderedDecorators.forEach { it.extras(protocolConfig, rustCrate) }
     }
 
+    override fun transformModel(service: ServiceShape, baseModel: Model): Model {
+        return orderedDecorators.foldRight(baseModel) { decorator, model -> decorator.transformModel(service, model) }
+    }
+
     companion object {
         private val logger = Logger.getLogger("RustCodegenSPILoader")
         fun fromClasspath(context: PluginContext): RustCodegenDecorator {
@@ -125,7 +134,7 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
                 .onEach {
                     logger.info("Adding Codegen Decorator: ${it.javaClass.name}")
                 }.toList()
-            return CombinedCodegenDecorator(decorators + RequiredCustomizations())
+            return CombinedCodegenDecorator(decorators + RequiredCustomizations() + FluentClientDecorator())
         }
     }
 }

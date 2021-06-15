@@ -52,8 +52,8 @@ data class RuntimeConfig(
         }
     }
 
-    fun runtimeCrate(runtimeCrateName: String): CargoDependency =
-        CargoDependency("$cratePrefix-$runtimeCrateName", runtimeCrateLocation.crateLocation())
+    fun runtimeCrate(runtimeCrateName: String, optional: Boolean = false): CargoDependency =
+        CargoDependency("$cratePrefix-$runtimeCrateName", runtimeCrateLocation.crateLocation(), optional = optional)
 }
 
 data class RuntimeType(val name: String?, val dependency: RustDependency?, val namespace: String) {
@@ -123,15 +123,15 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun Base64Encode(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType(
                 "encode",
-                CargoDependency.SmithyHttp(runtimeConfig),
-                "${runtimeConfig.cratePrefix}_http::base64"
+                CargoDependency.SmithyTypes(runtimeConfig),
+                "${runtimeConfig.cratePrefix}_types::base64"
             )
 
         fun Base64Decode(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType(
                 "decode",
-                CargoDependency.SmithyHttp(runtimeConfig),
-                "${runtimeConfig.cratePrefix}_http::base64"
+                CargoDependency.SmithyTypes(runtimeConfig),
+                "${runtimeConfig.cratePrefix}_types::base64"
             )
 
         fun TimestampFormat(runtimeConfig: RuntimeConfig, format: TimestampFormatTrait.Format): RuntimeType {

@@ -7,9 +7,11 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayDecorator
+import software.amazon.smithy.rustsdk.customize.ec2.Ec2Decorator
 import software.amazon.smithy.rustsdk.customize.s3.S3Decorator
 
 val DECORATORS = listOf(
+    // General AWS Decorators
     CredentialsProviderDecorator(),
     RegionDecorator(),
     AwsEndpointDecorator(),
@@ -18,9 +20,12 @@ val DECORATORS = listOf(
     RetryPolicyDecorator(),
     IntegrationTestDecorator(),
     FluentClientDecorator(),
-    ApiGatewayDecorator(),
     CrateLicenseDecorator(),
-    S3Decorator()
+
+    // Service specific decorators
+    ApiGatewayDecorator(),
+    S3Decorator(),
+    Ec2Decorator()
 )
 
 class AwsCodegenDecorator : CombinedCodegenDecorator(DECORATORS) {
