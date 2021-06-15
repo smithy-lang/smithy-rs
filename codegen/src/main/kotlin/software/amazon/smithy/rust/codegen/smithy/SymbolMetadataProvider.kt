@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.Attribute.Companion.NonExhaustive
@@ -25,6 +26,10 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 open class WrappingSymbolProvider(private val base: RustSymbolProvider) : RustSymbolProvider {
     override fun config(): SymbolVisitorConfig {
         return base.config()
+    }
+
+    override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
+        return base.toEnumVariantName(definition)
     }
 
     override fun toSymbol(shape: Shape): Symbol {

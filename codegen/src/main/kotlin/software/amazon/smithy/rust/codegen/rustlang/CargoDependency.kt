@@ -107,6 +107,9 @@ class InlineDependency(
             CargoDependency.SmithyHttp(runtimeConfig)
         )
 
+        fun ec2QueryErrors(runtimeConfig: RuntimeConfig): InlineDependency =
+            forRustFile("ec2_query_errors", CargoDependency.smithyXml(runtimeConfig))
+
         fun wrappedXmlErrors(runtimeConfig: RuntimeConfig): InlineDependency =
             forRustFile("rest_xml_wrapped_errors", CargoDependency.smithyXml(runtimeConfig))
 
@@ -182,9 +185,12 @@ data class CargoDependency(
     companion object {
         val FastRand = CargoDependency("fastrand", CratesIo("1"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2"))
+        val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"), optional = true)
         fun SmithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("types")
 
         fun SmithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http")
+        fun SmithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-tower")
+        fun SmithyClient(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("client", true)
 
         fun ProtocolTestHelpers(runtimeConfig: RuntimeConfig) = CargoDependency(
             "protocol-test-helpers", runtimeConfig.runtimeCrateLocation.crateLocation(), scope = DependencyScope.Dev
