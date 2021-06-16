@@ -597,10 +597,9 @@ pub mod test {
         value.extend(std::iter::repeat("{\"t\":").take(300));
         value.push('1');
         value.extend(std::iter::repeat('}').take(300));
-        println!("value: {}", value);
         assert_eq!(
             Err(Error::custom(
-                "exceeded max recursxion depth while parsing document"
+                "exceeded max recursion depth while parsing document"
             )),
             expect_document(&mut json_token_iter(value.as_bytes()).peekable())
         );
