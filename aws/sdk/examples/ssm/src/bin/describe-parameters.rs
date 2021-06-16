@@ -2,16 +2,14 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
+
 use std::process;
 
-use secretsmanager::{Client, Config, Region};
+use ssm::{Client, Config, Region};
 
 use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
 use structopt::StructOpt;
-
-use tracing_subscriber::fmt::format::FmtSpan;
-use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
@@ -19,12 +17,12 @@ struct Opt {
     #[structopt(short, long)]
     region: Option<String>,
 
-    /// Whether to display additonal runtime information
+    /// Whether to display additional information
     #[structopt(short, long)]
     verbose: bool,
 }
 
-/// Lists the names of your secrets.
+/// Lists the names of your AWS Systems Manager parameters.
 /// # Arguments
 ///
 /// * `[-d DEFAULT-REGION]` - The region in which the client is created.
@@ -41,36 +39,33 @@ async fn main() {
         .unwrap_or_else(|| Region::new("us-west-2"));
 
     if verbose {
-        println!(
-            "SecretsManager client version: {}",
-            secretsmanager::PKG_VERSION
-        );
-        println!("Region: {:?}", &region);
+        println!("SSM client version:   {}", ssm::PKG_VERSION);
+        println!("Region:               {:?}", &region);
 
-        SubscriberBuilder::default()
-            .with_env_filter("info")
-            .with_span_events(FmtSpan::CLOSE)
-            .init();
+        tracing_subscriber::fmt::init();
     }
 
     let config = Config::builder().region(region).build();
     let client = Client::from_conf(config);
 
-    match client.list_secrets().send().await {
-        Ok(resp) => {
-            println!("Secret names:");
+    println!("Parameter names:");
 
-            let secrets = resp.secret_list.unwrap_or_default();
-            for secret in &secrets {
-                println!("  {}", secret.name.as_deref().unwrap_or("No name!"));
+    match client.describe_parameters().send().await {
+        Ok(response) => {
+            for param in response.parameters.unwrap().iter() {
+                match &param.name {
+                    None => {}
+                    Some(n) => {
+                        println!("  {}", n);
+                    }
+                }
             }
-
-            println!("Found {} secrets", secrets.len());
         }
-        Err(e) => {
-            println!("Got an error listing secrets:");
-            println!("{}", e);
+        Err(error) => {
+            println!("Got an error listing the parameter names: {}", error);
             process::exit(1);
         }
-    };
+    }
+
+    println!();
 }
