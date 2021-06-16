@@ -127,7 +127,7 @@ abstract class HttpProtocolGenerator(
     protected fun httpBuilderFun(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
         Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
         implBlockWriter.rustBlock(
-            "fn request_builder_base(&self) -> Result<#T, #T>",
+            "fn request_builder_base(&self) -> std::result::Result<#T, #T>",
             RuntimeType.HttpRequestBuilder, buildErrorT
         ) {
             f(this)
@@ -180,7 +180,7 @@ abstract class HttpProtocolGenerator(
         val sdkBody = RuntimeType.sdkBody(runtimeConfig)
 
         val baseReturnType = buildOperationType(implBlockWriter, shape, features)
-        val returnType = "Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
+        val returnType = "std::result::Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
         // For codegen simplicity, allow `let x = ...; x`
