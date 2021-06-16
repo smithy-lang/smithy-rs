@@ -154,16 +154,6 @@ expect_value_or_null_fn!(expect_bool_or_null, ValueBool, bool, "Expects a [Token
 expect_value_or_null_fn!(expect_number_or_null, ValueNumber, Number, "Expects a [Token::ValueNumber] or [Token::ValueNull], and returns the [Number] value if it's not null.");
 expect_value_or_null_fn!(expect_string_or_null, ValueString, EscapedStr, "Expects a [Token::ValueString] or [Token::ValueNull], and returns the [EscapedStr] value if it's not null.");
 
-/// Expects a [Token::ValueString] or [Token::ValueNull]. If the value is a string, its **unescaped** value will be returned.
-pub fn expect_unescaped_string_or_null(
-    token: Option<Result<Token<'_>, Error>>,
-) -> Result<Option<String>, Error> {
-    Ok(match expect_string_or_null(token)? {
-        Some(value) => Some(value.to_unescaped()?.to_string()),
-        None => None,
-    })
-}
-
 /// Expects a [Token::ValueString] or [Token::ValueNull]. If the value is a string, it interprets it as a base64 encoded [Blob] value.
 pub fn expect_blob_or_null(token: Option<Result<Token<'_>, Error>>) -> Result<Option<Blob>, Error> {
     Ok(match expect_string_or_null(token)? {
@@ -207,6 +197,20 @@ pub fn expect_document<'a, I>(tokens: &mut Peekable<I>) -> Result<Document, Erro
 where
     I: Iterator<Item = Result<Token<'a>, Error>>,
 {
+    expect_document_inner(tokens, 0)
+}
+
+const MAX_DOCUMENT_RECURSION: usize = 256;
+
+fn expect_document_inner<'a, I>(tokens: &mut Peekable<I>, depth: usize) -> Result<Document, Error>
+where
+    I: Iterator<Item = Result<Token<'a>, Error>>,
+{
+    if depth >= MAX_DOCUMENT_RECURSION {
+        return Err(Error::custom(
+            "exceeded max recursion depth while parsing document",
+        ));
+    }
     match tokens.next().transpose()? {
         Some(Token::ValueNull { .. }) => Ok(Document::Null),
         Some(Token::ValueBool { value, .. }) => Ok(Document::Bool(value)),
@@ -221,7 +225,7 @@ where
                     Some(Token::EndObject { .. }) => break,
                     Some(Token::ObjectKey { key, .. }) => {
                         let key = key.to_unescaped()?.into_owned();
-                        let value = expect_document(tokens)?;
+                        let value = expect_document_inner(tokens, depth + 1)?;
                         object.insert(key, value);
                     }
                     _ => return Err(Error::custom("expected object key or end object")),
@@ -237,7 +241,7 @@ where
                         tokens.next().transpose().unwrap();
                         break;
                     }
-                    _ => array.push(expect_document(tokens)?),
+                    _ => array.push(expect_document_inner(tokens, depth + 1)?),
                 }
             }
             Ok(Document::Array(array))
@@ -455,19 +459,6 @@ pub mod test {
     }
 
     #[test]
-    fn test_expect_unescaped_string_or_null() {
-        assert_eq!(Ok(None), expect_unescaped_string_or_null(value_null(0)));
-        assert_eq!(
-            Ok(Some("test\n".to_string())),
-            expect_unescaped_string_or_null(value_string(0, "test\\n"))
-        );
-        assert_eq!(
-            Err(Error::custom("expected ValueString or ValueNull")),
-            expect_unescaped_string_or_null(value_bool(0, true))
-        );
-    }
-
-    #[test]
     fn test_expect_number_or_null() {
         assert_eq!(Ok(None), expect_number_or_null(value_null(0)));
         assert_eq!(
@@ -587,6 +578,31 @@ pub mod test {
                   "nested": { "test": null } }
                 "#
             )
+        );
+    }
+
+    #[test]
+    fn test_document_recursion_limit() {
+        let mut value = String::new();
+        value.extend(std::iter::repeat('[').take(300));
+        value.extend(std::iter::repeat(']').take(300));
+        assert_eq!(
+            Err(Error::custom(
+                "exceeded max recursion depth while parsing document"
+            )),
+            expect_document(&mut json_token_iter(value.as_bytes()).peekable())
+        );
+
+        value = String::new();
+        value.extend(std::iter::repeat("{\"t\":").take(300));
+        value.push('1');
+        value.extend(std::iter::repeat('}').take(300));
+        println!("value: {}", value);
+        assert_eq!(
+            Err(Error::custom(
+                "exceeded max recursxion depth while parsing document"
+            )),
+            expect_document(&mut json_token_iter(value.as_bytes()).peekable())
         );
     }
 }

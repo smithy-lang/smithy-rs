@@ -72,6 +72,7 @@ class JsonParserGeneratorTest {
         }
 
         structure Top {
+            @required
             choice: Choice,
             field: String,
             extra: Integer,
