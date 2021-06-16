@@ -57,7 +57,7 @@ async fn main() {
 
     match client.describe_parameters().send().await {
         Ok(response) => {
-            for (_, param) in response.parameters.unwrap().iter().enumerate() {
+            for param in response.parameters.unwrap().iter() {
                 match &param.name {
                     None => {}
                     Some(n) => {
