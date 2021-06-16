@@ -35,7 +35,7 @@ class SerdeJsonParserGenerator(protocolConfig: ProtocolConfig) : StructuredDataP
         return RuntimeType.forInlineFun(fnName, "json_deser") {
             it.rustTemplate(
                 """
-                    pub fn $fnName(inp: &[u8]) -> Result<#{Shape}, #{Error}> {
+                    pub fn $fnName(inp: &[u8]) -> std::result::Result<#{Shape}, #{Error}> {
                         #{serde_json}::from_slice(inp)
                     }""",
                 *codegenScope, "Shape" to symbolProvider.toSymbol(shape)
@@ -55,7 +55,7 @@ class SerdeJsonParserGenerator(protocolConfig: ProtocolConfig) : StructuredDataP
 
         return RuntimeType.forInlineFun(fnName, "json_deser") {
             it.rustBlockTemplate(
-                "pub fn $fnName(inp: &[u8], mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
+                "pub fn $fnName(inp: &[u8], mut builder: #{Builder}) -> std::result::Result<#{Builder}, #{Error}>",
                 "Builder" to outputShape.builderSymbol(symbolProvider),
                 *codegenScope
             ) {
@@ -87,7 +87,7 @@ class SerdeJsonParserGenerator(protocolConfig: ProtocolConfig) : StructuredDataP
         val fnName = errorShape.id.name.toString().toSnakeCase()
         return RuntimeType.forInlineFun(fnName, "json_deser") {
             it.rustBlockTemplate(
-                "pub fn $fnName(inp: &[u8], mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
+                "pub fn $fnName(inp: &[u8], mut builder: #{Builder}) -> std::result::Result<#{Builder}, #{Error}>",
                 "Builder" to errorShape.builderSymbol(symbolProvider),
                 *codegenScope
             ) {

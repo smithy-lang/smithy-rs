@@ -2,14 +2,14 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
+
 use std::process;
 
-use secretsmanager::{Client, Config, Region};
+use polly::{Client, Config, Region};
 
 use aws_types::region::{EnvironmentProvider, ProvideRegion};
 
 use structopt::StructOpt;
-
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
 
@@ -19,12 +19,12 @@ struct Opt {
     #[structopt(short, long)]
     region: Option<String>,
 
-    /// Whether to display additonal runtime information
+    /// Activate verbose mode
     #[structopt(short, long)]
     verbose: bool,
 }
 
-/// Lists the names of your secrets.
+/// Displays a list of the lexicons in the region.
 /// # Arguments
 ///
 /// * `[-d DEFAULT-REGION]` - The region in which the client is created.
@@ -41,11 +41,8 @@ async fn main() {
         .unwrap_or_else(|| Region::new("us-west-2"));
 
     if verbose {
-        println!(
-            "SecretsManager client version: {}",
-            secretsmanager::PKG_VERSION
-        );
-        println!("Region: {:?}", &region);
+        println!("polly client version: {}\n", polly::PKG_VERSION);
+        println!("Region:      {:?}", &region);
 
         SubscriberBuilder::default()
             .with_env_filter("info")
@@ -54,21 +51,35 @@ async fn main() {
     }
 
     let config = Config::builder().region(region).build();
+
     let client = Client::from_conf(config);
 
-    match client.list_secrets().send().await {
+    match client.list_lexicons().send().await {
         Ok(resp) => {
-            println!("Secret names:");
+            println!("Lexicons:");
+            let lexicons = resp.lexicons.unwrap_or_default();
 
-            let secrets = resp.secret_list.unwrap_or_default();
-            for secret in &secrets {
-                println!("  {}", secret.name.as_deref().unwrap_or("No name!"));
+            for lexicon in &lexicons {
+                println!(
+                    "  Name:     {}",
+                    lexicon.name.as_deref().unwrap_or_default()
+                );
+                println!(
+                    "  Language: {:?}\n",
+                    lexicon
+                        .attributes
+                        .as_ref()
+                        .map(|attrib| attrib
+                            .language_code
+                            .as_ref()
+                            .expect("languages must have language codes"))
+                        .expect("languages must have attributes")
+                );
             }
-
-            println!("Found {} secrets", secrets.len());
+            println!("\nFound {} lexicons.\n", lexicons.len());
         }
         Err(e) => {
-            println!("Got an error listing secrets:");
+            println!("Got an error listing lexicons:");
             println!("{}", e);
             process::exit(1);
         }

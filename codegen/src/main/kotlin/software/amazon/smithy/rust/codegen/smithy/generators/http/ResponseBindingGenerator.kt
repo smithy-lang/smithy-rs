@@ -70,7 +70,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         val fnName = "deser_header_${fnName(operationShape, binding)}"
         return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
             writer.rustBlock(
-                "pub fn $fnName(header_map: &#T::HeaderMap) -> Result<#T, #T::ParseError>",
+                "pub fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.http,
                 outputT,
                 headerUtil
@@ -90,7 +90,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         val fnName = "deser_prefix_header_${fnName(operationShape, binding)}"
         val inner = RuntimeType.forInlineFun("${fnName}_inner", "http_serde") {
             it.rustBlock(
-                "pub fn ${fnName}_inner(headers: #T::header::ValueIter<http::HeaderValue>) -> Result<Option<#T>, #T::ParseError>",
+                "pub fn ${fnName}_inner(headers: #T::header::ValueIter<http::HeaderValue>) -> std::result::Result<Option<#T>, #T::ParseError>",
                 RuntimeType.http,
                 symbolProvider.toSymbol(model.expectShape(target.value.target)),
                 headerUtil
@@ -100,7 +100,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         }
         return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
             writer.rustBlock(
-                "pub fn $fnName(header_map: &#T::HeaderMap) -> Result<#T, #T::ParseError>",
+                "pub fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.http,
                 outputT,
                 headerUtil
@@ -108,7 +108,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                 rust(
                     """
                     let headers = #T::headers_for_prefix(&header_map, ${binding.locationName.dq()});
-                    let out: Result<_, _> = headers.map(|(key, header_name)| {
+                    let out: std::result::Result<_, _> = headers.map(|(key, header_name)| {
                         let values = header_map.get_all(header_name);
                         #T(values.iter()).map(|v| (key.to_string(), v.unwrap()))
                     }).collect();
@@ -137,7 +137,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         return RuntimeType.forInlineFun(fnName, "http_serde") { rustWriter ->
             if (binding.member.isStreaming(model)) {
                 rustWriter.rustBlock(
-                    "pub fn $fnName(body: &mut #T) -> Result<#T, #T>",
+                    "pub fn $fnName(body: &mut #T) -> std::result::Result<#T, #T>",
                     RuntimeType.sdkBody(runtimeConfig),
                     outputT,
                     errorT
@@ -145,7 +145,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                     deserializeStreamingBody(binding)
                 }
             } else {
-                rustWriter.rustBlock("pub fn $fnName(body: &[u8]) -> Result<#T, #T>", outputT, errorT) {
+                rustWriter.rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorT) {
                     deserializePayloadBody(
                         binding,
                         errorT,
@@ -242,7 +242,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
             )
             if (coreShape.hasTrait<MediaTypeTrait>()) {
                 rustTemplate(
-                    """let $parsedValue: Result<Vec<_>, _> = $parsedValue
+                    """let $parsedValue: std::result::Result<Vec<_>, _> = $parsedValue
                         .iter().map(|s|
                             #{base_64_decode}(s).map_err(|_|#{header}::ParseError)
                             .and_then(|bytes|String::from_utf8(bytes).map_err(|_|#{header}::ParseError))

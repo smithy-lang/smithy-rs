@@ -95,11 +95,11 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             }
 
             /// An ergonomic service client for `$humanName`.
-            /// 
+            ///
             /// This client allows ergonomic access to a `$humanName`-shaped service.
             /// Each method corresponds to an endpoint defined in the service's Smithy model,
             /// and the request and response shapes are auto-generated from that same model.
-            /// 
+            ///
             /// ## Constructing a Client
             ///
             /// To construct a client, you need a few different things:
@@ -130,7 +130,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             /// `build` to construct the finalized output type. The
             /// [`#{client}::Client`] builder is re-exported in this crate as
             /// [`Builder`] for convenience.
-            /// 
+            ///
             /// In _most_ circumstances, you will want to use the following pattern
             /// to construct a client:
             ///
@@ -163,7 +163,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             /// use tower::layer::util::Stack;
             /// use tower::ServiceBuilder;
             ///
-            /// type AwsMiddlewareStack = 
+            /// type AwsMiddlewareStack =
             ///     Stack<MapRequestLayer<SigV4SigningStage>,
             ///         Stack<MapRequestLayer<UserAgentStage>,
             ///             MapRequestLayer<AwsEndpointStage>>>,
@@ -190,7 +190,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             ///     }
             /// }
             /// ```
-            /// 
+            ///
             /// ## Using a Client
             ///
             /// Once you have a client set up, you can access the service's endpoints
@@ -199,7 +199,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             /// the various fields of the request. Once your request is complete, use
             /// the `send` method to send the request. `send` returns a future, which
             /// you then have to `.await` to get the service's response.
-            /// 
+            ///
             /// [builder pattern]: https://rust-lang.github.io/api-guidelines/type-safety.html##c-builder
             /// [SigV4-signed requests]: https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html
             ##[derive(Clone, std::fmt::Debug)]
@@ -286,7 +286,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         Self { handle, inner: Default::default() }
                     }
 
-                    pub async fn send(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>> where
+                    pub async fn send(self) -> std::result::Result<#{ok}, #{sdk_err}<#{operation_err}>> where
                         R::Policy: #{client}::bounds::SmithyRetryPolicy<#{input}OperationOutputAlias, #{ok}, #{operation_err}, #{input}OperationRetryAlias>,
                     {
                         let input = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
