@@ -27,7 +27,7 @@ mod hyper_impls;
 
 /// Re-export HyperAdapter
 #[cfg(feature = "hyper")]
-pub mod hyper {
+pub mod hyper_ext {
     pub use crate::hyper_impls::HyperAdapter as Adapter;
 }
 
