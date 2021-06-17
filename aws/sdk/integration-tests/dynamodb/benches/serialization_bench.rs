@@ -7,7 +7,6 @@ use aws_sdk_dynamodb::input::PutItemInput;
 use aws_sdk_dynamodb::model::AttributeValue;
 use aws_sdk_dynamodb::Config;
 use criterion::{criterion_group, criterion_main, Criterion};
-use tokio::runtime::Builder as RuntimeBuilder;
 
 macro_rules! attr_s {
     ($str_val:expr) => {
@@ -34,7 +33,7 @@ macro_rules! attr_obj {
     };
 }
 
-async fn do_bench(config: &Config, input: &PutItemInput) {
+fn do_bench(config: &Config, input: &PutItemInput) {
     let operation = input
         .make_operation(&config)
         .expect("operation failed to build");
@@ -44,10 +43,6 @@ async fn do_bench(config: &Config, input: &PutItemInput) {
 }
 
 fn bench_group(c: &mut Criterion) {
-    let runtime = RuntimeBuilder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
     c.bench_function("serialization_bench", |b| {
         let config = Config::builder().build();
         let input = PutItemInput::builder()
@@ -71,7 +66,7 @@ fn bench_group(c: &mut Criterion) {
             ))
             .build()
             .expect("valid input");
-        b.to_async(&runtime).iter(|| do_bench(&config, &input))
+        b.iter(|| do_bench(&config, &input))
     });
 }
 

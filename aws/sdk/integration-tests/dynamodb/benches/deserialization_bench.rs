@@ -8,9 +8,8 @@ use bytes::Bytes;
 use criterion::{criterion_group, criterion_main, Criterion};
 use smithy_http::body::SdkBody;
 use smithy_http::response::ParseHttpResponse;
-use tokio::runtime::Builder as RuntimeBuilder;
 
-async fn do_bench() {
+fn do_bench() {
     let response = http::Response::builder()
         .header("server", "Server")
         .header("date", "Mon, 08 Mar 2021 15:51:23 GMT")
@@ -29,13 +28,7 @@ async fn do_bench() {
 }
 
 fn bench_group(c: &mut Criterion) {
-    let runtime = RuntimeBuilder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    c.bench_function("deserialization_bench", |b| {
-        b.to_async(&runtime).iter(do_bench)
-    });
+    c.bench_function("deserialization_bench", |b| b.iter(do_bench));
 }
 
 criterion_group!(benches, bench_group);

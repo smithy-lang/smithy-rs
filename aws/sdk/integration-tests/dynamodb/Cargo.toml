@@ -13,7 +13,7 @@ aws-http = { path = "../../build/aws-sdk/aws-http" }
 aws-hyper = { path = "../../build/aws-sdk/aws-hyper", features = ["test-util"] }
 aws-sdk-dynamodb = { path = "../../build/aws-sdk/dynamodb" }
 bytes = "1"
-criterion = { version = "0.3.4", features = ["async_tokio"] }
+criterion = { version = "0.3.4" }
 http = "0.2.4"
 serde_json = "1"
 smithy-http = { path = "../../build/aws-sdk/smithy-http" }
