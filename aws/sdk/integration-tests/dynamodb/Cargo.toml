@@ -12,6 +12,7 @@ aws-auth = { path = "../../build/aws-sdk/aws-auth" }
 aws-http = { path = "../../build/aws-sdk/aws-http" }
 aws-hyper = { path = "../../build/aws-sdk/aws-hyper", features = ["test-util"] }
 aws-sdk-dynamodb = { path = "../../build/aws-sdk/dynamodb" }
+bytes = "1"
 criterion = { version = "0.3.4", features = ["async_tokio"] }
 http = "0.2.4"
 serde_json = "1"
@@ -21,5 +22,9 @@ tokio = { version = "1", features = ["full", "test-util"]}
 tracing-subscriber = "0.2.16"
 
 [[bench]]
-name = "ser_deser_benchmark"
+name = "deserialization_bench"
+harness = false
+
+[[bench]]
+name = "serialization_bench"
 harness = false
