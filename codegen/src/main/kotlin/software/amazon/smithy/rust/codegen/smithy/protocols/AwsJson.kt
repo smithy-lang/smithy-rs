@@ -199,7 +199,7 @@ class BasicAwsJsonGenerator(
         operationWriter.rustTemplate(
             """
             impl #{parse_strict} for $operationName {
-                type Output = Result<#{output}, #{error}>;
+                type Output = std::result::Result<#{output}, #{error}>;
                 fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
                     self.parse_response(response)
                 }
@@ -312,7 +312,7 @@ class BasicAwsJsonGenerator(
         Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
         Attribute.AllowUnused.render(implBlockWriter)
         implBlockWriter.rustBlock(
-            "fn parse_response(&self, response: & #T<#T>) -> Result<#T, #T>",
+            "fn parse_response(&self, response: & #T<#T>) -> std::result::Result<#T, #T>",
             RuntimeType.Http("response::Response"),
             RuntimeType.Bytes,
             symbolProvider.toSymbol(operationShape.outputShape(model)),

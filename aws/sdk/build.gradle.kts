@@ -109,7 +109,7 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                       },
                       "service": "${it.service}",
                       "module": "aws-sdk-${it.module}",
-                      "moduleVersion": "0.0.7-alpha",
+                      "moduleVersion": "0.0.8-alpha",
                       "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
                       "license": "Apache-2.0"
                       ${it.extraConfig ?: ""}
@@ -148,6 +148,11 @@ task("relocateServices") {
             copy {
                 from(projectDir.resolve("integration-tests/${it.module}/tests"))
                 into(sdkOutputDir.resolve(it.module).resolve("tests"))
+            }
+
+            copy {
+                from(projectDir.resolve("integration-tests/${it.module}/benches"))
+                into(sdkOutputDir.resolve(it.module).resolve("benches"))
             }
         }
     }
@@ -240,7 +245,7 @@ tasks.register<Exec>("cargoCheck") {
     workingDir(sdkOutputDir)
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
-    commandLine("cargo", "check")
+    commandLine("cargo", "check", "--lib", "--tests", "--benches")
     dependsOn("assemble")
 }
 

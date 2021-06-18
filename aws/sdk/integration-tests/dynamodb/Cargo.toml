@@ -2,19 +2,29 @@
 [package]
 name = "dynamo-tests"
 version = "0.1.0"
-authors = ["Russell Cohen <rcoh@amazon.com>"]
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-aws-sdk-dynamodb = { path = "../../build/aws-sdk/dynamodb" }
-smithy-http = { path = "../../build/aws-sdk/smithy-http" }
-smithy-types = { path = "../../build/aws-sdk/smithy-types" }
-http = "0.2.4"
-serde_json = "1"
-aws-hyper = { path = "../../build/aws-sdk/aws-hyper", features = ["test-util"] }
 aws-auth = { path = "../../build/aws-sdk/aws-auth" }
 aws-http = { path = "../../build/aws-sdk/aws-http" }
+aws-hyper = { path = "../../build/aws-sdk/aws-hyper", features = ["test-util"] }
+aws-sdk-dynamodb = { path = "../../build/aws-sdk/dynamodb" }
+bytes = "1"
+criterion = { version = "0.3.4" }
+http = "0.2.4"
+serde_json = "1"
+smithy-http = { path = "../../build/aws-sdk/smithy-http" }
+smithy-types = { path = "../../build/aws-sdk/smithy-types" }
 tokio = { version = "1", features = ["full", "test-util"]}
 tracing-subscriber = "0.2.16"
+
+[[bench]]
+name = "deserialization_bench"
+harness = false
+
+[[bench]]
+name = "serialization_bench"
+harness = false
