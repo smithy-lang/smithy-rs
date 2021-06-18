@@ -77,6 +77,7 @@ where
     O: ParseHttpResponse<SdkBody, Output = Result<T, E>>,
 {
     if let Some(parsed_response) = handler.parse_unloaded(&mut response) {
+        trace!(response = ?response);
         return sdk_result(parsed_response, response);
     }
 
