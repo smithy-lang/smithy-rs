@@ -266,7 +266,7 @@ class XmlBindingTraitParserGenerator(
     /**
      * Update a structure builder based on the [members], specifying where to find each member (document vs. attributes)
      */
-    fun RustWriter.parseStructureInner(members: XmlMemberIndex, builder: String, outerCtx: Ctx) {
+    private fun RustWriter.parseStructureInner(members: XmlMemberIndex, builder: String, outerCtx: Ctx) {
         members.attributeMembers.forEach { member ->
             val temp = safeName("attrib")
             withBlock("let $temp =", ";") {
@@ -285,7 +285,8 @@ class XmlBindingTraitParserGenerator(
                     withBlock("let $temp =", ";") {
                         parseMember(
                             member,
-                            ctx.copy(accum = "$builder.${symbolProvider.toMemberName(member)}.take()")
+                            ctx.copy(accum = "$builder.${symbolProvider.toMemberName(member)}.take()"),
+                            forceOptional = true
                         )
                     }
                     rust("$builder = $builder.${member.setterName()}($temp);")
@@ -313,17 +314,16 @@ class XmlBindingTraitParserGenerator(
     /**
      * Generate an XML parser for a given member
      */
-    private fun RustWriter.parseMember(memberShape: MemberShape, ctx: Ctx) {
+    private fun RustWriter.parseMember(memberShape: MemberShape, ctx: Ctx, forceOptional: Boolean = false) {
         val target = model.expectShape(memberShape.target)
         val symbol = symbolProvider.toSymbol(memberShape)
-        conditionalBlock("Some(", ")", symbol.isOptional()) {
+        conditionalBlock("Some(", ")", forceOptional || symbol.isOptional()) {
             conditionalBlock("Box::new(", ")", symbol.isBoxed()) {
                 when (target) {
-                    is StringShape, is BooleanShape, is NumberShape, is TimestampShape, is BlobShape -> parsePrimitiveInner(
-                        memberShape
-                    ) {
-                        rustTemplate("#{try_data}(&mut ${ctx.tag})?.as_ref()", *codegenScope)
-                    }
+                    is StringShape, is BooleanShape, is NumberShape, is TimestampShape, is BlobShape ->
+                        parsePrimitiveInner(memberShape) {
+                            rustTemplate("#{try_data}(&mut ${ctx.tag})?.as_ref()", *codegenScope)
+                        }
                     is MapShape -> if (memberShape.isFlattened()) {
                         parseFlatMap(target, ctx)
                     } else {
@@ -424,12 +424,7 @@ class XmlBindingTraitParserGenerator(
                 *codegenScope, "Shape" to symbol
             ) {
                 Attribute.AllowUnusedMut.render(this)
-                rustTemplate(
-                    """
-                    let mut builder = #{Shape}::builder();
-                """,
-                    *codegenScope, "Shape" to symbol
-                )
+                rustTemplate("let mut builder = #{Shape}::builder();", *codegenScope, "Shape" to symbol)
                 val members = shape.xmlMembers()
                 if (members.isNotEmpty()) {
                     parseStructureInner(members, "builder", Ctx(tag = "decoder", accum = null))

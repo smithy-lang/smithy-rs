@@ -101,13 +101,7 @@ class InstantiatorTest {
     fun `generate struct builders`() {
         val structure = model.lookup<StructureShape>("com.test#MyStruct")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
-        val data = Node.parse(
-            """ {
-            "bar": 10,
-            "foo": "hello"
-        }
-            """.trimIndent()
-        )
+        val data = Node.parse("""{ "bar": 10, "foo": "hello" }""")
         val writer = RustWriter.forModule("model")
         structure.renderWithModelBuilder(model, symbolProvider, writer)
         writer.test {
