@@ -149,6 +149,11 @@ task("relocateServices") {
                 from(projectDir.resolve("integration-tests/${it.module}/tests"))
                 into(sdkOutputDir.resolve(it.module).resolve("tests"))
             }
+
+            copy {
+                from(projectDir.resolve("integration-tests/${it.module}/benches"))
+                into(sdkOutputDir.resolve(it.module).resolve("benches"))
+            }
         }
     }
     outputs.upToDateWhen { false }
@@ -240,7 +245,7 @@ tasks.register<Exec>("cargoCheck") {
     workingDir(sdkOutputDir)
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
-    commandLine("cargo", "check")
+    commandLine("cargo", "check", "--lib", "--tests", "--benches")
     dependsOn("assemble")
 }
 
