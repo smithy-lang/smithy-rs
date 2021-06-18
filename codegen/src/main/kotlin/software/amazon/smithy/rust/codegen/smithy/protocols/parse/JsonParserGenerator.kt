@@ -40,7 +40,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isBoxed
-import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.deserializeFunctionName
@@ -94,7 +93,7 @@ class JsonParserGenerator(
                     *codegenScope
                 )
                 rust("let result =")
-                deserializeMember(member, forceOptional = false)
+                deserializeMember(member)
                 rustTemplate(".ok_or_else(|| #{Error}::custom(\"expected payload member value\"));", *codegenScope)
                 expectEndOfTokenStream()
                 rust("result")
@@ -200,8 +199,7 @@ class JsonParserGenerator(
                 for (member in members) {
                     rustBlock("${member.wireName().dq()} =>") {
                         withBlock("builder = builder.${member.setterName()}(", ");") {
-                            // TODO: If #507 lands, forceOptional should be set to true below
-                            deserializeMember(member, forceOptional = false)
+                            deserializeMember(member)
                         }
                     }
                 }
@@ -210,7 +208,7 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.deserializeMember(memberShape: MemberShape, forceOptional: Boolean) {
+    private fun RustWriter.deserializeMember(memberShape: MemberShape) {
         when (val target = model.expectShape(memberShape.target)) {
             is StringShape -> deserializeString(target)
             is BooleanShape -> rustTemplate("#{expect_bool_or_null}(tokens.next())?", *codegenScope)
@@ -227,19 +225,6 @@ class JsonParserGenerator(
         val symbol = symbolProvider.toSymbol(memberShape)
         if (symbol.isBoxed()) {
             rust(".map(Box::new)")
-        }
-        // TODO: If #507 lands, then the following block of code can move into `deserializeUnion` since that
-        // will be the only thing that needs it.
-        if (!forceOptional && !symbol.isOptional()) {
-            if (symbol.canUseDefault()) {
-                rust(".unwrap_or_default()")
-            } else {
-                val name = escape(memberShape.memberName)
-                rustTemplate(
-                    ".ok_or_else(|| #{Error}::custom(\"value for '$name' cannot be null\"))?",
-                    *codegenScope
-                )
-            }
         }
     }
 
@@ -298,11 +283,11 @@ class JsonParserGenerator(
                             rustBlock("_ => ") {
                                 if (isSparse) {
                                     withBlock("items.push(", ");") {
-                                        deserializeMember(shape.member, forceOptional = false)
+                                        deserializeMember(shape.member)
                                     }
                                 } else {
                                     withBlock("let value =", ";") {
-                                        deserializeMember(shape.member, forceOptional = true)
+                                        deserializeMember(shape.member)
                                     }
                                     rustBlock("if let Some(value) = value") {
                                         rust("items.push(value);")
@@ -341,7 +326,7 @@ class JsonParserGenerator(
                             deserializeStringInner(keyTarget, "key")
                         }
                         withBlock("let value =", ";") {
-                            deserializeMember(shape.value, forceOptional = true)
+                            deserializeMember(shape.value)
                         }
                         if (isSparse) {
                             rust("map.insert(key, value);")
@@ -405,8 +390,8 @@ class JsonParserGenerator(
                 rustBlock("match tokens.next().transpose()?") {
                     rustBlockTemplate(
                         """
-                            Some(#{Token}::ValueNull { .. }) => return Ok(None),
-                            Some(#{Token}::StartObject { .. }) =>
+                        Some(#{Token}::ValueNull { .. }) => return Ok(None),
+                        Some(#{Token}::StartObject { .. }) =>
                         """,
                         *codegenScope
                     ) {
@@ -424,7 +409,8 @@ class JsonParserGenerator(
                                     val variantName = member.memberName.toPascalCase()
                                     rustBlock("${member.wireName().dq()} =>") {
                                         withBlock("Some(#T::$variantName(", "))", symbol) {
-                                            deserializeMember(member, false)
+                                            deserializeMember(member)
+                                            unwrapOrDefaultOrError(member)
                                         }
                                     }
                                 }
@@ -442,6 +428,17 @@ class JsonParserGenerator(
             }
         }
         rust("#T(tokens)?", nestedParser)
+    }
+
+    private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape) {
+        if (symbolProvider.toSymbol(member).canUseDefault()) {
+            rust(".unwrap_or_default()")
+        } else {
+            rustTemplate(
+                ".ok_or_else(|| #{Error}::custom(\"value for '${escape(member.memberName)}' cannot be null\"))?",
+                *codegenScope
+            )
+        }
     }
 
     private fun RustWriter.objectKeyLoop(inner: RustWriter.() -> Unit) {
