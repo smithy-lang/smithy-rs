@@ -33,11 +33,11 @@ struct Opt {
     verbose: bool,
 }
 
-/// Gets the contents of an object in a bucket.
+/// Lists your buckets and uploads a file to a bucket.
 /// # Arguments
 ///
-/// * `-b BUCKET` - The bucket.
-/// * `-k KEY` - The key.
+/// * `-b BUCKET` - The bucket to which the file is uploaded.
+/// * `-k KEY` - The name of the file to upload to the bucket.
 /// * `[-d DEFAULT-REGION]` - The region in which the client is created.
 ///    If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
 ///    If the environment variable is not set, defaults to **us-west-2**.

@@ -139,6 +139,12 @@ inline fun <reified T : RustType.Container> RustType.stripOuter(): RustType = wh
     else -> this
 }
 
+/** Wraps a type in Option if it isn't already */
+fun RustType.asOptional(): RustType = when (this) {
+    is RustType.Option -> this
+    else -> RustType.Option(this)
+}
+
 /**
  * Meta information about a Rust construction (field, struct, or enum)
  */

@@ -9,13 +9,16 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -55,25 +58,29 @@ class SerdeJsonParserGenerator(protocolConfig: ProtocolConfig) : StructuredDataP
 
         return RuntimeType.forInlineFun(fnName, "json_deser") {
             it.rustBlockTemplate(
-                "pub fn $fnName(inp: &[u8], mut builder: #{Builder}) -> std::result::Result<#{Builder}, #{Error}>",
+                "pub fn $fnName(input: &[u8], mut builder: #{Builder}) -> std::result::Result<#{Builder}, #{Error}>",
                 "Builder" to outputShape.builderSymbol(symbolProvider),
                 *codegenScope
             ) {
                 rustTemplate(
                     """
-                    let parsed_body: #{BodyShape} = if inp.is_empty() {
+                    let parsed_body: #{BodyShape} = if input.is_empty() {
                         // To enable JSON parsing to succeed, replace an empty body
                         // with an empty JSON body. If a member was required, it will fail slightly later
                         // during the operation construction phase when a required field was missing.
                         #{serde_json}::from_slice(b"{}")?
                     } else {
-                        #{serde_json}::from_slice(inp)?
+                        #{serde_json}::from_slice(input)?
                     };
                 """,
                     "BodyShape" to body, *codegenScope
                 )
                 bodyShape.members().forEach { member ->
-                    rust("builder = builder.${member.setterName()}(parsed_body.${symbolProvider.toMemberName(member)});")
+                    withBlock("builder = builder.${member.setterName()}(", ");") {
+                        conditionalBlock("Some(", ")", !symbolProvider.toSymbol(member).isOptional()) {
+                            rust("parsed_body.${symbolProvider.toMemberName(member)}")
+                        }
+                    }
                 }
                 rust("Ok(builder)")
             }
@@ -87,26 +94,30 @@ class SerdeJsonParserGenerator(protocolConfig: ProtocolConfig) : StructuredDataP
         val fnName = errorShape.id.name.toString().toSnakeCase()
         return RuntimeType.forInlineFun(fnName, "json_deser") {
             it.rustBlockTemplate(
-                "pub fn $fnName(inp: &[u8], mut builder: #{Builder}) -> std::result::Result<#{Builder}, #{Error}>",
+                "pub fn $fnName(input: &[u8], mut builder: #{Builder}) -> std::result::Result<#{Builder}, #{Error}>",
                 "Builder" to errorShape.builderSymbol(symbolProvider),
                 *codegenScope
             ) {
                 rustTemplate(
                     """
-                    let parsed_body: #{BodyShape} = if inp.is_empty() {
+                    let parsed_body: #{BodyShape} = if input.is_empty() {
                         // To enable JSON parsing to succeed, replace an empty body
                         // with an empty JSON body. If a member was required, it will fail slightly later
                         // during the operation construction phase.
                         #{serde_json}::from_slice(b"{}")?
                     } else {
-                        #{serde_json}::from_slice(inp)?
+                        #{serde_json}::from_slice(input)?
                     };
                 """,
                     "BodyShape" to symbolProvider.toSymbol(errorShape),
                     *codegenScope
                 )
                 errorShape.members().forEach { member ->
-                    rust("builder = builder.${member.setterName()}(parsed_body.${symbolProvider.toMemberName(member)});")
+                    withBlock("builder = builder.${member.setterName()}(", ");") {
+                        conditionalBlock("Some(", ")", !symbolProvider.toSymbol(member).isOptional()) {
+                            rust("parsed_body.${symbolProvider.toMemberName(member)}")
+                        }
+                    }
                 }
                 rust("Ok(builder)")
             }

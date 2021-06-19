@@ -44,6 +44,7 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlMemberIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlNameIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.deserializeFunctionName
+import software.amazon.smithy.rust.codegen.smithy.traits.S3UnwrappedXmlOutputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -191,8 +192,12 @@ class XmlBindingTraitParserGenerator(
                     *codegenScope
                 )
                 val context = OperationWrapperContext(operationShape, shapeName, xmlError)
-                writeOperationWrapper(context) { tagName ->
-                    parseStructureInner(members, builder = "builder", Ctx(tag = tagName, accum = null))
+                if (outputShape.hasTrait<S3UnwrappedXmlOutputTrait>()) {
+                    unwrappedResponseParser("builder", "decoder", "start_el", outputShape.members())
+                } else {
+                    writeOperationWrapper(context) { tagName ->
+                        parseStructureInner(members, builder = "builder", Ctx(tag = tagName, accum = null))
+                    }
                 }
                 rust("Ok(builder)")
             }
@@ -233,10 +238,35 @@ class XmlBindingTraitParserGenerator(
         TODO("Document shapes are not supported by rest XML")
     }
 
+    private fun RustWriter.unwrappedResponseParser(
+        builder: String,
+        decoder: String,
+        element: String,
+        members: Collection<MemberShape>
+    ) {
+        check(members.size == 1) {
+            "The S3UnwrappedXmlOutputTrait is only allowed on structs with exactly one member"
+        }
+        val member = members.first()
+        rustBlock("match $element") {
+            case(member) {
+                val temp = safeName()
+                withBlock("let $temp =", ";") {
+                    parseMember(
+                        member,
+                        Ctx(tag = decoder, accum = "$builder.${symbolProvider.toMemberName(member)}.take()")
+                    )
+                }
+                rust("$builder = $builder.${member.setterName()}($temp);")
+            }
+            rustTemplate("_ => return Err(#{XmlError}::custom(\"expected ${member.xmlName()} tag\"))", *codegenScope)
+        }
+    }
+
     /**
      * Update a structure builder based on the [members], specifying where to find each member (document vs. attributes)
      */
-    fun RustWriter.parseStructureInner(members: XmlMemberIndex, builder: String, outerCtx: Ctx) {
+    private fun RustWriter.parseStructureInner(members: XmlMemberIndex, builder: String, outerCtx: Ctx) {
         members.attributeMembers.forEach { member ->
             val temp = safeName("attrib")
             withBlock("let $temp =", ";") {
@@ -255,7 +285,8 @@ class XmlBindingTraitParserGenerator(
                     withBlock("let $temp =", ";") {
                         parseMember(
                             member,
-                            ctx.copy(accum = "$builder.${symbolProvider.toMemberName(member)}.take()")
+                            ctx.copy(accum = "$builder.${symbolProvider.toMemberName(member)}.take()"),
+                            forceOptional = true
                         )
                     }
                     rust("$builder = $builder.${member.setterName()}($temp);")
@@ -283,17 +314,16 @@ class XmlBindingTraitParserGenerator(
     /**
      * Generate an XML parser for a given member
      */
-    private fun RustWriter.parseMember(memberShape: MemberShape, ctx: Ctx) {
+    private fun RustWriter.parseMember(memberShape: MemberShape, ctx: Ctx, forceOptional: Boolean = false) {
         val target = model.expectShape(memberShape.target)
         val symbol = symbolProvider.toSymbol(memberShape)
-        conditionalBlock("Some(", ")", symbol.isOptional()) {
+        conditionalBlock("Some(", ")", forceOptional || symbol.isOptional()) {
             conditionalBlock("Box::new(", ")", symbol.isBoxed()) {
                 when (target) {
-                    is StringShape, is BooleanShape, is NumberShape, is TimestampShape, is BlobShape -> parsePrimitiveInner(
-                        memberShape
-                    ) {
-                        rustTemplate("#{try_data}(&mut ${ctx.tag})?.as_ref()", *codegenScope)
-                    }
+                    is StringShape, is BooleanShape, is NumberShape, is TimestampShape, is BlobShape ->
+                        parsePrimitiveInner(memberShape) {
+                            rustTemplate("#{try_data}(&mut ${ctx.tag})?.as_ref()", *codegenScope)
+                        }
                     is MapShape -> if (memberShape.isFlattened()) {
                         parseFlatMap(target, ctx)
                     } else {
