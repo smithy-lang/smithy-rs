@@ -232,10 +232,17 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                 timestampFormatType
             )
         } else {
-            rust(
-                "let $parsedValue: Vec<${coreType.render(true)}> = #T::read_many(headers)?;",
-                headerUtil
-            )
+            if (coreType == RustType.String) {
+                rustTemplate(
+                    "let $parsedValue = headers.map(|value| value.to_str().map(str::to_owned).map_err(|_| #{header}::ParseError)).collect::<Result<Vec<${coreType.render(true)}>, _>>()?;",
+                    "header" to headerUtil
+                )
+            } else {
+                rust(
+                    "let $parsedValue: Vec<${coreType.render(true)}> = #T::read_many(headers)?;",
+                    headerUtil
+                )
+            }
             if (coreShape.hasTrait<MediaTypeTrait>()) {
                 rustTemplate(
                     """let $parsedValue: std::result::Result<Vec<_>, _> = $parsedValue
