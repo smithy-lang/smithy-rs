@@ -266,7 +266,7 @@ class JsonParserGenerator(
             // which become `__list_of__`, and the Rust compiler warning doesn't like multiple adjacent underscores.
             it.rustBlockTemplate(
                 """
-                ##[allow(non_snake_case)]
+                ##[allow(clippy::type_complexity, non_snake_case)]
                 pub fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
