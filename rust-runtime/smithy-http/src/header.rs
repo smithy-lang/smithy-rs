@@ -73,7 +73,10 @@ where
     Ok(out)
 }
 
-pub fn exactly_one<T: FromStr>(
+/// Read exactly one or none from a headers iterator
+///
+/// This function does not perform comma splitting like `read_many`
+pub fn one_or_none<T: FromStr>(
     mut values: ValueIter<HeaderValue>,
 ) -> Result<Option<T>, ParseError> {
     let first = match values.next() {

@@ -216,7 +216,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         // is just a single string (which might include `,`s.).
         // MediaType doesn't include `,` since it's base64, send that through the normal path
         if (targetType is StringShape && !targetType.hasTrait<MediaTypeTrait>()) {
-            rust("#T::exactly_one(headers)", headerUtil)
+            rust("#T::one_or_none(headers)", headerUtil)
             return
         }
         val (coreType, coreShape) = if (targetType is CollectionShape) {
