@@ -17,7 +17,8 @@ service RestXmlExtras {
         XmlMapsFlattenedNestedXmlNamespace,
         EnumKeys,
         PrimitiveIntOpXml,
-        ChecksumRequired
+        ChecksumRequired,
+        StringHeader,
     ]
 }
 
@@ -202,4 +203,33 @@ operation ChecksumRequired {
 
 structure ChecksumRequiredInput {
     field: String
+}
+
+
+@httpResponseTests([{
+    id: "DeserHeaderStringCommas",
+    code: 200,
+    documentation: """
+    Regression test for https://github.com/awslabs/aws-sdk-rust/issues/122
+    where `,` was eagerly used to split fields in cases where the input was not
+    a list.
+    """,
+    body: "",
+    headers: { "x-field": "a,b,c" },
+    params: {
+        field: "a,b,c"
+    },
+    protocol: "aws.protocols#restXml"
+}])
+@http(uri: "/StringHeader", method: "POST")
+operation StringHeader {
+    output: StringHeaderOutput
+}
+
+structure StringHeaderOutput {
+    @httpHeader("x-field")
+    field: String,
+
+    @httpHeader("x-enum")
+    enumHeader: StringEnum
 }
