@@ -12,7 +12,13 @@ use smithy.test#httpRequestTests
 @restXml
 service RestXmlExtras {
     version: "2019-12-16",
-    operations: [AttributeParty, XmlMapsFlattenedNestedXmlNamespace, EnumKeys, PrimitiveIntOpXml]
+    operations: [
+        AttributeParty,
+        XmlMapsFlattenedNestedXmlNamespace,
+        EnumKeys,
+        PrimitiveIntOpXml,
+        ChecksumRequired
+    ]
 }
 
 @httpRequestTests([{
@@ -174,4 +180,26 @@ map XmlMapsNestedNestedNamespaceInputOutputMap {
     @xmlNamespace(uri: "http://hoo.com")
     @xmlName("V")
     value: String
+}
+
+@httpRequestTests([{
+    id: "ChecksumRequiredHeader",
+    method: "POST",
+    body: "<ChecksumRequiredInput><field>hello</field></ChecksumRequiredInput>",
+    uri: "/ChecksumRequired",
+    bodyMediaType: "application/xml",
+    params: {
+        field: "hello"
+    },
+    headers: { "Content-Md5": "240240a9803ad7032101319e42a45c31" },
+    protocol: "aws.protocols#restXml"
+}])
+@httpChecksumRequired
+@http(uri: "/ChecksumRequired", method: "POST")
+operation ChecksumRequired {
+    input: ChecksumRequiredInput
+}
+
+structure ChecksumRequiredInput {
+    field: String
 }
