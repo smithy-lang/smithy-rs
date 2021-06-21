@@ -212,6 +212,13 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
      */
     private fun RustWriter.deserializeFromHeader(targetType: Shape, memberShape: MemberShape) {
         val rustType = symbolProvider.toSymbol(targetType).rustType().stripOuter<RustType.Option>()
+        // Normally, we go through a flow that looks for `,`s but that's wrong if the output
+        // is just a single string (which might include `,`s.).
+        // MediaType doesn't include `,` since it's base64, send that through the normal path
+        if (targetType is StringShape && !targetType.hasTrait<MediaTypeTrait>()) {
+            rust("#T::exactly_one(headers)", headerUtil)
+            return
+        }
         val (coreType, coreShape) = if (targetType is CollectionShape) {
             rustType.stripOuter<RustType.Container>() to model.expectShape(targetType.member.target)
         } else {
