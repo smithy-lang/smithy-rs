@@ -21,3 +21,16 @@ apply NotFound @httpResponseTests([
         }
     }
 ])
+
+apply GetBucketLocation @httpResponseTests([
+    {
+        id: "GetBucketLocation",
+        documentation: "This test case validates https://github.com/awslabs/aws-sdk-rust/issues/116",
+        code: 200,
+        body: "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<LocationConstraint xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">us-west-2</LocationConstraint>",
+        params: {
+            "LocationConstraint": "us-west-2"
+        },
+        protocol: "aws.protocols#restXml"
+    }
+])

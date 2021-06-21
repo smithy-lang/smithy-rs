@@ -184,7 +184,7 @@ jobs:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
         path: aws-sdk
     - name: Cargo Check
-      run: cargo check
+      run: cargo check --lib --tests --benches
       working-directory: aws-sdk
       env:
         RUSTFLAGS: -D warnings
