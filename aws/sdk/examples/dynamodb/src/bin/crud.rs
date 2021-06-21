@@ -5,7 +5,6 @@
 
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
-use std::collections::HashMap;
 use std::io::{stdin, Read};
 use std::time::Duration;
 use std::{iter, process};
@@ -43,7 +42,7 @@ struct Opt {
     #[structopt(short, long)]
     interactive: bool,
 
-    /// The region
+    /// The AWS Region
     #[structopt(short, long)]
     region: Option<String>,
 
@@ -142,91 +141,21 @@ async fn query(client: &dynamodb::Client, item: Item) {
     let value = &item.value;
     let key = &item.key;
     let user_av = AttributeValue::S(value.to_string());
-    let userav = AttributeValue::S(value.to_string());
-    let type_av = AttributeValue::S(item.utype);
-    let age_av = AttributeValue::S(item.age);
-    let first_av = AttributeValue::S(item.first_name);
-    let last_av = AttributeValue::S(item.last_name);
-    let mut found_match = true;
-    let mut cond = HashMap::new();
-    cond.insert("#key".to_string(), key.to_string());
-    let mut expr = HashMap::new();
-    expr.insert(":value".to_string(), user_av);
-    match client
+
+    let resp = client
         .query()
         .table_name(item.table)
-        .set_key_condition_expression(Some("#key = :value".to_string()))
-        .set_expression_attribute_names(Some(cond))
-        .set_expression_attribute_values(Some(expr))
+        .key_condition_expression("#key = :value".to_string())
+        .expression_attribute_names("#key".to_string(), key.to_string())
+        .expression_attribute_values(":value".to_string(), user_av)
         .select(Select::AllAttributes)
         .send()
-        .await
-    {
-        Ok(resp) => {
-            let items = resp.items.unwrap_or_default();
-            for item in items {
-                // Do key values match?
-                match item.get(&String::from(key)) {
-                    None => found_match = false,
-                    Some(v) => {
-                        if v != &userav {
-                            found_match = false;
-                        }
-                    }
-                }
+        .await;
 
-                // Do age values match?
-                match item.get(&String::from("age")) {
-                    None => found_match = false,
-                    Some(v) => {
-                        if v != &age_av {
-                            found_match = false;
-                        }
-                    }
-                }
-
-                // Do first name values match?
-                match item.get(&String::from("first_name")) {
-                    None => found_match = false,
-                    Some(v) => {
-                        if v != &first_av {
-                            found_match = false;
-                        }
-                    }
-                }
-
-                // Do last name values match?
-                match item.get(&String::from("last_name")) {
-                    None => found_match = false,
-                    Some(v) => {
-                        if v != &last_av {
-                            found_match = false;
-                        }
-                    }
-                }
-
-                // Do account type values match?
-                match item.get(&String::from("account_type")) {
-                    None => found_match = false,
-                    Some(v) => {
-                        if v != &type_av {
-                            found_match = false;
-                        }
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            println!("Got an error querying the table:");
-            println!("{}", e);
-            process::exit(1);
-        }
-    };
-
-    if !found_match {
-        println!("Did not find matching entry in table");
+    if resp.unwrap().count > 0 {
+        println!("Found a matching entry in table");
     } else {
-        println!("Found a match!");
+        println!("Did not find a match");
     }
 }
 
