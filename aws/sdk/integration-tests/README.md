@@ -1,8 +1,44 @@
 # Handwritten Integration Test Root
 
-This folder contains hand-written integration tests that are specific to individual services. In order for your test to be merged into the final artifact:
+This folder contains hand-written integration tests that are specific to
+individual services. In order for your test to be merged into the final artifact:
 
 - The crate name must match the generated crate name, eg. `kms`, `dynamodb`
 - Your test must be placed into the `tests` folder. **Everything else in your test crate is ignored.**
 
-The contents of the `test` folder will be combined with codegenerated integration tests & inserted into the `tests` folder of the final generated service crate.
+The contents of the `test` folder will be combined with code-generated integration
+tests & inserted into the `tests` folder of the final generated service crate.
+
+## Benchmarks
+
+Some integration test roots have a `benches/` directory. In these, `cargo bench` can be
+invoked to run the benchmarks against the current version of smithy-rs. To compare
+across smithy-rs versions, you can use git to checkout the version to compare against,
+run the benchmark, and then checkout the other version and run it again:
+
+```bash
+# For example, this was the very first commit that had a benchmark
+git checkout 1fd6e978ae43fb8139cc091997f0ab76ae9fdafa
+
+# Re-generate the SDK before benchmarking to make sure you have the correct code
+./gradlew :aws:sdk:assemble
+
+# The DynamoDB integration tests have benchmarks. Let's run them
+cd aws/sdk/integration-tests/dynamodb
+cargo bench
+
+# Record the results...
+
+# Now, run against the latest
+git checkout main
+
+# Re-generate the SDK before benchmarking to make sure you have the correct code
+cd ../../../..
+./gradlew :aws:sdk:assemble
+
+# Go run the same benchmarks with the latest version
+cd aws/sdk/integration-tests/dynamodb
+cargo bench
+
+# Compare!
+```
