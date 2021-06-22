@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -53,21 +52,6 @@ class UnionGenerator(
                 }
                 rustBlock("pub fn is_$funcNamePart(&self) -> bool") {
                     rust("self.as_$funcNamePart().is_ok()")
-                }
-            }
-        }
-
-        sortedMembers.forEach { member ->
-            val memberSymbol = symbolProvider.toSymbol(member)
-            val variantName = member.memberName.toPascalCase()
-            writer.rustBlock("impl std::convert::TryFrom<${unionSymbol.name}> for #T", memberSymbol) {
-                rust("type Error = #T;", unionSymbol)
-                rustBlockTemplate(
-                    "fn try_from(value: #{Union}) -> Result<#{Member}, Self::Error>",
-                    "Union" to unionSymbol,
-                    "Member" to memberSymbol
-                ) {
-                    rust("if let ${unionSymbol.name}::$variantName(variant) = value { Ok(variant) } else { Err(value) }")
                 }
             }
         }
