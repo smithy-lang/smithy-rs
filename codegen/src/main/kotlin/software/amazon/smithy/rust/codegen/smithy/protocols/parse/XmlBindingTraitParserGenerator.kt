@@ -389,7 +389,7 @@ class XmlBindingTraitParserGenerator(
                                     })
                                 """
                             withBlock("let tmp =", ";") {
-                                parseMember(member, ctx.copy(accum = current))
+                                parseMember(member, ctx.copy(accum = current.trim()))
                             }
                             rust("base = Some(#T::$variantName(tmp));", symbol)
                         }

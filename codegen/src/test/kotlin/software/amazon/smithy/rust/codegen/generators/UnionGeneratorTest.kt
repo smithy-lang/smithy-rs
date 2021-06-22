@@ -62,9 +62,6 @@ class UnionGeneratorTest {
             assert_eq!(bar.is_int_value(), true);
             assert_eq!(bar.as_string_value(), Err(&bar));
             assert_eq!(bar.as_int_value(), Ok(&10));
-
-            use std::convert::TryFrom;
-            let _ = String::try_from(foo).expect("foo is a string");
             """
         )
     }
