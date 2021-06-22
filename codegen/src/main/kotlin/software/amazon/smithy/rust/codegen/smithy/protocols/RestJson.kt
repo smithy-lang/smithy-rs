@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
-import software.amazon.smithy.rust.codegen.smithy.protocols.parse.SerdeJsonParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
@@ -83,7 +83,7 @@ class RestJson(private val protocolConfig: ProtocolConfig) : Protocol {
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return SerdeJsonParserGenerator(protocolConfig)
+        return JsonParserGenerator(protocolConfig, httpBindingResolver)
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator {
@@ -105,7 +105,7 @@ class RestJson(private val protocolConfig: ProtocolConfig) : Protocol {
                     let body = #{sj}::from_slice(response.body().as_ref())
                         .unwrap_or_else(|_|#{sj}::json!({}));
                     Ok(#{aws_json_errors}::parse_generic_error(&response, &body))
-                """,
+                    """,
                     "sj" to RuntimeType.serdeJson, "aws_json_errors" to awsJsonErrors
                 )
             }

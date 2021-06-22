@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
+package software.amazon.smithy.rust.codegen.smithy.protocols.parse
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
@@ -23,10 +23,10 @@ import software.amazon.smithy.rust.codegen.testutil.testProtocolConfig
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.expectTrait
-import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.lookup
+import software.amazon.smithy.rust.codegen.util.outputShape
 
-class JsonSerializerGeneratorTest {
+class JsonParserGeneratorTest {
     private val baseModel = """
         namespace test
         use aws.protocols#restJson1
@@ -72,9 +72,10 @@ class JsonSerializerGeneratorTest {
         }
 
         structure Top {
+            @required
             choice: Choice,
             field: String,
-            extra: Long,
+            extra: Integer,
             @jsonName("rec")
             recursive: TopList
         }
@@ -83,7 +84,7 @@ class JsonSerializerGeneratorTest {
             member: Top
         }
 
-        structure OpInput {
+        structure OpOutput {
             @httpHeader("x-test")
             someHeader: String,
 
@@ -92,45 +93,49 @@ class JsonSerializerGeneratorTest {
 
         @http(uri: "/top", method: "POST")
         operation Op {
-            input: OpInput,
+            output: OpOutput,
         }
     """.asSmithyModel()
 
     @Test
-    fun `generates valid serializers`() {
+    fun `generates valid deserializers`() {
         val model = RecursiveShapeBoxer.transform(
             OperationNormalizer(baseModel).transformModel(
                 OperationNormalizer.NoBody,
-                OperationNormalizer.NoBody
-            )
+            ) { _, shape -> shape }
         )
         val symbolProvider = testSymbolProvider(model)
-        val parserSerializer = JsonSerializerGenerator(
+        val parserGenerator = JsonParserGenerator(
             testProtocolConfig(model),
-            HttpTraitHttpBindingResolver(model, "application/json", null)
+            HttpTraitHttpBindingResolver(model, "application/json", "application/json")
         )
-        val operationGenerator = parserSerializer.operationSerializer(model.lookup("test#Op"))
-        val documentGenerator = parserSerializer.documentSerializer()
+        val operationGenerator = parserGenerator.operationParser(model.lookup("test#Op"))
+        val documentGenerator = parserGenerator.documentParser(model.lookup("test#Op"))
+        val payloadGenerator = parserGenerator.payloadParser(model.lookup("test#OpOutput\$top"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
             writer.unitTest(
                 """
-                use model::Top;
+                use model::Choice;
 
                 // Generate the document serializer even though it's not tested directly
                 // ${writer.format(documentGenerator)}
+                // ${writer.format(payloadGenerator)}
 
-                let input = crate::input::OpInput::builder().top(
-                    Top::builder()
-                        .field("hello!")
-                        .extra(45)
-                        .recursive(Top::builder().extra(55).build())
-                        .build()
-                ).build().unwrap();
-                let serialized = ${writer.format(operationGenerator!!)}(&input).unwrap();
-                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
-                assert_eq!(output, r#"{"top":{"field":"hello!","extra":45,"rec":[{"extra":55}]}}"#);
+                let json = br#"
+                    { "top":
+                        { "extra": 45,
+                          "field": "something",
+                          "choice":
+                              { "int": 5 }}}
+                "#;
+
+                let output = ${writer.format(operationGenerator!!)}(json, output::op_output::Builder::default()).unwrap().build();
+                let top = output.top.expect("top");
+                assert_eq!(Some(45), top.extra);
+                assert_eq!(Some("something".to_string()), top.field);
+                assert_eq!(Some(Choice::Int(5)), top.choice);
                 """
             )
         }
@@ -141,13 +146,13 @@ class JsonSerializerGeneratorTest {
             EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
         }
 
-        project.withModule(RustModule.default("input", public = true)) {
-            model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
+        project.withModule(RustModule.default("output", public = true)) {
+            model.lookup<OperationShape>("test#Op").outputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/json_ser.rs")
+        println("file:///${project.baseDir}/src/json_deser.rs")
         println("file:///${project.baseDir}/src/lib.rs")
         println("file:///${project.baseDir}/src/model.rs")
-        println("file:///${project.baseDir}/src/operation_ser.rs")
+        println("file:///${project.baseDir}/src/output.rs")
         project.compileAndTest()
     }
 }

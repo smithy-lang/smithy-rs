@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.util.doubleQuote
+import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.orNull
 
@@ -154,7 +155,7 @@ class EnumGenerator(
             writer.rustBlock("pub fn as_str(&self) -> &str") {
                 writer.rustBlock("match self") {
                     sortedMembers.forEach { member ->
-                        write("""$enumName::${member.derivedName()} => "${member.value}",""")
+                        write("""$enumName::${member.derivedName()} => ${member.value.dq()},""")
                     }
                     write("$enumName::$UnknownVariant(s) => s.as_ref()")
                 }
@@ -182,7 +183,7 @@ class EnumGenerator(
             writer.rustBlock("fn from(s: &str) -> Self") {
                 writer.rustBlock("match s") {
                     sortedMembers.forEach { member ->
-                        write(""""${member.value}" => $enumName::${member.derivedName()},""")
+                        write("""${member.value.dq()} => $enumName::${member.derivedName()},""")
                     }
                     write("other => $enumName::$UnknownVariant(other.to_owned())")
                 }
