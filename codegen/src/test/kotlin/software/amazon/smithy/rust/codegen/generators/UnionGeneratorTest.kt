@@ -18,42 +18,37 @@ import software.amazon.smithy.rust.codegen.util.lookup
 class UnionGeneratorTest {
     @Test
     fun `generate basic unions`() {
-        val model = """
-        namespace test
-        union MyUnion {
-            stringConfig: String,
-            @documentation("This *is* documentation about the member")
-            intConfig: PrimitiveInteger
-        }
-        """.asSmithyModel()
-        val provider: SymbolProvider = testSymbolProvider(model)
-        val writer = RustWriter.forModule("model")
-        val generator = UnionGenerator(model, provider, writer, model.lookup("test#MyUnion"))
-        generator.render()
+        val writer = generateUnion(
+            """
+            union MyUnion {
+                stringConfig: String,
+                @documentation("This *is* documentation about the member")
+                intConfig: PrimitiveInteger
+            }
+            """
+        )
+
         writer.compileAndTest(
             """
-        let var_a = MyUnion::StringConfig("abc".to_string());
-        let var_b = MyUnion::IntConfig(10);
-        assert_ne!(var_a, var_b);
-        assert_eq!(var_a, var_a);
-        """
+            let var_a = MyUnion::StringConfig("abc".to_string());
+            let var_b = MyUnion::IntConfig(10);
+            assert_ne!(var_a, var_b);
+            assert_eq!(var_a, var_a);
+            """
         )
         writer.toString() shouldContain "#[non_exhaustive]"
     }
 
     @Test
     fun `generate conversion helper methods`() {
-        val model = """
-        namespace test
-        union MyUnion {
-            stringValue: String,
-            intValue: PrimitiveInteger
-        }
-        """.asSmithyModel()
-        val provider: SymbolProvider = testSymbolProvider(model)
-        val writer = RustWriter.forModule("model")
-        val generator = UnionGenerator(model, provider, writer, model.lookup("test#MyUnion"))
-        generator.render()
+        val writer = generateUnion(
+            """
+            union MyUnion {
+                stringValue: String,
+                intValue: PrimitiveInteger
+            }
+            """
+        )
 
         writer.compileAndTest(
             """
@@ -67,7 +62,26 @@ class UnionGeneratorTest {
             assert_eq!(bar.is_int_value(), true);
             assert_eq!(bar.as_string_value(), None);
             assert_eq!(bar.as_int_value(), Some(&10));
-        """
+            """
         )
+    }
+
+    @Test
+    fun `documents are not optional in unions`() {
+        val writer = generateUnion("union MyUnion { doc: Document, other: String }")
+        writer.compileAndTest(
+            """
+            // If the document isn't optional, this will compile
+            MyUnion::Doc(smithy_types::Document::Null);
+            """
+        )
+    }
+
+    private fun generateUnion(modelSmithy: String, unionName: String = "MyUnion"): RustWriter {
+        val model = "namespace test\n$modelSmithy".asSmithyModel()
+        val provider: SymbolProvider = testSymbolProvider(model)
+        val writer = RustWriter.forModule("model")
+        UnionGenerator(model, provider, writer, model.lookup("test#$unionName")).render()
+        return writer
     }
 }

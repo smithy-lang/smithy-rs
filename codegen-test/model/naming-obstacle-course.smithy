@@ -14,7 +14,9 @@ service Config {
     operations: [
        ReservedWordsAsMembers,
        StructureNamePunning,
-       ErrCollisions
+       ErrCollisions,
+       Result,
+       Option,
     ]
 }
 
@@ -39,7 +41,11 @@ operation ReservedWordsAsMembers {
 
 structure ReservedWords {
     as: Integer,
-    async: Boolean
+    async: Boolean,
+    enum: UnknownVariantCollidingEnum,
+    self: Boolean,
+    crate: Boolean,
+    super: Boolean
 }
 
 @httpRequestTests([
@@ -68,6 +74,13 @@ structure Vec {
     pv_member: Boolean
 }
 
+structure Some {
+    pv_member: Boolean
+}
+
+structure None {
+}
+
 
 operation ErrCollisions {
     errors: [
@@ -75,6 +88,16 @@ operation ErrCollisions {
         CollidingException
         // , ErrCollisionsException
     ]
+}
+
+operation Result {
+    input: Vec,
+    output: Some
+}
+
+operation Option {
+    input: Vec,
+    output: None
 }
 
 @error("client")
@@ -97,5 +120,8 @@ structure CollidingException {
 @enum([
     { name: "Known", value: "Known" },
     { name: "Unknown", value: "Unknown" },
+    { name: "Self", value: "Self" },
+    { name: "UnknownValue", value: "UnknownValue" },
+    { name: "SelfValue", value: "SelfValue" }
 ])
 string UnknownVariantCollidingEnum

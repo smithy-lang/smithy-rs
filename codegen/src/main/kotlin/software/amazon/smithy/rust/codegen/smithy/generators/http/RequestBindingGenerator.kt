@@ -95,7 +95,7 @@ class RequestBindingGenerator(
         val hasQuery = uriQuery(implBlockWriter)
         Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
         implBlockWriter.rustBlock(
-            "fn update_http_builder(&self, builder: #1T) -> Result<#1T, #2T>",
+            "fn update_http_builder(&self, builder: #1T) -> std::result::Result<#1T, #2T>",
             RuntimeType.HttpRequestBuilder,
             buildError
         ) {
@@ -129,7 +129,7 @@ class RequestBindingGenerator(
             return false
         }
         writer.rustBlock(
-            "fn add_headers(&self, mut builder: #1T) -> Result<#1T, #2T>",
+            "fn add_headers(&self, mut builder: #1T) -> std::result::Result<#1T, #2T>",
             RuntimeType.HttpRequestBuilder,
             buildErrorT
         ) {

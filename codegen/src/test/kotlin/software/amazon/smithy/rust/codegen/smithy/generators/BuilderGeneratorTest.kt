@@ -9,9 +9,11 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.generators.StructureGeneratorTest
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.Default
+import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.setDefault
@@ -41,7 +43,7 @@ internal class BuilderGeneratorTest {
             let my_struct = MyStruct::builder().byte_value(4).foo("hello!").build();
             assert_eq!(my_struct.foo.unwrap(), "hello!");
             assert_eq!(my_struct.bar, 0);
-        """
+            """
         )
     }
 
@@ -52,6 +54,10 @@ internal class BuilderGeneratorTest {
             object : RustSymbolProvider {
                 override fun config(): SymbolVisitorConfig {
                     return baseProvider.config()
+                }
+
+                override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
+                    return baseProvider.toEnumVariantName(definition)
                 }
 
                 override fun toSymbol(shape: Shape?): Symbol {
@@ -83,7 +89,7 @@ internal class BuilderGeneratorTest {
             let my_struct = MyStruct::builder().byte_value(4).foo("hello!").bar(0).build().expect("required field was not provided");
             assert_eq!(my_struct.foo.unwrap(), "hello!");
             assert_eq!(my_struct.bar, 0);
-        """
+            """
         )
     }
 }
