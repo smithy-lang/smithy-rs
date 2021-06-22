@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+/// Lists your AWS Elemental MediaPackage endpoint URLs.
 #[tokio::main]
 async fn main() -> Result<(), mediapackage::Error> {
     let client = mediapackage::Client::from_env();

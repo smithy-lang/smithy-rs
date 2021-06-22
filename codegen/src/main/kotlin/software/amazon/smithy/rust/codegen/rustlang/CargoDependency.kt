@@ -183,6 +183,7 @@ data class CargoDependency(
     }
 
     companion object {
+        val Md5 = CargoDependency("md5", CratesIo("0.7"))
         val FastRand = CargoDependency("fastrand", CratesIo("1"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2"))
         val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"), optional = true)
