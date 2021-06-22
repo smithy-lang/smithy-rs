@@ -13,7 +13,7 @@ use std::{process, str};
 
 // types from the AWS SDK for Rust
 use aws_types::region::ProvideRegion;
-use lambda::{error::InvokeErrorKind, Client, Config, Region, SdkError};
+use lambda::{Client, Config, Region, SdkError};
 
 // types from other third-party crates
 use tracing_subscriber::fmt::format::FmtSpan;
