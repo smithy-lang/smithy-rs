@@ -58,20 +58,24 @@ class Instantiator(
     private val model: Model,
     private val runtimeConfig: RuntimeConfig
 ) {
-
-    // The Rust HTTP library lower cases headers but Smithy protocol tests
-    // contain httpPrefix headers with uppercase keys
-    data class Ctx(val lowercaseMapKeys: Boolean, val streaming: Boolean)
+    data class Ctx(
+        // The Rust HTTP library lower cases headers but Smithy protocol tests
+        // contain httpPrefix headers with uppercase keys
+        val lowercaseMapKeys: Boolean,
+        val streaming: Boolean,
+        // Whether or not we are instantiating with a Builder, in which case all setters take Option
+        val builder: Boolean
+    )
 
     fun render(
         writer: RustWriter,
         shape: Shape,
         arg: Node,
-        ctx: Ctx = Ctx(lowercaseMapKeys = false, streaming = false)
+        ctx: Ctx = Ctx(lowercaseMapKeys = false, streaming = false, builder = false)
     ) {
         when (shape) {
             // Compound Shapes
-            is StructureShape -> renderStructure(writer, shape, arg as ObjectNode, ctx)
+            is StructureShape -> renderStructure(writer, shape, arg as ObjectNode, ctx.copy(builder = true))
             is UnionShape -> renderUnion(writer, shape, arg as ObjectNode, ctx)
 
             // Collections
@@ -112,9 +116,9 @@ class Instantiator(
             is DocumentShape -> {
                 writer.rust(
                     """{
-                    let as_json = #T! { ${Node.prettyPrintJson(arg)} };
-                    #T::json_to_doc(as_json)
-                }""",
+                        let as_json = #T! { ${Node.prettyPrintJson(arg)} };
+                        #T::json_to_doc(as_json)
+                    }""",
                     RuntimeType.SerdeJson("json"), RuntimeType.DocJson
                 )
             }
@@ -135,7 +139,7 @@ class Instantiator(
             ) { "A null node was provided for $shape but the symbol was not optional. This is invalid input data." }
             writer.write("None")
         } else {
-            writer.conditionalBlock("Some(", ")", conditional = symbol.isOptional()) {
+            writer.conditionalBlock("Some(", ")", conditional = ctx.builder || symbol.isOptional()) {
                 writer.conditionalBlock(
                     "Box::new(",
                     ")",
@@ -145,13 +149,12 @@ class Instantiator(
                         this,
                         target,
                         arg,
-                        ctx.letIf(shape.getMemberTrait(model, HttpPrefixHeadersTrait::class.java).isPresent) {
-                            it.copy(lowercaseMapKeys = true)
-                        }.letIf(
-                            shape.isStreaming(model)
-                        ) {
-                            it.copy(streaming = true)
-                        }
+                        ctx.copy(builder = false)
+                            .letIf(shape.getMemberTrait(model, HttpPrefixHeadersTrait::class.java).isPresent) {
+                                it.copy(lowercaseMapKeys = true)
+                            }.letIf(shape.isStreaming(model)) {
+                                it.copy(streaming = true)
+                            }
                     )
                 }
             }
@@ -245,12 +248,7 @@ class Instantiator(
         data.members.forEach { (key, value) ->
             val memberShape = shape.expectMember(key.value)
             writer.withBlock(".${memberShape.setterName()}(", ")") {
-                renderMember(
-                    this,
-                    memberShape,
-                    value,
-                    ctx
-                )
+                renderMember(this, memberShape, value, ctx)
             }
         }
         writer.write(".build()")
