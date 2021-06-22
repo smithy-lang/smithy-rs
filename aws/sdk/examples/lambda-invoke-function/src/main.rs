@@ -112,9 +112,7 @@ async fn main() {
         //
         // For our example, we will simply print that the function doesn't
         // exist and return a non-zero exit code to indicate the failure.
-        Err(SdkError::ServiceError { err, .. })
-            if matches!(err.kind, InvokeErrorKind::ResourceNotFoundError(_)) =>
-        {
+        Err(SdkError::ServiceError { err, .. }) if err.is_resource_not_found_error() => {
             println!("This lambda function does not exist: {}", err);
             process::exit(1);
         }
