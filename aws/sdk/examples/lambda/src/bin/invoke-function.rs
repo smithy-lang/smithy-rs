@@ -11,6 +11,9 @@
 // types from the Rust standard library
 use std::{process, str};
 
+// For command-line arguments.
+use structopt::StructOpt;
+
 // types from the AWS SDK for Rust
 use aws_types::region::ProvideRegion;
 use lambda::{Client, Config, Region, SdkError};
@@ -19,26 +22,53 @@ use lambda::{Client, Config, Region, SdkError};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::SubscriberBuilder;
 
+#[derive(Debug, StructOpt)]
+struct Opt {
+    /// The region. Overrides environment variable AWS_DEFAULT_REGION.
+    #[structopt(short, long)]
+    default_region: Option<String>,
+
+    /// Specifies the Lambda function's ARN
+    #[structopt(short, long)]
+    arn: String,
+
+    /// Whether to display additional runtime information
+    #[structopt(short, long)]
+    verbose: bool,
+}
+
+/// Invokes a Lambda function by its ARN.
+/// # Arguments
+///
+/// * `-a ARN` - The ARN of the Lambda function.
+/// * `[-d DEFAULT-REGION]` - The region in which the client is created.
+///    If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///    If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() {
-    // We are going to attempt to load the AWS region from the default provider
-    // or else we will default to the us-west-2 region (also referred to as
-    // `PDX`).
-    let region = aws_types::region::default_provider()
-        .region()
+    let Opt {
+        arn,
+        default_region,
+        verbose,
+    } = Opt::from_args();
+
+    let region = default_region
+        .as_ref()
+        .map(|region| Region::new(region.clone()))
+        .or_else(|| aws_types::region::default_provider().region())
         .unwrap_or_else(|| Region::new("us-west-2"));
 
-    // My favorite part about learning a new language is to use print
-    // statements to confirm the program is doing what I think it's doing.
-    // Let's borrow that region information so we can print it.
-    println!("Region:      {:?}", &region);
-    println!("Lambda client version: {}", lambda::PKG_VERSION);
+    if verbose {
+        println!("Lambda client version: {}", lambda::PKG_VERSION);
+        println!("Region:                {:?}", &region);
+        println!("Lambda function ARN:   {}", arn);
 
-    // Your guess is as good as mine what this does.
-    SubscriberBuilder::default()
-        .with_env_filter("info")
-        .with_span_events(FmtSpan::CLOSE)
-        .init();
+        SubscriberBuilder::default()
+            .with_env_filter("info")
+            .with_span_events(FmtSpan::CLOSE)
+            .init();
+    }
 
     // The AWS SDK for Rust service clients can be instantiated in a few
     // different ways. The way we're instantiating it here is to first build
@@ -64,12 +94,7 @@ async fn main() {
     //
     // We are going to use the full ARN to prevent any ambiguity in which
     // function will be invoked.
-    match client
-        .invoke()
-        .function_name("arn:aws:lambda:us-west-2:072326518754:function:hello-python")
-        .send()
-        .await
-    {
+    match client.invoke().function_name(arn).send().await {
         // If the API call returns without an error, the Lambda Invoke API
         // returns a response object containing the following:
         //
