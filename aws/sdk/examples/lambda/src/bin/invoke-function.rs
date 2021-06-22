@@ -16,7 +16,7 @@ use structopt::StructOpt;
 
 // types from the AWS SDK for Rust
 use aws_types::region::ProvideRegion;
-use lambda::{error::InvokeErrorKind, Client, Config, Region, SdkError};
+use lambda::{Client, Config, Region, SdkError};
 
 // types from other third-party crates
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -137,9 +137,7 @@ async fn main() {
         //
         // For our example, we will simply print that the function doesn't
         // exist and return a non-zero exit code to indicate the failure.
-        Err(SdkError::ServiceError { err, .. })
-            if matches!(err.kind, InvokeErrorKind::ResourceNotFoundError(_)) =>
-        {
+        Err(SdkError::ServiceError { err, .. }) if err.is_resource_not_found_error() => {
             println!("This lambda function does not exist: {}", err);
             process::exit(1);
         }

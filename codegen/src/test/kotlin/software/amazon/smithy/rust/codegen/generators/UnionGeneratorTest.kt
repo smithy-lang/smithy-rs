@@ -56,12 +56,12 @@ class UnionGeneratorTest {
             let bar = MyUnion::IntValue(10);
             assert_eq!(foo.is_string_value(), true);
             assert_eq!(foo.is_int_value(), false);
-            assert_eq!(foo.as_string_value(), Some(&"foo".to_string()));
-            assert_eq!(foo.as_int_value(), None);
+            assert_eq!(foo.as_string_value(), Ok(&"foo".to_string()));
+            assert_eq!(foo.as_int_value(), Err(&foo));
             assert_eq!(bar.is_string_value(), false);
             assert_eq!(bar.is_int_value(), true);
-            assert_eq!(bar.as_string_value(), None);
-            assert_eq!(bar.as_int_value(), Some(&10));
+            assert_eq!(bar.as_string_value(), Err(&bar));
+            assert_eq!(bar.as_int_value(), Ok(&10));
             """
         )
     }
