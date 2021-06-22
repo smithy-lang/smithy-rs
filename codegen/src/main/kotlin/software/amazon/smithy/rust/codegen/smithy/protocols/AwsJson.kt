@@ -148,7 +148,7 @@ class AwsJson(
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
     override fun additionalHeaders(operationShape: OperationShape): List<Pair<String, String>> =
-        listOf("X-Amz-Target" to "${protocolConfig.serviceShape.id.name}.${operationShape.id.name}")
+        listOf("x-amz-target" to "${protocolConfig.serviceShape.id.name}.${operationShape.id.name}")
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
         JsonParserGenerator(protocolConfig, httpBindingResolver)
@@ -158,18 +158,18 @@ class AwsJson(
 
     override fun parseGenericError(operationShape: OperationShape): RuntimeType {
         return RuntimeType.forInlineFun("parse_generic_error", "json_deser") {
-            it.rustBlockTemplate(
-                "pub fn parse_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}>",
+            it.rustTemplate(
+                """
+                pub fn parse_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
+                    #{json_errors}::parse_generic_error(response)
+                }
+                """,
                 "Response" to RuntimeType.http.member("Response"),
                 "Bytes" to RuntimeType.Bytes,
                 "Error" to RuntimeType.GenericError(runtimeConfig),
-                "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::Error")
-            ) {
-                rust(
-                    "#T::parse_generic_error(response)",
-                    RuntimeType.jsonErrors(runtimeConfig)
-                )
-            }
+                "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::Error"),
+                "json_errors" to RuntimeType.jsonErrors(runtimeConfig)
+            )
         }
     }
 }
