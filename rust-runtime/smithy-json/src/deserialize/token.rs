@@ -30,7 +30,7 @@ impl<'a> EscapedStr<'a> {
 
     /// Unescapes the string and returns it.
     /// If the string doesn't need unescaping, it will be returned directly.
-    pub fn to_unescaped(&self) -> Result<Cow<'a, str>, EscapeError> {
+    pub fn to_unescaped(self) -> Result<Cow<'a, str>, EscapeError> {
         unescape_string(self.0)
     }
 }
