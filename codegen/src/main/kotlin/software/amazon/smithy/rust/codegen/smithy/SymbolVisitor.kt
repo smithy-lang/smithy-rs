@@ -40,8 +40,6 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
-import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
-import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -168,7 +166,7 @@ class SymbolVisitor(
         // an Input shape, then the field is _not optional_.
         val httpLabeledInput =
             container.hasTrait<SyntheticInputTrait>() && member.hasTrait<HttpLabelTrait>()
-        return if (nullableIndex.isNullable(member) && !httpLabeledInput || model.expectShape(member.target).isDocumentShape) {
+        return if (nullableIndex.isNullable(member) && !httpLabeledInput) {
             symbol.makeOptional()
         } else symbol
     }
@@ -257,7 +255,6 @@ class SymbolVisitor(
         val isError = shape.hasTrait<ErrorTrait>()
         val isInput = shape.hasTrait<SyntheticInputTrait>()
         val isOutput = shape.hasTrait<SyntheticOutputTrait>()
-        val isBody = shape.hasTrait<InputBodyTrait>() || shape.hasTrait<OutputBodyTrait>()
         val name = StringUtils.capitalize(shape.contextName()).letIf(isError && config.codegenConfig.renameExceptions) {
             // TODO: Do we want to do this?
             // https://github.com/awslabs/smithy-rs/issues/77
@@ -268,7 +265,6 @@ class SymbolVisitor(
             isError -> builder.locatedIn(Errors)
             isInput -> builder.locatedIn(Inputs)
             isOutput -> builder.locatedIn(Outputs)
-            isBody -> builder.locatedIn(Serializers)
             else -> builder.locatedIn(Models)
         }.build()
     }

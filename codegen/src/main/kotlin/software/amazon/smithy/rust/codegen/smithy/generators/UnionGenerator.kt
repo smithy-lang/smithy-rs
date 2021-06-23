@@ -30,10 +30,10 @@ class UnionGenerator(
 
     private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
     private fun renderUnion() {
-        val symbol = symbolProvider.toSymbol(shape)
-        val containerMeta = symbol.expectRustMetadata()
+        val unionSymbol = symbolProvider.toSymbol(shape)
+        val containerMeta = unionSymbol.expectRustMetadata()
         containerMeta.render(writer)
-        writer.rustBlock("enum ${symbol.name}") {
+        writer.rustBlock("enum ${unionSymbol.name}") {
             sortedMembers.forEach { member ->
                 val memberSymbol = symbolProvider.toSymbol(member)
                 documentShape(member, model)
@@ -41,17 +41,17 @@ class UnionGenerator(
                 write("${member.memberName.toPascalCase()}(#T),", symbolProvider.toSymbol(member))
             }
         }
-        writer.rustBlock("impl ${symbol.name}") {
+        writer.rustBlock("impl ${unionSymbol.name}") {
             sortedMembers.forEach { member ->
                 val memberSymbol = symbolProvider.toSymbol(member)
                 val funcNamePart = member.memberName.toSnakeCase()
                 val variantName = member.memberName.toPascalCase()
 
-                writer.rustBlock("pub fn as_$funcNamePart(&self) -> Option<&#T>", memberSymbol) {
-                    rust("if let ${symbol.name}::$variantName(val) = &self { Some(&val) } else { None }")
+                rustBlock("pub fn as_$funcNamePart(&self) -> Result<&#T, &Self>", memberSymbol) {
+                    rust("if let ${unionSymbol.name}::$variantName(val) = &self { Ok(&val) } else { Err(&self) }")
                 }
-                writer.rustBlock("pub fn is_$funcNamePart(&self) -> bool") {
-                    rust("self.as_$funcNamePart().is_some()")
+                rustBlock("pub fn is_$funcNamePart(&self) -> bool") {
+                    rust("self.as_$funcNamePart().is_ok()")
                 }
             }
         }

@@ -98,6 +98,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val Debug = stdfmt.member("Debug")
         val Default: RuntimeType = RuntimeType("Default", dependency = null, namespace = "std::default")
         val From = RuntimeType("From", dependency = null, namespace = "std::convert")
+        val Infallible = RuntimeType("Infallible", dependency = null, namespace = "std::convert")
         val PartialEq = std.member("cmp::PartialEq")
         val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
         val String = RuntimeType("String", dependency = null, namespace = "std::string")
@@ -160,25 +161,9 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val HttpRequestBuilder = Http("request::Builder")
         val HttpResponseBuilder = Http("response::Builder")
 
-        fun Serde(path: String) = RuntimeType(
-            path, dependency = CargoDependency.Serde, namespace = "serde"
-        )
+        fun jsonErrors(runtimeConfig: RuntimeConfig) =
+            forInlineDependency(InlineDependency.jsonErrors(runtimeConfig))
 
-        val Deserialize: RuntimeType = RuntimeType("Deserialize", CargoDependency.Serde, namespace = "serde")
-        val Deserializer = RuntimeType("Deserializer", CargoDependency.Serde, namespace = "serde")
-        fun SerdeJson(path: String) =
-            RuntimeType(path, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
-
-        val serdeJson = RuntimeType(null, dependency = CargoDependency.SerdeJson, namespace = "serde_json")
-
-        fun awsJsonErrors(runtimeConfig: RuntimeConfig) =
-            forInlineDependency(InlineDependency.awsJsonErrors(runtimeConfig))
-
-        val DocJson by lazy { forInlineDependency(InlineDependency.docJson()) }
-
-        val InstantEpoch by lazy { forInlineDependency(InlineDependency.instantEpoch()) }
-        val InstantHttpDate by lazy { forInlineDependency(InlineDependency.instantHttpDate()) }
-        val Instant8601 by lazy { forInlineDependency(InlineDependency.instant8601()) }
         val IdempotencyToken by lazy { forInlineDependency(InlineDependency.idempotencyToken()) }
 
         val Config = RuntimeType("config", null, "crate")
@@ -205,7 +190,6 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         )
 
         val Bytes = RuntimeType("Bytes", dependency = CargoDependency.Bytes, namespace = "bytes")
-        fun BlobSerde(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.blobSerde(runtimeConfig))
 
         fun forInlineDependency(inlineDependency: InlineDependency) =
             RuntimeType(inlineDependency.name, inlineDependency, namespace = "crate")

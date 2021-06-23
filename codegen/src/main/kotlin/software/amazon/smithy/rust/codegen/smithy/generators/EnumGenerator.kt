@@ -15,13 +15,13 @@ import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.util.doubleQuote
+import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.orNull
 
@@ -103,7 +103,6 @@ class EnumGenerator(
         } else {
             renderUnamedEnum()
         }
-        renderSerde()
     }
 
     private fun renderUnamedEnum() {
@@ -154,7 +153,7 @@ class EnumGenerator(
             writer.rustBlock("pub fn as_str(&self) -> &str") {
                 writer.rustBlock("match self") {
                     sortedMembers.forEach { member ->
-                        write("""$enumName::${member.derivedName()} => "${member.value}",""")
+                        write("""$enumName::${member.derivedName()} => ${member.value.dq()},""")
                     }
                     write("$enumName::$UnknownVariant(s) => s.as_ref()")
                 }
@@ -162,27 +161,12 @@ class EnumGenerator(
         }
     }
 
-    private fun renderSerde() {
-        writer.rustTemplate(
-            """
-                impl<'de> #{deserialize}<'de> for $enumName {
-                    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: #{deserializer}<'de> {
-                        let data = <&str>::deserialize(deserializer)?;
-                        Ok(Self::from(data))
-                    }
-                }
-            """,
-            "deserializer" to RuntimeType.Deserializer,
-            "deserialize" to RuntimeType.Deserialize
-        )
-    }
-
     private fun renderFromStr() {
         writer.rustBlock("impl #T<&str> for $enumName", RuntimeType.From) {
             writer.rustBlock("fn from(s: &str) -> Self") {
                 writer.rustBlock("match s") {
                     sortedMembers.forEach { member ->
-                        write(""""${member.value}" => $enumName::${member.derivedName()},""")
+                        write("""${member.value.dq()} => $enumName::${member.derivedName()},""")
                     }
                     write("other => $enumName::$UnknownVariant(other.to_owned())")
                 }

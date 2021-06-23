@@ -50,6 +50,7 @@ class IntegrationTestDependencies(
         LibRsSection.Body -> writable {
             if (hasTests) {
                 addDependency(runtimeConfig.awsHyper().copy(scope = DependencyScope.Dev))
+                addDependency(SerdeJson)
                 addDependency(Tokio)
             }
             if (hasBenches) {
@@ -61,5 +62,6 @@ class IntegrationTestDependencies(
 }
 
 val Criterion = CargoDependency("criterion", CratesIo("0.3"), scope = DependencyScope.Dev)
+val SerdeJson = CargoDependency("serde_json", CratesIo("1"), features = emptyList())
 val Tokio = CargoDependency("tokio", CratesIo("1"), features = listOf("macros", "test-util"), scope = DependencyScope.Dev)
 fun RuntimeConfig.awsHyper() = awsRuntimeDependency("aws-hyper", features = listOf("test-util"))

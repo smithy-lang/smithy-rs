@@ -12,7 +12,14 @@ use smithy.test#httpRequestTests
 @restXml
 service RestXmlExtras {
     version: "2019-12-16",
-    operations: [AttributeParty, XmlMapsFlattenedNestedXmlNamespace, EnumKeys, PrimitiveIntOpXml]
+    operations: [
+        AttributeParty,
+        XmlMapsFlattenedNestedXmlNamespace,
+        EnumKeys,
+        PrimitiveIntOpXml,
+        ChecksumRequired,
+        StringHeader,
+    ]
 }
 
 @httpRequestTests([{
@@ -174,4 +181,55 @@ map XmlMapsNestedNestedNamespaceInputOutputMap {
     @xmlNamespace(uri: "http://hoo.com")
     @xmlName("V")
     value: String
+}
+
+@httpRequestTests([{
+    id: "ChecksumRequiredHeader",
+    method: "POST",
+    body: "<ChecksumRequiredInput><field>hello</field></ChecksumRequiredInput>",
+    uri: "/ChecksumRequired",
+    bodyMediaType: "application/xml",
+    params: {
+        field: "hello"
+    },
+    headers: { "Content-Md5": "240240a9803ad7032101319e42a45c31" },
+    protocol: "aws.protocols#restXml"
+}])
+@httpChecksumRequired
+@http(uri: "/ChecksumRequired", method: "POST")
+operation ChecksumRequired {
+    input: ChecksumRequiredInput
+}
+
+structure ChecksumRequiredInput {
+    field: String
+}
+
+
+@httpResponseTests([{
+    id: "DeserHeaderStringCommas",
+    code: 200,
+    documentation: """
+    Regression test for https://github.com/awslabs/aws-sdk-rust/issues/122
+    where `,` was eagerly used to split fields in cases where the input was not
+    a list.
+    """,
+    body: "",
+    headers: { "x-field": "a,b,c" },
+    params: {
+        field: "a,b,c"
+    },
+    protocol: "aws.protocols#restXml"
+}])
+@http(uri: "/StringHeader", method: "POST")
+operation StringHeader {
+    output: StringHeaderOutput
+}
+
+structure StringHeaderOutput {
+    @httpHeader("x-field")
+    field: String,
+
+    @httpHeader("x-enum")
+    enumHeader: StringEnum
 }

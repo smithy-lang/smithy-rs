@@ -19,7 +19,6 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -51,6 +50,8 @@ interface Protocol {
     val httpBindingResolver: HttpBindingResolver
 
     val defaultTimestampFormat: TimestampFormatTrait.Format
+
+    fun additionalHeaders(operationShape: OperationShape): List<Pair<String, String>> = emptyList()
 
     fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator
 
@@ -213,16 +214,16 @@ class HttpBoundProtocolGenerator(
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
-                impl #{ParseStrict} for $operationName {
-                    type Output = std::result::Result<#{O}, #{E}>;
-                    fn parse(&self, response: &#{Response}<#{Bytes}>) -> Self::Output {
-                         if !response.status().is_success() && response.status().as_u16() != $successCode {
-                            #{parse_error}(response)
-                         } else {
-                            #{parse_response}(response)
-                         }
-                    }
-                }""",
+            impl #{ParseStrict} for $operationName {
+                type Output = std::result::Result<#{O}, #{E}>;
+                fn parse(&self, response: &#{Response}<#{Bytes}>) -> Self::Output {
+                     if !response.status().is_success() && response.status().as_u16() != $successCode {
+                        #{parse_error}(response)
+                     } else {
+                        #{parse_response}(response)
+                     }
+                }
+            }""",
             *codegenScope,
             "O" to outputSymbol,
             "E" to operationShape.errorSymbol(symbolProvider),
@@ -239,21 +240,21 @@ class HttpBoundProtocolGenerator(
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
-                    impl #{ParseResponse}<#{SdkBody}> for $operationName {
-                        type Output = std::result::Result<#{O}, #{E}>;
-                        fn parse_unloaded(&self, response: &mut http::Response<#{SdkBody}>) -> Option<Self::Output> {
-                            // This is an error, defer to the non-streaming parser
-                            if !response.status().is_success() && response.status().as_u16() != $successCode {
-                                return None;
-                            }
-                            Some(#{parse_streaming_response}(response))
+                impl #{ParseResponse}<#{SdkBody}> for $operationName {
+                    type Output = std::result::Result<#{O}, #{E}>;
+                    fn parse_unloaded(&self, response: &mut http::Response<#{SdkBody}>) -> Option<Self::Output> {
+                        // This is an error, defer to the non-streaming parser
+                        if !response.status().is_success() && response.status().as_u16() != $successCode {
+                            return None;
                         }
-                        fn parse_loaded(&self, response: &http::Response<#{Bytes}>) -> Self::Output {
-                            // if streaming, we only hit this case if its an error
-                            #{parse_error}(response)
-                        }
+                        Some(#{parse_streaming_response}(response))
                     }
-                """,
+                    fn parse_loaded(&self, response: &http::Response<#{Bytes}>) -> Self::Output {
+                        // if streaming, we only hit this case if its an error
+                        #{parse_error}(response)
+                    }
+                }
+            """,
             "O" to outputSymbol,
             "E" to operationShape.errorSymbol(symbolProvider),
             "parse_streaming_response" to parseStreamingResponse(operationShape),
@@ -295,7 +296,7 @@ class HttpBoundProtocolGenerator(
                             val errorShape = model.expectShape(error, StructureShape::class.java)
                             val variantName = symbolProvider.toSymbol(model.expectShape(error)).name
                             withBlock(
-                                "${error.name.dq()} => #1T { meta: generic, kind: #1TKind::$variantName({",
+                                "${httpBindingResolver.errorCode(errorShape).dq()} => #1T { meta: generic, kind: #1TKind::$variantName({",
                                 "})},",
                                 errorSymbol
                             ) {
@@ -381,14 +382,12 @@ class HttpBoundProtocolGenerator(
         val contentType = httpBindingResolver.requestContentType(operationShape)
         httpBindingGenerator.renderUpdateHttpBuilder(implBlockWriter)
         httpBuilderFun(implBlockWriter) {
-            rust(
-                """
-                let builder = #T::new();
-                let builder = builder.header("Content-Type", ${contentType.dq()});
-                self.update_http_builder(builder)
-                """,
-                RuntimeType.HttpRequestBuilder
-            )
+            rust("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
+            val additionalHeaders = listOf("Content-Type" to contentType) + protocol.additionalHeaders(operationShape)
+            for (header in additionalHeaders) {
+                rust("let builder = builder.header(${header.first.dq()}, ${header.second.dq()});")
+            }
+            rust("self.update_http_builder(builder)")
         }
     }
 
@@ -404,7 +403,7 @@ class HttpBoundProtocolGenerator(
         rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
         // avoid non-usage warnings for response
         rust("let _ = response;")
-        if (outputShape.id == operationShape.output.get()) { // && !outputShape.hasStreamingMember(model)) {
+        if (outputShape.id == operationShape.output.get()) {
             structuredDataParser.operationParser(operationShape)?.also { parser ->
                 rust(
                     "output = #T(response.body().as_ref(), output).map_err(#T::unhandled)?;",
@@ -456,7 +455,8 @@ class HttpBoundProtocolGenerator(
                 rust(
                     """
                         #T(response.headers())
-                            .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?""",
+                            .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
+                    """,
                     fnName, errorSymbol
                 )
             }
@@ -482,15 +482,13 @@ class HttpBoundProtocolGenerator(
                     structuredHandler = structureShapeHandler
                 )
                 return if (binding.member.isStreaming(model)) {
-                    writable { rust("#T(response.body_mut())?", deserializer) }
+                    writable { rust("Some(#T(response.body_mut())?)", deserializer) }
                 } else {
                     writable { rust("#T(response.body().as_ref())?", deserializer) }
                 }
             }
             HttpLocation.RESPONSE_CODE -> writable {
-                conditionalBlock("Some(", ")", symbolProvider.toSymbol(member).isOptional()) {
-                    rust("response.status().as_u16() as _")
-                }
+                rust("Some(response.status().as_u16() as _)")
             }
             HttpLocation.PREFIX_HEADERS -> {
                 val sym = httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)

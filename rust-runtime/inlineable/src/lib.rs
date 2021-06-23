@@ -4,17 +4,11 @@
  */
 
 #[allow(dead_code)]
-mod aws_json_errors;
-mod blob_serde;
-#[allow(dead_code)]
-mod doc_json;
-#[allow(dead_code)]
 mod ec2_query_errors;
 #[allow(dead_code)]
 mod idempotency_token;
-mod instant_epoch;
-mod instant_httpdate;
-mod instant_iso8601;
+#[allow(dead_code)]
+mod json_errors;
 #[allow(unused)]
 mod rest_xml_unwrapped_errors;
 #[allow(unused)]
@@ -24,26 +18,10 @@ mod rest_xml_wrapped_errors;
 // requiring a proptest dependency
 #[cfg(test)]
 mod test {
-    use crate::doc_json::SerDoc;
     use crate::idempotency_token;
     use crate::idempotency_token::uuid_v4;
     use proptest::prelude::*;
-    use proptest::std_facade::HashMap;
-    use smithy_types::Document;
-    use smithy_types::Number;
     use std::sync::Mutex;
-
-    #[test]
-    fn nan_floats_serialize_null() {
-        let mut map = HashMap::new();
-        map.insert("num".to_string(), Document::Number(Number::PosInt(45)));
-        map.insert("nan".to_string(), Document::Number(Number::Float(f64::NAN)));
-        let doc = Document::Object(map);
-        assert_eq!(
-            serde_json::to_value(&SerDoc(&doc)).unwrap(),
-            serde_json::json!({"num":45,"nan":null})
-        );
-    }
 
     #[test]
     fn test_uuid() {
