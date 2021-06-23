@@ -53,6 +53,7 @@ impl<'a> Writer<'a> {
     pub fn push_v(&mut self, v: &str) {
         self.out.push(self.prefix);
         self.out.push_str(v);
+        self.prefix = '&';
     }
 }
 
