@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.traits
 
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.AnnotationTrait
@@ -12,8 +13,8 @@ import software.amazon.smithy.model.traits.AnnotationTrait
 /**
  * Indicates that a shape is a synthetic input (see `OperationNormalizer.kt`)
  */
-class SyntheticOutputTrait constructor(val operation: ShapeId, val body: ShapeId?, val originalId: ShapeId?) :
-    AnnotationTrait(ID, ObjectNode.fromStringMap(mapOf("body" to body.toString()))) {
+class SyntheticOutputTrait constructor(val operation: ShapeId, val originalId: ShapeId?) :
+    AnnotationTrait(ID, Node.objectNode()) {
     companion object {
         val ID = ShapeId.from("smithy.api.internal#syntheticOutput")
     }
