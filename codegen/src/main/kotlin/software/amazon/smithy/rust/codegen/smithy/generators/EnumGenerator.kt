@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -104,7 +103,6 @@ class EnumGenerator(
         } else {
             renderUnamedEnum()
         }
-        renderSerde()
     }
 
     private fun renderUnamedEnum() {
@@ -161,21 +159,6 @@ class EnumGenerator(
                 }
             }
         }
-    }
-
-    private fun renderSerde() {
-        writer.rustTemplate(
-            """
-                impl<'de> #{deserialize}<'de> for $enumName {
-                    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: #{deserializer}<'de> {
-                        let data = <&str>::deserialize(deserializer)?;
-                        Ok(Self::from(data))
-                    }
-                }
-            """,
-            "deserializer" to RuntimeType.Deserializer,
-            "deserialize" to RuntimeType.Deserialize
-        )
     }
 
     private fun renderFromStr() {

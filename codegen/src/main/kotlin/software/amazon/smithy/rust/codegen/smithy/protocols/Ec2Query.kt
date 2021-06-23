@@ -30,10 +30,7 @@ class Ec2QueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
         HttpBoundProtocolGenerator(protocolConfig, Ec2QueryProtocol(protocolConfig))
 
     override fun transformModel(model: Model): Model {
-        return OperationNormalizer(model).transformModel(
-            inputBodyFactory = OperationNormalizer.NoBody,
-            outputBodyFactory = OperationNormalizer.NoBody
-        ).let(RemoveEventStreamOperations::transform)
+        return OperationNormalizer(model).transformModel().let(RemoveEventStreamOperations::transform)
     }
 
     override fun support(): ProtocolSupport {

@@ -29,12 +29,15 @@ import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
@@ -113,13 +116,16 @@ class Instantiator(
             is StringShape -> renderString(writer, shape, arg as StringNode)
             is NumberShape -> writer.write(arg.asNumberNode().get())
             is BooleanShape -> writer.write(arg.asBooleanNode().get().toString())
-            is DocumentShape -> {
-                writer.rust(
-                    """{
-                        let as_json = #T! { ${Node.prettyPrintJson(arg)} };
-                        #T::json_to_doc(as_json)
-                    }""",
-                    RuntimeType.SerdeJson("json"), RuntimeType.DocJson
+            is DocumentShape -> writer.rustBlock("") {
+                val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
+                rustTemplate(
+                    """
+                    let json_bytes = br##"${Node.prettyPrintJson(arg)}"##;
+                    let mut tokens = #{json_token_iter}(json_bytes).peekable();
+                    #{expect_document}(&mut tokens).expect("well formed json")
+                    """,
+                    "expect_document" to smithyJson.member("deserialize::token::expect_document"),
+                    "json_token_iter" to smithyJson.member("deserialize::json_token_iter"),
                 )
             }
             else -> writer.writeWithNoFormatting("todo!() /* $shape $arg */")
