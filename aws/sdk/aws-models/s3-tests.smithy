@@ -72,3 +72,21 @@ apply PutBucketLifecycleConfiguration @httpRequestTests([
         }
     }
 ])
+
+apply CreateMultipartUpload @httpRequestTests([
+    {
+        id: "CreateMultipartUploadUriConstruction",
+        documentation: "This test validates that the URI for CreateMultipartUpload is created correctly",
+        method: "POST",
+        protocol: "aws.protocols#restXml",
+        uri: "/test-bucket/object.txt",
+        queryParams: [
+            "uploads",
+            "x-id=CreateMultipartUpload"
+        ],
+        params: {
+            "Bucket": "test-bucket",
+            "Key": "object.txt"
+        }
+    }
+])
