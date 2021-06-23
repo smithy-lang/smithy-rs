@@ -8,7 +8,7 @@ name: CI
 
 env:
   rust_version: 1.52.1
-  rust_toolchain_components: "clippy,rustfmt"
+  rust_toolchain_components: clippy,rustfmt
   java_version: 11
 
 jobs:
@@ -211,7 +211,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
-        components: "rustfmt,clippy"
+        components: ${{ env.rust_toolchain_components }}
         default: true
     - name: Generate a name for the SDK
       id: gen-name
