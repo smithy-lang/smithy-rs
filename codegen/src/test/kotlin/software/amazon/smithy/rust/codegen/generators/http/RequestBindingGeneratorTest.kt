@@ -101,10 +101,7 @@ class RequestBindingGeneratorTest {
                 stringHeader: String
             }
         """.asSmithyModel()
-    private val model = OperationNormalizer(baseModel).transformModel(
-        inputBodyFactory = OperationNormalizer.NoBody,
-        outputBodyFactory = OperationNormalizer.NoBody
-    )
+    private val model = OperationNormalizer(baseModel).transformModel()
 
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
     private val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)

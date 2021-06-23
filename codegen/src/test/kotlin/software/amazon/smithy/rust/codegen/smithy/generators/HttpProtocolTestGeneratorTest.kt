@@ -164,10 +164,7 @@ class HttpProtocolTestGeneratorTest {
             }
 
             override fun transformModel(model: Model): Model {
-                return OperationNormalizer(model).transformModel(
-                    inputBodyFactory = OperationNormalizer.NoBody,
-                    outputBodyFactory = OperationNormalizer.NoBody
-                ).let(RemoveEventStreamOperations::transform)
+                return OperationNormalizer(model).transformModel().let(RemoveEventStreamOperations::transform)
             }
 
             override fun support(): ProtocolSupport {
@@ -195,10 +192,10 @@ class HttpProtocolTestGeneratorTest {
     fun `passing e2e protocol request test`() {
         val path = generateService(
             """
-                    .uri("/?Hi=Hello%20there&required")
-                    .header("X-Greeting", "Hi")
-                    .method("POST")
-                """
+            .uri("/?Hi=Hello%20there&required")
+            .header("X-Greeting", "Hi")
+            .method("POST")
+            """
         )
 
         val testOutput = "cargo test".runCommand(path)
@@ -210,10 +207,10 @@ class HttpProtocolTestGeneratorTest {
     fun `test incorrect response parsing`() {
         val path = generateService(
             """
-                    .uri("/?Hi=Hello%20there&required")
-                    .header("X-Greeting", "Hi")
-                    .method("POST")
-                """,
+            .uri("/?Hi=Hello%20there&required")
+            .header("X-Greeting", "Hi")
+            .method("POST")
+            """,
             correctResponse = "Ok(crate::output::SayHelloOutput::builder().build())"
         )
         val err = assertThrows<CommandFailed> {
@@ -227,10 +224,10 @@ class HttpProtocolTestGeneratorTest {
     fun `test invalid body`() {
         val path = generateService(
             """
-                    .uri("/?Hi=Hello%20there&required")
-                    .header("X-Greeting", "Hi")
-                    .method("POST")
-                """,
+            .uri("/?Hi=Hello%20there&required")
+            .header("X-Greeting", "Hi")
+            .method("POST")
+            """,
             """"{}".to_string().into()"""
         )
 
@@ -248,10 +245,10 @@ class HttpProtocolTestGeneratorTest {
         // Hard coded implementation for this 1 test
         val path = generateService(
             """
-                    .uri("/?Hi=INCORRECT&required")
-                    .header("X-Greeting", "Hi")
-                    .method("POST")
-                """
+            .uri("/?Hi=INCORRECT&required")
+            .header("X-Greeting", "Hi")
+            .method("POST")
+            """
         )
 
         val err = assertThrows<CommandFailed> {
@@ -266,10 +263,10 @@ class HttpProtocolTestGeneratorTest {
     fun `test forbidden url parameter`() {
         val path = generateService(
             """
-                    .uri("/?goodbye&Hi=Hello%20there&required")
-                    .header("X-Greeting", "Hi")
-                    .method("POST")
-                """
+            .uri("/?goodbye&Hi=Hello%20there&required")
+            .header("X-Greeting", "Hi")
+            .method("POST")
+            """
         )
 
         val err = assertThrows<CommandFailed> {
@@ -285,10 +282,10 @@ class HttpProtocolTestGeneratorTest {
         // Hard coded implementation for this 1 test
         val path = generateService(
             """
-                    .uri("/?Hi=Hello%20there")
-                    .header("X-Greeting", "Hi")
-                    .method("POST")
-                """
+            .uri("/?Hi=Hello%20there")
+            .header("X-Greeting", "Hi")
+            .method("POST")
+            """
         )
 
         val err = assertThrows<CommandFailed> {
@@ -303,11 +300,11 @@ class HttpProtocolTestGeneratorTest {
     fun `invalid header`() {
         val path = generateService(
             """
-                    .uri("/?Hi=Hello%20there&required")
-                    // should be "Hi"
-                    .header("X-Greeting", "Hey")
-                    .method("POST")
-                """
+            .uri("/?Hi=Hello%20there&required")
+            // should be "Hi"
+            .header("X-Greeting", "Hey")
+            .method("POST")
+            """
         )
 
         val err = assertThrows<CommandFailed> {

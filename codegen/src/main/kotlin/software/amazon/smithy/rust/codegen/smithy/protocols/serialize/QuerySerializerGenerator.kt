@@ -80,7 +80,7 @@ abstract class QuerySerializerGenerator(protocolConfig: ProtocolConfig) : Struct
     protected val symbolProvider = protocolConfig.symbolProvider
     protected val runtimeConfig = protocolConfig.runtimeConfig
     private val serviceShape = protocolConfig.serviceShape
-    private val serializerError = RuntimeType.SerdeJson("error::Error")
+    private val serializerError = RuntimeType.Infallible
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
     private val smithyQuery = CargoDependency.smithyQuery(runtimeConfig).asType()
     private val serdeUtil = SerializerUtil(model)

@@ -88,24 +88,11 @@ class InlineDependency(
         private fun forRustFile(name: String, vararg additionalDependencies: RustDependency) =
             forRustFile(name, "inlineable", *additionalDependencies)
 
-        fun awsJsonErrors(runtimeConfig: RuntimeConfig) =
-            forRustFile("aws_json_errors", CargoDependency.Http, CargoDependency.SmithyTypes(runtimeConfig))
-
-        fun docJson() = forRustFile("doc_json", CargoDependency.Serde)
-        fun instantEpoch() = forRustFile("instant_epoch", CargoDependency.Serde)
-        fun instantHttpDate() =
-            forRustFile("instant_httpdate", CargoDependency.Serde)
-
-        fun instant8601() = forRustFile("instant_iso8601", CargoDependency.Serde)
+        fun jsonErrors(runtimeConfig: RuntimeConfig) =
+            forRustFile("json_errors", CargoDependency.Http, CargoDependency.SmithyTypes(runtimeConfig))
 
         fun idempotencyToken() =
             forRustFile("idempotency_token", CargoDependency.FastRand)
-
-        fun blobSerde(runtimeConfig: RuntimeConfig) = forRustFile(
-            "blob_serde",
-            CargoDependency.Serde,
-            CargoDependency.SmithyHttp(runtimeConfig)
-        )
 
         fun ec2QueryErrors(runtimeConfig: RuntimeConfig): InlineDependency =
             forRustFile("ec2_query_errors", CargoDependency.smithyXml(runtimeConfig))
@@ -201,9 +188,6 @@ data class CargoDependency(
         fun smithyQuery(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("query")
         fun smithyXml(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("xml")
 
-        val SerdeJson: CargoDependency =
-            CargoDependency("serde_json", CratesIo("1"), features = listOf("float_roundtrip"))
-        val Serde = CargoDependency("serde", CratesIo("1"), features = listOf("derive"))
         val Bytes: RustDependency = CargoDependency("bytes", CratesIo("1"))
     }
 }
