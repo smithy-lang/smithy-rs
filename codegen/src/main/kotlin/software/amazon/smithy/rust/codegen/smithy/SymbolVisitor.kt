@@ -37,7 +37,6 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
@@ -164,9 +163,7 @@ class SymbolVisitor(
     private fun handleOptionality(symbol: Symbol, member: MemberShape, container: Shape): Symbol {
         // If a field has the httpLabel trait and we are generating
         // an Input shape, then the field is _not optional_.
-        val httpLabeledInput =
-            container.hasTrait<SyntheticInputTrait>() && member.hasTrait<HttpLabelTrait>()
-        return if (nullableIndex.isNullable(member) && !httpLabeledInput) {
+        return if (nullableIndex.isNullable(member)) {
             symbol.makeOptional()
         } else symbol
     }

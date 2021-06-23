@@ -20,15 +20,18 @@ import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.assignment
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
+import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
@@ -100,7 +103,7 @@ class RequestBindingGenerator(
             buildError
         ) {
             write("let mut uri = String::new();")
-            write("self.uri_base(&mut uri);")
+            write("self.uri_base(&mut uri)?;")
             if (hasQuery) {
                 write("self.uri_query(&mut uri);")
             }
@@ -252,14 +255,23 @@ class RequestBindingGenerator(
      */
     private fun uriBase(writer: RustWriter) {
         val formatString = httpTrait.uriFormatString()
+        // name of a local variable containing this member's component of the URI
+        val local = { member: MemberShape -> symbolProvider.toMemberName(member) }
         val args = httpTrait.uri.labels.map { label ->
             val member = inputShape.expectMember(label.content)
-            "${label.content} = ${labelFmtFun(writer, model.expectShape(member.target), member, label)}"
+            "${label.content} = ${local(member)}"
         }
         val combinedArgs = listOf(formatString, *args.toTypedArray())
         writer.addImport(RuntimeType.stdfmt.member("Write").toSymbol(), null)
-        writer.rustBlock("fn uri_base(&self, output: &mut String)") {
-            write("write!(output, ${combinedArgs.joinToString(", ")}).expect(\"formatting should succeed\")")
+        writer.rustBlock("fn uri_base(&self, output: &mut String) -> Result<(), #T>", runtimeConfig.operationBuildError()) {
+            httpTrait.uri.labels.map { label ->
+                val member = inputShape.expectMember(label.content)
+                assignment(local(member)) {
+                    serializeLabel(member, label)
+                }
+            }
+            rust("""write!(output, ${combinedArgs.joinToString(", ")}).expect("formatting should succeed");""")
+            rust("Ok(())")
         }
     }
 
@@ -368,29 +380,47 @@ class RequestBindingGenerator(
         }
     }
 
-    /**
-     * Format [member] when used as an HTTP Label (`/bucket/{key}`)
-     */
-    private fun labelFmtFun(writer: RustWriter, target: Shape, member: MemberShape, label: SmithyPattern.Segment): String {
-        val memberName = symbolProvider.toMemberName(member)
-        return when {
-            target.isStringShape -> {
-                val func = writer.format(RuntimeType.LabelFormat(runtimeConfig, "fmt_string"))
-                "$func(&self.$memberName, ${label.isGreedyLabel})"
+    private fun RustWriter.serializeLabel(member: MemberShape, label: SmithyPattern.Segment) {
+        val target = model.expectShape(member.target)
+        val symbol = symbolProvider.toSymbol(member)
+        val buildError = {
+            OperationBuildError(runtimeConfig).missingField(
+                this,
+                symbolProvider.toMemberName(member),
+                "cannot be empty or unset"
+            )
+        }
+        rustBlock("") {
+            rust("let input = &self.${symbolProvider.toMemberName(member)};")
+            if (symbol.isOptional()) {
+                rust("let input = input.as_ref().ok_or(${buildError()})?;")
             }
-            target.isTimestampShape -> {
-                val timestampFormat =
-                    index.determineTimestampFormat(member, HttpBinding.Location.LABEL, defaultTimestampFormat)
-                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                val func = writer.format(RuntimeType.LabelFormat(runtimeConfig, "fmt_timestamp"))
-                "$func(&self.$memberName, ${writer.format(timestampFormatType)})"
+            when {
+                target.isStringShape -> {
+                    val func = format(RuntimeType.LabelFormat(runtimeConfig, "fmt_string"))
+                    rust("let formatted = $func(input, ${label.isGreedyLabel});")
+                }
+                target.isTimestampShape -> {
+                    val timestampFormat =
+                        index.determineTimestampFormat(member, HttpBinding.Location.LABEL, defaultTimestampFormat)
+                    val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                    val func = format(RuntimeType.LabelFormat(runtimeConfig, "fmt_timestamp"))
+                    rust("let formatted = $func(&input, ${format(timestampFormatType)});")
+                }
+                else -> {
+                    val func = format(RuntimeType.LabelFormat(runtimeConfig, "fmt_default"))
+                    rust("let formatted = $func(input);")
+                }
             }
-            else -> {
-                val func = writer.format(RuntimeType.LabelFormat(runtimeConfig, "fmt_default"))
-                "$func(&self.$memberName)"
-            }
+            rust(
+                """
+                if formatted == "" {
+                    return Err(${buildError()})
+                }
+                formatted
+            """
+            )
         }
     }
-
     /** End URI generation **/
 }
