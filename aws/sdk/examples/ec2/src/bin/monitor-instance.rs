@@ -53,9 +53,6 @@ async fn main() -> Result<(), Error> {
         println!("Instance ID:        {:?}", &instance_id);
     }
 
-    // Option<Vec<String>>
-    //let insts: Option<Vec<String>> = Some(instances.iter().map(|i| i.to_string()).collect());
-    //    let insts: Option<Vec<String>> = Some(instances.iter().map(ToString::to_string).collect());
 
     let config = Config::builder().region(&region).build();
 
