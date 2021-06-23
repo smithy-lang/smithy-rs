@@ -53,6 +53,8 @@ interface HttpBindingResolver {
      */
     fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor>
 
+    fun errorCode(errorShape: ToShapeId): String = errorShape.toShapeId().name
+
     /**
      * Returns a list of member shapes bound to a given request [location] for a given [operationShape]
      */
@@ -122,7 +124,7 @@ class HttpTraitHttpBindingResolver(
  * Takes an [HttpTrait] value and content type, and provides bindings based on those.
  * All members will end up being document members.
  */
-class StaticHttpBindingResolver(
+open class StaticHttpBindingResolver(
     private val model: Model,
     private val httpTrait: HttpTrait,
     private val requestContentType: String,

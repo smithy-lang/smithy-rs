@@ -294,7 +294,7 @@ class HttpBoundProtocolGenerator(
                             val errorShape = model.expectShape(error, StructureShape::class.java)
                             val variantName = symbolProvider.toSymbol(model.expectShape(error)).name
                             withBlock(
-                                "${error.name.dq()} => #1T { meta: generic, kind: #1TKind::$variantName({",
+                                "${httpBindingResolver.errorCode(errorShape).dq()} => #1T { meta: generic, kind: #1TKind::$variantName({",
                                 "})},",
                                 errorSymbol
                             ) {
