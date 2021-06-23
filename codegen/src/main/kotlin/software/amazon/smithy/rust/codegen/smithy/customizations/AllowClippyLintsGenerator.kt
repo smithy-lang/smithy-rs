@@ -27,7 +27,7 @@ val ClippyAllowLints = listOf(
     "should_implement_trait",
 
     // protocol tests use silly names like `baz`, don't flag that
-    "blacklisted-name"
+    "blacklisted_name"
 )
 
 class AllowClippyLints : LibRsCustomization() {
