@@ -1,5 +1,5 @@
 # Recursive Shapes
-> NB: Throughout this document, the word "box" always refers to a Rust [`Box<T>`](https://doc.rust-lang.org/std/boxed/struct.Box.html), a heap allocated pointer to T, and not the Smithy concept of boxed vs. unboxed.
+> Note: Throughout this document, the word "box" always refers to a Rust [`Box<T>`](https://doc.rust-lang.org/std/boxed/struct.Box.html), a heap allocated pointer to T, and not the Smithy concept of boxed vs. unboxed.
 
 Recursive shapes pose a problem for Rust, because the following Rust code will not compile:
 
