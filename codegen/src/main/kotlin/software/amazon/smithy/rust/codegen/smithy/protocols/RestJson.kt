@@ -6,10 +6,7 @@
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.knowledge.HttpBinding
-import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -31,30 +28,8 @@ class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
         protocolConfig: ProtocolConfig
     ): HttpBoundProtocolGenerator = HttpBoundProtocolGenerator(protocolConfig, RestJson(protocolConfig))
 
-    /** Create a synthetic awsJsonInputBody if specified
-     * A body is created if any member of [shape] is bound to the `DOCUMENT` section of the `bindings.
-     */
-    private fun restJsonBody(shape: StructureShape?, bindings: Map<String, HttpBinding>): StructureShape? {
-        if (shape == null) {
-            return null
-        }
-        val bodyMembers = shape.members().filter { member ->
-            bindings[member.memberName]?.location == HttpBinding.Location.DOCUMENT
-        }
-
-        return if (bodyMembers.isNotEmpty()) {
-            shape.toBuilder().members(bodyMembers).build()
-        } else {
-            null
-        }
-    }
-
     override fun transformModel(model: Model): Model {
-        val httpIndex = HttpBindingIndex.of(model)
-        return OperationNormalizer(model).transformModel(
-            inputBodyFactory = { op, input -> restJsonBody(input, httpIndex.getRequestBindings(op)) },
-            outputBodyFactory = { op, output -> restJsonBody(output, httpIndex.getResponseBindings(op)) },
-        ).let(RemoveEventStreamOperations::transform)
+        return OperationNormalizer(model).transformModel().let(RemoveEventStreamOperations::transform)
     }
 
     override fun support(): ProtocolSupport {

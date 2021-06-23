@@ -14,7 +14,6 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -57,10 +56,7 @@ class AwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFac
 
     override fun transformModel(model: Model): Model {
         // For AwsJson10, the body matches 1:1 with the input
-        return OperationNormalizer(model).transformModel(
-            inputBodyFactory = shapeIfHasMembers,
-            outputBodyFactory = shapeIfHasMembers
-        ).let(RemoveEventStreamOperations::transform)
+        return OperationNormalizer(model).transformModel().let(RemoveEventStreamOperations::transform)
     }
 
     override fun support(): ProtocolSupport = ProtocolSupport(

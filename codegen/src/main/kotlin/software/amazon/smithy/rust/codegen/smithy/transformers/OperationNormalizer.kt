@@ -11,8 +11,6 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
-import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.orNull
@@ -28,21 +26,14 @@ class OperationNormalizer(private val model: Model) {
     /**
      * Add synthetic input & output shapes to every Operation in model. The generated shapes will be marked with
      * [SyntheticInputTrait] and [SyntheticOutputTrait] respectively. Shapes will be added _even_ if the operation does
-     * not specify an input or an output. The body shapes (if created) will be marked with [InputBodyTrait] and
-     * [OutputBodyTrait]
-     *
-     * To build input bodies, [inputBodyFactory] is called on the input shape of every operation. It MUST return a structure representing the
-     * shape of the request body, or null if there is no request body.
-     *
-     * To build output bodies, [outputBodyFactory] is called on the output shape of every operation. It MUST return a structure representing the
-     * shape of the response body, or null if there is no response body.
+     * not specify an input or an output.
      */
-    fun transformModel(inputBodyFactory: StructureModifier, outputBodyFactory: StructureModifier): Model {
+    fun transformModel(): Model {
         val transformer = ModelTransformer.create()
         val operations = model.shapes(OperationShape::class.java).toList()
         val newShapes = operations.flatMap { operation ->
             // Generate or modify the input and output of the given `Operation` to be a unique shape
-            syntheticInputShapes(operation, inputBodyFactory) + syntheticOutputShapes(operation, outputBodyFactory)
+            syntheticInputShapes(operation) + syntheticOutputShapes(operation)
         }
         val modelWithOperationInputs = model.toBuilder().addShapes(newShapes).build()
         return transformer.mapShapes(modelWithOperationInputs) {
@@ -58,15 +49,8 @@ class OperationNormalizer(private val model: Model) {
         }
     }
 
-    private fun syntheticOutputShapes(
-        operation: OperationShape,
-        outputBodyFactory: StructureModifier
-    ): List<StructureShape> {
+    private fun syntheticOutputShapes(operation: OperationShape): List<StructureShape> {
         val outputId = operation.syntheticOutputId()
-        val outputBodyShape = outputBodyFactory(
-            operation,
-            operation.output.map { model.expectShape(it, StructureShape::class.java) }.orNull()
-        )?.let { it.toBuilder().addTrait(OutputBodyTrait()).rename(operation.syntheticOutputBodyId()).build() }
         val outputShapeBuilder = operation.output.map { shapeId ->
             model.expectShape(shapeId, StructureShape::class.java).toBuilder().rename(outputId)
         }.orElse(empty(outputId))
@@ -74,24 +58,13 @@ class OperationNormalizer(private val model: Model) {
             SyntheticOutputTrait(
                 operation = operation.id,
                 originalId = operation.output.orNull(),
-                body = outputBodyShape?.id
             )
         ).build()
-        return listOf(outputShape, outputBodyShape).mapNotNull { it }
+        return listOfNotNull(outputShape)
     }
 
-    private fun syntheticInputShapes(
-        operation: OperationShape,
-        inputBodyFactory: StructureModifier
-    ): List<StructureShape> {
+    private fun syntheticInputShapes(operation: OperationShape): List<StructureShape> {
         val inputId = operation.syntheticInputId()
-        val inputBodyShape = inputBodyFactory(
-            operation,
-            operation.input.map {
-                val inputShape = model.expectShape(it, StructureShape::class.java)
-                inputShape.toBuilder().addTrait(InputBodyTrait()).rename(operation.syntheticInputBodyId()).build()
-            }.orNull()
-        )
         val inputShapeBuilder = operation.input.map { shapeId ->
             model.expectShape(shapeId, StructureShape::class.java).toBuilder().rename(inputId)
         }.orElse(empty(inputId))
@@ -99,26 +72,19 @@ class OperationNormalizer(private val model: Model) {
             inputShapeBuilder.addTrait(
                 SyntheticInputTrait(
                     operation = operation.id,
-                    body = inputBodyShape?.id,
                     originalId = operation.input.orNull()
                 )
             ).build()
-        return listOf(inputShape, inputBodyShape).mapNotNull { it }
+        return listOfNotNull(inputShape)
     }
 
     private fun empty(id: ShapeId) = StructureShape.builder().id(id)
 
     companion object {
-        // Functions to construct synthetic shape IDs—Don't rely on these in external code: The attached traits
-        // provide shape ids via `.body` on [SyntheticInputTrait] and [SyntheticOutputTrait]
+        // Functions to construct synthetic shape IDs—Don't rely on these in external code.
         // Rename safety: Operations cannot be renamed
         private fun OperationShape.syntheticInputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Input")
         private fun OperationShape.syntheticOutputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Output")
-        // TODO: Remove synthetic body when cleaning up serde json generators
-        private fun OperationShape.syntheticInputBodyId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}InputBody")
-        private fun OperationShape.syntheticOutputBodyId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}OutputBody")
-
-        val NoBody: StructureModifier = { _: OperationShape, _: StructureShape? -> null }
     }
 }
 
