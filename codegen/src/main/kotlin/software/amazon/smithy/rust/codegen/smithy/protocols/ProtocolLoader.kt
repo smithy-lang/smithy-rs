@@ -38,8 +38,8 @@ class ProtocolLoader(private val supportedProtocols: ProtocolMap) {
 
     companion object {
         val DefaultProtocols = mapOf(
-            AwsJson1_0Trait.ID to BasicAwsJsonFactory(AwsJsonVersion.Json10),
-            AwsJson1_1Trait.ID to BasicAwsJsonFactory(AwsJsonVersion.Json11),
+            AwsJson1_0Trait.ID to AwsJsonFactory(AwsJsonVersion.Json10),
+            AwsJson1_1Trait.ID to AwsJsonFactory(AwsJsonVersion.Json11),
             AwsQueryTrait.ID to AwsQueryFactory(),
             Ec2QueryTrait.ID to Ec2QueryFactory(),
             RestJson1Trait.ID to RestJsonFactory(),

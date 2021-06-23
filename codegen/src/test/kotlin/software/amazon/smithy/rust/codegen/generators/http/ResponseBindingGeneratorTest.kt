@@ -65,10 +65,7 @@ class ResponseBindingGeneratorTest {
                 additional: String,
             }
         """.asSmithyModel()
-    private val model = OperationNormalizer(baseModel).transformModel(
-        inputBodyFactory = OperationNormalizer.NoBody,
-        outputBodyFactory = OperationNormalizer.NoBody
-    )
+    private val model = OperationNormalizer(baseModel).transformModel()
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
     private val symbolProvider = testSymbolProvider(model)
     private val testProtocolConfig: ProtocolConfig = testProtocolConfig(model)

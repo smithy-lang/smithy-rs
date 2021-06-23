@@ -6,17 +6,12 @@
 package software.amazon.smithy.rust.codegen.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
-import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.CombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.TopLevelErrorGenerator
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
-import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 
 class ServiceGenerator(
@@ -48,7 +43,6 @@ class ServiceGenerator(
         }
 
         TopLevelErrorGenerator(config, operations).render(rustCrate)
-        renderBodies(operations)
 
         rustCrate.withModule(RustModule.Config) { writer ->
             ServiceConfigGenerator.withBaseBehavior(
@@ -59,32 +53,6 @@ class ServiceGenerator(
 
         rustCrate.lib {
             it.write("pub use config::Config;")
-        }
-    }
-
-    private fun renderBodies(operations: List<OperationShape>) {
-        val inputBodies = operations.map { config.model.expectShape(it.input.get()) }.map {
-            it.expectTrait<SyntheticInputTrait>()
-        }.mapNotNull { // mapNotNull is flatMap but for null `map { it }.filter { it != null }`
-            it.body
-        }.map { // Lookup the Body structure by its id
-            config.model.expectShape(it, StructureShape::class.java)
-        }
-        val outputBodies = operations.map { config.model.expectShape(it.output.get()) }.map {
-            it.expectTrait<SyntheticOutputTrait>()
-        }.mapNotNull { // mapNotNull is flatMap but for null `map { it }.filter { it != null }`
-            it.body
-        }.map { // Lookup the Body structure by its id
-            config.model.expectShape(it, StructureShape::class.java)
-        }
-        (inputBodies + outputBodies).map { body ->
-            // The body symbol controls its location, usually in the serializer module
-            rustCrate.useShapeWriter(body) { writer ->
-                with(config) {
-                    // Generate a body via the structure generator
-                    StructureGenerator(model, symbolProvider, writer, body).render()
-                }
-            }
         }
     }
 }
