@@ -53,6 +53,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
+        default: true
     - name: Set up JDK
       uses: actions/setup-java@v1
       with:
@@ -86,6 +87,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
+        default: true
     - name: Set up JDK
       uses: actions/setup-java@v1
       with:
@@ -116,6 +118,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
+        default: true
     - name: Format Check
       run: rustfmt --check --edition 2018 $(find -name '*.rs' -print)
     - name: execute runtime tests
@@ -138,6 +141,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
+        default: true
     - name: Set up JDK
       uses: actions/setup-java@v1
       with:
@@ -172,9 +176,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.rust_version }}
+        default: true
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
@@ -203,9 +205,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.rust_version }}
+        default: true
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
@@ -234,9 +234,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.rust_version }}
+        default: true
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
@@ -265,9 +263,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.rust_version }}
+        default: true
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
