@@ -13,6 +13,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
@@ -56,7 +57,7 @@ internal class EnumMemberModel(private val definition: EnumDefinition, private v
 }
 
 private fun RustWriter.docWithNote(doc: String?, note: String?) {
-    doc?.also { docs(it) }
+    doc?.also { docs(escape(it)) }
     note?.also {
         // Add a blank line between the docs and the note to visually differentiate
         doc?.also { write("///") }
@@ -178,7 +179,7 @@ class EnumGenerator(
             impl std::str::FromStr for $enumName {
                 type Err = std::convert::Infallible;
 
-                fn from_str(s: &str) -> Result<Self, Self::Err> {
+                fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
                     Ok($enumName::from(s))
                 }
             }
