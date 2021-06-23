@@ -9,6 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asOptional
@@ -34,7 +35,8 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): RuntimeType {
     val symbol = symbolProvider.toSymbol(this)
-    return RuntimeType("Builder", null, "${symbol.namespace}::${symbol.name.toSnakeCase()}")
+    val builderNamespace = RustReservedWords.escapeIfNeeded(symbol.name.toSnakeCase())
+    return RuntimeType("Builder", null, "${symbol.namespace}::$builderNamespace")
 }
 
 fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).member("BuildError")

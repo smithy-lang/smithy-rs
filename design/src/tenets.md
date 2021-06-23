@@ -1,6 +1,6 @@
 # Rust SDK Design Tenets
 > Unless you know better ones! These are our tenets today, but we'd love your thoughts. Do you wish we had different priorities? Let us know by opening and issue or starting a discussion.
-1. [**Batteries included, but replaceable.**](#batteries-included-but-replaceable) The AWS SDK for Rust should provide a best-in-class experience for many use cases, **but**, customers will use the SDK in unqiue and unexpected ways. **Meet customers where they are;** strive to be compatible with their tools. Provide mechanisms to allow customers make different choices.
+1. [**Batteries included, but replaceable.**](#batteries-included-but-replaceable) The AWS SDK for Rust should provide a best-in-class experience for many use cases, **but**, customers will use the SDK in unique and unexpected ways. **Meet customers where they are;** strive to be compatible with their tools. Provide mechanisms to allow customers make different choices.
 2. [**Make common problems easy to solve.**](#make-common-problems-easy-to-solve) The AWS SDK for Rust should uncommon problems solvable. Guide customers to patterns that set them up for long-term success.
 3. [**Design for the Future.**](#design-for-the-future) The AWS SDK for Rust should evolve with AWS without breaking existing customers. APIs will evolve in unpredictable directions, new protocols will gain adoption, and new services will be created that we never could have imagined. Don’t simplify or unify code today that prevents evolution tomorrow.
 
