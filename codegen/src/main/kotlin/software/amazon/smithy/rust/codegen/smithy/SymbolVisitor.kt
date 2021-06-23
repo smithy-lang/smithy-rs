@@ -160,7 +160,7 @@ class SymbolVisitor(
         return RuntimeType.Blob(config.runtimeConfig).toSymbol()
     }
 
-    private fun handleOptionality(symbol: Symbol, member: MemberShape, container: Shape): Symbol {
+    private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol {
         // If a field has the httpLabel trait and we are generating
         // an Input shape, then the field is _not optional_.
         return if (nullableIndex.isNullable(member)) {
@@ -280,7 +280,7 @@ class SymbolVisitor(
         return targetSymbol.letIf(config.handleRustBoxing) {
             handleRustBoxing(it, shape)
         }.letIf(config.handleOptionality) {
-            handleOptionality(it, shape, model.expectShape(shape.container))
+            handleOptionality(it, shape)
         }
     }
 

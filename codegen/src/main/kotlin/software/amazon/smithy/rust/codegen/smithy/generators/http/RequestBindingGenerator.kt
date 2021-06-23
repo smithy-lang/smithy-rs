@@ -414,7 +414,7 @@ class RequestBindingGenerator(
             }
             rust(
                 """
-                if formatted == "" {
+                if formatted.is_empty() {
                     return Err(${buildError()})
                 }
                 formatted
