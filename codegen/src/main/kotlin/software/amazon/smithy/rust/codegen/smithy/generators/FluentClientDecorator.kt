@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asOptional
@@ -249,7 +250,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                 val name = symbolProvider.toSymbol(operation).name
                 rust(
                     """
-                    pub fn ${name.toSnakeCase()}(&self) -> fluent_builders::$name<C, M, R> {
+                    pub fn ${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}(&self) -> fluent_builders::$name<C, M, R> {
                         fluent_builders::$name::new(self.handle.clone())
                     }"""
                 )
