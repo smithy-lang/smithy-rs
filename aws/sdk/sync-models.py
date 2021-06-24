@@ -15,6 +15,6 @@ for model in os.listdir("aws-models"):
     model_name = model[:-len('.json')]
     source = Path(aws_models) / model_name / 'smithy' / 'model.json'
     if not source.exists():
-        print(f'cannout find: {source}')
-        sys.exit(1)
+        print(f'warning: cannot find: {source}')
+        continue
     shutil.copyfile(source, Path('aws-models') / model)

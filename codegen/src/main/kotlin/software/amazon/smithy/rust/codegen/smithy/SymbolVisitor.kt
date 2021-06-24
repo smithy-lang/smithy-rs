@@ -45,7 +45,6 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
-import software.amazon.smithy.utils.StringUtils
 import kotlin.reflect.KClass
 
 // TODO: currently, respecting integer types.
@@ -161,8 +160,6 @@ class SymbolVisitor(
     }
 
     private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol {
-        // If a field has the httpLabel trait and we are generating
-        // an Input shape, then the field is _not optional_.
         return if (nullableIndex.isNullable(member)) {
             symbol.makeOptional()
         } else symbol
@@ -252,7 +249,7 @@ class SymbolVisitor(
         val isError = shape.hasTrait<ErrorTrait>()
         val isInput = shape.hasTrait<SyntheticInputTrait>()
         val isOutput = shape.hasTrait<SyntheticOutputTrait>()
-        val name = StringUtils.capitalize(shape.contextName()).letIf(isError && config.codegenConfig.renameExceptions) {
+        val name = shape.contextName().toPascalCase().letIf(isError && config.codegenConfig.renameExceptions) {
             // TODO: Do we want to do this?
             // https://github.com/awslabs/smithy-rs/issues/77
             it.replace("Exception", "Error")
@@ -267,7 +264,7 @@ class SymbolVisitor(
     }
 
     override fun unionShape(shape: UnionShape): Symbol {
-        val name = StringUtils.capitalize(shape.contextName())
+        val name = shape.contextName().toPascalCase()
         val builder = symbolBuilder(shape, RustType.Opaque(name)).locatedIn(Models)
 
         return builder.build()

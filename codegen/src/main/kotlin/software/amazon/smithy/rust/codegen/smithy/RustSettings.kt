@@ -93,6 +93,7 @@ class RustSettings(
                     MODULE_AUTHORS,
                     MODULE_VERSION,
                     RUNTIME_CONFIG,
+                    CODEGEN_SETTINGS,
                     LICENSE
                 )
             )
