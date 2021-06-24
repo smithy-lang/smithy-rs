@@ -101,10 +101,7 @@ class RequestBindingGeneratorTest {
                 stringHeader: String
             }
         """.asSmithyModel()
-    private val model = OperationNormalizer(baseModel).transformModel(
-        inputBodyFactory = OperationNormalizer.NoBody,
-        outputBodyFactory = OperationNormalizer.NoBody
-    )
+    private val model = OperationNormalizer(baseModel).transformModel()
 
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
     private val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
@@ -276,6 +273,59 @@ class RequestBindingGeneratorTest {
         let err = inp.request_builder_base().expect_err("can't make a header with a newline");
         // make sure we obey the sensitive trait
         assert_eq!(format!("{}", err), "Invalid field in input: string_header (Details: `*** Sensitive Data Redacted ***` cannot be used as a header value: failed to parse header value)");
+        """
+        )
+    }
+
+    @Test
+    fun `missing uri label produces an error`() {
+        val writer = RustWriter.forModule("input")
+        renderOperation(writer)
+        writer.compileAndTest(
+            """
+        let ts = smithy_types::Instant::from_epoch_seconds(10123125);
+        let inp = PutObjectInput::builder()
+            // don't set bucket
+            // .bucket_name("buk")
+            .key(ts.clone())
+            .build().unwrap();
+        let err = inp.request_builder_base().expect_err("can't build request with bucket unset");
+        assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+        """
+        )
+    }
+
+    @Test
+    fun `missing timestamp uri label produces an error`() {
+        val writer = RustWriter.forModule("input")
+        renderOperation(writer)
+        writer.compileAndTest(
+            """
+        let ts = smithy_types::Instant::from_epoch_seconds(10123125);
+        let inp = PutObjectInput::builder()
+            .bucket_name("buk")
+            // don't set key
+            // .key(ts.clone())
+            .build().unwrap();
+        let err = inp.request_builder_base().expect_err("can't build request with bucket unset");
+        assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+        """
+        )
+    }
+
+    @Test
+    fun `empty uri label produces an error`() {
+        val writer = RustWriter.forModule("input")
+        renderOperation(writer)
+        writer.compileAndTest(
+            """
+        let ts = smithy_types::Instant::from_epoch_seconds(10123125);
+        let inp = PutObjectInput::builder()
+            .bucket_name("")
+            .key(ts.clone())
+            .build().unwrap();
+        let err = inp.request_builder_base().expect_err("can't build request with bucket unset");
+        assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
         """
         )
     }

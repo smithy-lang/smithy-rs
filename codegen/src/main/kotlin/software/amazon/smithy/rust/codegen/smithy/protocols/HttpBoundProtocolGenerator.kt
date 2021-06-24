@@ -51,6 +51,8 @@ interface Protocol {
 
     val defaultTimestampFormat: TimestampFormatTrait.Format
 
+    fun additionalHeaders(operationShape: OperationShape): List<Pair<String, String>> = emptyList()
+
     fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator
 
     fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator
@@ -212,16 +214,16 @@ class HttpBoundProtocolGenerator(
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
-                impl #{ParseStrict} for $operationName {
-                    type Output = std::result::Result<#{O}, #{E}>;
-                    fn parse(&self, response: &#{Response}<#{Bytes}>) -> Self::Output {
-                         if !response.status().is_success() && response.status().as_u16() != $successCode {
-                            #{parse_error}(response)
-                         } else {
-                            #{parse_response}(response)
-                         }
-                    }
-                }""",
+            impl #{ParseStrict} for $operationName {
+                type Output = std::result::Result<#{O}, #{E}>;
+                fn parse(&self, response: &#{Response}<#{Bytes}>) -> Self::Output {
+                     if !response.status().is_success() && response.status().as_u16() != $successCode {
+                        #{parse_error}(response)
+                     } else {
+                        #{parse_response}(response)
+                     }
+                }
+            }""",
             *codegenScope,
             "O" to outputSymbol,
             "E" to operationShape.errorSymbol(symbolProvider),
@@ -238,21 +240,21 @@ class HttpBoundProtocolGenerator(
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
-                    impl #{ParseResponse}<#{SdkBody}> for $operationName {
-                        type Output = std::result::Result<#{O}, #{E}>;
-                        fn parse_unloaded(&self, response: &mut http::Response<#{SdkBody}>) -> Option<Self::Output> {
-                            // This is an error, defer to the non-streaming parser
-                            if !response.status().is_success() && response.status().as_u16() != $successCode {
-                                return None;
-                            }
-                            Some(#{parse_streaming_response}(response))
+                impl #{ParseResponse}<#{SdkBody}> for $operationName {
+                    type Output = std::result::Result<#{O}, #{E}>;
+                    fn parse_unloaded(&self, response: &mut http::Response<#{SdkBody}>) -> Option<Self::Output> {
+                        // This is an error, defer to the non-streaming parser
+                        if !response.status().is_success() && response.status().as_u16() != $successCode {
+                            return None;
                         }
-                        fn parse_loaded(&self, response: &http::Response<#{Bytes}>) -> Self::Output {
-                            // if streaming, we only hit this case if its an error
-                            #{parse_error}(response)
-                        }
+                        Some(#{parse_streaming_response}(response))
                     }
-                """,
+                    fn parse_loaded(&self, response: &http::Response<#{Bytes}>) -> Self::Output {
+                        // if streaming, we only hit this case if its an error
+                        #{parse_error}(response)
+                    }
+                }
+            """,
             "O" to outputSymbol,
             "E" to operationShape.errorSymbol(symbolProvider),
             "parse_streaming_response" to parseStreamingResponse(operationShape),
@@ -294,7 +296,7 @@ class HttpBoundProtocolGenerator(
                             val errorShape = model.expectShape(error, StructureShape::class.java)
                             val variantName = symbolProvider.toSymbol(model.expectShape(error)).name
                             withBlock(
-                                "${error.name.dq()} => #1T { meta: generic, kind: #1TKind::$variantName({",
+                                "${httpBindingResolver.errorCode(errorShape).dq()} => #1T { meta: generic, kind: #1TKind::$variantName({",
                                 "})},",
                                 errorSymbol
                             ) {
@@ -380,14 +382,12 @@ class HttpBoundProtocolGenerator(
         val contentType = httpBindingResolver.requestContentType(operationShape)
         httpBindingGenerator.renderUpdateHttpBuilder(implBlockWriter)
         httpBuilderFun(implBlockWriter) {
-            rust(
-                """
-                let builder = #T::new();
-                let builder = builder.header("Content-Type", ${contentType.dq()});
-                self.update_http_builder(builder)
-                """,
-                RuntimeType.HttpRequestBuilder
-            )
+            rust("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
+            val additionalHeaders = listOf("Content-Type" to contentType) + protocol.additionalHeaders(operationShape)
+            for (header in additionalHeaders) {
+                rust("let builder = builder.header(${header.first.dq()}, ${header.second.dq()});")
+            }
+            rust("self.update_http_builder(builder)")
         }
     }
 

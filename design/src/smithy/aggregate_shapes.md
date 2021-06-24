@@ -55,13 +55,11 @@ long WriteIOs
 ```rust,ignore
 /// <p>Contains I/O usage metrics for a command that was invoked.</p>
 #[non_exhaustive]
-#[derive(serde::Deserialize, serde::Serialize, std::clone::Clone, std::cmp::PartialEq)]
+#[derive(std::clone::Clone, std::cmp::PartialEq)]
 pub struct IOUsage {
     /// <p>The number of read I/O requests that the command made.</p>
-    #[serde(rename = "ReadIOs")]
     pub read_i_os: i64,
     /// <p>The number of write I/O requests that the command made.</p>
-    #[serde(rename = "WriteIOs")]
     pub write_i_os: i64,
 }
 impl std::fmt::Debug for IOUsage {
@@ -163,26 +161,26 @@ pub enum AttributeValue {
 }
 
 impl AttributeValue {
-    pub fn as_bool(&self) -> Option<&bool> {
-        if let AttributeValue::Bool(val) = &self { Some(&val) } else { None }
+    pub fn as_bool(&self) -> Result<&bool, &crate::model::AttributeValue> {
+        if let AttributeValue::Bool(val) = &self { Ok(&val) } else { Err(self) }
     }
     pub fn is_bool(&self) -> bool {
         self.as_bool().is_some()
     }
-    pub fn as_bools(&self) -> Option<&std::vec::Vec<bool>> {
-        if let AttributeValue::Bools(val) = &self { Some(&val) } else { None }
+    pub fn as_bools(&self) -> Result<&std::vec::Vec<bool>, &crate::model::AttributeValue> {
+        if let AttributeValue::Bools(val) = &self { Ok(&val) } else { Err(self) }
     }
     pub fn is_bools(&self) -> bool {
         self.as_bools().is_some()
     }
-    pub fn as_map(&self) -> Option<&std::collections::HashMap<std::string::String, crate::model::AttributeValue>> {
-        if let AttributeValue::Map(val) = &self { Some(&val) } else { None }
+    pub fn as_map(&self) -> Result<&std::collections::HashMap<std::string::String, crate::model::AttributeValue>, &crate::model::AttributeValue> {
+        if let AttributeValue::Map(val) = &self { Ok(&val) } else { Err(self) }
     }
     pub fn is_map(&self) -> bool {
         self.as_map().is_some()
     }
-    pub fn as_string(&self) -> Option<&std::string::String> {
-        if let AttributeValue::String(val) = &self { Some(&val) } else { None }
+    pub fn as_string(&self) -> Result<&std::string::String, &crate::model::AttributeValue> {
+        if let AttributeValue::String(val) = &self { Ok(&val) } else { Err(self) }
     }
     pub fn is_string(&self) -> bool {
         self.as_string().is_some()

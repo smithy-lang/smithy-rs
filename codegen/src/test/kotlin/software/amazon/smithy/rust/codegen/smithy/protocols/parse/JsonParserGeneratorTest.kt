@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
+package software.amazon.smithy.rust.codegen.smithy.protocols.parse
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
@@ -23,46 +23,42 @@ import software.amazon.smithy.rust.codegen.testutil.testProtocolConfig
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.expectTrait
-import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.lookup
+import software.amazon.smithy.rust.codegen.util.outputShape
 
-internal class XmlBindingTraitSerializerGeneratorTest {
+class JsonParserGeneratorTest {
     private val baseModel = """
         namespace test
-        use aws.protocols#restXml
+        use aws.protocols#restJson1
+
         union Choice {
-            @xmlFlattened
-            @xmlName("Hi")
-            flatMap: MyMap,
-
-            deepMap: MyMap,
-
-            @xmlFlattened
-            flatList: SomeList,
-
-            deepList: SomeList,
-
-            s: String,
-
-            enum: FooEnum,
-
+            blob: Blob,
+            boolean: Boolean,
             date: Timestamp,
-
+            document: Document,
+            enum: FooEnum,
+            int: Integer,
+            list: SomeList,
+            listSparse: SomeSparseList,
+            long: Long,
+            map: MyMap,
+            mapSparse: MySparseMap,
             number: Double,
-
+            s: String,
             top: Top,
-
-            blob: Blob
         }
 
         @enum([{name: "FOO", value: "FOO"}])
         string FooEnum
 
         map MyMap {
-            @xmlName("Name")
             key: String,
+            value: Choice,
+        }
 
-            @xmlName("Setting")
+        @sparse
+        map MySparseMap {
+            key: String,
             value: Choice,
         }
 
@@ -70,19 +66,17 @@ internal class XmlBindingTraitSerializerGeneratorTest {
             member: Choice
         }
 
+        @sparse
+        list SomeSparseList {
+            member: Choice
+        }
 
         structure Top {
+            @required
             choice: Choice,
-
             field: String,
-
-            @xmlAttribute
-            extra: Long,
-
-            @xmlName("prefix:local")
-            renamedWithPrefix: String,
-
-            @xmlFlattened
+            extra: Integer,
+            @jsonName("rec")
             recursive: TopList
         }
 
@@ -90,43 +84,55 @@ internal class XmlBindingTraitSerializerGeneratorTest {
             member: Top
         }
 
-        structure OpInput {
-            @httpPayload
-            payload: Top
+        structure OpOutput {
+            @httpHeader("x-test")
+            someHeader: String,
+
+            top: Top
         }
 
         @http(uri: "/top", method: "POST")
         operation Op {
-            input: OpInput,
+            output: OpOutput,
         }
     """.asSmithyModel()
 
     @Test
-    fun `generates valid serializers`() {
+    fun `generates valid deserializers`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer(baseModel).transformModel())
         val symbolProvider = testSymbolProvider(model)
-        val parserGenerator = XmlBindingTraitSerializerGenerator(
+        val parserGenerator = JsonParserGenerator(
             testProtocolConfig(model),
-            HttpTraitHttpBindingResolver(model, "application/xml", null)
+            HttpTraitHttpBindingResolver(model, "application/json", "application/json")
         )
-        val operationParser = parserGenerator.payloadSerializer(model.lookup("test#OpInput\$payload"))
+        val operationGenerator = parserGenerator.operationParser(model.lookup("test#Op"))
+        val documentGenerator = parserGenerator.documentParser(model.lookup("test#Op"))
+        val payloadGenerator = parserGenerator.payloadParser(model.lookup("test#OpOutput\$top"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
             writer.unitTest(
                 """
-                 use model::Top;
-                let inp = crate::input::OpInput::builder().payload(
-                    Top::builder()
-                        .field("hello!")
-                        .extra(45)
-                        .recursive(Top::builder().extra(55).build())
-                        .build()
-                ).build().unwrap();
-                let serialized = ${writer.format(operationParser)}(&inp.payload.unwrap()).unwrap();
-                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
-                assert_eq!(output, "<Top extra=\"45\"><field>hello!</field><recursive extra=\"55\"></recursive></Top>");
-            """
+                use model::Choice;
+
+                // Generate the document serializer even though it's not tested directly
+                // ${writer.format(documentGenerator)}
+                // ${writer.format(payloadGenerator)}
+
+                let json = br#"
+                    { "top":
+                        { "extra": 45,
+                          "field": "something",
+                          "choice":
+                              { "int": 5 }}}
+                "#;
+
+                let output = ${writer.format(operationGenerator!!)}(json, output::op_output::Builder::default()).unwrap().build();
+                let top = output.top.expect("top");
+                assert_eq!(Some(45), top.extra);
+                assert_eq!(Some("something".to_string()), top.field);
+                assert_eq!(Some(Choice::Int(5)), top.choice);
+                """
             )
         }
         project.withModule(RustModule.default("model", public = true)) {
@@ -136,10 +142,13 @@ internal class XmlBindingTraitSerializerGeneratorTest {
             EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
         }
 
-        project.withModule(RustModule.default("input", public = true)) {
-            model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
+        project.withModule(RustModule.default("output", public = true)) {
+            model.lookup<OperationShape>("test#Op").outputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/xml_ser.rs")
+        println("file:///${project.baseDir}/src/json_deser.rs")
+        println("file:///${project.baseDir}/src/lib.rs")
+        println("file:///${project.baseDir}/src/model.rs")
+        println("file:///${project.baseDir}/src/output.rs")
         project.compileAndTest()
     }
 }
