@@ -155,7 +155,8 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                         "relativePath": "../"
                       },
                       "codegen": {
-                        "includeFluentClient": false
+                        "includeFluentClient": false,
+                        "renameErrors": false
                       },
                       "service": "${it.service}",
                       "module": "aws-sdk-${it.module}",
