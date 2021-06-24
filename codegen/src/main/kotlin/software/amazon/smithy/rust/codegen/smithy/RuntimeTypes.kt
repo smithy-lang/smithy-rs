@@ -72,7 +72,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
 
     fun fullyQualifiedName(): String {
         val postFix = name?.let { "::$name" } ?: ""
-        return "$namespace$postFix"
+        return "$namespace$postFix".replace("##", "#")
     }
 
     // TODO: refactor to be RuntimeTypeProvider a la Symbol provider that packages the `RuntimeConfig` state.

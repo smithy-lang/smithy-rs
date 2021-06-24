@@ -19,9 +19,9 @@ class RustCodegenPlugin : SmithyBuildPlugin {
     override fun getName(): String = "rust-codegen"
 
     override fun execute(context: PluginContext) {
-        val codegenDecorator = CombinedCodegenDecorator.fromClasspath(context)
         // Suppress extremely noisy logs about reserved words
         Logger.getLogger(ReservedWordSymbolProvider::class.java.name).level = Level.OFF
+        val codegenDecorator = CombinedCodegenDecorator.fromClasspath(context)
         CodegenVisitor(context, codegenDecorator).execute()
     }
 

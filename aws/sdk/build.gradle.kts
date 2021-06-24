@@ -43,7 +43,47 @@ dependencies {
     implementation(project(":aws:sdk-codegen"))
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-aws-iam-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-aws-cloudformation-traits:$smithyVersion")
 }
+
+// Tier 1 Services have examples and tests
+val tier1Services = setOf(
+    "apigateway",
+    "batch",
+    "cloudformation",
+    "dynamodb",
+    "ec2",
+    "ecs",
+    "iam",
+    "kinesis",
+    "kms",
+    "lambda",
+    "logs",
+    "medialive",
+    "mediapackage",
+    "polly",
+    "qldb-session",
+    "qldb",
+    "rds-data",
+    "rds",
+    "route53",
+    "runtime",
+    "s3-tests",
+    "s3",
+    "sagemaker-a2i-runtime",
+    "sagemaker-edge",
+    "sagemaker-featurestore-runtime",
+    "sagemaker",
+    "secretsmanager",
+    "sesv2",
+    "sns",
+    "sqs",
+    "ssm",
+    "sts"
+)
+
+private val disableServices = setOf("transcribestreaming")
 
 data class AwsService(
     val service: String,
@@ -55,14 +95,20 @@ data class AwsService(
     fun files(): List<File> = listOf(modelFile) + extraFiles
 }
 
-val awsServices: Provider<List<AwsService>> = project.providers.provider { discoverServices() }
+val generateAllServices = project.providers.environmentVariable("GENERATE_ALL_SERVICES")
+val awsServices: Provider<List<AwsService>> = generateAllServices.map { v ->
+    discoverServices(v.toLowerCase() == "true")
+}
+
+val generateOnly: Set<String>? = setOf("codeguruprofiler")
+
 
 /**
  * Discovers services from the `models` directory
  *
  * Do not invoke this function directly. Use the `awsServices` provider.
  */
-fun discoverServices(): List<AwsService> {
+fun discoverServices(allServices: Boolean): List<AwsService> {
     val models = project.file("aws-models")
     return fileTree(models).mapNotNull { file ->
         val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
@@ -84,6 +130,10 @@ fun discoverServices(): List<AwsService> {
             val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId.toLowerCase().replace(" ", "")
             AwsService(service = service.id.toString(), module = sdkId, modelFile = file, extraFiles = extras)
         }
+    }.filter {
+        allServices || (generateOnly != null && generateOnly.contains(it.module)) || (generateOnly == null && tier1Services.contains(
+            it.module
+        ))
     }
 }
 
@@ -205,8 +255,10 @@ tasks.register<Copy>("relocateRuntime") {
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {
-    val examples = projectDir.resolve("examples").listFiles { file -> !file.name.startsWith(".") }?.toList()
-        ?.map { "examples/${it.name}" }.orEmpty()
+    val examples = projectDir.resolve("examples")
+        .listFiles { file -> !file.name.startsWith(".") }.orEmpty().toList()
+        .filter { generateOnly == null || generateOnly.contains(it.name) }
+        .map { "examples/${it.name}" }
 
     val modules = services.map(AwsService::module) + runtimeModules + awsModules + examples.toList()
     return """

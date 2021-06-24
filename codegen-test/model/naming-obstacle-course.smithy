@@ -57,6 +57,10 @@ structure ReservedWords {
     send: String
 }
 
+structure Type {
+    field: String
+}
+
 @httpRequestTests([
     {
         id: "structure_punning",

@@ -407,7 +407,9 @@ class RustWriter private constructor(
                     t.rustType().render(fullyQualified = true)
                 }
                 else -> throw CodegenException("Invalid type provided to RustSymbolFormatter: $t")
-            }
+                // escaping generates `##` sequences for all the common cases where
+                // it will be run through templating, but in this context, we won't be escaped
+            }.replace("##", "#")
         }
     }
 }
