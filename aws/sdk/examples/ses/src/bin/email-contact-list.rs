@@ -86,33 +86,22 @@ async fn main() -> Result<(), Error> {
 
     let contacts = resp.unwrap().contacts.unwrap_or_default();
 
-    let cs: Option<Vec<String>> = Some(
-        contacts
-            .into_iter()
-            .map(|i| i.email_address.unwrap_or_default())
-            .collect(),
-    );
+    let cs: String = contacts
+        .into_iter()
+        .map(|i| i.email_address.unwrap_or_default())
+        .collect();
 
-    let mut dest = Destination::builder().build();
-    dest.to_addresses = cs;
+    let dest = Destination::builder().to_addresses(cs).build();
+    let subject_content = Content::builder().data(subject).charset("UTF-8").build();
+    let body_content = Content::builder().data(message).charset("UTF-8").build();
+    let body = Body::builder().text(body_content).build();
 
-    let mut subject_content = Content::builder().build();
-    subject_content.data = Some(subject);
-    subject_content.charset = Some(String::from("UTF-8"));
+    let msg = Message::builder()
+        .subject(subject_content)
+        .body(body)
+        .build();
 
-    let mut body_content = Content::builder().build();
-    body_content.data = Some(message);
-    body_content.charset = Some(String::from("UTF-8"));
-
-    let mut body = Body::builder().build();
-    body.text = Some(body_content);
-
-    let mut msg = Message::builder().build();
-    msg.subject = Some(subject_content);
-    msg.body = Some(body);
-
-    let mut email_content = EmailContent::builder().build();
-    email_content.simple = Some(msg);
+    let email_content = EmailContent::builder().simple(msg).build();
 
     match client
         .send_email()
