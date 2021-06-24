@@ -95,13 +95,12 @@ data class AwsService(
     fun files(): List<File> = listOf(modelFile) + extraFiles
 }
 
-val generateAllServices = project.providers.environmentVariable("GENERATE_ALL_SERVICES")
+val generateAllServices = project.providers.environmentVariable("GENERATE_ALL_SERVICES").orElse("")
 val awsServices: Provider<List<AwsService>> = generateAllServices.map { v ->
     discoverServices(v.toLowerCase() == "true")
 }
 
-val generateOnly: Set<String>? = setOf("codeguruprofiler")
-
+val generateOnly: Set<String>? = null
 
 /**
  * Discovers services from the `models` directory
@@ -130,11 +129,12 @@ fun discoverServices(allServices: Boolean): List<AwsService> {
             val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId.toLowerCase().replace(" ", "")
             AwsService(service = service.id.toString(), module = sdkId, modelFile = file, extraFiles = extras)
         }
-    }.filter {
-        allServices || (generateOnly != null && generateOnly.contains(it.module)) || (generateOnly == null && tier1Services.contains(
-            it.module
-        ))
-    }
+    }.filterNot { disableServices.contains(it.module) }
+        .filter {
+            allServices || (generateOnly != null && generateOnly.contains(it.module)) || (generateOnly == null && tier1Services.contains(
+                it.module
+            ))
+        }
 }
 
 fun generateSmithyBuild(tests: List<AwsService>): String {
@@ -207,7 +207,8 @@ task("relocateServices") {
             }
         }
     }
-    outputs.upToDateWhen { false }
+    inputs.dir("$buildDir/smithyprojections/sdk/")
+    outputs.dir(sdkOutputDir)
 }
 
 task("relocateExamples") {
@@ -221,6 +222,8 @@ task("relocateExamples") {
             filter { line -> line.replace("build/aws-sdk/", "") }
         }
     }
+    inputs.dir(projectDir.resolve("examples"))
+    outputs.dir(sdkOutputDir)
 }
 
 tasks.register<Copy>("relocateAwsRuntime") {
@@ -232,7 +235,6 @@ tasks.register<Copy>("relocateAwsRuntime") {
     exclude("**/Cargo.lock")
     filter { line -> rewritePathDependency(line) }
     into(sdkOutputDir)
-    outputs.upToDateWhen { false }
 }
 
 /**
@@ -252,7 +254,6 @@ tasks.register<Copy>("relocateRuntime") {
         exclude("**/Cargo.lock")
     }
     into(sdkOutputDir)
-    outputs.upToDateWhen { false }
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {

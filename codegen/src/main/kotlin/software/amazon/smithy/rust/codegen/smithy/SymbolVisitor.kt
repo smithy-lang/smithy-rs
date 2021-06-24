@@ -160,8 +160,6 @@ class SymbolVisitor(
     }
 
     private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol {
-        // If a field has the httpLabel trait and we are generating
-        // an Input shape, then the field is _not optional_.
         return if (nullableIndex.isNullable(member)) {
             symbol.makeOptional()
         } else symbol
