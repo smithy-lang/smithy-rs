@@ -33,10 +33,16 @@ fun <T : CodeWriter> T.withBlock(
     return conditionalBlock(textBeforeNewLine, textAfterNewLine, conditional = true, block = block, args = args)
 }
 
+fun <T : CodeWriter> T.assignment(variableName: String, vararg ctx: Pair<String, Any>, block: T.() -> Unit) {
+    withBlockTemplate("let $variableName =", ";", *ctx) {
+        block()
+    }
+}
+
 fun <T : CodeWriter> T.withBlockTemplate(
     textBeforeNewLine: String,
     textAfterNewLine: String,
-    vararg ctx: Pair<String, RuntimeType>,
+    vararg ctx: Pair<String, Any>,
     block: T.() -> Unit
 ): T {
     return withTemplate(textBeforeNewLine, ctx) { header ->
