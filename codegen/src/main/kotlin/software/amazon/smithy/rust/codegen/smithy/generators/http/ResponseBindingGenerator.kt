@@ -297,5 +297,5 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
      */
     // rename here technically not required, operations and members cannot be renamed
     private fun fnName(operationShape: OperationShape, binding: HttpBindingDescriptor) =
-        "${operationShape.id.getName(service).toSnakeCase()}_${binding.memberName.toSnakeCase()}"
+        "${operationShape.id.getName(service).toSnakeCase()}_${binding.member.container.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
 }
