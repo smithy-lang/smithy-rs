@@ -159,7 +159,7 @@ jobs:
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
     - name: Tar the SDK
-      run: tar -cvf sdk.tar -C aws/sdk/build/aws-sdk/
+      run: tar -cvf sdk.tar -C aws/sdk/build/aws-sdk/ .
     - uses: actions/upload-artifact@v2
       name: Upload SDK Artifact
       with:
