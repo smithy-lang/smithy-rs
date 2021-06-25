@@ -219,7 +219,9 @@ jobs:
       name: Download SDK Artifact
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
-        path: aws-sdk
+        path: artifact
+    - name: untar
+      run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
     - uses: actions/cache@v2
       with:
         path: |
@@ -261,7 +263,9 @@ jobs:
       name: Download SDK Artifact
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
-        path: aws-sdk
+        path: artifact
+    - name: untar
+      run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
     - name: Cargo Docs
       run: cargo doc --no-deps --document-private-items
       working-directory: aws-sdk
@@ -291,7 +295,9 @@ jobs:
       name: Download SDK Artifact
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
-        path: aws-sdk
+        path: artifact
+    - name: untar
+      run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
     - name: Cargo Clippy
       run: cargo clippy -- -D warnings
       working-directory: aws-sdk
