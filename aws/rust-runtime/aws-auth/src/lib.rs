@@ -4,6 +4,7 @@
  */
 
 pub mod provider;
+pub mod refresh;
 
 use smithy_http::property_bag::PropertyBag;
 use std::error::Error;
