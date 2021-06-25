@@ -176,7 +176,7 @@ jobs:
         path: |
           ~/.cargo/registry
           ~/.cargo/git
-          target
+          aws-sdk/target
         key: ${{ runner.os }}-cargocheck
     - uses: actions-rs/toolchain@v1
       with:
