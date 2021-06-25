@@ -284,3 +284,41 @@ jobs:
     - name: Cargo Clippy
       run: cargo clippy -- -D warnings
       working-directory: aws-sdk
+
+  all-services-check:
+    name: cargo check all services
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.java_version }}
+    - name: Generate the SDK
+      run: ./gradlew :aws:sdk:cargoCheck
+      env:
+        GENERATE_ALL_SERVICES: 'true'
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - uses: actions/upload-artifact@v2
+      name: Upload SDK Artifact
+      with:
+        name: aws-sdk-all-services-${{ env.name }}-${{ github.sha }}
+        path: |
+          aws/sdk/build/aws-sdk/
+          !aws/sdk/build/aws-sdk/target
