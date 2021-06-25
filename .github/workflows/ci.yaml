@@ -308,7 +308,7 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: ${{ env.java_version }}
-    - name: Generate the SDK
+    - name: generate a check all services
       run: ./gradlew :aws:sdk:cargoCheck
       env:
         GENERATE_ALL_SERVICES: 'true'
