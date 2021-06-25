@@ -205,13 +205,6 @@ jobs:
     needs: generate-sdk
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/cache@v2
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargotest
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
@@ -239,6 +232,7 @@ jobs:
       run: cargo test
       working-directory: aws-sdk
       env:
+        RUSTC_FORCE_INCREMENTAL: 1
         RUSTFLAGS: -D warnings
         CARGO_TARGET_DIR: ../target
   docs-sdk:
