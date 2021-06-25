@@ -171,13 +171,6 @@ jobs:
     needs: generate-sdk
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/cache@v2
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargocheck
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
@@ -191,12 +184,22 @@ jobs:
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
         path: aws-sdk
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-
+          ${{ runner.os }}-${{ env.rust_version }}-
     - name: Cargo Check
       run: cargo check --lib --tests --benches
       working-directory: aws-sdk
       env:
         RUSTFLAGS: -D warnings
-        CARGO_TARGET_DIR: "../target"
+        CARGO_TARGET_DIR: ../target
   test-sdk:
     name: cargo test AWS SDK
     needs: generate-sdk
@@ -222,12 +225,22 @@ jobs:
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
         path: aws-sdk
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-
+          ${{ runner.os }}-${{ env.rust_version }}-
     - name: Cargo Test
       run: cargo test
       working-directory: aws-sdk
       env:
         RUSTFLAGS: -D warnings
-        CARGO_TARGET_DIR: "../target"
+        CARGO_TARGET_DIR: ../target
   docs-sdk:
     name: cargo docs AWS SDK
     needs: generate-sdk
