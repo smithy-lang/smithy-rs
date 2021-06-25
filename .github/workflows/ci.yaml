@@ -183,9 +183,9 @@ jobs:
       name: Download SDK Artifact
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
-        path: aws-sdk.tar
+        path: artifact
     - name: untar
-      run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../aws-sdk.tar
+      run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
     - uses: actions/cache@v2
       with:
         path: |
