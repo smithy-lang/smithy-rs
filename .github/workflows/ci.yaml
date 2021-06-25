@@ -176,7 +176,7 @@ jobs:
         path: |
           ~/.cargo/registry
           ~/.cargo/git
-          aws-sdk/target
+          target
         key: ${{ runner.os }}-cargocheck
     - uses: actions-rs/toolchain@v1
       with:
@@ -196,6 +196,7 @@ jobs:
       working-directory: aws-sdk
       env:
         RUSTFLAGS: -D warnings
+        CARGO_TARGET_DIR: "../target"
   test-sdk:
     name: cargo test AWS SDK
     needs: generate-sdk
@@ -226,6 +227,7 @@ jobs:
       working-directory: aws-sdk
       env:
         RUSTFLAGS: -D warnings
+        CARGO_TARGET_DIR: "../target"
   docs-sdk:
     name: cargo docs AWS SDK
     needs: generate-sdk
