@@ -332,10 +332,10 @@ jobs:
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - name: Tar the SDK
+      run: tar -cvf sdk.tar -C aws/sdk/build/aws-sdk/ .
     - uses: actions/upload-artifact@v2
       name: Upload SDK Artifact
       with:
-        name: aws-sdk-all-services-${{ env.name }}-${{ github.sha }}
-        path: |
-          aws/sdk/build/aws-sdk/
-          !aws/sdk/build/aws-sdk/target
+        name: aws-sdk-${{ env.name }}-allservices-${{ github.sha }}
+        path: sdk.tar
