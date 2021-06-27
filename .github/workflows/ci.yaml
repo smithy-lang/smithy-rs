@@ -233,7 +233,7 @@ jobs:
           ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-
           ${{ runner.os }}-${{ env.rust_version }}-
     - name: Cargo Test
-      run: cargo test
+      run: cargo test -p aws-sdk-s3
       working-directory: aws-sdk
       env:
         RUSTC_FORCE_INCREMENTAL: 1
