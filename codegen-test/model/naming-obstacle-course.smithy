@@ -17,6 +17,7 @@ service Config {
        ErrCollisions,
        Result,
        Option,
+       Match
     ]
 }
 
@@ -38,6 +39,11 @@ operation ReservedWordsAsMembers {
     input: ReservedWords
 }
 
+// tests that module names are properly escaped
+operation Match {
+    input: ReservedWords
+}
+
 
 structure ReservedWords {
     as: Integer,
@@ -45,7 +51,14 @@ structure ReservedWords {
     enum: UnknownVariantCollidingEnum,
     self: Boolean,
     crate: Boolean,
-    super: Boolean
+    super: Boolean,
+    build: String,
+    default: String,
+    send: String
+}
+
+structure Type {
+    field: String
 }
 
 @httpRequestTests([

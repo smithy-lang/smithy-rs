@@ -276,4 +276,57 @@ class RequestBindingGeneratorTest {
         """
         )
     }
+
+    @Test
+    fun `missing uri label produces an error`() {
+        val writer = RustWriter.forModule("input")
+        renderOperation(writer)
+        writer.compileAndTest(
+            """
+        let ts = smithy_types::Instant::from_epoch_seconds(10123125);
+        let inp = PutObjectInput::builder()
+            // don't set bucket
+            // .bucket_name("buk")
+            .key(ts.clone())
+            .build().unwrap();
+        let err = inp.request_builder_base().expect_err("can't build request with bucket unset");
+        assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+        """
+        )
+    }
+
+    @Test
+    fun `missing timestamp uri label produces an error`() {
+        val writer = RustWriter.forModule("input")
+        renderOperation(writer)
+        writer.compileAndTest(
+            """
+        let ts = smithy_types::Instant::from_epoch_seconds(10123125);
+        let inp = PutObjectInput::builder()
+            .bucket_name("buk")
+            // don't set key
+            // .key(ts.clone())
+            .build().unwrap();
+        let err = inp.request_builder_base().expect_err("can't build request with bucket unset");
+        assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+        """
+        )
+    }
+
+    @Test
+    fun `empty uri label produces an error`() {
+        val writer = RustWriter.forModule("input")
+        renderOperation(writer)
+        writer.compileAndTest(
+            """
+        let ts = smithy_types::Instant::from_epoch_seconds(10123125);
+        let inp = PutObjectInput::builder()
+            .bucket_name("")
+            .key(ts.clone())
+            .build().unwrap();
+        let err = inp.request_builder_base().expect_err("can't build request with bucket unset");
+        assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+        """
+        )
+    }
 }

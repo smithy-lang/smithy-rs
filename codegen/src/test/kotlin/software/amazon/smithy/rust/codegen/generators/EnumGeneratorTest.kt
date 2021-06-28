@@ -32,10 +32,10 @@ class EnumGeneratorTest {
                   documentation: "Some documentation." },
                 { value: "some-value-2",
                   name: "someName2",
-                  documentation: "More documentation" },
+                  documentation: "More documentation #escape" },
                 { value: "unknown",
                   name: "unknown",
-                  documentation: "It has some docs" }
+                  documentation: "It has some docs that #need to be escaped" }
             ])
             string EnumWithUnknown
         """.asSmithyModel()
@@ -75,7 +75,7 @@ class EnumGeneratorTest {
             println(rendered.lines())
             rendered shouldContain
                 """
-                /// It has some docs
+                /// It has some docs that #need to be escaped
                 ///
                 /// **NOTE:** `::Unknown` has been renamed to `::UnknownValue`.
                 UnknownValue,

@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -47,6 +48,9 @@ class UnionGenerator(
                 val funcNamePart = member.memberName.toSnakeCase()
                 val variantName = member.memberName.toPascalCase()
 
+                if (sortedMembers.size == 1) {
+                    Attribute.Custom("allow(irrefutable_let_patterns)").render(this)
+                }
                 rustBlock("pub fn as_$funcNamePart(&self) -> Result<&#T, &Self>", memberSymbol) {
                     rust("if let ${unionSymbol.name}::$variantName(val) = &self { Ok(&val) } else { Err(&self) }")
                 }

@@ -200,7 +200,7 @@ operation MapWithEnumKeyOp {
 
 
 @enum([
-    { value: "has\"quotes", name: "HAS_QUOTES" },
+    { value: "has\"quotes", name: "HAS_QUOTES", documentation: "this needs#tobe escaped" },
     { value: "normal", name: "NORMAL" },
 ])
 string EnumWithEscapedChars
@@ -245,9 +245,14 @@ map NonSparseMap {
     value: String,
 }
 
+union SingleElementUnion {
+    a: String
+}
+
 structure NullInNonSparseOutput {
     list: NonSparseList,
     map: NonSparseMap,
+    union: SingleElementUnion
 }
 
 @http(uri: "/null-in-non-sparse", method: "POST")
