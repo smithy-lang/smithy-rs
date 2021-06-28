@@ -110,13 +110,6 @@ fun discoverServices(allServices: Boolean): List<AwsService> {
     val models = project.file("aws-models")
     return fileTree(models).mapNotNull { file ->
         val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
-        val testFile = file.parentFile.resolve(file.nameWithoutExtension + "-tests.smithy")
-        val extras = if (testFile.exists()) {
-            logger.warn("Discovered protocol tests for ${file.name}")
-            listOf(testFile)
-        } else {
-            listOf()
-        }
         val services: List<ServiceShape> = model.shapes(ServiceShape::class.java).sorted().toList()
         if (services.size > 1) {
             throw Exception("There must be exactly one service in each aws model file")
@@ -126,6 +119,13 @@ fun discoverServices(allServices: Boolean): List<AwsService> {
         } else {
             val service = services[0]
             val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId.toLowerCase().replace(" ", "")
+            val testFile = file.parentFile.resolve("$sdkId-tests.smithy")
+            val extras = if (testFile.exists()) {
+                logger.warn("Discovered protocol tests for ${file.name}")
+                listOf(testFile)
+            } else {
+                listOf()
+            }
             AwsService(service = service.id.toString(), module = sdkId, modelFile = file, extraFiles = extras)
         }
     }.filterNot { disableServices.contains(it.module) }
