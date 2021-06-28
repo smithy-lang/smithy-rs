@@ -155,6 +155,8 @@ jobs:
       run: ./gradlew :aws:sdk:assemble
     - name: Generate the SDK...again?
       run: ./gradlew :aws:sdk:assemble
+    - name: Generate a list of services with tests
+      run: python aws/sdk/test-services.py > aws/sdk/build/aws-sdk/services-with-tests
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
@@ -233,7 +235,7 @@ jobs:
           ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-
           ${{ runner.os }}-${{ env.rust_version }}-
     - name: Cargo Test
-      run: cargo test -p aws-sdk-s3
+      run: cargo test $(cat services-with-tests)
       working-directory: aws-sdk
       env:
         RUSTC_FORCE_INCREMENTAL: 1
