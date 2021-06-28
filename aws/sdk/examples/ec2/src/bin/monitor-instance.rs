@@ -53,7 +53,6 @@ async fn main() -> Result<(), Error> {
         println!("Instance ID:        {:?}", &instance_id);
     }
 
-
     let config = Config::builder().region(&region).build();
 
     let client = Client::from_conf(config);
