@@ -80,6 +80,7 @@ val tier1Services = setOf(
     "sqs",
     "ssm",
     "sts",
+    "ecr",
     "eks"
 )
 
