@@ -79,7 +79,10 @@ val tier1Services = setOf(
     "sns",
     "sqs",
     "ssm",
-    "sts"
+    "sts",
+    "cloudwatch",
+    "ecr",
+    "eks"
 )
 
 private val disableServices = setOf("transcribestreaming")
