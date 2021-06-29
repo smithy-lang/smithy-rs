@@ -283,6 +283,7 @@ task("generateCargoWorkspace") {
         sdkOutputDir.mkdirs()
         sdkOutputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices.get()))
     }
+    outputs.file(sdkOutputDir.resolve("Cargo.toml"))
 }
 
 task("finalizeSdk") {
