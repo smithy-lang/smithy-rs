@@ -31,6 +31,9 @@ impl Region {
     pub fn new(region: impl Into<Cow<'static, str>>) -> Self {
         Self(region.into())
     }
+    pub const fn from_static(region: &'static str) -> Self {
+        Self(Cow::Borrowed(region))
+    }
 }
 
 /// Provide a [`Region`](Region) to use with AWS requests
