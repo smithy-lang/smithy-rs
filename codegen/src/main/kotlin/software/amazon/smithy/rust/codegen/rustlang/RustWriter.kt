@@ -204,6 +204,7 @@ fun <T : CodeWriter> T.docs(text: String, vararg args: Any, newlinePrefix: Strin
         // We need to filter out blank lines—an empty line causes the markdown parser to interpret the subsequent
         // docs as a code block because they are indented.
         .filter { it.isNotBlank() }
+        .map { fixBareUrls(it, expressionStart) }
         .joinToString("\n") {
             // Rustdoc warns on tabs in documentation
             it.trimStart().replace("\t", "  ")
@@ -213,8 +214,22 @@ fun <T : CodeWriter> T.docs(text: String, vararg args: Any, newlinePrefix: Strin
     return this
 }
 
+private val BARE_URL_MATCHER = Regex("""(https?\:\/\/[^\s]+)""")
+private fun fixBareUrls(line: String, expressionStart: Char): String = BARE_URL_MATCHER.replace(line) { match ->
+    // If the URL is prepended with quotes, it's likely inside of an anchor tag, so don't attempt to fix it
+    if (match.range.first > 0 && line[match.range.first - 1] != '"') {
+        val escaped = escape(match.value, expressionStart)
+        "<$escaped>"
+    } else {
+        match.value
+    }
+}
+
 /** Escape the [expressionStart] character to avoid problems during formatting */
-fun CodeWriter.escape(text: String): String = text.replace("$expressionStart", "$expressionStart$expressionStart")
+fun CodeWriter.escape(text: String): String = escape(text, expressionStart)
+
+private fun escape(text: String, expressionStart: Char): String =
+    text.replace("$expressionStart", "$expressionStart$expressionStart")
 
 /**
  * Write _exactly_ the text as written into the code writer without newlines or formatting

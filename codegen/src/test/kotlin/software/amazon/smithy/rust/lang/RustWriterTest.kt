@@ -112,4 +112,24 @@ class RustWriterTest {
         sut.docs("A link! #D", symbol)
         sut.toString() shouldContain "/// A link! [`Foo`](crate::model::Foo)"
     }
+
+    @Test
+    fun `generate doc fix bare links`() {
+        val sut = RustWriter.forModule("lib")
+        sut.docs(
+            """
+            Simple link in this line: https://example.com
+            Multiple http://test.org?something=something#foo URLs https://www.test.co.uk/asdf%20asdf?foo=%3C&bar
+            Real http://tools.ietf.org/html/rfc6902#section-4 link
+            Don't touch <a href="https://example.com">html links</a>.
+            """.trimMargin()
+        )
+        sut.toString() shouldContain
+            """
+            /// Simple link in this line: <https://example.com>
+            /// Multiple <http://test.org?something=something#foo> URLs <https://www.test.co.uk/asdf%20asdf?foo=%3C&bar>
+            /// Real <http://tools.ietf.org/html/rfc6902#section-4> link
+            /// Don't touch <a href="https://example.com">html links</a>.
+            """.trimIndent()
+    }
 }
