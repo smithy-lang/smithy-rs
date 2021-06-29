@@ -28,14 +28,25 @@ private const val RUNTIME_CONFIG = "runtimeConfig"
 private const val CODEGEN_SETTINGS = "codegen"
 private const val LICENSE = "license"
 
-data class CodegenConfig(val renameExceptions: Boolean = true, val includeFluentClient: Boolean = true, val formatTimeoutSeconds: Int = 20) {
+data class CodegenConfig(
+    // / Rename `Exception` to `Error` in the generated SDK
+    val renameExceptions: Boolean = true,
+    // / Include a fluent client in the generated SDK
+    val includeFluentClient: Boolean = true,
+    // / Add a message field to all shapes that have the error trait
+    val addMessageToErrors: Boolean = true,
+    // / Timeout when running `cargo fmt` on a generate service
+    val formatTimeoutSeconds: Int = 20
+) {
     companion object {
         fun fromNode(node: Optional<ObjectNode>): CodegenConfig {
             return if (node.isPresent) {
                 CodegenConfig(
                     node.get().getBooleanMemberOrDefault("renameErrors", true),
                     node.get().getBooleanMemberOrDefault("includeFluentClient", true),
-                    node.get().getNumberMemberOrDefault("formatTimeoutSeconds", 20).toInt()
+                    node.get().getBooleanMemberOrDefault("addMessageToErrors", true),
+                    node.get().getNumberMemberOrDefault("formatTimeoutSeconds", 20).toInt(),
+
                 )
             } else {
                 CodegenConfig()
