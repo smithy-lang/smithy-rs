@@ -28,7 +28,7 @@ private const val RUNTIME_CONFIG = "runtimeConfig"
 private const val CODEGEN_SETTINGS = "codegen"
 private const val LICENSE = "license"
 
-data class CodegenConfig(val renameExceptions: Boolean = true, val includeFluentClient: Boolean = true, val formatTimeoutSeconds: Int) {
+data class CodegenConfig(val renameExceptions: Boolean = true, val includeFluentClient: Boolean = true, val formatTimeoutSeconds: Int = 20) {
     companion object {
         fun fromNode(node: Optional<ObjectNode>): CodegenConfig {
             return if (node.isPresent) {
