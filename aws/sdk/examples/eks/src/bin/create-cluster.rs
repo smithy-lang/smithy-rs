@@ -41,7 +41,7 @@ async fn main() -> Result<(), aws_sdk_eks::Error> {
     let region = region
         .map(Region::new)
         .or_else(|| region::default_provider().region())
-        .unwrap_or(Region::new("us-west-2"));
+        .unwrap_or_else(|| Region::from_static("us-west-2"));
     let conf = aws_sdk_eks::Config::builder().region(region).build();
     let client = aws_sdk_eks::Client::from_conf(conf);
     let cluster = client
