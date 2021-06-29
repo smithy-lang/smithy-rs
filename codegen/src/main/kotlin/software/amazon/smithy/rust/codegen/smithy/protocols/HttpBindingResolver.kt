@@ -53,11 +53,19 @@ interface HttpBindingResolver {
      */
     fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor>
 
+    fun errorCode(errorShape: ToShapeId): String = errorShape.toShapeId().name
+
     /**
      * Returns a list of member shapes bound to a given request [location] for a given [operationShape]
      */
     fun requestMembers(operationShape: OperationShape, location: HttpLocation): List<MemberShape> =
         requestBindings(operationShape).filter { it.location == location }.map { it.member }
+
+    /**
+     * Returns a list of member shapes bound to a given response [location] for a given [operationShape]
+     */
+    fun responseMembers(operationShape: OperationShape, location: HttpLocation): List<MemberShape> =
+        responseBindings(operationShape).filter { it.location == location }.map { it.member }
 
     /**
      * Determine the timestamp format based on the input parameters.
@@ -116,7 +124,7 @@ class HttpTraitHttpBindingResolver(
  * Takes an [HttpTrait] value and content type, and provides bindings based on those.
  * All members will end up being document members.
  */
-class StaticHttpBindingResolver(
+open class StaticHttpBindingResolver(
     private val model: Model,
     private val httpTrait: HttpTrait,
     private val requestContentType: String,

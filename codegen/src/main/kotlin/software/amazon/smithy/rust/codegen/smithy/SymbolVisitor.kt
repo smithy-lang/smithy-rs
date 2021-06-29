@@ -34,19 +34,17 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
-import software.amazon.smithy.rust.codegen.smithy.traits.InputBodyTrait
-import software.amazon.smithy.rust.codegen.smithy.traits.OutputBodyTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
-import software.amazon.smithy.utils.StringUtils
 import kotlin.reflect.KClass
 
 // TODO: currently, respecting integer types.
@@ -71,7 +69,12 @@ data class SymbolVisitorConfig(
 
 // TODO: consider if this is better handled as a wrapper
 val DefaultConfig =
-    SymbolVisitorConfig(runtimeConfig = RuntimeConfig(), handleOptionality = true, handleRustBoxing = true, codegenConfig = CodegenConfig())
+    SymbolVisitorConfig(
+        runtimeConfig = RuntimeConfig(),
+        handleOptionality = true,
+        handleRustBoxing = true,
+        codegenConfig = CodegenConfig()
+    )
 
 data class SymbolLocation(val namespace: String) {
     val filename = "$namespace.rs"
@@ -117,8 +120,11 @@ fun Symbol.Builder.locatedIn(symbolLocation: SymbolLocation): Symbol.Builder {
         .rustType(newRustType)
 }
 
+data class MaybeRenamed(val name: String, val renamedFrom: String?)
+
 interface RustSymbolProvider : SymbolProvider {
     fun config(): SymbolVisitorConfig
+    fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed?
 }
 
 class SymbolVisitor(
@@ -142,18 +148,19 @@ class SymbolVisitor(
         }
     }
 
+    override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
+        val baseName = definition.name.orNull()?.toPascalCase() ?: return null
+        return MaybeRenamed(baseName, null)
+    }
+
     override fun toMemberName(shape: MemberShape): String = shape.memberName.toSnakeCase()
 
     override fun blobShape(shape: BlobShape?): Symbol {
         return RuntimeType.Blob(config.runtimeConfig).toSymbol()
     }
 
-    private fun handleOptionality(symbol: Symbol, member: MemberShape, container: Shape): Symbol {
-        // If a field has the httpLabel trait and we are generating
-        // an Input shape, then the field is _not optional_.
-        val httpLabeledInput =
-            container.hasTrait<SyntheticInputTrait>() && member.hasTrait<HttpLabelTrait>()
-        return if (nullableIndex.isNullable(member) && !httpLabeledInput || model.expectShape(member.target).isDocumentShape) {
+    private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol {
+        return if (nullableIndex.isNullable(member)) {
             symbol.makeOptional()
         } else symbol
     }
@@ -242,8 +249,7 @@ class SymbolVisitor(
         val isError = shape.hasTrait<ErrorTrait>()
         val isInput = shape.hasTrait<SyntheticInputTrait>()
         val isOutput = shape.hasTrait<SyntheticOutputTrait>()
-        val isBody = shape.hasTrait<InputBodyTrait>() || shape.hasTrait<OutputBodyTrait>()
-        val name = StringUtils.capitalize(shape.contextName()).letIf(isError && config.codegenConfig.renameExceptions) {
+        val name = shape.contextName().toPascalCase().letIf(isError && config.codegenConfig.renameExceptions) {
             // TODO: Do we want to do this?
             // https://github.com/awslabs/smithy-rs/issues/77
             it.replace("Exception", "Error")
@@ -253,13 +259,12 @@ class SymbolVisitor(
             isError -> builder.locatedIn(Errors)
             isInput -> builder.locatedIn(Inputs)
             isOutput -> builder.locatedIn(Outputs)
-            isBody -> builder.locatedIn(Serializers)
             else -> builder.locatedIn(Models)
         }.build()
     }
 
     override fun unionShape(shape: UnionShape): Symbol {
-        val name = StringUtils.capitalize(shape.contextName())
+        val name = shape.contextName().toPascalCase()
         val builder = symbolBuilder(shape, RustType.Opaque(name)).locatedIn(Models)
 
         return builder.build()
@@ -272,7 +277,7 @@ class SymbolVisitor(
         return targetSymbol.letIf(config.handleRustBoxing) {
             handleRustBoxing(it, shape)
         }.letIf(config.handleOptionality) {
-            handleOptionality(it, shape, model.expectShape(shape.container))
+            handleOptionality(it, shape)
         }
     }
 

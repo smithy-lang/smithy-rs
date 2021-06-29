@@ -13,7 +13,7 @@
 | [bigInteger](#big-numbers) | `BigInteger` (Not implemented yet) |
 | [bigDecimal](#big-numbers) | `BigDecimal` (Not implemented yet) |
 | [timestamp](#timestamps)  | [`Instant`](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/smithy-types/src/instant/mod.rs) |
-| [document](#documents) | `Document` (https://github.com/awslabs/smithy-rs/blob/v0.6-rc.1/rust-runtime/smithy-types/src/lib.rs#L33-L41) |
+| [document](#documents) | [`Document`](https://github.com/awslabs/smithy-rs/blob/v0.14/rust-runtime/smithy-types/src/lib.rs#L38-L52) |
 
 ### Big Numbers
 Rust currently has no standard library or universally accepted large-number crate. Until one is stabilized, a string representation is a reasonable compromise:
@@ -25,7 +25,7 @@ pub struct BigDecimal(String);
 
 This will enable us to add helpers over time as requested. Users will also be able to define their own conversions into their preferred large-number libraries.
 
-As of 4/17/2021 BigInteger / BigDecimal are not included in AWS models. Implementation is tracked [here](https://github.com/awslabs/smithy-rs/issues/312).
+As of 5/23/2021 BigInteger / BigDecimal are not included in AWS models. Implementation is tracked [here](https://github.com/awslabs/smithy-rs/issues/312).
 ### Timestamps
 [chrono](https://github.com/chronotope/chrono) is the current de facto library for datetime in Rust, but it is pre-1.0. Instants are represented by an SDK defined structure modeled on `std::time::Duration` from the Rust standard library.
 
@@ -55,4 +55,4 @@ Smithy defines the concept of "Document Types":
 {{#include ../../../rust-runtime/smithy-types/src/lib.rs:document}}
 ```
 
-Individual protocols define their own document serialization behavior, typically by creating a newtype around `Document` that implements `serde::Serialize/serde::Deserialize`. See [Document Json Serialization](https://github.com/awslabs/smithy-rs/blob/138320e99e6c7aaf14217d07cf996ba07349dd5e/rust-runtime/inlineable/src/doc_json.rs)
+Individual protocols define their own document serialization behavior, with some protocols such as AWS and EC2 Query not supporting document types.

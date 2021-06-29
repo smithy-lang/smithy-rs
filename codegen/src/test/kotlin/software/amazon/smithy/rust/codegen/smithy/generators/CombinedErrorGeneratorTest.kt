@@ -58,6 +58,9 @@ internal class CombinedErrorGeneratorTest {
             use smithy_types::retry::ProvideErrorKind;
             assert_eq!(error.retryable_error_kind(), Some(smithy_types::retry::ErrorKind::ClientError));
 
+            // Generate is_xyz methods for errors
+            assert_eq!(error.is_invalid_greeting(), true);
+            assert_eq!(error.is_complex_error(), false);
 
             // unhandled variants properly delegate message
             let error = GreetingError::generic(smithy_types::Error::builder().message("hello").build());

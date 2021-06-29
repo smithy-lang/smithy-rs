@@ -58,8 +58,13 @@ class StructureGeneratorTest {
             // test that sensitive can be applied directly to a member or to the shape
             secretKey: SecretKey
         }
+
+        structure StructWithDoc {
+            doc: Document
+        }
         """.asSmithyModel()
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
+        val structWithDoc = model.lookup<StructureShape>("com.test#StructWithDoc")
         val inner = model.lookup<StructureShape>("com.test#Inner")
         val credentials = model.lookup<StructureShape>("com.test#Credentials")
         val error = model.lookup<StructureShape>("com.test#MyError")
@@ -177,5 +182,21 @@ class StructureGeneratorTest {
             }
 
         writer.compileAndTest()
+    }
+
+    @Test
+    fun `documents are optional in structs`() {
+        val provider = testSymbolProvider(model)
+        val writer = RustWriter.forModule("lib")
+        StructureGenerator(model, provider, writer, structWithDoc).render()
+
+        writer.compileAndTest(
+            """
+            let _struct = StructWithDoc {
+                // This will only compile if the document is optional
+                doc: None
+            };
+            """
+        )
     }
 }

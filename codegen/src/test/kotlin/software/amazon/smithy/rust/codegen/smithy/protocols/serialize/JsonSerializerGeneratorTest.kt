@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
 
 import org.junit.jupiter.api.Test
@@ -93,19 +98,14 @@ class JsonSerializerGeneratorTest {
 
     @Test
     fun `generates valid serializers`() {
-        val model = RecursiveShapeBoxer.transform(
-            OperationNormalizer(baseModel).transformModel(
-                OperationNormalizer.NoBody,
-                OperationNormalizer.NoBody
-            )
-        )
+        val model = RecursiveShapeBoxer.transform(OperationNormalizer(baseModel).transformModel())
         val symbolProvider = testSymbolProvider(model)
-        val parserGenerator = JsonSerializerGenerator(
+        val parserSerializer = JsonSerializerGenerator(
             testProtocolConfig(model),
             HttpTraitHttpBindingResolver(model, "application/json", null)
         )
-        val operationGenerator = parserGenerator.operationSerializer(model.lookup("test#Op"))
-        val documentGenerator = parserGenerator.documentSerializer()
+        val operationGenerator = parserSerializer.operationSerializer(model.lookup("test#Op"))
+        val documentGenerator = parserSerializer.documentSerializer()
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->

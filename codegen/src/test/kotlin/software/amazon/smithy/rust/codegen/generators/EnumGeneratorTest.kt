@@ -9,7 +9,6 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -33,29 +32,30 @@ class EnumGeneratorTest {
                   documentation: "Some documentation." },
                 { value: "some-value-2",
                   name: "someName2",
-                  documentation: "More documentation" },
+                  documentation: "More documentation #escape" },
                 { value: "unknown",
                   name: "unknown",
-                  documentation: "It has some docs" }
+                  documentation: "It has some docs that #need to be escaped" }
             ])
             string EnumWithUnknown
         """.asSmithyModel()
+        private val symbolProvider = testSymbolProvider(testModel)
 
         private val enumTrait = testModel.lookup<StringShape>("test#EnumWithUnknown").expectTrait<EnumTrait>()
 
         private fun model(name: String): EnumMemberModel =
-            EnumMemberModel(enumTrait.values.first { it.name.orNull() == name })
+            EnumMemberModel(enumTrait.values.first { it.name.orNull() == name }, symbolProvider)
 
         @Test
         fun `it converts enum names to PascalCase and renames any named Unknown to UnknownValue`() {
             model("some_name_1").derivedName() shouldBe "SomeName1"
             model("someName2").also { someName2 ->
                 someName2.derivedName() shouldBe "SomeName2"
-                someName2.collidesWithUnknown shouldBe false
+                someName2.name()!!.renamedFrom shouldBe null
             }
             model("unknown").also { unknown ->
                 unknown.derivedName() shouldBe "UnknownValue"
-                unknown.collidesWithUnknown shouldBe true
+                unknown.name()!!.renamedFrom shouldBe "Unknown"
             }
         }
 
@@ -72,11 +72,12 @@ class EnumGeneratorTest {
         @Test
         fun `it adds a documentation note when renaming an enum named Unknown`() {
             val rendered = RustWriter.forModule("model").also { model("unknown").render(it) }.toString()
+            println(rendered.lines())
             rendered shouldContain
                 """
-                /// It has some docs
+                /// It has some docs that #need to be escaped
                 ///
-                /// **NOTE:** `::Unknown` has been renamed to `::UnknownValue`. `::Unknown` refers to additional values that may have been added since this enum was generated.
+                /// **NOTE:** `::Unknown` has been renamed to `::UnknownValue`.
                 UnknownValue,
                 """.trimIndent()
         }
@@ -104,7 +105,7 @@ class EnumGeneratorTest {
                 ])
                 string InstanceType
             """.asSmithyModel()
-            val provider: SymbolProvider = testSymbolProvider(model)
+            val provider = testSymbolProvider(model)
             val writer = RustWriter.forModule("model")
             val shape = model.lookup<StringShape>("test#InstanceType")
             val generator = EnumGenerator(model, provider, writer, shape, shape.expectTrait<EnumTrait>())
@@ -206,7 +207,7 @@ class EnumGeneratorTest {
             """.asSmithyModel()
             val shape: StringShape = model.lookup("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
-            val provider: SymbolProvider = testSymbolProvider(model)
+            val provider = testSymbolProvider(model)
             val writer = RustWriter.forModule("model")
             val generator = EnumGenerator(model, provider, writer, shape, trait)
             generator.render()
@@ -225,6 +226,7 @@ class EnumGeneratorTest {
                 @enum([
                     { name: "Known", value: "Known" },
                     { name: "Unknown", value: "Unknown" },
+                    { name: "UnknownValue", value: "UnknownValue" },
                 ])
                 string SomeEnum
             """.asSmithyModel()
@@ -238,6 +240,7 @@ class EnumGeneratorTest {
             writer.compileAndTest(
                 """
                 assert_eq!(SomeEnum::from("Unknown"), SomeEnum::UnknownValue);
+                assert_eq!(SomeEnum::from("UnknownValue"), SomeEnum::UnknownValue_);
                 assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown("SomethingNew".into()));
                 """
             )
@@ -247,7 +250,7 @@ class EnumGeneratorTest {
         fun `it should generate documentation for enums`() {
             val model = """
                 namespace test
-                
+
                 /// Some top-level documentation.
                 @enum([
                     { name: "Known", value: "Known" },
@@ -265,7 +268,7 @@ class EnumGeneratorTest {
                 """
                     /// Some top-level documentation.
                     ///
-                    /// **NOTE:** `SomeEnum::Unknown` has been renamed to `::UnknownValue`. `SomeEnum::Unknown` refers to additional values that may have been added since this enum was generated.
+                    /// **NOTE:** `SomeEnum::Unknown` has been renamed to `::UnknownValue`.
                 """.trimIndent()
         }
 
@@ -273,7 +276,7 @@ class EnumGeneratorTest {
         fun `it should generate documentation for unnamed enums`() {
             val model = """
                 namespace test
-                
+
                 /// Some top-level documentation.
                 @enum([
                     { value: "One" },
@@ -292,5 +295,30 @@ class EnumGeneratorTest {
                     /// Some top-level documentation.
                 """.trimIndent()
         }
+    }
+
+    @Test
+    fun `it handles variants that clash with Rust reserved words`() {
+        val model = """
+                namespace test
+                @enum([
+                    { name: "Known", value: "Known" },
+                    { name: "Self", value: "other" },
+                ])
+                string SomeEnum
+            """.asSmithyModel()
+
+        val shape: StringShape = model.lookup("test#SomeEnum")
+        val trait = shape.expectTrait<EnumTrait>()
+        val provider = testSymbolProvider(model)
+        val writer = RustWriter.forModule("model")
+        EnumGenerator(model, provider, writer, shape, trait).render()
+
+        writer.compileAndTest(
+            """
+                assert_eq!(SomeEnum::from("other"), SomeEnum::SelfValue);
+                assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown("SomethingNew".into()));
+                """
+        )
     }
 }

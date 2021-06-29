@@ -124,9 +124,9 @@ class JsonSerializerGenerator(
     private val model = protocolConfig.model
     private val symbolProvider = protocolConfig.symbolProvider
     private val runtimeConfig = protocolConfig.runtimeConfig
-    private val serializerError = RuntimeType.SerdeJson("error::Error")
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
+    private val serializerError = smithyTypes.member("Error")
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
         "Error" to serializerError,

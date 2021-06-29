@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
@@ -133,7 +134,7 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
                 .onEach {
                     logger.info("Adding Codegen Decorator: ${it.javaClass.name}")
                 }.toList()
-            return CombinedCodegenDecorator(decorators + RequiredCustomizations())
+            return CombinedCodegenDecorator(decorators + RequiredCustomizations() + FluentClientDecorator())
         }
     }
 }

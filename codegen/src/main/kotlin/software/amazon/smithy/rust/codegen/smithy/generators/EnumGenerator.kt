@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.DocumentationTrait
@@ -14,48 +13,42 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.util.doubleQuote
+import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.orNull
-import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 /** Model that wraps [EnumDefinition] to calculate and cache values required to generate the Rust enum source. */
-internal class EnumMemberModel(private val definition: EnumDefinition) {
+internal class EnumMemberModel(private val definition: EnumDefinition, private val symbolProvider: RustSymbolProvider) {
     // Because enum variants always start with an upper case letter, they will never
     // conflict with reserved words (which are always lower case), therefore, we never need
     // to fall back to raw identifiers
-    private val unescapedName: String? = definition.name.orNull()?.toPascalCase()
-
-    val collidesWithUnknown: Boolean = unescapedName == EnumGenerator.UnknownVariant
-
-    /** Enum name with correct case format and collision resolution */
-    fun derivedName(): String = when (collidesWithUnknown) {
-        // If there is a variant named "Unknown", then rename it to "UnknownValue" so that it
-        // doesn't conflict with the code generator's "Unknown" variant that exists for backwards compatibility.
-        true -> "UnknownValue"
-        else -> checkNotNull(unescapedName) { "Enum variants must be named to derive a name. This is a bug." }
-    }
 
     val value: String get() = definition.value
 
+    fun name(): MaybeRenamed? = symbolProvider.toEnumVariantName(definition)
+
     private fun renderDocumentation(writer: RustWriter) {
+        val name =
+            checkNotNull(name()) { "cannot generate docs for unnamed enum variants" }
         writer.docWithNote(
             definition.documentation.orNull(),
-            when (collidesWithUnknown) {
-                true ->
-                    "`::${EnumGenerator.UnknownVariant}` has been renamed to `::${EnumGenerator.EscapedUnknownVariant}`. " +
-                        "`::${EnumGenerator.UnknownVariant}` refers to additional values that may have been added since " +
-                        "this enum was generated."
-                else -> null
+            name.renamedFrom?.let { renamedFrom ->
+                "`::$renamedFrom` has been renamed to `::${name.name}`."
             }
+
         )
     }
+
+    fun derivedName() = checkNotNull(symbolProvider.toEnumVariantName(definition)).name
 
     fun render(writer: RustWriter) {
         renderDocumentation(writer)
@@ -64,7 +57,7 @@ internal class EnumMemberModel(private val definition: EnumDefinition) {
 }
 
 private fun RustWriter.docWithNote(doc: String?, note: String?) {
-    doc?.also { docs(it) }
+    doc?.also { docs(escape(it)) }
     note?.also {
         // Add a blank line between the docs and the note to visually differentiate
         doc?.also { write("///") }
@@ -74,7 +67,7 @@ private fun RustWriter.docWithNote(doc: String?, note: String?) {
 
 class EnumGenerator(
     private val model: Model,
-    symbolProvider: SymbolProvider,
+    private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StringShape,
     private val enumTrait: EnumTrait
@@ -82,16 +75,13 @@ class EnumGenerator(
     private val symbol = symbolProvider.toSymbol(shape)
     private val enumName = symbol.name
     private val meta = symbol.expectRustMetadata()
-    private val sortedMembers: List<EnumMemberModel> = enumTrait.values.sortedBy { it.value }.map(::EnumMemberModel)
+    private val sortedMembers: List<EnumMemberModel> =
+        enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(it, symbolProvider) }
 
     companion object {
-        /**
-         * For enums with named members, variants with names that collide with the generated unknown enum
-         * member get renamed to this [EscapedUnknownVariant] value.
-         */
-        const val EscapedUnknownVariant = "UnknownValue"
         /** Name of the generated unknown enum member name for enums with named members. */
         const val UnknownVariant = "Unknown"
+
         /** Name of the function on the enum impl to get a vec of value names */
         const val Values = "values"
     }
@@ -114,7 +104,6 @@ class EnumGenerator(
         } else {
             renderUnamedEnum()
         }
-        renderSerde()
     }
 
     private fun renderUnamedEnum() {
@@ -142,20 +131,20 @@ class EnumGenerator(
     }
 
     private fun renderEnum() {
+        val renamedWarning =
+            sortedMembers.mapNotNull { it.name() }.filter { it.renamedFrom != null }.joinToString("\n") {
+                val previousName = it.renamedFrom!!
+                "`$enumName::$previousName` has been renamed to `::${it.name}`."
+            }
         writer.docWithNote(
             shape.getTrait<DocumentationTrait>()?.value,
-            when (sortedMembers.any { it.collidesWithUnknown }) {
-                true ->
-                    "`$enumName::$UnknownVariant` has been renamed to `::$EscapedUnknownVariant`. " +
-                        "`$enumName::$UnknownVariant` refers to additional values that may have been added since " +
-                        "this enum was generated."
-                else -> null
-            }
+            renamedWarning.ifBlank { null }
         )
 
         meta.render(writer)
         writer.rustBlock("enum $enumName") {
             sortedMembers.forEach { member -> member.render(writer) }
+            docs("$UnknownVariant contains new variants that have been added since this code was generated.")
             write("$UnknownVariant(String)")
         }
     }
@@ -165,7 +154,7 @@ class EnumGenerator(
             writer.rustBlock("pub fn as_str(&self) -> &str") {
                 writer.rustBlock("match self") {
                     sortedMembers.forEach { member ->
-                        write("""$enumName::${member.derivedName()} => "${member.value}",""")
+                        write("""$enumName::${member.derivedName()} => ${member.value.dq()},""")
                     }
                     write("$enumName::$UnknownVariant(s) => s.as_ref()")
                 }
@@ -173,27 +162,12 @@ class EnumGenerator(
         }
     }
 
-    private fun renderSerde() {
-        writer.rustTemplate(
-            """
-                impl<'de> #{deserialize}<'de> for $enumName {
-                    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: #{deserializer}<'de> {
-                        let data = <&str>::deserialize(deserializer)?;
-                        Ok(Self::from(data))
-                    }
-                }
-            """,
-            "deserializer" to RuntimeType.Deserializer,
-            "deserialize" to RuntimeType.Deserialize
-        )
-    }
-
     private fun renderFromStr() {
         writer.rustBlock("impl #T<&str> for $enumName", RuntimeType.From) {
             writer.rustBlock("fn from(s: &str) -> Self") {
                 writer.rustBlock("match s") {
                     sortedMembers.forEach { member ->
-                        write(""""${member.value}" => $enumName::${member.derivedName()},""")
+                        write("""${member.value.dq()} => $enumName::${member.derivedName()},""")
                     }
                     write("other => $enumName::$UnknownVariant(other.to_owned())")
                 }
@@ -205,7 +179,7 @@ class EnumGenerator(
             impl std::str::FromStr for $enumName {
                 type Err = std::convert::Infallible;
 
-                fn from_str(s: &str) -> Result<Self, Self::Err> {
+                fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
                     Ok($enumName::from(s))
                 }
             }
