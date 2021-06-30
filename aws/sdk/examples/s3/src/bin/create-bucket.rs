@@ -3,43 +3,38 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use std::process;
-
-use s3::{Client, Config, Region};
-
-use s3::model::{BucketLocationConstraint, CreateBucketConfiguration};
-
 use aws_types::region::ProvideRegion;
-
+use s3::model::{BucketLocationConstraint, CreateBucketConfiguration};
+use s3::{Client, Config, Error, Region, PKG_VERSION};
 use structopt::StructOpt;
-use tracing_subscriber::fmt::format::FmtSpan;
-use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// The default region
+    /// The default AWS Region.
     #[structopt(short, long)]
     default_region: Option<String>,
 
-    /// The name of the bucket
+    /// The name of the bucket.
     #[structopt(short, long)]
     name: String,
 
-    /// Whether to display additional information
+    /// Whether to display additional information.
     #[structopt(short, long)]
     verbose: bool,
 }
 
-/// Creates an Amazon S3 bucket
+/// Creates an Amazon S3 bucket.
 /// # Arguments
 ///
 /// * `-n NAME` - The name of the bucket.
-/// * `[-d DEFAULT-REGION]` - The region containing the bucket.
-///   If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+/// * `[-d DEFAULT-REGION]` - The Region in which the client is created.
+///   If not supplied, uses the value of the **AWS_REGION** environment variable.
 ///   If the environment variable is not set, defaults to **us-west-2**.
 /// * `[-v]` - Whether to display additional information.
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Error> {
+    tracing_subscriber::fmt::init();
+
     let Opt {
         default_region,
         name,
@@ -54,18 +49,15 @@ async fn main() {
 
     let r: &str = &region.as_ref();
 
-    if verbose {
-        println!("S3 client version: {}", s3::PKG_VERSION);
-        println!("Region:            {:?}", &region);
+    println!();
 
-        SubscriberBuilder::default()
-            .with_env_filter("info")
-            .with_span_events(FmtSpan::CLOSE)
-            .init();
+    if verbose {
+        println!("S3 version: {}", PKG_VERSION);
+        println!("Region:     {:?}", &region);
+        println!();
     }
 
     let config = Config::builder().region(&region).build();
-
     let client = Client::from_conf(config);
 
     let constraint = BucketLocationConstraint::from(r);
@@ -73,21 +65,13 @@ async fn main() {
         .location_constraint(constraint)
         .build();
 
-    match client
+    client
         .create_bucket()
         .create_bucket_configuration(cfg)
         .bucket(&name)
         .send()
-        .await
-    {
-        Ok(_) => {
-            println!("Created bucket {}", name);
-        }
+        .await?;
+    println!("Created bucket {}", name);
 
-        Err(e) => {
-            println!("Got an error creating bucket:");
-            println!("{}", e);
-            process::exit(1);
-        }
-    };
+    Ok(())
 }
