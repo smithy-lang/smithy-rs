@@ -121,7 +121,12 @@ fun discoverServices(allServices: Boolean): List<AwsService> {
             null
         } else {
             val service = services[0]
-            val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId.toLowerCase().replace(" ", "")
+            val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId
+                .toLowerCase()
+                .replace(" ", "")
+                // TODO: the smithy models should not include the suffix "service"
+                .removeSuffix("service")
+                .removeSuffix("api")
             val testFile = file.parentFile.resolve("$sdkId-tests.smithy")
             val extras = if (testFile.exists()) {
                 logger.warn("Discovered protocol tests for ${file.name}")
@@ -275,8 +280,10 @@ fun generateCargoWorkspace(services: List<AwsService>): String {
 task("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
+        sdkOutputDir.mkdirs()
         sdkOutputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices.get()))
     }
+    outputs.file(sdkOutputDir.resolve("Cargo.toml"))
 }
 
 task("finalizeSdk") {
@@ -286,14 +293,14 @@ task("finalizeSdk") {
         "relocateServices",
         "relocateRuntime",
         "relocateAwsRuntime",
-        "relocateExamples",
-        "generateCargoWorkspace"
+        "relocateExamples"
     )
 }
 
 tasks["smithyBuildJar"].inputs.file(projectDir.resolve("smithy-build.json"))
 tasks["smithyBuildJar"].inputs.dir(projectDir.resolve("aws-models"))
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
+tasks["smithyBuildJar"].dependsOn("generateCargoWorkspace")
 tasks["assemble"].dependsOn("smithyBuildJar")
 tasks["assemble"].finalizedBy("finalizeSdk")
 
