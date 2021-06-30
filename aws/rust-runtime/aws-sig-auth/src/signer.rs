@@ -148,7 +148,7 @@ impl SigV4Signer {
                     .map(SignableBody::Bytes)
                     .unwrap_or(SignableBody::UnsignedPayload)
             });
-        for (key, mut value) in aws_sigv4_poc::sign_core(request, signable_body, &sigv4_config)? {
+        for (key, value) in aws_sigv4_poc::sign_core(request, signable_body, &sigv4_config)? {
             request
                 .headers_mut()
                 .append(HeaderName::from_static(key), value);
