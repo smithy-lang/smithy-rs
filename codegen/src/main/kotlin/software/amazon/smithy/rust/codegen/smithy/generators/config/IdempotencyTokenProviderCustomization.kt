@@ -18,17 +18,17 @@ class IdempotencyTokenProviderCustomization : NamedSectionGenerator<ServiceConfi
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             is ServiceConfig.ConfigStruct -> writable {
-                rust("pub (crate) make_token: Box<dyn #T::MakeIdempotencyToken>,", RuntimeType.IdempotencyToken)
+                rust("pub (crate) make_token: #T::IdempotencyTokenProvider,", RuntimeType.IdempotencyToken)
             }
             ServiceConfig.ConfigImpl -> emptySection
             ServiceConfig.BuilderStruct -> writable {
-                rust("make_token: Option<Box<dyn #T::MakeIdempotencyToken>>,", RuntimeType.IdempotencyToken)
+                rust("make_token: Option<#T::IdempotencyTokenProvider>,", RuntimeType.IdempotencyToken)
             }
             ServiceConfig.BuilderImpl -> writable {
                 rust(
                     """
-            pub fn make_token(mut self, make_token: impl #T::MakeIdempotencyToken + 'static) -> Self {
-                self.make_token = Some(Box::new(make_token));
+            pub fn make_token(mut self, make_token: impl Into<#T::IdempotencyTokenProvider>) -> Self {
+                self.make_token = Some(make_token.into());
                 self
             }
             """,
@@ -36,7 +36,7 @@ class IdempotencyTokenProviderCustomization : NamedSectionGenerator<ServiceConfi
                 )
             }
             ServiceConfig.BuilderBuild -> writable {
-                rust("make_token: self.make_token.unwrap_or_else(|| Box::new(#T::default_provider())),", RuntimeType.IdempotencyToken)
+                rust("make_token: self.make_token.unwrap_or_else(|| #T::default_provider()),", RuntimeType.IdempotencyToken)
             }
         }
     }
