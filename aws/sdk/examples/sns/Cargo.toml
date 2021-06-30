@@ -9,8 +9,6 @@ edition = "2018"
 [dependencies]
 sns = { package = "aws-sdk-sns", path = "../../build/aws-sdk/sns" }
 aws-types = { path = "../../build/aws-sdk/aws-types" }
-
 tokio = { version = "1", features = ["full"] }
-tracing-subscriber = "0.2.18"
-
 structopt = { version = "0.3", default-features = false }
+tracing-subscriber = "0.2.18"
