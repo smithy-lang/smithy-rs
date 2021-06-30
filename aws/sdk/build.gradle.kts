@@ -82,6 +82,7 @@ val tier1Services = setOf(
     "sts",
     "cloudwatch",
     "ecr",
+    "ebs",
     "eks"
 )
 
@@ -283,6 +284,7 @@ task("generateCargoWorkspace") {
         sdkOutputDir.mkdirs()
         sdkOutputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices.get()))
     }
+    inputs.dir(projectDir.resolve("examples"))
     outputs.file(sdkOutputDir.resolve("Cargo.toml"))
 }
 
