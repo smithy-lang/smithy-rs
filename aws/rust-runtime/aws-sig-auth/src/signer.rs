@@ -140,7 +140,9 @@ impl SigV4Signer {
         // (any sort of streaming body) will be signed via UNSIGNED-PAYLOAD.
         let signable_body = request_config
             .payload_override
-            .map(|body| body.clone())
+            // the payload_override is a cheap clone because it contains either a
+            // reference or a short checksum (we're not cloning the entire body)
+            .cloned()
             .unwrap_or_else(|| {
                 request
                     .body()
