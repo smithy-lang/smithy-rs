@@ -95,8 +95,7 @@ async fn main() -> Result<(), Error> {
         .source_key_id(first_key)
         .destination_key_id(new_key)
         .send()
-        .await
-        .expect("Could not encrypt file contents");
+        .await?;
 
     // Did we get an encrypted blob?
     let blob = resp.ciphertext_blob.expect("Could not get encrypted text");

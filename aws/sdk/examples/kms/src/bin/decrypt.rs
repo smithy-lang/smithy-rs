@@ -79,8 +79,7 @@ async fn main() -> Result<(), Error> {
         .key_id(key)
         .ciphertext_blob(data.unwrap())
         .send()
-        .await
-        .expect("Could not decrypt file contents");
+        .await?;
 
     let inner = resp.plaintext.unwrap();
     let bytes = inner.as_ref();

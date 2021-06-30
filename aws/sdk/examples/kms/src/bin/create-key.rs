@@ -50,11 +50,7 @@ async fn main() -> Result<(), Error> {
     let conf = Config::builder().region(region).build();
     let client = Client::from_conf(conf);
 
-    let resp = client
-        .create_key()
-        .send()
-        .await
-        .expect("Could not create key");
+    let resp = client.create_key().send().await?;
 
     let id = resp
         .key_metadata

@@ -76,13 +76,7 @@ async fn main() -> Result<(), Error> {
 
     let blob = Blob::new(text.as_bytes());
 
-    let resp = client
-        .encrypt()
-        .key_id(key)
-        .plaintext(blob)
-        .send()
-        .await
-        .expect("Could not encrypt text");
+    let resp = client.encrypt().key_id(key).plaintext(blob).send().await?;
 
     // Did we get an encrypted blob?
     let blob = resp.ciphertext_blob.expect("Could not get encrypted text");

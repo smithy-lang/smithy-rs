@@ -64,8 +64,7 @@ async fn main() -> Result<(), Error> {
         .key_id(key)
         .key_spec(DataKeySpec::Aes256)
         .send()
-        .await
-        .expect("Could not generate key");
+        .await?;
 
     // Did we get an encrypted blob?
     let blob = resp.ciphertext_blob.expect("Could not get encrypted text");
@@ -73,7 +72,8 @@ async fn main() -> Result<(), Error> {
 
     let s = base64::encode(&bytes);
 
-    println!("\nData key:");
+    println!();
+    println!("Data key:");
     println!("{}", s);
 
     Ok(())

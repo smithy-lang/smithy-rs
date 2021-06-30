@@ -72,8 +72,7 @@ async fn main() -> Result<(), Error> {
         .generate_random()
         .number_of_bytes(length)
         .send()
-        .await
-        .expect("Could not generate random value");
+        .await?;
 
     // Did we get an encrypted blob?
     let blob = resp.plaintext.expect("Could not get encrypted text");
