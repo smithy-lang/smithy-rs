@@ -62,6 +62,8 @@ async fn main() -> Result<(), Error> {
         .or_else(|| aws_types::region::default_provider().region())
         .unwrap_or_else(|| Region::new("us-west-2"));
 
+    println!();
+
     if verbose {
         println!("RDS data version: {}", PKG_VERSION);
         println!("Region:           {:?}", &region);
@@ -82,7 +84,7 @@ async fn main() -> Result<(), Error> {
         .sql(query)
         .secret_arn(secret_arn);
 
-    let result = st.send().await.expect("Could not execute statement");
+    let result = st.send().await?;
 
     println!("{:?}", result);
     println!();
