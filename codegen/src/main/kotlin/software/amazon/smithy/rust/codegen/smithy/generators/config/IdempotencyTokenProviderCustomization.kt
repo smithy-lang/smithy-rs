@@ -36,7 +36,7 @@ class IdempotencyTokenProviderCustomization : NamedSectionGenerator<ServiceConfi
                 )
             }
             ServiceConfig.BuilderBuild -> writable {
-                rust("make_token: self.make_token.unwrap_or_else(|| #T::default_provider()),", RuntimeType.IdempotencyToken)
+                rust("make_token: self.make_token.unwrap_or_else(#T::default_provider),", RuntimeType.IdempotencyToken)
             }
         }
     }
