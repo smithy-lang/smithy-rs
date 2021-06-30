@@ -60,11 +60,7 @@ async fn main() -> Result<(), Error> {
     let client = Client::from_conf(config);
 
     // Get function's runtime
-    let resp = client
-        .list_functions()
-        .send()
-        .await
-        .expect("Could not get list of functions");
+    let resp = client.list_functions().send().await?;
 
     for function in resp.functions.unwrap_or_default() {
         if arn == function.function_arn.unwrap() {
@@ -77,9 +73,9 @@ async fn main() -> Result<(), Error> {
                     .function_name(function.function_name.unwrap())
                     .runtime(Runtime::Java8al2)
                     .send()
-                    .await;
+                    .await?;
 
-                let result_rt = result.unwrap().runtime.unwrap();
+                let result_rt = result.runtime.unwrap();
                 println!("New runtime: {:?}", result_rt);
             }
         }

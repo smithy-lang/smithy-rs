@@ -51,11 +51,7 @@ async fn main() -> Result<(), Error> {
     let config = Config::builder().region(region).build();
     let client = Client::from_conf(config);
 
-    let resp = client
-        .list_functions()
-        .send()
-        .await
-        .expect("Could not list functions");
+    let resp = client.list_functions().send().await?;
 
     println!("Function ARNs:");
 
