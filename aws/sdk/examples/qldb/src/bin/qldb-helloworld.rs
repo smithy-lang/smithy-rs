@@ -62,8 +62,7 @@ async fn main() -> Result<(), Error> {
         .send_command()
         .start_session(StartSessionRequest::builder().ledger_name(ledger).build())
         .send()
-        .await
-        .expect("Could not start a session");
+        .await?;
 
     println!(
         "Session id: {:?}",
