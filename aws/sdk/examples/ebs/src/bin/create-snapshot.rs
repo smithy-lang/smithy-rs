@@ -7,7 +7,6 @@ use aws_sdk_ebs::model::ChecksumAlgorithm;
 use aws_sdk_ebs::ByteStream;
 use aws_sdk_ec2::model::Filter;
 use sha2::Digest;
-use std::io::Write;
 
 /// EBS only supports one fixed size of block
 const EBS_BLOCK_SIZE: usize = 524288;
