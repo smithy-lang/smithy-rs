@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.getTrait
@@ -74,7 +75,9 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         httpGenerator = protocolGenerator.buildProtocolGenerator(protocolConfig)
     }
 
-    private fun baselineTransform(model: Model) = model.let(RecursiveShapeBoxer::transform)
+    private fun baselineTransform(model: Model) =
+        model.let(RecursiveShapeBoxer::transform)
+            .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
 
     fun execute() {
         logger.info("generating Rust client...")
