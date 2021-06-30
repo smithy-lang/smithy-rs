@@ -383,11 +383,14 @@ class HttpBoundProtocolGenerator(
         httpBindingGenerator.renderUpdateHttpBuilder(implBlockWriter)
         httpBuilderFun(implBlockWriter) {
             rust("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
+            rust("let mut builder = self.update_http_builder(builder)?;")
             val additionalHeaders = listOf("Content-Type" to contentType) + protocol.additionalHeaders(operationShape)
             for (header in additionalHeaders) {
-                rust("let builder = builder.header(${header.first.dq()}, ${header.second.dq()});")
+                withBlock("if !builder.headers_ref().map(|headers| headers.contains_key(${header.first.dq()})).unwrap_or(false) {", "}") {
+                    rust("builder = builder.header(${header.first.dq()}, ${header.second.dq()});")
+                }
             }
-            rust("self.update_http_builder(builder)")
+            rust("Ok(builder)")
         }
     }
 
