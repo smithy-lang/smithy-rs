@@ -28,14 +28,20 @@ private const val RUNTIME_CONFIG = "runtimeConfig"
 private const val CODEGEN_SETTINGS = "codegen"
 private const val LICENSE = "license"
 
+/**
+ * Configuration of codegen settings
+ *
+ * [renameExceptions]: Rename `Exception` to `Error` in the generated SDK
+ * [includeFluentClient]: Generate a `client` module in the generated SDK (currently the AWS SDK sets this to false
+ *   and generates its own client)
+ *
+ * [addMessageToErrors]: Adds a `message` field automatically to all error shapes
+ * [formatTimeoutSeconds]: Timeout for running cargo fmt at the end of code generation
+ */
 data class CodegenConfig(
-    // / Rename `Exception` to `Error` in the generated SDK
     val renameExceptions: Boolean = true,
-    // / Include a fluent client in the generated SDK
     val includeFluentClient: Boolean = true,
-    // / Add a message field to all shapes that have the error trait
     val addMessageToErrors: Boolean = true,
-    // / Timeout when running `cargo fmt` on a generate service
     val formatTimeoutSeconds: Int = 20
 ) {
     companion object {
