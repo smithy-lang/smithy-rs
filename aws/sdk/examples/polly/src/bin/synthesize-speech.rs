@@ -69,8 +69,7 @@ async fn main() -> Result<(), Error> {
         .text(content.unwrap())
         .voice_id(VoiceId::Joanna)
         .send()
-        .await
-        .expect("Could not synthesize speech");
+        .await?;
 
     // Get MP3 data from response and save it
     let mut blob = resp

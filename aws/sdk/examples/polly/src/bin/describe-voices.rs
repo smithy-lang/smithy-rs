@@ -51,11 +51,7 @@ async fn main() -> Result<(), Error> {
     let config = Config::builder().region(region).build();
     let client = Client::from_conf(config);
 
-    let resp = client
-        .describe_voices()
-        .send()
-        .await
-        .expect("Could not get voices");
+    let resp = client.describe_voices().send().await?;
 
     println!("Voices:");
 

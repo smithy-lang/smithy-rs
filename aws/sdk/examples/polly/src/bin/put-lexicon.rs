@@ -85,8 +85,7 @@ async fn main() -> Result<(), Error> {
         .name(name)
         .content(content)
         .send()
-        .await
-        .expect("Could not add lexicon");
+        .await?;
 
     println!("Added lexicon");
 
