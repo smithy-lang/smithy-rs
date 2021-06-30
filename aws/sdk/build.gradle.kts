@@ -6,6 +6,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.aws.traits.ServiceTrait
 import kotlin.streams.toList
+import org.jetbrains.kotlin.utils.ifEmpty
 
 extra["displayName"] = "Smithy :: Rust :: AWS-SDK"
 extra["moduleName"] = "software.amazon.smithy.rust.awssdk"
@@ -103,7 +104,11 @@ val awsServices: Provider<List<AwsService>> = generateAllServices.map { v ->
     discoverServices(v.toLowerCase() == "true")
 }
 
-val generateOnly: Set<String>? = null
+val generateOnly: Provider<Set<String>> =
+    project.providers.environmentVariable("GENERATE_ONLY").orElse("")
+        .map {
+            it.split(",").toSet()
+        }
 
 /**
  * Discovers services from the `models` directory
@@ -139,7 +144,8 @@ fun discoverServices(allServices: Boolean): List<AwsService> {
         }
     }.filterNot { disableServices.contains(it.module) }
         .filter {
-            allServices || (generateOnly != null && generateOnly.contains(it.module)) || (generateOnly == null && tier1Services.contains(
+            val only = generateOnly.get()
+            allServices || (only.isNotEmpty() && only.contains(it.module)) || (only.isEmpty() && tier1Services.contains(
                 it.module
             ))
         }
@@ -265,9 +271,10 @@ tasks.register<Copy>("relocateRuntime") {
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {
+    val generatedModules = services.map { it.module }.toSet()
     val examples = projectDir.resolve("examples")
         .listFiles { file -> !file.name.startsWith(".") }.orEmpty().toList()
-        .filter { generateOnly == null || generateOnly.contains(it.name) }
+        .filter { generatedModules.contains(it.name) }
         .map { "examples/${it.name}" }
 
     val modules = services.map(AwsService::module) + runtimeModules + awsModules + examples.toList()
