@@ -49,11 +49,7 @@ async fn main() -> Result<(), Error> {
     let conf = Config::builder().region(region).build();
     let client = Client::from_conf(conf);
 
-    let result = client
-        .describe_db_instances()
-        .send()
-        .await
-        .expect("Could not get instances");
+    let result = client.describe_db_instances().send().await?;
 
     for db_instance in result.db_instances.unwrap_or_default() {
         println!(
