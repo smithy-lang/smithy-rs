@@ -61,8 +61,7 @@ async fn main() -> Result<(), Error> {
         .delete_stream()
         .stream_name(stream_name)
         .send()
-        .await
-        .expect("Could not delete stream");
+        .await?;
 
     println!("Deleted stream.");
 

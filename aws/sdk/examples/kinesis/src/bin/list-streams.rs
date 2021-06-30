@@ -43,11 +43,7 @@ async fn main() -> Result<(), Error> {
     let config = Config::builder().region(region).build();
     let client = Client::from_conf(config);
 
-    let resp = client
-        .list_streams()
-        .send()
-        .await
-        .expect("Could not get list of streame");
+    let resp = client.list_streams().send().await?;
 
     println!("Stream names:");
 

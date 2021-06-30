@@ -62,8 +62,7 @@ async fn main() -> Result<(), Error> {
         .stream_name(stream_name)
         .shard_count(4)
         .send()
-        .await
-        .expect("Could not create stream");
+        .await?;
 
     println!("Created stream");
 

@@ -81,8 +81,7 @@ async fn main() -> Result<(), Error> {
         .partition_key(key)
         .stream_name(stream_name)
         .send()
-        .await
-        .expect("Could not add record");
+        .await?;
 
     println!("Put data into stream.");
 

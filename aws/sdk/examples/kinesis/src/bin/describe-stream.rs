@@ -60,8 +60,7 @@ async fn main() -> Result<(), Error> {
         .describe_stream()
         .stream_name(stream_name)
         .send()
-        .await
-        .expect("Could not describe stream");
+        .await?;
 
     let desc = resp.stream_description.unwrap();
 
