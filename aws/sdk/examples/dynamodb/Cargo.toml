@@ -8,19 +8,13 @@ edition = "2018"
 
 [dependencies]
 dynamodb = { package = "aws-sdk-dynamodb", path = "../../build/aws-sdk/dynamodb" }
-aws-hyper = { path = "../../build/aws-sdk/aws-hyper"}
 aws-http = { path = "../../build/aws-sdk/aws-http"}
+aws-hyper = { path = "../../build/aws-sdk/aws-hyper"}
 aws-types = { path = "../../build/aws-sdk/aws-types" }
 smithy-http = { path = "../../build/aws-sdk/smithy-http" }
 smithy-types = { path = "../../build/aws-sdk/smithy-types" }
-rand = "0.8.3"
-structopt = { version = "0.3", default-features = false }
 tokio = { version = "1", features = ["full"] }
+rand = "0.8.3"
 serde_json = "1"
+structopt = { version = "0.3", default-features = false }
 tracing-subscriber = { version = "0.2.16", features = ["fmt"] }
-
-# used only for static endpoint configuration:
-http = "0.2.3"
-
-# used only to enable basic logging:
-env_logger = "0.8.2"
