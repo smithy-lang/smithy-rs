@@ -28,13 +28,31 @@ private const val RUNTIME_CONFIG = "runtimeConfig"
 private const val CODEGEN_SETTINGS = "codegen"
 private const val LICENSE = "license"
 
-data class CodegenConfig(val renameExceptions: Boolean = true, val includeFluentClient: Boolean = true) {
+/**
+ * Configuration of codegen settings
+ *
+ * [renameExceptions]: Rename `Exception` to `Error` in the generated SDK
+ * [includeFluentClient]: Generate a `client` module in the generated SDK (currently the AWS SDK sets this to false
+ *   and generates its own client)
+ *
+ * [addMessageToErrors]: Adds a `message` field automatically to all error shapes
+ * [formatTimeoutSeconds]: Timeout for running cargo fmt at the end of code generation
+ */
+data class CodegenConfig(
+    val renameExceptions: Boolean = true,
+    val includeFluentClient: Boolean = true,
+    val addMessageToErrors: Boolean = true,
+    val formatTimeoutSeconds: Int = 20
+) {
     companion object {
         fun fromNode(node: Optional<ObjectNode>): CodegenConfig {
             return if (node.isPresent) {
                 CodegenConfig(
                     node.get().getBooleanMemberOrDefault("renameErrors", true),
-                    node.get().getBooleanMemberOrDefault("includeFluentClient", true)
+                    node.get().getBooleanMemberOrDefault("includeFluentClient", true),
+                    node.get().getBooleanMemberOrDefault("addMessageToErrors", true),
+                    node.get().getNumberMemberOrDefault("formatTimeoutSeconds", 20).toInt(),
+
                 )
             } else {
                 CodegenConfig()
@@ -93,6 +111,7 @@ class RustSettings(
                     MODULE_AUTHORS,
                     MODULE_VERSION,
                     RUNTIME_CONFIG,
+                    CODEGEN_SETTINGS,
                     LICENSE
                 )
             )

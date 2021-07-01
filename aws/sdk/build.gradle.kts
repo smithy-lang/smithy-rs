@@ -43,7 +43,49 @@ dependencies {
     implementation(project(":aws:sdk-codegen"))
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-aws-iam-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-aws-cloudformation-traits:$smithyVersion")
 }
+
+// Tier 1 Services have examples and tests
+val tier1Services = setOf(
+    "apigateway",
+    "batch",
+    "cloudformation",
+    "dynamodb",
+    "ec2",
+    "ecs",
+    "iam",
+    "kinesis",
+    "kms",
+    "lambda",
+    "cloudwatchlogs",
+    "medialive",
+    "mediapackage",
+    "polly",
+    "qldbsession",
+    "qldb",
+    "rdsdata",
+    "rds",
+    "route53",
+    "runtime",
+    "s3",
+    "sagemakera2iruntime",
+    "sagemakeredge",
+    "sagemakerfeaturestoreruntime",
+    "sagemaker",
+    "secretsmanager",
+    "sesv2",
+    "sns",
+    "sqs",
+    "ssm",
+    "sts",
+    "cloudwatch",
+    "ecr",
+    "eks"
+)
+
+private val disableServices = setOf("transcribestreaming")
 
 data class AwsService(
     val service: String,
@@ -55,24 +97,22 @@ data class AwsService(
     fun files(): List<File> = listOf(modelFile) + extraFiles
 }
 
-val awsServices: Provider<List<AwsService>> = project.providers.provider { discoverServices() }
+val generateAllServices = project.providers.environmentVariable("GENERATE_ALL_SERVICES").orElse("")
+val awsServices: Provider<List<AwsService>> = generateAllServices.map { v ->
+    discoverServices(v.toLowerCase() == "true")
+}
+
+val generateOnly: Set<String>? = null
 
 /**
  * Discovers services from the `models` directory
  *
  * Do not invoke this function directly. Use the `awsServices` provider.
  */
-fun discoverServices(): List<AwsService> {
+fun discoverServices(allServices: Boolean): List<AwsService> {
     val models = project.file("aws-models")
     return fileTree(models).mapNotNull { file ->
         val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
-        val testFile = file.parentFile.resolve(file.nameWithoutExtension + "-tests.smithy")
-        val extras = if (testFile.exists()) {
-            logger.warn("Discovered protocol tests for ${file.name}")
-            listOf(testFile)
-        } else {
-            listOf()
-        }
         val services: List<ServiceShape> = model.shapes(ServiceShape::class.java).sorted().toList()
         if (services.size > 1) {
             throw Exception("There must be exactly one service in each aws model file")
@@ -81,10 +121,27 @@ fun discoverServices(): List<AwsService> {
             null
         } else {
             val service = services[0]
-            val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId.toLowerCase().replace(" ", "")
+            val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId
+                .toLowerCase()
+                .replace(" ", "")
+                // TODO: the smithy models should not include the suffix "service"
+                .removeSuffix("service")
+                .removeSuffix("api")
+            val testFile = file.parentFile.resolve("$sdkId-tests.smithy")
+            val extras = if (testFile.exists()) {
+                logger.warn("Discovered protocol tests for ${file.name}")
+                listOf(testFile)
+            } else {
+                listOf()
+            }
             AwsService(service = service.id.toString(), module = sdkId, modelFile = file, extraFiles = extras)
         }
-    }
+    }.filterNot { disableServices.contains(it.module) }
+        .filter {
+            allServices || (generateOnly != null && generateOnly.contains(it.module)) || (generateOnly == null && tier1Services.contains(
+                it.module
+            ))
+        }
 }
 
 fun generateSmithyBuild(tests: List<AwsService>): String {
@@ -105,11 +162,12 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                         "relativePath": "../"
                       },
                       "codegen": {
-                        "includeFluentClient": false
+                        "includeFluentClient": false,
+                        "renameErrors": false
                       },
                       "service": "${it.service}",
                       "module": "aws-sdk-${it.module}",
-                      "moduleVersion": "0.0.8-alpha",
+                      "moduleVersion": "0.0.11-alpha",
                       "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
                       "license": "Apache-2.0"
                       ${it.extraConfig ?: ""}
@@ -156,7 +214,8 @@ task("relocateServices") {
             }
         }
     }
-    outputs.upToDateWhen { false }
+    inputs.dir("$buildDir/smithyprojections/sdk/")
+    outputs.dir(sdkOutputDir)
 }
 
 task("relocateExamples") {
@@ -170,6 +229,8 @@ task("relocateExamples") {
             filter { line -> line.replace("build/aws-sdk/", "") }
         }
     }
+    inputs.dir(projectDir.resolve("examples"))
+    outputs.dir(sdkOutputDir)
 }
 
 tasks.register<Copy>("relocateAwsRuntime") {
@@ -181,7 +242,6 @@ tasks.register<Copy>("relocateAwsRuntime") {
     exclude("**/Cargo.lock")
     filter { line -> rewritePathDependency(line) }
     into(sdkOutputDir)
-    outputs.upToDateWhen { false }
 }
 
 /**
@@ -201,12 +261,13 @@ tasks.register<Copy>("relocateRuntime") {
         exclude("**/Cargo.lock")
     }
     into(sdkOutputDir)
-    outputs.upToDateWhen { false }
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {
-    val examples = projectDir.resolve("examples").listFiles { file -> !file.name.startsWith(".") }?.toList()
-        ?.map { "examples/${it.name}" }.orEmpty()
+    val examples = projectDir.resolve("examples")
+        .listFiles { file -> !file.name.startsWith(".") }.orEmpty().toList()
+        .filter { generateOnly == null || generateOnly.contains(it.name) }
+        .map { "examples/${it.name}" }
 
     val modules = services.map(AwsService::module) + runtimeModules + awsModules + examples.toList()
     return """
@@ -219,8 +280,10 @@ fun generateCargoWorkspace(services: List<AwsService>): String {
 task("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
+        sdkOutputDir.mkdirs()
         sdkOutputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices.get()))
     }
+    outputs.file(sdkOutputDir.resolve("Cargo.toml"))
 }
 
 task("finalizeSdk") {
@@ -230,14 +293,14 @@ task("finalizeSdk") {
         "relocateServices",
         "relocateRuntime",
         "relocateAwsRuntime",
-        "relocateExamples",
-        "generateCargoWorkspace"
+        "relocateExamples"
     )
 }
 
 tasks["smithyBuildJar"].inputs.file(projectDir.resolve("smithy-build.json"))
 tasks["smithyBuildJar"].inputs.dir(projectDir.resolve("aws-models"))
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
+tasks["smithyBuildJar"].dependsOn("generateCargoWorkspace")
 tasks["assemble"].dependsOn("smithyBuildJar")
 tasks["assemble"].finalizedBy("finalizeSdk")
 

@@ -29,12 +29,15 @@ import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
@@ -58,20 +61,24 @@ class Instantiator(
     private val model: Model,
     private val runtimeConfig: RuntimeConfig
 ) {
-
-    // The Rust HTTP library lower cases headers but Smithy protocol tests
-    // contain httpPrefix headers with uppercase keys
-    data class Ctx(val lowercaseMapKeys: Boolean, val streaming: Boolean)
+    data class Ctx(
+        // The Rust HTTP library lower cases headers but Smithy protocol tests
+        // contain httpPrefix headers with uppercase keys
+        val lowercaseMapKeys: Boolean,
+        val streaming: Boolean,
+        // Whether or not we are instantiating with a Builder, in which case all setters take Option
+        val builder: Boolean
+    )
 
     fun render(
         writer: RustWriter,
         shape: Shape,
         arg: Node,
-        ctx: Ctx = Ctx(lowercaseMapKeys = false, streaming = false)
+        ctx: Ctx = Ctx(lowercaseMapKeys = false, streaming = false, builder = false)
     ) {
         when (shape) {
             // Compound Shapes
-            is StructureShape -> renderStructure(writer, shape, arg as ObjectNode, ctx)
+            is StructureShape -> renderStructure(writer, shape, arg as ObjectNode, ctx.copy(builder = true))
             is UnionShape -> renderUnion(writer, shape, arg as ObjectNode, ctx)
 
             // Collections
@@ -109,13 +116,16 @@ class Instantiator(
             is StringShape -> renderString(writer, shape, arg as StringNode)
             is NumberShape -> writer.write(arg.asNumberNode().get())
             is BooleanShape -> writer.write(arg.asBooleanNode().get().toString())
-            is DocumentShape -> {
-                writer.rust(
-                    """{
-                    let as_json = #T! { ${Node.prettyPrintJson(arg)} };
-                    #T::json_to_doc(as_json)
-                }""",
-                    RuntimeType.SerdeJson("json"), RuntimeType.DocJson
+            is DocumentShape -> writer.rustBlock("") {
+                val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
+                rustTemplate(
+                    """
+                    let json_bytes = br##"${Node.prettyPrintJson(arg)}"##;
+                    let mut tokens = #{json_token_iter}(json_bytes).peekable();
+                    #{expect_document}(&mut tokens).expect("well formed json")
+                    """,
+                    "expect_document" to smithyJson.member("deserialize::token::expect_document"),
+                    "json_token_iter" to smithyJson.member("deserialize::json_token_iter"),
                 )
             }
             else -> writer.writeWithNoFormatting("todo!() /* $shape $arg */")
@@ -135,7 +145,7 @@ class Instantiator(
             ) { "A null node was provided for $shape but the symbol was not optional. This is invalid input data." }
             writer.write("None")
         } else {
-            writer.conditionalBlock("Some(", ")", conditional = symbol.isOptional()) {
+            writer.conditionalBlock("Some(", ")", conditional = ctx.builder || symbol.isOptional()) {
                 writer.conditionalBlock(
                     "Box::new(",
                     ")",
@@ -145,13 +155,12 @@ class Instantiator(
                         this,
                         target,
                         arg,
-                        ctx.letIf(shape.getMemberTrait(model, HttpPrefixHeadersTrait::class.java).isPresent) {
-                            it.copy(lowercaseMapKeys = true)
-                        }.letIf(
-                            shape.isStreaming(model)
-                        ) {
-                            it.copy(streaming = true)
-                        }
+                        ctx.copy(builder = false)
+                            .letIf(shape.getMemberTrait(model, HttpPrefixHeadersTrait::class.java).isPresent) {
+                                it.copy(lowercaseMapKeys = true)
+                            }.letIf(shape.isStreaming(model)) {
+                                it.copy(streaming = true)
+                            }
                     )
                 }
             }
@@ -245,12 +254,7 @@ class Instantiator(
         data.members.forEach { (key, value) ->
             val memberShape = shape.expectMember(key.value)
             writer.withBlock(".${memberShape.setterName()}(", ")") {
-                renderMember(
-                    this,
-                    memberShape,
-                    value,
-                    ctx
-                )
+                renderMember(this, memberShape, value, ctx)
             }
         }
         writer.write(".build()")

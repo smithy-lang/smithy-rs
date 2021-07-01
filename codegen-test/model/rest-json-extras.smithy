@@ -53,7 +53,17 @@ apply QueryPrecedence @httpRequestTests([
 @restJson1
 service RestJsonExtras {
     version: "2019-12-16",
-    operations: [StringPayload, PrimitiveIntHeader, EnumQuery, StatusResponse, MapWithEnumKeyOp, PrimitiveIntOp]
+    operations: [
+        StringPayload,
+        PrimitiveIntHeader,
+        EnumQuery,
+        StatusResponse,
+        MapWithEnumKeyOp,
+        PrimitiveIntOp,
+        EscapedStringValues,
+        NullInNonSparse,
+        CaseInsensitiveErrorOperation
+    ]
 }
 
 @http(uri: "/StringPayload", method: "POST")
@@ -187,4 +197,95 @@ structure MapWithEnumKeyInputOutput {
 operation MapWithEnumKeyOp {
     input: MapWithEnumKeyInputOutput,
     output: MapWithEnumKeyInputOutput,
+}
+
+
+@enum([
+    { value: "has\"quotes", name: "HAS_QUOTES", documentation: "this needs#tobe escaped" },
+    { value: "normal", name: "NORMAL" },
+])
+string EnumWithEscapedChars
+
+structure EscapedStringValuesInputOutput {
+    enum: EnumWithEscapedChars,
+    @jsonName("also\"has\"quotes")
+    someString: String,
+}
+
+@http(uri: "/escaped-string-values", method: "POST")
+@httpRequestTests([
+    {
+        id: "EscapedStringValuesRequest",
+        uri: "/escaped-string-values",
+        method: "POST",
+        protocol: "aws.protocols#restJson1",
+        body: "{\"enum\":\"has\\\"quotes\",\"also\\\"has\\\"quotes\":\"test\"}",
+        params: { enum: "has\"quotes", someString: "test" },
+    }
+])
+@httpResponseTests([
+    {
+        id: "EscapedStringValuesResponse",
+        protocol: "aws.protocols#restJson1",
+        code: 200,
+        body: "{\"enum\":\"has\\\"quotes\",\"also\\\"has\\\"quotes\":\"test\"}",
+        params: { enum: "has\"quotes", someString: "test" },
+    }
+])
+operation EscapedStringValues {
+    input: EscapedStringValuesInputOutput,
+    output: EscapedStringValuesInputOutput,
+}
+
+list NonSparseList {
+    member: String,
+}
+
+map NonSparseMap {
+    key: String,
+    value: String,
+}
+
+union SingleElementUnion {
+    a: String
+}
+
+structure NullInNonSparseOutput {
+    list: NonSparseList,
+    map: NonSparseMap,
+    union: SingleElementUnion
+}
+
+@http(uri: "/null-in-non-sparse", method: "POST")
+@httpResponseTests([
+    {
+        id: "NullInNonSparse",
+        protocol: "aws.protocols#restJson1",
+        code: 200,
+        body: "{\"list\":[null,\"one\",null,\"two\",null],\"map\":{\"zero\":null,\"one\":\"1\"}}",
+        params: { list: ["one", "two"], map: { "one": "1" } },
+    }
+])
+operation NullInNonSparse {
+    output: NullInNonSparseOutput,
+}
+
+@http(uri: "/error-sensitive", method: "POST")
+operation CaseInsensitiveErrorOperation {
+    errors: [CaseInsensitiveError]
+}
+
+@httpResponseTests([
+    {
+        id: "Upper case error modeled lower case",
+        protocol: "aws.protocols#restJson1",
+        code: 500,
+        body: "{\"Message\": \"hello\"}",
+        headers: { "X-Amzn-Errortype": "CaseInsensitiveError" },
+        params: { message: "hello" }
+    }
+])
+@error("server")
+structure CaseInsensitiveError {
+    message: String
 }

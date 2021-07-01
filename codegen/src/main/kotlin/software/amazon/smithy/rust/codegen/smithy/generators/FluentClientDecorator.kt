@@ -12,8 +12,10 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.contains
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
@@ -248,7 +250,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                 val name = symbolProvider.toSymbol(operation).name
                 rust(
                     """
-                    pub fn ${name.toSnakeCase()}(&self) -> fluent_builders::$name<C, M, R> {
+                    pub fn ${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}(&self) -> fluent_builders::$name<C, M, R> {
                         fluent_builders::$name::new(self.handle.clone())
                     }"""
                 )
@@ -306,8 +308,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         // All fields in the builder are optional
                         val memberSymbol = symbolProvider.toSymbol(member)
                         val outerType = memberSymbol.rustType()
-                        val coreType = outerType.stripOuter<RustType.Option>()
-                        when (coreType) {
+                        when (val coreType = outerType.stripOuter<RustType.Option>()) {
                             is RustType.Vec -> renderVecHelper(member, memberName, coreType)
                             is RustType.HashMap -> renderMapHelper(member, memberName, coreType)
                             else -> {
@@ -324,10 +325,11 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                             }
                         }
                         // pure setter
-                        rustBlock("pub fn ${member.setterName()}(mut self, inp: ${outerType.render(true)}) -> Self") {
+                        val inputType = outerType.asOptional()
+                        rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
                             rust(
                                 """
-                                self.inner = self.inner.${member.setterName()}(inp);
+                                self.inner = self.inner.${member.setterName()}(input);
                                 self
                                 """
                             )

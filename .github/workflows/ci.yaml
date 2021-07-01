@@ -7,7 +7,8 @@ on:
 name: CI
 
 env:
-  rust_version: 1.51.0
+  rust_version: 1.52.1
+  rust_toolchain_components: clippy,rustfmt
   java_version: 11
 
 jobs:
@@ -53,6 +54,8 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
     - name: Set up JDK
       uses: actions/setup-java@v1
       with:
@@ -86,6 +89,8 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
     - name: Set up JDK
       uses: actions/setup-java@v1
       with:
@@ -116,6 +121,8 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
     - name: Format Check
       run: rustfmt --check --edition 2018 $(find -name '*.rs' -print)
     - name: execute runtime tests
@@ -138,6 +145,8 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
     - name: Set up JDK
       uses: actions/setup-java@v1
       with:
@@ -146,35 +155,29 @@ jobs:
       run: ./gradlew :aws:sdk:assemble
     - name: Generate the SDK...again?
       run: ./gradlew :aws:sdk:assemble
+    - name: Generate a list of services with tests
+      run: python aws/sdk/test-services.py > aws/sdk/build/aws-sdk/services-with-tests
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - name: Tar the SDK
+      run: tar -cvf sdk.tar -C aws/sdk/build/aws-sdk/ .
     - uses: actions/upload-artifact@v2
       name: Upload SDK Artifact
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
-        path: |
-          aws/sdk/build/aws-sdk/
-          !aws/sdk/build/aws-sdk/target
+        path: sdk.tar
 
   check-sdk:
     name: cargo check AWS SDK
     needs: generate-sdk
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/cache@v2
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargocheck
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
@@ -182,30 +185,35 @@ jobs:
       name: Download SDK Artifact
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
-        path: aws-sdk
+        path: artifact
+    - name: untar
+      run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-
+          ${{ runner.os }}-${{ env.rust_version }}-
     - name: Cargo Check
       run: cargo check --lib --tests --benches
       working-directory: aws-sdk
       env:
         RUSTFLAGS: -D warnings
+        CARGO_TARGET_DIR: ../target
   test-sdk:
     name: cargo test AWS SDK
     needs: generate-sdk
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/cache@v2
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargotest
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
@@ -213,12 +221,26 @@ jobs:
       name: Download SDK Artifact
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
-        path: aws-sdk
+        path: artifact
+    - name: untar
+      run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-
+          ${{ runner.os }}-${{ env.rust_version }}-
     - name: Cargo Test
-      run: cargo test
+      run: cargo test $(cat services-with-tests)
       working-directory: aws-sdk
       env:
+        RUSTC_FORCE_INCREMENTAL: 1
         RUSTFLAGS: -D warnings
+        CARGO_TARGET_DIR: ../target
   docs-sdk:
     name: cargo docs AWS SDK
     needs: generate-sdk
@@ -234,9 +256,8 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
@@ -244,7 +265,9 @@ jobs:
       name: Download SDK Artifact
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
-        path: aws-sdk
+        path: artifact
+    - name: untar
+      run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
     - name: Cargo Docs
       run: cargo doc --no-deps --document-private-items
       working-directory: aws-sdk
@@ -265,9 +288,8 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
@@ -275,7 +297,47 @@ jobs:
       name: Download SDK Artifact
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
-        path: aws-sdk
+        path: artifact
+    - name: untar
+      run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
     - name: Cargo Clippy
       run: cargo clippy -- -D warnings
       working-directory: aws-sdk
+
+  all-services-check:
+    name: cargo check all services
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.java_version }}
+    - name: generate a check all services
+      run: ./gradlew :aws:sdk:cargoCheck
+      env:
+        GENERATE_ALL_SERVICES: 'true'
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - name: Tar the SDK
+      run: tar -cvf sdk.tar -C aws/sdk/build/aws-sdk/ .
+    - uses: actions/upload-artifact@v2
+      name: Upload SDK Artifact
+      with:
+        name: aws-sdk-${{ env.name }}-allservices-${{ github.sha }}
+        path: sdk.tar

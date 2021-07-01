@@ -4,17 +4,11 @@
  */
 
 #[allow(dead_code)]
-mod aws_json_errors;
-mod blob_serde;
-#[allow(dead_code)]
-mod doc_json;
-#[allow(dead_code)]
 mod ec2_query_errors;
 #[allow(dead_code)]
 mod idempotency_token;
-mod instant_epoch;
-mod instant_httpdate;
-mod instant_iso8601;
+#[allow(dead_code)]
+mod json_errors;
 #[allow(unused)]
 mod rest_xml_unwrapped_errors;
 #[allow(unused)]
@@ -24,26 +18,9 @@ mod rest_xml_wrapped_errors;
 // requiring a proptest dependency
 #[cfg(test)]
 mod test {
-    use crate::doc_json::SerDoc;
     use crate::idempotency_token;
-    use crate::idempotency_token::uuid_v4;
+    use crate::idempotency_token::{uuid_v4, IdempotencyTokenProvider};
     use proptest::prelude::*;
-    use proptest::std_facade::HashMap;
-    use smithy_types::Document;
-    use smithy_types::Number;
-    use std::sync::Mutex;
-
-    #[test]
-    fn nan_floats_serialize_null() {
-        let mut map = HashMap::new();
-        map.insert("num".to_string(), Document::Number(Number::PosInt(45)));
-        map.insert("nan".to_string(), Document::Number(Number::Float(f64::NAN)));
-        let doc = Document::Object(map);
-        assert_eq!(
-            serde_json::to_value(&SerDoc(&doc)).unwrap(),
-            serde_json::json!({"num":45,"nan":null})
-        );
-    }
 
     #[test]
     fn test_uuid() {
@@ -58,7 +35,6 @@ mod test {
     #[test]
     fn default_token_generator_smoke_test() {
         // smoke test to make sure the default token generator produces a token-like object
-        use crate::idempotency_token::MakeIdempotencyToken;
         assert_eq!(
             idempotency_token::default_provider()
                 .make_idempotency_token()
@@ -69,8 +45,7 @@ mod test {
 
     #[test]
     fn token_generator() {
-        let provider = Mutex::new(fastrand::Rng::with_seed(123));
-        use crate::idempotency_token::MakeIdempotencyToken;
+        let provider = IdempotencyTokenProvider::with_seed(123);
         assert_eq!(
             provider.make_idempotency_token(),
             "b4021a03-ae07-4db5-fc1b-38bf919691f8"

@@ -103,12 +103,7 @@ internal class XmlBindingTraitSerializerGeneratorTest {
 
     @Test
     fun `generates valid serializers`() {
-        val model = RecursiveShapeBoxer.transform(
-            OperationNormalizer(baseModel).transformModel(
-                OperationNormalizer.NoBody,
-                OperationNormalizer.NoBody
-            )
-        )
+        val model = RecursiveShapeBoxer.transform(OperationNormalizer(baseModel).transformModel())
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = XmlBindingTraitSerializerGenerator(
             testProtocolConfig(model),

@@ -10,5 +10,11 @@ edition = "2018"
 [dependencies]
 aws-sdk-s3 = { path = "../../build/aws-sdk/s3" }
 smithy-http = { path = "../../build/aws-sdk/smithy-http" }
+tracing-subscriber = "0.2.18"
+
+[dev-dependencies]
+tokio  = { version = "1", features = ["full"]}
 http = "0.2.3"
 bytes = "1"
+aws-hyper = { path = "../../build/aws-sdk/aws-hyper"}
+aws-http = { path = "../../build/aws-sdk/aws-http"}

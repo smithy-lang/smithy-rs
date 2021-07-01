@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
  * For a given Operation ([this]), return the symbol referring to the unified error? This can be used
@@ -119,13 +120,12 @@ class CombinedErrorGenerator(
             }
         }
 
-        writer.rustTemplate(
-            """
-        impl ${symbol.name} {
+        writer.rustBlock("impl ${symbol.name}") {
+            writer.rustTemplate(
+                """
             pub fn new(kind: ${symbol.name}Kind, meta: #{generic_error}) -> Self {
                 Self { kind, meta }
             }
-
 
             pub fn unhandled(err: impl Into<Box<dyn #{std_error} + Send + Sync + 'static>>) -> Self {
                 Self {
@@ -158,10 +158,17 @@ class CombinedErrorGenerator(
             pub fn code(&self) -> Option<&str> {
                 self.meta.code()
             }
-        }
         """,
-            "generic_error" to genericError, "std_error" to RuntimeType.StdError
-        )
+                "generic_error" to genericError, "std_error" to RuntimeType.StdError
+            )
+            errors.forEach { error ->
+                val errorSymbol = symbolProvider.toSymbol(error)
+                val fnName = errorSymbol.name.toSnakeCase()
+                writer.rustBlock("pub fn is_$fnName(&self) -> bool") {
+                    rust("matches!(&self.kind, ${symbol.name}Kind::${errorSymbol.name}(_))")
+                }
+            }
+        }
 
         writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.StdError) {
             rustBlock("fn source(&self) -> Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
