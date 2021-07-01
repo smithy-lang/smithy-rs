@@ -9,13 +9,13 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// The default AWS Region.
+    /// The AWS Region.
     #[structopt(short, long)]
-    default_region: Option<String>,
+    region: Option<String>,
 
     /// The data to add to the stream.
     #[structopt(short, long)]
-    info: String,
+    data: String,
 
     /// The name of the partition key.
     #[structopt(short, long)]
@@ -34,8 +34,8 @@ struct Opt {
 ///
 /// * `-s STREAM-NAME` - The name of the stream.
 /// * `-k KEY-NAME` - The name of the partition key.
-/// * `-i INFO` - The data to add.
-/// * `[-d DEFAULT-REGION]` - The Region in which the client is created.
+/// * `-d DATA` - The data to add.
+/// * `[-r REGION]` - The Region in which the client is created.
 ///    If not supplied, uses the value of the **AWS_REGION** environment variable.
 ///    If the environment variable is not set, defaults to **us-west-2**.
 /// * `[-v]` - Whether to display additional information.
@@ -44,14 +44,14 @@ async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
 
     let Opt {
-        info,
+        data,
         key,
         stream_name,
-        default_region,
+        region,
         verbose,
     } = Opt::from_args();
 
-    let region = default_region
+    let region = region
         .as_ref()
         .map(|region| Region::new(region.clone()))
         .or_else(|| aws_types::region::default_provider().region())
@@ -61,10 +61,10 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("Kinesis version: {}", PKG_VERSION);
-        println!("Region:          {:?}", &default_region);
+        println!("Region:          {:?}", &region);
         println!("Data:");
         println!();
-        println!("{}", &info);
+        println!("{}", &data);
         println!();
         println!("Partition key:   {}", &key);
         println!("Stream name:     {}", &stream_name);
@@ -73,7 +73,7 @@ async fn main() -> Result<(), Error> {
 
     let config = Config::builder().region(region).build();
     let client = Client::from_conf(config);
-    let blob = kinesis::Blob::new(info);
+    let blob = kinesis::Blob::new(data);
 
     client
         .put_record()

@@ -9,9 +9,9 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// The default AWS Region.
+    /// The AWS Region.
     #[structopt(short, long)]
-    default_region: Option<String>,
+    region: Option<String>,
 
     /// Whether to display additional information
     #[structopt(short, long)]
@@ -21,12 +21,9 @@ struct Opt {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
-    let Opt {
-        default_region,
-        verbose,
-    } = Opt::from_args();
+    let Opt { region, verbose } = Opt::from_args();
 
-    let region = default_region
+    let region = region
         .as_ref()
         .map(|region| Region::new(region.clone()))
         .or_else(|| aws_types::region::default_provider().region())
@@ -36,7 +33,7 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("Kinesis version: {}", PKG_VERSION);
-        println!("Region:          {:?}", &default_region);
+        println!("Region:          {:?}", &region);
         println!();
     }
 

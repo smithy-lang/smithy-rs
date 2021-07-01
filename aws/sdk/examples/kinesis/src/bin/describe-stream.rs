@@ -9,9 +9,9 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// The default AWS Region.
+    /// The AWS Region.
     #[structopt(short, long)]
-    default_region: Option<String>,
+    region: Option<String>,
 
     /// The name of the stream.
     #[structopt(short, long)]
@@ -25,7 +25,7 @@ struct Opt {
 /// Lists your Amazon Kinesis data streams in the Region.
 /// # Arguments
 ///
-/// * `[-d DEFAULT-REGION]` - The Region in which the client is created.
+/// * `[-r REGION]` - The Region in which the client is created.
 ///    If not supplied, uses the value of the **AWS_REGION** environment variable.
 ///    If the environment variable is not set, defaults to **us-west-2**.
 /// * `[-v]` - Whether to display additional information.
@@ -34,11 +34,11 @@ async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
     let Opt {
         stream_name,
-        default_region,
+        region,
         verbose,
     } = Opt::from_args();
 
-    let region = default_region
+    let region = region
         .as_ref()
         .map(|region| Region::new(region.clone()))
         .or_else(|| aws_types::region::default_provider().region())
@@ -48,7 +48,7 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("Kinesis version: {}", PKG_VERSION);
-        println!("Region:          {:?}", &default_region);
+        println!("Region:          {:?}", &region);
         println!("Stream name:     {}", &stream_name);
         println!();
     }
