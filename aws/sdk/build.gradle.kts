@@ -69,7 +69,6 @@ val tier1Services = setOf(
     "rdsdata",
     "rds",
     "route53",
-    "runtime",
     "s3",
     "sagemakera2iruntime",
     "sagemakeredge",
@@ -84,6 +83,7 @@ val tier1Services = setOf(
     "cloudwatch",
     "ecr",
     "ebs",
+    "config",
     "eks"
 )
 
@@ -122,7 +122,7 @@ val awsServices: Provider<List<AwsService>> = generateAllServices.zip(generateOn
  */
 fun discoverServices(allServices: Boolean, generateOnly: Set<String>): List<AwsService> {
     val models = project.file("aws-models")
-    return fileTree(models).mapNotNull { file ->
+    val services = fileTree(models).mapNotNull { file ->
         val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
         val services: List<ServiceShape> = model.shapes(ServiceShape::class.java).sorted().toList()
         if (services.size > 1) {
@@ -153,6 +153,13 @@ fun discoverServices(allServices: Boolean, generateOnly: Set<String>): List<AwsS
                 it.module
             ))
         }
+    if (generateOnly.isNotEmpty()) {
+        val modules = services.map { it.module }.toSet()
+        tier1Services.forEach { service ->
+            check(modules.contains(service)) { "Service $service was in list of tier 1 services but not generated!" }
+        }
+    }
+    return services
 }
 
 fun generateSmithyBuild(tests: List<AwsService>): String {
