@@ -68,7 +68,6 @@ val tier1Services = setOf(
     "rdsdata",
     "rds",
     "route53",
-    "runtime",
     "s3",
     "sagemakera2iruntime",
     "sagemakeredge",
@@ -82,6 +81,7 @@ val tier1Services = setOf(
     "sts",
     "cloudwatch",
     "ecr",
+    "config",
     "eks"
 )
 
@@ -111,7 +111,7 @@ val generateOnly: Set<String>? = null
  */
 fun discoverServices(allServices: Boolean): List<AwsService> {
     val models = project.file("aws-models")
-    return fileTree(models).mapNotNull { file ->
+    val services = fileTree(models).mapNotNull { file ->
         val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
         val services: List<ServiceShape> = model.shapes(ServiceShape::class.java).sorted().toList()
         if (services.size > 1) {
@@ -136,12 +136,20 @@ fun discoverServices(allServices: Boolean): List<AwsService> {
             }
             AwsService(service = service.id.toString(), module = sdkId, modelFile = file, extraFiles = extras)
         }
-    }.filterNot { disableServices.contains(it.module) }
-        .filter {
-            allServices || (generateOnly != null && generateOnly.contains(it.module)) || (generateOnly == null && tier1Services.contains(
-                it.module
-            ))
+    }.filterNot {
+        disableServices.contains(it.module)
+    }.filter {
+        allServices || (generateOnly != null && generateOnly.contains(it.module)) || (generateOnly == null && tier1Services.contains(
+            it.module
+        ))
+    }
+    if (generateOnly == null) {
+        val modules = services.map { it.module }.toSet()
+        tier1Services.forEach { service ->
+            check(modules.contains(service)) { "Service $service was in list of tier 1 services but not generated!" }
         }
+    }
+    return services
 }
 
 fun generateSmithyBuild(tests: List<AwsService>): String {
