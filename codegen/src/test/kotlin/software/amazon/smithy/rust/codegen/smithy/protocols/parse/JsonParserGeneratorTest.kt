@@ -91,9 +91,16 @@ class JsonParserGeneratorTest {
             top: Top
         }
 
+        @error("client")
+        structure Error {
+            message: String,
+            reason: String
+        }
+
         @http(uri: "/top", method: "POST")
         operation Op {
             output: OpOutput,
+            errors: [Error]
         }
     """.asSmithyModel()
 
@@ -108,6 +115,7 @@ class JsonParserGeneratorTest {
         val operationGenerator = parserGenerator.operationParser(model.lookup("test#Op"))
         val documentGenerator = parserGenerator.documentParser(model.lookup("test#Op"))
         val payloadGenerator = parserGenerator.payloadParser(model.lookup("test#OpOutput\$top"))
+        val errorParser = parserGenerator.errorParser(model.lookup("test#Error"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
@@ -132,6 +140,17 @@ class JsonParserGeneratorTest {
                 assert_eq!(Some(45), top.extra);
                 assert_eq!(Some("something".to_string()), top.field);
                 assert_eq!(Some(Choice::Int(5)), top.choice);
+                let output = ${writer.format(operationGenerator!!)}(b"", output::op_output::Builder::default()).unwrap().build();
+                assert_eq!(output.top, None);
+
+
+                // empty error
+                let error_output = ${writer.format(errorParser!!)}(b"", error::error::Builder::default()).unwrap().build();
+                assert_eq!(error_output.message, None);
+
+                // error with message
+                let error_output = ${writer.format(errorParser!!)}(br#"{"message": "hello"}"#, error::error::Builder::default()).unwrap().build();
+                assert_eq!(error_output.message.expect("message should be set"), "hello");
                 """
             )
         }
@@ -144,6 +163,9 @@ class JsonParserGeneratorTest {
 
         project.withModule(RustModule.default("output", public = true)) {
             model.lookup<OperationShape>("test#Op").outputShape(model).renderWithModelBuilder(model, symbolProvider, it)
+        }
+        project.withModule(RustModule.default("error", public = true)) {
+            model.lookup<StructureShape>("test#Error").renderWithModelBuilder(model, symbolProvider, it)
         }
         println("file:///${project.baseDir}/src/json_deser.rs")
         println("file:///${project.baseDir}/src/lib.rs")

@@ -214,6 +214,7 @@ class XmlBindingTraitParserGenerator(
                 xmlError
             ) {
                 val members = errorShape.errorXmlMembers()
+                rust("if inp.is_empty() { return Ok(builder) }")
                 if (members.isNotEmpty()) {
                     rustTemplate(
                         """
@@ -226,8 +227,6 @@ class XmlBindingTraitParserGenerator(
                         "xml_errors" to xmlErrors
                     )
                     parseStructureInner(members, builder = "builder", Ctx(tag = "error_decoder", accum = null))
-                } else {
-                    rust("let _ = inp;")
                 }
                 rust("Ok(builder)")
             }
