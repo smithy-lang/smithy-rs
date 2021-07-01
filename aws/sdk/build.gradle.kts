@@ -99,23 +99,28 @@ data class AwsService(
     fun files(): List<File> = listOf(modelFile) + extraFiles
 }
 
-val generateAllServices = project.providers.environmentVariable("GENERATE_ALL_SERVICES").orElse("")
-val awsServices: Provider<List<AwsService>> = generateAllServices.map { v ->
-    discoverServices(v.toLowerCase() == "true")
-}
+val generateAllServices =
+    project.providers.environmentVariable("GENERATE_ALL_SERVICES").forUseAtConfigurationTime().orElse("")
 
 val generateOnly: Provider<Set<String>> =
-    project.providers.environmentVariable("GENERATE_ONLY").orElse("")
-        .map {
-            it.split(",").toSet()
+    project.providers.environmentVariable("GENERATE_ONLY")
+        .forUseAtConfigurationTime()
+        .map { envVar ->
+            envVar.split(",").filter { service -> service.trim().isNotBlank() }
         }
+        .orElse(listOf())
+        .map { it.toSet() }
+
+val awsServices: Provider<List<AwsService>> = generateAllServices.zip(generateOnly) { v, only ->
+    discoverServices(v.toLowerCase() == "true", only)
+}
 
 /**
  * Discovers services from the `models` directory
  *
  * Do not invoke this function directly. Use the `awsServices` provider.
  */
-fun discoverServices(allServices: Boolean): List<AwsService> {
+fun discoverServices(allServices: Boolean, generateOnly: Set<String>): List<AwsService> {
     val models = project.file("aws-models")
     return fileTree(models).mapNotNull { file ->
         val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
@@ -144,8 +149,7 @@ fun discoverServices(allServices: Boolean): List<AwsService> {
         }
     }.filterNot { disableServices.contains(it.module) }
         .filter {
-            val only = generateOnly.get()
-            allServices || (only.isNotEmpty() && only.contains(it.module)) || (only.isEmpty() && tier1Services.contains(
+            allServices || (generateOnly.isNotEmpty() && generateOnly.contains(it.module)) || (generateOnly.isEmpty() && tier1Services.contains(
                 it.module
             ))
         }
@@ -194,6 +198,7 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
 
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
+    dependsOn(awsServices)
     doFirst {
         projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices.get()))
     }
@@ -291,8 +296,10 @@ task("generateCargoWorkspace") {
         sdkOutputDir.mkdirs()
         sdkOutputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices.get()))
     }
+    dependsOn(awsServices)
     inputs.dir(projectDir.resolve("examples"))
     outputs.file(sdkOutputDir.resolve("Cargo.toml"))
+    outputs.upToDateWhen { false }
 }
 
 task("finalizeSdk") {
@@ -309,7 +316,9 @@ task("finalizeSdk") {
 tasks["smithyBuildJar"].inputs.file(projectDir.resolve("smithy-build.json"))
 tasks["smithyBuildJar"].inputs.dir(projectDir.resolve("aws-models"))
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
+tasks["smithyBuildJar"].dependsOn(awsServices)
 tasks["smithyBuildJar"].dependsOn("generateCargoWorkspace")
+tasks["smithyBuildJar"].outputs.upToDateWhen { false }
 tasks["assemble"].dependsOn("smithyBuildJar")
 tasks["assemble"].finalizedBy("finalizeSdk")
 
