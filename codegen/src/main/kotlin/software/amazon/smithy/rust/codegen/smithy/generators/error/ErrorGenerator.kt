@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.StdError
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.stdfmt
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.letIf
+import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
 
@@ -71,9 +72,8 @@ class ErrorGenerator(
 
     private fun renderError() {
         val symbol = symbolProvider.toSymbol(shape)
-        val messageShape =
-            shape.getMember("message").or { shape.getMember("Message") }.or { shape.getMember("errorMessage") }
-        val message = messageShape.map { "self.${symbolProvider.toMemberName(it)}.as_deref()" }.orElse("None")
+        val messageShape = shape.errorMessageMember()
+        val message = messageShape?.let { "self.${symbolProvider.toMemberName(it)}.as_deref()" } ?: "None"
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
         writer.rustBlock("impl ${symbol.name}") {
             val retryKindWriteable = shape.modeledRetryKind(error)?.writable(symbolProvider.config().runtimeConfig)
@@ -97,7 +97,7 @@ class ErrorGenerator(
                     "$symbolName [${shape.id.name}]"
                 }
                 write("write!(f, ${errorDesc.dq()})?;")
-                messageShape.map {
+                messageShape?.let {
                     ifSet(it, symbolProvider.toSymbol(it), "&self.message") { field ->
                         write("""write!(f, ": {}", $field)?;""")
                     }

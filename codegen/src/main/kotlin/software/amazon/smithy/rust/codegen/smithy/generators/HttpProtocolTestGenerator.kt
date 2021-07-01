@@ -426,6 +426,8 @@ class HttpProtocolTestGenerator(
         private val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
         private val RestJson = "aws.protocoltests.restjson#RestJson"
         private val RestXml = "aws.protocoltests.restxml#RestXml"
+        private val AwsQuery = "aws.protocoltests.query#AwsQuery"
+        private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
         private val ExpectFail = setOf<FailingTest>()
         private val RunOnly: Set<String>? = null
 

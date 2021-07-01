@@ -73,6 +73,7 @@ class JsonParserGenerator(
         "Peekable" to RuntimeType.std.member("iter::Peekable"),
         "skip_value" to smithyJson.member("deserialize::token::skip_value"),
         "Token" to smithyJson.member("deserialize::Token"),
+        "or_empty" to orEmptyJson()
     )
 
     override fun payloadParser(member: MemberShape): RuntimeType {
@@ -87,7 +88,7 @@ class JsonParserGenerator(
             ) {
                 rustTemplate(
                     """
-                    let mut tokens_owned = #{json_token_iter}(input).peekable();
+                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
                     let tokens = &mut tokens_owned;
                     """,
                     *codegenScope
@@ -116,18 +117,16 @@ class JsonParserGenerator(
                 "Builder" to outputShape.builderSymbol(symbolProvider),
                 *codegenScope
             ) {
-                rustBlock("if !input.is_empty()") {
-                    rustTemplate(
-                        """
-                        let mut tokens_owned = #{json_token_iter}(input).peekable();
-                        let tokens = &mut tokens_owned;
-                        #{expect_start_object}(tokens.next())?;
-                        """,
-                        *codegenScope
-                    )
-                    deserializeStructInner(httpDocumentMembers)
-                    expectEndOfTokenStream()
-                }
+                rustTemplate(
+                    """
+                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
+                    let tokens = &mut tokens_owned;
+                    #{expect_start_object}(tokens.next())?;
+                    """,
+                    *codegenScope
+                )
+                deserializeStructInner(httpDocumentMembers)
+                expectEndOfTokenStream()
                 rust("Ok(builder)")
             }
         }
@@ -146,7 +145,7 @@ class JsonParserGenerator(
             ) {
                 rustTemplate(
                     """
-                    let mut tokens_owned = #{json_token_iter}(input).peekable();
+                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
                     let tokens = &mut tokens_owned;
                     #{expect_start_object}(tokens.next())?;
                     """,
@@ -179,6 +178,20 @@ class JsonParserGenerator(
                 rust("result")
             }
         }
+    }
+
+    private fun orEmptyJson(): RuntimeType = RuntimeType.forInlineFun("or_empty_doc", "json_deser") {
+        it.rust(
+            """
+            pub fn or_empty_doc(data: &[u8]) -> &[u8] {
+                if data.is_empty() {
+                    b"{}"
+                } else {
+                    data
+                }
+            }
+        """
+        )
     }
 
     private fun RustWriter.expectEndOfTokenStream() {

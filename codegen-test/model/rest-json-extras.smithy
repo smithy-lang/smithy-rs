@@ -62,6 +62,7 @@ service RestJsonExtras {
         PrimitiveIntOp,
         EscapedStringValues,
         NullInNonSparse,
+        CaseInsensitiveErrorOperation
     ]
 }
 
@@ -267,4 +268,24 @@ structure NullInNonSparseOutput {
 ])
 operation NullInNonSparse {
     output: NullInNonSparseOutput,
+}
+
+@http(uri: "/error-sensitive", method: "POST")
+operation CaseInsensitiveErrorOperation {
+    errors: [CaseInsensitiveError]
+}
+
+@httpResponseTests([
+    {
+        id: "Upper case error modeled lower case",
+        protocol: "aws.protocols#restJson1",
+        code: 500,
+        body: "{\"Message\": \"hello\"}",
+        headers: { "X-Amzn-Errortype": "CaseInsensitiveError" },
+        params: { message: "hello" }
+    }
+])
+@error("server")
+structure CaseInsensitiveError {
+    message: String
 }

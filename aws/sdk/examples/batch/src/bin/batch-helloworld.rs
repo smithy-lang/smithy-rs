@@ -1,10 +1,5 @@
-/*
- * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
- */
-
 use aws_types::region::ProvideRegion;
-use mediapackage::{Client, Config, Error, Region, PKG_VERSION};
+use batch::{Client, Config, Error, Region};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -18,17 +13,16 @@ struct Opt {
     verbose: bool,
 }
 
-/// Lists your AWS Elemental MediaPackage channel ARNs and descriptions.
+/// Lists the names and the ARNs of your batch compute environments in a Region.
 /// # Arguments
 ///
 /// * `[-d DEFAULT-REGION]` - The Region in which the client is created.
-///    If not supplied, uses the value of the **AWS_REGION** environment variable.
-///    If the environment variable is not set, defaults to **us-west-2**.
-/// * `[-v]` - Whether to display additional information.
+///   If not supplied, uses the value of the **AWS_REGION** environment variable.
+///   If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display information.
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
-
     let Opt {
         default_region,
         verbose,
@@ -43,24 +37,24 @@ async fn main() -> Result<(), Error> {
     println!();
 
     if verbose {
-        println!("MediaPackage version: {}", PKG_VERSION);
+        println!("Batch client version: {}", batch::PKG_VERSION);
         println!("Region:               {:?}", &region);
         println!();
     }
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(&region).build();
     let client = Client::from_conf(conf);
+    let rsp = client.describe_compute_environments().send().await?;
 
-    let list_channels = client.list_channels().send().await?;
+    let compute_envs = rsp.compute_environments.unwrap_or_default();
+    println!("Found {} compute environments:", compute_envs.len());
+    for env in compute_envs {
+        let arn = env.compute_environment_arn.as_deref().unwrap_or_default();
+        let name = env.compute_environment_name.as_deref().unwrap_or_default();
 
-    for c in list_channels.channels.unwrap_or_default() {
-        let description = c.description.as_deref().unwrap_or_default();
-        let arn = c.arn.as_deref().unwrap_or_default();
-
-        println!(
-            "Channel Description : {}, Channel ARN : {}",
-            description, arn
-        );
+        println!("  Name : {}", name);
+        println!("  ARN:   {}", arn);
+        println!();
     }
 
     Ok(())
