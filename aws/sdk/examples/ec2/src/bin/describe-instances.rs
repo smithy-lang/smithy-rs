@@ -47,7 +47,9 @@ async fn main() -> Result<(), Error> {
         .or_else(|| aws_types::region::default_provider().region())
         .unwrap_or_else(|| Region::new("us-west-2"));
 
-    let only_one = instance_id.as_deref().unwrap_or_default() != "";
+    println!();
+
+    let only_one = instance_id.is_some();
 
     if verbose {
         println!("EC2 client version: {}", ec2::PKG_VERSION);
@@ -56,34 +58,35 @@ async fn main() -> Result<(), Error> {
         if only_one {
             println!("Instance ID:        {:?}", instance_id);
         }
+
+        println!();
     }
 
     let config = Config::builder().region(&region).build();
-
     let client = Client::from_conf(config);
 
-    if only_one {
-        let resp = client.describe_instances().send().await?;
-        for reservation in resp.reservations.unwrap_or_default() {
-            println!("Instances:");
+    let mut ids: Vec<String> = Vec::new();
+    let id_opt: std::option::Option<std::vec::Vec<std::string::String>>;
 
-            for instance in reservation.instances.unwrap_or_default() {
-                println!("  {}", instance.instance_id.unwrap());
-                println!("  State: {:?}", instance.state.unwrap().name.unwrap());
-                println!();
-            }
+    match instance_id {
+        None => id_opt = None,
+        Some(i) => {
+            ids.push(i);
+            id_opt = Some(ids);
         }
-    } else {
-        let resp = client
-            .describe_instances()
-            .instance_ids(instance_id.unwrap())
-            .send()
-            .await?;
-        for reservation in resp.reservations.unwrap_or_default() {
-            for instance in reservation.instances.unwrap_or_default() {
-                println!("State: {:?}", instance.state.unwrap().name.unwrap());
-                println!();
-            }
+    }
+
+    let resp = client
+        .describe_instances()
+        .set_instance_ids(id_opt)
+        .send()
+        .await?;
+
+    for reservation in resp.reservations.unwrap_or_default() {
+        for instance in reservation.instances.unwrap_or_default() {
+            println!("Instance ID: {}", instance.instance_id.unwrap());
+            println!("State:       {:?}", instance.state.unwrap().name.unwrap());
+            println!();
         }
     }
 
