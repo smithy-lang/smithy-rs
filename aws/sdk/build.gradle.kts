@@ -52,37 +52,40 @@ val tier1Services = setOf(
     "apigateway",
     "batch",
     "cloudformation",
+    "cloudwatch",
+    "cloudwatchlogs",
+    "cognitoidentity",
+    "cognitoidentityprovider",
+    "cognitosync",
+    "config",
     "dynamodb",
     "ec2",
+    "ecr",
     "ecs",
+    "eks",
     "iam",
     "kinesis",
     "kms",
     "lambda",
-    "cloudwatchlogs",
     "medialive",
     "mediapackage",
     "polly",
-    "qldbsession",
     "qldb",
-    "rdsdata",
+    "qldbsession",
     "rds",
+    "rdsdata",
     "route53",
     "s3",
+    "sagemaker",
     "sagemakera2iruntime",
     "sagemakeredge",
     "sagemakerfeaturestoreruntime",
-    "sagemaker",
     "secretsmanager",
     "sesv2",
     "sns",
     "sqs",
     "ssm",
-    "sts",
-    "cloudwatch",
-    "ecr",
-    "config",
-    "eks"
+    "sts"
 )
 
 private val disableServices = setOf("transcribestreaming")
@@ -111,13 +114,16 @@ val generateOnly: Set<String>? = null
  */
 fun discoverServices(allServices: Boolean): List<AwsService> {
     val models = project.file("aws-models")
-    val services = fileTree(models).mapNotNull { file ->
+    val services = fileTree(models)
+        .sortedBy { file -> file.name }
+        .mapNotNull { file ->
         val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
         val services: List<ServiceShape> = model.shapes(ServiceShape::class.java).sorted().toList()
         if (services.size > 1) {
             throw Exception("There must be exactly one service in each aws model file")
         }
         if (services.isEmpty()) {
+            println("${file.name} has no services")
             null
         } else {
             val service = services[0]
@@ -139,9 +145,9 @@ fun discoverServices(allServices: Boolean): List<AwsService> {
     }.filterNot {
         disableServices.contains(it.module)
     }.filter {
-        allServices || (generateOnly != null && generateOnly.contains(it.module)) || (generateOnly == null && tier1Services.contains(
-            it.module
-        ))
+        val inGenerateOnly = generateOnly != null && generateOnly.contains(it.module)
+        val inTier1 = generateOnly == null && tier1Services.contains(it.module)
+        allServices || inGenerateOnly || inTier1
     }
     if (generateOnly == null) {
         val modules = services.map { it.module }.toSet()
@@ -206,6 +212,7 @@ task("relocateServices") {
     description = "relocate AWS services to their final destination"
     doLast {
         awsServices.get().forEach {
+            println("Relocating ${it.module}...")
             copy {
                 from("$buildDir/smithyprojections/sdk/${it.module}/rust-codegen")
                 into(sdkOutputDir.resolve(it.module))

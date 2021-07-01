@@ -1,0 +1,75 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
+use aws_types::region::ProvideRegion;
+
+use cognitosync::{Client, Config, Error, Region};
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+struct Opt {
+    /// The default region
+    #[structopt(short, long)]
+    default_region: Option<String>,
+
+    /// Whether to display additional information
+    #[structopt(short, long)]
+    verbose: bool,
+}
+
+/// Lists identity pools registered with  Amazon Cognito
+/// # Arguments
+///
+/// * `[-d DEFAULT-REGION]` - The region containing the buckets.
+///   If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///   If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-g]` - Whether to display buckets in all regions.
+/// * `[-v]` - Whether to display additional information.
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    tracing_subscriber::fmt::init();
+
+    let Opt {
+        default_region,
+        verbose,
+    } = Opt::from_args();
+
+    let region = default_region
+        .as_ref()
+        .map(|region| Region::new(region.clone()))
+        .or_else(|| aws_types::region::default_provider().region())
+        .unwrap_or_else(|| Region::new("us-west-2"));
+
+    if verbose {
+        println!("Cognito client version: {}", cognitosync::PKG_VERSION);
+        println!("Region:                 {:?}", &region);
+        println!();
+    }
+
+    let config = Config::builder().region(region).build();
+    let client = Client::from_conf(config);
+
+    let response = client
+        .list_identity_pool_usage()
+        .max_results(10)
+        .send()
+        .await?;
+    if let Some(pools) = response.identity_pool_usages {
+        println!("Identity pools:");
+        for pool in pools {
+            println!(
+                "  Identity pool ID:    {}",
+                pool.identity_pool_id.unwrap_or_default()
+            );
+            println!("  Data storage:        {:?}", pool.data_storage);
+            println!("  Sync sessions count: {:?}", pool.sync_sessions_count);
+            println!("  Last modified:       {:?}", pool.last_modified_date);
+            println!();
+        }
+    }
+    println!("Next token: {:?}", response.next_token);
+
+    Ok(())
+}
