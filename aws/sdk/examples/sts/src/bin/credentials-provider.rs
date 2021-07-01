@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_auth::{CredentialsError, ProvideCredentials};
+use aws_auth::provider::{CredentialsError, ProvideCredentials};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use sts::Credentials;
