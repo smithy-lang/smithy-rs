@@ -135,7 +135,7 @@ fun discoverServices(allServices: Boolean, generateOnly: Set<String>): List<AwsS
             throw Exception("There must be exactly one service in each aws model file")
         }
         if (services.isEmpty()) {
-            println("${file.name} has no services")
+            logger.info("${file.name} has no services")
             null
         } else {
             val service = services[0]
@@ -225,7 +225,7 @@ task("relocateServices") {
     description = "relocate AWS services to their final destination"
     doLast {
         awsServices.get().forEach {
-            println("Relocating ${it.module}...")
+            logger.info("Relocating ${it.module}...")
             copy {
                 from("$buildDir/smithyprojections/sdk/${it.module}/rust-codegen")
                 into(sdkOutputDir.resolve(it.module))

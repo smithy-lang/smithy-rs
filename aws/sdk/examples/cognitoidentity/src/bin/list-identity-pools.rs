@@ -35,18 +35,17 @@ async fn main() -> Result<(), Error> {
         verbose,
     } = Opt::from_args();
 
-    let region = region::ChainProvider::first_try(default_region.map(Region::new))
+    let region_provider = region::ChainProvider::first_try(default_region.map(Region::new))
         .or_default_provider()
-        .or_else(Region::new("us-west-2"))
-        .region();
+        .or_else(Region::new("us-west-2"));
 
     if verbose {
         println!("Cognito client version: {}", cognitoidentity::PKG_VERSION);
-        println!("Region:                 {:?}", &region);
+        println!("Region:                 {:?}", region_provider.region());
         println!();
     }
 
-    let config = Config::builder().region(region).build();
+    let config = Config::builder().region(region_provider).build();
     let client = Client::from_conf(config);
 
     let response = client.list_identity_pools().max_results(10).send().await?;
