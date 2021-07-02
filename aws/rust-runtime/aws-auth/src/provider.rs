@@ -44,17 +44,61 @@ type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
 /// An asynchronous credentials provider
 ///
-/// If your use-case is synchronous, you should implement [ProvideCredentials] instead.
+/// If your use-case is synchronous, you should implement [`ProvideCredentials`] instead. Otherwise,
+/// consider using [`async_provide_credentials_fn`] with a closure rather than directly implementing
+/// this trait.
 pub trait AsyncProvideCredentials: Send + Sync {
     fn provide_credentials(&self) -> BoxFuture<CredentialsResult>;
 }
 
 pub type CredentialsProvider = Arc<dyn AsyncProvideCredentials>;
 
+/// A [`AsyncProvideCredentials`] implemented by a closure.
+///
+/// See [`async_provide_credentials_fn`] for more details.
+#[derive(Copy, Clone)]
+pub struct AsyncProvideCredentialsFn<T: Send + Sync> {
+    f: T,
+}
+
+impl<T, F> AsyncProvideCredentials for AsyncProvideCredentialsFn<T>
+where
+    T: Fn() -> F + Send + Sync,
+    F: Future<Output = CredentialsResult> + Send + 'static,
+{
+    fn provide_credentials(&self) -> BoxFuture<CredentialsResult> {
+        Box::pin((self.f)())
+    }
+}
+
+/// Returns a new [`AsyncProvideCredentialsFn`] with the given closure. This allows you
+/// to create an [`AsyncProvideCredentials`] implementation from an async block that returns
+/// a [`CredentialsResult`].
+///
+/// # Example
+///
+/// ```
+/// use aws_auth::Credentials;
+/// use aws_auth::provider::async_provide_credentials_fn;
+///
+/// async_provide_credentials_fn(|| async {
+///     // Async process to retrieve credentials goes here
+///     let credentials: Credentials = todo!().await?;
+///     Ok(credentials)
+/// });
+/// ```
+pub fn async_provide_credentials_fn<T, F>(f: T) -> AsyncProvideCredentialsFn<T>
+where
+    T: Fn() -> F + Send + Sync,
+    F: Future<Output = CredentialsResult> + Send + 'static,
+{
+    AsyncProvideCredentialsFn { f }
+}
+
 /// A synchronous credentials provider
 ///
 /// This is offered as a convenience for credential provider implementations that don't
-/// need to be async. Otherwise, implement [AsyncProvideCredentials].
+/// need to be async. Otherwise, implement [`AsyncProvideCredentials`].
 pub trait ProvideCredentials: Send + Sync {
     fn provide_credentials(&self) -> Result<Credentials, CredentialsError>;
 }
