@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::region::ProvideRegion;
-
+use aws_types::region::{self, ProvideRegion};
 use cognitosync::{Client, Config, Error, Region};
 use structopt::StructOpt;
 
@@ -36,11 +35,10 @@ async fn main() -> Result<(), Error> {
         verbose,
     } = Opt::from_args();
 
-    let region = default_region
-        .as_ref()
-        .map(|region| Region::new(region.clone()))
-        .or_else(|| aws_types::region::default_provider().region())
-        .unwrap_or_else(|| Region::new("us-west-2"));
+    let region = region::ChainProvider::first_try(default_region.map(Region::new))
+        .or_default_provider()
+        .or_else(Region::new("us-west-2"))
+        .region();
 
     if verbose {
         println!("Cognito client version: {}", cognitosync::PKG_VERSION);
