@@ -51,6 +51,7 @@ dependencies {
 // Tier 1 Services have examples and tests
 val tier1Services = setOf(
     "apigateway",
+    "autoscaling",
     "batch",
     "cloudformation",
     "cloudwatch",
