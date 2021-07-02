@@ -7,4 +7,4 @@ mod credentials;
 pub mod middleware;
 pub mod provider;
 
-pub use credentials::*;
+pub use credentials::Credentials;

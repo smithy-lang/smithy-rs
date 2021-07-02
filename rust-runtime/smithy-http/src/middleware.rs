@@ -18,11 +18,9 @@ use http::Response;
 use http_body::Body;
 use std::error::Error;
 use std::future::Future;
-use std::pin::Pin;
 use tracing::trace;
 
 type BoxError = Box<dyn Error + Send + Sync>;
-type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
 /// [`AsyncMapRequest`] defines an asynchronous middleware that transforms an [`operation::Request`].
 ///
@@ -34,11 +32,9 @@ type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 /// retrieval (e.g., from AWS STS's AssumeRole operation).
 pub trait AsyncMapRequest {
     type Error: Into<BoxError> + 'static;
+    type Future: Future<Output = Result<operation::Request, Self::Error>> + Send + 'static;
 
-    fn apply(
-        &self,
-        request: operation::Request,
-    ) -> BoxFuture<Result<operation::Request, Self::Error>>;
+    fn apply(&self, request: operation::Request) -> Self::Future;
 }
 
 /// [`MapRequest`] defines a synchronous middleware that transforms an [`operation::Request`].
