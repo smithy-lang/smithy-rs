@@ -4,6 +4,7 @@
  */
 
 pub mod env;
+pub mod lazy_caching;
 
 use crate::Credentials;
 use smithy_http::property_bag::PropertyBag;
@@ -82,8 +83,8 @@ where
 /// use aws_auth::provider::async_provide_credentials_fn;
 ///
 /// async_provide_credentials_fn(|| async {
-///     // Async process to retrieve credentials goes here
-///     let credentials: Credentials = todo!().await?;
+///     // An async process to retrieve credentials would go here:
+///     let credentials: Credentials = Credentials::from_keys("example", "example", None);
 ///     Ok(credentials)
 /// });
 /// ```
