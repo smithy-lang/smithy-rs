@@ -40,6 +40,7 @@ impl Debug for Credentials {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut creds = f.debug_struct("Credentials");
         creds.field("provider_name", &self.0.provider_name);
+        creds.field("access_key_id", &self.0.access_key_id);
         creds.finish()
     }
 }
