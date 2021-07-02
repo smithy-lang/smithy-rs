@@ -5,6 +5,7 @@
 
 use crate::signer::{OperationSigningConfig, RequestConfig, SigV4Signer, SigningError};
 use aws_auth::Credentials;
+use aws_sigv4_poc::SignableBody;
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
 use smithy_http::middleware::MapRequest;
@@ -73,12 +74,14 @@ fn signing_config(
     let signing_service = config
         .get::<SigningService>()
         .ok_or(SigningStageError::MissingSigningService)?;
+    let payload_override = config.get::<SignableBody<'static>>();
     let request_config = RequestConfig {
         request_ts: config
             .get::<SystemTime>()
             .copied()
             .unwrap_or_else(SystemTime::now),
         region,
+        payload_override,
         service: signing_service,
     };
     Ok((operation_config, request_config, credentials))
