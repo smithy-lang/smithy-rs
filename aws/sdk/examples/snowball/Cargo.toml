@@ -9,3 +9,7 @@ edition = "2018"
 [dependencies]
 tokio = { version = "1", features = ["full"]}
 aws-sdk-snowball = { path = "../../build/aws-sdk/snowball" }
+aws-hyper = { path = "../../build/aws-sdk/aws-hyper" }
+aws-types = { path = "../../build/aws-sdk/aws-types" }
+structopt = { version = "0.3", default-features = false }
+tracing-subscriber = { version = "0.2.16", features = ["fmt"] }
