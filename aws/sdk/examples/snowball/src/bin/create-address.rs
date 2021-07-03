@@ -52,11 +52,6 @@ struct Opt {
     street3: Option<String>,
 }
 
-/*
- * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
- */
-
 #[tokio::main]
 async fn main() -> Result<(), aws_sdk_snowball::Error> {
     let Opt {
