@@ -85,6 +85,7 @@ val tier1Services = setOf(
     "sagemakerfeaturestoreruntime",
     "secretsmanager",
     "sesv2",
+    "snowball",
     "sns",
     "sqs",
     "ssm",
