@@ -9,18 +9,18 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// The default region
+    /// The region
     #[structopt(short, long)]
-    default_region: Option<String>,
+    region: Option<String>,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), aws_sdk_snowball::Error> {
     tracing_subscriber::fmt::init();
 
-    let Opt { default_region } = Opt::from_args();
+    let Opt { region } = Opt::from_args();
 
-    let region_provider = region::ChainProvider::first_try(default_region.map(Region::new))
+    let region_provider = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-east-1"));
 

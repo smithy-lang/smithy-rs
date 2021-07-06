@@ -9,9 +9,9 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// The default region
+    /// The region
     #[structopt(short, long)]
-    default_region: Option<String>,
+    region: Option<String>,
 
     /// Whether to display additional information
     #[structopt(short, long)]
@@ -21,7 +21,7 @@ struct Opt {
 /// Lists your Amazon Cognito user pools
 /// # Arguments
 ///
-/// * `[-d DEFAULT-REGION]` - The region containing the buckets.
+/// * `[-r REGION]` - The region containing the buckets.
 ///   If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
 ///   If the environment variable is not set, defaults to **us-west-2**.
 /// * `[-g]` - Whether to display buckets in all regions.
@@ -30,12 +30,9 @@ struct Opt {
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
 
-    let Opt {
-        default_region,
-        verbose,
-    } = Opt::from_args();
+    let Opt { region, verbose } = Opt::from_args();
 
-    let region_provider = region::ChainProvider::first_try(default_region.map(Region::new))
+    let region_provider = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
 

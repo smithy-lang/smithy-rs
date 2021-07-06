@@ -12,7 +12,7 @@ use structopt::StructOpt;
 struct Opt {
     /// The default region
     #[structopt(short, long)]
-    default_region: Option<String>,
+    region: Option<String>,
 
     // Address information
     #[structopt(long)]
@@ -57,7 +57,7 @@ async fn main() -> Result<(), aws_sdk_snowball::Error> {
     tracing_subscriber::fmt::init();
 
     let Opt {
-        default_region,
+        region,
         city,
         company,
         country,
@@ -72,7 +72,7 @@ async fn main() -> Result<(), aws_sdk_snowball::Error> {
         street3,
     } = Opt::from_args();
 
-    let region_provider = region::ChainProvider::first_try(default_region.map(Region::new))
+    let region_provider = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
 
