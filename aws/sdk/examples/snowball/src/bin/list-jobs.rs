@@ -4,12 +4,29 @@
  */
 
 use aws_sdk_snowball::{Config, Region};
+use aws_types::region;
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+struct Opt {
+    /// The default region
+    #[structopt(short, long)]
+    default_region: Option<String>,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), aws_sdk_snowball::Error> {
-    let region = Region::new("us-east-1");
-    let conf = Config::builder().region(region).build();
+    tracing_subscriber::fmt::init();
+
+    let Opt { default_region } = Opt::from_args();
+
+    let region_provider = region::ChainProvider::first_try(default_region.map(Region::new))
+        .or_default_provider()
+        .or_else(Region::new("us-east-1"));
+
+    let conf = Config::builder().region(region_provider).build();
     let client = aws_sdk_snowball::Client::from_conf(conf);
+
     let jobs = client.list_jobs().send().await?;
     for job in jobs.job_list_entries.unwrap() {
         println!("JobId: {:?}", job.job_id);
