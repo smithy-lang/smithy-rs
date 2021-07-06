@@ -5,12 +5,12 @@
 
 use aws_sdk_snowball::model::Address;
 use aws_sdk_snowball::{Config, Region};
-use aws_types::region::{EnvironmentProvider, ProvideRegion};
+use aws_types::region;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// The region
+    /// The default region
     #[structopt(short, long)]
     region: Option<String>,
 
@@ -54,6 +54,8 @@ struct Opt {
 
 #[tokio::main]
 async fn main() -> Result<(), aws_sdk_snowball::Error> {
+    tracing_subscriber::fmt::init();
+
     let Opt {
         region,
         city,
@@ -70,10 +72,9 @@ async fn main() -> Result<(), aws_sdk_snowball::Error> {
         street3,
     } = Opt::from_args();
 
-    let region = EnvironmentProvider::new()
-        .region()
-        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
-        .unwrap_or_else(|| Region::new("us-west-2"));
+    let region_provider = region::ChainProvider::first_try(region.map(Region::new))
+        .or_default_provider()
+        .or_else(Region::new("us-west-2"));
 
     let new_address = Address::builder()
         .set_address_id(None)
@@ -92,7 +93,7 @@ async fn main() -> Result<(), aws_sdk_snowball::Error> {
         .set_is_restricted(Some(false))
         .build();
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region_provider).build();
     let client = aws_sdk_snowball::Client::from_conf(conf);
 
     let result = client.create_address().address(new_address).send().await?;
