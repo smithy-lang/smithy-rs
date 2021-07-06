@@ -68,11 +68,11 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                 docs("""Set the credentials provider for this service""")
                 rust(
                     """
-            pub fn credentials_provider(mut self, credentials_provider: impl #T + 'static) -> Self {
-                self.credentials_provider = Some(std::sync::Arc::new(credentials_provider));
-                self
-            }
-            """,
+                    pub fn credentials_provider(mut self, credentials_provider: impl #T + 'static) -> Self {
+                        self.credentials_provider = Some(std::sync::Arc::new(credentials_provider));
+                        self
+                    }
+                    """,
                     credentialsProvider,
                 )
             }
@@ -90,8 +90,8 @@ class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : Ope
             is OperationSection.MutateRequest -> writable {
                 rust(
                     """
-                #T(&mut ${section.request}.config_mut(), ${section.config}.credentials_provider.clone());
-                """,
+                    #T(&mut ${section.request}.config_mut(), ${section.config}.credentials_provider.clone());
+                    """,
                     setProvider(runtimeConfig)
                 )
             }
@@ -111,7 +111,10 @@ class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
 
 fun awsAuth(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-auth")
 fun credentialsProvider(runtimeConfig: RuntimeConfig) =
-    RuntimeType("ProvideCredentials", awsAuth(runtimeConfig), "aws_auth")
+    RuntimeType("AsyncProvideCredentials", awsAuth(runtimeConfig), "aws_auth::provider")
 
-fun defaultProvider(runtimeConfig: RuntimeConfig) = RuntimeType("default_provider", awsAuth(runtimeConfig), "aws_auth")
-fun setProvider(runtimeConfig: RuntimeConfig) = RuntimeType("set_provider", awsAuth(runtimeConfig), "aws_auth")
+fun defaultProvider(runtimeConfig: RuntimeConfig) =
+    RuntimeType("default_provider", awsAuth(runtimeConfig), "aws_auth::provider")
+
+fun setProvider(runtimeConfig: RuntimeConfig) =
+    RuntimeType("set_provider", awsAuth(runtimeConfig), "aws_auth::provider")
