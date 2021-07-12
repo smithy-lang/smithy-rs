@@ -29,7 +29,7 @@ const DEFAULT_CREDENTIAL_EXPIRATION: Duration = Duration::from_secs(15 * 60);
 /// # Note
 ///
 /// This is __NOT__ production ready yet. Timeouts and panic safety have not been implemented yet.
-pub struct LazyCachingCredentialsProvider(Provider<SystemTimeProvider>);
+pub struct LazyCachingCredentialsProvider(Provider<SystemTimeSource>);
 
 impl LazyCachingCredentialsProvider {
     fn new(
@@ -38,7 +38,7 @@ impl LazyCachingCredentialsProvider {
         default_credential_expiration: Duration,
     ) -> Self {
         LazyCachingCredentialsProvider(Provider::new(
-            SystemTimeProvider,
+            SystemTimeSource,
             refresh,
             refresh_timeout,
             default_credential_expiration,
@@ -138,14 +138,14 @@ pub mod builder {
 }
 
 // Allows us to abstract time for tests.
-trait TimeProvider: Clone + Send + Sync + 'static {
+trait TimeSource: Clone + Send + Sync + 'static {
     fn now(&self) -> SystemTime;
 }
 
 #[derive(Copy, Clone)]
-struct SystemTimeProvider;
+struct SystemTimeSource;
 
-impl TimeProvider for SystemTimeProvider {
+impl TimeSource for SystemTimeSource {
     fn now(&self) -> SystemTime {
         SystemTime::now()
     }
@@ -161,7 +161,7 @@ fn expired(credentials: &Credentials, now: SystemTime) -> bool {
 }
 
 #[derive(Clone)]
-struct Inner<T: TimeProvider> {
+struct Inner<T: TimeSource> {
     time: T,
     cache: Cache,
     refresh: Arc<dyn AsyncProvideCredentials>,
@@ -169,7 +169,7 @@ struct Inner<T: TimeProvider> {
     default_credential_expiration: Duration,
 }
 
-impl<T: TimeProvider> Inner<T> {
+impl<T: TimeSource> Inner<T> {
     async fn refresh(&self) -> CredentialsResult {
         let time = self.time.clone();
         let default_credential_expiration = self.default_credential_expiration;
@@ -214,11 +214,11 @@ impl<T: TimeProvider> Inner<T> {
     }
 }
 
-struct Provider<T: TimeProvider> {
+struct Provider<T: TimeSource> {
     inner: Inner<T>,
 }
 
-impl<T: TimeProvider> Provider<T> {
+impl<T: TimeSource> Provider<T> {
     fn new(
         time: T,
         refresh: Arc<dyn AsyncProvideCredentials>,
@@ -307,7 +307,7 @@ impl Cache {
 mod tests {
     use super::expired;
     use crate::provider::lazy_caching::{
-        Cache, Provider, TimeProvider, DEFAULT_CREDENTIAL_EXPIRATION, DEFAULT_REFRESH_TIMEOUT,
+        Cache, Provider, TimeSource, DEFAULT_CREDENTIAL_EXPIRATION, DEFAULT_REFRESH_TIMEOUT,
     };
     use crate::provider::{async_provide_credentials_fn, CredentialsError, CredentialsResult};
     use crate::Credentials;
@@ -332,16 +332,13 @@ mod tests {
         }
     }
 
-    impl TimeProvider for TestTime {
+    impl TimeSource for TestTime {
         fn now(&self) -> SystemTime {
             *self.time.lock().unwrap()
         }
     }
 
-    fn test_provider<T: TimeProvider>(
-        time: T,
-        refresh_list: Vec<CredentialsResult>,
-    ) -> Provider<T> {
+    fn test_provider<T: TimeSource>(time: T, refresh_list: Vec<CredentialsResult>) -> Provider<T> {
         let refresh_list = Arc::new(Mutex::new(refresh_list));
         Provider::new(
             time,
@@ -366,7 +363,7 @@ mod tests {
         Credentials::new("test", "test", None, Some(epoch_secs(expired_secs)), "test")
     }
 
-    async fn expect_creds<T: TimeProvider>(expired_secs: u64, provider: &Provider<T>) {
+    async fn expect_creds<T: TimeSource>(expired_secs: u64, provider: &Provider<T>) {
         let creds = provider
             .provide_credentials()
             .await
