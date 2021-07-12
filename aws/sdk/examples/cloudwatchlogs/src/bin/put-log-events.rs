@@ -69,8 +69,8 @@ async fn main() -> Result<(), cloudwatchlogs::Error> {
 
 async fn get_next_seq_token(
     client: &Client,
-    log_group: &String,
-    log_stream: &String,
+    log_group: &str,
+    log_stream: &str,
 ) -> Result<String, cloudwatchlogs::Error> {
     let seq_token = client
         .describe_log_streams()
