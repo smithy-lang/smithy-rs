@@ -28,12 +28,12 @@ class CloudWatchDecorator : RustCodegenDecorator {
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
         return baseCustomizations.letIf(applies(protocolConfig)) {
-            it + CloudwatchAddLogFormatHeader()
+            it + CloudWatchAddLogFormatHeader()
         }
     }
 }
 
-class CloudwatchAddLogFormatHeader : OperationCustomization() {
+class CloudWatchAddLogFormatHeader : OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
         is OperationSection.FinalizeOperation -> emptySection
         OperationSection.OperationImplBlock -> emptySection
