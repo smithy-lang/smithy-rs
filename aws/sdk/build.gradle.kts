@@ -54,7 +54,6 @@ val tier1Services = setOf(
     "batch",
     "cloudformation",
     "cloudwatch",
-    "cloudwatch",
     "cloudwatchlogs",
     "cognitoidentity",
     "cognitoidentityprovider",
