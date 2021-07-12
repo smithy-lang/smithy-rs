@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use crate::provider::time::{SystemTimeSource, TimeSource};
 use crate::provider::{AsyncProvideCredentials, BoxFuture, CredentialsResult};
 use crate::Credentials;
 use std::future::Future;
@@ -134,20 +135,6 @@ pub mod builder {
                 default_credential_expiration,
             )
         }
-    }
-}
-
-// Allows us to abstract time for tests.
-trait TimeSource: Clone + Send + Sync + 'static {
-    fn now(&self) -> SystemTime;
-}
-
-#[derive(Copy, Clone)]
-struct SystemTimeSource;
-
-impl TimeSource for SystemTimeSource {
-    fn now(&self) -> SystemTime {
-        SystemTime::now()
     }
 }
 

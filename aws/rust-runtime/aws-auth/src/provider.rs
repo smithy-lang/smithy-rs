@@ -5,6 +5,7 @@
 
 pub mod env;
 pub mod lazy_caching;
+mod time;
 
 use crate::Credentials;
 use smithy_http::property_bag::PropertyBag;
