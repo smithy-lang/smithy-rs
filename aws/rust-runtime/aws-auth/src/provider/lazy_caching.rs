@@ -148,7 +148,7 @@ fn expired(credentials: &Credentials, now: SystemTime) -> bool {
 }
 
 #[derive(Clone)]
-struct Inner<T: TimeSource> {
+struct Provider<T: TimeSource> {
     time: T,
     cache: Cache,
     refresh: Arc<dyn AsyncProvideCredentials>,
@@ -156,26 +156,47 @@ struct Inner<T: TimeSource> {
     default_credential_expiration: Duration,
 }
 
-impl<T: TimeSource> Inner<T> {
+impl<T: TimeSource> Provider<T> {
+    fn new(
+        time: T,
+        refresh: Arc<dyn AsyncProvideCredentials>,
+        refresh_timeout: Duration,
+        default_credential_expiration: Duration,
+    ) -> Self {
+        Provider {
+            time,
+            cache: Cache::new(),
+            refresh,
+            refresh_timeout,
+            default_credential_expiration,
+        }
+    }
+
+    fn provide_credentials(&self) -> BoxFuture<CredentialsResult> {
+        let this = self.clone();
+        Box::pin(async move {
+            let now = this.time.now();
+            if this.needs_refresh(now).await {
+                let span = trace_span!("lazy_refresh_credentials");
+                let _enter = span.enter();
+                this.refresh().await
+            } else {
+                Ok(this.cached().await)
+            }
+        })
+    }
+
     async fn refresh(&self) -> CredentialsResult {
-        let time = self.time.clone();
+        let now = self.time.now();
         let default_credential_expiration = self.default_credential_expiration;
         let future = self.refresh.provide_credentials();
         self.cache
             .refresh(|| async move {
-                let credentials = future.await?;
+                let mut credentials = future.await?;
                 // If the credentials don't have an expiration time, then create a default one
-                let credentials = if credentials.expiry().is_none() {
-                    Credentials::new(
-                        credentials.access_key_id(),
-                        credentials.secret_access_key(),
-                        credentials.session_token().map(|s| s.to_string()),
-                        Some(time.now() + default_credential_expiration),
-                        "lazy_caching_default_credential_expiration",
-                    )
-                } else {
-                    credentials
-                };
+                if credentials.expiry().is_none() {
+                    *credentials.expiry_mut() = Some(now + default_credential_expiration);
+                }
                 Ok(credentials)
             })
             .await
@@ -198,43 +219,6 @@ impl<T: TimeSource> Inner<T> {
             .get()
             .await
             .expect("refresh requirement checked in advance")
-    }
-}
-
-struct Provider<T: TimeSource> {
-    inner: Inner<T>,
-}
-
-impl<T: TimeSource> Provider<T> {
-    fn new(
-        time: T,
-        refresh: Arc<dyn AsyncProvideCredentials>,
-        refresh_timeout: Duration,
-        default_credential_expiration: Duration,
-    ) -> Self {
-        Provider {
-            inner: Inner {
-                time,
-                cache: Cache::new(),
-                refresh,
-                refresh_timeout,
-                default_credential_expiration,
-            },
-        }
-    }
-
-    fn provide_credentials(&self) -> BoxFuture<CredentialsResult> {
-        let inner = self.inner.clone();
-        Box::pin(async move {
-            let now = inner.time.now();
-            if inner.needs_refresh(now).await {
-                let span = trace_span!("lazy_refresh_credentials");
-                let _enter = span.enter();
-                inner.refresh().await
-            } else {
-                Ok(inner.cached().await)
-            }
-        })
     }
 }
 
@@ -422,10 +406,10 @@ mod tests {
 
         expect_creds(1000, &provider).await;
         expect_creds(1000, &provider).await;
-        provider.inner.time.set(epoch_secs(1500));
+        provider.time.set(epoch_secs(1500));
         expect_creds(2000, &provider).await;
         expect_creds(2000, &provider).await;
-        provider.inner.time.set(epoch_secs(2500));
+        provider.time.set(epoch_secs(2500));
         expect_creds(3000, &provider).await;
         expect_creds(3000, &provider).await;
     }
@@ -441,7 +425,7 @@ mod tests {
         );
 
         expect_creds(1000, &provider).await;
-        provider.inner.time.set(epoch_secs(1500));
+        provider.time.set(epoch_secs(1500));
         assert!(provider.provide_credentials().await.is_err());
     }
 }
