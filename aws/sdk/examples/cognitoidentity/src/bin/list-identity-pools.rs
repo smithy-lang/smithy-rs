@@ -18,7 +18,7 @@ struct Opt {
     verbose: bool,
 }
 
-/// Lists your Amazon Cognito identitiy pools.
+/// Lists your Amazon Cognito identitiy pools in the Region.
 /// # Arguments
 ///
 /// * `[-r REGION]` - The Region in which the client is created.
@@ -39,7 +39,10 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("Cognito client version: {}", PKG_VERSION);
-        println!("Region:                 {}", region_provider.region().unwrap().as_ref());
+        println!(
+            "Region:                 {}",
+            region_provider.region().unwrap().as_ref()
+        );
         println!();
     }
 

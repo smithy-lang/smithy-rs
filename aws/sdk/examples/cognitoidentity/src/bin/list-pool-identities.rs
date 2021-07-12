@@ -25,9 +25,10 @@ struct Opt {
     verbose: bool,
 }
 
-/// Lists your Amazon Cognito identitiy pools.
+/// Lists the identities in an Amazon Cognito identitiy pool.
 /// # Arguments
 ///
+/// * `-i IDENTITY-POOL-ID` - The ID of the identity pool.
 /// * `[-r REGION]` - The Region in which the client is created.
 ///   If not supplied, uses the value of the **AWS_REGION** environment variable.
 ///   If the environment variable is not set, defaults to **us-west-2**.

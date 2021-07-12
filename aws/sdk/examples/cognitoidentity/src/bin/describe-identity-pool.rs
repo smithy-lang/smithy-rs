@@ -22,7 +22,7 @@ struct Opt {
     verbose: bool,
 }
 
-/// Lists your Amazon Cognito identitiy pools.
+/// Displays some information about an Amazon Cognito identitiy pool.
 /// # Arguments
 ///
 /// * `[-r REGION]` - The Region in which the client is created.
