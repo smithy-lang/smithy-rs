@@ -25,7 +25,6 @@ struct Opt {
 /// * `[-r REGION]` - The region containing the buckets.
 ///   If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
 ///   If the environment variable is not set, defaults to **us-west-2**.
-/// * `[-g]` - Whether to display buckets in all regions.
 /// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() -> Result<(), Error> {
