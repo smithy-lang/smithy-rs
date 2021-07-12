@@ -108,33 +108,18 @@ async fn main() -> Result<(), Error> {
             "Region:                 {}",
             region_provider.region().unwrap().as_ref()
         );
-        println!("City:                   {}", city.clone());
-        println!(
-            "Company:                {}",
-            company.clone().unwrap_or_default()
-        );
-        println!("Country:                {}", country.clone());
-        println!(
-            "Landmark:               {}",
-            landmark.clone().unwrap_or_default()
-        );
-        println!("Name:                   {}", name.clone());
-        println!("Phone number:           {}", phone_number.clone());
-        println!("Postal code:            {}", postal_code.clone());
-        println!(
-            "Prefecture or district: {}",
-            prefecture_or_district.clone().unwrap_or_default()
-        );
-        println!("State:                  {}", state.clone());
-        println!("Street1:                {}", street1.clone());
-        println!(
-            "Street2:                {}",
-            street2.clone().unwrap_or_default()
-        );
-        println!(
-            "Street3:                {}",
-            street3.clone().unwrap_or_default()
-        );
+        println!("City:                   {}", &city);
+        println!("Company:                {:?}", &company);
+        println!("Country:                {}", &country);
+        println!("Landmark:               {:?}", &landmark);
+        println!("Name:                   {}", &name);
+        println!("Phone number:           {}", &phone_number);
+        println!("Postal code:            {}", &postal_code);
+        println!("Prefecture or district: {:?}", &prefecture_or_district);
+        println!("State:                  {}", &state);
+        println!("Street1:                {}", &street1);
+        println!("Street2:                {:?}", &street2);
+        println!("Street3:                {:?}", &street3);
     }
 
     let new_address = Address::builder()

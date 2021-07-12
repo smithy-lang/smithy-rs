@@ -40,7 +40,7 @@ async fn main() -> Result<(), Error> {
     if verbose {
         println!("Snowball version: {}", PKG_VERSION);
         println!(
-            "Region:                {}",
+            "Region:           {}",
             region_provider.region().unwrap().as_ref()
         );
     }
