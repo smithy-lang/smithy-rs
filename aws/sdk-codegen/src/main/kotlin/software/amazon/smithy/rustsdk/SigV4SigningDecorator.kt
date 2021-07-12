@@ -6,6 +6,7 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
+import software.amazon.smithy.aws.traits.auth.UnsignedPayloadTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -54,7 +55,7 @@ class SigV4SigningDecorator : RustCodegenDecorator {
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
         return baseCustomizations.letIf(applies(protocolConfig)) {
-            it + SigV4SigningFeature(protocolConfig.runtimeConfig, protocolConfig.serviceShape)
+            it + SigV4SigningFeature(operation, protocolConfig.runtimeConfig, protocolConfig.serviceShape)
         }
     }
 }
@@ -90,8 +91,15 @@ fun disableDoubleEncode(service: ServiceShape) = when {
     else -> false
 }
 
-class SigV4SigningFeature(private val runtimeConfig: RuntimeConfig, private val service: ServiceShape) :
+class SigV4SigningFeature(
+    private val operation: OperationShape,
+    runtimeConfig: RuntimeConfig,
+    private val service: ServiceShape
+) :
     OperationCustomization() {
+    private val codegenScope =
+        arrayOf("sig_auth" to runtimeConfig.sigAuth().asType(), "aws_types" to awsTypes(runtimeConfig).asType())
+
     override fun section(section: OperationSection): Writable {
         return when (section) {
             is OperationSection.MutateRequest -> writable {
@@ -100,7 +108,7 @@ class SigV4SigningFeature(private val runtimeConfig: RuntimeConfig, private val 
                 ##[allow(unused_mut)]
                 let mut signing_config = #{sig_auth}::signer::OperationSigningConfig::default_config();
                 """,
-                    "sig_auth" to runtimeConfig.sigAuth().asType()
+                    *codegenScope
                 )
                 if (needsAmzSha256(service)) {
                     rust("signing_config.signing_options.content_sha256_header = true;")
@@ -108,12 +116,19 @@ class SigV4SigningFeature(private val runtimeConfig: RuntimeConfig, private val 
                 if (disableDoubleEncode(service)) {
                     rust("signing_config.signing_options.double_uri_encode = false;")
                 }
+                if (operation.hasTrait<UnsignedPayloadTrait>()) {
+                    rust("signing_config.signing_options.content_sha256_header = true;")
+                    rustTemplate(
+                        "${section.request}.config_mut().insert(#{sig_auth}::signer::SignableBody::UnsignedPayload);",
+                        *codegenScope
+                    )
+                }
                 rustTemplate(
                     """
                 ${section.request}.config_mut().insert(signing_config);
                 ${section.request}.config_mut().insert(#{aws_types}::SigningService::from_static(${section.config}.signing_service()));
                 """,
-                    "aws_types" to awsTypes(runtimeConfig).asType()
+                    *codegenScope
                 )
             }
             else -> emptySection

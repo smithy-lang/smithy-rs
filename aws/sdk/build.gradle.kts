@@ -50,39 +50,46 @@ dependencies {
 // Tier 1 Services have examples and tests
 val tier1Services = setOf(
     "apigateway",
+    "autoscaling",
     "batch",
     "cloudformation",
+    "cloudwatch",
+    "cloudwatch",
+    "cloudwatchlogs",
+    "cognitoidentity",
+    "cognitoidentityprovider",
+    "cognitosync",
+    "config",
     "dynamodb",
+    "ebs",
     "ec2",
+    "ecr",
     "ecs",
+    "eks",
     "iam",
     "kinesis",
     "kms",
     "lambda",
-    "cloudwatchlogs",
     "medialive",
     "mediapackage",
     "polly",
-    "qldbsession",
     "qldb",
-    "rdsdata",
+    "qldbsession",
     "rds",
+    "rdsdata",
     "route53",
-    "runtime",
     "s3",
+    "sagemaker",
     "sagemakera2iruntime",
     "sagemakeredge",
     "sagemakerfeaturestoreruntime",
-    "sagemaker",
     "secretsmanager",
     "sesv2",
+    "snowball",
     "sns",
     "sqs",
     "ssm",
-    "sts",
-    "cloudwatch",
-    "ecr",
-    "eks"
+    "sts"
 )
 
 private val disableServices = setOf("transcribestreaming")
@@ -97,27 +104,39 @@ data class AwsService(
     fun files(): List<File> = listOf(modelFile) + extraFiles
 }
 
-val generateAllServices = project.providers.environmentVariable("GENERATE_ALL_SERVICES").orElse("")
-val awsServices: Provider<List<AwsService>> = generateAllServices.map { v ->
-    discoverServices(v.toLowerCase() == "true")
-}
+val generateAllServices =
+    project.providers.environmentVariable("GENERATE_ALL_SERVICES").forUseAtConfigurationTime().orElse("")
 
-val generateOnly: Set<String>? = null
+val generateOnly: Provider<Set<String>> =
+    project.providers.environmentVariable("GENERATE_ONLY")
+        .forUseAtConfigurationTime()
+        .map { envVar ->
+            envVar.split(",").filter { service -> service.trim().isNotBlank() }
+        }
+        .orElse(listOf())
+        .map { it.toSet() }
+
+val awsServices: Provider<List<AwsService>> = generateAllServices.zip(generateOnly) { v, only ->
+    discoverServices(v.toLowerCase() == "true", only)
+}
 
 /**
  * Discovers services from the `models` directory
  *
  * Do not invoke this function directly. Use the `awsServices` provider.
  */
-fun discoverServices(allServices: Boolean): List<AwsService> {
+fun discoverServices(allServices: Boolean, generateOnly: Set<String>): List<AwsService> {
     val models = project.file("aws-models")
-    return fileTree(models).mapNotNull { file ->
+    val services = fileTree(models)
+        .sortedBy { file -> file.name }
+        .mapNotNull { file ->
         val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
         val services: List<ServiceShape> = model.shapes(ServiceShape::class.java).sorted().toList()
         if (services.size > 1) {
             throw Exception("There must be exactly one service in each aws model file")
         }
         if (services.isEmpty()) {
+            logger.info("${file.name} has no services")
             null
         } else {
             val service = services[0]
@@ -136,12 +155,20 @@ fun discoverServices(allServices: Boolean): List<AwsService> {
             }
             AwsService(service = service.id.toString(), module = sdkId, modelFile = file, extraFiles = extras)
         }
-    }.filterNot { disableServices.contains(it.module) }
-        .filter {
-            allServices || (generateOnly != null && generateOnly.contains(it.module)) || (generateOnly == null && tier1Services.contains(
-                it.module
-            ))
+    }.filterNot {
+        disableServices.contains(it.module)
+    }.filter {
+        val inGenerateOnly = generateOnly.isNotEmpty() && generateOnly.contains(it.module)
+        val inTier1 = generateOnly.isEmpty() && tier1Services.contains(it.module)
+        allServices || inGenerateOnly || inTier1
+    }
+    if (generateOnly.isNotEmpty()) {
+        val modules = services.map { it.module }.toSet()
+        tier1Services.forEach { service ->
+            check(modules.contains(service)) { "Service $service was in list of tier 1 services but not generated!" }
         }
+    }
+    return services
 }
 
 fun generateSmithyBuild(tests: List<AwsService>): String {
@@ -187,6 +214,7 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
 
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
+    dependsOn(awsServices)
     doFirst {
         projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices.get()))
     }
@@ -198,6 +226,7 @@ task("relocateServices") {
     description = "relocate AWS services to their final destination"
     doLast {
         awsServices.get().forEach {
+            logger.info("Relocating ${it.module}...")
             copy {
                 from("$buildDir/smithyprojections/sdk/${it.module}/rust-codegen")
                 into(sdkOutputDir.resolve(it.module))
@@ -264,9 +293,10 @@ tasks.register<Copy>("relocateRuntime") {
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {
+    val generatedModules = services.map { it.module }.toSet()
     val examples = projectDir.resolve("examples")
         .listFiles { file -> !file.name.startsWith(".") }.orEmpty().toList()
-        .filter { generateOnly == null || generateOnly.contains(it.name) }
+        .filter { generatedModules.contains(it.name) }
         .map { "examples/${it.name}" }
 
     val modules = services.map(AwsService::module) + runtimeModules + awsModules + examples.toList()
@@ -283,7 +313,10 @@ task("generateCargoWorkspace") {
         sdkOutputDir.mkdirs()
         sdkOutputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices.get()))
     }
+    dependsOn(awsServices)
+    inputs.dir(projectDir.resolve("examples"))
     outputs.file(sdkOutputDir.resolve("Cargo.toml"))
+    outputs.upToDateWhen { false }
 }
 
 task("finalizeSdk") {
@@ -300,7 +333,9 @@ task("finalizeSdk") {
 tasks["smithyBuildJar"].inputs.file(projectDir.resolve("smithy-build.json"))
 tasks["smithyBuildJar"].inputs.dir(projectDir.resolve("aws-models"))
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
+tasks["smithyBuildJar"].dependsOn(awsServices)
 tasks["smithyBuildJar"].dependsOn("generateCargoWorkspace")
+tasks["smithyBuildJar"].outputs.upToDateWhen { false }
 tasks["assemble"].dependsOn("smithyBuildJar")
 tasks["assemble"].finalizedBy("finalizeSdk")
 

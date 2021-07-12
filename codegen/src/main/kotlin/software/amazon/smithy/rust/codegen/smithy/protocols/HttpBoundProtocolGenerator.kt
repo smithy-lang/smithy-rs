@@ -19,7 +19,9 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.assignment
 import software.amazon.smithy.rust.codegen.rustlang.rust
+import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
@@ -37,6 +39,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
@@ -288,7 +291,10 @@ class HttpBoundProtocolGenerator(
                         let error_code = match generic.code() {
                             Some(code) => code,
                             None => return Err(#{error_symbol}::unhandled(generic))
-                        };""",
+                        };
+
+                        let _error_message = generic.message().map(|msg|msg.to_owned());
+                        """,
                         "error_symbol" to errorSymbol,
                     )
                     withBlock("Err(match error_code {", "})") {
@@ -296,16 +302,33 @@ class HttpBoundProtocolGenerator(
                             val errorShape = model.expectShape(error, StructureShape::class.java)
                             val variantName = symbolProvider.toSymbol(model.expectShape(error)).name
                             withBlock(
-                                "${httpBindingResolver.errorCode(errorShape).dq()} => #1T { meta: generic, kind: #1TKind::$variantName({",
+                                "${
+                                httpBindingResolver.errorCode(errorShape).dq()
+                                } => #1T { meta: generic, kind: #1TKind::$variantName({",
                                 "})},",
                                 errorSymbol
                             ) {
-                                renderShapeParser(
-                                    operationShape,
-                                    errorShape,
-                                    httpBindingResolver.errorResponseBindings(errorShape),
-                                    errorSymbol
-                                )
+                                Attribute.AllowUnusedMut.render(this)
+                                assignment("mut tmp") {
+                                    rustBlock("") {
+                                        renderShapeParser(
+                                            operationShape,
+                                            errorShape,
+                                            httpBindingResolver.errorResponseBindings(errorShape),
+                                            errorSymbol
+                                        )
+                                    }
+                                }
+                                if (errorShape.errorMessageMember() != null) {
+                                    rust(
+                                        """
+                                        if (&tmp.message).is_none() {
+                                            tmp.message = _error_message;
+                                        }
+                                        """
+                                    )
+                                }
+                                rust("tmp")
                             }
                         }
                         rust("_ => #T::generic(generic)", errorSymbol)
