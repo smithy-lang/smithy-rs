@@ -4,10 +4,7 @@
  */
 
 use aws_types::region::{self, ProvideRegion};
-use chrono::prelude::DateTime;
-use chrono::Utc;
 use cognitoidentity::{Client, Config, Error, Region, PKG_VERSION};
-//use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -69,33 +66,19 @@ async fn main() -> Result<(), Error> {
         .send()
         .await?;
 
-    let pool_id = response.identity_pool_id.unwrap_or_default();
-    println!("Pool ID: {}", pool_id);
-    println!();
-
     if let Some(ids) = response.identities {
         println!("Identitities:");
         for id in ids {
-            let creation_date = id.creation_date.unwrap().to_system_time().unwrap();
-            let creation_datetime = DateTime::<Utc>::from(creation_date);
-            // Formats the combined date and time with the specified format string.
-            let creation_timestamp_str =
-                creation_datetime.format("%Y-%m-%d %H:%M:%S.%f").to_string();
-
+            let creation_timestamp = id.creation_date.unwrap().to_chrono();
             let idid = id.identity_id.unwrap_or_default();
-            let mod_date = id.last_modified_date.unwrap().to_system_time().unwrap();
-            let mod_datetime = DateTime::<Utc>::from(mod_date);
-            let mod_timestamp_str = mod_datetime.format("%Y-%m-%d %H:%M:%S.%f").to_string();
-
-            println!("  Creation data:      {}", creation_timestamp_str);
+            let mod_timestamp = id.last_modified_date.unwrap().to_chrono();
+            println!("  Creation date:      {}", creation_timestamp);
             println!("  ID:                 {}", idid);
-            println!("  Last modified data: {}", mod_timestamp_str);
+            println!("  Last modified date: {}", mod_timestamp);
 
-            if let Some(logins) = id.logins {
-                println!("  Logins:");
-                for login in logins {
-                    println!("    {}", login);
-                }
+            println!("  Logins:");
+            for login in id.logins.unwrap_or_default() {
+                println!("    {}", login);
             }
 
             println!();
