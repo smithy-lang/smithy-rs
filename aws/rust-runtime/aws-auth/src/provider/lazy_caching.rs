@@ -3,17 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use crate::provider::cache::Cache;
 use crate::provider::time::{SystemTimeSource, TimeSource};
 use crate::provider::{AsyncProvideCredentials, BoxFuture, CredentialsResult};
-use crate::Credentials;
-use std::future::Future;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
-use tokio::sync::{OnceCell, RwLock};
-use tracing::{trace_span, warn};
+use std::time::Duration;
+use tracing::{trace_span, Instrument};
 
 const DEFAULT_REFRESH_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_CREDENTIAL_EXPIRATION: Duration = Duration::from_secs(15 * 60);
+const DEFAULT_EXPIRATION_MARGIN: Duration = Duration::from_secs(10);
 
 // TODO: Implement async runtime-agnostic timeouts
 // TODO: Add catch_unwind() to handle panics
@@ -37,12 +36,14 @@ impl LazyCachingCredentialsProvider {
         refresh: Arc<dyn AsyncProvideCredentials>,
         refresh_timeout: Duration,
         default_credential_expiration: Duration,
+        expiration_margin: Duration,
     ) -> Self {
         LazyCachingCredentialsProvider(Provider::new(
             SystemTimeSource,
             refresh,
             refresh_timeout,
             default_credential_expiration,
+            expiration_margin,
         ))
     }
 
@@ -60,7 +61,8 @@ impl AsyncProvideCredentials for LazyCachingCredentialsProvider {
 
 pub mod builder {
     use crate::provider::lazy_caching::{
-        LazyCachingCredentialsProvider, DEFAULT_CREDENTIAL_EXPIRATION, DEFAULT_REFRESH_TIMEOUT,
+        LazyCachingCredentialsProvider, DEFAULT_CREDENTIAL_EXPIRATION, DEFAULT_EXPIRATION_MARGIN,
+        DEFAULT_REFRESH_TIMEOUT,
     };
     use crate::provider::AsyncProvideCredentials;
     use std::sync::Arc;
@@ -89,6 +91,7 @@ pub mod builder {
     pub struct Builder {
         refresh: Option<Arc<dyn AsyncProvideCredentials>>,
         refresh_timeout: Option<Duration>,
+        expiration_margin: Option<Duration>,
         default_credential_expiration: Option<Duration>,
     }
 
@@ -108,6 +111,13 @@ pub mod builder {
         /// Defaults to 5 seconds.
         pub fn refresh_timeout(mut self, timeout: Duration) -> Self {
             self.refresh_timeout = Some(timeout);
+            self
+        }
+
+        /// (Optional) Amount of time before the actual credential expiration time
+        /// where credentials are considered expired. Defaults to 10 seconds.
+        pub fn expiration_margin(mut self, margin: Duration) -> Self {
+            self.expiration_margin = Some(margin);
             self
         }
 
@@ -132,19 +142,11 @@ pub mod builder {
             LazyCachingCredentialsProvider::new(
                 self.refresh.expect("refresh provider is required"),
                 self.refresh_timeout.unwrap_or(DEFAULT_REFRESH_TIMEOUT),
+                self.expiration_margin.unwrap_or(DEFAULT_EXPIRATION_MARGIN),
                 default_credential_expiration,
             )
         }
     }
-}
-
-/// Returns whether or not the `credentials` are expired based on the given time.
-/// This will panic if the credentials don't have an `expiry` set.
-fn expired(credentials: &Credentials, now: SystemTime) -> bool {
-    let expiration = credentials
-        .expiry()
-        .expect("refresh sets expiry if not given");
-    now > expiration
 }
 
 #[derive(Clone)]
@@ -162,10 +164,11 @@ impl<T: TimeSource> Provider<T> {
         refresh: Arc<dyn AsyncProvideCredentials>,
         refresh_timeout: Duration,
         default_credential_expiration: Duration,
+        expiration_margin: Duration,
     ) -> Self {
         Provider {
             time,
-            cache: Cache::new(),
+            cache: Cache::new(expiration_margin),
             refresh,
             refresh_timeout,
             default_credential_expiration,
@@ -173,112 +176,40 @@ impl<T: TimeSource> Provider<T> {
     }
 
     fn provide_credentials(&self) -> BoxFuture<CredentialsResult> {
-        let this = self.clone();
+        let now = self.time.now();
+        let refresh = self.refresh.clone();
+        let cache = self.cache.clone();
+        let default_credential_expiration = self.default_credential_expiration;
         Box::pin(async move {
-            let now = this.time.now();
-            if this.needs_refresh(now).await {
-                let span = trace_span!("lazy_refresh_credentials");
-                let _enter = span.enter();
-                this.refresh().await
+            if let Some(credentials) = cache.yield_or_clear_if_expired(now).await {
+                Ok(credentials)
             } else {
-                Ok(this.cached().await)
+                let span = trace_span!("lazy_refresh_credentials");
+                let future = refresh.provide_credentials();
+                cache
+                    .refresh(|| {
+                        async move {
+                            let mut credentials = future.await?;
+                            // If the credentials don't have an expiration time, then create a default one
+                            if credentials.expiry().is_none() {
+                                *credentials.expiry_mut() =
+                                    Some(now + default_credential_expiration);
+                            }
+                            Ok(credentials)
+                        }
+                        .instrument(span)
+                    })
+                    .await
             }
         })
-    }
-
-    async fn refresh(&self) -> CredentialsResult {
-        let now = self.time.now();
-        let default_credential_expiration = self.default_credential_expiration;
-        let future = self.refresh.provide_credentials();
-        self.cache
-            .refresh(|| async move {
-                let mut credentials = future.await?;
-                // If the credentials don't have an expiration time, then create a default one
-                if credentials.expiry().is_none() {
-                    *credentials.expiry_mut() = Some(now + default_credential_expiration);
-                }
-                Ok(credentials)
-            })
-            .await
-    }
-
-    async fn needs_refresh(&self, now: SystemTime) -> bool {
-        if let Some(credentials) = self.cache.get().await {
-            if expired(&credentials, now) {
-                self.cache.clear_if_expired(now).await
-            } else {
-                false
-            }
-        } else {
-            true
-        }
-    }
-
-    async fn cached(&self) -> Credentials {
-        self.cache
-            .get()
-            .await
-            .expect("refresh requirement checked in advance")
-    }
-}
-
-#[derive(Clone)]
-struct Cache {
-    value: Arc<RwLock<OnceCell<Credentials>>>,
-}
-
-impl Cache {
-    pub fn new() -> Cache {
-        Cache {
-            value: Arc::new(RwLock::new(OnceCell::new())),
-        }
-    }
-
-    pub async fn get(&self) -> Option<Credentials> {
-        self.value.read().await.get().cloned()
-    }
-
-    pub async fn refresh<F, Fut>(&self, f: F) -> CredentialsResult
-    where
-        F: FnOnce() -> Fut,
-        Fut: Future<Output = CredentialsResult>,
-    {
-        let lock = self.value.read().await;
-        let future = lock.get_or_try_init(f);
-        future.await.map(|creds| creds.clone())
-    }
-
-    /// Returns true if the cache was cleared
-    pub async fn clear_if_expired(&self, now: SystemTime) -> bool {
-        let mut lock = self.value.write().await;
-
-        // Only clear the cache if it hasn't been cleared by another thread. If it was already
-        // cleared, then another thread is initializing the empty cell.
-        if let Some(credentials) = lock.get() {
-            let should_clear = credentials
-                .expiry()
-                .map(|expiration| now > expiration)
-                .unwrap_or({
-                    warn!("Cached credentials don't have an expiration time. This is a bug in aws-auth.");
-                    false
-                });
-            if should_clear {
-                *lock = OnceCell::new();
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::expired;
     use crate::provider::lazy_caching::{
-        Cache, Provider, TimeSource, DEFAULT_CREDENTIAL_EXPIRATION, DEFAULT_REFRESH_TIMEOUT,
+        Provider, TimeSource, DEFAULT_CREDENTIAL_EXPIRATION, DEFAULT_EXPIRATION_MARGIN,
+        DEFAULT_REFRESH_TIMEOUT,
     };
     use crate::provider::{async_provide_credentials_fn, CredentialsError, CredentialsResult};
     use crate::Credentials;
@@ -323,6 +254,7 @@ mod tests {
             })),
             DEFAULT_REFRESH_TIMEOUT,
             DEFAULT_CREDENTIAL_EXPIRATION,
+            DEFAULT_EXPIRATION_MARGIN,
         )
     }
 
@@ -342,33 +274,6 @@ mod tests {
         assert_eq!(Some(epoch_secs(expired_secs)), creds.expiry());
     }
 
-    #[test]
-    fn expired_check() {
-        let creds = credentials(100);
-        assert!(expired(&creds, epoch_secs(1000)));
-        assert!(!expired(&creds, epoch_secs(10)));
-    }
-
-    #[test_env_log::test(tokio::test)]
-    async fn cache_clears_if_expired_only() {
-        let cache = Cache::new();
-        assert!(!cache.clear_if_expired(epoch_secs(100)).await);
-
-        cache
-            .refresh(|| async { Ok(credentials(100)) })
-            .await
-            .unwrap();
-        assert_eq!(Some(epoch_secs(100)), cache.get().await.unwrap().expiry());
-
-        // It should not clear the credentials if they're not expired
-        assert!(!cache.clear_if_expired(epoch_secs(10)).await);
-        assert_eq!(Some(epoch_secs(100)), cache.get().await.unwrap().expiry());
-
-        // It should clear the credentials if they're expired
-        assert!(cache.clear_if_expired(epoch_secs(500)).await);
-        assert!(cache.get().await.is_none());
-    }
-
     #[test_env_log::test(tokio::test)]
     async fn initial_populate_credentials() {
         let time = TestTime::new(epoch_secs(100));
@@ -381,6 +286,7 @@ mod tests {
             refresh,
             DEFAULT_REFRESH_TIMEOUT,
             DEFAULT_CREDENTIAL_EXPIRATION,
+            DEFAULT_EXPIRATION_MARGIN,
         );
         assert_eq!(
             epoch_secs(1000),
@@ -427,5 +333,46 @@ mod tests {
         expect_creds(1000, &provider).await;
         provider.time.set(epoch_secs(1500));
         assert!(provider.provide_credentials().await.is_err());
+    }
+
+    #[test_env_log::test]
+    fn refresh_retrieve_contention() {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(16)
+            .build()
+            .unwrap();
+
+        let provider = Arc::new(test_provider(
+            TestTime::new(epoch_secs(0)),
+            vec![
+                Ok(credentials(500)),
+                Ok(credentials(1500)),
+                Ok(credentials(2500)),
+                Ok(credentials(3500)),
+                Ok(credentials(4500)),
+            ],
+        ));
+
+        for i in 0..4 {
+            let mut tasks = Vec::new();
+            for j in 0..50 {
+                let provider = provider.clone();
+                tasks.push(rt.spawn(async move {
+                    let now = epoch_secs(i * 1000 + (4 * j));
+                    provider.time.set(now);
+
+                    let creds = provider.provide_credentials().await.unwrap();
+                    assert!(
+                        creds.expiry().unwrap() >= now,
+                        "{:?} >= {:?}",
+                        creds.expiry(),
+                        now
+                    );
+                }));
+            }
+            for task in tasks {
+                rt.block_on(task).unwrap();
+            }
+        }
     }
 }

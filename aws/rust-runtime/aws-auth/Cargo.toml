@@ -16,5 +16,5 @@ zeroize = "1.2.0"
 env_logger = "*"
 http = "0.2.3"
 test-env-log = { version = "0.2.7", features = ["trace"] }
-tokio = { version = "1", features = ["macros", "rt", "test-util"] }
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "test-util"] }
 tracing-subscriber = { version = "0.2.16", features = ["fmt"] }

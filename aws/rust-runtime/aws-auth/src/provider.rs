@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+mod cache;
 pub mod env;
 pub mod lazy_caching;
 mod time;
