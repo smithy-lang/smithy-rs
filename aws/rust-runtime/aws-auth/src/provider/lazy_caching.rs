@@ -111,7 +111,7 @@ pub mod builder {
         /// Defaults to 5 seconds.
         pub fn refresh_timeout(mut self, timeout: Duration) -> Self {
             self.refresh_timeout = Some(timeout);
-            self
+            unimplemented!("refresh_timeout hasn't been implemented yet")
         }
 
         /// (Optional) Amount of time before the actual credential expiration time
