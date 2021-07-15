@@ -6,7 +6,7 @@
 use std::time::SystemTime;
 
 /// Allows us to abstract time for tests.
-pub(super) trait TimeSource: Clone + Send + Sync + 'static {
+pub(super) trait TimeSource: Send + Sync + 'static {
     fn now(&self) -> SystemTime;
 }
 
