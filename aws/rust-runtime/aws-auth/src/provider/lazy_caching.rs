@@ -180,10 +180,16 @@ impl<T: TimeSource> Provider<T> {
         let refresh = self.refresh.clone();
         let cache = self.cache.clone();
         let default_credential_expiration = self.default_credential_expiration;
+
         Box::pin(async move {
+            // Attempt to get cached credentials, or clear the cache if they're expired
             if let Some(credentials) = cache.yield_or_clear_if_expired(now).await {
                 Ok(credentials)
             } else {
+                // If we didn't get credentials from the cache, then we need to try and refresh.
+                // There may be other threads also refreshing simultaneously, but this is OK
+                // since the futures are not eagerly executed, and the cache will only run one
+                // of them.
                 let span = trace_span!("lazy_refresh_credentials");
                 let future = refresh.provide_credentials();
                 cache
@@ -197,6 +203,8 @@ impl<T: TimeSource> Provider<T> {
                             }
                             Ok(credentials)
                         }
+                        // Only instrument the the actual refreshing future so that no span
+                        // is opened if the cache decides not to execute it.
                         .instrument(span)
                     })
                     .await

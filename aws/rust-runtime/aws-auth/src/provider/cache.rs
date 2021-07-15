@@ -29,6 +29,9 @@ impl Cache {
         self.value.read().await.get().cloned()
     }
 
+    /// Attempts to refresh the cached credentials with the given async future.
+    /// If multiple threads attempt to refresh at the same time, one of them will win,
+    /// and the others will await that thread's result rather than multiple refreshes occurring.
     pub async fn refresh<F, Fut>(&self, f: F) -> CredentialsResult
     where
         F: FnOnce() -> Fut,
@@ -36,7 +39,7 @@ impl Cache {
     {
         let lock = self.value.read().await;
         let future = lock.get_or_try_init(f);
-        future.await.map(|creds| creds.clone())
+        future.await.map(|credentials| credentials.clone())
     }
 
     /// If the credentials are expired, clears the cache. Otherwise, yields the current credentials value.
@@ -48,10 +51,13 @@ impl Cache {
             }
         }
 
-        // Only clear the cache if it hasn't been cleared by another thread. If it was already
-        // cleared, then another thread is initializing the empty cell.
+        // Acquire a write lock to clear the cache, but then once the lock is acquired,
+        // check again that the credential is not already cleared. If it has been cleared,
+        // then another thread is refreshing the cache by the time the write lock was acquired.
         let mut lock = self.value.write().await;
         if let Some(credentials) = lock.get() {
+            // Also check that we're clearing the expired credentials and not credentials
+            // that have been refreshed by another thread.
             if expired(credentials, self.margin, now) {
                 *lock = OnceCell::new();
             }
