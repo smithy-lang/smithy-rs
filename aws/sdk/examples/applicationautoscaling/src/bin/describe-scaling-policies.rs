@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use applicationautoscaling::model::ServiceNamespace;
+use applicationautoscaling::{Client, Config, Error, Region};
 use aws_types::region::{self, ProvideRegion};
-use cognitosync::{Client, Config, Error, Region};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -18,13 +19,12 @@ struct Opt {
     verbose: bool,
 }
 
-/// Lists identity pools registered with  Amazon Cognito
+/// Lists your Amazon Cognito identities
 /// # Arguments
 ///
 /// * `[-r REGION]` - The region containing the buckets.
 ///   If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
 ///   If the environment variable is not set, defaults to **us-west-2**.
-/// * `[-g]` - Whether to display buckets in all regions.
 /// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -37,8 +37,14 @@ async fn main() -> Result<(), Error> {
         .or_else(Region::new("us-west-2"));
 
     if verbose {
-        println!("Cognito client version: {}", cognitosync::PKG_VERSION);
-        println!("Region:                 {:?}", region_provider.region());
+        println!(
+            "Application Auto Scaling client version: {}",
+            applicationautoscaling::PKG_VERSION
+        );
+        println!(
+            "Region:                                  {:?}",
+            region_provider.region()
+        );
         println!();
     }
 
@@ -46,21 +52,14 @@ async fn main() -> Result<(), Error> {
     let client = Client::from_conf(config);
 
     let response = client
-        .list_identity_pool_usage()
-        .max_results(10)
+        .describe_scaling_policies()
+        .service_namespace(ServiceNamespace::Ec2)
         .send()
         .await?;
-    if let Some(pools) = response.identity_pool_usages {
-        println!("Identity pools:");
-        for pool in pools {
-            println!(
-                "  Identity pool ID:    {}",
-                pool.identity_pool_id.unwrap_or_default()
-            );
-            println!("  Data storage:        {:?}", pool.data_storage);
-            println!("  Sync sessions count: {:?}", pool.sync_sessions_count);
-            println!("  Last modified:       {:?}", pool.last_modified_date);
-            println!();
+    if let Some(policies) = response.scaling_policies {
+        println!("Auto Scaling Policies:");
+        for policy in policies {
+            println!("{:?}\n", policy);
         }
     }
     println!("Next token: {:?}", response.next_token);

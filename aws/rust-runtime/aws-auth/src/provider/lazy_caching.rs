@@ -61,7 +61,10 @@ impl LazyCachingCredentialsProvider {
 }
 
 impl AsyncProvideCredentials for LazyCachingCredentialsProvider {
-    fn provide_credentials(&self) -> BoxFuture<CredentialsResult> {
+    fn provide_credentials<'a>(&'a self) -> BoxFuture<'a, CredentialsResult>
+    where
+        Self: 'a,
+    {
         let now = self.time.now();
         let refresh = self.refresh.clone();
         let cache = self.cache.clone();

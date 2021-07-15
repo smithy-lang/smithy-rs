@@ -43,7 +43,7 @@ impl Error for CredentialsError {
 }
 
 pub type CredentialsResult = Result<Credentials, CredentialsError>;
-type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
+type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// An asynchronous credentials provider
 ///
@@ -51,7 +51,9 @@ type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 /// consider using [`async_provide_credentials_fn`] with a closure rather than directly implementing
 /// this trait.
 pub trait AsyncProvideCredentials: Send + Sync {
-    fn provide_credentials(&self) -> BoxFuture<CredentialsResult>;
+    fn provide_credentials<'a>(&'a self) -> BoxFuture<'a, CredentialsResult>
+    where
+        Self: 'a;
 }
 
 pub type CredentialsProvider = Arc<dyn AsyncProvideCredentials>;
@@ -69,7 +71,10 @@ where
     T: Fn() -> F + Send + Sync,
     F: Future<Output = CredentialsResult> + Send + 'static,
 {
-    fn provide_credentials(&self) -> BoxFuture<CredentialsResult> {
+    fn provide_credentials<'a>(&'a self) -> BoxFuture<'a, CredentialsResult>
+    where
+        Self: 'a,
+    {
         Box::pin((self.f)())
     }
 }
@@ -84,9 +89,13 @@ where
 /// use aws_auth::Credentials;
 /// use aws_auth::provider::async_provide_credentials_fn;
 ///
+/// async fn load_credentials() -> Credentials {
+///     todo!()
+/// }
+///
 /// async_provide_credentials_fn(|| async {
-///     // An async process to retrieve credentials would go here:
-///     let credentials: Credentials = Credentials::from_keys("example", "example", None);
+///     // Async process to retrieve credentials goes here
+///     let credentials = load_credentials().await;
 ///     Ok(credentials)
 /// });
 /// ```
@@ -110,7 +119,10 @@ impl<T> AsyncProvideCredentials for T
 where
     T: ProvideCredentials,
 {
-    fn provide_credentials(&self) -> BoxFuture<CredentialsResult> {
+    fn provide_credentials<'a>(&'a self) -> BoxFuture<'a, CredentialsResult>
+    where
+        Self: 'a,
+    {
         let result = self.provide_credentials();
         Box::pin(future::ready(result))
     }
@@ -133,12 +145,33 @@ pub fn set_provider(config: &mut PropertyBag, provider: Arc<dyn AsyncProvideCred
 
 #[cfg(test)]
 mod test {
+    use crate::provider::{AsyncProvideCredentials, BoxFuture, CredentialsResult};
     use crate::Credentials;
+    use async_trait::async_trait;
 
     fn assert_send_sync<T: Send + Sync>() {}
 
     #[test]
     fn creds_are_send_sync() {
         assert_send_sync::<Credentials>()
+    }
+
+    #[async_trait]
+    trait AnotherTrait: Send + Sync {
+        async fn creds(&self) -> Credentials;
+    }
+
+    struct AnotherTraitWrapper<T> {
+        inner: T,
+    }
+
+    impl<T: AnotherTrait> AsyncProvideCredentials for AnotherTraitWrapper<T> {
+        fn provide_credentials<'a>(&'a self) -> BoxFuture<'a, CredentialsResult>
+        where
+            Self: 'a,
+        {
+            let inner_fut = self.inner.creds();
+            Box::pin(async move { Ok(inner_fut.await) })
+        }
     }
 }

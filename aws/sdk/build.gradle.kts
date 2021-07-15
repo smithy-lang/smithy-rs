@@ -6,7 +6,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.aws.traits.ServiceTrait
 import kotlin.streams.toList
-import org.jetbrains.kotlin.utils.ifEmpty
 
 extra["displayName"] = "Smithy :: Rust :: AWS-SDK"
 extra["moduleName"] = "software.amazon.smithy.rust.awssdk"
@@ -51,6 +50,9 @@ dependencies {
 // Tier 1 Services have examples and tests
 val tier1Services = setOf(
     "apigateway",
+    "applicationautoscaling",
+    "autoscaling",
+    "autoscalingplans",
     "batch",
     "cloudformation",
     "cloudwatch",
@@ -85,6 +87,7 @@ val tier1Services = setOf(
     "sagemakerfeaturestoreruntime",
     "secretsmanager",
     "sesv2",
+    "snowball",
     "sns",
     "sqs",
     "ssm",
