@@ -11,8 +11,6 @@ use aws_types::region;
 
 use aws_types::region::ProvideRegion;
 use structopt::StructOpt;
-use tracing_subscriber::fmt::format::FmtSpan;
-use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
@@ -45,7 +43,7 @@ async fn main() {
         verbose,
     } = Opt::from_args();
 
-    let region = region::ChainProvider::first_try(default_region)
+    let region = region::ChainProvider::first_try(default_region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
 
@@ -59,7 +57,7 @@ async fn main() {
         );
     }
 
-    let config = Config::builder().region(&region).build();
+    let config = Config::builder().region(region).build();
 
     let client = Client::from_conf(config);
 
