@@ -1,3 +1,8 @@
+## vNext (Month Day Year)
+
+**New This Week**
+- :bug: Bugfix: Fix parsing bug where whitespace was stripped when parsing XML (#TODO)
+
 ## v0.15 (June 29th 2021)
 This week, we've added EKS, ECR and Cloudwatch. The JSON deserialization implementation has been replaced, please be
 on the lookout for potential issues.
