@@ -12,7 +12,7 @@ use tracing::{trace_span, Instrument};
 
 const DEFAULT_REFRESH_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_CREDENTIAL_EXPIRATION: Duration = Duration::from_secs(15 * 60);
-const DEFAULT_EXPIRATION_MARGIN: Duration = Duration::from_secs(10);
+const DEFAULT_BUFFER_TIME: Duration = Duration::from_secs(10);
 
 // TODO: Implement async runtime-agnostic timeouts
 // TODO: Add catch_unwind() to handle panics
@@ -43,11 +43,11 @@ impl LazyCachingCredentialsProvider {
         refresh: Arc<dyn AsyncProvideCredentials>,
         refresh_timeout: Duration,
         default_credential_expiration: Duration,
-        expiration_margin: Duration,
+        buffer_time: Duration,
     ) -> Self {
         LazyCachingCredentialsProvider {
             time: Box::new(time),
-            cache: Cache::new(expiration_margin),
+            cache: Cache::new(buffer_time),
             refresh,
             _refresh_timeout: refresh_timeout,
             default_credential_expiration,
@@ -82,7 +82,7 @@ impl AsyncProvideCredentials for LazyCachingCredentialsProvider {
                 let span = trace_span!("lazy_refresh_credentials");
                 let future = refresh.provide_credentials();
                 cache
-                    .refresh(|| {
+                    .get_or_load(|| {
                         async move {
                             let mut credentials = future.await?;
                             // If the credentials don't have an expiration time, then create a default one
@@ -104,7 +104,7 @@ impl AsyncProvideCredentials for LazyCachingCredentialsProvider {
 
 pub mod builder {
     use crate::provider::lazy_caching::{
-        LazyCachingCredentialsProvider, DEFAULT_CREDENTIAL_EXPIRATION, DEFAULT_EXPIRATION_MARGIN,
+        LazyCachingCredentialsProvider, DEFAULT_BUFFER_TIME, DEFAULT_CREDENTIAL_EXPIRATION,
         DEFAULT_REFRESH_TIMEOUT,
     };
     use crate::provider::time::SystemTimeSource;
@@ -134,7 +134,7 @@ pub mod builder {
     pub struct Builder {
         refresh: Option<Arc<dyn AsyncProvideCredentials>>,
         refresh_timeout: Option<Duration>,
-        expiration_margin: Option<Duration>,
+        buffer_time: Option<Duration>,
         default_credential_expiration: Option<Duration>,
     }
 
@@ -158,9 +158,11 @@ pub mod builder {
         }
 
         /// (Optional) Amount of time before the actual credential expiration time
-        /// where credentials are considered expired. Defaults to 10 seconds.
-        pub fn expiration_margin(mut self, margin: Duration) -> Self {
-            self.expiration_margin = Some(margin);
+        /// where credentials are considered expired. For example, if credentials are expiring
+        /// in 15 minutes, and the buffer time is 10 seconds, then any requests made after
+        /// 14 minutes and 50 seconds will load new credentials. Defaults to 10 seconds.
+        pub fn buffer_time(mut self, buffer_time: Duration) -> Self {
+            self.buffer_time = Some(buffer_time);
             self
         }
 
@@ -186,7 +188,7 @@ pub mod builder {
                 SystemTimeSource,
                 self.refresh.expect("refresh provider is required"),
                 self.refresh_timeout.unwrap_or(DEFAULT_REFRESH_TIMEOUT),
-                self.expiration_margin.unwrap_or(DEFAULT_EXPIRATION_MARGIN),
+                self.buffer_time.unwrap_or(DEFAULT_BUFFER_TIME),
                 default_credential_expiration,
             )
         }
@@ -196,8 +198,8 @@ pub mod builder {
 #[cfg(test)]
 mod tests {
     use crate::provider::lazy_caching::{
-        LazyCachingCredentialsProvider, TimeSource, DEFAULT_CREDENTIAL_EXPIRATION,
-        DEFAULT_EXPIRATION_MARGIN, DEFAULT_REFRESH_TIMEOUT,
+        LazyCachingCredentialsProvider, TimeSource, DEFAULT_BUFFER_TIME,
+        DEFAULT_CREDENTIAL_EXPIRATION, DEFAULT_REFRESH_TIMEOUT,
     };
     use crate::provider::{
         async_provide_credentials_fn, AsyncProvideCredentials, CredentialsError, CredentialsResult,
@@ -247,7 +249,7 @@ mod tests {
             })),
             DEFAULT_REFRESH_TIMEOUT,
             DEFAULT_CREDENTIAL_EXPIRATION,
-            DEFAULT_EXPIRATION_MARGIN,
+            DEFAULT_BUFFER_TIME,
         )
     }
 
@@ -279,7 +281,7 @@ mod tests {
             refresh,
             DEFAULT_REFRESH_TIMEOUT,
             DEFAULT_CREDENTIAL_EXPIRATION,
-            DEFAULT_EXPIRATION_MARGIN,
+            DEFAULT_BUFFER_TIME,
         );
         assert_eq!(
             epoch_secs(1000),
