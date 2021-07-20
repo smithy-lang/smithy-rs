@@ -23,8 +23,8 @@ async fn main() -> Result<(), dynamodb::Error> {
         // it can be used with different async runtimes. The sleep function will be used for timeouts.
         // Since we're using Tokio in this example, we use the `TokioSleep` implementation, which
         // requires the `timeout-tokio` feature in the `aws-auth` dependency.
-        .sleep_impl(TokioSleep::new())
-        .refresh(async_provide_credentials_fn(move || {
+        .sleeper(TokioSleep::new())
+        .loader(async_provide_credentials_fn(move || {
             let client = client.clone();
             async move {
                 let session_token = client

@@ -15,11 +15,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{trace_span, Instrument};
 
-const DEFAULT_REFRESH_TIMEOUT: Duration = Duration::from_secs(5);
+const DEFAULT_LOAD_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_CREDENTIAL_EXPIRATION: Duration = Duration::from_secs(15 * 60);
 const DEFAULT_BUFFER_TIME: Duration = Duration::from_secs(10);
-
-// TODO: Rename refresh to load
 
 /// `LazyCachingCredentialsProvider` implements [`AsyncProvideCredentials`] by caching
 /// credentials that it loads by calling a user-provided [`AsyncProvideCredentials`] implementation.
@@ -29,28 +27,28 @@ const DEFAULT_BUFFER_TIME: Duration = Duration::from_secs(10);
 /// will cache those credentials until they expire.
 pub struct LazyCachingCredentialsProvider {
     time: Box<dyn TimeSource>,
-    sleep: Box<dyn AsyncSleep>,
+    sleeper: Box<dyn AsyncSleep>,
     cache: Cache,
-    refresh: Arc<dyn AsyncProvideCredentials>,
-    refresh_timeout: Duration,
+    loader: Arc<dyn AsyncProvideCredentials>,
+    load_timeout: Duration,
     default_credential_expiration: Duration,
 }
 
 impl LazyCachingCredentialsProvider {
     fn new(
         time: impl TimeSource,
-        sleep: Box<dyn AsyncSleep>,
-        refresh: Arc<dyn AsyncProvideCredentials>,
-        refresh_timeout: Duration,
+        sleeper: Box<dyn AsyncSleep>,
+        loader: Arc<dyn AsyncProvideCredentials>,
+        load_timeout: Duration,
         default_credential_expiration: Duration,
         buffer_time: Duration,
     ) -> Self {
         LazyCachingCredentialsProvider {
             time: Box::new(time),
-            sleep,
+            sleeper,
             cache: Cache::new(buffer_time),
-            refresh,
-            refresh_timeout,
+            loader,
+            load_timeout,
             default_credential_expiration,
         }
     }
@@ -67,9 +65,9 @@ impl AsyncProvideCredentials for LazyCachingCredentialsProvider {
         Self: 'a,
     {
         let now = self.time.now();
-        let refresh = self.refresh.clone();
-        let timeout_future = self.sleep.sleep(self.refresh_timeout);
-        let refresh_timeout = self.refresh_timeout;
+        let loader = self.loader.clone();
+        let timeout_future = self.sleeper.sleep(self.load_timeout);
+        let load_timeout = self.load_timeout;
         let cache = self.cache.clone();
         let default_credential_expiration = self.default_credential_expiration;
 
@@ -78,18 +76,18 @@ impl AsyncProvideCredentials for LazyCachingCredentialsProvider {
             if let Some(credentials) = cache.yield_or_clear_if_expired(now).await {
                 Ok(credentials)
             } else {
-                // If we didn't get credentials from the cache, then we need to try and refresh.
-                // There may be other threads also refreshing simultaneously, but this is OK
+                // If we didn't get credentials from the cache, then we need to try and load.
+                // There may be other threads also loading simultaneously, but this is OK
                 // since the futures are not eagerly executed, and the cache will only run one
                 // of them.
-                let span = trace_span!("lazy_refresh_credentials");
-                let future = Timeout::new(refresh.provide_credentials(), timeout_future);
+                let span = trace_span!("lazy_load_credentials");
+                let future = Timeout::new(loader.provide_credentials(), timeout_future);
                 cache
                     .get_or_load(|| {
                         async move {
-                            let mut credentials = future.await.map_err(|_| {
-                                CredentialsError::ProviderTimedOut(refresh_timeout)
-                            })??;
+                            let mut credentials = future
+                                .await
+                                .map_err(|_| CredentialsError::ProviderTimedOut(load_timeout))??;
                             // If the credentials don't have an expiration time, then create a default one
                             if credentials.expiry().is_none() {
                                 *credentials.expiry_mut() =
@@ -97,7 +95,7 @@ impl AsyncProvideCredentials for LazyCachingCredentialsProvider {
                             }
                             Ok(credentials)
                         }
-                        // Only instrument the the actual refreshing future so that no span
+                        // Only instrument the the actual load future so that no span
                         // is opened if the cache decides not to execute it.
                         .instrument(span)
                     })
@@ -110,7 +108,7 @@ impl AsyncProvideCredentials for LazyCachingCredentialsProvider {
 pub mod builder {
     use crate::provider::lazy_caching::{
         LazyCachingCredentialsProvider, DEFAULT_BUFFER_TIME, DEFAULT_CREDENTIAL_EXPIRATION,
-        DEFAULT_REFRESH_TIMEOUT,
+        DEFAULT_LOAD_TIMEOUT,
     };
     use crate::provider::time::SystemTimeSource;
     use crate::provider::AsyncProvideCredentials;
@@ -131,8 +129,8 @@ pub mod builder {
     /// use smithy_http::sleep::TokioSleep;
     ///
     /// let provider = LazyCachingCredentialsProvider::builder()
-    ///     .sleep_impl(TokioSleep::new())
-    ///     .refresh(async_provide_credentials_fn(|| async {
+    ///     .sleeper(TokioSleep::new())
+    ///     .loader(async_provide_credentials_fn(|| async {
     ///         // An async process to retrieve credentials would go here:
     ///         Ok(Credentials::from_keys("example", "example", None))
     ///     }))
@@ -141,8 +139,8 @@ pub mod builder {
     #[derive(Default)]
     pub struct Builder {
         sleep: Option<Box<dyn AsyncSleep>>,
-        refresh: Option<Arc<dyn AsyncProvideCredentials>>,
-        refresh_timeout: Option<Duration>,
+        loader: Option<Arc<dyn AsyncProvideCredentials>>,
+        load_timeout: Option<Duration>,
         buffer_time: Option<Duration>,
         default_credential_expiration: Option<Duration>,
     }
@@ -152,10 +150,10 @@ pub mod builder {
             Default::default()
         }
 
-        /// An implementation of [`AsyncProvideCredentials`] that will be used to refresh
+        /// An implementation of [`AsyncProvideCredentials`] that will be used to load
         /// the cached credentials once they're expired.
-        pub fn refresh(mut self, refresh: impl AsyncProvideCredentials + 'static) -> Self {
-            self.refresh = Some(Arc::new(refresh));
+        pub fn loader(mut self, loader: impl AsyncProvideCredentials + 'static) -> Self {
+            self.loader = Some(Arc::new(loader));
             self
         }
 
@@ -163,15 +161,15 @@ pub mod builder {
         /// the `LazyCachingCredentialsProvider` with other async runtimes.
         /// If using Tokio as the async runtime, this should be set to an instance of
         /// [`TokioSleep`](smithy_http::sleep::TokioSleep).
-        pub fn sleep_impl(mut self, sleep: impl AsyncSleep + 'static) -> Self {
+        pub fn sleeper(mut self, sleep: impl AsyncSleep + 'static) -> Self {
             self.sleep = Some(Box::new(sleep));
             self
         }
 
         /// (Optional) Timeout for the given [`AsyncProvideCredentials`] implementation.
         /// Defaults to 5 seconds.
-        pub fn refresh_timeout(mut self, timeout: Duration) -> Self {
-            self.refresh_timeout = Some(timeout);
+        pub fn load_timeout(mut self, timeout: Duration) -> Self {
+            self.load_timeout = Some(timeout);
             self
         }
 
@@ -205,8 +203,8 @@ pub mod builder {
             LazyCachingCredentialsProvider::new(
                 SystemTimeSource,
                 self.sleep.expect("sleep_impl is required"),
-                self.refresh.expect("refresh provider is required"),
-                self.refresh_timeout.unwrap_or(DEFAULT_REFRESH_TIMEOUT),
+                self.loader.expect("loader is required"),
+                self.load_timeout.unwrap_or(DEFAULT_LOAD_TIMEOUT),
                 self.buffer_time.unwrap_or(DEFAULT_BUFFER_TIME),
                 default_credential_expiration,
             )
@@ -218,7 +216,7 @@ pub mod builder {
 mod tests {
     use crate::provider::lazy_caching::{
         LazyCachingCredentialsProvider, TimeSource, DEFAULT_BUFFER_TIME,
-        DEFAULT_CREDENTIAL_EXPIRATION, DEFAULT_REFRESH_TIMEOUT,
+        DEFAULT_CREDENTIAL_EXPIRATION, DEFAULT_LOAD_TIMEOUT,
     };
     use crate::provider::{
         async_provide_credentials_fn, AsyncProvideCredentials, CredentialsError, CredentialsResult,
@@ -254,21 +252,21 @@ mod tests {
 
     fn test_provider<T: TimeSource>(
         time: T,
-        refresh_list: Vec<CredentialsResult>,
+        load_list: Vec<CredentialsResult>,
     ) -> LazyCachingCredentialsProvider {
-        let refresh_list = Arc::new(Mutex::new(refresh_list));
+        let load_list = Arc::new(Mutex::new(load_list));
         LazyCachingCredentialsProvider::new(
             time,
             Box::new(TokioSleep::new()),
             Arc::new(async_provide_credentials_fn(move || {
-                let list = refresh_list.clone();
+                let list = load_list.clone();
                 async move {
                     let next = list.lock().unwrap().remove(0);
                     info!("refreshing the credentials to {:?}", next);
                     next
                 }
             })),
-            DEFAULT_REFRESH_TIMEOUT,
+            DEFAULT_LOAD_TIMEOUT,
             DEFAULT_CREDENTIAL_EXPIRATION,
             DEFAULT_BUFFER_TIME,
         )
@@ -293,15 +291,15 @@ mod tests {
     #[test_env_log::test(tokio::test)]
     async fn initial_populate_credentials() {
         let time = TestTime::new(epoch_secs(100));
-        let refresh = Arc::new(async_provide_credentials_fn(|| async {
+        let loader = Arc::new(async_provide_credentials_fn(|| async {
             info!("refreshing the credentials");
             Ok(credentials(1000))
         }));
         let provider = LazyCachingCredentialsProvider::new(
             time,
             Box::new(TokioSleep::new()),
-            refresh,
-            DEFAULT_REFRESH_TIMEOUT,
+            loader,
+            DEFAULT_LOAD_TIMEOUT,
             DEFAULT_CREDENTIAL_EXPIRATION,
             DEFAULT_BUFFER_TIME,
         );
@@ -317,7 +315,7 @@ mod tests {
     }
 
     #[test_env_log::test(tokio::test)]
-    async fn refresh_expired_credentials() {
+    async fn reload_expired_credentials() {
         let time = TestTime::new(epoch_secs(100));
         let time_inner = time.time.clone();
         let provider = test_provider(
@@ -340,7 +338,7 @@ mod tests {
     }
 
     #[test_env_log::test(tokio::test)]
-    async fn refresh_failed_error() {
+    async fn load_failed_error() {
         let time = TestTime::new(epoch_secs(100));
         let time_inner = time.time.clone();
         let provider = test_provider(
@@ -357,7 +355,7 @@ mod tests {
     }
 
     #[test_env_log::test]
-    fn refresh_retrieve_contention() {
+    fn load_contention() {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_time()
             .worker_threads(16)
