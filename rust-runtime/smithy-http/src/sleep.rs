@@ -18,12 +18,13 @@ pub trait AsyncSleep: Send + Sync {
 
 /// Implementation of [`AsyncSleep`] for Tokio.
 #[cfg(feature = "sleep-tokio")]
+#[derive(Default)]
 pub struct TokioSleep;
 
 #[cfg(feature = "sleep-tokio")]
 impl TokioSleep {
     pub fn new() -> TokioSleep {
-        TokioSleep
+        Default::default()
     }
 }
 
