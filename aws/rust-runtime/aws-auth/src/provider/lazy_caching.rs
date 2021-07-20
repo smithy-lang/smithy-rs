@@ -3,9 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+//! Lazy, caching, credentials provider implementation
+
 use crate::provider::cache::Cache;
 use crate::provider::time::TimeSource;
-use crate::provider::{AsyncProvideCredentials, BoxFuture, CredentialsResult};
+use crate::provider::timeout::Timeout;
+use crate::provider::{
+    AsyncProvideCredentials, AsyncSleep, BoxFuture, CredentialsError, CredentialsResult,
+};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{trace_span, Instrument};
@@ -14,10 +19,7 @@ const DEFAULT_REFRESH_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_CREDENTIAL_EXPIRATION: Duration = Duration::from_secs(15 * 60);
 const DEFAULT_BUFFER_TIME: Duration = Duration::from_secs(10);
 
-// TODO: Implement async runtime-agnostic timeouts
-// TODO: Add catch_unwind() to handle panics
-// TODO: Update doc comment below once catch_unwind and timeouts are implemented
-// TODO: Update warning not to use this in the STS example once it's prod ready
+// TODO: Rename refresh to load
 
 /// `LazyCachingCredentialsProvider` implements [`AsyncProvideCredentials`] by caching
 /// credentials that it loads by calling a user-provided [`AsyncProvideCredentials`] implementation.
@@ -25,21 +27,19 @@ const DEFAULT_BUFFER_TIME: Duration = Duration::from_secs(10);
 /// For example, you can provide an [`AsyncProvideCredentials`] implementation that calls
 /// AWS STS's AssumeRole operation to get temporary credentials, and `LazyCachingCredentialsProvider`
 /// will cache those credentials until they expire.
-///
-/// # Note
-///
-/// This is __NOT__ production ready yet. Timeouts and panic safety have not been implemented yet.
 pub struct LazyCachingCredentialsProvider {
     time: Box<dyn TimeSource>,
+    sleep: Box<dyn AsyncSleep>,
     cache: Cache,
     refresh: Arc<dyn AsyncProvideCredentials>,
-    _refresh_timeout: Duration,
+    refresh_timeout: Duration,
     default_credential_expiration: Duration,
 }
 
 impl LazyCachingCredentialsProvider {
     fn new(
         time: impl TimeSource,
+        sleep: Box<dyn AsyncSleep>,
         refresh: Arc<dyn AsyncProvideCredentials>,
         refresh_timeout: Duration,
         default_credential_expiration: Duration,
@@ -47,9 +47,10 @@ impl LazyCachingCredentialsProvider {
     ) -> Self {
         LazyCachingCredentialsProvider {
             time: Box::new(time),
+            sleep,
             cache: Cache::new(buffer_time),
             refresh,
-            _refresh_timeout: refresh_timeout,
+            refresh_timeout,
             default_credential_expiration,
         }
     }
@@ -67,6 +68,8 @@ impl AsyncProvideCredentials for LazyCachingCredentialsProvider {
     {
         let now = self.time.now();
         let refresh = self.refresh.clone();
+        let timeout_future = self.sleep.sleep(self.refresh_timeout);
+        let refresh_timeout = self.refresh_timeout;
         let cache = self.cache.clone();
         let default_credential_expiration = self.default_credential_expiration;
 
@@ -80,11 +83,13 @@ impl AsyncProvideCredentials for LazyCachingCredentialsProvider {
                 // since the futures are not eagerly executed, and the cache will only run one
                 // of them.
                 let span = trace_span!("lazy_refresh_credentials");
-                let future = refresh.provide_credentials();
+                let future = Timeout::new(refresh.provide_credentials(), timeout_future);
                 cache
                     .get_or_load(|| {
                         async move {
-                            let mut credentials = future.await?;
+                            let mut credentials = future.await.map_err(|_| {
+                                CredentialsError::ProviderTimedOut(refresh_timeout)
+                            })??;
                             // If the credentials don't have an expiration time, then create a default one
                             if credentials.expiry().is_none() {
                                 *credentials.expiry_mut() =
@@ -109,6 +114,7 @@ pub mod builder {
     };
     use crate::provider::time::SystemTimeSource;
     use crate::provider::AsyncProvideCredentials;
+    use smithy_http::sleep::AsyncSleep;
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -122,8 +128,10 @@ pub mod builder {
     /// use aws_auth::provider::lazy_caching::LazyCachingCredentialsProvider;
     /// use std::sync::Arc;
     /// use std::time::Duration;
+    /// use smithy_http::sleep::TokioSleep;
     ///
     /// let provider = LazyCachingCredentialsProvider::builder()
+    ///     .sleep_impl(TokioSleep::new())
     ///     .refresh(async_provide_credentials_fn(|| async {
     ///         // An async process to retrieve credentials would go here:
     ///         Ok(Credentials::from_keys("example", "example", None))
@@ -132,6 +140,7 @@ pub mod builder {
     /// ```
     #[derive(Default)]
     pub struct Builder {
+        sleep: Option<Box<dyn AsyncSleep>>,
         refresh: Option<Arc<dyn AsyncProvideCredentials>>,
         refresh_timeout: Option<Duration>,
         buffer_time: Option<Duration>,
@@ -150,11 +159,20 @@ pub mod builder {
             self
         }
 
+        /// Implementation of [`AsyncSleep`] to use for timeouts. This enables use of
+        /// the `LazyCachingCredentialsProvider` with other async runtimes.
+        /// If using Tokio as the async runtime, this should be set to an instance of
+        /// [`TokioSleep`](smithy_http::sleep::TokioSleep).
+        pub fn sleep_impl(mut self, sleep: impl AsyncSleep + 'static) -> Self {
+            self.sleep = Some(Box::new(sleep));
+            self
+        }
+
         /// (Optional) Timeout for the given [`AsyncProvideCredentials`] implementation.
         /// Defaults to 5 seconds.
         pub fn refresh_timeout(mut self, timeout: Duration) -> Self {
             self.refresh_timeout = Some(timeout);
-            unimplemented!("refresh_timeout hasn't been implemented yet")
+            self
         }
 
         /// (Optional) Amount of time before the actual credential expiration time
@@ -186,6 +204,7 @@ pub mod builder {
             );
             LazyCachingCredentialsProvider::new(
                 SystemTimeSource,
+                self.sleep.expect("sleep_impl is required"),
                 self.refresh.expect("refresh provider is required"),
                 self.refresh_timeout.unwrap_or(DEFAULT_REFRESH_TIMEOUT),
                 self.buffer_time.unwrap_or(DEFAULT_BUFFER_TIME),
@@ -205,6 +224,7 @@ mod tests {
         async_provide_credentials_fn, AsyncProvideCredentials, CredentialsError, CredentialsResult,
     };
     use crate::Credentials;
+    use smithy_http::sleep::TokioSleep;
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, SystemTime};
     use tracing::info;
@@ -239,6 +259,7 @@ mod tests {
         let refresh_list = Arc::new(Mutex::new(refresh_list));
         LazyCachingCredentialsProvider::new(
             time,
+            Box::new(TokioSleep::new()),
             Arc::new(async_provide_credentials_fn(move || {
                 let list = refresh_list.clone();
                 async move {
@@ -278,6 +299,7 @@ mod tests {
         }));
         let provider = LazyCachingCredentialsProvider::new(
             time,
+            Box::new(TokioSleep::new()),
             refresh,
             DEFAULT_REFRESH_TIMEOUT,
             DEFAULT_CREDENTIAL_EXPIRATION,
@@ -337,6 +359,7 @@ mod tests {
     #[test_env_log::test]
     fn refresh_retrieve_contention() {
         let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_time()
             .worker_threads(16)
             .build()
             .unwrap();
@@ -376,5 +399,26 @@ mod tests {
                 rt.block_on(task).unwrap();
             }
         }
+    }
+
+    #[test_env_log::test(tokio::test)]
+    async fn load_timeout() {
+        let time = TestTime::new(epoch_secs(100));
+        let provider = LazyCachingCredentialsProvider::new(
+            time,
+            Box::new(TokioSleep::new()),
+            Arc::new(async_provide_credentials_fn(|| async {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                Ok(credentials(1000))
+            })),
+            Duration::from_millis(5),
+            DEFAULT_CREDENTIAL_EXPIRATION,
+            DEFAULT_BUFFER_TIME,
+        );
+
+        assert!(matches!(
+            provider.provide_credentials().await,
+            Err(CredentialsError::ProviderTimedOut(_))
+        ));
     }
 }

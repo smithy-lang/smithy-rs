@@ -7,6 +7,7 @@ license = "Apache-2.0"
 
 [features]
 bytestream-util = ["tokio/fs", "tokio-util/io"]
+sleep-tokio = ["tokio/time"]
 default = ["bytestream-util"]
 
 [dependencies]
