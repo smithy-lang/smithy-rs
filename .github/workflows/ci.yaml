@@ -128,6 +128,8 @@ jobs:
         default: true
     - name: Format Check
       run: rustfmt --check --edition 2018 $(find -name '*.rs' -print)
+      # windows doesn't support using --check like this
+      if: ${{ matrix.os == 'ubuntu-latest' }}
     - name: execute runtime tests
       run: ./rust-runtime/test.sh
 
