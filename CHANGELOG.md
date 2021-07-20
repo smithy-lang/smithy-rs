@@ -1,6 +1,7 @@
 ## vNext (Month Day Year)
 
 **New This Week**
+- :tada: Add LazyCachingCredentialsProvider to aws-auth for use with expiring credentials, such as STS AssumeRole. Update STS example to use this new provider (#578, #595)
 - :bug: Bugfix: Fix parsing bug where whitespace was stripped when parsing XML (#590)
 
 ## v0.15 (June 29th 2021)
