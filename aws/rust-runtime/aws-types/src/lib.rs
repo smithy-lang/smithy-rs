@@ -4,6 +4,7 @@
  */
 
 pub mod build_metadata;
+pub mod environment;
 pub mod region;
 
 use std::borrow::Cow;
