@@ -327,21 +327,10 @@ mod tests {
     #[cfg(windows)]
     fn test_expand_home_windows() {
         let path = "~/.aws/config";
-        let env = Env::from_slice(&[("HOMEDRIVE", "C:"), ("HOMEPATH", "\\Users\\name")]);
         assert_eq!(
-            expand_home(&path, &env, Os::Windows).to_str().unwrap(),
-            "C:\\Users\\name\\.aws\\config"
-        );
-    }
-
-    /// Test that windows oriented path expands on windows
-    #[test]
-    #[cfg(windows)]
-    fn test_expand_windows_path_windows() {
-        let path = "~\\.aws\\config";
-        let env = Env::from_slice(&[("HOMEDRIVE", "C:"), ("HOMEPATH", "\\Users\\name")]);
-        assert_eq!(
-            expand_home(&path, &env, Os::Windows).to_str().unwrap(),
+            expand_home(&path, &Some("C:\\Users\\name".to_string()))
+                .to_str()
+                .unwrap(),
             "C:\\Users\\name\\.aws\\config"
         );
     }
