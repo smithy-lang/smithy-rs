@@ -318,8 +318,16 @@ mod tests {
 
     #[test]
     fn expand_home_no_home() {
+        // there is an edge case around expansion when no home directory exists
         // if no home directory can be determined, leave the path as is
-        assert_eq!(expand_home("~/config", &None).to_str().unwrap(), "~/config")
+        if !cfg!(windows) {
+            assert_eq!(expand_home("~/config", &None).to_str().unwrap(), "~/config")
+        } else {
+            assert_eq!(
+                expand_home("~/config", &None).to_str().unwrap(),
+                "~\\config"
+            )
+        }
     }
 
     /// Test that a linux oriented path expands on windows
