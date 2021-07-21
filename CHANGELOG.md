@@ -2,6 +2,7 @@
 
 **New This Week**
 - :bug: Bugfix: Fix parsing bug where whitespace was stripped when parsing XML (#590)
+- :bug: Bugfix: Constrain RFC-3339 timestamp formatting to microsecond precision (#596)
 
 ## v0.15 (June 29th 2021)
 This week, we've added EKS, ECR and Cloudwatch. The JSON deserialization implementation has been replaced, please be
