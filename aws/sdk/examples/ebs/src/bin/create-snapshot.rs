@@ -111,6 +111,7 @@ async fn main() -> Result<(), Error> {
 
     println!("Snapshot ID {}", snapshot_id);
     println!("The state is 'completed' when all of the modified blocks have been transferred to Amazon S3.");
+    println!("Use the get-snapshot-state code example to get the state of the snapshot.")
 
     Ok(())
 }

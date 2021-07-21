@@ -50,8 +50,9 @@ async fn main() -> Result<(), Error> {
     let config = Config::builder().region(region_provider).build();
     let client = Client::from_conf(config);
 
-    // You can find snapshots for any account by replacing
-    // "self" with their account ID.
+    // "self" represents your account ID.
+    // You can list the snapshots for any account by replacing
+    // "self" with that account ID.
     let resp = client.describe_snapshots().owner_ids("self").send().await?;
     let snapshots = resp.snapshots.unwrap();
     let length = snapshots.len();

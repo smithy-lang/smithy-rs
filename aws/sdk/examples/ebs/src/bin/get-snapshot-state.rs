@@ -23,7 +23,7 @@ struct Opt {
     verbose: bool,
 }
 
-/// Retrieves the state of an EBS snapshot.
+/// Retrieves the state of an Amazon EBS snapshot using Amazon EC2 API.
 /// It must be `completed` before you can use the snapshot.
 /// # Arguments
 ///
