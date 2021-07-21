@@ -8,3 +8,5 @@ mod source;
 // exposed only to remove unused code warnings until the parser side is added
 #[doc(hidden)]
 pub use source::load;
+#[doc(hidden)]
+pub use source::Source;

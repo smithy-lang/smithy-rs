@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::environment::ProcessEnvironment;
+use crate::os_shim_internal::Env;
 use std::borrow::Cow;
 
 /// The region to send requests to.
@@ -112,7 +112,7 @@ pub fn default_provider() -> impl ProvideRegion {
 
 #[non_exhaustive]
 pub struct EnvironmentProvider {
-    env: ProcessEnvironment,
+    env: Env,
 }
 
 impl Default for EnvironmentProvider {
@@ -124,9 +124,7 @@ impl Default for EnvironmentProvider {
 #[allow(clippy::redundant_closure)] // https://github.com/rust-lang/rust-clippy/issues/7218
 impl EnvironmentProvider {
     pub fn new() -> Self {
-        EnvironmentProvider {
-            env: ProcessEnvironment::real(),
-        }
+        EnvironmentProvider { env: Env::real() }
     }
 }
 
@@ -166,12 +164,12 @@ impl SigningRegion {
 
 #[cfg(test)]
 mod test {
-    use crate::environment::ProcessEnvironment;
+    use crate::os_shim_internal::Env;
     use crate::region::{EnvironmentProvider, ProvideRegion, Region};
 
     fn test_provider(vars: &[(&str, &str)]) -> EnvironmentProvider {
         EnvironmentProvider {
-            env: ProcessEnvironment::from_slice(vars),
+            env: Env::from_slice(vars),
         }
     }
 

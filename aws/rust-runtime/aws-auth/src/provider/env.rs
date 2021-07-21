@@ -5,19 +5,17 @@
 
 use crate::provider::{CredentialsError, ProvideCredentials};
 use crate::Credentials;
-use aws_types::environment::ProcessEnvironment;
+use aws_types::os_shim_internal::Env;
 use std::env::VarError;
 
 /// Load Credentials from Environment Variables
 pub struct EnvironmentVariableCredentialsProvider {
-    env: ProcessEnvironment,
+    env: Env,
 }
 
 impl EnvironmentVariableCredentialsProvider {
     pub fn new() -> Self {
-        EnvironmentVariableCredentialsProvider {
-            env: ProcessEnvironment::real(),
-        }
+        EnvironmentVariableCredentialsProvider { env: Env::real() }
     }
 }
 
@@ -59,11 +57,11 @@ fn to_cred_error(err: VarError) -> CredentialsError {
 mod test {
     use super::EnvironmentVariableCredentialsProvider;
     use crate::provider::{CredentialsError, ProvideCredentials};
-    use aws_types::environment::ProcessEnvironment;
+    use aws_types::os_shim_internal::Env;
 
     fn make_provider(vars: &[(&str, &str)]) -> EnvironmentVariableCredentialsProvider {
         EnvironmentVariableCredentialsProvider {
-            env: ProcessEnvironment::from_slice(vars),
+            env: Env::from_slice(vars),
         }
     }
 

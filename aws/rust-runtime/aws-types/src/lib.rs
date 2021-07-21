@@ -4,7 +4,9 @@
  */
 
 pub mod build_metadata;
-pub mod environment;
+// internal APIs, may be unstable
+#[doc(hidden)]
+pub mod os_shim_internal;
 pub mod profile;
 pub mod region;
 

@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-//! Abstractions for testing code that interacts with the process environment:
-//! - Determining the current time
+//! Abstractions for testing code that interacts with the operating system:
 //! - Reading environment variables
 //! - Reading from the file system
 
@@ -21,12 +20,12 @@ use std::sync::Arc;
 /// # Example
 /// Construct a file-system which delegates to `std::fs`:
 /// ```rust
-/// let fs = aws_types::environment::Fs::real();
+/// let fs = aws_types::os_shim_internal::Fs::real();
 /// ```
 ///
 /// Construct an in-memory file system for testing:
 /// ```rust
-/// use std::collections::HashMap;let fs = aws_types::environment::Fs::from_map({
+/// use std::collections::HashMap;let fs = aws_types::os_shim_internal::Fs::from_map({
 ///     let mut map = HashMap::new();
 ///     map.insert("/home/.aws/config".to_string(),"[default]\nregion = us-east-1".into());
 ///     map
@@ -57,7 +56,7 @@ impl Fs {
         }
     }
 
-    pub fn read(&self, path: impl AsRef<Path>) -> std::io::Result<Vec<u8>> {
+    pub fn read_to_end(&self, path: impl AsRef<Path>) -> std::io::Result<Vec<u8>> {
         use fs::Inner;
         let path = path.as_ref();
         match &self.0 {
@@ -80,17 +79,21 @@ mod fs {
     }
 }
 
-/// Process Environment Abstraction
+/// Environment variable abstraction
+///
+/// Environment variables are global to a process, and, as such, are difficult to test with a multi-
+/// threaded test runner like Rust's. This enables loading environment variables either from the
+/// actual process environment ([`std::env::var`](std::env::var))
 ///
 /// Process environments are cheap to clone:
 /// - Faked process environments are wrapped in an internal Arc
 /// - Real process environments are pointer-sized
 #[derive(Clone)]
-pub struct ProcessEnvironment(process_environment::Inner);
+pub struct Env(env::Inner);
 
-impl ProcessEnvironment {
+impl Env {
     pub fn get(&self, k: &str) -> Result<String, VarError> {
-        use process_environment::Inner;
+        use env::Inner;
         match &self.0 {
             Inner::Real => std::env::var(k),
             Inner::Fake(map) => map.get(k).cloned().ok_or(VarError::NotPresent),
@@ -101,15 +104,15 @@ impl ProcessEnvironment {
     ///
     /// # Example
     /// ```rust
-    /// use aws_types::environment::ProcessEnvironment;
-    /// let mock_env = ProcessEnvironment::from_slice(&[
+    /// use aws_types::os_shim_internal::Env;
+    /// let mock_env = Env::from_slice(&[
     ///     ("HOME", "/home/myname"),
     ///     ("AWS_REGION", "us-west-2")
     /// ]);
     /// assert_eq!(mock_env.get("HOME").unwrap(), "/home/myname");
     /// ```
     pub fn from_slice<'a>(vars: &[(&'a str, &'a str)]) -> Self {
-        use process_environment::Inner;
+        use env::Inner;
         Self(Inner::Fake(Arc::new(
             vars.iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -121,17 +124,17 @@ impl ProcessEnvironment {
     ///
     /// Calls will be delegated to [`std::env::var`](std::env::var).
     pub fn real() -> Self {
-        Self(process_environment::Inner::Real)
+        Self(env::Inner::Real)
     }
 }
 
-impl From<HashMap<String, String>> for ProcessEnvironment {
+impl From<HashMap<String, String>> for Env {
     fn from(hash_map: HashMap<String, String>) -> Self {
-        Self(process_environment::Inner::Fake(Arc::new(hash_map)))
+        Self(env::Inner::Fake(Arc::new(hash_map)))
     }
 }
 
-mod process_environment {
+mod env {
     use std::collections::HashMap;
     use std::sync::Arc;
 

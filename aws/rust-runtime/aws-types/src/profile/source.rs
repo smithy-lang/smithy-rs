@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::environment;
+use crate::os_shim_internal;
 use std::borrow::Cow;
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
@@ -28,18 +28,34 @@ pub struct File {
     pub contents: String,
 }
 
+enum FileKind {
+    Config,
+    Credentials,
+}
+
+impl FileKind {
+    fn default_path(&self) -> &'static str {
+        match &self {
+            FileKind::Credentials => "~/.aws/credentials",
+            FileKind::Config => "~/.aws/config",
+        }
+    }
+
+    fn override_environment_variable(&self) -> &'static str {
+        match &self {
+            FileKind::Config => "AWS_CONFIG_FILE",
+            FileKind::Credentials => "AWS_SHARED_CREDENTIALS_FILE",
+        }
+    }
+}
+
 /// Load a [Source](Source) from a given environment and filesystem.
-pub fn load(proc_env: &environment::ProcessEnvironment, fs: &environment::Fs) -> Source {
+pub fn load(proc_env: &os_shim_internal::Env, fs: &os_shim_internal::Fs) -> Source {
+    let home = home_dir(&proc_env, Os::real());
     let config = tracing::info_span!("load_config_file")
-        .in_scope(|| read(&fs, &proc_env, "~/.aws/config", "AWS_CONFIG_FILE"));
-    let credentials = tracing::info_span!("load_credentials_file").in_scope(|| {
-        read(
-            &fs,
-            &proc_env,
-            "~/.aws/credentials",
-            "AWS_SHARED_CREDENTIALS_FILE",
-        )
-    });
+        .in_scope(|| load_config_file(FileKind::Config, &home, &fs, &proc_env));
+    let credentials = tracing::info_span!("load_credentials_file")
+        .in_scope(|| load_config_file(FileKind::Credentials, &home, &fs, &proc_env));
     Source {
         config_file: config,
         credentials_file: credentials,
@@ -50,41 +66,51 @@ pub fn load(proc_env: &environment::ProcessEnvironment, fs: &environment::Fs) ->
     }
 }
 
-/// Read a file given a potential path override & Home directory expansion
+/// Loads an AWS Config file
+///
+/// Both the default & the overriding patterns may contain `~/` which MUST be expanded to the users
+/// home directory in a platform-aware way (see [`expand_home`](expand_home))
 ///
 /// Arguments:
+/// * `kind`: The type of config file to load
+/// * `home_directory`: Home directory to use during home directory expansion
 /// * `fs`: Filesystem abstraction
 /// * `environment`: Process environment abstraction
-/// * `default_path`: Fallback path if the environment variable specified by `overriden_by_env_var` is unset
-/// * `overridden_by_env_var`: name of an environment variable whose contents can override `default_path`
-fn read(
-    fs: &environment::Fs,
-    environment: &environment::ProcessEnvironment,
-    default_path: &str,
-    overridden_by_env_var: &str,
+fn load_config_file(
+    kind: FileKind,
+    home_directory: &Option<String>,
+    fs: &os_shim_internal::Fs,
+    environment: &os_shim_internal::Env,
 ) -> File {
     let path = environment
-        .get(overridden_by_env_var)
+        .get(kind.override_environment_variable())
         .map(Cow::Owned)
         .ok()
-        .unwrap_or_else(|| default_path.into());
-    let expanded = expand_home(path.as_ref(), &environment, Os::real());
-    tracing::debug!(before = ?path, after = ?expanded, "home directory expanded");
-    let data = match fs.read(&expanded) {
+        .unwrap_or_else(|| kind.default_path().into());
+    let expanded = expand_home(path.as_ref(), home_directory);
+    if path != expanded.to_string_lossy() {
+        tracing::debug!(before = ?path, after = ?expanded, "home directory expanded");
+    }
+    // read the data at the specified path
+    // if the path does not exist, log a warning but pretend it was actually an empty file
+    let data = match fs.read_to_end(&expanded) {
         Ok(data) => data,
         Err(e) => {
             match e.kind() {
-                ErrorKind::NotFound if path == default_path => {
+                ErrorKind::NotFound if path == kind.default_path() => {
                     tracing::info!(path = %path, "config file not found")
                 }
-                ErrorKind::NotFound if path != default_path => {
-                    tracing::warn!(path = %path, env = %overridden_by_env_var, "config file overridden via environment variable not found")
+                ErrorKind::NotFound if path != kind.default_path() => {
+                    // in the case where the user overrode the path with an environment variable,
+                    // log more loudly than the case where the default path was missing
+                    tracing::warn!(path = %path, env = %kind.override_environment_variable(), "config file overridden via environment variable not found")
                 }
                 _other => tracing::warn!(path = %path, error = %e, "failed to read config file"),
             };
             Default::default()
         }
     };
+    // if the file is not valid utf-8, log a warning and use an empty file instead
     let data = match String::from_utf8(data) {
         Ok(data) => data,
         Err(e) => {
@@ -100,11 +126,7 @@ fn read(
     }
 }
 
-fn expand_home(
-    path: impl AsRef<Path>,
-    env_var: &environment::ProcessEnvironment,
-    os: Os,
-) -> PathBuf {
+fn expand_home(path: impl AsRef<Path>, home_dir: &Option<String>) -> PathBuf {
     let path = path.as_ref();
     let mut components = path.components();
     let start = components.next();
@@ -112,18 +134,20 @@ fn expand_home(
         None => path.into(), // empty path,
         Some(Component::Normal(s)) if s == "~" => {
             // do homedir replacement
-            let mut path = match home_dir(&env_var, os) {
+            let path = match home_dir {
                 Some(dir) => {
-                    tracing::debug!(home = ?dir, "performing home directory substitution");
-                    dir
+                    tracing::debug!(home = ?dir, path = ?path, "performing home directory substitution");
+                    dir.clone()
                 }
                 None => {
                     tracing::warn!(
                         "could not determine home directory but home expansion was requested"
                     );
-                    Default::default()
+                    // if we can't determine the home directory, just leave it as `~`
+                    "~".into()
                 }
             };
+            let mut path: PathBuf = path.into();
             // rewrite the path using system-specific path separators
             for component in components {
                 path.push(component);
@@ -154,16 +178,16 @@ impl Os {
 }
 
 /// Resolve a home directory given a set of environment variables
-fn home_dir(env_var: &environment::ProcessEnvironment, os: Os) -> Option<PathBuf> {
+fn home_dir(env_var: &os_shim_internal::Env, os: Os) -> Option<String> {
     if let Ok(home) = env_var.get("HOME") {
         tracing::debug!(src = "HOME", "loaded home directory");
-        return Some(PathBuf::from(home));
+        return Some(home);
     }
 
     if os == Os::Windows {
         if let Ok(home) = env_var.get("USERPROFILE") {
             tracing::debug!(src = "USERPROFILE", "loaded home directory");
-            return Some(PathBuf::from(home));
+            return Some(home);
         }
 
         let home_drive = env_var.get("HOMEDRIVE");
@@ -171,7 +195,7 @@ fn home_dir(env_var: &environment::ProcessEnvironment, os: Os) -> Option<PathBuf
         tracing::debug!(src = "HOMEDRIVE/HOMEPATH", "loaded home directory");
         if let (Ok(mut drive), Ok(path)) = (home_drive, home_path) {
             drive.push_str(&path);
-            return Some(drive.into());
+            return Some(drive);
         }
     }
     None
@@ -179,8 +203,8 @@ fn home_dir(env_var: &environment::ProcessEnvironment, os: Os) -> Option<PathBuf
 
 #[cfg(test)]
 mod tests {
-    use crate::environment::{Fs, ProcessEnvironment};
-    use crate::profile::source::{expand_home, load, Os};
+    use crate::os_shim_internal::{Env, Fs};
+    use crate::profile::source::{expand_home, home_dir, load, Os};
     use serde::Deserialize;
     use std::collections::HashMap;
     use std::error::Error;
@@ -190,11 +214,7 @@ mod tests {
     fn only_expand_home_prefix() {
         // ~ is only expanded as a single component (currently)
         let path = "~aws/config";
-        let env = ProcessEnvironment::from_slice(&[("HOME", "/user/foo")]);
-        assert_eq!(
-            expand_home(&path, &env, Os::NotWindows).to_str().unwrap(),
-            "~aws/config"
-        );
+        assert_eq!(expand_home(&path, &None).to_str().unwrap(), "~aws/config");
     }
 
     #[derive(Deserialize, Debug)]
@@ -231,7 +251,7 @@ mod tests {
     #[traced_test]
     #[test]
     fn logs_produced_default() {
-        let env = ProcessEnvironment::from_slice(&[("HOME", "/user/name")]);
+        let env = Env::from_slice(&[("HOME", "/user/name")]);
         let mut fs = HashMap::new();
         fs.insert(
             "/user/name/.aws/config".to_string(),
@@ -247,7 +267,7 @@ mod tests {
 
     fn check(test_case: TestCase) {
         let fs = Fs::real();
-        let env = ProcessEnvironment::from(test_case.environment);
+        let env = Env::from(test_case.environment);
         let platform_matches = (cfg!(windows) && test_case.platform == "windows")
             || (!cfg!(windows) && test_case.platform != "windows");
         if platform_matches {
@@ -277,11 +297,29 @@ mod tests {
     #[cfg(not(windows))]
     fn test_expand_home() {
         let path = "~/.aws/config";
-        let env = ProcessEnvironment::from_slice(&[("HOME", "/user/foo")]);
         assert_eq!(
-            expand_home(&path, &env, Os::NotWindows).to_str().unwrap(),
+            expand_home(&path, &Some("/user/foo".to_string()))
+                .to_str()
+                .unwrap(),
             "/user/foo/.aws/config"
         );
+    }
+
+    #[test]
+    fn homedir_profile_only_windows() {
+        // windows specific variables should only be considered when the platform is windows
+        let env = Env::from_slice(&[("USERPROFILE", "C:\\Users\\name")]);
+        assert_eq!(
+            home_dir(&env, Os::Windows),
+            Some("C:\\Users\\name".to_string())
+        );
+        assert_eq!(home_dir(&env, Os::NotWindows), None);
+    }
+
+    #[test]
+    fn expand_home_no_home() {
+        // if no home directory can be determined, leave the path as is
+        assert_eq!(expand_home("~/config", &None).to_str().unwrap(), "~/config")
     }
 
     /// Test that a linux oriented path expands on windows
@@ -289,8 +327,7 @@ mod tests {
     #[cfg(windows)]
     fn test_expand_home_windows() {
         let path = "~/.aws/config";
-        let env =
-            ProcessEnvironment::from_slice(&[("HOMEDRIVE", "C:"), ("HOMEPATH", "\\Users\\name")]);
+        let env = Env::from_slice(&[("HOMEDRIVE", "C:"), ("HOMEPATH", "\\Users\\name")]);
         assert_eq!(
             expand_home(&path, &env, Os::Windows).to_str().unwrap(),
             "C:\\Users\\name\\.aws\\config"
@@ -302,8 +339,7 @@ mod tests {
     #[cfg(windows)]
     fn test_expand_windows_path_windows() {
         let path = "~\\.aws\\config";
-        let env =
-            ProcessEnvironment::from_slice(&[("HOMEDRIVE", "C:"), ("HOMEPATH", "\\Users\\name")]);
+        let env = Env::from_slice(&[("HOMEDRIVE", "C:"), ("HOMEPATH", "\\Users\\name")]);
         assert_eq!(
             expand_home(&path, &env, Os::Windows).to_str().unwrap(),
             "C:\\Users\\name\\.aws\\config"

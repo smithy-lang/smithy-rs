@@ -9,7 +9,7 @@ license = "Apache-2.0"
 
 [dependencies]
 lazy_static = "1"
-tracing = "0.1.26"
+tracing = "0.1"
 
 [dev-dependencies]
 tracing-test = "0.1.0"
