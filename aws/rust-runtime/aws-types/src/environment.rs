@@ -14,21 +14,22 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::sync::Arc;
 
-/// FileSystem abstraction
+/// File system abstraction
 ///
-/// Simple filesystem abstraction enabling in-memory mocking of the filesystem
+/// Simple abstraction enabling in-memory mocking of the file system
 ///
 /// # Example
-/// Construct a file-system which delegates to `std::fs`:
+/// Construct a file system which delegates to `std::fs`:
 /// ```rust
 /// let fs = aws_types::environment::Fs::real();
 /// ```
 ///
 /// Construct an in-memory file system for testing:
 /// ```rust
-/// use std::collections::HashMap;let fs = aws_types::environment::Fs::from_map({
+/// use std::collections::HashMap;
+/// let fs = aws_types::environment::Fs::from_map({
 ///     let mut map = HashMap::new();
-///     map.insert("/home/.aws/config".to_string(),"[default]\nregion = us-east-1".into());
+///     map.insert("/home/.aws/config".to_string(), "[default]\nregion = us-east-1".into());
 ///     map
 /// });
 /// ```
