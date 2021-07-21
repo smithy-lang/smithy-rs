@@ -138,8 +138,10 @@ jobs:
       if: ${{ matrix.os == 'ubuntu-latest' }}
     - name: run tests
       run: cargo test --all-features
+      working-directory: ${{ matrix.runtime }}/rust-runtime/
     - name: generate docs
       run: cargo doc --no-deps --document-private-items
+      working-directory: ${{ matrix.runtime }}/rust-runtime/
       env:
         RUSTDOCFLAGS: -D warnings
 
