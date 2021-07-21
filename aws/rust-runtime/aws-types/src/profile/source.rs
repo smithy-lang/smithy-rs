@@ -294,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(windows))]
+    #[cfg_attr(windows, ignore)]
     fn test_expand_home() {
         let path = "~/.aws/config";
         assert_eq!(
@@ -332,7 +332,7 @@ mod tests {
 
     /// Test that a linux oriented path expands on windows
     #[test]
-    #[cfg(windows)]
+    #[cfg_attr(not(windows), ignore)]
     fn test_expand_home_windows() {
         let path = "~/.aws/config";
         assert_eq!(
