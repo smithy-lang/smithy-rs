@@ -50,7 +50,9 @@ dependencies {
 // Tier 1 Services have examples and tests
 val tier1Services = setOf(
     "apigateway",
+    "applicationautoscaling",
     "autoscaling",
+    "autoscalingplans",
     "batch",
     "cloudformation",
     "cloudwatch",
@@ -162,10 +164,10 @@ fun discoverServices(allServices: Boolean, generateOnly: Set<String>): List<AwsS
         val inTier1 = generateOnly.isEmpty() && tier1Services.contains(it.module)
         allServices || inGenerateOnly || inTier1
     }
-    if (generateOnly.isNotEmpty()) {
+    if (generateOnly.isEmpty()) {
         val modules = services.map { it.module }.toSet()
         tier1Services.forEach { service ->
-            check(modules.contains(service)) { "Service $service was in list of tier 1 services but not generated!" }
+            check(modules.contains(service)) { "Service $service was in list of tier 1 services but not generated! ($generateOnly)" }
         }
     }
     return services
