@@ -134,7 +134,7 @@ jobs:
     - name: clippy check
       run: cargo clippy -- -D warnings
       working-directory: ${{ matrix.runtime }}/rust-runtime/
-      # don't both running Clippy twice, it will have the same results on Windows
+      # don't bother running Clippy twice, it will have the same results on Windows
       if: ${{ matrix.os == 'ubuntu-latest' }}
     - name: run tests
       run: cargo test --all-features

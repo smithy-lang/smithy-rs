@@ -84,7 +84,7 @@ mod fs {
 ///
 /// Environment variables are global to a process, and, as such, are difficult to test with a multi-
 /// threaded test runner like Rust's. This enables loading environment variables either from the
-/// actual process environment ([`std::env::var`](std::env::var))
+/// actual process environment ([`std::env::var`](std::env::var)) or from a hash map.
 ///
 /// Process environments are cheap to clone:
 /// - Faked process environments are wrapped in an internal Arc
