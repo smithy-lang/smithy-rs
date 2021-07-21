@@ -472,6 +472,7 @@ pub mod rfc3339 {
 
     /// Formats sub-second fraction for RFC-3339 (including the '.').
     /// Expects to be called with a number of `nanos` between 0 and 999_999_999 inclusive.
+    /// The formatted fraction will be truncated to microseconds.
     fn format_subsecond_fraction(into: &mut String, nanos: u32) {
         debug_assert!(nanos < 1_000_000_000);
         let micros = nanos / 1000;
