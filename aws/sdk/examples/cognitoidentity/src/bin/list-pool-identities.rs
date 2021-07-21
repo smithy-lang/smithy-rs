@@ -22,7 +22,7 @@ struct Opt {
     verbose: bool,
 }
 
-/// Lists the identities in an Amazon Cognito identitiy pool.
+/// Lists the identities in an Amazon Cognito identity pool.
 /// # Arguments
 ///
 /// * `-i IDENTITY-POOL-ID` - The ID of the identity pool.
@@ -85,9 +85,7 @@ async fn main() -> Result<(), Error> {
         }
     }
 
-    let next_token = response.next_token;
-
-    println!("Next token: {:?}", next_token);
+    println!("Next token: {:?}", response.next_token);
 
     println!();
 
