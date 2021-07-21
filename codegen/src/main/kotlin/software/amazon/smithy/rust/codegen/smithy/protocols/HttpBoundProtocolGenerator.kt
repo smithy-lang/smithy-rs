@@ -17,8 +17,10 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.assignment
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -408,12 +410,12 @@ class HttpBoundProtocolGenerator(
             rust("let mut builder = self.update_http_builder(#T::new())?;", RuntimeType.HttpRequestBuilder)
             val additionalHeaders = listOf("content-type" to contentType) + protocol.additionalHeaders(operationShape)
             for (header in additionalHeaders) {
-                rust(
+                rustTemplate(
                     """
-                    if !builder.headers_ref().map(|h| h.contains_key(${header.first.dq()})).unwrap_or(false) {
-                        builder = builder.header(${header.first.dq()}, ${header.second.dq()});
-                    }
-                    """
+                    builder = #{header_util}::set_header_if_absent(builder, ${header.first.dq()}, ${header.second.dq()});
+                    """,
+                    "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header")
+
                 )
             }
             rust("Ok(builder)")
