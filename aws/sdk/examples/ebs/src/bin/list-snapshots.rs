@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::region::{self, ProvideRegion};
-use ec2::{Client, Config, Error, Region, PKG_VERSION};
+use aws_sdk_ec2::{Client, Config, Error, Region, PKG_VERSION};
+use aws_types::region;
+use aws_types::region::ProvideRegion;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -18,7 +19,7 @@ struct Opt {
     verbose: bool,
 }
 
-/// Displays some information about the EBS snapshots you own in the Region.
+/// Displays some information about the Amazon Elastic Block Store snapshots you own in the Region.
 /// # Arguments
 ///
 /// * `[-r REGION]` - The Region in which the client is created.
@@ -31,7 +32,7 @@ async fn main() -> Result<(), Error> {
 
     let Opt { region, verbose } = Opt::from_args();
 
-    let region_provider = region::ChainProvider::first_try(region.map(Region::new))
+    let region = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
 
@@ -39,15 +40,12 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("EC2 version: {}", PKG_VERSION);
-        println!(
-            "Region:      {}",
-            region_provider.region().unwrap().as_ref()
-        );
+        println!("Region:      {}", region.region().unwrap().as_ref());
 
         println!();
     }
 
-    let config = Config::builder().region(region_provider).build();
+    let config = Config::builder().region(region).build();
     let client = Client::from_conf(config);
 
     // "self" represents your account ID.

@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::region::{self, ProvideRegion};
-use ec2::model::Filter;
-use ec2::{Client, Config, Error, Region, PKG_VERSION};
+use aws_sdk_ec2::model::Filter;
+use aws_sdk_ec2::{Client, Config, Error, Region, PKG_VERSION};
+use aws_types::region;
+use aws_types::region::ProvideRegion;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -23,7 +24,7 @@ struct Opt {
     verbose: bool,
 }
 
-/// Retrieves the state of an Amazon EBS snapshot using Amazon EC2 API.
+/// Retrieves the state of an Amazon Elastic Block Store snapshot using Amazon EC2 API.
 /// It must be `completed` before you can use the snapshot.
 /// # Arguments
 ///
@@ -42,7 +43,7 @@ async fn main() -> Result<(), Error> {
         verbose,
     } = Opt::from_args();
 
-    let region_provider = region::ChainProvider::first_try(region.map(Region::new))
+    let region = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
 
@@ -50,15 +51,12 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("EC2 version: {}", PKG_VERSION);
-        println!(
-            "Region:      {}",
-            region_provider.region().unwrap().as_ref()
-        );
+        println!("Region:      {}", region.region().unwrap().as_ref());
         println!("Snapshot ID: {}", snapshot_id);
         println!();
     }
 
-    let config = Config::builder().region(region_provider).build();
+    let config = Config::builder().region(region).build();
     let client = Client::from_conf(config);
 
     let resp = client

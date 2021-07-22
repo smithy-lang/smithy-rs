@@ -3,13 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::region::{self, ProvideRegion};
-use ebs::model::ChecksumAlgorithm;
-use ebs::{ByteStream, Client, Config, Error, Region, PKG_VERSION};
+use aws_sdk_ebs::model::ChecksumAlgorithm;
+use aws_sdk_ebs::{ByteStream, Client, Config, Error, Region, PKG_VERSION};
+use aws_types::region;
+use aws_types::region::ProvideRegion;
 use sha2::Digest;
 use structopt::StructOpt;
 
-/// EBS only supports one fixed size of block
+/// Amazon EBS only supports one fixed size of block
 const EBS_BLOCK_SIZE: usize = 524288;
 
 #[derive(Debug, StructOpt)]
@@ -27,7 +28,7 @@ struct Opt {
     verbose: bool,
 }
 
-/// Creates an EBS snapshot with the specified description.
+/// Creates an Amazon Elastic Block Store snapshot with the specified description.
 /// # Arguments
 ///
 /// * `-d DESCRIPTION` - The description of the snapshot.
@@ -45,7 +46,7 @@ async fn main() -> Result<(), Error> {
         verbose,
     } = Opt::from_args();
 
-    let region_provider = region::ChainProvider::first_try(region.map(Region::new))
+    let region = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
 
@@ -54,14 +55,11 @@ async fn main() -> Result<(), Error> {
     if verbose {
         println!("EBS version: {}", PKG_VERSION);
         println!("Description: {}", description);
-        println!(
-            "Region:      {}",
-            region_provider.region().unwrap().as_ref()
-        );
+        println!("Region:      {}", region.region().unwrap().as_ref());
         println!();
     }
 
-    let config = Config::builder().region(region_provider).build();
+    let config = Config::builder().region(region).build();
     let client = Client::from_conf(config);
 
     let snapshot = client
@@ -111,7 +109,7 @@ async fn main() -> Result<(), Error> {
 
     println!("Snapshot ID {}", snapshot_id);
     println!("The state is 'completed' when all of the modified blocks have been transferred to Amazon S3.");
-    println!("Use the get-snapshot-state code example to get the state of the snapshot.")
+    println!("Use the get-snapshot-state code example to get the state of the snapshot.");
 
     Ok(())
 }
