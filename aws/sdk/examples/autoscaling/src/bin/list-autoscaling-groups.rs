@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use autoscaling::{Client, Config, Error, Region, PKG_VERSION};
+use aws_sdk_autoscaling::{Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region::{self, ProvideRegion};
 use structopt::StructOpt;
 
@@ -18,7 +18,7 @@ struct Opt {
     verbose: bool,
 }
 
-/// Lists your AutoScaling groups in the Region.
+/// Lists your Amazon EC2 Auto Scaling group in the Region.
 /// # Arguments
 ///
 /// * `[-r REGION]` - The Region in which the client is created.
@@ -31,19 +31,22 @@ async fn main() -> Result<(), Error> {
 
     let Opt { region, verbose } = Opt::from_args();
 
-    let region_provider = region::ChainProvider::first_try(region.map(Region::new))
+    let region = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
 
     println!();
 
     if verbose {
-        println!("AutoScaling version: {}", PKG_VERSION);
-        println!("Region:              {:?}", region_provider.region());
+        println!("Auto Scaling client version: {}", PKG_VERSION);
+        println!(
+            "Region:                      {}",
+            region.region().unwrap().as_ref()
+        );
         println!();
     }
 
-    let conf = Config::builder().region(region_provider).build();
+    let conf = Config::builder().region(region).build();
     let client = Client::from_conf(conf);
 
     let resp = client.describe_auto_scaling_groups().send().await?;
