@@ -163,8 +163,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse the lines of a property after the first line. This is triggered by lines that start
-    /// with whitespace.
+    /// Parse the lines of a property after the first line.
+    ///
+    /// This is triggered by lines that start with whitespace.
     fn read_property_continuation(&mut self, line: &'a str) -> Result<(), ProfileParseError> {
         let current_property = match &self.state {
             State::Starting => return Err(self.make_error("Expected a profile definition")),
