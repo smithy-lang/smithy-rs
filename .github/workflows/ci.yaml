@@ -108,7 +108,11 @@ jobs:
           codegen-test/build/smithyprojections/codegen-test/Cargo.toml
   runtime-tests:
     name: Rust runtime tests
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        runtime: [., ./aws]
+    runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v2
     - uses: actions/cache@v2
@@ -125,8 +129,21 @@ jobs:
         default: true
     - name: Format Check
       run: rustfmt --check --edition 2018 $(find -name '*.rs' -print)
-    - name: execute runtime tests
-      run: ./rust-runtime/test.sh
+      # windows doesn't support using --check like this
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+    - name: clippy check
+      run: cargo clippy -- -D warnings
+      working-directory: ${{ matrix.runtime }}/rust-runtime/
+      # don't bother running Clippy twice, it will have the same results on Windows
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+    - name: run tests
+      run: cargo test --all-features
+      working-directory: ${{ matrix.runtime }}/rust-runtime/
+    - name: generate docs
+      run: cargo doc --no-deps --document-private-items
+      working-directory: ${{ matrix.runtime }}/rust-runtime/
+      env:
+        RUSTDOCFLAGS: -D warnings
 
   generate-sdk:
     name: Generate an AWS SDK

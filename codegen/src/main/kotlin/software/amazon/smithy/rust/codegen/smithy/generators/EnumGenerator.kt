@@ -159,6 +159,13 @@ class EnumGenerator(
                     write("$enumName::$UnknownVariant(s) => s.as_ref()")
                 }
             }
+
+            writer.rustBlock("pub fn $Values() -> &'static [&'static str]") {
+                withBlock("&[", "]") {
+                    val memberList = sortedMembers.joinToString(", ") { it.value.doubleQuote() }
+                    write(memberList)
+                }
+            }
         }
     }
 
