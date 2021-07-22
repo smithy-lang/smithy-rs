@@ -1,0 +1,13 @@
+# Note: this workspace exists solely for the convenience of running tests. These packages will all eventually
+# end up in the final SDK workspace.
+[workspace]
+
+members = [
+    "aws-auth",
+    "aws-endpoint",
+    "aws-http",
+    "aws-hyper",
+    "aws-inlineable",
+    "aws-sig-auth",
+    "aws-types"
+]
