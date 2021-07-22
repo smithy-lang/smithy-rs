@@ -46,7 +46,7 @@ impl ProfileName<'_> {
         }
         match (self.name, kind, self.has_profile_prefix) {
             (_, FileKind::Config, true) => Ok(self),
-            ("default", FileKind::Config, false) => Ok(self),
+            (DEFAULT, FileKind::Config, false) => Ok(self),
             (_not_default, FileKind::Config, false) => Err(format!(
                 "profile `{}` ignored because config profiles must be of the form `[profile <name>]`",
                 self.name
