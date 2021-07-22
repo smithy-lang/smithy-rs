@@ -7,10 +7,9 @@
 
 use crate::provider::cache::Cache;
 use crate::provider::time::TimeSource;
-use crate::provider::timeout::Timeout;
-use crate::provider::{
-    AsyncProvideCredentials, AsyncSleep, BoxFuture, CredentialsError, CredentialsResult,
-};
+use crate::provider::{AsyncProvideCredentials, BoxFuture, CredentialsError, CredentialsResult};
+use smithy_async::future::timeout::Timeout;
+use smithy_async::rt::sleep::AsyncSleep;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{trace_span, Instrument};
@@ -112,7 +111,7 @@ pub mod builder {
     };
     use crate::provider::time::SystemTimeSource;
     use crate::provider::AsyncProvideCredentials;
-    use smithy_http::sleep::AsyncSleep;
+    use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -126,11 +125,9 @@ pub mod builder {
     /// use aws_auth::provider::lazy_caching::LazyCachingCredentialsProvider;
     /// use std::sync::Arc;
     /// use std::time::Duration;
-    /// use smithy_http::sleep::TokioSleep;
     ///
     /// let provider = LazyCachingCredentialsProvider::builder()
-    ///     .sleeper(TokioSleep::new())
-    ///     .loader(async_provide_credentials_fn(|| async {
+    ///     .load(async_provide_credentials_fn(|| async {
     ///         // An async process to retrieve credentials would go here:
     ///         Ok(Credentials::from_keys("example", "example", None))
     ///     }))
@@ -139,7 +136,7 @@ pub mod builder {
     #[derive(Default)]
     pub struct Builder {
         sleep: Option<Box<dyn AsyncSleep>>,
-        loader: Option<Arc<dyn AsyncProvideCredentials>>,
+        load: Option<Arc<dyn AsyncProvideCredentials>>,
         load_timeout: Option<Duration>,
         buffer_time: Option<Duration>,
         default_credential_expiration: Option<Duration>,
@@ -152,8 +149,8 @@ pub mod builder {
 
         /// An implementation of [`AsyncProvideCredentials`] that will be used to load
         /// the cached credentials once they're expired.
-        pub fn loader(mut self, loader: impl AsyncProvideCredentials + 'static) -> Self {
-            self.loader = Some(Arc::new(loader));
+        pub fn load(mut self, loader: impl AsyncProvideCredentials + 'static) -> Self {
+            self.load = Some(Arc::new(loader));
             self
         }
 
@@ -161,7 +158,7 @@ pub mod builder {
         /// the `LazyCachingCredentialsProvider` with other async runtimes.
         /// If using Tokio as the async runtime, this should be set to an instance of
         /// [`TokioSleep`](smithy_http::sleep::TokioSleep).
-        pub fn sleeper(mut self, sleep: impl AsyncSleep + 'static) -> Self {
+        pub fn sleep(mut self, sleep: impl AsyncSleep + 'static) -> Self {
             self.sleep = Some(Box::new(sleep));
             self
         }
@@ -202,8 +199,10 @@ pub mod builder {
             );
             LazyCachingCredentialsProvider::new(
                 SystemTimeSource,
-                self.sleep.expect("sleep_impl is required"),
-                self.loader.expect("loader is required"),
+                self.sleep.unwrap_or_else(|| {
+                    default_async_sleep().expect("no default sleep implementation available")
+                }),
+                self.load.expect("load implementation is required"),
                 self.load_timeout.unwrap_or(DEFAULT_LOAD_TIMEOUT),
                 self.buffer_time.unwrap_or(DEFAULT_BUFFER_TIME),
                 default_credential_expiration,
@@ -222,7 +221,7 @@ mod tests {
         async_provide_credentials_fn, AsyncProvideCredentials, CredentialsError, CredentialsResult,
     };
     use crate::Credentials;
-    use smithy_http::sleep::TokioSleep;
+    use smithy_async::rt::sleep::TokioSleep;
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, SystemTime};
     use tracing::info;

@@ -9,6 +9,6 @@ edition = "2018"
 [dependencies]
 sts = { package = "aws-sdk-sts", path = "../../build/aws-sdk/sts" }
 dynamodb = { package = "aws-sdk-dynamodb", path = "../../build/aws-sdk/dynamodb"}
-aws-auth = { package = "aws-auth", path = "../../build/aws-sdk/aws-auth", features = ["timeout-tokio"] }
+aws-auth = { package = "aws-auth", path = "../../build/aws-sdk/aws-auth" }
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = "0.2.18"

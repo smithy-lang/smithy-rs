@@ -4,7 +4,6 @@
  */
 
 use aws_auth::provider::lazy_caching::LazyCachingCredentialsProvider;
-use aws_auth::provider::TokioSleep;
 use aws_auth::provider::{async_provide_credentials_fn, CredentialsError};
 use sts::Credentials;
 
@@ -19,12 +18,7 @@ async fn main() -> Result<(), dynamodb::Error> {
     // credentials cached. See the docs on the builder for the various configuration options,
     // such as timeouts, default expiration times, and more.
     let sts_provider = LazyCachingCredentialsProvider::builder()
-        // `LazyCachingCredentialsProvider` requires an implementation of async sleep so that
-        // it can be used with different async runtimes. The sleep function will be used for timeouts.
-        // Since we're using Tokio in this example, we use the `TokioSleep` implementation, which
-        // requires the `timeout-tokio` feature in the `aws-auth` dependency.
-        .sleeper(TokioSleep::new())
-        .loader(async_provide_credentials_fn(move || {
+        .load(async_provide_credentials_fn(move || {
             let client = client.clone();
             async move {
                 let session_token = client

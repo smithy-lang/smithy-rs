@@ -1,10 +1,41 @@
 /*
- * Original Copyright (c) 2021 Tokio Contributors. Licensed under the Apache-2.0 license.
- * Modifications Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use pin_project::pin_project;
+// This code was copied and then modified from Tokio.
+
+/*
+ * Copyright (c) 2021 Tokio Contributors
+ *
+ * Permission is hereby granted, free of charge, to any
+ * person obtaining a copy of this software and associated
+ * documentation files (the "Software"), to deal in the
+ * Software without restriction, including without
+ * limitation the rights to use, copy, modify, merge,
+ * publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software
+ * is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice
+ * shall be included in all copies or substantial portions
+ * of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ * ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+ * TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+ * PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+ * SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+ * IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
+
+//! Provides the [`Timeout`] future for adding a timeout to another future.
+
+use pin_project_lite::pin_project;
 use std::error::Error;
 use std::fmt;
 use std::future::Future;
@@ -22,18 +53,20 @@ impl fmt::Display for TimedOutError {
     }
 }
 
-#[pin_project]
-#[must_use = "futures do nothing unless you `.await` or poll them"]
-#[derive(Debug)]
-pub struct Timeout<T, S> {
-    #[pin]
-    value: T,
-    #[pin]
-    sleep: S,
+pin_project! {
+    #[non_exhaustive]
+    #[must_use = "futures do nothing unless you `.await` or poll them"]
+    #[derive(Debug)]
+    pub struct Timeout<T, S> {
+        #[pin]
+        value: T,
+        #[pin]
+        sleep: S,
+    }
 }
 
 impl<T, S> Timeout<T, S> {
-    pub(crate) fn new(value: T, sleep: S) -> Timeout<T, S> {
+    pub fn new(value: T, sleep: S) -> Timeout<T, S> {
         Timeout { value, sleep }
     }
 }
@@ -63,20 +96,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::Timeout;
-    use crate::provider::timeout::TimedOutError;
-    use std::future::Future;
-    use std::pin::Pin;
-    use std::task::{Context, Poll};
-
-    struct Never;
-    impl Future for Never {
-        type Output = ();
-
-        fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
-            Poll::Pending
-        }
-    }
+    use super::{TimedOutError, Timeout};
+    use crate::future::never::Never;
 
     #[tokio::test]
     async fn success() {

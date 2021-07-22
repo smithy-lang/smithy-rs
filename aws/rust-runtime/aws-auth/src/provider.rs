@@ -17,7 +17,6 @@ mod cache;
 pub mod env;
 pub mod lazy_caching;
 mod time;
-mod timeout;
 
 use crate::Credentials;
 use smithy_http::property_bag::PropertyBag;
@@ -28,11 +27,6 @@ use std::future::{self, Future};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
-
-// Re-export AsyncSleep and TokioSleep so that an explicit dependency on smithy-http isn't needed
-pub use smithy_http::sleep::AsyncSleep;
-#[cfg(feature = "timeout-tokio")]
-pub use smithy_http::sleep::TokioSleep;
 
 #[derive(Debug)]
 #[non_exhaustive]

@@ -18,5 +18,4 @@ pub mod query;
 pub mod response;
 pub mod result;
 pub mod retry;
-pub mod sleep;
 mod urlencode;
