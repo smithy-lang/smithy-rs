@@ -34,7 +34,7 @@ use std::collections::HashMap;
 ///
 /// When determining the home directory, the following environment variables are checked:
 /// - `$HOME` on all platforms
-/// - `$USER_PROFILE` on Windows
+/// - `$USERPROFILE` on Windows
 /// - `$HOMEDRIVE$HOMEPATH` on Windows
 ///
 /// ## Profile file syntax
@@ -77,18 +77,19 @@ pub struct ProfileSet {
 
 impl ProfileSet {
     fn parse(source: Source) -> Result<Self, ProfileParseError> {
-        let base = ProfileSet::empty();
-        let base = normalize::normalize(
-            base,
+        let mut base = ProfileSet::empty();
+        base.selected_profile = source.profile;
+
+        normalize::merge_in(
+            &mut base,
             parse_profile_file(&source.config_file)?,
             FileKind::Config,
-        )?;
-        let mut base = normalize::normalize(
-            base,
+        );
+        normalize::merge_in(
+            &mut base,
             parse_profile_file(&source.credentials_file)?,
             FileKind::Credentials,
-        )?;
-        base.selected_profile = source.profile;
+        );
         Ok(base)
     }
 
@@ -161,11 +162,13 @@ mod test {
     use std::collections::HashMap;
     use std::error::Error;
     use std::fs;
+    use tracing_test::traced_test;
 
     /// Run all tests from profile-parser-tests.json
     ///
     /// These represent the bulk of the test cases and reach effectively 100% coverage
     #[test]
+    #[traced_test]
     fn run_tests() -> Result<(), Box<dyn Error>> {
         let tests = fs::read_to_string("test-data/profile-parser-tests.json")?;
         let tests: ParserTests = serde_json::from_str(&tests)?;
@@ -243,13 +246,10 @@ mod test {
         let copy = test_case.clone();
         let parsed = ProfileSet::parse(make_source(test_case.input));
         let res = match (parsed.map(flatten), &test_case.output) {
-            (Ok(actual), ParserOutput::Profiles(expected)) if &actual != expected => {
-                let actual = actual;
-                Err(format!(
-                    "mismatch:\nExpected: {:#?}\nActual: {:#?}",
-                    expected, actual
-                ))
-            }
+            (Ok(actual), ParserOutput::Profiles(expected)) if &actual != expected => Err(format!(
+                "mismatch:\nExpected: {:#?}\nActual: {:#?}",
+                expected, actual
+            )),
             (Ok(_), ParserOutput::Profiles(_)) => Ok(()),
             (Err(msg), ParserOutput::ErrorContaining(substr)) => {
                 if format!("{}", msg).contains(substr) {

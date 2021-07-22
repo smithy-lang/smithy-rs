@@ -24,7 +24,7 @@ pub type RawProfileSet<'a> = HashMap<&'a str, HashMap<&'a str, Cow<'a, str>>>;
 ///
 /// Profile parsing is actually quite strict about what is and is not whitespace, so use this instead
 /// of `.is_whitespace()` / `.trim()`
-const WHITESPACE: &[char] = &[' ', '\t'];
+pub const WHITESPACE: &[char] = &[' ', '\t'];
 const COMMENT: &[char] = &['#', ';'];
 
 /// Location for use during error reporting
@@ -106,7 +106,7 @@ pub fn parse_profile_file(file: &File) -> Result<RawProfileSet, ProfileParseErro
         state: State::Starting,
         location: Location {
             line_number: 0,
-            path: (&file.path).to_string(),
+            path: file.path.to_string(),
         },
     };
     parser.parse_profile(&file.contents)?;
@@ -138,7 +138,7 @@ impl<'a> Parser<'a> {
     fn read_property_line(&mut self, line: &'a str) -> Result<(), ProfileParseError> {
         let location = &self.location;
         let (current_profile, name) = match &self.state {
-            State::Starting => return Err(self.emit_error("Expected a profile definition")),
+            State::Starting => return Err(self.make_error("Expected a profile definition")),
             State::ReadingProfile { profile, .. } => (
                 self.data.get_mut(*profile).expect("profile must exist"),
                 profile,
@@ -156,7 +156,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Create a location-tagged error message
-    fn emit_error(&self, message: &str) -> ProfileParseError {
+    fn make_error(&self, message: &str) -> ProfileParseError {
         ProfileParseError {
             location: self.location.clone(),
             message: message.into(),
@@ -167,7 +167,7 @@ impl<'a> Parser<'a> {
     /// with whitespace.
     fn read_property_continuation(&mut self, line: &'a str) -> Result<(), ProfileParseError> {
         let current_property = match &self.state {
-            State::Starting => return Err(self.emit_error("Expected a profile definition")),
+            State::Starting => return Err(self.make_error("Expected a profile definition")),
             State::ReadingProfile {
                 profile,
                 property: Some(property),
@@ -186,7 +186,7 @@ impl<'a> Parser<'a> {
                 profile: _,
                 property: None,
                 ..
-            } => return Err(self.emit_error("Expected a property definition, found continuation")),
+            } => return Err(self.make_error("Expected a property definition, found continuation")),
         };
         let line = line.trim_matches(WHITESPACE);
         let current_property = current_property.to_mut();
@@ -199,9 +199,9 @@ impl<'a> Parser<'a> {
         let line = prepare_line(line, false);
         let profile_name = line
             .strip_prefix('[')
-            .ok_or_else(|| self.emit_error("Profile definition must start with ]"))?
+            .ok_or_else(|| self.make_error("Profile definition must start with ]"))?
             .strip_suffix(']')
-            .ok_or_else(|| self.emit_error("Profile definition must end with ']'"))?;
+            .ok_or_else(|| self.make_error("Profile definition must end with ']'"))?;
         if !self.data.contains_key(profile_name) {
             self.data.insert(profile_name, Default::default());
         }
@@ -254,6 +254,8 @@ fn parse_property_line(line: &str) -> Result<(&str, &str), PropertyError> {
 
 /// Prepare a line for parsing
 ///
+/// Because leading whitespace is significant, this method should only be called after determining
+/// whether a line represents a property (no whitespace) or a sub-property (whitespace).
 /// This function preprocesses a line to simplify parsing:
 /// 1. Strip leading and trailing whitespace
 /// 2. Remove trailing comments
@@ -289,11 +291,17 @@ mod test {
     #[test]
     fn property_parsing() {
         assert_eq!(parse_property_line("a = b"), Ok(("a", "b")));
+        assert_eq!(parse_property_line("a=b"), Ok(("a", "b")));
         assert_eq!(parse_property_line("a = b "), Ok(("a", "b")));
         assert_eq!(parse_property_line(" a = b "), Ok(("a", "b")));
         assert_eq!(parse_property_line(" a = b 🐱 "), Ok(("a", "b 🐱")));
         assert_eq!(parse_property_line("a b"), Err(PropertyError::NoEquals));
         assert_eq!(parse_property_line("= b"), Err(PropertyError::NoName));
+        assert_eq!(parse_property_line("a =    "), Ok(("a", "")));
+        assert_eq!(
+            parse_property_line("something_base64=aGVsbG8gZW50aHVzaWFzdGljIHJlYWRlcg=="),
+            Ok(("something_base64", "aGVsbG8gZW50aHVzaWFzdGljIHJlYWRlcg=="))
+        );
     }
 
     #[test]

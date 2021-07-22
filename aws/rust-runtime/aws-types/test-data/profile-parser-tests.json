@@ -612,6 +612,22 @@
       }
     },
     {
+      "name": "Default profiles with mixed prefixes merge with credentials",
+      "input": {
+        "configFile": "[profile default]\nname = value\n[default]\nname2 = value2\n[profile default]\nname3 = value3",
+        "credentialsFile": "[default]\nsecret=foo"
+      },
+      "output": {
+        "profiles": {
+          "default": {
+            "name": "value",
+            "name3": "value3",
+            "secret": "foo"
+          }
+        }
+      }
+    },
+    {
       "name": "Duplicate properties between files uses credentials property.",
       "input": {
         "configFile": "[profile foo]\nname = value",
@@ -663,6 +679,34 @@
       },
       "output": {
         "errorContaining": "Expected a property definition, found continuation"
+      }
+    },
+    {
+      "name": "sneaky profile name",
+      "input": {
+        "configFile": "[profilefoo]\nname = value\n[profile bar]"
+      },
+      "output": {
+        "profiles": { "bar":  {} }
+      }
+    },
+
+    {
+      "name": "profile name with extra whitespace",
+      "input": {
+        "configFile": "[   profile foo    ]\nname = value\n[profile bar]"
+      },
+      "output": {
+        "profiles": { "bar":  {}, "foo": {"name":  "value"} }
+      }
+    },
+    {
+      "name": "profile name with extra whitespace in credentials",
+      "input": {
+        "credentialsFile": "[   foo    ]\nname = value\n[profile bar]"
+      },
+      "output": {
+        "profiles": { "foo": {"name":  "value"} }
       }
     }
   ]
