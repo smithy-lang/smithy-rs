@@ -182,7 +182,7 @@ jobs:
     - uses: actions/upload-artifact@v2
       name: Upload SDK Artifact
       with:
-        name: aws-sdk-${{ env.name }}-${{ github.sha }}
+        name: aws-sdk-${{ env.name }}-tier1-${{ github.sha }}
         path: sdk.tar
 
   check-sdk:
@@ -356,5 +356,5 @@ jobs:
     - uses: actions/upload-artifact@v2
       name: Upload SDK Artifact
       with:
-        name: aws-sdk-${{ env.name }}-allservices-${{ github.sha }}
+        name: aws-sdk-${{ env.name }}-${{ github.sha }}
         path: sdk.tar

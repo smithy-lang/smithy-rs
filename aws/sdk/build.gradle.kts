@@ -94,7 +94,15 @@ val tier1Services = setOf(
     "sts"
 )
 
-private val disableServices = setOf("transcribestreaming")
+private val disableServices = setOf(
+    // transcribe streaming contains exclusively EventStream operations which are not supported
+    "transcribestreaming",
+    // Glacier requires a customization which is not currently supported:
+    // https://github.com/awslabs/smithy-rs/issues/137
+    "glacier",
+    // https://github.com/awslabs/smithy-rs/issues/606
+    "iotdeviceanager"
+)
 
 data class AwsService(
     val service: String,
