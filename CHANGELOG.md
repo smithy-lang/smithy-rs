@@ -1,7 +1,9 @@
 ## vNext (Month Day Year)
 
 **New This Week**
-- :bug: Bugfix: Fix parsing bug where whitespace was stripped when parsing XML (#590)
+- :tada: Release of all* remaining AWS services! This release includes all remaining AWS services with the exception of three
+   services which will require further work to function (Glacier, IOT Device Gateway, and Transcribe Streaming). (#607)
+- :bug: Bugfix: Fix parsing bug where parsing XML incorrectly stripped whitespace (#590, aws-sdk-rust#153)
 - Establish common abstraction for environment variables (#594)
 - Add windows to the test matrix (#594)
 - (When complete) Add profile file provider for region (#594, #xyz)
