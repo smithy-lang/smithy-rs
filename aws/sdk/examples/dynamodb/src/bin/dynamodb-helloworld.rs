@@ -22,7 +22,7 @@ struct Opt {
     verbose: bool,
 }
 
-/// Lists your DynamoDB tables and creates the table **test_table**.
+/// Lists your DynamoDB tables and creates the table **test-table**.
 /// # Arguments
 ///
 /// * `[-r REGION]` - The region in which the client is created.
