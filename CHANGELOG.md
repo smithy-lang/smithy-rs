@@ -1,5 +1,11 @@
 ## vNext (Month Day Year)
 
+**Breaking changes**
+* `test-util` has been made an optional dependency and has moved from
+  aws-hyper to smithy-http. If you were relying on `aws_hyper::TestConnection`, add `smithy-client` as a dependency
+  and enable the optional `test-util` feature. This prunes some unnecessary dependencies on `roxmltree` and `serde_json`
+  for most users. (#608)
+
 **New This Week**
 - :tada: Release all but three remaining AWS services! Glacier, IoT Data Plane and Transcribe streaming will be available in a future release. If you discover that a service isn't functioning as expected please let us know! (#607)
 - :bug: Bugfix: Fix parsing bug where parsing XML incorrectly stripped whitespace (#590, aws-sdk-rust#153)

@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use aws_sdk_ec2::{Client, Config, Error, Region, PKG_VERSION};
+use aws_types::region;
 use aws_types::region::ProvideRegion;
-use kinesis::{Client, Config, Error, Region, PKG_VERSION};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -13,19 +14,20 @@ struct Opt {
     #[structopt(short, long)]
     region: Option<String>,
 
-    /// THe name of the stream.
+    /// The ID of the snapshot.
     #[structopt(short, long)]
-    stream_name: String,
+    snapshot_id: String,
 
     /// Whether to display additional information.
     #[structopt(short, long)]
     verbose: bool,
 }
 
-/// Creates an Amazon Kinesis data stream.
+/// Deletes an Amazon Elastic Block Store snapshot.
+/// It must be `completed` before you can use the snapshot.
 /// # Arguments
 ///
-/// * `-s STREAM-NAME` - The name of the stream.
+/// * `-s SNAPSHOT-ID` - The ID of the snapshot.
 /// * `[-r REGION]` - The Region in which the client is created.
 ///    If not supplied, uses the value of the **AWS_REGION** environment variable.
 ///    If the environment variable is not set, defaults to **us-west-2**.
@@ -33,24 +35,23 @@ struct Opt {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
+
     let Opt {
-        stream_name,
         region,
+        snapshot_id,
         verbose,
     } = Opt::from_args();
 
-    let region = region
-        .as_ref()
-        .map(|region| Region::new(region.clone()))
-        .or_else(|| aws_types::region::default_provider().region())
-        .unwrap_or_else(|| Region::new("us-west-2"));
+    let region = region::ChainProvider::first_try(region.map(Region::new))
+        .or_default_provider()
+        .or_else(Region::new("us-west-2"));
 
     println!();
 
     if verbose {
-        println!("Kinesis client version: {}", PKG_VERSION);
-        println!("Region:                 {:?}", &region);
-        println!("Stream name:            {}", &stream_name);
+        println!("EC2 version: {}", PKG_VERSION);
+        println!("Region:      {}", region.region().unwrap().as_ref());
+        println!("Snapshot ID: {}", snapshot_id);
         println!();
     }
 
@@ -58,13 +59,12 @@ async fn main() -> Result<(), Error> {
     let client = Client::from_conf(config);
 
     client
-        .create_stream()
-        .stream_name(stream_name)
-        .shard_count(4)
+        .delete_snapshot()
+        .snapshot_id(snapshot_id)
         .send()
         .await?;
 
-    println!("Created stream");
+    println!("Deleted");
 
     Ok(())
 }
