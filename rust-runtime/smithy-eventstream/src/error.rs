@@ -16,6 +16,7 @@ pub enum Error {
     InvalidHeaderValueType(u8),
     InvalidHeadersLength,
     InvalidMessageLength,
+    InvalidUtf8String,
     MessageChecksumMismatch(u32, u32),
     MessageTooLong,
     PayloadTooLong,
@@ -35,6 +36,7 @@ impl fmt::Display for Error {
             InvalidHeaderValueType(val) => write!(f, "invalid header value type: {}", val),
             InvalidHeadersLength => write!(f, "invalid headers length"),
             InvalidMessageLength => write!(f, "invalid message length"),
+            InvalidUtf8String => write!(f, "encountered invalid UTF-8 string"),
             MessageChecksumMismatch(expected, actual) => write!(
                 f,
                 "message checksum 0x{:X} didn't match expected checksum 0x{:X}",

@@ -27,10 +27,7 @@ fn mutate(data: &mut [u8], size: usize, max_size: usize) -> usize {
                     "bytes",
                     HeaderValue::ByteArray((&b"some bytes"[..]).into()),
                 ))
-                .add_header(Header::new(
-                    "str",
-                    HeaderValue::String((&b"some str"[..]).into()),
-                ))
+                .add_header(Header::new("str", HeaderValue::String("some str".into())))
                 .add_header(Header::new(
                     "time",
                     HeaderValue::Timestamp(Instant::from_epoch_seconds(5_000_000_000)),

@@ -10,7 +10,7 @@ use crate::buf::crc::{CrcBuf, CrcBufMut};
 use crate::error::Error;
 use crate::str_bytes::StrBytes;
 use bytes::{Buf, BufMut, Bytes};
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::mem::size_of;
 
 const PRELUDE_LENGTH_BYTES: u32 = 3 * size_of::<u32>() as u32;
@@ -25,6 +25,7 @@ mod value {
     use crate::str_bytes::StrBytes;
     use bytes::{Buf, BufMut, Bytes};
     use smithy_types::Instant;
+    use std::convert::TryInto;
     use std::mem::size_of;
 
     const TYPE_TRUE: u8 = 0;
@@ -64,7 +65,7 @@ mod value {
     }
 
     impl HeaderValue {
-        pub(super) fn read_from(buffer: &mut dyn Buf) -> Result<HeaderValue, Error> {
+        pub(super) fn read_from<B: Buf>(mut buffer: B) -> Result<HeaderValue, Error> {
             let value_type = buffer.get_u8();
             match value_type {
                 TYPE_TRUE => Ok(HeaderValue::Bool(true)),
@@ -81,7 +82,9 @@ mod value {
                         }
                         let bytes = buffer.copy_to_bytes(len);
                         if value_type == TYPE_STRING {
-                            Ok(HeaderValue::String(bytes.into()))
+                            Ok(HeaderValue::String(
+                                bytes.try_into().map_err(|_| Error::InvalidUtf8String)?,
+                            ))
                         } else {
                             Ok(HeaderValue::ByteArray(bytes))
                         }
@@ -103,7 +106,7 @@ mod value {
             }
         }
 
-        pub(super) fn write_to(&self, buffer: &mut dyn BufMut) -> Result<(), Error> {
+        pub(super) fn write_to<B: BufMut>(&self, mut buffer: B) -> Result<(), Error> {
             use HeaderValue::*;
             match self {
                 Bool(val) => buffer.put_u8(if *val { TYPE_TRUE } else { TYPE_FALSE }),
@@ -202,24 +205,27 @@ impl Header {
     }
 
     /// Reads a header from the given `buffer`.
-    fn read_from(buffer: &mut dyn Buf) -> Result<(Header, usize), Error> {
+    fn read_from<B: Buf>(mut buffer: B) -> Result<(Header, usize), Error> {
         if buffer.remaining() < MIN_HEADER_LEN {
             return Err(Error::InvalidHeadersLength);
         }
 
-        let mut counting_buf = CountBuf::new(buffer);
+        let mut counting_buf = CountBuf::new(&mut buffer);
         let name_len = counting_buf.get_u8();
         if name_len as usize >= counting_buf.remaining() {
             return Err(Error::InvalidHeaderNameLength);
         }
 
-        let name = counting_buf.copy_to_bytes(name_len as usize);
+        let name: StrBytes = counting_buf
+            .copy_to_bytes(name_len as usize)
+            .try_into()
+            .map_err(|_| Error::InvalidUtf8String)?;
         let value = HeaderValue::read_from(&mut counting_buf)?;
         Ok((Header::new(name, value), counting_buf.into_count()))
     }
 
     /// Writes the header to the given `buffer`.
-    fn write_to(&self, buffer: &mut dyn BufMut) -> Result<(), Error> {
+    fn write_to<B: BufMut>(&self, mut buffer: B) -> Result<(), Error> {
         if self.name.as_bytes().len() > MAX_HEADER_NAME_LEN {
             return Err(Error::InvalidHeaderNameLength);
         }
@@ -264,8 +270,8 @@ impl Message {
     }
 
     // Returns (total_len, header_len)
-    fn read_prelude_from(buffer: &mut dyn Buf) -> Result<Option<(u32, u32)>, Error> {
-        let mut crc_buffer = CrcBuf::new(buffer);
+    fn read_prelude_from<B: Buf>(mut buffer: B) -> Result<Option<(u32, u32)>, Error> {
+        let mut crc_buffer = CrcBuf::new(&mut buffer);
 
         // If the buffer doesn't have the entire frame yet, then short circuit
         let total_len = crc_buffer.get_u32();
@@ -288,14 +294,14 @@ impl Message {
 
     /// Reads a message from the given `buffer`. If the buffer doesn't have the whole
     /// message in it yet (as is the case when streaming), then it returns `Ok(None)`.
-    pub fn read_from(buffer: &mut dyn Buf) -> Result<Option<Message>, Error> {
+    pub fn read_from<B: Buf>(mut buffer: B) -> Result<Option<Message>, Error> {
         // If we haven't received the full prelude, then short circuit
         if buffer.remaining() < PRELUDE_LENGTH_BYTES_USIZE {
             return Ok(None);
         }
 
         // Calculate a CRC as we go and read the prelude
-        let mut crc_buffer = CrcBuf::new(buffer);
+        let mut crc_buffer = CrcBuf::new(&mut buffer);
         if let Some((total_len, header_len)) = Self::read_prelude_from(&mut crc_buffer)? {
             // Verify we have the full frame before continuing
             let remaining_len = total_len
@@ -446,7 +452,7 @@ mod tests {
         );
         read_message_expect_err!(
             include_bytes!("../test_data/invalid_header_name_length_too_long"),
-            Error::InvalidHeaderValue
+            Error::InvalidUtf8String
         );
     }
 
@@ -531,10 +537,7 @@ mod tests {
                     "bytes",
                     HeaderValue::ByteArray(Bytes::from(&b"some bytes"[..]))
                 ),
-                Header::new(
-                    "str",
-                    HeaderValue::String(Bytes::from(&b"some str"[..]).into())
-                ),
+                Header::new("str", HeaderValue::String("some str".into())),
                 Header::new(
                     "time",
                     HeaderValue::Timestamp(Instant::from_epoch_seconds(5_000_000_000))
@@ -562,10 +565,7 @@ mod tests {
                 "bytes",
                 HeaderValue::ByteArray((&b"some bytes"[..]).into()),
             ))
-            .add_header(Header::new(
-                "str",
-                HeaderValue::String((&b"some str"[..]).into()),
-            ))
+            .add_header(Header::new("str", HeaderValue::String("some str".into())))
             .add_header(Header::new(
                 "time",
                 HeaderValue::Timestamp(Instant::from_epoch_seconds(5_000_000_000)),

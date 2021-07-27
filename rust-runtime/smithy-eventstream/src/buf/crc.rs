@@ -11,14 +11,20 @@ use crc32fast::Hasher;
 
 /// Implementation of [`Buf`] that calculates a CRC-32 checksum of the data
 /// being read from an underlying `Buf` instance.
-pub struct CrcBuf<'a> {
-    buffer: &'a mut dyn Buf,
+pub struct CrcBuf<'a, B>
+where
+    B: Buf,
+{
+    buffer: &'a mut B,
     crc: Hasher,
 }
 
-impl<'a> CrcBuf<'a> {
+impl<'a, B> CrcBuf<'a, B>
+where
+    B: Buf,
+{
     /// Creates a new `CrcBuf` by wrapping the given `buffer`.
-    pub fn new(buffer: &'a mut dyn Buf) -> Self {
+    pub fn new(buffer: &'a mut B) -> Self {
         CrcBuf {
             buffer,
             crc: Hasher::new(),
@@ -31,7 +37,10 @@ impl<'a> CrcBuf<'a> {
     }
 }
 
-impl<'a> Buf for CrcBuf<'a> {
+impl<'a, B> Buf for CrcBuf<'a, B>
+where
+    B: Buf,
+{
     fn remaining(&self) -> usize {
         self.buffer.remaining()
     }

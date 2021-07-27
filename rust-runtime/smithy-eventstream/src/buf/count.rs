@@ -6,30 +6,35 @@
 //! A [`Buf`] implementation that counts bytes read.
 
 use bytes::Buf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// A [`Buf`] implementation that counts bytes read.
-pub struct CountBuf<'a> {
-    buffer: &'a mut dyn Buf,
-    count: AtomicUsize,
+pub struct CountBuf<'a, B>
+where
+    B: Buf,
+{
+    buffer: &'a mut B,
+    count: usize,
 }
 
-impl<'a> CountBuf<'a> {
+impl<'a, B> CountBuf<'a, B>
+where
+    B: Buf,
+{
     /// Creates a new `CountBuf` by wrapping the given `buffer`.
-    pub fn new(buffer: &'a mut dyn Buf) -> Self {
-        CountBuf {
-            buffer,
-            count: AtomicUsize::new(0),
-        }
+    pub fn new(buffer: &'a mut B) -> Self {
+        CountBuf { buffer, count: 0 }
     }
 
     /// Consumes the `CountBuf` and returns the number of bytes read.
     pub fn into_count(self) -> usize {
-        self.count.load(Ordering::Relaxed)
+        self.count
     }
 }
 
-impl<'a> Buf for CountBuf<'a> {
+impl<'a, B> Buf for CountBuf<'a, B>
+where
+    B: Buf,
+{
     fn remaining(&self) -> usize {
         self.buffer.remaining()
     }
@@ -39,7 +44,7 @@ impl<'a> Buf for CountBuf<'a> {
     }
 
     fn advance(&mut self, cnt: usize) {
-        self.count.fetch_add(cnt, Ordering::Relaxed);
+        self.count += cnt;
         self.buffer.advance(cnt);
     }
 }
