@@ -101,7 +101,7 @@ private val disableServices = setOf(
     // https://github.com/awslabs/smithy-rs/issues/137
     "glacier",
     // https://github.com/awslabs/smithy-rs/issues/606
-    "iotdeviceanager"
+    "iotdataplane"
 )
 
 data class AwsService(
@@ -137,7 +137,7 @@ val awsServices: Provider<List<AwsService>> = generateAllServices.zip(generateOn
  */
 fun discoverServices(allServices: Boolean, generateOnly: Set<String>): List<AwsService> {
     val models = project.file("aws-models")
-    val services = fileTree(models)
+    val baseServices = fileTree(models)
         .sortedBy { file -> file.name }
         .mapNotNull { file ->
         val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
@@ -165,7 +165,14 @@ fun discoverServices(allServices: Boolean, generateOnly: Set<String>): List<AwsS
             }
             AwsService(service = service.id.toString(), module = sdkId, modelFile = file, extraFiles = extras)
         }
-    }.filterNot {
+    }
+    val baseModules = baseServices.map { it.module }.toSet()
+    disableServices.forEach{ disabledService ->
+        check(baseModules.contains(disabledService)) {
+            "Service $disabledService was explicitly disabled but no service was generated with that name. Generated:\n ${baseModules.joinToString("\n ")}"
+        }
+    }
+    val services = baseServices.filterNot {
         disableServices.contains(it.module)
     }.filter {
         val inGenerateOnly = generateOnly.isNotEmpty() && generateOnly.contains(it.module)
