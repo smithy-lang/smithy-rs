@@ -7,7 +7,8 @@
   for most users. (#608)
 
 **New This Week**
-- :bug: Bugfix: Fix parsing bug where whitespace was stripped when parsing XML (#590)
+- :tada: Release all but three remaining AWS services! Glacier, IoT Data Plane and Transcribe streaming will be available in a future release. If you discover that a service isn't functioning as expected please let us know! (#607)
+- :bug: Bugfix: Fix parsing bug where parsing XML incorrectly stripped whitespace (#590, aws-sdk-rust#153)
 - Establish common abstraction for environment variables (#594)
 - Add windows to the test matrix (#594)
 - (When complete) Add profile file provider for region (#594, #xyz)
