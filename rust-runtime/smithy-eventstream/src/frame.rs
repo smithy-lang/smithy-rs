@@ -10,6 +10,7 @@ use crate::buf::crc::{CrcBuf, CrcBufMut};
 use crate::error::Error;
 use crate::str_bytes::StrBytes;
 use bytes::{Buf, BufMut, Bytes};
+use std::convert::TryFrom;
 use std::mem::size_of;
 
 const PRELUDE_LENGTH_BYTES: u32 = 3 * size_of::<u32>() as u32;
@@ -144,14 +145,38 @@ mod value {
             Ok(())
         }
     }
+
+    #[cfg(feature = "derive-arbitrary")]
+    impl<'a> arbitrary::Arbitrary<'a> for HeaderValue {
+        fn arbitrary(unstruct: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+            let value_type: u8 = unstruct.int_in_range(0..=9)?;
+            Ok(match value_type {
+                TYPE_TRUE => HeaderValue::Bool(true),
+                TYPE_FALSE => HeaderValue::Bool(false),
+                TYPE_BYTE => HeaderValue::Byte(u8::arbitrary(unstruct)?),
+                TYPE_INT16 => HeaderValue::Int16(i16::arbitrary(unstruct)?),
+                TYPE_INT32 => HeaderValue::Int32(i32::arbitrary(unstruct)?),
+                TYPE_INT64 => HeaderValue::Int64(i64::arbitrary(unstruct)?),
+                TYPE_BYTE_ARRAY => {
+                    HeaderValue::ByteArray(Bytes::from(Vec::<u8>::arbitrary(unstruct)?))
+                }
+                TYPE_STRING => HeaderValue::String(StrBytes::from(String::arbitrary(unstruct)?)),
+                TYPE_TIMESTAMP => {
+                    HeaderValue::Timestamp(Instant::from_epoch_seconds(i64::arbitrary(unstruct)?))
+                }
+                TYPE_UUID => HeaderValue::Uuid(u128::arbitrary(unstruct)?),
+                _ => unreachable!(),
+            })
+        }
+    }
 }
 
-use std::convert::TryFrom;
 pub use value::HeaderValue;
 
 /// Event Stream header.
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "derive-arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Header {
     name: StrBytes,
     value: HeaderValue,
@@ -207,7 +232,7 @@ impl Header {
 
 /// Event Stream message.
 #[non_exhaustive]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Message {
     headers: Vec<Header>,
     payload: Bytes,
@@ -336,6 +361,17 @@ impl Message {
         crc_buffer.put(&self.payload[..]);
         crc_buffer.put_crc();
         Ok(())
+    }
+}
+
+#[cfg(feature = "derive-arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for Message {
+    fn arbitrary(unstruct: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let headers: arbitrary::Result<Vec<Header>> = unstruct.arbitrary_iter()?.collect();
+        Ok(Message {
+            headers: headers?,
+            payload: Bytes::from(Vec::<u8>::arbitrary(unstruct)?),
+        })
     }
 }
 

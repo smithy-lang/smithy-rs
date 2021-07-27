@@ -69,6 +69,13 @@ impl StrBytes {
     }
 }
 
+#[cfg(feature = "derive-arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for StrBytes {
+    fn arbitrary(unstruct: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(String::arbitrary(unstruct)?.into())
+    }
+}
+
 impl Eq for StrBytes {}
 
 impl PartialEq for StrBytes {
