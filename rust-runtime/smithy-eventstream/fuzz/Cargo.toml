@@ -24,25 +24,25 @@ path = ".."
 members = ["."]
 
 [[bin]]
-name = "read_message"
-path = "fuzz_targets/read_message.rs"
+name = "raw_bytes"
+path = "fuzz_targets/raw_bytes.rs"
 test = false
 doc = false
 
 [[bin]]
-name = "roundtrip"
-path = "fuzz_targets/roundtrip.rs"
+name = "round_trip"
+path = "fuzz_targets/round_trip.rs"
 test = false
 doc = false
 
 [[bin]]
-name = "assisted_read"
-path = "fuzz_targets/assisted_read.rs"
+name = "corrected_prelude_crc"
+path = "fuzz_targets/corrected_prelude_crc.rs"
 test = false
 doc = false
 
 [[bin]]
-name = "mutated_read"
-path = "fuzz_targets/mutated_read.rs"
+name = "mutated_headers"
+path = "fuzz_targets/mutated_headers.rs"
 test = false
 doc = false
