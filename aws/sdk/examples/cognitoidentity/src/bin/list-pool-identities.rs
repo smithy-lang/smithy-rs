@@ -13,14 +13,19 @@ struct Opt {
     #[structopt(short, long)]
     region: Option<String>,
 
+    /// The ID of the identity pool to describe.
+    #[structopt(short, long)]
+    identity_pool_id: String,
+
     /// Whether to display additional information.
     #[structopt(short, long)]
     verbose: bool,
 }
 
-/// Lists your Amazon Cognito identity pools in the Region.
+/// Lists the identities in an Amazon Cognito identity pool.
 /// # Arguments
 ///
+/// * `-i IDENTITY-POOL-ID` - The ID of the identity pool.
 /// * `[-r REGION]` - The Region in which the client is created.
 ///   If not supplied, uses the value of the **AWS_REGION** environment variable.
 ///   If the environment variable is not set, defaults to **us-west-2**.
@@ -29,7 +34,11 @@ struct Opt {
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
 
-    let Opt { region, verbose } = Opt::from_args();
+    let Opt {
+        identity_pool_id,
+        region,
+        verbose,
+    } = Opt::from_args();
 
     let region_provider = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
@@ -43,27 +52,42 @@ async fn main() -> Result<(), Error> {
             "Region:                 {}",
             region_provider.region().unwrap().as_ref()
         );
+        println!("Identity pool ID:       {}", identity_pool_id);
         println!();
     }
 
     let config = Config::builder().region(region_provider).build();
     let client = Client::from_conf(config);
 
-    let response = client.list_identity_pools().max_results(10).send().await?;
+    let response = client
+        .list_identities()
+        .identity_pool_id(identity_pool_id)
+        .max_results(10)
+        .send()
+        .await?;
 
-    // Print IDs and names of pools.
-    if let Some(pools) = response.identity_pools {
-        println!("Identity pools:");
-        for pool in pools {
-            let id = pool.identity_pool_id.unwrap_or_default();
-            let name = pool.identity_pool_name.unwrap_or_default();
-            println!("  Identity pool ID:   {}", id);
-            println!("  Identity pool name: {}", name);
+    if let Some(ids) = response.identities {
+        println!("Identitities:");
+        for id in ids {
+            let creation_timestamp = id.creation_date.unwrap().to_chrono();
+            let idid = id.identity_id.unwrap_or_default();
+            let mod_timestamp = id.last_modified_date.unwrap().to_chrono();
+            println!("  Creation date:      {}", creation_timestamp);
+            println!("  ID:                 {}", idid);
+            println!("  Last modified date: {}", mod_timestamp);
+
+            println!("  Logins:");
+            for login in id.logins.unwrap_or_default() {
+                println!("    {}", login);
+            }
+
             println!();
         }
     }
 
     println!("Next token: {:?}", response.next_token);
+
+    println!();
 
     Ok(())
 }
