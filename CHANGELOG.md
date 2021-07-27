@@ -1,5 +1,8 @@
 ## vNext (Month Day Year)
+**New This Week**
+- (When complete) Add profile file provider for region (#594, #xyz)
 
+## v0.17 (July 27th 2021)
 **Breaking changes**
 * `test-util` has been made an optional dependency and has moved from
   aws-hyper to smithy-http. If you were relying on `aws_hyper::TestConnection`, add `smithy-client` as a dependency
@@ -11,7 +14,6 @@
 - :bug: Bugfix: Fix parsing bug where parsing XML incorrectly stripped whitespace (#590, aws-sdk-rust#153)
 - Establish common abstraction for environment variables (#594)
 - Add windows to the test matrix (#594)
-- (When complete) Add profile file provider for region (#594, #xyz)
 - :bug: Bugfix: Constrain RFC-3339 timestamp formatting to microsecond precision (#596)
 
 ## v0.15 (June 29th 2021)
