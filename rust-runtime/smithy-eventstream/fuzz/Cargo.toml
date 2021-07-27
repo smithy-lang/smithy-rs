@@ -9,7 +9,11 @@ edition = "2018"
 cargo-fuzz = true
 
 [dependencies]
+arbitrary = { version = "1", features = ["derive"] }
+bytes = "1"
+crc32fast = "1"
 libfuzzer-sys = "0.4"
+smithy-types = { path = "../../smithy-types" }
 
 [dependencies.smithy-eventstream]
 features = ["derive-arbitrary"]
@@ -28,5 +32,17 @@ doc = false
 [[bin]]
 name = "roundtrip"
 path = "fuzz_targets/roundtrip.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "assisted_read"
+path = "fuzz_targets/assisted_read.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "mutated_read"
+path = "fuzz_targets/mutated_read.rs"
 test = false
 doc = false
