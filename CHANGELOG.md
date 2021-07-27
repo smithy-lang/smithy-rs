@@ -1,8 +1,7 @@
 ## vNext (Month Day Year)
 
 **New This Week**
-- :tada: Release of all* remaining AWS services! This release includes all remaining AWS services with the exception of three
-   services which will require further work to function (Glacier, IOT Device Gateway, and Transcribe Streaming). (#607)
+- :tada: Release all but three remaining AWS services! Glacier, IoT Data Plane and Transcribe streaming will be available in a future release. If you discover that a service isn't functioning as expected please let us know! (#607)
 - :bug: Bugfix: Fix parsing bug where parsing XML incorrectly stripped whitespace (#590, aws-sdk-rust#153)
 - Establish common abstraction for environment variables (#594)
 - Add windows to the test matrix (#594)
