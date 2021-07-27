@@ -213,8 +213,9 @@ class XmlBindingTraitSerializerGenerator(
             } else {
                 rust("$input.as_ref()")
             }
-            is NumberShape -> rust("$input.to_string().as_ref()")
-            is BooleanShape -> rust("""if ${autoDeref(input)} { "true" } else { "false" }""")
+            is BooleanShape, is NumberShape -> {
+                rust("#T::from(*$input).encode()", CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder"))
+            }
             is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.Base64Encode(runtimeConfig))
             is TimestampShape -> {
                 val timestampFormat =

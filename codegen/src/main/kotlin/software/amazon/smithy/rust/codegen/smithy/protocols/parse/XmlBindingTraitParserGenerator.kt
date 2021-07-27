@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
@@ -101,7 +102,8 @@ class XmlBindingTraitParserGenerator(
         "XmlError" to xmlError,
         "next_start_element" to smithyXml.member("decode::next_start_element"),
         "try_data" to smithyXml.member("decode::try_data"),
-        "ScopedDecoder" to scopedDecoder
+        "ScopedDecoder" to scopedDecoder,
+        "smithy_types" to CargoDependency.SmithyTypes(runtimeConfig).asType()
     )
     private val model = protocolConfig.model
     private val index = HttpBindingIndex.of(model)
@@ -406,7 +408,7 @@ class XmlBindingTraitParserGenerator(
     private fun RustWriter.case(member: MemberShape, inner: RustWriter.() -> Unit) {
         rustBlock(
             "s if ${
-            member.xmlName().matchExpression("s")
+                member.xmlName().matchExpression("s")
             } /* ${member.memberName} ${escape(member.id.toString())} */ => "
         ) {
             inner()
@@ -561,8 +563,12 @@ class XmlBindingTraitParserGenerator(
             is StringShape -> parseStringInner(shape, provider)
             is NumberShape, is BooleanShape -> {
                 rustBlock("") {
-                    rust("use std::str::FromStr;")
-                    withBlock("#T::from_str(", ")", symbolProvider.toSymbol(shape)) {
+                    withBlockTemplate(
+                        "<#{shape} as #{smithy_types}::primitive::Parse>::parse(",
+                        ")",
+                        *codegenScope,
+                        "shape" to symbolProvider.toSymbol(shape)
+                    ) {
                         provider()
                     }
                     rustTemplate(

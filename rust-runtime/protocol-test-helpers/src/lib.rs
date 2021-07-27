@@ -15,6 +15,35 @@ use std::fmt::{self, Debug};
 use thiserror::Error;
 use urlencoded::try_url_encoded_form_equivalent;
 
+pub trait FloatEquals {
+    fn float_equals(&self, other: &Self) -> bool;
+}
+
+impl FloatEquals for f64 {
+    fn float_equals(&self, other: &Self) -> bool {
+        (self.is_nan() && other.is_nan()) || self == other
+    }
+}
+
+impl FloatEquals for f32 {
+    fn float_equals(&self, other: &Self) -> bool {
+        (self.is_nan() && other.is_nan()) || self == other
+    }
+}
+
+impl<T> FloatEquals for Option<T>
+where
+    T: FloatEquals,
+{
+    fn float_equals(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Some(this), Some(other)) => this.float_equals(other),
+            (None, None) => true,
+            _else => false,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Error)]
 pub enum ProtocolTestFailure {
     #[error("missing query param: expected `{expected}`, found {found:?}")]

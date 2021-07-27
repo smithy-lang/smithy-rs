@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ArrayNode
@@ -17,6 +18,8 @@ import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.DocumentShape
+import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -114,7 +117,18 @@ class Instantiator(
 
             // Simple Shapes
             is StringShape -> renderString(writer, shape, arg as StringNode)
-            is NumberShape -> writer.write(arg.asNumberNode().get())
+            is NumberShape -> when (arg) {
+                is StringNode -> {
+                    val numberSymbol = symbolProvider.toSymbol(shape)
+                    // support Smithy custom values
+                    writer.rust(
+                        """<#T as #T>::parse(${arg.value.dq()}).expect("invalid string for number")""",
+                        numberSymbol,
+                        CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse")
+                    )
+                }
+                is NumberNode -> writer.write(arg.value)
+            }
             is BooleanShape -> writer.write(arg.asBooleanNode().get().toString())
             is DocumentShape -> writer.rustBlock("") {
                 val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()

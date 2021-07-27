@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 itoa = "0.4"
-ryu = "1.0"
 smithy-types = { path = "../smithy-types" }
 
 [dev-dependencies]
