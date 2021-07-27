@@ -2,7 +2,7 @@
 **New This Week**
 - (When complete) Add profile file provider for region (#594, #xyz)
 
-## v0.17 (July 27th 2021)
+## v0.18 (July 27th 2021)
 **Breaking changes**
 * `test-util` has been made an optional dependency and has moved from
   aws-hyper to smithy-http. If you were relying on `aws_hyper::TestConnection`, add `smithy-client` as a dependency
