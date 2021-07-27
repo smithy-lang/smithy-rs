@@ -1,5 +1,11 @@
 ## vNext (Month Day Year)
 
+**Breaking changes**
+* `test-util` has been made an optional dependency and has moved from
+  aws-hyper to smithy-http. If you were relying on `aws_hyper::TestConnection`, add `smithy-client` as a dependency
+  and enable the optional `test-util` feature. This prunes some unnecessary dependencies on `roxmltree` and `serde_json`
+  for most users. (#608)
+
 **New This Week**
 - :bug: Bugfix: Fix parsing bug where whitespace was stripped when parsing XML (#590)
 - Establish common abstraction for environment variables (#594)

@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.contains
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -48,7 +47,7 @@ class FluentClientDecorator : RustCodegenDecorator {
         rustCrate.withModule(RustModule("client", module)) { writer ->
             FluentClientGenerator(protocolConfig).render(writer)
         }
-        val awsHyper = protocolConfig.runtimeConfig.awsHyper().name
+        val awsHyper = "aws-hyper"
         rustCrate.addFeature(Feature("client", true, listOf(awsHyper)))
         rustCrate.addFeature(Feature("rustls", default = true, listOf("$awsHyper/rustls")))
         rustCrate.addFeature(Feature("native-tls", default = false, listOf("$awsHyper/native-tls")))
@@ -76,8 +75,8 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
         TopDownIndex.of(protocolConfig.model).getContainedOperations(serviceShape).sortedBy { it.id }
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
-    private val hyperDep = protocolConfig.runtimeConfig.awsHyper().copy(optional = true)
     private val runtimeConfig = protocolConfig.runtimeConfig
+    private val hyperDep = runtimeConfig.awsRuntimeDependency("aws-hyper").copy(optional = true)
 
     fun render(writer: RustWriter) {
         writer.rustTemplate(
