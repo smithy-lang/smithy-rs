@@ -270,13 +270,13 @@ impl Message {
     }
 
     // Returns (total_len, header_len)
-    fn read_prelude_from<B: Buf>(mut buffer: B) -> Result<Option<(u32, u32)>, Error> {
+    fn read_prelude_from<B: Buf>(mut buffer: B) -> Result<(u32, u32), Error> {
         let mut crc_buffer = CrcBuf::new(&mut buffer);
 
-        // If the buffer doesn't have the entire frame yet, then short circuit
+        // If the buffer doesn't have the entire, then error
         let total_len = crc_buffer.get_u32();
         if crc_buffer.remaining() + size_of::<u32>() < total_len as usize {
-            return Ok(None);
+            return Err(Error::InvalidMessageLength);
         }
 
         // Validate the prelude
@@ -289,54 +289,51 @@ impl Message {
         if header_len == 1 || header_len > max_header_len(total_len)? {
             return Err(Error::InvalidHeadersLength);
         }
-        Ok(Some((total_len, header_len)))
+        Ok((total_len, header_len))
     }
 
-    /// Reads a message from the given `buffer`. If the buffer doesn't have the whole
-    /// message in it yet (as is the case when streaming), then it returns `Ok(None)`.
-    pub fn read_from<B: Buf>(mut buffer: B) -> Result<Option<Message>, Error> {
-        // If we haven't received the full prelude, then short circuit
+    /// Reads a message from the given `buffer`. For streaming use cases, use
+    /// the [`MessageFrameDecoder`] instead of this.
+    pub fn read_from<B: Buf>(mut buffer: B) -> Result<Message, Error> {
         if buffer.remaining() < PRELUDE_LENGTH_BYTES_USIZE {
-            return Ok(None);
+            return Err(Error::InvalidMessageLength);
         }
 
         // Calculate a CRC as we go and read the prelude
         let mut crc_buffer = CrcBuf::new(&mut buffer);
-        if let Some((total_len, header_len)) = Self::read_prelude_from(&mut crc_buffer)? {
-            // Verify we have the full frame before continuing
-            let remaining_len = total_len
-                .checked_sub(PRELUDE_LENGTH_BYTES)
-                .ok_or(Error::InvalidMessageLength)?;
-            if crc_buffer.remaining() < remaining_len as usize {
-                return Ok(None);
-            }
+        let (total_len, header_len) = Self::read_prelude_from(&mut crc_buffer)?;
 
-            // Read headers
-            let mut header_bytes_read = 0;
-            let mut headers = Vec::new();
-            while header_bytes_read < header_len as usize {
-                let (header, bytes_read) = Header::read_from(&mut crc_buffer)?;
-                header_bytes_read += bytes_read;
-                if header_bytes_read > header_len as usize {
-                    return Err(Error::InvalidHeaderValue);
-                }
-                headers.push(header);
-            }
-
-            // Read payload
-            let payload_len = payload_len(total_len, header_len)?;
-            let payload = crc_buffer.copy_to_bytes(payload_len as usize);
-
-            let expected_crc = crc_buffer.into_crc();
-            let message_crc = buffer.get_u32();
-            if expected_crc != message_crc {
-                return Err(Error::MessageChecksumMismatch(expected_crc, message_crc));
-            }
-
-            Ok(Some(Message { headers, payload }))
-        } else {
-            Ok(None)
+        // Verify we have the full frame before continuing
+        let remaining_len = total_len
+            .checked_sub(PRELUDE_LENGTH_BYTES)
+            .ok_or(Error::InvalidMessageLength)?;
+        if crc_buffer.remaining() < remaining_len as usize {
+            return Err(Error::InvalidMessageLength);
         }
+
+        // Read headers
+        let mut header_bytes_read = 0;
+        let mut headers = Vec::new();
+        while header_bytes_read < header_len as usize {
+            let (header, bytes_read) = Header::read_from(&mut crc_buffer)?;
+            header_bytes_read += bytes_read;
+            if header_bytes_read > header_len as usize {
+                return Err(Error::InvalidHeaderValue);
+            }
+            headers.push(header);
+        }
+
+        // Read payload
+        let payload_len = payload_len(total_len, header_len)?;
+        let payload = crc_buffer.copy_to_bytes(payload_len as usize);
+
+        let expected_crc = crc_buffer.into_crc();
+        let message_crc = buffer.get_u32();
+        if expected_crc != message_crc {
+            return Err(Error::MessageChecksumMismatch(expected_crc, message_crc));
+        }
+
+        Ok(Message { headers, payload })
     }
 
     /// Writes the message to the given `buffer`.
@@ -402,7 +399,7 @@ fn payload_len(total_len: u32, header_len: u32) -> Result<u32, Error> {
 }
 
 #[cfg(test)]
-mod tests {
+mod message_tests {
     use crate::error::Error;
     use crate::frame::{Header, HeaderValue, Message};
     use bytes::Bytes;
@@ -457,22 +454,6 @@ mod tests {
     }
 
     #[test]
-    fn message_not_fully_available_yet() {
-        let message = include_bytes!("../test_data/valid_with_all_headers_and_payload");
-        for i in 0..message.len() {
-            let message = &message[0..i]; // truncate the message
-            assert!(matches!(
-                Message::read_from(&mut Bytes::from(message)),
-                Ok(None)
-            ));
-        }
-        // Sanity check the full message reads
-        Message::read_from(&mut Bytes::from_static(message))
-            .unwrap()
-            .unwrap();
-    }
-
-    #[test]
     fn read_message_no_headers() {
         // Test message taken from the CRT:
         // https://github.com/awslabs/aws-c-event-stream/blob/main/tests/message_deserializer_test.c
@@ -482,9 +463,7 @@ mod tests {
             0x36,
         ];
 
-        let result = Message::read_from(&mut Bytes::from_static(&data))
-            .unwrap()
-            .unwrap();
+        let result = Message::read_from(&mut Bytes::from_static(&data)).unwrap();
         assert_eq!(result.headers(), Vec::new());
 
         let expected_payload = b"{'foo':'bar'}";
@@ -503,9 +482,7 @@ mod tests {
             0x7d, 0x8D, 0x9C, 0x08, 0xB1,
         ];
 
-        let result = Message::read_from(&mut Bytes::from_static(&data))
-            .unwrap()
-            .unwrap();
+        let result = Message::read_from(&mut Bytes::from_static(&data)).unwrap();
         assert_eq!(
             result.headers(),
             vec![Header::new(
@@ -521,9 +498,7 @@ mod tests {
     #[test]
     fn read_all_headers_and_payload() {
         let message = include_bytes!("../test_data/valid_with_all_headers_and_payload");
-        let result = Message::read_from(&mut Bytes::from_static(message))
-            .unwrap()
-            .unwrap();
+        let result = Message::read_from(&mut Bytes::from_static(message)).unwrap();
         assert_eq!(
             result.headers(),
             vec![
@@ -581,10 +556,141 @@ mod tests {
         let expected = include_bytes!("../test_data/valid_with_all_headers_and_payload").to_vec();
         assert_eq!(expected, actual);
 
-        let result = Message::read_from(&mut Bytes::from(actual))
-            .unwrap()
-            .unwrap();
+        let result = Message::read_from(&mut Bytes::from(actual)).unwrap();
         assert_eq!(message.headers(), result.headers());
         assert_eq!(message.payload().as_ref(), result.payload.as_ref());
+    }
+}
+
+/// Return value from [`MessageFrameDecoder`].
+#[derive(Debug)]
+pub enum DecodedFrame {
+    /// There wasn't enough data in the buffer to decode a full message.
+    Incomplete,
+    /// There was enough data in the buffer to decode.
+    Complete(Message),
+}
+
+/// Streaming decoder for decoding a [`Message`] from a stream.
+#[non_exhaustive]
+#[derive(Default)]
+pub struct MessageFrameDecoder {
+    prelude: [u8; PRELUDE_LENGTH_BYTES_USIZE],
+    prelude_read: bool,
+}
+
+impl MessageFrameDecoder {
+    /// Returns a new `MessageFrameDecoder`.
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Determines if the `buffer` has enough data in it to read a full frame.
+    /// Returns `Ok(None)` if there's not enough data, or `Some(remaining)` where
+    /// `remaining` is the number of bytes after the prelude that belong to the
+    /// message that's in the buffer.
+    fn remaining_ready<B: Buf>(&self, buffer: &B) -> Result<Option<usize>, Error> {
+        if self.prelude_read {
+            let remaining_len = (&self.prelude[..])
+                .get_u32()
+                .checked_sub(PRELUDE_LENGTH_BYTES)
+                .ok_or(Error::InvalidMessageLength)?;
+            if buffer.remaining() >= remaining_len as usize {
+                return Ok(Some(remaining_len as usize));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Resets the decoder.
+    fn reset(&mut self) {
+        self.prelude_read = false;
+        self.prelude = [0u8; PRELUDE_LENGTH_BYTES_USIZE];
+    }
+
+    /// Attempts to decode a [`Message`] from the given `buffer`. This function expects
+    /// to be called over and over again with more data in the buffer each time its called.
+    /// When there's not enough data to decode a message, it returns `Ok(None)`.
+    ///
+    /// Once there is enough data to read a message prelude, then it will mutate the `Buf`
+    /// position. The state from the reading of the prelude is stored in the decoder so that
+    /// the next call will be able to decode the entire message, even though the prelude
+    /// is no longer available in the `Buf`.
+    pub fn decode_frame<B: Buf>(&mut self, mut buffer: B) -> Result<DecodedFrame, Error> {
+        if !self.prelude_read && buffer.remaining() >= PRELUDE_LENGTH_BYTES_USIZE {
+            buffer.copy_to_slice(&mut self.prelude);
+            self.prelude_read = true;
+        }
+
+        if let Some(remaining_len) = self.remaining_ready(&buffer)? {
+            let mut message_buf = (&self.prelude[..]).chain(buffer.take(remaining_len));
+            let result = Message::read_from(&mut message_buf).map(DecodedFrame::Complete);
+            self.reset();
+            return result;
+        }
+
+        Ok(DecodedFrame::Incomplete)
+    }
+}
+
+#[cfg(test)]
+mod message_frame_decoder_tests {
+    use super::{DecodedFrame, MessageFrameDecoder};
+    use crate::frame::Message;
+    use bytes::Bytes;
+    use bytes_utils::SegmentedBuf;
+
+    #[test]
+    fn single_streaming_message() {
+        let message = include_bytes!("../test_data/valid_with_all_headers_and_payload");
+
+        let mut decoder = MessageFrameDecoder::new();
+        let mut segmented = SegmentedBuf::new();
+        for i in 0..(message.len() - 1) {
+            segmented.push(&message[i..(i + 1)]);
+            if let DecodedFrame::Complete(_) = decoder.decode_frame(&mut segmented).unwrap() {
+                panic!("incomplete frame shouldn't result in message");
+            }
+        }
+
+        segmented.push(&message[(message.len() - 1)..]);
+        match decoder.decode_frame(&mut segmented).unwrap() {
+            DecodedFrame::Incomplete => panic!("frame should be complete now"),
+            DecodedFrame::Complete(actual) => {
+                let expected = Message::read_from(&mut Bytes::from_static(message)).unwrap();
+                assert_eq!(expected, actual);
+            }
+        }
+    }
+
+    #[test]
+    fn multiple_streaming_messages() {
+        let message1 = include_bytes!("../test_data/valid_with_all_headers_and_payload");
+        let message2 = include_bytes!("../test_data/valid_empty_payload");
+        let message3 = include_bytes!("../test_data/valid_no_headers");
+        let mut repeated = message1.to_vec();
+        repeated.extend_from_slice(message2);
+        repeated.extend_from_slice(message3);
+
+        let mut decoder = MessageFrameDecoder::new();
+        let mut segmented = SegmentedBuf::new();
+        let mut decoded = Vec::new();
+        for window in repeated.chunks(3) {
+            segmented.push(window);
+            match dbg!(decoder.decode_frame(&mut segmented)).unwrap() {
+                DecodedFrame::Incomplete => {}
+                DecodedFrame::Complete(message) => {
+                    decoded.push(message);
+                }
+            }
+        }
+
+        let expected1 = Message::read_from(&mut Bytes::from_static(message1)).unwrap();
+        let expected2 = Message::read_from(&mut Bytes::from_static(message2)).unwrap();
+        let expected3 = Message::read_from(&mut Bytes::from_static(message3)).unwrap();
+        assert_eq!(3, decoded.len());
+        assert_eq!(expected1, decoded[0]);
+        assert_eq!(expected2, decoded[1]);
+        assert_eq!(expected3, decoded[2]);
     }
 }

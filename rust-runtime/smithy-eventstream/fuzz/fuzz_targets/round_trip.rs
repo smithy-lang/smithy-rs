@@ -20,7 +20,7 @@ fuzz_target!(|message: Message| {
         Err(err) => panic!("unexpected error on write: {}", err),
         Ok(_) => {
             let mut data = &buffer[..];
-            let parsed = Message::read_from(&mut data).unwrap().unwrap();
+            let parsed = Message::read_from(&mut data).unwrap();
             assert_eq!(message, parsed);
         }
     }

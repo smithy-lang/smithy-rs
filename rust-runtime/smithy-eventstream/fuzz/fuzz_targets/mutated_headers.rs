@@ -13,32 +13,29 @@ use smithy_types::Instant;
 
 fn mutate(data: &mut [u8], size: usize, max_size: usize) -> usize {
     let input = &mut &data[..size];
-    let message = {
-        let result = Message::read_from(input);
-        if result.is_err() || result.as_ref().unwrap().is_none() {
-            Message::new(&b"some payload"[..])
-                .add_header(Header::new("true", HeaderValue::Bool(true)))
-                .add_header(Header::new("false", HeaderValue::Bool(false)))
-                .add_header(Header::new("byte", HeaderValue::Byte(50)))
-                .add_header(Header::new("short", HeaderValue::Int16(20_000)))
-                .add_header(Header::new("int", HeaderValue::Int32(500_000)))
-                .add_header(Header::new("long", HeaderValue::Int64(50_000_000_000)))
-                .add_header(Header::new(
-                    "bytes",
-                    HeaderValue::ByteArray((&b"some bytes"[..]).into()),
-                ))
-                .add_header(Header::new("str", HeaderValue::String("some str".into())))
-                .add_header(Header::new(
-                    "time",
-                    HeaderValue::Timestamp(Instant::from_epoch_seconds(5_000_000_000)),
-                ))
-                .add_header(Header::new(
-                    "uuid",
-                    HeaderValue::Uuid(0xb79bc914_de21_4e13_b8b2_bc47e85b7f0b),
-                ))
-        } else {
-            result.unwrap().unwrap()
-        }
+    let message = if let Ok(message) = Message::read_from(input) {
+        message
+    } else {
+        Message::new(&b"some payload"[..])
+            .add_header(Header::new("true", HeaderValue::Bool(true)))
+            .add_header(Header::new("false", HeaderValue::Bool(false)))
+            .add_header(Header::new("byte", HeaderValue::Byte(50)))
+            .add_header(Header::new("short", HeaderValue::Int16(20_000)))
+            .add_header(Header::new("int", HeaderValue::Int32(500_000)))
+            .add_header(Header::new("long", HeaderValue::Int64(50_000_000_000)))
+            .add_header(Header::new(
+                "bytes",
+                HeaderValue::ByteArray((&b"some bytes"[..]).into()),
+            ))
+            .add_header(Header::new("str", HeaderValue::String("some str".into())))
+            .add_header(Header::new(
+                "time",
+                HeaderValue::Timestamp(Instant::from_epoch_seconds(5_000_000_000)),
+            ))
+            .add_header(Header::new(
+                "uuid",
+                HeaderValue::Uuid(0xb79bc914_de21_4e13_b8b2_bc47e85b7f0b),
+            ))
     };
 
     let mut bytes = Vec::new();

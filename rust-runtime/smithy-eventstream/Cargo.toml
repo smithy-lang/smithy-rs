@@ -13,3 +13,6 @@ arbitrary = { version = "1", optional = true, features = ["derive"] }
 bytes = "1"
 crc32fast = "1"
 smithy-types = { path = "../smithy-types" }
+
+[dev-dependencies]
+bytes-utils = "0.1"
