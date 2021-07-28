@@ -2,6 +2,9 @@
 **New This Week**
 - (When complete) Add profile file provider for region (#594, #xyz)
 
+## v0.18.1 (July 27th 2021)
+* Remove timestreamwrite and timestreamquery from the generated services (#613)
+
 ## v0.18 (July 27th 2021)
 **Breaking changes**
 * `test-util` has been made an optional dependency and has moved from
@@ -20,11 +23,11 @@
 
 **New this Week**
 * 🎉 Add support for Autoscaling (#576, #582)
-* `AsyncProvideCredentials` now introduces an additional lifetime parameter, simplifying bridging it with `#[async_trait]` interfaces 
+* `AsyncProvideCredentials` now introduces an additional lifetime parameter, simplifying bridging it with `#[async_trait]` interfaces
 * Fix S3 bug when content type was set explicitly (aws-sdk-rust#131, #566, @eagletmt)
 
 **Contributions**
-Thank you for your contributions! ❤️ 
+Thank you for your contributions! ❤️
 * @eagletmt (#566)
 
 ## v0.16 (July 6th 2021)
