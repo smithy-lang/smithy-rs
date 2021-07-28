@@ -111,7 +111,7 @@ apply PutBucketLifecycleConfiguration @httpRequestTests([
         headers: {
             // we can assert this, but when this test is promoted, it can't assert
             // on the exact contents
-            "content-md5": "b14bbeb8064f913b40c4975a03ef6e4a",
+            "content-md5": "sUu+uAZPkTtAxJdaA+9uSg==",
         },
         bodyMediaType: "application/xml",
         body: """
