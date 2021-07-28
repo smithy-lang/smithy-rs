@@ -11,6 +11,11 @@ use libfuzzer_sys::{fuzz_mutator, fuzz_target};
 use smithy_eventstream::frame::{Header, HeaderValue, Message};
 use smithy_types::Instant;
 
+// This fuzz test uses a custom mutator to manipulate the headers.
+// If it fails to parse a message from the unmutated input, it will create a message
+// with every single possible header type to give the fuzzer a leg up.
+// After the headers are mutated, a new valid prelude and valid message CRC are generated
+// so that the fuzzer can actually explore the header parsing logic.
 fn mutate(data: &mut [u8], size: usize, max_size: usize) -> usize {
     let input = &mut &data[..size];
     let message = if let Ok(message) = Message::read_from(input) {

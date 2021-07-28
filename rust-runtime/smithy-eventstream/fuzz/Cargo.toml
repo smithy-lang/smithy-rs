@@ -46,3 +46,9 @@ name = "mutated_headers"
 path = "fuzz_targets/mutated_headers.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "prelude"
+path = "fuzz_targets/prelude.rs"
+test = false
+doc = false
