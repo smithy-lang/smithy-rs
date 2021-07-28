@@ -1,5 +1,6 @@
 ## vNext (Month Day Year)
 **New This Week**
+- :bug: Correctly encode HTTP Checksums using base64 instead of hex. Fixes aws-sdk-rust#164. (#615)
 - (When complete) Add profile file provider for region (#594, #xyz)
 
 ## v0.18.1 (July 27th 2021)
