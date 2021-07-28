@@ -589,7 +589,10 @@ impl MessageFrameDecoder {
     /// Returns `Ok(None)` if there's not enough data, or `Some(remaining)` where
     /// `remaining` is the number of bytes after the prelude that belong to the
     /// message that's in the buffer.
-    fn remaining_ready<B: Buf>(&self, buffer: &B) -> Result<Option<usize>, Error> {
+    fn remaining_bytes_if_frame_available<B: Buf>(
+        &self,
+        buffer: &B,
+    ) -> Result<Option<usize>, Error> {
         if self.prelude_read {
             let remaining_len = (&self.prelude[..])
                 .get_u32()
@@ -622,7 +625,7 @@ impl MessageFrameDecoder {
             self.prelude_read = true;
         }
 
-        if let Some(remaining_len) = self.remaining_ready(&buffer)? {
+        if let Some(remaining_len) = self.remaining_bytes_if_frame_available(&buffer)? {
             let mut message_buf = (&self.prelude[..]).chain(buffer.take(remaining_len));
             let result = Message::read_from(&mut message_buf).map(DecodedFrame::Complete);
             self.reset();
@@ -663,8 +666,7 @@ mod message_frame_decoder_tests {
         }
     }
 
-    #[test]
-    fn multiple_streaming_messages() {
+    fn multiple_streaming_messages_chunk_size(chunk_size: usize) {
         let message1 = include_bytes!("../test_data/valid_with_all_headers_and_payload");
         let message2 = include_bytes!("../test_data/valid_empty_payload");
         let message3 = include_bytes!("../test_data/valid_no_headers");
@@ -675,7 +677,7 @@ mod message_frame_decoder_tests {
         let mut decoder = MessageFrameDecoder::new();
         let mut segmented = SegmentedBuf::new();
         let mut decoded = Vec::new();
-        for window in repeated.chunks(3) {
+        for window in repeated.chunks(chunk_size) {
             segmented.push(window);
             match dbg!(decoder.decode_frame(&mut segmented)).unwrap() {
                 DecodedFrame::Incomplete => {}
@@ -692,5 +694,13 @@ mod message_frame_decoder_tests {
         assert_eq!(expected1, decoded[0]);
         assert_eq!(expected2, decoded[1]);
         assert_eq!(expected3, decoded[2]);
+    }
+
+    #[test]
+    fn multiple_streaming_messages() {
+        for chunk_size in 1..=11 {
+            println!("chunk size: {}", chunk_size);
+            multiple_streaming_messages_chunk_size(chunk_size);
+        }
     }
 }

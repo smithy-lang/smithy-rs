@@ -9,20 +9,65 @@ use bytes::Bytes;
 use std::convert::TryFrom;
 use std::str::Utf8Error;
 
+/// UTF-8 string byte buffer representation with validation amortization.
+/// When `StrBytes` is constructed from a `&str` or `String`, its underlying bytes are assumed
+/// to be valid UTF-8. Otherwise, if constructed from a byte source, the construction will
+/// be fallible.
+///
+/// Example construction from a `&str`:
+/// ```rust
+/// use smithy_eventstream::str_bytes::StrBytes;
+///
+/// let value: StrBytes = "example".into();
+/// assert_eq!("example", value.as_str());
+/// assert_eq!(b"example", &value.as_bytes()[..]);
+/// ```
+///
+/// Example construction from `Bytes`:
+/// ```rust
+/// use bytes::Bytes;
+/// use smithy_eventstream::str_bytes::StrBytes;
+/// use std::convert::TryInto;
+///
+/// let bytes = Bytes::from_static(b"example");
+/// let value: StrBytes = bytes.try_into().expect("valid utf-8");
+/// assert_eq!("example", value.as_str());
+/// assert_eq!(b"example", &value.as_bytes()[..]);
+/// ```
 #[non_exhaustive]
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StrBytes {
     bytes: Bytes,
 }
 
 impl StrBytes {
+    fn new(bytes: Bytes) -> Self {
+        StrBytes { bytes }
+    }
+
+    /// Returns the underlying `Bytes` representation.
     pub fn as_bytes(&self) -> &Bytes {
         &self.bytes
     }
 
+    /// Returns the `StrBytes` value as a `&str`.
     pub fn as_str(&self) -> &str {
         // Safety: StrBytes can only be constructed from a valid UTF-8 string
         unsafe { std::str::from_utf8_unchecked(&self.bytes[..]) }
+    }
+
+    /// Tries to create a `StrBytes` from a slice, or returns a `Utf8Error` if the slice
+    /// is not valid UTF-8.
+    pub fn try_copy_from_slice(slice: &[u8]) -> Result<Self, Utf8Error> {
+        match std::str::from_utf8(slice) {
+            Ok(_) => Ok(StrBytes::new(Bytes::copy_from_slice(slice))),
+            Err(err) => Err(err),
+        }
+    }
+
+    /// Creates a `StrBytes` from a `&str`.
+    pub fn copy_from_str(string: &str) -> Self {
+        StrBytes::new(Bytes::copy_from_slice(string.as_bytes()))
     }
 }
 
@@ -33,35 +78,15 @@ impl<'a> arbitrary::Arbitrary<'a> for StrBytes {
     }
 }
 
-impl Eq for StrBytes {}
-
-impl PartialEq for StrBytes {
-    fn eq(&self, other: &Self) -> bool {
-        self.bytes == other.bytes
-    }
-}
-
-impl Clone for StrBytes {
-    fn clone(&self) -> Self {
-        StrBytes {
-            bytes: self.bytes.clone(),
-        }
-    }
-}
-
 impl From<String> for StrBytes {
     fn from(value: String) -> Self {
-        StrBytes {
-            bytes: Bytes::from(value),
-        }
+        StrBytes::new(Bytes::from(value))
     }
 }
 
 impl From<&'static str> for StrBytes {
     fn from(value: &'static str) -> Self {
-        StrBytes {
-            bytes: Bytes::from(value),
-        }
+        StrBytes::new(Bytes::from(value))
     }
 }
 
@@ -70,9 +95,7 @@ impl TryFrom<&'static [u8]> for StrBytes {
 
     fn try_from(value: &'static [u8]) -> Result<Self, Self::Error> {
         match std::str::from_utf8(value) {
-            Ok(_) => Ok(StrBytes {
-                bytes: Bytes::from(value),
-            }),
+            Ok(_) => Ok(StrBytes::new(Bytes::from(value))),
             Err(err) => Err(err),
         }
     }
@@ -83,9 +106,7 @@ impl TryFrom<Vec<u8>> for StrBytes {
 
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
         match std::str::from_utf8(&value[..]) {
-            Ok(_) => Ok(StrBytes {
-                bytes: Bytes::from(value),
-            }),
+            Ok(_) => Ok(StrBytes::new(Bytes::from(value))),
             Err(err) => Err(err),
         }
     }
@@ -96,7 +117,7 @@ impl TryFrom<Bytes> for StrBytes {
 
     fn try_from(bytes: Bytes) -> Result<Self, Self::Error> {
         match std::str::from_utf8(&bytes[..]) {
-            Ok(_) => Ok(StrBytes { bytes }),
+            Ok(_) => Ok(StrBytes::new(bytes)),
             Err(err) => Err(err),
         }
     }
