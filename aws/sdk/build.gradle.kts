@@ -101,7 +101,11 @@ private val disableServices = setOf(
     // https://github.com/awslabs/smithy-rs/issues/137
     "glacier",
     // https://github.com/awslabs/smithy-rs/issues/606
-    "iotdataplane"
+    "iotdataplane",
+    // timestream requires endpoint discovery
+    // https://github.com/awslabs/aws-sdk-rust/issues/114
+    "timestreamwrite",
+    "timestreamquery"
 )
 
 data class AwsService(
