@@ -51,42 +51,12 @@ fn random_string(n: usize) -> String {
         .collect()
 }
 
-/// Returns true if a table by this name exists in the user's account and Region.
-async fn does_table_exist(client: &Client, table: &str) -> bool {
-    let resp = client.list_tables().send().await;
-
-    let names = resp.unwrap().table_names.unwrap_or_default();
-
-    for name in names {
-        if table == name {
-            return true;
-        }
-    }
-
-    false
-}
-
 /// Create a new table.
 async fn make_table(
     client: &Client,
     table: &str,
     key: &str,
-) -> Result<(), aws_sdk_dynamodb::error::CreateTableError> {
-    // Return an error if a table with the table name exists.
-    let exists = does_table_exist(client, table).await;
-    if exists {
-        let riu_ex = aws_sdk_dynamodb::error::ResourceInUseException::builder()
-            .message("The table already exists")
-            .build();
-        let st_err = smithy_types::Error::builder().build();
-        let err = aws_sdk_dynamodb::error::CreateTableError::new(
-            aws_sdk_dynamodb::error::CreateTableErrorKind::ResourceInUseException(riu_ex),
-            st_err,
-        );
-
-        return Err(err);
-    }
-
+) -> Result<(), aws_hyper::SdkError<aws_sdk_dynamodb::error::CreateTableError>> {
     let ad = AttributeDefinition::builder()
         .attribute_name(key)
         .attribute_type(ScalarAttributeType::S)
@@ -112,20 +82,7 @@ async fn make_table(
         .await
     {
         Ok(_) => Ok(()),
-        Err(e) => {
-            println!("Got an error creating the table:");
-            println!("{:?}", e);
-            let riu_ex = aws_sdk_dynamodb::error::ResourceInUseException::builder()
-                .message("Got an error creating the table:")
-                .build();
-            let st_err = smithy_types::Error::builder().build();
-            let err = aws_sdk_dynamodb::error::CreateTableError::new(
-                aws_sdk_dynamodb::error::CreateTableErrorKind::ResourceInUseException(riu_ex),
-                st_err,
-            );
-
-            Err(err)
-        }
+        Err(e) => Err(e),
     }
 }
 
