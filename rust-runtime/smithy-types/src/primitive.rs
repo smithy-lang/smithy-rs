@@ -11,9 +11,9 @@
 //! - Positive infinity should be serialized as `Infinity`
 //! - Negative infinity should be serialized as `-Infinity`
 //!
-//! This module defines the [`Parse`](primitive::Parse) trait which
+//! This module defines the [`Parse`](Parse) trait which
 //! enables parsing primitive values (numbers & booleans) that follow
-//! these rules and [`Encoder`](primitive::Encoder), a struct that enables
+//! these rules and [`Encoder`](Encoder), a struct that enables
 //! allocation-free serialization.
 //!
 //! # Examples
