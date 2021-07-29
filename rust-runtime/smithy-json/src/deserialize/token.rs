@@ -9,6 +9,7 @@ use smithy_types::instant::Format;
 use smithy_types::{base64, Blob, Document, Instant, Number};
 use std::borrow::Cow;
 
+use crate::deserialize::must_not_be_finite;
 pub use crate::escape::Error as EscapeError;
 use smithy_types::primitive::Parse;
 use std::collections::HashMap;
@@ -167,11 +168,16 @@ pub fn expect_number_or_null(
         Some(Token::ValueString { value, offset }) => match value.to_unescaped() {
             Err(_) => Err(Error::custom("expected a valid string, escape was invalid")),
             Ok(v) => f64::parse(v.as_ref())
+                // disregard the exact error
+                .map_err(|_|())
+                // only infinite / NaN can be used as strings
+                .and_then(must_not_be_finite)
                 .map(|float| Some(smithy_types::Number::Float(float)))
+                // convert to a helpful error
                 .map_err(|_| {
                     Error::new(
                         ErrorReason::Custom(Cow::Owned(format!(
-                        "expected `Infinity`, `-Infinity`, `NaN` or a valid float but found: `{}`",
+                        "only `Infinity`, `-Infinity`, `NaN` can represent a float as a string but found `{}`",
                         v
                     ))),
                         Some(offset.0),
@@ -417,6 +423,15 @@ pub mod test {
     }
 
     #[test]
+    fn test_non_finite_floats() {
+        let mut tokens = json_token_iter(b"inf");
+        tokens
+            .next()
+            .expect("there is a token")
+            .expect_err("but it is invalid, ensure that Rust float boundary cases don't parse");
+    }
+
+    #[test]
     fn mismatched_braces() {
         // The skip_value function doesn't need to explicitly handle these cases since
         // token iterator's parser handles them. This test confirms that assumption.
@@ -504,6 +519,10 @@ pub mod test {
         assert_eq!(
             Ok(Some(Number::Float(f64::INFINITY))),
             expect_number_or_null(value_string(0, "Infinity"))
+        );
+        assert_eq!(
+            Err(Error::new(ErrorReason::Custom("only `Infinity`, `-Infinity`, `NaN` can represent a float as a string but found `123`".into()), Some(0))),
+            expect_number_or_null(value_string(0, "123"))
         );
         match expect_number_or_null(value_string(0, "NaN")) {
             Ok(Some(Number::Float(v))) if v.is_nan() => {
