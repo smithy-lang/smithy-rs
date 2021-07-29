@@ -1,5 +1,12 @@
 ## vNext (Month Day Year)
+**New This Week**
+- :bug: Correctly encode HTTP Checksums using base64 instead of hex. Fixes aws-sdk-rust#164. (#615)
+- (When complete) Add profile file provider for region (#594, #xyz)
 
+## v0.18.1 (July 27th 2021)
+* Remove timestreamwrite and timestreamquery from the generated services (#613)
+
+## v0.18 (July 27th 2021)
 **Breaking changes**
 * `test-util` has been made an optional dependency and has moved from
   aws-hyper to smithy-http. If you were relying on `aws_hyper::TestConnection`, add `smithy-client` as a dependency
@@ -7,11 +14,45 @@
   for most users. (#608)
 
 **New This Week**
-- :bug: Bugfix: Fix parsing bug where whitespace was stripped when parsing XML (#590)
+- :tada: Release all but three remaining AWS services! Glacier, IoT Data Plane and Transcribe streaming will be available in a future release. If you discover that a service isn't functioning as expected please let us know! (#607)
+- :bug: Bugfix: Fix parsing bug where parsing XML incorrectly stripped whitespace (#590, aws-sdk-rust#153)
 - Establish common abstraction for environment variables (#594)
 - Add windows to the test matrix (#594)
-- (When complete) Add profile file provider for region (#594, #xyz)
 - :bug: Bugfix: Constrain RFC-3339 timestamp formatting to microsecond precision (#596)
+
+## v0.17 (July 15th 2021)
+
+**New this Week**
+* 🎉 Add support for Autoscaling (#576, #582)
+* `AsyncProvideCredentials` now introduces an additional lifetime parameter, simplifying bridging it with `#[async_trait]` interfaces
+* Fix S3 bug when content type was set explicitly (aws-sdk-rust#131, #566, @eagletmt)
+
+**Contributions**
+Thank you for your contributions! ❤️
+* @eagletmt (#566)
+
+## v0.16 (July 6th 2021)
+**New this Week**
+- ⚠️ **Breaking Change:** `ProvideCredentials` and `CredentialError` were both moved into `aws_auth::provider` when they were previously in `aws_auth` (#572)
+- 🎉 Add support for AWS Config (#570)
+- 🎉 Add support for EBS (#567)
+- 🎉 Add support for Cognito (#573)
+- 🎉 Add support for Snowball (#579, @landonxjames)
+- Make it possible to asynchronously provide credentials with `async_provide_credentials_fn` (#572, #577)
+- Improve RDS, QLDB, Polly, and KMS examples (#561, #560, #558, #556, #550)
+- Update AWS SDK models (#575)
+- 🐛 Bugfix: Fill in message from error response even when it doesn't match the modeled case format (#565)
+
+**Internal Changes**
+- Add support for `@unsignedPayload` Smithy trait (#567)
+- Strip service/api/client suffix from sdkId (#546)
+- Remove idempotency token trait (#571)
+
+**Contributions**
+
+Thank you for your contributions! ❤️
+
+- landonxjames (#579)
 
 ## v0.15 (June 29th 2021)
 This week, we've added EKS, ECR and Cloudwatch. The JSON deserialization implementation has been replaced, please be
