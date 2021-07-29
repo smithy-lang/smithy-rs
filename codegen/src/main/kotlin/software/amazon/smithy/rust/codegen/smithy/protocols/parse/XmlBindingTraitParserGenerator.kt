@@ -408,7 +408,7 @@ class XmlBindingTraitParserGenerator(
     private fun RustWriter.case(member: MemberShape, inner: RustWriter.() -> Unit) {
         rustBlock(
             "s if ${
-                member.xmlName().matchExpression("s")
+            member.xmlName().matchExpression("s")
             } /* ${member.memberName} ${escape(member.id.toString())} */ => "
         ) {
             inner()
