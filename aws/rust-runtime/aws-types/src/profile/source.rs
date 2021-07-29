@@ -28,7 +28,8 @@ pub struct File {
     pub contents: String,
 }
 
-enum FileKind {
+#[derive(Clone, Copy)]
+pub enum FileKind {
     Config,
     Credentials,
 }

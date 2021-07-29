@@ -8,8 +8,7 @@ license = "Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-test-util = ["protocol-test-helpers"]
-default = ["test-util"]
+default = []
 native-tls = ["hyper-tls", "smithy-client/native-tls"]
 rustls = ["hyper-rustls", "smithy-client/rustls"]
 
@@ -35,13 +34,11 @@ tokio = { version = "1", features = ["time"] }
 pin-project = "1"
 tracing = "0.1"
 
-protocol-test-helpers = { path = "../../../rust-runtime/protocol-test-helpers", optional = true }
-
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
 tower-test = "0.4.0"
 aws-types = { path = "../aws-types" }
+smithy-client = { path = "../../../rust-runtime/smithy-client", features = ["test-util"] }
 
 [[test]]
 name = "e2e_test"
-required-features = ["test-util"]
