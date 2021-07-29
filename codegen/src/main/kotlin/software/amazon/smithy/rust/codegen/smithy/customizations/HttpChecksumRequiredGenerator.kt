@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
@@ -46,13 +47,14 @@ class HttpChecksumRequiredGenerator(
                         let checksum = #{md5}::compute(data);
                         req.headers_mut().insert(
                             #{http}::header::HeaderName::from_static("content-md5"),
-                            format!("{:x}", checksum).parse().expect("checksum is valid header value")
+                            #{base64_encode}(&checksum[..]).parse().expect("checksum is valid header value")
                         );
                         Result::<_, #{BuildError}>::Ok(req)
                     })?;
                 """,
                     "md5" to CargoDependency.Md5.asType(),
                     "http" to CargoDependency.Http.asType(),
+                    "base64_encode" to RuntimeType.Base64Encode(protocolConfig.runtimeConfig),
                     "BuildError" to protocolConfig.runtimeConfig.operationBuildError()
                 )
             }
