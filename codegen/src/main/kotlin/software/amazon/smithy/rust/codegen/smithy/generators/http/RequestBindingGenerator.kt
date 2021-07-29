@@ -74,6 +74,7 @@ class RequestBindingGenerator(
 ) {
     private val index = HttpBindingIndex.of(model)
     private val buildError = runtimeConfig.operationBuildError()
+    private val Encoder = CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
 
     constructor(
         protocolConfig: ProtocolConfig,
@@ -360,8 +361,6 @@ class RequestBindingGenerator(
         }
         return true
     }
-
-    private val Encoder = CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
 
     /**
      * Format [member] when used as a queryParam

@@ -166,7 +166,9 @@ pub fn expect_number_or_null(
         Some(Token::ValueNull { .. }) => Ok(None),
         Some(Token::ValueNumber { value, .. }) => Ok(Some(value)),
         Some(Token::ValueString { value, offset }) => match value.to_unescaped() {
-            Err(_) => Err(Error::custom("expected a valid string, escape was invalid")),
+            Err(err) => Err(Error::new(
+                ErrorReason::Custom(format!("expected a valid string, escape was invalid: {}", err).into()), Some(offset.0))
+            ),
             Ok(v) => f64::parse(v.as_ref())
                 // disregard the exact error
                 .map_err(|_|())
@@ -570,8 +572,7 @@ pub mod test {
         );
         let err = Error::new(
             ErrorReason::Custom(
-                "expected `Infinity`, `-Infinity`, `NaN` or a valid float but found: `wrong`"
-                    .into(),
+                "only `Infinity`, `-Infinity`, `NaN` can represent a float as a string but found `wrong`".into(),
             ),
             Some(0),
         );
