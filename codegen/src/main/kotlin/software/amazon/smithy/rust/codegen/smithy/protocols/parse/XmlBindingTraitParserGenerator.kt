@@ -194,7 +194,7 @@ class XmlBindingTraitParserGenerator(
                     *codegenScope
                 )
                 val context = OperationWrapperContext(operationShape, shapeName, xmlError)
-                if (outputShape.hasTrait<S3UnwrappedXmlOutputTrait>()) {
+                if (operationShape.hasTrait<S3UnwrappedXmlOutputTrait>()) {
                     unwrappedResponseParser("builder", "decoder", "start_el", outputShape.members())
                 } else {
                     writeOperationWrapper(context) { tagName ->
