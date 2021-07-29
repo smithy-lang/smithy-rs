@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols.parse
 
+import software.amazon.smithy.aws.traits.customizations.S3UnwrappedXmlOutputTrait
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
@@ -45,7 +46,6 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlMemberIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlNameIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.deserializeFunctionName
-import software.amazon.smithy.rust.codegen.smithy.traits.S3UnwrappedXmlOutputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
