@@ -6,7 +6,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.aws.traits.ServiceTrait
 import kotlin.streams.toList
-import org.jetbrains.kotlin.utils.ifEmpty
 
 extra["displayName"] = "Smithy :: Rust :: AWS-SDK"
 extra["moduleName"] = "software.amazon.smithy.rust.awssdk"
@@ -51,6 +50,9 @@ dependencies {
 // Tier 1 Services have examples and tests
 val tier1Services = setOf(
     "apigateway",
+    "applicationautoscaling",
+    "autoscaling",
+    "autoscalingplans",
     "batch",
     "cloudformation",
     "cloudwatch",
@@ -92,7 +94,19 @@ val tier1Services = setOf(
     "sts"
 )
 
-private val disableServices = setOf("transcribestreaming")
+private val disableServices = setOf(
+    // transcribe streaming contains exclusively EventStream operations which are not supported
+    "transcribestreaming",
+    // Glacier requires a customization which is not currently supported:
+    // https://github.com/awslabs/smithy-rs/issues/137
+    "glacier",
+    // https://github.com/awslabs/smithy-rs/issues/606
+    "iotdataplane",
+    // timestream requires endpoint discovery
+    // https://github.com/awslabs/aws-sdk-rust/issues/114
+    "timestreamwrite",
+    "timestreamquery"
+)
 
 data class AwsService(
     val service: String,
@@ -127,7 +141,7 @@ val awsServices: Provider<List<AwsService>> = generateAllServices.zip(generateOn
  */
 fun discoverServices(allServices: Boolean, generateOnly: Set<String>): List<AwsService> {
     val models = project.file("aws-models")
-    val services = fileTree(models)
+    val baseServices = fileTree(models)
         .sortedBy { file -> file.name }
         .mapNotNull { file ->
         val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
@@ -155,17 +169,24 @@ fun discoverServices(allServices: Boolean, generateOnly: Set<String>): List<AwsS
             }
             AwsService(service = service.id.toString(), module = sdkId, modelFile = file, extraFiles = extras)
         }
-    }.filterNot {
+    }
+    val baseModules = baseServices.map { it.module }.toSet()
+    disableServices.forEach{ disabledService ->
+        check(baseModules.contains(disabledService)) {
+            "Service $disabledService was explicitly disabled but no service was generated with that name. Generated:\n ${baseModules.joinToString("\n ")}"
+        }
+    }
+    val services = baseServices.filterNot {
         disableServices.contains(it.module)
     }.filter {
         val inGenerateOnly = generateOnly.isNotEmpty() && generateOnly.contains(it.module)
         val inTier1 = generateOnly.isEmpty() && tier1Services.contains(it.module)
         allServices || inGenerateOnly || inTier1
     }
-    if (generateOnly.isNotEmpty()) {
+    if (generateOnly.isEmpty()) {
         val modules = services.map { it.module }.toSet()
         tier1Services.forEach { service ->
-            check(modules.contains(service)) { "Service $service was in list of tier 1 services but not generated!" }
+            check(modules.contains(service)) { "Service $service was in list of tier 1 services but not generated! ($generateOnly)" }
         }
     }
     return services
@@ -194,7 +215,7 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                       },
                       "service": "${it.service}",
                       "module": "aws-sdk-${it.module}",
-                      "moduleVersion": "0.0.11-alpha",
+                      "moduleVersion": "0.0.13-alpha",
                       "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
                       "license": "Apache-2.0"
                       ${it.extraConfig ?: ""}
