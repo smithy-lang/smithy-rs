@@ -95,7 +95,19 @@ val tier1Services = setOf(
     "sts"
 )
 
-private val disableServices = setOf("transcribestreaming")
+private val disableServices = setOf(
+    // transcribe streaming contains exclusively EventStream operations which are not supported
+    "transcribestreaming",
+    // Glacier requires a customization which is not currently supported:
+    // https://github.com/awslabs/smithy-rs/issues/137
+    "glacier",
+    // https://github.com/awslabs/smithy-rs/issues/606
+    "iotdataplane",
+    // timestream requires endpoint discovery
+    // https://github.com/awslabs/aws-sdk-rust/issues/114
+    "timestreamwrite",
+    "timestreamquery"
+)
 
 data class AwsService(
     val service: String,
@@ -130,7 +142,7 @@ val awsServices: Provider<List<AwsService>> = generateAllServices.zip(generateOn
  */
 fun discoverServices(allServices: Boolean, generateOnly: Set<String>): List<AwsService> {
     val models = project.file("aws-models")
-    val services = fileTree(models)
+    val baseServices = fileTree(models)
         .sortedBy { file -> file.name }
         .mapNotNull { file ->
         val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
@@ -158,7 +170,14 @@ fun discoverServices(allServices: Boolean, generateOnly: Set<String>): List<AwsS
             }
             AwsService(service = service.id.toString(), module = sdkId, modelFile = file, extraFiles = extras)
         }
-    }.filterNot {
+    }
+    val baseModules = baseServices.map { it.module }.toSet()
+    disableServices.forEach{ disabledService ->
+        check(baseModules.contains(disabledService)) {
+            "Service $disabledService was explicitly disabled but no service was generated with that name. Generated:\n ${baseModules.joinToString("\n ")}"
+        }
+    }
+    val services = baseServices.filterNot {
         disableServices.contains(it.module)
     }.filter {
         val inGenerateOnly = generateOnly.isNotEmpty() && generateOnly.contains(it.module)
@@ -197,7 +216,7 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                       },
                       "service": "${it.service}",
                       "module": "aws-sdk-${it.module}",
-                      "moduleVersion": "0.0.11-alpha",
+                      "moduleVersion": "0.0.13-alpha",
                       "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
                       "license": "Apache-2.0"
                       ${it.extraConfig ?: ""}

@@ -14,8 +14,9 @@ default = ["rt-tokio"]
 pin-project = "1"
 smithy-async = { path = "../../../rust-runtime/smithy-async", default-features = false }
 smithy-http = { path = "../../../rust-runtime/smithy-http" }
+aws-types = { path = "../aws-types" }
 tokio = { version = "1", features = ["sync"] }
-tracing = "0.1.25"
+tracing = "0.1"
 zeroize = "1.2.0"
 
 [dev-dependencies]
