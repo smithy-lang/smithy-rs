@@ -1,10 +1,10 @@
-use aws_types::region;
-use aws_types::region::ProvideRegion;
-use config::model::{
+use aws_sdk_config::model::{
     ConfigSnapshotDeliveryProperties, ConfigurationRecorder, DeliveryChannel,
     MaximumExecutionFrequency, RecordingGroup, ResourceType,
 };
-use config::{Client, Config, Error, Region, PKG_VERSION};
+use aws_sdk_config::{Client, Config, Error, Region, PKG_VERSION};
+use aws_types::region;
+use aws_types::region::ProvideRegion;
 use std::process;
 use structopt::StructOpt;
 

@@ -1,6 +1,6 @@
+use aws_sdk_config::{Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region;
 use aws_types::region::ProvideRegion;
-use config::{Client, Config, Error, Region, PKG_VERSION};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]

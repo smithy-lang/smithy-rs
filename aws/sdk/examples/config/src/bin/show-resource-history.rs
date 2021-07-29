@@ -1,7 +1,7 @@
+use aws_sdk_config::model::ResourceType;
+use aws_sdk_config::{Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region;
 use aws_types::region::ProvideRegion;
-use config::model::ResourceType;
-use config::{Client, Config, Error, Region, PKG_VERSION};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -29,7 +29,7 @@ struct Opt {
 /// # Arguments
 ///
 /// * `-i ID` - The ID of the resource.
-/// * `-t TYPE` - The resource type, such as 'AWS::EC2::SecurityGroup'.
+/// * `-t TYPE` - The resource type, such as `AWS::EC2::SecurityGroup`.
 /// * `[-r REGION]` - The Region in which the client is created.
 ///   If not supplied, uses the value of the **AWS_REGION** environment variable.
 ///   If the environment variable is not set, defaults to **us-west-2**.
