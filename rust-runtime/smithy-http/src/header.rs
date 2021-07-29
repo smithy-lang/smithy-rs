@@ -93,7 +93,7 @@ pub fn read_many_from_str<T: FromStr>(
 
 pub fn read_many_primitive<T: Parse>(values: ValueIter<HeaderValue>) -> Result<Vec<T>, ParseError> {
     read_many(values, |v: &str| {
-        T::parse(v).map_err(|primitive| {
+        T::parse_smithy_primitive(v).map_err(|primitive| {
             ParseError::new_with_message(format!(
                 "failed reading a list of primitives: {}",
                 primitive

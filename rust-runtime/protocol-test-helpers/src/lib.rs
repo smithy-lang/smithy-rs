@@ -25,13 +25,13 @@ pub trait FloatEquals {
 
 impl FloatEquals for f64 {
     fn float_equals(&self, other: &Self) -> bool {
-        (self.is_nan() && other.is_nan()) || (self - other).abs() < f64::EPSILON
+        (self.is_nan() && other.is_nan()) || self.eq(other)
     }
 }
 
 impl FloatEquals for f32 {
     fn float_equals(&self, other: &Self) -> bool {
-        (self.is_nan() && other.is_nan()) || (self - other).abs() < f32::EPSILON
+        (self.is_nan() && other.is_nan()) || self.eq(other)
     }
 }
 
@@ -359,7 +359,7 @@ fn try_json_eq(actual: &str, expected: &str) -> Result<(), ProtocolTestFailure> 
 mod tests {
     use crate::{
         forbid_headers, forbid_query_params, require_headers, require_query_params, validate_body,
-        validate_headers, validate_query_string, MediaType, ProtocolTestFailure,
+        validate_headers, validate_query_string, FloatEquals, MediaType, ProtocolTestFailure,
     };
     use http::Request;
 
@@ -504,5 +504,21 @@ mod tests {
 
         validate_body(&expected, expected, MediaType::from("something/else"))
             .expect("inputs matched exactly")
+    }
+
+    #[test]
+    fn test_float_equals() {
+        let a = f64::NAN;
+        let b = f64::NAN;
+        assert_ne!(a, b);
+        assert!(a.float_equals(&b));
+        assert!(!a.float_equals(&5_f64));
+
+        assert!(5.0.float_equals(&5.0));
+        assert!(!5.0.float_equals(&5.1));
+
+        assert!(f64::INFINITY.float_equals(&f64::INFINITY));
+        assert!(!f64::INFINITY.float_equals(&f64::NEG_INFINITY));
+        assert!(f64::NEG_INFINITY.float_equals(&f64::NEG_INFINITY));
     }
 }

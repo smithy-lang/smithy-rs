@@ -564,7 +564,7 @@ class XmlBindingTraitParserGenerator(
             is NumberShape, is BooleanShape -> {
                 rustBlock("") {
                     withBlockTemplate(
-                        "<#{shape} as #{smithy_types}::primitive::Parse>::parse(",
+                        "<#{shape} as #{smithy_types}::primitive::Parse>::parse_smithy_primitive(",
                         ")",
                         *codegenScope,
                         "shape" to symbolProvider.toSymbol(shape)

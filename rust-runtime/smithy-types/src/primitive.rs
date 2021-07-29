@@ -20,7 +20,7 @@
 //! ## Parsing
 //! ```rust
 //! use smithy_types::primitive::Parse;
-//! let parsed = f64::parse("123.4").expect("valid float");
+//! let parsed = f64::parse_smithy_primitive("123.4").expect("valid float");
 //! ```
 //!
 //! ## Encoding
@@ -48,7 +48,7 @@ impl Error for PrimitiveParseError {}
 
 /// Sealed trait for custom parsing of primitive types
 pub trait Parse: Sealed {
-    fn parse(input: &str) -> Result<Self, PrimitiveParseError>
+    fn parse_smithy_primitive(input: &str) -> Result<Self, PrimitiveParseError>
     where
         Self: Sized;
 }
@@ -68,7 +68,7 @@ mod private {
 macro_rules! parse_from_str {
     ($t: ty) => {
         impl Parse for $t {
-            fn parse(input: &str) -> Result<Self, PrimitiveParseError> {
+            fn parse_smithy_primitive(input: &str) -> Result<Self, PrimitiveParseError> {
                 FromStr::from_str(input).map_err(|_| PrimitiveParseError(stringify!($t)))
             }
         }
@@ -82,13 +82,13 @@ parse_from_str!(i32);
 parse_from_str!(i64);
 
 impl Parse for f32 {
-    fn parse(input: &str) -> Result<Self, PrimitiveParseError> {
+    fn parse_smithy_primitive(input: &str) -> Result<Self, PrimitiveParseError> {
         float::parse_f32(input).map_err(|_| PrimitiveParseError("f32"))
     }
 }
 
 impl Parse for f64 {
-    fn parse(input: &str) -> Result<Self, PrimitiveParseError> {
+    fn parse_smithy_primitive(input: &str) -> Result<Self, PrimitiveParseError> {
         float::parse_f64(input).map_err(|_| PrimitiveParseError("f64"))
     }
 }
@@ -233,10 +233,10 @@ mod test {
     fn bool_format() {
         assert_eq!(Encoder::from(true).encode(), "true");
         assert_eq!(Encoder::from(false).encode(), "false");
-        let err = <bool as Parse>::parse("not a boolean").expect_err("should fail");
+        let err = bool::parse_smithy_primitive("not a boolean").expect_err("should fail");
         assert_eq!(err.0, "bool");
-        assert_eq!(bool::parse("true"), Ok(true));
-        assert_eq!(bool::parse("false"), Ok(false));
+        assert_eq!(bool::parse_smithy_primitive("true"), Ok(true));
+        assert_eq!(bool::parse_smithy_primitive("false"), Ok(false));
     }
 
     #[test]
@@ -252,18 +252,24 @@ mod test {
 
     #[test]
     fn float_parse() {
-        assert_eq!(f64::parse("1234.5"), Ok(1234.5));
-        assert!(<f64 as Parse>::parse("NaN").unwrap().is_nan());
-        assert_eq!(<f64 as Parse>::parse("Infinity").unwrap(), f64::INFINITY);
+        assert_eq!(f64::parse_smithy_primitive("1234.5"), Ok(1234.5));
+        assert!(f64::parse_smithy_primitive("NaN").unwrap().is_nan());
         assert_eq!(
-            <f64 as Parse>::parse("-Infinity").unwrap(),
+            f64::parse_smithy_primitive("Infinity").unwrap(),
+            f64::INFINITY
+        );
+        assert_eq!(
+            f64::parse_smithy_primitive("-Infinity").unwrap(),
             f64::NEG_INFINITY
         );
-        assert_eq!(f32::parse("1234.5"), Ok(1234.5));
-        assert!(<f32 as Parse>::parse("NaN").unwrap().is_nan());
-        assert_eq!(<f32 as Parse>::parse("Infinity").unwrap(), f32::INFINITY);
+        assert_eq!(f32::parse_smithy_primitive("1234.5"), Ok(1234.5));
+        assert!(f32::parse_smithy_primitive("NaN").unwrap().is_nan());
         assert_eq!(
-            <f32 as Parse>::parse("-Infinity").unwrap(),
+            f32::parse_smithy_primitive("Infinity").unwrap(),
+            f32::INFINITY
+        );
+        assert_eq!(
+            f32::parse_smithy_primitive("-Infinity").unwrap(),
             f32::NEG_INFINITY
         );
     }

@@ -169,7 +169,7 @@ pub fn expect_number_or_null(
             Err(err) => Err(Error::new(
                 ErrorReason::Custom(format!("expected a valid string, escape was invalid: {}", err).into()), Some(offset.0))
             ),
-            Ok(v) => f64::parse(v.as_ref())
+            Ok(v) => f64::parse_smithy_primitive(v.as_ref())
                 // disregard the exact error
                 .map_err(|_|())
                 // only infinite / NaN can be used as strings

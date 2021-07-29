@@ -119,7 +119,7 @@ class Instantiator(
                     val numberSymbol = symbolProvider.toSymbol(shape)
                     // support Smithy custom values, such as Infinity
                     writer.rust(
-                        """<#T as #T>::parse(${arg.value.dq()}).expect("invalid string for number")""",
+                        """<#T as #T>::parse_smithy_primitive(${arg.value.dq()}).expect("invalid string for number")""",
                         numberSymbol,
                         CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse")
                     )
