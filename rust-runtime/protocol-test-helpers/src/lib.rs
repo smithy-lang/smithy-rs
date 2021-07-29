@@ -15,19 +15,23 @@ use std::fmt::{self, Debug};
 use thiserror::Error;
 use urlencoded::try_url_encoded_form_equivalent;
 
+/// Helper trait for tests for float comparisons
+///
+/// This trait differs in float's default `PartialEq` implementation by considering all `NaN` values to
+/// be equal.
 pub trait FloatEquals {
     fn float_equals(&self, other: &Self) -> bool;
 }
 
 impl FloatEquals for f64 {
     fn float_equals(&self, other: &Self) -> bool {
-        (self.is_nan() && other.is_nan()) || self == other
+        (self.is_nan() && other.is_nan()) || (self - other).abs() < f64::EPSILON
     }
 }
 
 impl FloatEquals for f32 {
     fn float_equals(&self, other: &Self) -> bool {
-        (self.is_nan() && other.is_nan()) || self == other
+        (self.is_nan() && other.is_nan()) || (self - other).abs() < f32::EPSILON
     }
 }
 
