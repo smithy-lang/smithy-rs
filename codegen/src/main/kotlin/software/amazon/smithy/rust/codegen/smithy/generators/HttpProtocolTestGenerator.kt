@@ -315,9 +315,9 @@ class HttpProtocolTestGenerator(
                             )
                             rust(
                                 """
-                            assert!(parsed.$memberName.float_equals(&expected_output.$memberName),
+                                assert!(parsed.$memberName.float_equals(&expected_output.$memberName),
                                     "Unexpected value for `$memberName` {:?} vs. {:?}", expected_output.$memberName, parsed.$memberName);
-                        """
+                                """
                             )
                         }
                         else ->

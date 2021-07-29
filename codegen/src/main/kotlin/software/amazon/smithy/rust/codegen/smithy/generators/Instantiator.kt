@@ -117,7 +117,7 @@ class Instantiator(
             is NumberShape -> when (arg) {
                 is StringNode -> {
                     val numberSymbol = symbolProvider.toSymbol(shape)
-                    // support Smithy custom values
+                    // support Smithy custom values, such as Infinity
                     writer.rust(
                         """<#T as #T>::parse(${arg.value.dq()}).expect("invalid string for number")""",
                         numberSymbol,
