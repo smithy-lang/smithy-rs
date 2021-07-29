@@ -38,6 +38,69 @@ apply GetBucketLocation @httpResponseTests([
     }
 ])
 
+apply ListObjects @httpResponseTests([
+    {
+        id: "KeysWithWhitespace",
+        documentation: "This test validates that parsing respects whitespace",
+        code: 200,
+        bodyMediaType: "application/xml",
+        protocol: "aws.protocols#restXml",
+        body: """
+        <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n
+        <ListBucketResult
+        	xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">
+        	<Name>bucketname</Name>
+        	<Prefix></Prefix>
+        	<Marker></Marker>
+        	<MaxKeys>1000</MaxKeys>
+        	<IsTruncated>false</IsTruncated>
+        	<Contents>
+        		<Key>    </Key>
+        		<LastModified>2021-07-16T16:20:53.000Z</LastModified>
+        		<ETag>&quot;etag123&quot;</ETag>
+        		<Size>0</Size>
+        		<Owner>
+        			<ID>owner</ID>
+        		</Owner>
+        		<StorageClass>STANDARD</StorageClass>
+        	</Contents>
+        	<Contents>
+        		<Key> a </Key>
+        		<LastModified>2021-07-16T16:02:10.000Z</LastModified>
+        		<ETag>&quot;etag123&quot;</ETag>
+        		<Size>0</Size>
+        		<Owner>
+        			<ID>owner</ID>
+        		</Owner>
+        		<StorageClass>STANDARD</StorageClass>
+        	</Contents>
+        </ListBucketResult>
+        """,
+        params: {
+            MaxKeys: 1000,
+            IsTruncated: false,
+            Marker: "",
+            Name: "bucketname",
+            Prefix: "",
+            Contents: [{
+                Key: "    ",
+                LastModified: 1626452453,
+                ETag: "\"etag123\"",
+                Size: 0,
+                Owner: { ID: "owner" },
+                StorageClass: "STANDARD"
+            }, {
+               Key: " a ",
+               LastModified: 1626451330,
+               ETag: "\"etag123\"",
+               Size: 0,
+               Owner: { ID: "owner" },
+               StorageClass: "STANDARD"
+           }]
+        }
+    }
+])
+
 apply PutBucketLifecycleConfiguration @httpRequestTests([
     {
         id: "PutBucketLifecycleConfiguration",
@@ -48,7 +111,7 @@ apply PutBucketLifecycleConfiguration @httpRequestTests([
         headers: {
             // we can assert this, but when this test is promoted, it can't assert
             // on the exact contents
-            "content-md5": "b14bbeb8064f913b40c4975a03ef6e4a",
+            "content-md5": "sUu+uAZPkTtAxJdaA+9uSg==",
         },
         bodyMediaType: "application/xml",
         body: """
@@ -87,6 +150,22 @@ apply CreateMultipartUpload @httpRequestTests([
         params: {
             "Bucket": "test-bucket",
             "Key": "object.txt"
+        }
+    }
+])
+
+apply PutObject @httpRequestTests([
+    {
+        id: "DontSendMultipleContentTypeHeaders",
+        documentation: "This test validates that if a content-type is specified, that only one content-type header is sent",
+        method: "PUT",
+        protocol: "aws.protocols#restXml",
+        uri: "/test-bucket/test-key",
+        headers: { "content-type": "text/html" },
+        params: {
+            Bucket: "test-bucket",
+            Key: "test-key",
+            ContentType: "text/html"
         }
     }
 ])

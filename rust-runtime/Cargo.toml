@@ -1,0 +1,12 @@
+[workspace]
+
+members = [
+    "smithy-http",
+    "smithy-client",
+    "smithy-http-tower",
+    "smithy-json",
+    "smithy-query",
+    "smithy-types",
+    "smithy-xml",
+    "inlineable"
+]
