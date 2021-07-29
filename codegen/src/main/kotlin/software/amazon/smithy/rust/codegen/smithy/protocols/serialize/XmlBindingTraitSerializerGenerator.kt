@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -193,17 +194,6 @@ class XmlBindingTraitSerializerGenerator(
             serializeMember(member, scopeCtx.scopedTo(member), null)
         }
         rust("scope.finish();")
-    }
-
-    /**
-     * Dereference [input]
-     *
-     * Clippy is upset about `*&`, so if [input] is already referenced, simply strip the leading '&'
-     */
-    private fun autoDeref(input: String) = if (input.startsWith("&")) {
-        input.removePrefix("&")
-    } else {
-        "*$input"
     }
 
     private fun RustWriter.serializeRawMember(member: MemberShape, input: String) {

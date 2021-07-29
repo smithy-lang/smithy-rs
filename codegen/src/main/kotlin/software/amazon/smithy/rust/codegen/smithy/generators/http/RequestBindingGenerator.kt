@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -198,7 +199,7 @@ class RequestBindingGenerator(
             listForEach(memberType, field) { innerField, targetId ->
                 val innerMemberType = model.expectShape(targetId)
                 if (innerMemberType.isPrimitive()) {
-                    rust("let mut encoder = #T::from(*$innerField);", Encoder)
+                    rust("let mut encoder = #T::from(${autoDeref(innerField)});", Encoder)
                 }
                 val formatted = headerFmtFun(this, innerMemberType, memberShape, innerField)
                 val safeName = safeName("formatted")
@@ -382,7 +383,7 @@ class RequestBindingGenerator(
                 throw IllegalArgumentException("lists should be handled at a higher level")
             }
             else -> {
-                "${writer.format(Encoder)}::from(*$targetName).encode()"
+                "${writer.format(Encoder)}::from(${autoDeref(targetName)}).encode()"
             }
         }
     }
@@ -416,7 +417,7 @@ class RequestBindingGenerator(
             }
             else -> {
                 rust(
-                    "let mut ${outputVar}_encoder = #T::from(*$input); let $outputVar = ${outputVar}_encoder.encode();",
+                    "let mut ${outputVar}_encoder = #T::from(${autoDeref(input)}); let $outputVar = ${outputVar}_encoder.encode();",
                     Encoder
                 )
             }
