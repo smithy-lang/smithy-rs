@@ -9,6 +9,17 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
 
 /**
+ * Dereference [input]
+ *
+ * Clippy is upset about `*&`, so if [input] is already referenced, simply strip the leading '&'
+ */
+fun autoDeref(input: String) = if (input.startsWith("&")) {
+    input.removePrefix("&")
+} else {
+    "*$input"
+}
+
+/**
  * A hierarchy of types handled by Smithy codegen
  */
 sealed class RustType {
