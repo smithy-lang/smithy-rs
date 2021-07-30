@@ -160,7 +160,7 @@ mod test {
 
     #[test]
     fn endpoint_with_path() {
-        for uri in [
+        for uri in &[
             // check that trailing slashes are properly normalized
             "https://us-east-1.dynamo.amazonaws.com/private",
             "https://us-east-1.dynamo.amazonaws.com/private/",
