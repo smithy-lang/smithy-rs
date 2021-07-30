@@ -132,6 +132,10 @@ impl Instant {
         self.seconds
     }
 
+    pub fn subsec_nanos(&self) -> u32 {
+        self.subsecond_nanos
+    }
+
     pub fn fmt(&self, format: Format) -> String {
         match format {
             Format::DateTime => format::rfc3339::format(&self),

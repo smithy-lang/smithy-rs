@@ -28,6 +28,9 @@ mod value {
     use std::convert::TryInto;
     use std::mem::size_of;
 
+    const NANOS_PER_MILLI_U32: u32 = 1_000_000;
+    const NANOS_PER_MILLI_I64: i64 = NANOS_PER_MILLI_U32 as i64;
+
     const TYPE_TRUE: u8 = 0;
     const TYPE_FALSE: u8 = 1;
     const TYPE_BYTE: u8 = 2;
@@ -94,8 +97,12 @@ mod value {
                 }
                 TYPE_TIMESTAMP => {
                     if buffer.remaining() >= size_of::<i64>() {
-                        Ok(HeaderValue::Timestamp(Instant::from_epoch_seconds(
-                            buffer.get_i64(),
+                        let time = buffer.get_i64();
+                        let seconds = time / 1000;
+                        let millis = time.rem_euclid(1000) as u32;
+                        Ok(HeaderValue::Timestamp(Instant::from_secs_and_nanos(
+                            seconds,
+                            millis * NANOS_PER_MILLI_U32,
                         )))
                     } else {
                         Err(Error::InvalidHeaderValue)
@@ -136,9 +143,18 @@ mod value {
                     buffer.put_u16(checked(val.as_bytes().len(), Error::HeaderValueTooLong)?);
                     buffer.put_slice(&val.as_bytes()[..]);
                 }
-                Timestamp(val) => {
+                Timestamp(time) => {
                     buffer.put_u8(TYPE_TIMESTAMP);
-                    buffer.put_i64(val.epoch_seconds());
+                    buffer.put_i64(
+                        time.epoch_seconds()
+                            .checked_mul(1000)
+                            .and_then(|val| {
+                                val.checked_add(
+                                    i64::from(time.subsec_nanos()) / NANOS_PER_MILLI_I64,
+                                )
+                            })
+                            .ok_or(Error::TimestampValueTooLarge(*time))?,
+                    );
                 }
                 Uuid(val) => {
                     buffer.put_u8(TYPE_UUID);
@@ -234,6 +250,14 @@ impl Header {
         buffer.put_slice(&self.name.as_bytes()[..]);
         self.value.write_to(buffer)
     }
+}
+
+/// Writes the given `headers` to a `buffer`.
+pub fn write_headers_to<B: BufMut>(headers: &[Header], mut buffer: B) -> Result<(), Error> {
+    for header in headers {
+        header.write_to(&mut buffer)?;
+    }
+    Ok(())
 }
 
 /// Event Stream message.
@@ -515,7 +539,7 @@ mod message_tests {
                 Header::new("str", HeaderValue::String("some str".into())),
                 Header::new(
                     "time",
-                    HeaderValue::Timestamp(Instant::from_epoch_seconds(5_000_000_000))
+                    HeaderValue::Timestamp(Instant::from_epoch_seconds(5_000_000))
                 ),
                 Header::new(
                     "uuid",
@@ -543,7 +567,7 @@ mod message_tests {
             .add_header(Header::new("str", HeaderValue::String("some str".into())))
             .add_header(Header::new(
                 "time",
-                HeaderValue::Timestamp(Instant::from_epoch_seconds(5_000_000_000)),
+                HeaderValue::Timestamp(Instant::from_epoch_seconds(5_000_000)),
             ))
             .add_header(Header::new(
                 "uuid",
