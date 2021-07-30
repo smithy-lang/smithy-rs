@@ -6,12 +6,8 @@
 package software.amazon.smithy.rustsdk.customize.s3
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -28,7 +24,6 @@ import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.smithy.protocols.RestXmlFactory
-import software.amazon.smithy.rust.codegen.smithy.traits.S3UnwrappedXmlOutputTrait
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 
 /**
@@ -57,20 +52,6 @@ class S3Decorator : RustCodegenDecorator {
     ): List<LibRsCustomization> {
         return baseCustomizations.letIf(applies(protocolConfig.serviceShape.id)) {
             it + S3PubUse()
-        }
-    }
-
-    override fun transformModel(service: ServiceShape, model: Model): Model {
-        return model.letIf(applies(service.id)) {
-            ModelTransformer.create().mapShapes(model) { shape ->
-                // Apply the S3UnwrappedXmlOutput customization to GetBucketLocation (more
-                // details on the S3UnwrappedXmlOutputTrait)
-                if (shape is StructureShape && shape.id == ShapeId.from("com.amazonaws.s3#GetBucketLocationOutput")) {
-                    shape.toBuilder().addTrait(S3UnwrappedXmlOutputTrait()).build()
-                } else {
-                    shape
-                }
-            }
         }
     }
 }

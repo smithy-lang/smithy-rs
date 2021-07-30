@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -195,17 +196,6 @@ class XmlBindingTraitSerializerGenerator(
         rust("scope.finish();")
     }
 
-    /**
-     * Dereference [input]
-     *
-     * Clippy is upset about `*&`, so if [input] is already referenced, simply strip the leading '&'
-     */
-    private fun autoDeref(input: String) = if (input.startsWith("&")) {
-        input.removePrefix("&")
-    } else {
-        "*$input"
-    }
-
     private fun RustWriter.serializeRawMember(member: MemberShape, input: String) {
         when (val shape = model.expectShape(member.target)) {
             is StringShape -> if (shape.hasTrait<EnumTrait>()) {
@@ -213,8 +203,9 @@ class XmlBindingTraitSerializerGenerator(
             } else {
                 rust("$input.as_ref()")
             }
-            is NumberShape -> rust("$input.to_string().as_ref()")
-            is BooleanShape -> rust("""if ${autoDeref(input)} { "true" } else { "false" }""")
+            is BooleanShape, is NumberShape -> {
+                rust("#T::from(${autoDeref(input)}).encode()", CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder"))
+            }
             is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.Base64Encode(runtimeConfig))
             is TimestampShape -> {
                 val timestampFormat =
