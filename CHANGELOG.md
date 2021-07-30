@@ -2,6 +2,7 @@
 **New This Week**
 - :bug: Correctly encode HTTP Checksums using base64 instead of hex. Fixes aws-sdk-rust#164. (#615)
 - (When complete) Add profile file provider for region (#594, #xyz)
+- Overhaul serialization/deserialization of numeric/boolean types. This resolves issues around serialization of NaN/Infinity and should also reduce the number of allocations required during serialization. (#618)
 
 ## v0.18.1 (July 27th 2021)
 * Remove timestreamwrite and timestreamquery from the generated services (#613)
