@@ -95,7 +95,7 @@ impl Endpoint {
         }
         let endpoint_path = endpoint.path();
         let uri_path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("");
-        if endpoint_path == "" {
+        if endpoint_path.is_empty() {
             Cow::Borrowed(uri_path_and_query)
         } else {
             let ep_no_slash = endpoint_path.strip_suffix("/").unwrap_or(endpoint_path);
