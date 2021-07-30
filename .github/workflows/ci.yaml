@@ -345,9 +345,7 @@ jobs:
       with:
         java-version: ${{ env.java_version }}
     - name: generate a check all services
-      run: ./gradlew :aws:sdk:cargoCheck
-      env:
-        GENERATE_ALL_SERVICES: 'true'
+      run: ./gradlew -Paws.fullsdk=true :aws:sdk:cargoCheck
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
