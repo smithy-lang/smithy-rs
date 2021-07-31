@@ -28,9 +28,6 @@ mod value {
     use std::convert::TryInto;
     use std::mem::size_of;
 
-    const NANOS_PER_MILLI_U32: u32 = 1_000_000;
-    const NANOS_PER_MILLI_I64: i64 = NANOS_PER_MILLI_U32 as i64;
-
     const TYPE_TRUE: u8 = 0;
     const TYPE_FALSE: u8 = 1;
     const TYPE_BYTE: u8 = 2;
@@ -97,12 +94,9 @@ mod value {
                 }
                 TYPE_TIMESTAMP => {
                     if buffer.remaining() >= size_of::<i64>() {
-                        let time = buffer.get_i64();
-                        let seconds = time / 1000;
-                        let millis = time.rem_euclid(1000) as u32;
-                        Ok(HeaderValue::Timestamp(Instant::from_secs_and_nanos(
-                            seconds,
-                            millis * NANOS_PER_MILLI_U32,
+                        let epoch_millis = buffer.get_i64();
+                        Ok(HeaderValue::Timestamp(Instant::from_epoch_millis(
+                            epoch_millis,
                         )))
                     } else {
                         Err(Error::InvalidHeaderValue)
@@ -146,14 +140,8 @@ mod value {
                 Timestamp(time) => {
                     buffer.put_u8(TYPE_TIMESTAMP);
                     buffer.put_i64(
-                        time.epoch_seconds()
-                            .checked_mul(1000)
-                            .and_then(|val| {
-                                val.checked_add(
-                                    i64::from(time.subsec_nanos()) / NANOS_PER_MILLI_I64,
-                                )
-                            })
-                            .ok_or(Error::TimestampValueTooLarge(*time))?,
+                        time.to_epoch_millis()
+                            .map_err(|_| Error::TimestampValueTooLarge(*time))?,
                     );
                 }
                 Uuid(val) => {
