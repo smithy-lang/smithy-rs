@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.isPrimitive
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -238,17 +239,22 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                 headerUtil,
                 timestampFormatType
             )
+        } else if (coreShape.isPrimitive()) {
+            rust(
+                "let $parsedValue = #T::read_many_primitive::<${coreType.render(fullyQualified = true)}>(headers)?;",
+                headerUtil
+            )
         } else {
             rust(
-                "let $parsedValue: Vec<${coreType.render(true)}> = #T::read_many(headers)?;",
+                "let $parsedValue: Vec<${coreType.render(fullyQualified = true)}> = #T::read_many_from_str(headers)?;",
                 headerUtil
             )
             if (coreShape.hasTrait<MediaTypeTrait>()) {
                 rustTemplate(
                     """let $parsedValue: std::result::Result<Vec<_>, _> = $parsedValue
                         .iter().map(|s|
-                            #{base_64_decode}(s).map_err(|_|#{header}::ParseError)
-                            .and_then(|bytes|String::from_utf8(bytes).map_err(|_|#{header}::ParseError))
+                            #{base_64_decode}(s).map_err(|_|#{header}::ParseError::new_with_message("failed to decode base64"))
+                            .and_then(|bytes|String::from_utf8(bytes).map_err(|_|#{header}::ParseError::new_with_message("base64 encoded data was not valid utf-8")))
                         ).collect();""",
                     "base_64_decode" to RuntimeType.Base64Decode(runtimeConfig),
                     "header" to headerUtil
@@ -281,7 +287,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
             else -> rustTemplate(
                 """
                 if $parsedValue.len() > 1 {
-                    Err(#{header_util}::ParseError)
+                    Err(#{header_util}::ParseError::new_with_message(format!("expected one item but found {}", $parsedValue.len())))
                 } else {
                     let mut $parsedValue = $parsedValue;
                     Ok($parsedValue.pop())
