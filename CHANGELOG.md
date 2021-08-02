@@ -1,5 +1,6 @@
 ## vNext (Month Day Year)
 **New This Week**
+- :tada: Add LazyCachingCredentialsProvider to aws-auth for use with expiring credentials, such as STS AssumeRole. Update STS example to use this new provider (#578, #595)
 - :bug: Correctly encode HTTP Checksums using base64 instead of hex. Fixes aws-sdk-rust#164. (#615)
 - Update SDK gradle build logic to use gradle properties (#620)
 - (When complete) Add profile file provider for region (#594, #xyz)
