@@ -7,7 +7,9 @@ package software.amazon.smithy.rust.codegen.util
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -65,3 +67,10 @@ inline fun <reified T : Trait> Shape.expectTrait(): T = expectTrait(T::class.jav
 
 /** Kotlin sugar for getTrait() check. e.g. shape.getTrait<EnumTrait>() instead of shape.getTrait(EnumTrait::class.java) */
 inline fun <reified T : Trait> Shape.getTrait(): T? = getTrait(T::class.java).orNull()
+
+fun Shape.isPrimitive(): Boolean {
+    return when (this) {
+        is NumberShape, is BooleanShape -> true
+        else -> false
+    }
+}
