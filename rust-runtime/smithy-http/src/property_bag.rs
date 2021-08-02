@@ -1,5 +1,6 @@
 /*
- * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Modifications Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Original implementation Copyright 2017 http-rs authors
  * SPDX-License-Identifier: Apache-2.0.
  */
 
@@ -32,10 +33,10 @@ impl Hasher for IdHasher {
     }
 }
 
-/// A type map of protocol extensions.
+/// A type-map of configuration data.
 ///
 /// `PropertyBag` can be used by `Request` and `Response` to store
-/// extra data derived from the underlying protocol.
+/// data used to configure
 ///
 /// TODO: We should consider if we want to require members of the property to be "resettable" in some
 /// way to reset any state prior to a retry. I think this is worth delaying until we need it, but
