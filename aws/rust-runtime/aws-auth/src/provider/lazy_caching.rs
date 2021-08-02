@@ -189,6 +189,11 @@ pub mod builder {
         }
 
         /// Creates the [`LazyCachingCredentialsProvider`].
+        ///
+        /// ## Note:
+        /// This will panic if no `sleep` implementation is given and if no default crate features
+        /// are used. By default, the [`TokioSleep`](smithy_http::sleep::TokioSleep)
+        /// implementation will be set automatically.
         pub fn build(self) -> LazyCachingCredentialsProvider {
             let default_credential_expiration = self
                 .default_credential_expiration
