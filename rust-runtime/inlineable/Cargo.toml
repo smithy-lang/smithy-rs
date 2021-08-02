@@ -20,3 +20,4 @@ are to allow this crate to be compilable and testable in isolation, no client co
 
 [dev-dependencies]
 proptest = "1"
+regex = "1"

@@ -17,9 +17,13 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.assignment
 import software.amazon.smithy.rust.codegen.rustlang.rust
+import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
@@ -37,6 +41,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
@@ -288,7 +293,10 @@ class HttpBoundProtocolGenerator(
                         let error_code = match generic.code() {
                             Some(code) => code,
                             None => return Err(#{error_symbol}::unhandled(generic))
-                        };""",
+                        };
+
+                        let _error_message = generic.message().map(|msg|msg.to_owned());
+                        """,
                         "error_symbol" to errorSymbol,
                     )
                     withBlock("Err(match error_code {", "})") {
@@ -296,16 +304,33 @@ class HttpBoundProtocolGenerator(
                             val errorShape = model.expectShape(error, StructureShape::class.java)
                             val variantName = symbolProvider.toSymbol(model.expectShape(error)).name
                             withBlock(
-                                "${httpBindingResolver.errorCode(errorShape).dq()} => #1T { meta: generic, kind: #1TKind::$variantName({",
+                                "${
+                                httpBindingResolver.errorCode(errorShape).dq()
+                                } => #1T { meta: generic, kind: #1TKind::$variantName({",
                                 "})},",
                                 errorSymbol
                             ) {
-                                renderShapeParser(
-                                    operationShape,
-                                    errorShape,
-                                    httpBindingResolver.errorResponseBindings(errorShape),
-                                    errorSymbol
-                                )
+                                Attribute.AllowUnusedMut.render(this)
+                                assignment("mut tmp") {
+                                    rustBlock("") {
+                                        renderShapeParser(
+                                            operationShape,
+                                            errorShape,
+                                            httpBindingResolver.errorResponseBindings(errorShape),
+                                            errorSymbol
+                                        )
+                                    }
+                                }
+                                if (errorShape.errorMessageMember() != null) {
+                                    rust(
+                                        """
+                                        if (&tmp.message).is_none() {
+                                            tmp.message = _error_message;
+                                        }
+                                        """
+                                    )
+                                }
+                                rust("tmp")
                             }
                         }
                         rust("_ => #T::generic(generic)", errorSymbol)
@@ -382,12 +407,18 @@ class HttpBoundProtocolGenerator(
         val contentType = httpBindingResolver.requestContentType(operationShape)
         httpBindingGenerator.renderUpdateHttpBuilder(implBlockWriter)
         httpBuilderFun(implBlockWriter) {
-            rust("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
-            val additionalHeaders = listOf("Content-Type" to contentType) + protocol.additionalHeaders(operationShape)
+            rust("let mut builder = self.update_http_builder(#T::new())?;", RuntimeType.HttpRequestBuilder)
+            val additionalHeaders = listOf("content-type" to contentType) + protocol.additionalHeaders(operationShape)
             for (header in additionalHeaders) {
-                rust("let builder = builder.header(${header.first.dq()}, ${header.second.dq()});")
+                rustTemplate(
+                    """
+                    builder = #{header_util}::set_header_if_absent(builder, ${header.first.dq()}, ${header.second.dq()});
+                    """,
+                    "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header")
+
+                )
             }
-            rust("self.update_http_builder(builder)")
+            rust("Ok(builder)")
         }
     }
 

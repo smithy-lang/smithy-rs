@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols.parse
 
+import software.amazon.smithy.aws.traits.customizations.S3UnwrappedXmlOutputTrait
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
@@ -34,6 +35,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
@@ -44,7 +46,6 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlMemberIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlNameIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.deserializeFunctionName
-import software.amazon.smithy.rust.codegen.smithy.traits.S3UnwrappedXmlOutputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -101,7 +102,8 @@ class XmlBindingTraitParserGenerator(
         "XmlError" to xmlError,
         "next_start_element" to smithyXml.member("decode::next_start_element"),
         "try_data" to smithyXml.member("decode::try_data"),
-        "ScopedDecoder" to scopedDecoder
+        "ScopedDecoder" to scopedDecoder,
+        "smithy_types" to CargoDependency.SmithyTypes(runtimeConfig).asType()
     )
     private val model = protocolConfig.model
     private val index = HttpBindingIndex.of(model)
@@ -192,7 +194,7 @@ class XmlBindingTraitParserGenerator(
                     *codegenScope
                 )
                 val context = OperationWrapperContext(operationShape, shapeName, xmlError)
-                if (outputShape.hasTrait<S3UnwrappedXmlOutputTrait>()) {
+                if (operationShape.hasTrait<S3UnwrappedXmlOutputTrait>()) {
                     unwrappedResponseParser("builder", "decoder", "start_el", outputShape.members())
                 } else {
                     writeOperationWrapper(context) { tagName ->
@@ -214,6 +216,7 @@ class XmlBindingTraitParserGenerator(
                 xmlError
             ) {
                 val members = errorShape.errorXmlMembers()
+                rust("if inp.is_empty() { return Ok(builder) }")
                 if (members.isNotEmpty()) {
                     rustTemplate(
                         """
@@ -226,8 +229,6 @@ class XmlBindingTraitParserGenerator(
                         "xml_errors" to xmlErrors
                     )
                     parseStructureInner(members, builder = "builder", Ctx(tag = "error_decoder", accum = null))
-                } else {
-                    rust("let _ = inp;")
                 }
                 rust("Ok(builder)")
             }
@@ -562,8 +563,12 @@ class XmlBindingTraitParserGenerator(
             is StringShape -> parseStringInner(shape, provider)
             is NumberShape, is BooleanShape -> {
                 rustBlock("") {
-                    rust("use std::str::FromStr;")
-                    withBlock("#T::from_str(", ")", symbolProvider.toSymbol(shape)) {
+                    withBlockTemplate(
+                        "<#{shape} as #{smithy_types}::primitive::Parse>::parse_smithy_primitive(",
+                        ")",
+                        *codegenScope,
+                        "shape" to symbolProvider.toSymbol(shape)
+                    ) {
                         provider()
                     }
                     rustTemplate(

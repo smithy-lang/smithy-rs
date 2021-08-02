@@ -19,9 +19,9 @@ mod rest_xml_wrapped_errors;
 #[cfg(test)]
 mod test {
     use crate::idempotency_token;
-    use crate::idempotency_token::uuid_v4;
+    use crate::idempotency_token::{uuid_v4, IdempotencyTokenProvider};
     use proptest::prelude::*;
-    use std::sync::Mutex;
+    use regex::Regex;
 
     #[test]
     fn test_uuid() {
@@ -36,7 +36,6 @@ mod test {
     #[test]
     fn default_token_generator_smoke_test() {
         // smoke test to make sure the default token generator produces a token-like object
-        use crate::idempotency_token::MakeIdempotencyToken;
         assert_eq!(
             idempotency_token::default_provider()
                 .make_idempotency_token()
@@ -47,11 +46,16 @@ mod test {
 
     #[test]
     fn token_generator() {
-        let provider = Mutex::new(fastrand::Rng::with_seed(123));
-        use crate::idempotency_token::MakeIdempotencyToken;
-        assert_eq!(
-            provider.make_idempotency_token(),
-            "b4021a03-ae07-4db5-fc1b-38bf919691f8"
+        let provider = IdempotencyTokenProvider::random();
+        let token = provider.make_idempotency_token();
+        assert!(
+            Regex::new(
+                r"[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-4[A-Fa-f0-9]{3}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}"
+            )
+            .unwrap()
+            .is_match(&token),
+            "token {} wasn't a valid random UUID",
+            token
         );
     }
 

@@ -30,21 +30,34 @@ val CodegenTests = listOf(
     CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
     CodegenTest("aws.protocoltests.json#JsonProtocol", "json_rpc11"),
     CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
-    CodegenTest("aws.protocoltests.restjson#RestJsonExtras", "rest_json_extas"),
-    CodegenTest("aws.protocoltests.restxml#RestXml", "rest_xml"),
-    CodegenTest("aws.protocoltests.query#AwsQuery", "aws_query"),
-    CodegenTest("aws.protocoltests.ec2#AwsEc2", "ec2_query"),
+    CodegenTest("aws.protocoltests.restjson#RestJsonExtras", "rest_json_extras"),
+    CodegenTest(
+        "aws.protocoltests.restxml#RestXml", "rest_xml",
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """
+    ),
+
+    CodegenTest(
+        "aws.protocoltests.query#AwsQuery", "aws_query",
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """
+    ),
+    CodegenTest(
+        "aws.protocoltests.ec2#AwsEc2", "ec2_query",
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """
+    ),
     CodegenTest(
         "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
-        "rest_xml_namespace"
+        "rest_xml_namespace",
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """
     ),
     CodegenTest(
         "aws.protocoltests.restxml#RestXmlExtras",
-        "rest_xml_extras"
+        "rest_xml_extras",
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """
     ),
     CodegenTest(
         "aws.protocoltests.restxmlunwrapped#RestXmlExtrasUnwrappedErrors",
-        "rest_xml_extras_unwrapped"
+        "rest_xml_extras_unwrapped",
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """
     ),
     CodegenTest(
         "crate#Config",

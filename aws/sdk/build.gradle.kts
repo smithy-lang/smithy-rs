@@ -6,6 +6,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.aws.traits.ServiceTrait
 import kotlin.streams.toList
+import java.util.*
 
 extra["displayName"] = "Smithy :: Rust :: AWS-SDK"
 extra["moduleName"] = "software.amazon.smithy.rust.awssdk"
@@ -47,45 +48,52 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-cloudformation-traits:$smithyVersion")
 }
 
-// Tier 1 Services have examples and tests
-val tier1Services = setOf(
-    "apigateway",
-    "batch",
-    "cloudformation",
-    "dynamodb",
-    "ec2",
-    "ecs",
-    "iam",
-    "kinesis",
-    "kms",
-    "lambda",
-    "cloudwatchlogs",
-    "medialive",
-    "mediapackage",
-    "polly",
-    "qldbsession",
-    "qldb",
-    "rdsdata",
-    "rds",
-    "route53",
-    "runtime",
-    "s3",
-    "sagemakera2iruntime",
-    "sagemakeredge",
-    "sagemakerfeaturestoreruntime",
-    "sagemaker",
-    "secretsmanager",
-    "sesv2",
-    "sns",
-    "sqs",
-    "ssm",
-    "sts",
-    "cloudwatch",
-    "ecr",
-    "eks"
-)
+// get a project property by name if it exists (including from local.properties)
+fun getProperty(name: String): String? {
+    if (project.hasProperty(name)) {
+        return project.properties[name].toString()
+    }
 
-private val disableServices = setOf("transcribestreaming")
+    val localProperties = Properties()
+    val propertiesFile: File = rootProject.file("local.properties")
+    if (propertiesFile.exists()) {
+        propertiesFile.inputStream().use { localProperties.load(it) }
+
+        if (localProperties.containsKey(name)) {
+            return localProperties[name].toString()
+        }
+    }
+    return null
+}
+
+
+// Class and functions for service and protocol membership for SDK generation
+data class Membership(val inclusions: Set<String> = emptySet(), val exclusions: Set<String> = emptySet())
+
+fun Membership.isMember(member: String): Boolean = when {
+    exclusions.contains(member) -> false
+    inclusions.contains(member) -> true
+    inclusions.isEmpty() -> true
+    else -> false
+}
+
+fun parseMembership(rawList: String): Membership {
+    val inclusions = mutableSetOf<String>()
+    val exclusions = mutableSetOf<String>()
+
+    rawList.split(",").map { it.trim() }.forEach { item ->
+        when {
+            item.startsWith('-') -> exclusions.add(item.substring(1))
+            item.startsWith('+') -> inclusions.add(item.substring(1))
+            else -> error("Must specify inclusion (+) or exclusion (-) prefix character to $item.")
+        }
+    }
+
+    val conflictingMembers = inclusions.intersect(exclusions)
+    require(conflictingMembers.isEmpty()) { "$conflictingMembers specified both for inclusion and exclusion in $rawList" }
+
+    return Membership(inclusions, exclusions)
+}
 
 data class AwsService(
     val service: String,
@@ -97,51 +105,76 @@ data class AwsService(
     fun files(): List<File> = listOf(modelFile) + extraFiles
 }
 
-val generateAllServices = project.providers.environmentVariable("GENERATE_ALL_SERVICES").orElse("")
-val awsServices: Provider<List<AwsService>> = generateAllServices.map { v ->
-    discoverServices(v.toLowerCase() == "true")
-}
+val awsServices: List<AwsService> by lazy { discoverServices() }
 
-val generateOnly: Set<String>? = null
+fun loadServiceMembership(): Membership {
+    val membershipOverride = getProperty("aws.services")?.let { parseMembership(it) }
+    println(membershipOverride)
+    val fullSdk = parseMembership(getProperty("aws.services.fullsdk") ?: throw kotlin.Exception("never list missing"))
+    val tier1 = parseMembership(getProperty("aws.services.tier1") ?: throw kotlin.Exception("tier1 list missing"))
+    return membershipOverride ?: if ((getProperty("aws.fullsdk") ?: "") == "true") {
+        fullSdk
+    } else {
+        tier1
+    }
+}
 
 /**
  * Discovers services from the `models` directory
  *
  * Do not invoke this function directly. Use the `awsServices` provider.
  */
-fun discoverServices(allServices: Boolean): List<AwsService> {
+fun discoverServices(): List<AwsService> {
     val models = project.file("aws-models")
-    return fileTree(models).mapNotNull { file ->
-        val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
-        val services: List<ServiceShape> = model.shapes(ServiceShape::class.java).sorted().toList()
-        if (services.size > 1) {
-            throw Exception("There must be exactly one service in each aws model file")
-        }
-        if (services.isEmpty()) {
-            null
-        } else {
-            val service = services[0]
-            val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId
-                .toLowerCase()
-                .replace(" ", "")
-                // TODO: the smithy models should not include the suffix "service"
-                .removeSuffix("service")
-                .removeSuffix("api")
-            val testFile = file.parentFile.resolve("$sdkId-tests.smithy")
-            val extras = if (testFile.exists()) {
-                logger.warn("Discovered protocol tests for ${file.name}")
-                listOf(testFile)
-            } else {
-                listOf()
+    val serviceMembership = loadServiceMembership()
+    val baseServices = fileTree(models)
+        .sortedBy { file -> file.name }
+        .mapNotNull { file ->
+            val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
+            val services: List<ServiceShape> = model.shapes(ServiceShape::class.java).sorted().toList()
+            if (services.size > 1) {
+                throw Exception("There must be exactly one service in each aws model file")
             }
-            AwsService(service = service.id.toString(), module = sdkId, modelFile = file, extraFiles = extras)
+            if (services.isEmpty()) {
+                logger.info("${file.name} has no services")
+                null
+            } else {
+                val service = services[0]
+                val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId
+                    .toLowerCase()
+                    .replace(" ", "")
+                    // TODO: the smithy models should not include the suffix "service"
+                    .removeSuffix("service")
+                    .removeSuffix("api")
+                val testFile = file.parentFile.resolve("$sdkId-tests.smithy")
+                val extras = if (testFile.exists()) {
+                    logger.warn("Discovered protocol tests for ${file.name}")
+                    listOf(testFile)
+                } else {
+                    listOf()
+                }
+                AwsService(service = service.id.toString(), module = sdkId, modelFile = file, extraFiles = extras)
+            }
         }
-    }.filterNot { disableServices.contains(it.module) }
-        .filter {
-            allServices || (generateOnly != null && generateOnly.contains(it.module)) || (generateOnly == null && tier1Services.contains(
-                it.module
-            ))
+    val baseModules = baseServices.map { it.module }.toSet()
+
+    // validate the full exclusion list hits
+    serviceMembership.exclusions.forEach { disabledService ->
+        check(baseModules.contains(disabledService)) {
+            "Service $disabledService was explicitly disabled but no service was generated with that name. Generated:\n ${
+                baseModules.joinToString(
+                    "\n "
+                )
+            }"
         }
+    }
+    // validate inclusion list hits
+    serviceMembership.inclusions.forEach { service ->
+        check(baseModules.contains(service)) { "Service $service was in explicit inclusion list but not generated!" }
+    }
+    return baseServices.filter {
+        serviceMembership.isMember(it.module)
+    }
 }
 
 fun generateSmithyBuild(tests: List<AwsService>): String {
@@ -167,7 +200,7 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                       },
                       "service": "${it.service}",
                       "module": "aws-sdk-${it.module}",
-                      "moduleVersion": "0.0.11-alpha",
+                      "moduleVersion": "0.0.13-alpha",
                       "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
                       "license": "Apache-2.0"
                       ${it.extraConfig ?: ""}
@@ -188,8 +221,9 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
     doFirst {
-        projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices.get()))
+        projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices))
     }
+    inputs.property("servicelist", awsServices.sortedBy { it.module }.toString())
     inputs.dir(projectDir.resolve("aws-models"))
     outputs.file(projectDir.resolve("smithy-build.json"))
 }
@@ -197,7 +231,8 @@ task("generateSmithyBuild") {
 task("relocateServices") {
     description = "relocate AWS services to their final destination"
     doLast {
-        awsServices.get().forEach {
+        awsServices.forEach {
+            logger.info("Relocating ${it.module}...")
             copy {
                 from("$buildDir/smithyprojections/sdk/${it.module}/rust-codegen")
                 into(sdkOutputDir.resolve(it.module))
@@ -264,9 +299,10 @@ tasks.register<Copy>("relocateRuntime") {
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {
+    val generatedModules = services.map { it.module }.toSet()
     val examples = projectDir.resolve("examples")
         .listFiles { file -> !file.name.startsWith(".") }.orEmpty().toList()
-        .filter { generateOnly == null || generateOnly.contains(it.name) }
+        .filter { generatedModules.contains(it.name) }
         .map { "examples/${it.name}" }
 
     val modules = services.map(AwsService::module) + runtimeModules + awsModules + examples.toList()
@@ -281,9 +317,12 @@ task("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
         sdkOutputDir.mkdirs()
-        sdkOutputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices.get()))
+        sdkOutputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices))
     }
+    inputs.property("servicelist", awsServices.sortedBy { it.module }.toString())
+    inputs.dir(projectDir.resolve("examples"))
     outputs.file(sdkOutputDir.resolve("Cargo.toml"))
+    outputs.upToDateWhen { false }
 }
 
 task("finalizeSdk") {
@@ -301,6 +340,7 @@ tasks["smithyBuildJar"].inputs.file(projectDir.resolve("smithy-build.json"))
 tasks["smithyBuildJar"].inputs.dir(projectDir.resolve("aws-models"))
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["smithyBuildJar"].dependsOn("generateCargoWorkspace")
+tasks["smithyBuildJar"].outputs.upToDateWhen { false }
 tasks["assemble"].dependsOn("smithyBuildJar")
 tasks["assemble"].finalizedBy("finalizeSdk")
 
