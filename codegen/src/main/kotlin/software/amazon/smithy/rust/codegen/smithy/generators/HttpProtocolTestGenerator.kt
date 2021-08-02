@@ -7,6 +7,8 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.knowledge.OperationIndex
+import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
@@ -306,7 +308,21 @@ class HttpProtocolTestGenerator(
                                     );"""
                     )
                 } else {
-                    rust("""assert_eq!(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""")
+                    when (protocolConfig.model.expectShape(member.target)) {
+                        is DoubleShape, is FloatShape -> {
+                            addUseImports(
+                                RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "FloatEquals").toSymbol()
+                            )
+                            rust(
+                                """
+                                assert!(parsed.$memberName.float_equals(&expected_output.$memberName),
+                                    "Unexpected value for `$memberName` {:?} vs. {:?}", expected_output.$memberName, parsed.$memberName);
+                                """
+                            )
+                        }
+                        else ->
+                            rust("""assert_eq!(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""")
+                    }
                 }
             }
         }

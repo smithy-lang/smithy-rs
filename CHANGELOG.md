@@ -2,7 +2,10 @@
 **New This Week**
 - :tada: Add LazyCachingCredentialsProvider to aws-auth for use with expiring credentials, such as STS AssumeRole. Update STS example to use this new provider (#578, #595)
 - :bug: Correctly encode HTTP Checksums using base64 instead of hex. Fixes aws-sdk-rust#164. (#615)
+- Update SDK gradle build logic to use gradle properties (#620)
 - (When complete) Add profile file provider for region (#594, #xyz)
+- Overhaul serialization/deserialization of numeric/boolean types. This resolves issues around serialization of NaN/Infinity and should also reduce the number of allocations required during serialization. (#618)
+- Update SQS example to clarify usage of FIFO vs. standard queues (#622, @trevorrobertsjr)
 
 ## v0.18.1 (July 27th 2021)
 * Remove timestreamwrite and timestreamquery from the generated services (#613)

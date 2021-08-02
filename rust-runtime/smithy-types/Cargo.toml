@@ -11,6 +11,8 @@ default = ["chrono-conversions"]
 
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = [] }
+ryu = "1.0.5"
+itoa = "0.4.0"
 
 [dev-dependencies]
 base64 = "0.13.0"
