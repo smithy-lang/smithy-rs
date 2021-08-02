@@ -3,25 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use aws_sdk_s3::{Client, Config, Error, Region, PKG_VERSION};
+use aws_types::region;
 use aws_types::region::ProvideRegion;
-use s3::{Client, Config, Error, Region, PKG_VERSION};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// The default AWS Region.
+    /// The AWS Region.
     #[structopt(short, long)]
-    default_region: Option<String>,
+    region: Option<String>,
 
     /// Whether to display additional information.
     #[structopt(short, long)]
     verbose: bool,
 }
 
-/// Lists your Amazon S3 buckets
+/// Lists your Amazon S3 buckets in the Region.
 /// # Arguments
 ///
-/// * `[-d DEFAULT-REGION]` - The Region in which the client is created.
+/// * `[-r REGION]` - The Region in which the client is created.
 ///   If not supplied, uses the value of the **AWS_REGION** environment variable.
 ///   If the environment variable is not set, defaults to **us-west-2**.
 /// * `[-v]` - Whether to display additional information.
@@ -29,36 +30,29 @@ struct Opt {
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
 
-    let Opt {
-        default_region,
-        verbose,
-    } = Opt::from_args();
+    let Opt { region, verbose } = Opt::from_args();
 
-    let region = default_region
-        .as_ref()
-        .map(|region| Region::new(region.clone()))
-        .or_else(|| aws_types::region::default_provider().region())
-        .unwrap_or_else(|| Region::new("us-west-2"));
+    let region = region::ChainProvider::first_try(region.map(Region::new))
+        .or_default_provider()
+        .or_else(Region::new("us-west-2"));
 
     println!();
 
     if verbose {
-        println!("S3 version: {}", PKG_VERSION);
-        println!("Region:     {:?}", &region);
+        println!("S3 client version: {}", PKG_VERSION);
+        println!("Region:            {}", region.region().unwrap().as_ref());
         println!();
     }
 
-    let config = Config::builder().region(&region).build();
-    let client = Client::from_conf(config);
-
-    let mut num_buckets = 0;
+    let conf = Config::builder().region(region).build();
+    let client = Client::from_conf(conf);
 
     let resp = client.list_buckets().send().await?;
     let buckets = resp.buckets.unwrap_or_default();
+    let num_buckets = buckets.len();
 
     for bucket in &buckets {
         println!("{}", bucket.name.as_deref().unwrap_or_default());
-        num_buckets += 1;
     }
 
     println!();
