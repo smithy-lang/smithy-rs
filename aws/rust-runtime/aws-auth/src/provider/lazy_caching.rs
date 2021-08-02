@@ -157,7 +157,7 @@ pub mod builder {
         /// Implementation of [`AsyncSleep`] to use for timeouts. This enables use of
         /// the `LazyCachingCredentialsProvider` with other async runtimes.
         /// If using Tokio as the async runtime, this should be set to an instance of
-        /// [`TokioSleep`](smithy_http::sleep::TokioSleep).
+        /// [`TokioSleep`](smithy_async::rt::sleep::TokioSleep).
         pub fn sleep(mut self, sleep: impl AsyncSleep + 'static) -> Self {
             self.sleep = Some(Box::new(sleep));
             self
@@ -192,7 +192,7 @@ pub mod builder {
         ///
         /// ## Note:
         /// This will panic if no `sleep` implementation is given and if no default crate features
-        /// are used. By default, the [`TokioSleep`](smithy_http::sleep::TokioSleep)
+        /// are used. By default, the [`TokioSleep`](smithy_async::rt::sleep::TokioSleep)
         /// implementation will be set automatically.
         pub fn build(self) -> LazyCachingCredentialsProvider {
             let default_credential_expiration = self
