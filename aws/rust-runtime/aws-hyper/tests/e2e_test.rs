@@ -54,14 +54,11 @@ impl ProvideErrorKind for OperationError {
     }
 }
 
-impl<B> ParseHttpResponse<B> for TestOperationParser
-where
-    B: http_body::Body,
-{
+impl ParseHttpResponse for TestOperationParser {
     type Output = Result<String, OperationError>;
 
-    fn parse_unloaded(&self, _response: &mut Response<B>) -> Option<Self::Output> {
-        if _response.status().is_success() {
+    fn parse_unloaded(&self, response: &mut Response<SdkBody>) -> Option<Self::Output> {
+        if response.status().is_success() {
             Some(Ok("Hello!".to_string()))
         } else {
             Some(Err(OperationError))

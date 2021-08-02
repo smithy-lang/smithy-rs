@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use crate::body::SdkBody;
 use bytes::Bytes;
 use http::Response;
 
@@ -18,7 +19,7 @@ use http::Response;
 ///
 /// It also enables this critical and core trait to avoid being async, and it makes code that uses
 /// the trait easier to test.
-pub trait ParseHttpResponse<B> {
+pub trait ParseHttpResponse {
     /// Output type of the HttpResponse.
     ///
     /// For request/response style operations, this is typically something like:
@@ -44,7 +45,7 @@ pub trait ParseHttpResponse<B> {
     /// the streaming body with an empty body as long as the body implements default.
     ///
     /// We should consider if this is too limiting & if this should take an owned response instead.
-    fn parse_unloaded(&self, response: &mut http::Response<B>) -> Option<Self::Output>;
+    fn parse_unloaded(&self, response: &mut http::Response<SdkBody>) -> Option<Self::Output>;
 
     /// Parse an HTTP request from a fully loaded body. This is for standard request/response style
     /// APIs like AwsJson 1.0/1.1 and the error path of most streaming APIs
@@ -69,13 +70,10 @@ pub trait ParseStrictResponse {
     fn parse(&self, response: &Response<Bytes>) -> Self::Output;
 }
 
-impl<B, T> ParseHttpResponse<B> for T
-where
-    T: ParseStrictResponse,
-{
+impl<T: ParseStrictResponse> ParseHttpResponse for T {
     type Output = T::Output;
 
-    fn parse_unloaded(&self, _response: &mut Response<B>) -> Option<Self::Output> {
+    fn parse_unloaded(&self, _response: &mut Response<SdkBody>) -> Option<Self::Output> {
         None
     }
 
@@ -86,30 +84,26 @@ where
 
 #[cfg(test)]
 mod test {
+    use crate::body::SdkBody;
     use crate::response::ParseHttpResponse;
     use bytes::Bytes;
     use http::Response;
-    use http_body::Body;
     use std::mem;
 
     #[test]
     fn supports_streaming_body() {
-        pub struct S3GetObject<B: Body> {
-            pub body: B,
+        pub struct S3GetObject {
+            pub body: SdkBody,
         }
 
         struct S3GetObjectParser;
 
-        impl<B> ParseHttpResponse<B> for S3GetObjectParser
-        where
-            B: Default + Body,
-        {
-            type Output = S3GetObject<B>;
+        impl ParseHttpResponse for S3GetObjectParser {
+            type Output = S3GetObject;
 
-            fn parse_unloaded(&self, response: &mut Response<B>) -> Option<Self::Output> {
-                // For responses that pass on the body, use mem::take to leave behind an empty
-                // body
-                let body = mem::take(response.body_mut());
+            fn parse_unloaded(&self, response: &mut Response<SdkBody>) -> Option<Self::Output> {
+                // For responses that pass on the body, use mem::take to leave behind an empty body
+                let body = mem::replace(response.body_mut(), SdkBody::taken());
                 Some(S3GetObject { body })
             }
 

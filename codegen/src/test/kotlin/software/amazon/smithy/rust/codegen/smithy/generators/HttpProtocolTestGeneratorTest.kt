@@ -185,6 +185,7 @@ class HttpProtocolTestGeneratorTest {
             }
         )
         visitor.execute()
+        println("file:///$testDir/src/operation.rs")
         return testDir
     }
 
@@ -241,7 +242,6 @@ class HttpProtocolTestGeneratorTest {
 
     @Test
     fun `test invalid url parameter`() {
-
         // Hard coded implementation for this 1 test
         val path = generateService(
             """

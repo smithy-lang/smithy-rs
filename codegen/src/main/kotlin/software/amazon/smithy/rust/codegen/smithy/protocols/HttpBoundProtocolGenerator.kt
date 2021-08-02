@@ -245,7 +245,7 @@ class HttpBoundProtocolGenerator(
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
-                impl #{ParseResponse}<#{SdkBody}> for $operationName {
+                impl #{ParseResponse} for $operationName {
                     type Output = std::result::Result<#{O}, #{E}>;
                     fn parse_unloaded(&self, response: &mut http::Response<#{SdkBody}>) -> Option<Self::Output> {
                         // This is an error, defer to the non-streaming parser

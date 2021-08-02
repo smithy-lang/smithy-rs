@@ -73,7 +73,7 @@ impl<S, O, T, E, R> tower::Service<operation::Operation<O, R>> for ParseResponse
 where
     S: Service<operation::Request, Response = http::Response<SdkBody>, Error = SendOperationError>,
     S::Future: Send + 'static,
-    O: ParseHttpResponse<SdkBody, Output = Result<T, E>> + Send + Sync + 'static,
+    O: ParseHttpResponse<Output = Result<T, E>> + Send + Sync + 'static,
     E: Error,
 {
     type Response = smithy_http::result::SdkSuccess<T>;
