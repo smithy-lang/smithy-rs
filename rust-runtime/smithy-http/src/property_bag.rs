@@ -41,7 +41,7 @@ impl Hasher for IdHasher {
 /// A type-map of configuration data.
 ///
 /// `PropertyBag` can be used by `Request` and `Response` to store
-/// data used to configure
+/// data used to configure the SDK request pipeline.
 ///
 /// TODO: We should consider if we want to require members of the property to be "resettable" in some
 /// way to reset any state prior to a retry. I think this is worth delaying until we need it, but
