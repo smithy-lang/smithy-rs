@@ -16,10 +16,10 @@ use zeroize::Zeroizing;
 ///
 /// When `Credentials` is dropped, its contents are zeroed in memory. Credentials uses an interior Arc to ensure
 /// that even when cloned, credentials don't exist in multiple memory locations.
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Credentials(Arc<Inner>);
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 struct Inner {
     access_key_id: Zeroizing<String>,
     secret_access_key: Zeroizing<String>,
