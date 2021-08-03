@@ -31,7 +31,15 @@ val runtimeModules = listOf(
     "smithy-client",
     "protocol-test-helpers"
 )
-val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types", "aws-hyper", "aws-sig-auth", "aws-http")
+val awsModules = listOf(
+    "aws-auth",
+    "aws-endpoint",
+    "aws-types",
+    "aws-hyper",
+    "aws-sig-auth",
+    "aws-http",
+    "aws-auth-providers"
+)
 
 buildscript {
     val smithyVersion: String by project
