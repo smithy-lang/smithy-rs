@@ -11,3 +11,5 @@ members = [
     "aws-sig-auth",
     "aws-types"
 ]
+
+exclude = ["aws-auth-providers"]
