@@ -1,12 +1,28 @@
 ## vNext (Month Day Year)
 **New This Week**
+- (When complete) Add profile file provider for region (#594, #xyz)
+
+## v0.19 (August 3rd, 2021)
+This week sees the addition of a robust async caching credentials provider.
+Take a look at the
+[STS example](https://github.com/awslabs/smithy-rs/blob/7fa4af4a9367aeca6d55e26fc4d4ba93093b90c4/aws/sdk/examples/sts/src/bin/credentials-provider.rs)
+to see how to use it.
+
+**New This Week**
+
 - :tada: IoT Data Plane is now available! If you discover it isn't functioning as expected, please let us know! (#624)
 - :tada: Add LazyCachingCredentialsProvider to aws-auth for use with expiring credentials, such as STS AssumeRole. Update STS example to use this new provider (#578, #595)
 - :bug: Correctly encode HTTP Checksums using base64 instead of hex. Fixes aws-sdk-rust#164. (#615)
 - Update SDK gradle build logic to use gradle properties (#620)
-- (When complete) Add profile file provider for region (#594, #xyz)
 - Overhaul serialization/deserialization of numeric/boolean types. This resolves issues around serialization of NaN/Infinity and should also reduce the number of allocations required during serialization. (#618)
 - Update SQS example to clarify usage of FIFO vs. standard queues (#622, @trevorrobertsjr)
+- Implement Event Stream frame encoding/decoding (#609, #619)
+
+**Contributions**
+
+Thank you for your contributions! :heart:
+
+- @trevorrobertsjr (#622)
 
 ## v0.18.1 (July 27th 2021)
 * Remove timestreamwrite and timestreamquery from the generated services (#613)
