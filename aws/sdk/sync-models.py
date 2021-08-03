@@ -18,3 +18,5 @@ for model in os.listdir("aws-models"):
         print(f'warning: cannot find: {source}')
         continue
     shutil.copyfile(source, Path('aws-models') / model)
+
+print("Models synced.")
