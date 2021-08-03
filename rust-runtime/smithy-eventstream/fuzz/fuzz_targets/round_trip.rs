@@ -15,7 +15,8 @@ fuzz_target!(|message: Message| {
             Error::HeadersTooLong
             | Error::PayloadTooLong
             | Error::MessageTooLong
-            | Error::InvalidHeaderNameLength,
+            | Error::InvalidHeaderNameLength
+            | Error::TimestampValueTooLarge(_),
         ) => {}
         Err(err) => panic!("unexpected error on write: {}", err),
         Ok(_) => {
