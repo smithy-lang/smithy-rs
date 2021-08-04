@@ -93,6 +93,12 @@
                         "smithy.api#documentation": "<p>Supported licenses for the Amazon Chime account.</p>"
                     }
                 },
+                "AccountStatus": {
+                    "target": "com.amazonaws.chime#AccountStatus",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The status of the account.</p>"
+                    }
+                },
                 "SigninDelegateGroups": {
                     "target": "com.amazonaws.chime#SigninDelegateGroupList",
                     "traits": {
@@ -138,6 +144,21 @@
             },
             "traits": {
                 "smithy.api#documentation": "<p>Settings related to the Amazon Chime account. This includes settings that start or stop\n            remote control of shared screens, or start or stop the dial-out option in the Amazon Chime web application. For more information about these settings, see \n    <a href=\"https://docs.aws.amazon.com/chime/latest/ag/policies.html\">Use the Policies Page</a> in the <i>Amazon Chime Administration Guide</i>.</p>"
+            }
+        },
+        "com.amazonaws.chime#AccountStatus": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "Suspended",
+                        "name": "Suspended"
+                    },
+                    {
+                        "value": "Active",
+                        "name": "Active"
+                    }
+                ]
             }
         },
         "com.amazonaws.chime#AccountType": {
@@ -3243,6 +3264,97 @@
                 }
             }
         },
+        "com.amazonaws.chime#CreateMediaCapturePipeline": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.chime#CreateMediaCapturePipelineRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.chime#CreateMediaCapturePipelineResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.chime#BadRequestException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ForbiddenException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ResourceLimitExceededException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ServiceFailureException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ServiceUnavailableException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ThrottledClientException"
+                },
+                {
+                    "target": "com.amazonaws.chime#UnauthorizedClientException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Creates a media capture pipeline.</p>",
+                "smithy.api#http": {
+                    "method": "POST",
+                    "uri": "/media-capture-pipelines",
+                    "code": 201
+                }
+            }
+        },
+        "com.amazonaws.chime#CreateMediaCapturePipelineRequest": {
+            "type": "structure",
+            "members": {
+                "SourceType": {
+                    "target": "com.amazonaws.chime#MediaPipelineSourceType",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Source type from which the media artifacts will be captured. A Chime SDK Meeting \n            is the only supported source.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "SourceArn": {
+                    "target": "com.amazonaws.chime#Arn",
+                    "traits": {
+                        "smithy.api#documentation": "<p>ARN of the source from which the media artifacts are captured.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "SinkType": {
+                    "target": "com.amazonaws.chime#MediaPipelineSinkType",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Destination type to which the media artifacts are saved. You must use an S3 bucket. </p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "SinkArn": {
+                    "target": "com.amazonaws.chime#Arn",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The ARN of the sink type.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "ClientRequestToken": {
+                    "target": "com.amazonaws.chime#ClientRequestToken",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The token assigned to the client making the pipeline request.</p>",
+                        "smithy.api#idempotencyToken": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.chime#CreateMediaCapturePipelineResponse": {
+            "type": "structure",
+            "members": {
+                "MediaCapturePipeline": {
+                    "target": "com.amazonaws.chime#MediaCapturePipeline",
+                    "traits": {
+                        "smithy.api#documentation": "<p>A media capture pipeline object, the ID, source type, source ARN, sink type, and  sink ARN of a media capture pipeline object.</p>"
+                    }
+                }
+            }
+        },
         "com.amazonaws.chime#CreateMeeting": {
             "type": "operation",
             "input": {
@@ -5156,6 +5268,56 @@
                 }
             }
         },
+        "com.amazonaws.chime#DeleteMediaCapturePipeline": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.chime#DeleteMediaCapturePipelineRequest"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.chime#BadRequestException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ForbiddenException"
+                },
+                {
+                    "target": "com.amazonaws.chime#NotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ServiceFailureException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ServiceUnavailableException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ThrottledClientException"
+                },
+                {
+                    "target": "com.amazonaws.chime#UnauthorizedClientException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Deletes the media capture pipeline.</p>",
+                "smithy.api#http": {
+                    "method": "DELETE",
+                    "uri": "/media-capture-pipelines/{MediaPipelineId}",
+                    "code": 204
+                }
+            }
+        },
+        "com.amazonaws.chime#DeleteMediaCapturePipelineRequest": {
+            "type": "structure",
+            "members": {
+                "MediaPipelineId": {
+                    "target": "com.amazonaws.chime#GuidString",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The ID of the media capture pipeline being deleted. </p>",
+                        "smithy.api#httpLabel": {},
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
         "com.amazonaws.chime#DeleteMeeting": {
             "type": "operation",
             "input": {
@@ -6956,6 +7118,86 @@
                 "smithy.api#documentation": "<p>The emergency calling configuration details associated with an Amazon Chime Voice Connector.</p>"
             }
         },
+        "com.amazonaws.chime#EngineTranscribeMedicalSettings": {
+            "type": "structure",
+            "members": {
+                "LanguageCode": {
+                    "target": "com.amazonaws.chime#TranscribeMedicalLanguageCode",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The language code specified for the Amazon Transcribe Medical engine.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "Specialty": {
+                    "target": "com.amazonaws.chime#TranscribeMedicalSpecialty",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The specialty specified for the Amazon Transcribe Medical engine.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "Type": {
+                    "target": "com.amazonaws.chime#TranscribeMedicalType",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The type of transcription.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "VocabularyName": {
+                    "target": "com.amazonaws.chime#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The name of the vocabulary passed to Amazon Transcribe Medical.</p>"
+                    }
+                },
+                "Region": {
+                    "target": "com.amazonaws.chime#TranscribeMedicalRegion",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The AWS Region passed to Amazon Transcribe Medical. If you don't specify a Region, Amazon Chime uses the Region closest to the meeting's Region.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Settings specific to the Amazon Transcribe Medical engine.</p>"
+            }
+        },
+        "com.amazonaws.chime#EngineTranscribeSettings": {
+            "type": "structure",
+            "members": {
+                "LanguageCode": {
+                    "target": "com.amazonaws.chime#TranscribeLanguageCode",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The language code specified for the Amazon Transcribe engine.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "VocabularyFilterMethod": {
+                    "target": "com.amazonaws.chime#TranscribeVocabularyFilterMethod",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The filtering method passed to Amazon Transcribe.</p>"
+                    }
+                },
+                "VocabularyFilterName": {
+                    "target": "com.amazonaws.chime#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The name of the vocabulary filter passed to Amazon Transcribe.</p>"
+                    }
+                },
+                "VocabularyName": {
+                    "target": "com.amazonaws.chime#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The name of the vocabulary passed to Amazon Transcribe.</p>"
+                    }
+                },
+                "Region": {
+                    "target": "com.amazonaws.chime#TranscribeRegion",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The AWS Region passed to Amazon Transcribe. If you don't specify a Region, Amazon Chime uses the Region closest to the meeting's Region.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Settings specific to the Amazon Transcribe engine.</p>"
+            }
+        },
         "com.amazonaws.chime#ErrorCode": {
             "type": "string",
             "traits": {
@@ -7743,6 +7985,70 @@
                     "target": "com.amazonaws.chime#VoiceConnectorSettings",
                     "traits": {
                         "smithy.api#documentation": "<p>The Amazon Chime Voice Connector settings.</p>"
+                    }
+                }
+            }
+        },
+        "com.amazonaws.chime#GetMediaCapturePipeline": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.chime#GetMediaCapturePipelineRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.chime#GetMediaCapturePipelineResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.chime#BadRequestException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ForbiddenException"
+                },
+                {
+                    "target": "com.amazonaws.chime#NotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ServiceFailureException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ServiceUnavailableException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ThrottledClientException"
+                },
+                {
+                    "target": "com.amazonaws.chime#UnauthorizedClientException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Gets an existing media capture pipeline.</p>",
+                "smithy.api#http": {
+                    "method": "GET",
+                    "uri": "/media-capture-pipelines/{MediaPipelineId}",
+                    "code": 200
+                }
+            }
+        },
+        "com.amazonaws.chime#GetMediaCapturePipelineRequest": {
+            "type": "structure",
+            "members": {
+                "MediaPipelineId": {
+                    "target": "com.amazonaws.chime#GuidString",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The ID of the pipeline that you want to get.</p>",
+                        "smithy.api#httpLabel": {},
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.chime#GetMediaCapturePipelineResponse": {
+            "type": "structure",
+            "members": {
+                "MediaCapturePipeline": {
+                    "target": "com.amazonaws.chime#MediaCapturePipeline",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The media capture pipeline object.</p>"
                     }
                 }
             }
@@ -10725,6 +11031,84 @@
                 }
             }
         },
+        "com.amazonaws.chime#ListMediaCapturePipelines": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.chime#ListMediaCapturePipelinesRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.chime#ListMediaCapturePipelinesResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.chime#BadRequestException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ForbiddenException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ServiceFailureException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ServiceUnavailableException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ThrottledClientException"
+                },
+                {
+                    "target": "com.amazonaws.chime#UnauthorizedClientException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Returns a list of media capture pipelines.</p>",
+                "smithy.api#http": {
+                    "method": "GET",
+                    "uri": "/media-capture-pipelines",
+                    "code": 200
+                },
+                "smithy.api#paginated": {
+                    "inputToken": "NextToken",
+                    "outputToken": "NextToken",
+                    "pageSize": "MaxResults"
+                }
+            }
+        },
+        "com.amazonaws.chime#ListMediaCapturePipelinesRequest": {
+            "type": "structure",
+            "members": {
+                "NextToken": {
+                    "target": "com.amazonaws.chime#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The token used to retrieve the next page of results.</p>",
+                        "smithy.api#httpQuery": "next-token"
+                    }
+                },
+                "MaxResults": {
+                    "target": "com.amazonaws.chime#ResultMax",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The maximum number of results to return in a single call. Valid Range: 1 - 99.</p>",
+                        "smithy.api#httpQuery": "max-results"
+                    }
+                }
+            }
+        },
+        "com.amazonaws.chime#ListMediaCapturePipelinesResponse": {
+            "type": "structure",
+            "members": {
+                "MediaCapturePipelines": {
+                    "target": "com.amazonaws.chime#MediaCapturePipelineList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The media capture pipeline objects in the list.</p>"
+                    }
+                },
+                "NextToken": {
+                    "target": "com.amazonaws.chime#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The token used to retrieve the next page of results. </p>"
+                    }
+                }
+            }
+        },
         "com.amazonaws.chime#ListMeetingTags": {
             "type": "operation",
             "input": {
@@ -12043,6 +12427,117 @@
                 }
             }
         },
+        "com.amazonaws.chime#MediaCapturePipeline": {
+            "type": "structure",
+            "members": {
+                "MediaPipelineId": {
+                    "target": "com.amazonaws.chime#GuidString",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The ID of a media capture pipeline.</p>"
+                    }
+                },
+                "SourceType": {
+                    "target": "com.amazonaws.chime#MediaPipelineSourceType",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Source type from which media artifacts are saved. You must use <code>ChimeMeeting</code>.</p>"
+                    }
+                },
+                "SourceArn": {
+                    "target": "com.amazonaws.chime#Arn",
+                    "traits": {
+                        "smithy.api#documentation": "<p>ARN of the source from which the media artifacts will be saved.</p>"
+                    }
+                },
+                "Status": {
+                    "target": "com.amazonaws.chime#MediaPipelineStatus",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The status of the media capture pipeline.</p>"
+                    }
+                },
+                "SinkType": {
+                    "target": "com.amazonaws.chime#MediaPipelineSinkType",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Destination type to which the media artifacts are saved. You must use an S3 Bucket.</p>"
+                    }
+                },
+                "SinkArn": {
+                    "target": "com.amazonaws.chime#Arn",
+                    "traits": {
+                        "smithy.api#documentation": "<p>ARN of the destination to which the media artifacts are saved.</p>"
+                    }
+                },
+                "CreatedTimestamp": {
+                    "target": "com.amazonaws.chime#Iso8601Timestamp",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The time at which the capture pipeline was created, in ISO 8601 format.</p>"
+                    }
+                },
+                "UpdatedTimestamp": {
+                    "target": "com.amazonaws.chime#Iso8601Timestamp",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The time at which the capture pipeline was updated, in ISO 8601 format.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>A media capture pipeline object. A string consisting of an ID, source type, a source ARN, a sink type, and a sink ARN.</p>"
+            }
+        },
+        "com.amazonaws.chime#MediaCapturePipelineList": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.chime#MediaCapturePipeline"
+            }
+        },
+        "com.amazonaws.chime#MediaPipelineSinkType": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "S3Bucket",
+                        "name": "S3Bucket"
+                    }
+                ]
+            }
+        },
+        "com.amazonaws.chime#MediaPipelineSourceType": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "ChimeSdkMeeting",
+                        "name": "ChimeSdkMeeting"
+                    }
+                ]
+            }
+        },
+        "com.amazonaws.chime#MediaPipelineStatus": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "Initializing",
+                        "name": "Initializing"
+                    },
+                    {
+                        "value": "InProgress",
+                        "name": "InProgress"
+                    },
+                    {
+                        "value": "Failed",
+                        "name": "Failed"
+                    },
+                    {
+                        "value": "Stopping",
+                        "name": "Stopping"
+                    },
+                    {
+                        "value": "Stopped",
+                        "name": "Stopped"
+                    }
+                ]
+            }
+        },
         "com.amazonaws.chime#MediaPlacement": {
             "type": "structure",
             "members": {
@@ -12091,12 +12586,12 @@
                 "EventIngestionUrl": {
                     "target": "com.amazonaws.chime#UriType",
                     "traits": {
-                        "smithy.api#documentation": "<p>The event ingestion URL.</p>"
+                        "smithy.api#documentation": "<p>The URL of the S3 bucket used to store the captured media.</p>"
                     }
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>A set of endpoints used by clients to connect to the media service group for a Amazon Chime SDK meeting.</p>"
+                "smithy.api#documentation": "<p>A set of endpoints used by clients to connect to the media service group for an Amazon Chime SDK meeting.</p>"
             }
         },
         "com.amazonaws.chime#Meeting": {
@@ -15370,6 +15865,136 @@
                 ]
             }
         },
+        "com.amazonaws.chime#StartMeetingTranscription": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.chime#StartMeetingTranscriptionRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.chime#StartMeetingTranscriptionResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.chime#BadRequestException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ForbiddenException"
+                },
+                {
+                    "target": "com.amazonaws.chime#NotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ResourceLimitExceededException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ServiceFailureException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ServiceUnavailableException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ThrottledClientException"
+                },
+                {
+                    "target": "com.amazonaws.chime#UnauthorizedClientException"
+                },
+                {
+                    "target": "com.amazonaws.chime#UnprocessableEntityException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Start transcription for the specified <code>meetingId</code>. </p>",
+                "smithy.api#http": {
+                    "method": "POST",
+                    "uri": "/meetings/{MeetingId}/transcription?operation=start",
+                    "code": 200
+                }
+            }
+        },
+        "com.amazonaws.chime#StartMeetingTranscriptionRequest": {
+            "type": "structure",
+            "members": {
+                "MeetingId": {
+                    "target": "com.amazonaws.chime#GuidString",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The unique ID of the meeting being transcribed.</p>",
+                        "smithy.api#httpLabel": {},
+                        "smithy.api#required": {}
+                    }
+                },
+                "TranscriptionConfiguration": {
+                    "target": "com.amazonaws.chime#TranscriptionConfiguration",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The configuration for the current transcription operation. Must contain <code>EngineTranscribeSettings</code> or <code>EngineTranscribeMedicalSettings</code>.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.chime#StartMeetingTranscriptionResponse": {
+            "type": "structure",
+            "members": {}
+        },
+        "com.amazonaws.chime#StopMeetingTranscription": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.chime#StopMeetingTranscriptionRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.chime#StopMeetingTranscriptionResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.chime#BadRequestException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ForbiddenException"
+                },
+                {
+                    "target": "com.amazonaws.chime#NotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ServiceFailureException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ServiceUnavailableException"
+                },
+                {
+                    "target": "com.amazonaws.chime#ThrottledClientException"
+                },
+                {
+                    "target": "com.amazonaws.chime#UnauthorizedClientException"
+                },
+                {
+                    "target": "com.amazonaws.chime#UnprocessableEntityException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Stops transcription for the specified <code>meetingId</code>.</p>",
+                "smithy.api#http": {
+                    "method": "POST",
+                    "uri": "/meetings/{MeetingId}/transcription?operation=stop",
+                    "code": 200
+                }
+            }
+        },
+        "com.amazonaws.chime#StopMeetingTranscriptionRequest": {
+            "type": "structure",
+            "members": {
+                "MeetingId": {
+                    "target": "com.amazonaws.chime#GuidString",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The unique ID of the meeting for which you stop transcription.</p>",
+                        "smithy.api#httpLabel": {},
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.chime#StopMeetingTranscriptionResponse": {
+            "type": "structure",
+            "members": {}
+        },
         "com.amazonaws.chime#StreamingConfiguration": {
             "type": "structure",
             "members": {
@@ -15805,6 +16430,239 @@
                 "smithy.api#pattern": "^8(00|33|44|55|66|77|88)$"
             }
         },
+        "com.amazonaws.chime#TranscribeLanguageCode": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "en-US",
+                        "name": "EN_US"
+                    },
+                    {
+                        "value": "en-GB",
+                        "name": "EN_GB"
+                    },
+                    {
+                        "value": "es-US",
+                        "name": "ES_US"
+                    },
+                    {
+                        "value": "fr-CA",
+                        "name": "FR_CA"
+                    },
+                    {
+                        "value": "fr-FR",
+                        "name": "FR_FR"
+                    },
+                    {
+                        "value": "en-AU",
+                        "name": "EN_AU"
+                    },
+                    {
+                        "value": "it-IT",
+                        "name": "IT_IT"
+                    },
+                    {
+                        "value": "de-DE",
+                        "name": "DE_DE"
+                    },
+                    {
+                        "value": "pt-BR",
+                        "name": "PT_BR"
+                    },
+                    {
+                        "value": "ja-JP",
+                        "name": "JA_JP"
+                    },
+                    {
+                        "value": "ko-KR",
+                        "name": "KO_KR"
+                    },
+                    {
+                        "value": "zh-CN",
+                        "name": "ZH_CN"
+                    }
+                ]
+            }
+        },
+        "com.amazonaws.chime#TranscribeMedicalLanguageCode": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "en-US",
+                        "name": "EN_US"
+                    }
+                ]
+            }
+        },
+        "com.amazonaws.chime#TranscribeMedicalRegion": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "us-east-1",
+                        "name": "US_EAST_1"
+                    },
+                    {
+                        "value": "us-east-2",
+                        "name": "US_EAST_2"
+                    },
+                    {
+                        "value": "us-west-2",
+                        "name": "US_WEST_2"
+                    },
+                    {
+                        "value": "ap-southeast-2",
+                        "name": "AP_SOUTHEAST_2"
+                    },
+                    {
+                        "value": "ca-central-1",
+                        "name": "CA_CENTRAL_1"
+                    },
+                    {
+                        "value": "eu-west-1",
+                        "name": "EU_WEST_1"
+                    }
+                ]
+            }
+        },
+        "com.amazonaws.chime#TranscribeMedicalSpecialty": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "PRIMARYCARE",
+                        "name": "PrimaryCare"
+                    },
+                    {
+                        "value": "CARDIOLOGY",
+                        "name": "Cardiology"
+                    },
+                    {
+                        "value": "NEUROLOGY",
+                        "name": "Neurology"
+                    },
+                    {
+                        "value": "ONCOLOGY",
+                        "name": "Oncology"
+                    },
+                    {
+                        "value": "RADIOLOGY",
+                        "name": "Radiology"
+                    },
+                    {
+                        "value": "UROLOGY",
+                        "name": "Urology"
+                    }
+                ]
+            }
+        },
+        "com.amazonaws.chime#TranscribeMedicalType": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "CONVERSATION",
+                        "name": "Conversation"
+                    },
+                    {
+                        "value": "DICTATION",
+                        "name": "Dictation"
+                    }
+                ]
+            }
+        },
+        "com.amazonaws.chime#TranscribeRegion": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "us-east-2",
+                        "name": "US_EAST_2"
+                    },
+                    {
+                        "value": "us-east-1",
+                        "name": "US_EAST_1"
+                    },
+                    {
+                        "value": "us-west-2",
+                        "name": "US_WEST_2"
+                    },
+                    {
+                        "value": "ap-northeast-2",
+                        "name": "AP_NORTHEAST_2"
+                    },
+                    {
+                        "value": "ap-southeast-2",
+                        "name": "AP_SOUTHEAST_2"
+                    },
+                    {
+                        "value": "ap-northeast-1",
+                        "name": "AP_NORTHEAST_1"
+                    },
+                    {
+                        "value": "ca-central-1",
+                        "name": "CA_CENTRAL_1"
+                    },
+                    {
+                        "value": "eu-central-1",
+                        "name": "EU_CENTRAL_1"
+                    },
+                    {
+                        "value": "eu-west-1",
+                        "name": "EU_WEST_1"
+                    },
+                    {
+                        "value": "eu-west-2",
+                        "name": "EU_WEST_2"
+                    },
+                    {
+                        "value": "sa-east-1",
+                        "name": "SA_EAST_1"
+                    }
+                ]
+            }
+        },
+        "com.amazonaws.chime#TranscribeVocabularyFilterMethod": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "remove",
+                        "name": "Remove"
+                    },
+                    {
+                        "value": "mask",
+                        "name": "Mask"
+                    },
+                    {
+                        "value": "tag",
+                        "name": "Tag"
+                    }
+                ]
+            }
+        },
+        "com.amazonaws.chime#TranscriptionConfiguration": {
+            "type": "structure",
+            "members": {
+                "EngineTranscribeSettings": {
+                    "target": "com.amazonaws.chime#EngineTranscribeSettings",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The transcription configuration settings passed to Amazon Transcribe.</p>"
+                    }
+                },
+                "EngineTranscribeMedicalSettings": {
+                    "target": "com.amazonaws.chime#EngineTranscribeMedicalSettings",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The transcription configuration settings passed to Amazon Transcribe.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>The configuration for the current transcription operation. Must contain <code>EngineTranscribeSettings</code> or <code>EngineTranscribeMedicalSettings</code>.</p>"
+            }
+        },
         "com.amazonaws.chime#UCBuzzConsoleService": {
             "type": "service",
             "version": "2018-05-01",
@@ -15874,6 +16732,9 @@
                 },
                 {
                     "target": "com.amazonaws.chime#CreateChannelModerator"
+                },
+                {
+                    "target": "com.amazonaws.chime#CreateMediaCapturePipeline"
                 },
                 {
                     "target": "com.amazonaws.chime#CreateMeeting"
@@ -15949,6 +16810,9 @@
                 },
                 {
                     "target": "com.amazonaws.chime#DeleteEventsConfiguration"
+                },
+                {
+                    "target": "com.amazonaws.chime#DeleteMediaCapturePipeline"
                 },
                 {
                     "target": "com.amazonaws.chime#DeleteMeeting"
@@ -16062,6 +16926,9 @@
                     "target": "com.amazonaws.chime#GetGlobalSettings"
                 },
                 {
+                    "target": "com.amazonaws.chime#GetMediaCapturePipeline"
+                },
+                {
                     "target": "com.amazonaws.chime#GetMeeting"
                 },
                 {
@@ -16173,6 +17040,9 @@
                     "target": "com.amazonaws.chime#ListChannelsModeratedByAppInstanceUser"
                 },
                 {
+                    "target": "com.amazonaws.chime#ListMediaCapturePipelines"
+                },
+                {
                     "target": "com.amazonaws.chime#ListMeetings"
                 },
                 {
@@ -16279,6 +17149,12 @@
                 },
                 {
                     "target": "com.amazonaws.chime#SendChannelMessage"
+                },
+                {
+                    "target": "com.amazonaws.chime#StartMeetingTranscription"
+                },
+                {
+                    "target": "com.amazonaws.chime#StopMeetingTranscription"
                 },
                 {
                     "target": "com.amazonaws.chime#TagAttendee"
