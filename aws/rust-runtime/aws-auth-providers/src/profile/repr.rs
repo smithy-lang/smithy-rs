@@ -10,7 +10,7 @@
 //!
 //! This module can parse and resolve the profile chain into a flattened representation with
 //! 1-credential-per row (as opposed to a direct profile file representation which can combine
-//! multiple actions into the same profile.
+//! multiple actions into the same profile).
 
 use crate::profile::ProfileFileError;
 use aws_auth::Credentials;
