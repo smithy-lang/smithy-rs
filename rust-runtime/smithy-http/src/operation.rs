@@ -208,6 +208,71 @@ impl Request {
     }
 }
 
+#[derive(Debug)]
+pub struct Response {
+    /// The underlying HTTP Response
+    inner: http::Response<SdkBody>,
+
+    /// Property bag of configuration options
+    ///
+    /// Middleware can read and write from the property bag and use its
+    /// contents to augment the request (see [`Response::augment`](Response::augment))
+    configuration: Arc<Mutex<PropertyBag>>,
+}
+
+impl Response {
+    pub fn new(base: http::Response<SdkBody>) -> Self {
+        Response {
+            inner: base,
+            configuration: Arc::new(Mutex::new(PropertyBag::new())),
+        }
+    }
+
+    pub fn augment<T>(
+        self,
+        f: impl FnOnce(http::Response<SdkBody>, &mut PropertyBag) -> Result<http::Response<SdkBody>, T>,
+    ) -> Result<Response, T> {
+        let inner = {
+            let configuration: &mut PropertyBag = &mut self.configuration.lock().unwrap();
+            f(self.inner, configuration)?
+        };
+        Ok(Response {
+            inner,
+            configuration: self.configuration,
+        })
+    }
+
+    pub fn config_mut(&mut self) -> MutexGuard<'_, PropertyBag> {
+        self.configuration.lock().unwrap()
+    }
+
+    pub fn config(&self) -> MutexGuard<'_, PropertyBag> {
+        self.configuration.lock().unwrap()
+    }
+
+    pub fn response_mut(&mut self) -> &mut http::Response<SdkBody> {
+        &mut self.inner
+    }
+
+    pub fn response(&self) -> &http::Response<SdkBody> {
+        &self.inner
+    }
+
+    pub fn into_parts(self) -> (http::Response<SdkBody>, Arc<Mutex<PropertyBag>>) {
+        (self.inner, self.configuration)
+    }
+
+    pub fn from_parts(
+        inner: http::Response<SdkBody>,
+        configuration: Arc<Mutex<PropertyBag>>,
+    ) -> Self {
+        Response {
+            inner,
+            configuration,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::body::SdkBody;

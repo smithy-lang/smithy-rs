@@ -14,7 +14,7 @@ use aws_types::region::Region;
 use aws_types::SigningService;
 use bytes::Bytes;
 use http::header::{AUTHORIZATION, HOST, USER_AGENT};
-use http::{Response, Uri};
+use http::{self, Uri};
 use smithy_client::test_connection::TestConnection;
 use smithy_http::body::SdkBody;
 use smithy_http::operation;
@@ -57,15 +57,15 @@ impl ProvideErrorKind for OperationError {
 impl ParseHttpResponse for TestOperationParser {
     type Output = Result<String, OperationError>;
 
-    fn parse_unloaded(&self, response: &mut Response<SdkBody>) -> Option<Self::Output> {
-        if response.status().is_success() {
+    fn parse_unloaded(&self, response: &mut operation::Response) -> Option<Self::Output> {
+        if response.response().status().is_success() {
             Some(Ok("Hello!".to_string()))
         } else {
             Some(Err(OperationError))
         }
     }
 
-    fn parse_loaded(&self, _response: &Response<Bytes>) -> Self::Output {
+    fn parse_loaded(&self, _response: &http::Response<Bytes>) -> Self::Output {
         Ok("Hello!".to_string())
     }
 }
