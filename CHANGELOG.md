@@ -1,9 +1,22 @@
 vNext (Month Day Year)
 ----------------------
 
+**Breaking changes**
+
+- (#626) `ParseHttpResponse` no longer has a generic argument for the body type, but instead, always uses `SdkBody`. This may cause compilation failures for you if you are using Smithy generated types to parse JSON or XML without using a client to request data from a service. The fix should be as simple as removing `<SdkBody>` in the example below:
+
+  Before:
+  ```rust
+  let output = <Query as ParseHttpResponse<SdkBody>>::parse_loaded(&parser, &response).unwrap();
+  ```
+
+  After:
+  ```rust
+  let output = <Query as ParseHttpResponse>::parse_loaded(&parser, &response).unwrap();
+  ```
+
 **New This Week**
 - (When complete) Add profile file provider for region (#594, #xyz)
-
 
 v0.19 (August 3rd, 2021)
 ------------------------

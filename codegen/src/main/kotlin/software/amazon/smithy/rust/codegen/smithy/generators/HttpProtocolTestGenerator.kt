@@ -277,14 +277,13 @@ class HttpProtocolTestGenerator(
             let parsed = parser.parse_unloaded(&mut http_response);
             let parsed = parsed.unwrap_or_else(|| {
                 let http_response = http_response.map(|body|#{bytes}::copy_from_slice(body.bytes().unwrap()));
-                <#{op} as #{parse_http_response}<#{sdk_body}>>::parse_loaded(&parser, &http_response)
+                <#{op} as #{parse_http_response}>::parse_loaded(&parser, &http_response)
             });
         """,
             "op" to operationSymbol,
             "bytes" to RuntimeType.Bytes,
             "parse_http_response" to CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType()
                 .member("response::ParseHttpResponse"),
-            "sdk_body" to RuntimeType.sdkBody(runtimeConfig = protocolConfig.runtimeConfig)
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = operationShape.errorSymbol(protocolConfig.symbolProvider)

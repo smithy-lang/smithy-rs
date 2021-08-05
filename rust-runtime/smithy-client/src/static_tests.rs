@@ -24,7 +24,7 @@ impl ProvideErrorKind for TestOperationError {
 #[derive(Clone)]
 #[non_exhaustive]
 pub struct TestOperation;
-impl ParseHttpResponse<SdkBody> for TestOperation {
+impl ParseHttpResponse for TestOperation {
     type Output = Result<(), TestOperationError>;
 
     fn parse_unloaded(&self, _: &mut http::Response<SdkBody>) -> Option<Self::Output> {

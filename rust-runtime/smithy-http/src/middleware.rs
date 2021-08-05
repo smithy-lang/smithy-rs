@@ -90,7 +90,7 @@ pub async fn load_response<T, E, O>(
     handler: &O,
 ) -> Result<SdkSuccess<T>, SdkError<E>>
 where
-    O: ParseHttpResponse<SdkBody, Output = Result<T, E>>,
+    O: ParseHttpResponse<Output = Result<T, E>>,
 {
     if let Some(parsed_response) = handler.parse_unloaded(&mut response) {
         trace!(response = ?response);
