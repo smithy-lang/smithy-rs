@@ -258,7 +258,7 @@ class HttpProtocolTestGenerator(
         writeInline("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        write("let mut http_response = #T::new()", RuntimeType.HttpResponseBuilder)
+        write("let http_response = #T::new()", RuntimeType.HttpResponseBuilder)
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
         }
@@ -270,12 +270,17 @@ class HttpProtocolTestGenerator(
             """,
             RuntimeType.sdkBody(runtimeConfig = protocolConfig.runtimeConfig)
         )
+        write(
+            "let mut op_response = #T::new(http_response);",
+            RuntimeType.operationModule(protocolConfig.runtimeConfig).member("Response")
+        )
         rustTemplate(
             """
             use #{parse_http_response};
             let parser = #{op}::new();
-            let parsed = parser.parse_unloaded(&mut http_response);
+            let parsed = parser.parse_unloaded(&mut op_response);
             let parsed = parsed.unwrap_or_else(|| {
+                let (http_response, _) = op_response.into_parts();
                 let http_response = http_response.map(|body|#{bytes}::copy_from_slice(body.bytes().unwrap()));
                 <#{op} as #{parse_http_response}>::parse_loaded(&parser, &http_response)
             });

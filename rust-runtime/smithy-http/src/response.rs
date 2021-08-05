@@ -5,7 +5,6 @@
 
 use crate::operation;
 use bytes::Bytes;
-use http;
 
 /// `ParseHttpResponse` is a generic trait for parsing structured data from HTTP responses.
 ///
