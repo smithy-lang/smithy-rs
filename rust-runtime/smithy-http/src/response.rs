@@ -87,7 +87,6 @@ mod test {
     use crate::operation;
     use crate::response::ParseHttpResponse;
     use bytes::Bytes;
-    use http;
     use std::mem;
 
     #[test]
@@ -103,7 +102,7 @@ mod test {
 
             fn parse_unloaded(&self, response: &mut operation::Response) -> Option<Self::Output> {
                 // For responses that pass on the body, use mem::take to leave behind an empty body
-                let body = mem::replace(response.response_mut().body_mut(), SdkBody::taken());
+                let body = mem::replace(response.http_mut().body_mut(), SdkBody::taken());
                 Some(S3GetObject { body })
             }
 
