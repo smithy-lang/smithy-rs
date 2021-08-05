@@ -230,9 +230,6 @@ pub struct Response {
     inner: http::Response<SdkBody>,
 
     /// Property bag of configuration options
-    ///
-    /// Middleware can read and write from the property bag and use its
-    /// contents to augment the request (see [`Response::augment`](Response::augment))
     properties: Arc<Mutex<PropertyBag>>,
 }
 
