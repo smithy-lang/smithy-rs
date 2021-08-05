@@ -40,7 +40,7 @@ class ApiGatewayAddAcceptHeader : OperationCustomization() {
         is OperationSection.MutateRequest -> writable {
             rust(
                 """${section.request}
-                .request_mut()
+                .http_mut()
                 .headers_mut()
                 .insert("Accept", #T::HeaderValue::from_static("application/json"));""",
                 RuntimeType.http
