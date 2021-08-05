@@ -16,7 +16,7 @@ use thiserror::Error;
 
 /// AWS User Agent
 ///
-/// Ths struct should be inserted into the [`PropertyBag`](smithy_http::operation::Request::config)
+/// Ths struct should be inserted into the [`PropertyBag`](smithy_http::operation::Request::properties)
 /// during operation construction. [`UserAgentStage`](UserAgentStage) reads `AwsUserAgent`
 /// from the property bag and sets the `User-Agent` and `x-amz-user-agent` headers.
 pub struct AwsUserAgent {
