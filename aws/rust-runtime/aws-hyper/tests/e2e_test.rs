@@ -58,7 +58,7 @@ impl ParseHttpResponse for TestOperationParser {
     type Output = Result<String, OperationError>;
 
     fn parse_unloaded(&self, response: &mut operation::Response) -> Option<Self::Output> {
-        if response.response().status().is_success() {
+        if response.http().status().is_success() {
             Some(Ok("Hello!".to_string()))
         } else {
             Some(Err(OperationError))

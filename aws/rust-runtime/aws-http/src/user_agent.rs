@@ -298,7 +298,7 @@ mod test {
             .apply(req)
             .expect_err("adding UA should fail without a UA set");
         let mut req = operation::Request::new(http::Request::new(SdkBody::from("some body")));
-        req.config_mut()
+        req.properties_mut()
             .insert(AwsUserAgent::new_from_environment(ApiMetadata {
                 service_id: "dynamodb".into(),
                 version: "0.123",

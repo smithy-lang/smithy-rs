@@ -112,7 +112,7 @@ mod tests {
     async fn async_map_request_apply_populates_credentials() {
         let mut req = operation::Request::new(http::Request::new(SdkBody::from("some body")));
         set_provider(
-            &mut req.config_mut(),
+            &mut req.properties_mut(),
             Arc::new(Credentials::from_keys("test", "test", None)),
         );
         let req = CredentialsStage::new()
@@ -120,7 +120,7 @@ mod tests {
             .await
             .expect("credential provider is in the bag; should succeed");
         assert!(
-            req.config().get::<Credentials>().is_some(),
+            req.properties().get::<Credentials>().is_some(),
             "it should set credentials on the request config"
         );
     }
