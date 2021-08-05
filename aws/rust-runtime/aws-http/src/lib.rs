@@ -64,7 +64,7 @@ where
             Err(_) => return RetryKind::NotRetryable,
         };
         if let Some(retry_after_delay) = response
-            .response()
+            .http()
             .headers()
             .get("x-amz-retry-after")
             .and_then(|header| header.to_str().ok())
@@ -83,7 +83,7 @@ where
                 return RetryKind::Error(ErrorKind::TransientError);
             }
         };
-        if TRANSIENT_ERROR_STATUS_CODES.contains(&response.response().status().as_u16()) {
+        if TRANSIENT_ERROR_STATUS_CODES.contains(&response.http().status().as_u16()) {
             return RetryKind::Error(ErrorKind::TransientError);
         };
         // TODO: is IDPCommunicationError modeled yet?
