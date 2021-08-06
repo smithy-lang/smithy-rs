@@ -59,8 +59,10 @@ async fn main() -> Result<(), Error> {
 
     let resp = client.list_objects_v2().bucket(&bucket).send().await?;
 
+    println!("Objects:");
+
     for object in resp.contents.unwrap_or_default() {
-        println!(" {}", object.key.as_deref().unwrap_or_default());
+        println!("  {}", object.key.as_deref().unwrap_or_default());
     }
 
     Ok(())
