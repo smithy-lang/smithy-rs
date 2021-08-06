@@ -324,8 +324,8 @@ jobs:
       run: cargo clippy -- -D warnings
       working-directory: aws-sdk
 
-  standalone-examples-and-integration-tests-check:
-    name: AWS Rust SDK Standalone Examples & Tests - cargo check
+  standalone-integration-tests-check:
+    name: AWS Rust SDK Standalone Integration Tests - cargo check
     needs: generate-sdk
     runs-on: ubuntu-latest
     steps:
@@ -354,12 +354,6 @@ jobs:
         path: artifact
     - name: untar
       run: mkdir aws/sdk/build && cd aws/sdk/build && tar -xvf ../../../artifact/sdk.tar
-    - name: Check examples
-      run: cargo check
-      working-directory: aws/sdk/examples
-      env:
-        RUSTC_FORCE_INCREMENTAL: 1
-        RUSTFLAGS: -D warnings
     - name: Check integration tests
       run: cargo check
       working-directory: aws/sdk/integration-tests
