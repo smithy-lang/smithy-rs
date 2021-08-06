@@ -353,7 +353,7 @@ jobs:
         name: aws-sdk-${{ env.name }}-tier1-${{ github.sha }}
         path: artifact
     - name: untar
-      run: mkdir aws/sdk/build && cd aws/sdk/build && tar -xvf ../../../artifact/sdk.tar
+      run: mkdir aws/sdk/build/aws-sdk && cd aws/sdk/build/aws-sdk && tar -xvf ../../../../artifact/sdk.tar
     - name: Check integration tests
       run: cargo check
       working-directory: aws/sdk/integration-tests
