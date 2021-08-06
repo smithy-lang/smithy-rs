@@ -90,7 +90,7 @@ class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : Ope
             is OperationSection.MutateRequest -> writable {
                 rust(
                     """
-                    #T(&mut ${section.request}.config_mut(), ${section.config}.credentials_provider.clone());
+                    #T(&mut ${section.request}.properties_mut(), ${section.config}.credentials_provider.clone());
                     """,
                     setProvider(runtimeConfig)
                 )

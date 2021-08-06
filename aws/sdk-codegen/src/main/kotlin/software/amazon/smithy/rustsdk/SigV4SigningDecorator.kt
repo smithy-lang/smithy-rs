@@ -119,14 +119,14 @@ class SigV4SigningFeature(
                 if (operation.hasTrait<UnsignedPayloadTrait>()) {
                     rust("signing_config.signing_options.content_sha256_header = true;")
                     rustTemplate(
-                        "${section.request}.config_mut().insert(#{sig_auth}::signer::SignableBody::UnsignedPayload);",
+                        "${section.request}.properties_mut().insert(#{sig_auth}::signer::SignableBody::UnsignedPayload);",
                         *codegenScope
                     )
                 }
                 rustTemplate(
                     """
-                ${section.request}.config_mut().insert(signing_config);
-                ${section.request}.config_mut().insert(#{aws_types}::SigningService::from_static(${section.config}.signing_service()));
+                ${section.request}.properties_mut().insert(signing_config);
+                ${section.request}.properties_mut().insert(#{aws_types}::SigningService::from_static(${section.config}.signing_service()));
                 """,
                     *codegenScope
                 )
