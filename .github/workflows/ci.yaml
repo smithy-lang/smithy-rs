@@ -131,7 +131,7 @@ jobs:
         components: ${{ env.rust_toolchain_components }}
         default: true
     - name: Format Check
-      run: rustfmt --check --edition 2018 $(find -name '*.rs' -print)
+      run: rustfmt --check --edition 2018 $(find -name '*.rs' -print | grep -v /target/)
       # windows doesn't support using --check like this
       if: ${{ matrix.os == 'ubuntu-latest' }}
     - name: clippy check
