@@ -62,7 +62,7 @@ where
 pub trait SmithyMiddlewareService:
     Service<
     smithy_http::operation::Request,
-    Response = http::Response<SdkBody>,
+    Response = smithy_http::operation::Response,
     Error = smithy_http_tower::SendOperationError,
     Future = <Self as SmithyMiddlewareService>::Future,
 >
@@ -77,7 +77,7 @@ impl<T> SmithyMiddlewareService for T
 where
     T: Service<
         smithy_http::operation::Request,
-        Response = http::Response<SdkBody>,
+        Response = smithy_http::operation::Response,
         Error = smithy_http_tower::SendOperationError,
     >,
     T::Future: Send + 'static,
