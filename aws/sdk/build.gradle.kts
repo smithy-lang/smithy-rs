@@ -31,7 +31,15 @@ val runtimeModules = listOf(
     "smithy-client",
     "protocol-test-helpers"
 )
-val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types", "aws-hyper", "aws-sig-auth", "aws-http")
+val awsModules = listOf(
+    "aws-auth",
+    "aws-endpoint",
+    "aws-types",
+    "aws-hyper",
+    "aws-sig-auth",
+    "aws-http",
+    "aws-auth-providers"
+)
 
 buildscript {
     val smithyVersion: String by project
@@ -285,7 +293,11 @@ tasks.register<Copy>("relocateAwsRuntime") {
  * those paths need to be replaced in the final build. We should probably fix this with some symlinking.
  */
 fun rewritePathDependency(line: String): String {
-    return line.replace("../../rust-runtime/", "")
+
+    // some runtime crates are actually dependent on the generated bindings:
+    return line.replace("../sdk/build/aws-sdk/", "")
+        // others use relative dependencies::
+        .replace("../../rust-runtime/", "")
 }
 
 tasks.register<Copy>("relocateRuntime") {
