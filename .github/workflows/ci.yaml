@@ -222,7 +222,6 @@ jobs:
       env:
         RUSTC_FORCE_INCREMENTAL: 1
         RUSTFLAGS: -D warnings
-        CARGO_TARGET_DIR: ../target
 
   test-sdk:
     name: AWS Rust SDK Tier 1 - cargo test
@@ -260,7 +259,6 @@ jobs:
       env:
         RUSTC_FORCE_INCREMENTAL: 1
         RUSTFLAGS: -D warnings
-        CARGO_TARGET_DIR: ../target
 
   docs-sdk:
     name: AWS Rust SDK Tier 1 - cargo docs
@@ -362,14 +360,12 @@ jobs:
       env:
         RUSTC_FORCE_INCREMENTAL: 1
         RUSTFLAGS: -D warnings
-        CARGO_TARGET_DIR: ../../../target
     - name: Check integration tests
       run: cargo check
       working-directory: aws/sdk/integration-tests
       env:
         RUSTC_FORCE_INCREMENTAL: 1
         RUSTFLAGS: -D warnings
-        CARGO_TARGET_DIR: ../../../target
 
   all-services-check:
     name: AWS Rust SDK Tier 2 - Generate and cargo check

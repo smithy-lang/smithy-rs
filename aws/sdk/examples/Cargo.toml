@@ -1,3 +1,5 @@
+# Note: this workspace exists solely for the convenience of running tests. These packages will all eventually
+# end up in the final SDK workspace.
 [workspace]
 members = [
     "applicationautoscaling",
@@ -45,3 +47,6 @@ members = [
     "ssm",
     "sts"
 ]
+
+[profile.dev]
+split-debuginfo = "unpacked"
