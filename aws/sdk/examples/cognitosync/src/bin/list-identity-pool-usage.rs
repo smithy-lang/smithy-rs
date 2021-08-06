@@ -81,7 +81,7 @@ async fn main() -> Result<(), Error> {
         }
     }
 
-    println!("Next token: {}", response.next_token.unwrap_or_default());
+    println!("Next token: {:?}", response.next_token);
 
     Ok(())
 }
