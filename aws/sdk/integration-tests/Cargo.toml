@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "dynamodb",
+    "iam",
+    "kms",
+    "qldbsession",
+    "s3",
+]
