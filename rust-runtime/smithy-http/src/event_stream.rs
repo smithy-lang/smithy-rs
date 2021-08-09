@@ -271,7 +271,7 @@ mod tests {
         impl MarshallMessage for BadMarshaller {
             type Input = UnmarshalledMessage;
 
-            fn marshall(&self, input: Self::Input) -> Result<Message, EventStreamError> {
+            fn marshall(&self, _input: Self::Input) -> Result<Message, EventStreamError> {
                 Err(EventStreamError::InvalidMessageLength)
             }
         }
