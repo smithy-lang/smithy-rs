@@ -21,6 +21,7 @@ vNext (Month Day Year)
 **New This Week**
 - (When complete) Add profile file provider for region (#594, #xyz)
 - Add AssumeRoleProvider parser implementation. (#632)
+- Add `Sender`/`Receiver` implementations for Event Stream (#639)
 
 v0.19 (August 3rd, 2021)
 ------------------------
