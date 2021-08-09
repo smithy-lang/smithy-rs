@@ -10,44 +10,45 @@ use crate::result::SdkError;
 use bytes::Bytes;
 use bytes_utils::SegmentedBuf;
 use hyper::body::HttpBody;
-use smithy_eventstream::error::Error as EventStreamError;
-use smithy_eventstream::frame::{DecodedFrame, Message, MessageFrameDecoder};
+use smithy_eventstream::frame::{
+    DecodedFrame, MarshallMessage, MessageFrameDecoder, SignMessage, UnmarshallMessage,
+};
 use std::error::Error as StdError;
 use std::marker::PhantomData;
+use std::ops::DerefMut;
 
-/// Converts a Smithy modeled Event Stream type into a [`Message`](Message).
-pub trait MarshallMessage {
-    /// Smithy modeled input type to convert from.
-    type Input;
-
-    fn marshall(&self, input: Self::Input) -> Result<Message, EventStreamError>;
-}
-
-/// Converts an Event Stream [`Message`](Message) into a Smithy modeled type.
-pub trait UnmarshallMessage {
-    /// Smithy modeled type to convert into.
-    type Output;
-
-    fn unmarshall(&self, message: Message) -> Result<Self::Output, EventStreamError>;
+enum SenderState {
+    /// A Hyper body channel has been created for the Event Stream input,
+    /// but it's not hooked up to anything yet.
+    NotReady(hyper::Body),
+    /// The Hyper body channel is all wired up, and we have a message signer implementation.
+    Ready(Box<dyn SignMessage>),
 }
 
 /// Sends Smithy-modeled messages on an Event Stream.
 pub struct Sender<T, E: StdError + Send + Sync> {
     marshaller: Box<dyn MarshallMessage<Input = T>>,
     http_sender: hyper::body::Sender,
+    state: SenderState,
     _phantom: PhantomData<E>,
 }
 
 impl<T, E: StdError + Send + Sync> Sender<T, E> {
-    /// Creates a new `Sender` with the given message marshaller and HTTP sender.
-    pub fn new(
-        marshaller: impl MarshallMessage<Input = T> + 'static,
-        http_sender: hyper::body::Sender,
-    ) -> Self {
+    /// Creates a new `Sender` with the given message marshaller.
+    pub fn new(marshaller: impl MarshallMessage<Input = T> + 'static) -> Self {
+        let (http_sender, http_body) = hyper::Body::channel();
         Sender {
             marshaller: Box::new(marshaller),
             http_sender,
+            state: SenderState::NotReady(http_body),
             _phantom: Default::default(),
+        }
+    }
+
+    fn signer_mut(&mut self) -> &mut dyn SignMessage {
+        match &mut self.state {
+            SenderState::NotReady(_) => panic!("Sender is not ready to send data yet"),
+            SenderState::Ready(ref mut state) => state.deref_mut(),
         }
     }
 
@@ -60,6 +61,10 @@ impl<T, E: StdError + Send + Sync> Sender<T, E> {
             .marshaller
             .marshall(input)
             .map_err(|err| SdkError::ConstructionFailure(Box::new(err)))?;
+        let message = self
+            .signer_mut()
+            .sign(message)
+            .map_err(|err| SdkError::ConstructionFailure(err))?;
         let mut buffer = Vec::new();
         message
             .write_to(&mut buffer)
@@ -68,6 +73,16 @@ impl<T, E: StdError + Send + Sync> Sender<T, E> {
             .send_data(buffer.into())
             .await
             .map_err(|err| SdkError::DispatchFailure(Box::new(err)))
+    }
+
+    // Intended to be used by the generated code to connect the `Sender` to the actual request.
+    #[doc(hidden)]
+    pub fn make_ready(&mut self, signer: impl SignMessage + 'static) -> hyper::Body {
+        let new_state = SenderState::Ready(Box::new(signer));
+        match std::mem::replace(&mut self.state, new_state) {
+            SenderState::Ready(_) => panic!("`make_ready` can only be called once"),
+            SenderState::NotReady(body) => body,
+        }
     }
 }
 
@@ -130,7 +145,7 @@ mod tests {
     use bytes::Bytes;
     use hyper::body::{Body, HttpBody};
     use smithy_eventstream::error::Error as EventStreamError;
-    use smithy_eventstream::frame::Message;
+    use smithy_eventstream::frame::{Header, HeaderValue, Message, SignMessage, SignMessageError};
     use std::error::Error as StdError;
     use std::io::{Error as IOError, ErrorKind};
 
@@ -234,11 +249,19 @@ mod tests {
         ));
     }
 
+    struct TestSigner;
+    impl SignMessage for TestSigner {
+        fn sign(&self, message: Message) -> Result<Message, SignMessageError> {
+            let mut buffer = Vec::new();
+            message.write_to(&mut buffer).unwrap();
+            Ok(Message::new(buffer).add_header(Header::new("signed", HeaderValue::Bool(true))))
+        }
+    }
+
     #[tokio::test]
     async fn send_success() {
-        let (http_sender, mut http_body) = hyper::Body::channel();
-        let mut sender =
-            Sender::<UnmarshalledMessage, EventStreamError>::new(Marshaller, http_sender);
+        let mut sender = Sender::<UnmarshalledMessage, EventStreamError>::new(Marshaller);
+        let mut http_body = sender.make_ready(TestSigner);
 
         sender
             .send(UnmarshalledMessage("test".into()))
@@ -247,16 +270,18 @@ mod tests {
 
         let mut sent_bytes = http_body.data().await.unwrap().unwrap();
         let sent = Message::read_from(&mut sent_bytes).unwrap();
-        assert_eq!(&b"test"[..], &sent.payload()[..]);
+        assert_eq!("signed", sent.headers()[0].name().as_str());
+        assert_eq!(&HeaderValue::Bool(true), sent.headers()[0].value());
+        let inner = Message::read_from(&mut (&sent.payload()[..])).unwrap();
+        assert_eq!(&b"test"[..], &inner.payload()[..]);
     }
 
     #[tokio::test]
     async fn send_network_failure() {
-        let (http_sender, http_body) = hyper::Body::channel();
-        let mut sender =
-            Sender::<UnmarshalledMessage, EventStreamError>::new(Marshaller, http_sender);
-
+        let mut sender = Sender::<UnmarshalledMessage, EventStreamError>::new(Marshaller);
+        let http_body = sender.make_ready(TestSigner);
         drop(http_body);
+
         let result = sender.send(UnmarshalledMessage("test".into())).await;
         assert!(result.is_err());
         assert!(matches!(
@@ -276,9 +301,8 @@ mod tests {
             }
         }
 
-        let (http_sender, _http_body) = hyper::Body::channel();
-        let mut sender =
-            Sender::<UnmarshalledMessage, EventStreamError>::new(BadMarshaller, http_sender);
+        let mut sender = Sender::<UnmarshalledMessage, EventStreamError>::new(BadMarshaller);
+        let _http_body = sender.make_ready(TestSigner);
 
         let result = sender.send(UnmarshalledMessage("test".into())).await;
         assert!(result.is_err());
