@@ -101,6 +101,8 @@ abstract class QuerySerializerGenerator(protocolConfig: ProtocolConfig) : Struct
     }
 
     override fun payloadSerializer(member: MemberShape): RuntimeType {
+        // TODO(EventStream): [RPC] The query will need to be rendered to the initial message,
+        // so this needs to be implemented
         TODO("The $protocolName protocol doesn't support http payload traits")
     }
 

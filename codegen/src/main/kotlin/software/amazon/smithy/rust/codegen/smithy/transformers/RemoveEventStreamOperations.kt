@@ -16,20 +16,34 @@ import java.util.logging.Logger
 /** Transformer to REMOVE operations that use EventStreaming until event streaming is supported */
 object RemoveEventStreamOperations {
     private val logger = Logger.getLogger(javaClass.name)
-    fun transform(model: Model): Model = ModelTransformer.create().filterShapes(model) { parentShape ->
-        if (parentShape !is OperationShape) {
-            true
-        } else {
-            val ioShapes = listOfNotNull(parentShape.output.orNull(), parentShape.input.orNull()).map { model.expectShape(it, StructureShape::class.java) }
-            val hasEventStream = ioShapes.any { ioShape ->
-                val streamingMember = ioShape.findStreamingMember(model)?.let { model.expectShape(it.target) }
-                streamingMember?.isUnionShape ?: false
-            }
-            // If a streaming member has a union trait, it is an event stream. Event Streams are not currently supported
-            // by the SDK, so if we generate this API it won't work.
-            (!hasEventStream).also {
-                if (!it) {
-                    logger.info("Removed $parentShape from model because it targets an event stream")
+
+    private fun eventStreamEnabled(): Boolean =
+        System.getenv()["SMITHYRS_EXPERIMENTAL_EVENTSTREAM"] == "1"
+
+    fun transform(model: Model): Model {
+        if (eventStreamEnabled()) {
+            return model
+        }
+        return ModelTransformer.create().filterShapes(model) { parentShape ->
+            if (parentShape !is OperationShape) {
+                true
+            } else {
+                val ioShapes = listOfNotNull(parentShape.output.orNull(), parentShape.input.orNull()).map {
+                    model.expectShape(
+                        it,
+                        StructureShape::class.java
+                    )
+                }
+                val hasEventStream = ioShapes.any { ioShape ->
+                    val streamingMember = ioShape.findStreamingMember(model)?.let { model.expectShape(it.target) }
+                    streamingMember?.isUnionShape ?: false
+                }
+                // If a streaming member has a union trait, it is an event stream. Event Streams are not currently supported
+                // by the SDK, so if we generate this API it won't work.
+                (!hasEventStream).also {
+                    if (!it) {
+                        logger.info("Removed $parentShape from model because it targets an event stream")
+                    }
                 }
             }
         }

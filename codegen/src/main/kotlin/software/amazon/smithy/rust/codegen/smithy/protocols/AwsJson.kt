@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.smithy.protocols
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
@@ -26,7 +25,6 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerial
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
-import software.amazon.smithy.rust.codegen.smithy.transformers.StructureModifier
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 
@@ -45,13 +43,6 @@ sealed class AwsJsonVersion {
 class AwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
     override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): HttpBoundProtocolGenerator {
         return HttpBoundProtocolGenerator(protocolConfig, AwsJson(protocolConfig, version))
-    }
-
-    private val shapeIfHasMembers: StructureModifier = { _, shape: StructureShape? ->
-        when (shape?.members().isNullOrEmpty()) {
-            true -> null
-            else -> shape
-        }
     }
 
     override fun transformModel(model: Model): Model {

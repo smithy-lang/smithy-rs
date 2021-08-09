@@ -1,0 +1,154 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
+use smithy_eventstream::error::Error;
+use smithy_eventstream::frame::{Header, Message};
+use smithy_eventstream::str_bytes::StrBytes;
+
+pub struct ResponseHeaders<'a> {
+    pub content_type: &'a StrBytes,
+    pub message_type: &'a StrBytes,
+    pub smithy_type: &'a StrBytes,
+}
+
+fn expect_header_str_value<'a>(
+    header: Option<&'a Header>,
+    name: &str,
+) -> Result<&'a StrBytes, Error> {
+    match header {
+        Some(header) => Ok(header.value().as_string().map_err(|value| {
+            Error::Unmarshalling(format!(
+                "expected response {} header to be string, received {:?}",
+                name, value
+            ))
+        })?),
+        None => Err(Error::Unmarshalling(format!(
+            "expected response to include {} header, but it was missing",
+            name
+        ))),
+    }
+}
+
+pub fn parse_response_headers(message: &Message) -> Result<ResponseHeaders, Error> {
+    let (mut content_type, mut message_type, mut event_type, mut exception_type) =
+        (None, None, None, None);
+    for header in message.headers() {
+        match header.name().as_str() {
+            ":content-type" => content_type = Some(header),
+            ":message-type" => message_type = Some(header),
+            ":event-type" => event_type = Some(header),
+            ":exception-type" => exception_type = Some(header),
+            _ => {}
+        }
+    }
+    let message_type = expect_header_str_value(message_type, ":message-type")?;
+    Ok(ResponseHeaders {
+        content_type: expect_header_str_value(content_type, ":content-type")?,
+        message_type,
+        smithy_type: if message_type.as_str() == "event" {
+            expect_header_str_value(event_type, ":event-type")?
+        } else if message_type.as_str() == "exception" {
+            expect_header_str_value(exception_type, ":exception-type")?
+        } else {
+            return Err(Error::Unmarshalling(format!(
+                "unrecognized `:message-type`: {}",
+                message_type.as_str()
+            )));
+        },
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::event_stream::parse_response_headers;
+    use smithy_eventstream::frame::{Header, HeaderValue, Message};
+
+    #[test]
+    fn normal_message() {
+        let message = Message::new(&b"test"[..])
+            .add_header(Header::new(
+                ":event-type",
+                HeaderValue::String("Foo".into()),
+            ))
+            .add_header(Header::new(
+                ":content-type",
+                HeaderValue::String("application/json".into()),
+            ))
+            .add_header(Header::new(
+                ":message-type",
+                HeaderValue::String("event".into()),
+            ));
+        let parsed = parse_response_headers(&message).unwrap();
+        assert_eq!("Foo", parsed.smithy_type.as_str());
+        assert_eq!("application/json", parsed.content_type.as_str());
+        assert_eq!("event", parsed.message_type.as_str());
+    }
+
+    #[test]
+    fn error_message() {
+        let message = Message::new(&b"test"[..])
+            .add_header(Header::new(
+                ":exception-type",
+                HeaderValue::String("BadRequestException".into()),
+            ))
+            .add_header(Header::new(
+                ":content-type",
+                HeaderValue::String("application/json".into()),
+            ))
+            .add_header(Header::new(
+                ":message-type",
+                HeaderValue::String("exception".into()),
+            ));
+        let parsed = parse_response_headers(&message).unwrap();
+        assert_eq!("BadRequestException", parsed.smithy_type.as_str());
+        assert_eq!("application/json", parsed.content_type.as_str());
+        assert_eq!("exception", parsed.message_type.as_str());
+    }
+
+    #[test]
+    fn missing_exception_type() {
+        let message = Message::new(&b"test"[..])
+            .add_header(Header::new(
+                ":content-type",
+                HeaderValue::String("application/json".into()),
+            ))
+            .add_header(Header::new(
+                ":message-type",
+                HeaderValue::String("exception".into()),
+            ));
+        let error = parse_response_headers(&message).err().unwrap().to_string();
+        assert_eq!("failed to unmarshall message: expected response to include :exception-type header, but it was missing", error);
+    }
+
+    #[test]
+    fn missing_event_type() {
+        let message = Message::new(&b"test"[..])
+            .add_header(Header::new(
+                ":content-type",
+                HeaderValue::String("application/json".into()),
+            ))
+            .add_header(Header::new(
+                ":message-type",
+                HeaderValue::String("event".into()),
+            ));
+        let error = parse_response_headers(&message).err().unwrap().to_string();
+        assert_eq!("failed to unmarshall message: expected response to include :event-type header, but it was missing", error);
+    }
+
+    #[test]
+    fn missing_content_type() {
+        let message = Message::new(&b"test"[..])
+            .add_header(Header::new(
+                ":event-type",
+                HeaderValue::String("Foo".into()),
+            ))
+            .add_header(Header::new(
+                ":message-type",
+                HeaderValue::String("event".into()),
+            ));
+        let error = parse_response_headers(&message).err().unwrap().to_string();
+        assert_eq!("failed to unmarshall message: expected response to include :content-type header, but it was missing", error);
+    }
+}

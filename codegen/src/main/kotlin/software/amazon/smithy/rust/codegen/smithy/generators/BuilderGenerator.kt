@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -50,14 +51,15 @@ class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
 /** setter names will never hit a reserved word and therefore never need escaping */
 fun MemberShape.setterName(): String = "set_${this.memberName.toSnakeCase()}"
 
-class BuilderGenerator(
-    val model: Model,
-    private val symbolProvider: RustSymbolProvider,
-    private val shape: StructureShape
+open class BuilderGenerator(
+    protected val model: Model,
+    protected val symbolProvider: RustSymbolProvider,
+    protected val shape: StructureShape
 ) {
+    protected val runtimeConfig = symbolProvider.config().runtimeConfig
     private val members: List<MemberShape> = shape.allMembers.values.toList()
-    private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val structureSymbol = symbolProvider.toSymbol(shape)
+
     fun render(writer: RustWriter) {
         val symbol = symbolProvider.toSymbol(shape)
         // TODO: figure out exactly what docs we want on a the builder module
@@ -104,6 +106,53 @@ class BuilderGenerator(
         }
     }
 
+    // TODO(EventStream): [DX] Update builders to take EventInputStream as Into<EventInputStream>
+    open fun renderBuilderMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
+        // builder members are crate-public to enable using them
+        // directly in serializers/deserializers
+        writer.write("pub(crate) $memberName: #T,", memberSymbol)
+    }
+
+    open fun renderBuilderMemberFn(
+        writer: RustWriter,
+        coreType: RustType,
+        member: MemberShape,
+        memberName: String,
+        memberSymbol: Symbol
+    ) {
+        fun builderConverter(coreType: RustType) = when (coreType) {
+            is RustType.String,
+            is RustType.Box -> "input.into()"
+            else -> "input"
+        }
+
+        val signature = when (coreType) {
+            is RustType.String,
+            is RustType.Box -> "(mut self, input: impl Into<${coreType.render(true)}>) -> Self"
+            else -> "(mut self, input: ${coreType.render(true)}) -> Self"
+        }
+        writer.documentShape(member, model)
+        writer.rustBlock("pub fn $memberName$signature") {
+            write("self.$memberName = Some(${builderConverter(coreType)});")
+            write("self")
+        }
+    }
+
+    open fun renderBuilderMemberSetterFn(
+        writer: RustWriter,
+        outerType: RustType,
+        member: MemberShape,
+        memberName: String,
+        memberSymbol: Symbol
+    ) {
+        // Render a `set_foo` method. This is useful as a target for code generation, because the argument type
+        // is the same as the resulting member type, and is always optional.
+        val inputType = outerType.asOptional()
+        writer.rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
+            rust("self.$memberName = input; self")
+        }
+    }
+
     private fun renderBuilder(writer: RustWriter) {
         val builderName = "Builder"
 
@@ -119,16 +168,8 @@ class BuilderGenerator(
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional
                 val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
-                // builder members are crate-public to enable using them
-                // directly in serializers/deserializers
-                write("pub(crate) $memberName: #T,", memberSymbol)
+                renderBuilderMember(this, member, memberName, memberSymbol)
             }
-        }
-
-        fun builderConverter(coreType: RustType) = when (coreType) {
-            is RustType.String,
-            is RustType.Box -> "input.into()"
-            else -> "input"
         }
 
         writer.rustBlock("impl $builderName") {
@@ -143,26 +184,10 @@ class BuilderGenerator(
                 when (coreType) {
                     is RustType.Vec -> renderVecHelper(memberName, coreType)
                     is RustType.HashMap -> renderMapHelper(memberName, coreType)
-                    else -> {
-                        val signature = when (coreType) {
-                            is RustType.String,
-                            is RustType.Box -> "(mut self, input: impl Into<${coreType.render(true)}>) -> Self"
-                            else -> "(mut self, input: ${coreType.render(true)}) -> Self"
-                        }
-                        writer.documentShape(member, model)
-                        writer.rustBlock("pub fn $memberName$signature") {
-                            write("self.$memberName = Some(${builderConverter(coreType)});")
-                            write("self")
-                        }
-                    }
+                    else -> renderBuilderMemberFn(this, coreType, member, memberName, memberSymbol)
                 }
 
-                // Render a `set_foo` method. This is useful as a target for code generation, because the argument type
-                // is the same as the resulting member type, and is always optional.
-                val inputType = outerType.asOptional()
-                writer.rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
-                    rust("self.$memberName = input; self")
-                }
+                renderBuilderMemberSetterFn(this, outerType, member, memberName, memberSymbol)
             }
             buildFn(this)
         }

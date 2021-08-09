@@ -13,12 +13,14 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.OptionalAuthTrait
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -29,10 +31,12 @@ import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.isInputEventStream
 
 /**
  * The SigV4SigningDecorator:
  * - adds a `signing_service()` method to `config` to return the default signing service
+ * - adds a `new_event_stream_signer()` method to `config` to create an Event Stream SigV4 signer
  * - sets the `SigningService` during operation construction
  * - sets a default `OperationSigningConfig` A future enhancement will customize this for specific services that need
  *   different behavior.
@@ -48,7 +52,7 @@ class SigV4SigningDecorator : RustCodegenDecorator {
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
         return baseCustomizations.letIf(applies(protocolConfig)) {
-            it + SigV4SigningConfig(protocolConfig.serviceShape.expectTrait())
+            it + SigV4SigningConfig(protocolConfig.runtimeConfig, protocolConfig.serviceShape.expectTrait())
         }
     }
 
@@ -58,25 +62,49 @@ class SigV4SigningDecorator : RustCodegenDecorator {
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
         return baseCustomizations.letIf(applies(protocolConfig)) {
-            it + SigV4SigningFeature(operation, protocolConfig.runtimeConfig, protocolConfig.serviceShape, protocolConfig.model)
+            it + SigV4SigningFeature(
+                protocolConfig.model,
+                operation,
+                protocolConfig.runtimeConfig,
+                protocolConfig.serviceShape,
+            )
         }
     }
 }
 
-class SigV4SigningConfig(private val sigV4Trait: SigV4Trait) : ConfigCustomization() {
+class SigV4SigningConfig(runtimeConfig: RuntimeConfig, private val sigV4Trait: SigV4Trait) : ConfigCustomization() {
+    private val codegenScope = arrayOf(
+        "SigV4Signer" to RuntimeType(
+            "SigV4Signer",
+            runtimeConfig.awsRuntimeDependency("aws-sig-auth", listOf("sign-eventstream")),
+            "aws_sig_auth::event_stream"
+        ),
+        "PropertyBag" to RuntimeType(
+            "PropertyBag",
+            CargoDependency.SmithyHttp(runtimeConfig),
+            "smithy_http::property_bag"
+        )
+    )
+
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             is ServiceConfig.ConfigImpl -> writable {
-                rust(
+                rustTemplate(
                     """
                     /// The signature version 4 service signing name to use in the credential scope when signing requests.
                     ///
-                    /// The signing service may be overidden by the `Endpoint`, or by specifying a custom [`SigningService`](aws_types::SigningService) during
-                    /// operation construction
+                    /// The signing service may be overridden by the `Endpoint`, or by specifying a custom
+                    /// [`SigningService`](aws_types::SigningService) during operation construction
                     pub fn signing_service(&self) -> &'static str {
                         ${sigV4Trait.name.dq()}
                     }
-                    """
+
+                    /// Creates a new Event Stream `SignMessage` implementor.
+                    pub fn new_event_stream_signer(&self, properties: std::sync::Arc<std::sync::Mutex<#{PropertyBag}>>) -> #{SigV4Signer} {
+                        #{SigV4Signer}::new(properties)
+                    }
+                    """,
+                    *codegenScope
                 )
             }
             else -> emptySection
@@ -95,10 +123,10 @@ fun disableDoubleEncode(service: ServiceShape) = when {
 }
 
 class SigV4SigningFeature(
+    private val model: Model,
     private val operation: OperationShape,
     runtimeConfig: RuntimeConfig,
     private val service: ServiceShape,
-    model: Model
 ) :
     OperationCustomization() {
     private val codegenScope =
@@ -111,9 +139,9 @@ class SigV4SigningFeature(
             is OperationSection.MutateRequest -> writable {
                 rustTemplate(
                     """
-                ##[allow(unused_mut)]
-                let mut signing_config = #{sig_auth}::signer::OperationSigningConfig::default_config();
-                """,
+                    ##[allow(unused_mut)]
+                    let mut signing_config = #{sig_auth}::signer::OperationSigningConfig::default_config();
+                    """,
                     *codegenScope
                 )
                 if (needsAmzSha256(service)) {
@@ -128,6 +156,12 @@ class SigV4SigningFeature(
                         "${section.request}.properties_mut().insert(#{sig_auth}::signer::SignableBody::UnsignedPayload);",
                         *codegenScope
                     )
+                } else if (operation.isInputEventStream(model)) {
+                    // TODO(EventStream): Is this actually correct for all Event Stream operations?
+                    rustTemplate(
+                        "${section.request}.properties_mut().insert(#{sig_auth}::signer::SignableBody::Bytes(&[]));",
+                        *codegenScope
+                    )
                 }
                 // some operations are either unsigned or optionally signed:
                 val authSchemes = serviceIndex.getEffectiveAuthSchemes(service, operation)
@@ -140,9 +174,9 @@ class SigV4SigningFeature(
                 }
                 rustTemplate(
                     """
-                ${section.request}.properties_mut().insert(signing_config);
-                ${section.request}.properties_mut().insert(#{aws_types}::SigningService::from_static(${section.config}.signing_service()));
-                """,
+                    ${section.request}.properties_mut().insert(signing_config);
+                    ${section.request}.properties_mut().insert(#{aws_types}::SigningService::from_static(${section.config}.signing_service()));
+                    """,
                     *codegenScope
                 )
             }

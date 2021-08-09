@@ -35,7 +35,10 @@ pub enum SdkError<E> {
     },
 
     /// An error response was received from the service
-    ServiceError { err: E, raw: operation::Response },
+    ServiceError {
+        err: E,
+        raw: Option<operation::Response>,
+    },
 }
 
 impl<E> Display for SdkError<E>

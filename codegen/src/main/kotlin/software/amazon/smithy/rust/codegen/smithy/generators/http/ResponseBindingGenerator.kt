@@ -35,6 +35,8 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
+import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.smithy.protocols.parse.EventStreamUnmarshallerGenerator
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -42,7 +44,11 @@ import software.amazon.smithy.rust.codegen.util.isPrimitive
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val operationShape: OperationShape) {
+class ResponseBindingGenerator(
+    private val protocol: Protocol,
+    protocolConfig: ProtocolConfig,
+    private val operationShape: OperationShape
+) {
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
@@ -124,6 +130,7 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
      * Generate a function to deserialize `[binding]` from the response payload
      */
     fun generateDeserializePayloadFn(
+        operationShape: OperationShape,
         binding: HttpBindingDescriptor,
         errorT: RuntimeType,
         // Deserialize a single structure or union member marked as a payload
@@ -142,7 +149,13 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
                     outputT,
                     errorT
                 ) {
-                    deserializeStreamingBody(binding)
+                    // Streaming unions are Event Streams and should be handled separately
+                    val target = model.expectShape(binding.member.target)
+                    if (target.isUnionShape) {
+                        bindEventStreamOutput(operationShape, target as UnionShape)
+                    } else {
+                        deserializeStreamingBody(binding)
+                    }
                 }
             } else {
                 rustWriter.rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorT) {
@@ -157,6 +170,27 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         }
     }
 
+    private fun RustWriter.bindEventStreamOutput(operationShape: OperationShape, target: UnionShape) {
+        val unmarshallerConstructorFn = EventStreamUnmarshallerGenerator(
+            protocol,
+            model,
+            runtimeConfig,
+            symbolProvider,
+            operationShape,
+            target
+        ).render()
+        rustTemplate(
+            """
+            let unmarshaller = #{unmarshallerConstructorFn}();
+            let body = std::mem::replace(body, #{SdkBody}::taken());
+            Ok(#{Receiver}::new(unmarshaller, body))
+            """,
+            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+            "unmarshallerConstructorFn" to unmarshallerConstructorFn,
+            "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
+        )
+    }
+
     private fun RustWriter.deserializeStreamingBody(binding: HttpBindingDescriptor) {
         val member = binding.member
         val targetShape = model.expectShape(member.target)
@@ -164,10 +198,10 @@ class ResponseBindingGenerator(protocolConfig: ProtocolConfig, private val opera
         rustTemplate(
             """
             // replace the body with an empty body
-            let body = std::mem::replace(body, #{sdk_body}::taken());
-            Ok(#{byte_stream}::new(body))
+            let body = std::mem::replace(body, #{SdkBody}::taken());
+            Ok(#{ByteStream}::new(body))
             """,
-            "byte_stream" to RuntimeType.byteStream(runtimeConfig), "sdk_body" to RuntimeType.sdkBody(runtimeConfig)
+            "ByteStream" to RuntimeType.byteStream(runtimeConfig), "SdkBody" to RuntimeType.sdkBody(runtimeConfig)
         )
     }
 

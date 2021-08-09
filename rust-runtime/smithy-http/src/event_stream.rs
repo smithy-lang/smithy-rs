@@ -14,11 +14,48 @@ use hyper::body::HttpBody;
 use pin_project::pin_project;
 use smithy_eventstream::frame::{
     DecodedFrame, MarshallMessage, MessageFrameDecoder, SignMessage, UnmarshallMessage,
+    UnmarshalledMessage,
 };
 use std::error::Error as StdError;
+use std::fmt;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+
+pub type BoxError = Box<dyn StdError + Send + Sync + 'static>;
+
+/// Input type for Event Streams.
+pub struct EventStreamInput<T> {
+    input_stream: Pin<Box<dyn Stream<Item = Result<T, BoxError>> + Send>>,
+}
+
+impl<T> fmt::Debug for EventStreamInput<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "EventStreamInput(Box<dyn Stream>)")
+    }
+}
+
+impl<T> EventStreamInput<T> {
+    #[doc(hidden)]
+    pub fn into_body_stream<E: StdError + Send + Sync + 'static>(
+        self,
+        marshaller: impl MarshallMessage<Input = T> + Send + Sync + 'static,
+        signer: impl SignMessage + Send + Sync + 'static,
+    ) -> MessageStreamAdapter<T, E> {
+        MessageStreamAdapter::new(marshaller, signer, self.input_stream)
+    }
+}
+
+impl<T, S> From<S> for EventStreamInput<T>
+where
+    S: Stream<Item = Result<T, BoxError>> + Send + 'static,
+{
+    fn from(stream: S) -> Self {
+        EventStreamInput {
+            input_stream: Box::pin(stream),
+        }
+    }
+}
 
 /// Adapts a `Stream<SmithyMessageType>` to a signed `Stream<Bytes>` by using the provided
 /// message marshaller and signer implementations.
@@ -30,24 +67,32 @@ pub struct MessageStreamAdapter<T, E> {
     marshaller: Box<dyn MarshallMessage<Input = T> + Send + Sync>,
     signer: Box<dyn SignMessage + Send + Sync>,
     #[pin]
-    stream: Pin<Box<dyn Stream<Item = Result<T, E>> + Send + Sync>>,
+    stream: Pin<Box<dyn Stream<Item = Result<T, BoxError>> + Send>>,
+    _phantom: PhantomData<E>,
 }
 
-impl<T, E: StdError + Send + Sync + 'static> MessageStreamAdapter<T, E> {
+impl<T, E> MessageStreamAdapter<T, E>
+where
+    E: StdError + Send + Sync + 'static,
+{
     pub fn new(
         marshaller: impl MarshallMessage<Input = T> + Send + Sync + 'static,
         signer: impl SignMessage + Send + Sync + 'static,
-        stream: impl Stream<Item = Result<T, E>> + Send + Sync + 'static,
+        stream: Pin<Box<dyn Stream<Item = Result<T, BoxError>> + Send>>,
     ) -> Self {
         MessageStreamAdapter {
             marshaller: Box::new(marshaller),
             signer: Box::new(signer),
-            stream: Box::pin(stream),
+            stream,
+            _phantom: Default::default(),
         }
     }
 }
 
-impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, E> {
+impl<T, E> Stream for MessageStreamAdapter<T, E>
+where
+    E: StdError + Send + Sync + 'static,
+{
     type Item = Result<Bytes, SdkError<E>>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -56,7 +101,7 @@ impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, 
             Poll::Ready(message_option) => {
                 if let Some(message_result) = message_option {
                     let message_result =
-                        message_result.map_err(|err| SdkError::ConstructionFailure(Box::new(err)));
+                        message_result.map_err(|err| SdkError::ConstructionFailure(err));
                     let message = this
                         .marshaller
                         .marshall(message_result?)
@@ -80,17 +125,21 @@ impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, 
 }
 
 /// Receives Smithy-modeled messages out of an Event Stream.
-pub struct Receiver<T, E: StdError + Send + Sync> {
-    unmarshaller: Box<dyn UnmarshallMessage<Output = T>>,
+#[derive(Debug)]
+pub struct Receiver<T, E> {
+    unmarshaller: Box<dyn UnmarshallMessage<Output = T, Error = E>>,
     decoder: MessageFrameDecoder,
     buffer: SegmentedBuf<Bytes>,
     body: SdkBody,
     _phantom: PhantomData<E>,
 }
 
-impl<T, E: StdError + Send + Sync> Receiver<T, E> {
+impl<T, E> Receiver<T, E> {
     /// Creates a new `Receiver` with the given message unmarshaller and SDK body.
-    pub fn new(unmarshaller: impl UnmarshallMessage<Output = T> + 'static, body: SdkBody) -> Self {
+    pub fn new(
+        unmarshaller: impl UnmarshallMessage<Output = T, Error = E> + 'static,
+        body: SdkBody,
+    ) -> Self {
         Receiver {
             unmarshaller: Box::new(unmarshaller),
             decoder: MessageFrameDecoder::new(),
@@ -119,11 +168,16 @@ impl<T, E: StdError + Send + Sync> Receiver<T, E> {
                 .decode_frame(&mut self.buffer)
                 .map_err(|err| SdkError::DispatchFailure(Box::new(err)))?
             {
-                return Ok(Some(
-                    self.unmarshaller
-                        .unmarshall(message)
-                        .map_err(|err| SdkError::DispatchFailure(Box::new(err)))?,
-                ));
+                return match self
+                    .unmarshaller
+                    .unmarshall(message)
+                    .map_err(|err| SdkError::DispatchFailure(Box::new(err)))?
+                {
+                    UnmarshalledMessage::Event(event) => Ok(Some(event)),
+                    UnmarshalledMessage::Error(err) => {
+                        Err(SdkError::ServiceError { err, raw: None })
+                    }
+                };
             }
         }
         Ok(None)
@@ -134,7 +188,7 @@ impl<T, E: StdError + Send + Sync> Receiver<T, E> {
 mod tests {
     use super::{MarshallMessage, Receiver, UnmarshallMessage};
     use crate::body::SdkBody;
-    use crate::event_stream::MessageStreamAdapter;
+    use crate::event_stream::{EventStreamInput, MessageStreamAdapter};
     use crate::result::SdkError;
     use async_stream::stream;
     use bytes::Bytes;
@@ -142,7 +196,9 @@ mod tests {
     use futures_util::stream::StreamExt;
     use hyper::body::Body;
     use smithy_eventstream::error::Error as EventStreamError;
-    use smithy_eventstream::frame::{Header, HeaderValue, Message, SignMessage, SignMessageError};
+    use smithy_eventstream::frame::{
+        Header, HeaderValue, Message, SignMessage, SignMessageError, UnmarshalledMessage,
+    };
     use std::error::Error as StdError;
     use std::io::{Error as IOError, ErrorKind};
 
@@ -164,25 +220,31 @@ mod tests {
     impl StdError for FakeError {}
 
     #[derive(Debug, Eq, PartialEq)]
-    struct UnmarshalledMessage(String);
+    struct TestMessage(String);
 
+    #[derive(Debug)]
     struct Marshaller;
     impl MarshallMessage for Marshaller {
-        type Input = UnmarshalledMessage;
+        type Input = TestMessage;
 
         fn marshall(&self, input: Self::Input) -> Result<Message, EventStreamError> {
             Ok(Message::new(input.0.as_bytes().to_vec()))
         }
     }
 
+    #[derive(Debug)]
     struct Unmarshaller;
     impl UnmarshallMessage for Unmarshaller {
-        type Output = UnmarshalledMessage;
+        type Output = TestMessage;
+        type Error = EventStreamError;
 
-        fn unmarshall(&self, message: Message) -> Result<Self::Output, EventStreamError> {
-            Ok(UnmarshalledMessage(
+        fn unmarshall(
+            &self,
+            message: Message,
+        ) -> Result<UnmarshalledMessage<Self::Output, Self::Error>, EventStreamError> {
+            Ok(UnmarshalledMessage::Event(TestMessage(
                 std::str::from_utf8(&message.payload()[..]).unwrap().into(),
-            ))
+            )))
         }
     }
 
@@ -192,14 +254,13 @@ mod tests {
             vec![Ok(encode_message("one")), Ok(encode_message("two"))];
         let chunk_stream = futures_util::stream::iter(chunks);
         let body = SdkBody::from(Body::wrap_stream(chunk_stream));
-        let mut receiver =
-            Receiver::<UnmarshalledMessage, EventStreamError>::new(Unmarshaller, body);
+        let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
         assert_eq!(
-            UnmarshalledMessage("one".into()),
+            TestMessage("one".into()),
             receiver.recv().await.unwrap().unwrap()
         );
         assert_eq!(
-            UnmarshalledMessage("two".into()),
+            TestMessage("two".into()),
             receiver.recv().await.unwrap().unwrap()
         );
     }
@@ -212,10 +273,9 @@ mod tests {
         ];
         let chunk_stream = futures_util::stream::iter(chunks);
         let body = SdkBody::from(Body::wrap_stream(chunk_stream));
-        let mut receiver =
-            Receiver::<UnmarshalledMessage, EventStreamError>::new(Unmarshaller, body);
+        let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
         assert_eq!(
-            UnmarshalledMessage("one".into()),
+            TestMessage("one".into()),
             receiver.recv().await.unwrap().unwrap()
         );
         assert!(matches!(
@@ -234,10 +294,9 @@ mod tests {
         ];
         let chunk_stream = futures_util::stream::iter(chunks);
         let body = SdkBody::from(Body::wrap_stream(chunk_stream));
-        let mut receiver =
-            Receiver::<UnmarshalledMessage, EventStreamError>::new(Unmarshaller, body);
+        let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
         assert_eq!(
-            UnmarshalledMessage("one".into()),
+            TestMessage("one".into()),
             receiver.recv().await.unwrap().unwrap()
         );
         assert!(matches!(
@@ -246,6 +305,16 @@ mod tests {
         ));
     }
 
+    #[derive(Debug)]
+    struct TestServiceError;
+    impl std::fmt::Display for TestServiceError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "TestServiceError")
+        }
+    }
+    impl StdError for TestServiceError {}
+
+    #[derive(Debug)]
     struct TestSigner;
     impl SignMessage for TestSigner {
         fn sign(&mut self, message: Message) -> Result<Message, SignMessageError> {
@@ -267,12 +336,15 @@ mod tests {
     #[tokio::test]
     async fn message_stream_adapter_success() {
         let stream = stream! {
-            yield Ok(UnmarshalledMessage("test".into()));
+            yield Ok(TestMessage("test".into()));
         };
         let mut adapter =
-            check_compatible_with_hyper_wrap_stream(
-                MessageStreamAdapter::<_, EventStreamError>::new(Marshaller, TestSigner, stream),
-            );
+            check_compatible_with_hyper_wrap_stream(MessageStreamAdapter::<
+                TestMessage,
+                TestServiceError,
+            >::new(
+                Marshaller, TestSigner, Box::pin(stream)
+            ));
 
         let mut sent_bytes = adapter.next().await.unwrap().unwrap();
         let sent = Message::read_from(&mut sent_bytes).unwrap();
@@ -285,12 +357,15 @@ mod tests {
     #[tokio::test]
     async fn message_stream_adapter_construction_failure() {
         let stream = stream! {
-            yield Err(EventStreamError::InvalidMessageLength);
+            yield Err(EventStreamError::InvalidMessageLength.into());
         };
         let mut adapter =
-            check_compatible_with_hyper_wrap_stream(
-                MessageStreamAdapter::<UnmarshalledMessage, _>::new(Marshaller, TestSigner, stream),
-            );
+            check_compatible_with_hyper_wrap_stream(MessageStreamAdapter::<
+                TestMessage,
+                TestServiceError,
+            >::new(
+                Marshaller, TestSigner, Box::pin(stream)
+            ));
 
         let result = adapter.next().await.unwrap();
         assert!(result.is_err());
@@ -298,5 +373,19 @@ mod tests {
             result.err().unwrap(),
             SdkError::ConstructionFailure(_)
         ));
+    }
+
+    // Verify the developer experience for this compiles
+    #[allow(unused)]
+    fn event_stream_input_ergonomics() {
+        fn check(input: impl Into<EventStreamInput<TestMessage>>) {
+            let _: EventStreamInput<TestMessage> = input.into();
+        }
+        check(stream! {
+            yield Ok(TestMessage("test".into()));
+        });
+        check(stream! {
+            yield Err(EventStreamError::InvalidMessageLength.into());
+        });
     }
 }

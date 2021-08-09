@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
+import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -78,7 +79,9 @@ class ResponseBindingGeneratorTest {
                 .filter { it.location == HttpLocation.HEADER }
             bindings.forEach { binding ->
                 val runtimeType = ResponseBindingGenerator(
-                    testProtocolConfig, operationShape
+                    RestJson(testProtocolConfig),
+                    testProtocolConfig,
+                    operationShape
                 ).generateDeserializeHeaderFn(binding)
                 // little hack to force these functions to be generated
                 rust("// use #T;", runtimeType)

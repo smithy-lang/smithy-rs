@@ -124,7 +124,7 @@ internal class XmlBindingTraitSerializerGeneratorTest {
                         .build()
                 ).build().unwrap();
                 let serialized = ${writer.format(operationParser)}(&inp.payload.unwrap()).unwrap();
-                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
+                let output = std::str::from_utf8(serialized).unwrap();
                 assert_eq!(output, "<Top extra=\"45\"><field>hello!</field><recursive extra=\"55\"></recursive></Top>");
             """
             )

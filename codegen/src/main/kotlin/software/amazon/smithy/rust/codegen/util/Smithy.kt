@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.Trait
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 
 inline fun <reified T : Shape> Model.lookup(shapeId: String): T {
     return this.expectShape(ShapeId.from(shapeId), T::class.java)
@@ -41,6 +42,31 @@ fun UnionShape.expectMember(member: String): MemberShape =
 fun StructureShape.hasStreamingMember(model: Model) = this.findStreamingMember(model) != null
 fun UnionShape.hasStreamingMember(model: Model) = this.findMemberWithTrait<StreamingTrait>(model) != null
 fun MemberShape.isStreaming(model: Model) = this.getMemberTrait(model, StreamingTrait::class.java).isPresent
+
+fun UnionShape.isEventStream(): Boolean {
+    return hasTrait(StreamingTrait::class.java)
+}
+fun MemberShape.isEventStream(model: Model): Boolean {
+    return (model.expectShape(target) as? UnionShape)?.isEventStream() ?: false
+}
+fun MemberShape.isInputEventStream(model: Model): Boolean {
+    return isEventStream(model) && model.expectShape(container).hasTrait<SyntheticInputTrait>()
+}
+fun MemberShape.isOutputEventStream(model: Model): Boolean {
+    return isEventStream(model) && model.expectShape(container).hasTrait<SyntheticInputTrait>()
+}
+private fun Shape.hasEventStreamMember(model: Model): Boolean {
+    return members().any { it.isEventStream(model) }
+}
+fun OperationShape.isInputEventStream(model: Model): Boolean {
+    return input.map { id -> model.expectShape(id).hasEventStreamMember(model) }.orElse(false)
+}
+fun OperationShape.isOutputEventStream(model: Model): Boolean {
+    return output.map { id -> model.expectShape(id).hasEventStreamMember(model) }.orElse(false)
+}
+fun OperationShape.isEventStream(model: Model): Boolean {
+    return isInputEventStream(model) || isOutputEventStream(model)
+}
 
 /*
  * Returns the member of this structure targeted with streaming trait (if it exists).

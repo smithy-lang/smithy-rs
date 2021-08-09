@@ -161,6 +161,18 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val HttpRequestBuilder = Http("request::Builder")
         val HttpResponseBuilder = Http("response::Builder")
 
+        val Hyper = CargoDependency.Hyper.asType()
+
+        fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType =
+            RuntimeType(
+                "Receiver",
+                dependency = CargoDependency.SmithyHttp(runtimeConfig),
+                "smithy_http::event_stream"
+            )
+
+        fun eventStreamInlinables(runtimeConfig: RuntimeConfig): RuntimeType =
+            forInlineDependency(InlineDependency.eventStream(runtimeConfig))
+
         fun jsonErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.jsonErrors(runtimeConfig))
 

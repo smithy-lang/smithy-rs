@@ -12,6 +12,7 @@ use crate::str_bytes::StrBytes;
 use bytes::{Buf, BufMut, Bytes};
 use std::convert::{TryFrom, TryInto};
 use std::error::Error as StdError;
+use std::fmt;
 use std::mem::size_of;
 
 const PRELUDE_LENGTH_BYTES: u32 = 3 * size_of::<u32>() as u32;
@@ -23,24 +24,35 @@ const MIN_HEADER_LEN: usize = 2;
 pub type SignMessageError = Box<dyn StdError + Send + Sync + 'static>;
 
 /// Signs an Event Stream message.
-pub trait SignMessage {
+pub trait SignMessage: fmt::Debug {
     fn sign(&mut self, message: Message) -> Result<Message, SignMessageError>;
 }
 
 /// Converts a Smithy modeled Event Stream type into a [`Message`](Message).
-pub trait MarshallMessage {
+pub trait MarshallMessage: fmt::Debug {
     /// Smithy modeled input type to convert from.
     type Input;
 
     fn marshall(&self, input: Self::Input) -> Result<Message, Error>;
 }
 
+/// A successfully unmarshalled message that is either an `Event` or an `Error`.
+pub enum UnmarshalledMessage<T, E> {
+    Event(T),
+    Error(E),
+}
+
 /// Converts an Event Stream [`Message`](Message) into a Smithy modeled type.
-pub trait UnmarshallMessage {
+pub trait UnmarshallMessage: fmt::Debug {
     /// Smithy modeled type to convert into.
     type Output;
+    /// Smithy modeled error to convert into.
+    type Error;
 
-    fn unmarshall(&self, message: Message) -> Result<Self::Output, Error>;
+    fn unmarshall(
+        &self,
+        message: Message,
+    ) -> Result<UnmarshalledMessage<Self::Output, Self::Error>, Error>;
 }
 
 mod value {
@@ -76,6 +88,71 @@ mod value {
         String(StrBytes),
         Timestamp(Instant),
         Uuid(u128),
+    }
+
+    impl HeaderValue {
+        pub fn as_bool(&self) -> Result<bool, &Self> {
+            match self {
+                HeaderValue::Bool(value) => Ok(*value),
+                _ => Err(self),
+            }
+        }
+
+        pub fn as_byte(&self) -> Result<u8, &Self> {
+            match self {
+                HeaderValue::Byte(value) => Ok(*value),
+                _ => Err(self),
+            }
+        }
+
+        pub fn as_int16(&self) -> Result<i16, &Self> {
+            match self {
+                HeaderValue::Int16(value) => Ok(*value),
+                _ => Err(self),
+            }
+        }
+
+        pub fn as_int32(&self) -> Result<i32, &Self> {
+            match self {
+                HeaderValue::Int32(value) => Ok(*value),
+                _ => Err(self),
+            }
+        }
+
+        pub fn as_int64(&self) -> Result<i64, &Self> {
+            match self {
+                HeaderValue::Int64(value) => Ok(*value),
+                _ => Err(self),
+            }
+        }
+
+        pub fn as_byte_array(&self) -> Result<&Bytes, &Self> {
+            match self {
+                HeaderValue::ByteArray(value) => Ok(value),
+                _ => Err(self),
+            }
+        }
+
+        pub fn as_string(&self) -> Result<&StrBytes, &Self> {
+            match self {
+                HeaderValue::String(value) => Ok(value),
+                _ => Err(self),
+            }
+        }
+
+        pub fn as_timestamp(&self) -> Result<Instant, &Self> {
+            match self {
+                HeaderValue::Timestamp(value) => Ok(*value),
+                _ => Err(self),
+            }
+        }
+
+        pub fn as_uuid(&self) -> Result<u128, &Self> {
+            match self {
+                HeaderValue::Uuid(value) => Ok(*value),
+                _ => Err(self),
+            }
+        }
     }
 
     macro_rules! read_value {
@@ -285,6 +362,14 @@ impl Message {
     pub fn new(payload: impl Into<Bytes>) -> Message {
         Message {
             headers: Vec::new(),
+            payload: payload.into(),
+        }
+    }
+
+    /// Creates a message with the given `headers` and `payload`.
+    pub fn new_from_parts(headers: Vec<Header>, payload: impl Into<Bytes>) -> Self {
+        Self {
+            headers,
             payload: payload.into(),
         }
     }
@@ -609,7 +694,7 @@ pub enum DecodedFrame {
 
 /// Streaming decoder for decoding a [`Message`] from a stream.
 #[non_exhaustive]
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct MessageFrameDecoder {
     prelude: [u8; PRELUDE_LENGTH_BYTES_USIZE],
     prelude_read: bool,

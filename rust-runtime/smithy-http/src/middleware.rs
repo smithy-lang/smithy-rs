@@ -139,6 +139,9 @@ fn sdk_result<T, E>(
 ) -> Result<SdkSuccess<T>, SdkError<E>> {
     match parsed {
         Ok(parsed) => Ok(SdkSuccess { raw, parsed }),
-        Err(err) => Err(SdkError::ServiceError { raw, err }),
+        Err(err) => Err(SdkError::ServiceError {
+            raw: Some(raw),
+            err,
+        }),
     }
 }
