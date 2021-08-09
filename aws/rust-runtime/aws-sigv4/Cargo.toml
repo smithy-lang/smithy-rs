@@ -1,0 +1,27 @@
+[package]
+name = "aws-sigv4"
+version = "0.1.0"
+authors = ["David Barsky <me@davidbarsky.com>"]
+edition = "2018"
+exclude = [
+    "aws-sig-v4-test-suite/*"
+]
+license = "MIT OR Apache-2.0"
+description = "An AWS SigV4 request signer."
+repository = "https://github.com/davidbarsky/sigv4"
+homepage = "https://github.com/davidbarsky/sigv4"
+documentation = "https://docs.rs/aws-sigv4"
+
+[dependencies]
+http = "0.2"
+http-body = "0.4"
+ring = "0.16"
+serde = { version = "1", features = ["derive"] }
+serde_urlencoded = "0.7"
+bytes = "1"
+hex = "0.4"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[dev-dependencies]
+pretty_assertions = "0.6"
+httparse = "1"
