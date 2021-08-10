@@ -28,8 +28,17 @@ impl ReplayingConnection {
     }
 
     /// Return all the recorded requests for further analysis
-    pub fn take_requests(&self) -> HashMap<ConnectionId, http::Request<Bytes>> {
-        self.recorded_requests.lock().unwrap().drain().collect()
+    pub fn take_requests(self) -> Vec<http::Request<Bytes>> {
+        let mut recorded_requests = self.recorded_requests.lock().unwrap();
+        let mut out = Vec::with_capacity(recorded_requests.len());
+        for conn_id in 0..recorded_requests.len() {
+            out.push(
+                recorded_requests
+                    .remove(&ConnectionId(conn_id))
+                    .expect("should exist"),
+            )
+        }
+        out
     }
 
     /// Build a replay connection from a sequence of events

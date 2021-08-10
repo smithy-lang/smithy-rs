@@ -393,7 +393,7 @@ mod test {
         );
         let reqs = conn.take_requests();
         assert_eq!(reqs.len(), 1);
-        let req = reqs.values().next().unwrap();
+        let req = reqs.first().unwrap();
         // TODO: perform more request validation
         assert_eq!(
             req.uri().to_string(),
@@ -420,7 +420,7 @@ mod test {
         );
         let reqs = conn.take_requests();
         assert_eq!(reqs.len(), 1);
-        let req = reqs.values().next().unwrap();
+        let req = reqs.first().unwrap();
         // TODO: perform more request validation
         assert_eq!(
             req.uri().to_string(),
