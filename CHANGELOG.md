@@ -1,6 +1,9 @@
 vNext (Month Day, Year)
 -----------------------
+
+**New This Week**
 - (When complete) Add profile file provider for region (#594, #xyz)
+- :bug: Fix name collision that occurred when a model had both a union and a structure named `Result` (#643)
 
 v0.20 (August 10th, 2021)
 --------------------------
