@@ -22,6 +22,7 @@ vNext (Month Day Year)
 - (When complete) Add profile file provider for region (#594, #xyz)
 - Add AssumeRoleProvider parser implementation. (#632)
 - The closure passed to `async_provide_credentials_fn` can now borrow values (#637)
+- Add `Sender`/`Receiver` implementations for Event Stream (#639)
 
 v0.19 (August 3rd, 2021)
 ------------------------
