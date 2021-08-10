@@ -18,7 +18,6 @@ use smithy_eventstream::frame::{
 use std::error::Error as StdError;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 
 /// Adapts a `Stream<SmithyMessageType>` to a signed `Stream<Bytes>` by using the provided
@@ -28,8 +27,8 @@ use std::task::{Context, Poll};
 /// marshalled into an Event Stream frame, (e.g., if the message payload was too large).
 #[pin_project]
 pub struct MessageStreamAdapter<T, E> {
-    marshaller: Arc<dyn MarshallMessage<Input = T> + Send + Sync>,
-    signer: Arc<dyn SignMessage + Send + Sync>,
+    marshaller: Box<dyn MarshallMessage<Input = T> + Send + Sync>,
+    signer: Box<dyn SignMessage + Send + Sync>,
     #[pin]
     stream: Pin<Box<dyn Stream<Item = Result<T, E>> + Send + Sync>>,
 }
@@ -41,8 +40,8 @@ impl<T, E: StdError + Send + Sync + 'static> MessageStreamAdapter<T, E> {
         stream: impl Stream<Item = Result<T, E>> + Send + Sync + 'static,
     ) -> Self {
         MessageStreamAdapter {
-            marshaller: Arc::new(marshaller),
-            signer: Arc::new(signer),
+            marshaller: Box::new(marshaller),
+            signer: Box::new(signer),
             stream: Box::pin(stream),
         }
     }
@@ -249,7 +248,7 @@ mod tests {
 
     struct TestSigner;
     impl SignMessage for TestSigner {
-        fn sign(&self, message: Message) -> Result<Message, SignMessageError> {
+        fn sign(&mut self, message: Message) -> Result<Message, SignMessageError> {
             let mut buffer = Vec::new();
             message.write_to(&mut buffer).unwrap();
             Ok(Message::new(buffer).add_header(Header::new("signed", HeaderValue::Bool(true))))
