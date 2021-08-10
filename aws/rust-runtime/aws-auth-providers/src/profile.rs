@@ -53,7 +53,79 @@ impl AsyncProvideCredentials for ProfileFileCredentialProvider {
     }
 }
 
+/// AWS Profile based credentials provider
+///
+/// This credentials provider will load credentials from `~/.aws/config` and `~/.aws/credentials`.
+/// The locations of these files are configurable, see [`profile::load`](aws_types::profile::load).
+///
+/// Generally, this will be constructed via the default provider chain, however, it can be manually
+/// constructed with the builder:
+/// ```rust,no_run
+/// use aws_auth_providers::profile::ProfileFileCredentialProvider;
+/// let provider = ProfileFileCredentialProvider::builder().connector(todo!()).build();
+/// ```
+///
+/// This provider supports several different credentials formats:
+/// ### Credentials defined explicitly within the file
+/// ```ini
+/// [default]
+/// aws_access_key_id = 123
+/// aws_secret_access_key = 456
+/// ```
+///
+/// ### Assume Role Credentials loaded from a credential source
+/// ```ini
+/// [default]
+/// role_arn = arn:aws:iam::123456789:role/RoleA
+/// credential_source = Environment
+/// ```
+///
+/// NOTE: Currently only the `Environment` credential source is supported although it is possible to
+/// provide custom sources:
+/// ```rust,no_run
+/// use aws_auth_providers::profile::ProfileFileCredentialProvider;
+/// use aws_auth::provider::{CredentialsResult, AsyncProvideCredentials, BoxFuture};
+/// use std::sync::Arc;
+/// struct MyCustomProvider;
+/// impl MyCustomProvider {
+///     async fn load_credentials(&self) -> CredentialsResult {
+///         todo!()
+///     }
+/// }
+///
+/// impl AsyncProvideCredentials for MyCustomProvider {
+///   fn provide_credentials<'a>(&'a self) -> BoxFuture<'a, CredentialsResult> where Self: 'a {
+///         Box::pin(self.load_credentials())
+///     }
+/// }
+/// let provider = ProfileFileCredentialProvider::builder()
+///     .with_custom_provider("Custom", Arc::new(MyCustomProvider) as Arc<dyn AsyncProvideCredentials>)
+///     .connector(todo!())
+///     .build();
+/// ```
+///
+/// ### Assume role credentials from a source profile
+/// ```ini
+/// [default]
+/// role_arn = arn:aws:iam::123456789:role/RoleA
+/// source_profile = base
+///
+/// [profile base]
+/// aws_access_key_id = 123
+/// aws_secret_access_key = 456
+/// ```
+///
+/// Other more complex configurations are possible, consult `test-data/assume-role-tests.json`.
+pub struct ProfileFileCredentialProvider {
+    inner: Result<ProviderChain, ProfileFileError>,
+    client_config: ClientConfiguration,
+}
+
 impl ProfileFileCredentialProvider {
+    pub fn builder() -> Builder {
+        Builder::default()
+    }
+
     async fn load_credentials(&self) -> CredentialsResult {
         let inner = self.inner.as_ref().map_err(|err| {
             CredentialsError::Unhandled(format!("failed to load: {}", &err).into())
@@ -223,11 +295,6 @@ impl Builder {
     }
 }
 
-pub struct ProfileFileCredentialProvider {
-    inner: Result<ProviderChain, ProfileFileError>,
-    client_config: ClientConfiguration,
-}
-
 fn build_provider_chain(
     fs: &Fs,
     env: &Env,
@@ -257,6 +324,7 @@ mod test {
 
     use crate::profile::{Builder, ProfileFileCredentialProvider};
 
+    /// Record an interaction with a `ProfileFileCredentialProvider` to a network traffic trace
     #[allow(dead_code)]
     async fn record_test<F, T>(
         test_name: &str,
@@ -331,7 +399,6 @@ mod test {
             req.uri().to_string(),
             "https://sts.us-east-1.amazonaws.com/"
         );
-        println!("{:?}", req);
     }
 
     #[tokio::test]
