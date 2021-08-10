@@ -239,7 +239,7 @@ mod tests {
             "hello from example.com"
         );
         assert_eq!(
-            connection.data().as_slice(),
+            connection.events().as_slice(),
             network_traffic.events.as_slice()
         );
         let received_requests = inner.take_requests();
