@@ -9,79 +9,73 @@ use crate::body::SdkBody;
 use crate::result::SdkError;
 use bytes::Bytes;
 use bytes_utils::SegmentedBuf;
+use futures_core::Stream;
 use hyper::body::HttpBody;
+use pin_project::pin_project;
 use smithy_eventstream::frame::{
     DecodedFrame, MarshallMessage, MessageFrameDecoder, SignMessage, UnmarshallMessage,
 };
 use std::error::Error as StdError;
 use std::marker::PhantomData;
-use std::ops::DerefMut;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{Context, Poll};
 
-enum SenderState {
-    /// A Hyper body channel has been created for the Event Stream input,
-    /// but it's not hooked up to anything yet.
-    NotReady(hyper::Body),
-    /// The Hyper body channel is all wired up, and we have a message signer implementation.
-    Ready(Box<dyn SignMessage>),
+/// Adapts a `Stream<SmithyMessageType>` to a signed `Stream<Bytes>` by using the provided
+/// message marshaller and signer implementations.
+///
+/// This will yield an `Err(SdkError::ConstructionFailure)` if a message can't be
+/// marshalled into an Event Stream frame, (e.g., if the message payload was too large).
+#[pin_project]
+pub struct MessageStreamAdapter<T, E> {
+    marshaller: Arc<dyn MarshallMessage<Input = T> + Send + Sync>,
+    signer: Arc<dyn SignMessage + Send + Sync>,
+    #[pin]
+    stream: Pin<Box<dyn Stream<Item = Result<T, E>> + Send + Sync>>,
 }
 
-/// Sends Smithy-modeled messages on an Event Stream.
-pub struct Sender<T, E: StdError + Send + Sync> {
-    marshaller: Box<dyn MarshallMessage<Input = T>>,
-    http_sender: hyper::body::Sender,
-    state: SenderState,
-    _phantom: PhantomData<E>,
+impl<T, E: StdError + Send + Sync + 'static> MessageStreamAdapter<T, E> {
+    pub fn new(
+        marshaller: impl MarshallMessage<Input = T> + Send + Sync + 'static,
+        signer: impl SignMessage + Send + Sync + 'static,
+        stream: impl Stream<Item = Result<T, E>> + Send + Sync + 'static,
+    ) -> Self {
+        MessageStreamAdapter {
+            marshaller: Arc::new(marshaller),
+            signer: Arc::new(signer),
+            stream: Box::pin(stream),
+        }
+    }
 }
 
-impl<T, E: StdError + Send + Sync> Sender<T, E> {
-    /// Creates a new `Sender` with the given message marshaller.
-    pub fn new(marshaller: impl MarshallMessage<Input = T> + 'static) -> Self {
-        let (http_sender, http_body) = hyper::Body::channel();
-        Sender {
-            marshaller: Box::new(marshaller),
-            http_sender,
-            state: SenderState::NotReady(http_body),
-            _phantom: Default::default(),
-        }
-    }
+impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, E> {
+    type Item = Result<Bytes, SdkError<E>>;
 
-    fn signer_mut(&mut self) -> &mut dyn SignMessage {
-        match &mut self.state {
-            SenderState::NotReady(_) => panic!("Sender is not ready to send data yet"),
-            SenderState::Ready(ref mut state) => state.deref_mut(),
-        }
-    }
-
-    /// Asynchronously sends a message on the stream. Returns `Ok(())` if the message was sent
-    /// successfully. Returns `Err(SdkError::ConstructionFailure)` if the message couldn't be
-    /// marshalled into an Event Stream frame, (e.g., if the message payload was too large).
-    /// Returns `Err(SdkError::DispatchFailure)` if a transport failure occurred.
-    pub async fn send(&mut self, input: T) -> Result<(), SdkError<E>> {
-        let message = self
-            .marshaller
-            .marshall(input)
-            .map_err(|err| SdkError::ConstructionFailure(Box::new(err)))?;
-        let message = self
-            .signer_mut()
-            .sign(message)
-            .map_err(|err| SdkError::ConstructionFailure(err))?;
-        let mut buffer = Vec::new();
-        message
-            .write_to(&mut buffer)
-            .map_err(|err| SdkError::ConstructionFailure(Box::new(err)))?;
-        self.http_sender
-            .send_data(buffer.into())
-            .await
-            .map_err(|err| SdkError::DispatchFailure(Box::new(err)))
-    }
-
-    // Intended to be used by the generated code to connect the `Sender` to the actual request.
-    #[doc(hidden)]
-    pub fn make_ready(&mut self, signer: impl SignMessage + 'static) -> hyper::Body {
-        let new_state = SenderState::Ready(Box::new(signer));
-        match std::mem::replace(&mut self.state, new_state) {
-            SenderState::Ready(_) => panic!("`make_ready` can only be called once"),
-            SenderState::NotReady(body) => body,
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.project();
+        match this.stream.poll_next(cx) {
+            Poll::Ready(message_option) => {
+                if let Some(message_result) = message_option {
+                    let message_result =
+                        message_result.map_err(|err| SdkError::ConstructionFailure(Box::new(err)));
+                    let message = this
+                        .marshaller
+                        .marshall(message_result?)
+                        .map_err(|err| SdkError::ConstructionFailure(Box::new(err)))?;
+                    let message = this
+                        .signer
+                        .sign(message)
+                        .map_err(|err| SdkError::ConstructionFailure(err))?;
+                    let mut buffer = Vec::new();
+                    message
+                        .write_to(&mut buffer)
+                        .map_err(|err| SdkError::ConstructionFailure(Box::new(err)))?;
+                    Poll::Ready(Some(Ok(Bytes::from(buffer))))
+                } else {
+                    Poll::Ready(None)
+                }
+            }
+            Poll::Pending => Poll::Pending,
         }
     }
 }
@@ -139,11 +133,15 @@ impl<T, E: StdError + Send + Sync> Receiver<T, E> {
 
 #[cfg(test)]
 mod tests {
-    use super::{MarshallMessage, Receiver, Sender, UnmarshallMessage};
+    use super::{MarshallMessage, Receiver, UnmarshallMessage};
     use crate::body::SdkBody;
+    use crate::event_stream::MessageStreamAdapter;
     use crate::result::SdkError;
+    use async_stream::stream;
     use bytes::Bytes;
-    use hyper::body::{Body, HttpBody};
+    use futures_core::Stream;
+    use futures_util::stream::StreamExt;
+    use hyper::body::Body;
     use smithy_eventstream::error::Error as EventStreamError;
     use smithy_eventstream::frame::{Header, HeaderValue, Message, SignMessage, SignMessageError};
     use std::error::Error as StdError;
@@ -258,17 +256,26 @@ mod tests {
         }
     }
 
+    fn check_compatible_with_hyper_wrap_stream<S, O, E>(stream: S) -> S
+    where
+        S: Stream<Item = Result<O, E>> + Send + 'static,
+        O: Into<Bytes> + 'static,
+        E: Into<Box<dyn StdError + Send + Sync>> + 'static,
+    {
+        stream
+    }
+
     #[tokio::test]
-    async fn send_success() {
-        let mut sender = Sender::<UnmarshalledMessage, EventStreamError>::new(Marshaller);
-        let mut http_body = sender.make_ready(TestSigner);
+    async fn message_stream_adapter_success() {
+        let stream = stream! {
+            yield Ok(UnmarshalledMessage("test".into()));
+        };
+        let mut adapter =
+            check_compatible_with_hyper_wrap_stream(
+                MessageStreamAdapter::<_, EventStreamError>::new(Marshaller, TestSigner, stream),
+            );
 
-        sender
-            .send(UnmarshalledMessage("test".into()))
-            .await
-            .unwrap();
-
-        let mut sent_bytes = http_body.data().await.unwrap().unwrap();
+        let mut sent_bytes = adapter.next().await.unwrap().unwrap();
         let sent = Message::read_from(&mut sent_bytes).unwrap();
         assert_eq!("signed", sent.headers()[0].name().as_str());
         assert_eq!(&HeaderValue::Bool(true), sent.headers()[0].value());
@@ -277,34 +284,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn send_network_failure() {
-        let mut sender = Sender::<UnmarshalledMessage, EventStreamError>::new(Marshaller);
-        let http_body = sender.make_ready(TestSigner);
-        drop(http_body);
+    async fn message_stream_adapter_construction_failure() {
+        let stream = stream! {
+            yield Err(EventStreamError::InvalidMessageLength);
+        };
+        let mut adapter =
+            check_compatible_with_hyper_wrap_stream(
+                MessageStreamAdapter::<UnmarshalledMessage, _>::new(Marshaller, TestSigner, stream),
+            );
 
-        let result = sender.send(UnmarshalledMessage("test".into())).await;
-        assert!(result.is_err());
-        assert!(matches!(
-            result.err().unwrap(),
-            SdkError::DispatchFailure(_)
-        ));
-    }
-
-    #[tokio::test]
-    async fn send_construction_failure() {
-        struct BadMarshaller;
-        impl MarshallMessage for BadMarshaller {
-            type Input = UnmarshalledMessage;
-
-            fn marshall(&self, _input: Self::Input) -> Result<Message, EventStreamError> {
-                Err(EventStreamError::InvalidMessageLength)
-            }
-        }
-
-        let mut sender = Sender::<UnmarshalledMessage, EventStreamError>::new(BadMarshaller);
-        let _http_body = sender.make_ready(TestSigner);
-
-        let result = sender.send(UnmarshalledMessage("test".into())).await;
+        let result = adapter.next().await.unwrap();
         assert!(result.is_err());
         assert!(matches!(
             result.err().unwrap(),
