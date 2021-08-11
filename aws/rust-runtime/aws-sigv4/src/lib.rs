@@ -3,7 +3,6 @@ use http::{
     header::{self, HeaderName},
     HeaderValue,
 };
-use serde::{Deserialize, Serialize};
 use std::{iter, str};
 
 pub const HMAC_256: &str = "AWS4-HMAC-SHA256";
@@ -179,13 +178,10 @@ pub fn sign_core<'a, B>(
     })))
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct Credentials<'a> {
-    #[serde(rename = "aws_access_key_id")]
     pub access_key: &'a str,
-    #[serde(rename = "aws_secret_access_key")]
     pub secret_key: &'a str,
-    #[serde(rename = "aws_session_token")]
     pub security_token: Option<&'a str>,
 }
 

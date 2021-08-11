@@ -16,7 +16,6 @@ documentation = "https://docs.rs/aws-sigv4"
 http = "0.2"
 http-body = "0.4"
 ring = "0.16"
-serde = { version = "1", features = ["derive"] }
 serde_urlencoded = "0.7"
 bytes = "1"
 hex = "0.4"
