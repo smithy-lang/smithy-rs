@@ -13,4 +13,4 @@
 ## Checklist
 - [ ] I have updated the CHANGELOG
 
-By submitting this pull request, I confirm that my contribution is made under the terms of the Apache 2.0 license.
+By submitting this pull request, I confirm that you can use, modify, copy, and redistribute this contribution, under the terms of your choice.
