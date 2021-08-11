@@ -5,7 +5,7 @@
 
 //! Functions to create signing keys and calculate signatures.
 
-use crate::types::DateExt;
+use crate::date_fmt::format_date;
 use chrono::{Date, Utc};
 use ring::{
     digest::{self},
@@ -40,7 +40,7 @@ pub fn generate_signing_key(
 
     let secret = format!("AWS4{}", secret);
     let secret = hmac::Key::new(hmac::HMAC_SHA256, &secret.as_bytes());
-    let tag = hmac::sign(&secret, date.fmt_aws().as_bytes());
+    let tag = hmac::sign(&secret, format_date(&date).as_bytes());
 
     // sign region
     let key = hmac::Key::new(hmac::HMAC_SHA256, tag.as_ref());

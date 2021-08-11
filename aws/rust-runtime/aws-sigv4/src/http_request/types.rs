@@ -3,16 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::{
-    header::HeaderValue, sign::sha256_hex_string, Error, PayloadChecksumKind, SignableBody,
-    SigningSettings, UriEncoding, DATE_FORMAT, HMAC_256, X_AMZ_CONTENT_SHA_256, X_AMZ_DATE,
-    X_AMZ_SECURITY_TOKEN,
+use super::{
+    header::HeaderValue, Error, PayloadChecksumKind, SignableBody, SigningSettings, UriEncoding,
+    HMAC_256, X_AMZ_CONTENT_SHA_256, X_AMZ_DATE, X_AMZ_SECURITY_TOKEN,
 };
-use chrono::{format::ParseError, Date, DateTime, NaiveDate, NaiveDateTime, Utc};
+use crate::date_fmt::{format_date, format_date_time, parse_date, parse_date_time};
+use crate::sign::sha256_hex_string;
+use chrono::{Date, DateTime, Utc};
 use http::{
     header::{HeaderName, USER_AGENT},
     HeaderMap, Method, Request,
 };
+use percent_encoding::{AsciiSet, CONTROLS};
 use serde_urlencoded as qs;
 use std::{
     cmp::Ordering,
@@ -123,7 +125,7 @@ impl CanonicalRequest {
         let mut canonical_headers = req.headers().clone();
         let x_amz_date = HeaderName::from_static(X_AMZ_DATE);
         let date_header =
-            HeaderValue::try_from(date.fmt_aws()).expect("date is valid header value");
+            HeaderValue::try_from(format_date_time(&date)).expect("date is valid header value");
         canonical_headers.insert(x_amz_date, date_header.clone());
         // to return headers to the user, record which headers we added
         let mut out = AddedHeaders {
@@ -161,8 +163,6 @@ impl CanonicalRequest {
         Ok((creq, out))
     }
 }
-
-use percent_encoding::{AsciiSet, CONTROLS};
 
 /// base set of characters that must be URL encoded
 pub const BASE_SET: &AsciiSet = &CONTROLS
@@ -268,7 +268,7 @@ impl<'a> AsSigV4 for Scope<'a> {
     fn fmt(&self) -> String {
         format!(
             "{}/{}/{}/aws4_request",
-            self.date.fmt_aws(),
+            format_date(&self.date),
             self.region,
             self.service
         )
@@ -279,7 +279,7 @@ impl<'a> TryFrom<&'a str> for Scope<'a> {
     type Error = Error;
     fn try_from(s: &'a str) -> Result<Scope<'a>, Self::Error> {
         let mut scopes = s.split('/');
-        let date = Date::<Utc>::parse_aws(scopes.next().expect("missing date"))?;
+        let date = parse_date(scopes.next().expect("missing date"))?;
         let region = scopes.next().expect("missing region");
         let service = scopes.next().expect("missing service");
 
@@ -306,7 +306,7 @@ impl<'a> TryFrom<&'a str> for StringToSign<'a> {
     type Error = Error;
     fn try_from(s: &'a str) -> Result<Self, Self::Error> {
         let lines = s.lines().collect::<Vec<&str>>();
-        let date = DateTime::<Utc>::parse_aws(&lines[1])?;
+        let date = parse_date_time(&lines[1])?;
         let scope: Scope = TryFrom::try_from(lines[2])?;
         let hashed_creq = &lines[3];
 
@@ -349,43 +349,9 @@ impl<'a> AsSigV4 for StringToSign<'a> {
         format!(
             "{}\n{}\n{}\n{}",
             HMAC_256,
-            self.date.fmt_aws(),
+            format_date_time(&self.date),
             self.scope.fmt(),
             self.hashed_creq
         )
-    }
-}
-
-pub(crate) trait DateTimeExt {
-    // formats using SigV4's format. YYYYMMDD'T'HHMMSS'Z'.
-    fn fmt_aws(&self) -> String;
-    // YYYYMMDD
-    fn parse_aws(s: &str) -> Result<DateTime<Utc>, ParseError>;
-}
-
-pub(crate) trait DateExt {
-    fn fmt_aws(&self) -> String;
-
-    fn parse_aws(s: &str) -> Result<Date<Utc>, ParseError>;
-}
-
-impl DateExt for Date<Utc> {
-    fn fmt_aws(&self) -> String {
-        self.format("%Y%m%d").to_string()
-    }
-    fn parse_aws(s: &str) -> Result<Date<Utc>, ParseError> {
-        let date = NaiveDate::parse_from_str(s, "%Y%m%d")?;
-        Ok(Date::<Utc>::from_utc(date, Utc))
-    }
-}
-
-impl DateTimeExt for DateTime<Utc> {
-    fn fmt_aws(&self) -> String {
-        self.format(DATE_FORMAT).to_string()
-    }
-
-    fn parse_aws(s: &str) -> Result<DateTime<Utc>, ParseError> {
-        let date = NaiveDateTime::parse_from_str(s, DATE_FORMAT)?;
-        Ok(DateTime::<Utc>::from_utc(date, Utc))
     }
 }
