@@ -39,6 +39,7 @@ val awsModules = listOf(
     "aws-http",
     "aws-hyper",
     "aws-sig-auth",
+    "aws-sigv4",
     "aws-types"
 )
 
