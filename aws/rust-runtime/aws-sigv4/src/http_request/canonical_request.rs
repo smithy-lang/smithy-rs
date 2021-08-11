@@ -13,9 +13,8 @@ use chrono::{Date, DateTime, Utc};
 use http::header::{HeaderName, USER_AGENT};
 use http::{HeaderMap, HeaderValue, Method, Request};
 use percent_encoding::{AsciiSet, CONTROLS};
-use serde_urlencoded as qs;
+use std::borrow::Cow;
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::Formatter;
@@ -106,18 +105,21 @@ impl CanonicalRequest {
             ..Default::default()
         };
 
-        if let Some(path) = req.uri().query() {
-            let params: BTreeMap<String, String> = qs::from_str(path)?;
-            let n = params.len();
+        if let Some(query) = req.uri().query() {
+            let mut first = true;
             let mut out = String::new();
-            for (i, (k, v)) in params.into_iter().enumerate() {
-                let last = i == n - 1;
-                out.push_str(&percent_encode(&k));
-                out.push('=');
-                out.push_str(&percent_encode(&v));
-                if !last {
+            let mut params: Vec<(Cow<str>, Cow<str>)> =
+                form_urlencoded::parse(query.as_bytes()).collect();
+            params.sort_by(|a, b| a.0.cmp(&b.0));
+            for (key, value) in params {
+                if !first {
                     out.push('&');
                 }
+                first = false;
+
+                out.push_str(&percent_encode(&key));
+                out.push('=');
+                out.push_str(&percent_encode(&value));
             }
             creq.params = out;
         }

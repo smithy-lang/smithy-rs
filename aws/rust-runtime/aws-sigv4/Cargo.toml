@@ -8,19 +8,19 @@ license = "MIT OR Apache-2.0"
 description = "AWS SigV4 signer"
 
 [features]
-sign-http = ["http", "http-body", "percent-encoding", "serde_urlencoded"]
+sign-http = ["http", "http-body", "percent-encoding", "form_urlencoded"]
 sign-eventstream = []
 default = ["sign-http", "sign-eventstream"]
 
 [dependencies]
 bytes = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+form_urlencoded = { version = "1.0", optional = true }
 hex = "0.4"
 http = { version = "0.2", optional = true }
 http-body = { version = "0.4", optional = true }
 percent-encoding = { version = "2.1", optional = true }
 ring = "0.16"
-serde_urlencoded = { version = "0.7", optional = true }
 
 [dev-dependencies]
 pretty_assertions = "0.6"
