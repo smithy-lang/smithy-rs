@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
-/// Replay traffic recorded by a [`RecordingConnection`](RecordingConnection)
+/// Replay traffic recorded by a [`RecordingConnection`](super::RecordingConnection)
 #[derive(Clone, Debug)]
 pub struct ReplayingConnection {
     events: Arc<Mutex<HashMap<ConnectionId, VecDeque<Event>>>>,
