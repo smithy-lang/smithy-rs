@@ -11,6 +11,7 @@ use crate::error::Error;
 use crate::str_bytes::StrBytes;
 use bytes::{Buf, BufMut, Bytes};
 use std::convert::{TryFrom, TryInto};
+use std::error::Error as StdError;
 use std::mem::size_of;
 
 const PRELUDE_LENGTH_BYTES: u32 = 3 * size_of::<u32>() as u32;
@@ -18,6 +19,29 @@ const PRELUDE_LENGTH_BYTES_USIZE: usize = PRELUDE_LENGTH_BYTES as usize;
 const MESSAGE_CRC_LENGTH_BYTES: u32 = size_of::<u32>() as u32;
 const MAX_HEADER_NAME_LEN: usize = 255;
 const MIN_HEADER_LEN: usize = 2;
+
+pub type SignMessageError = Box<dyn StdError + Send + Sync + 'static>;
+
+/// Signs an Event Stream message.
+pub trait SignMessage {
+    fn sign(&mut self, message: Message) -> Result<Message, SignMessageError>;
+}
+
+/// Converts a Smithy modeled Event Stream type into a [`Message`](Message).
+pub trait MarshallMessage {
+    /// Smithy modeled input type to convert from.
+    type Input;
+
+    fn marshall(&self, input: Self::Input) -> Result<Message, Error>;
+}
+
+/// Converts an Event Stream [`Message`](Message) into a Smithy modeled type.
+pub trait UnmarshallMessage {
+    /// Smithy modeled type to convert into.
+    type Output;
+
+    fn unmarshall(&self, message: Message) -> Result<Self::Output, Error>;
+}
 
 mod value {
     use crate::error::Error;

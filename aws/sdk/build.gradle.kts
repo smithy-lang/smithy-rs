@@ -21,24 +21,25 @@ val smithyVersion: String by project
 
 val sdkOutputDir = buildDir.resolve("aws-sdk")
 val runtimeModules = listOf(
+    "protocol-test-helpers",
     "smithy-async",
-    "smithy-types",
-    "smithy-json",
-    "smithy-query",
-    "smithy-xml",
+    "smithy-client",
+    "smithy-eventstream",
     "smithy-http",
     "smithy-http-tower",
-    "smithy-client",
-    "protocol-test-helpers"
+    "smithy-json",
+    "smithy-query",
+    "smithy-types",
+    "smithy-xml"
 )
 val awsModules = listOf(
     "aws-auth",
+    "aws-auth-providers",
     "aws-endpoint",
-    "aws-types",
+    "aws-http",
     "aws-hyper",
     "aws-sig-auth",
-    "aws-http",
-    "aws-auth-providers"
+    "aws-types"
 )
 
 buildscript {

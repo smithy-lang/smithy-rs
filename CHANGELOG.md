@@ -1,5 +1,9 @@
-vNext (Month Day Year)
-----------------------
+vNext (Month Day, Year)
+-----------------------
+- (When complete) Add profile file provider for region (#594, #xyz)
+
+v0.20 (August 10th, 2021)
+--------------------------
 
 **Breaking changes**
 
@@ -19,9 +23,10 @@ vNext (Month Day Year)
   ```
 
 **New This Week**
-- (When complete) Add profile file provider for region (#594, #xyz)
 - Add AssumeRoleProvider parser implementation. (#632)
 - The closure passed to `async_provide_credentials_fn` can now borrow values (#637)
+- Add `Sender`/`Receiver` implementations for Event Stream (#639)
+- Bring in the latest AWS models (#630)
 
 v0.19 (August 3rd, 2021)
 ------------------------
