@@ -5,7 +5,7 @@
 
 use crate::signer::{OperationSigningConfig, RequestConfig, SigV4Signer, SigningError};
 use aws_auth::Credentials;
-use aws_sigv4::SignableBody;
+use aws_sigv4::http_request::SignableBody;
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
 use smithy_http::middleware::MapRequest;

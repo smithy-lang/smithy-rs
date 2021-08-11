@@ -9,7 +9,7 @@ description = "AWS SigV4 signer"
 
 [features]
 sign-http = ["http", "http-body", "percent-encoding", "form_urlencoded"]
-sign-eventstream = []
+sign-eventstream = ["smithy-eventstream"]
 default = ["sign-http", "sign-eventstream"]
 
 [dependencies]
@@ -20,6 +20,7 @@ http = { version = "0.2", optional = true }
 http-body = { version = "0.4", optional = true }
 percent-encoding = { version = "2.1", optional = true }
 ring = "0.16"
+smithy-eventstream = { path = "../../../rust-runtime/smithy-eventstream", optional = true }
 
 [dev-dependencies]
 bytes = "1"

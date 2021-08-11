@@ -34,7 +34,7 @@ where
     B: AsRef<[u8]>,
 {
     let signable_body = SignableBody::Bytes(request.body().as_ref());
-    for (header_name, header_value) in sign_core(
+    for (header_name, header_value) in calculate_signing_headers(
         &request,
         signable_body,
         &Config {
@@ -130,12 +130,14 @@ pub enum SignableBody<'a> {
     Precomputed(String),
 }
 
-/// req MUST NOT contain any of the following headers:
+/// Calculates the signature headers that need to get added to the given `request`.
+///
+/// `request` MUST NOT contain any of the following headers:
 /// - x-amz-date
 /// - x-amz-content-sha-256
 /// - x-amz-security-token
-fn sign_core<'a, B>(
-    req: &'a http::Request<B>,
+pub fn calculate_signing_headers<'a, B>(
+    request: &'a http::Request<B>,
     body: SignableBody,
     config: &'a Config<'a>,
 ) -> Result<impl Iterator<Item = (&'static str, HeaderValue)>, Error> {
@@ -150,7 +152,8 @@ fn sign_core<'a, B>(
         settings,
     } = config;
     let date = DateTime::<Utc>::from(*date);
-    let (creq, extra_headers) = CanonicalRequest::from(req, body, settings, date, *security_token)?;
+    let (creq, extra_headers) =
+        CanonicalRequest::from(request, body, settings, date, *security_token)?;
 
     // Step 2: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-string-to-sign.html.
     let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
