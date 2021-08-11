@@ -50,6 +50,7 @@ impl CanonicalRequest {
             creq.params = qs::to_string(params)?;
         }
 
+        #[allow(clippy::mutable_key_type)]
         let mut headers = BTreeSet::new();
         for (name, _) in req.headers() {
             headers.insert(CanonicalHeaderName(name.clone()));
