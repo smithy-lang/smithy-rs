@@ -178,7 +178,7 @@ mod tests {
     use chrono::{Date, DateTime, NaiveDateTime, Utc};
     use http::{Method, Request, Uri, Version};
     use pretty_assertions::assert_eq;
-    use std::{convert::TryFrom, str::FromStr};
+    use std::{convert::TryFrom, fs, str::FromStr};
 
     #[test]
     fn read_request() -> Result<(), Error> {
@@ -340,7 +340,7 @@ mod tests {
     #[test]
     fn test_signature_calculation() -> Result<(), Error> {
         let secret = "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY";
-        let creq = std::fs::read_to_string("./aws-sig-v4-test-suite/iam.creq")?;
+        let creq = fs::read_to_string("./aws-sig-v4-test-suite/iam.creq")?.replace("\r\n", "\n");
         let date = DateTime::parse_aws("20150830T123600Z")?;
 
         let derived_key = generate_signing_key(secret, date.date(), "us-east-1", "iam");
@@ -452,29 +452,29 @@ macro_rules! assert_req_eq {
 #[macro_export]
 macro_rules! read {
     (req: $case:tt) => {
-        std::fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.req", $case, $case))?
+        fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.req", $case, $case))?
             // this replacement is necessary for tests to pass on Windows, as reading the
             // sigv4 snapshots from the file system results in CRLF line endings being inserted.
             .replace("\r\n", "\n")
     };
 
     (creq: $case:tt) => {
-        std::fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.creq", $case, $case))?
+        fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.creq", $case, $case))?
             .replace("\r\n", "\n")
     };
 
     (sreq: $case:tt) => {
-        std::fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.sreq", $case, $case))?
+        fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.sreq", $case, $case))?
             .replace("\r\n", "\n")
     };
 
     (sts: $case:tt) => {
-        std::fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.sts", $case, $case))?
+        fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.sts", $case, $case))?
             .replace("\r\n", "\n")
     };
 
     (authz: $case:tt) => {
-        std::fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.authz", $case, $case))?
+        fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.authz", $case, $case))?
             .replace("\r\n", "\n")
     };
 }
