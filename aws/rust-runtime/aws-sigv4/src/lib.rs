@@ -195,7 +195,7 @@ mod tests {
         let creq = CanonicalRequest::from(&mut req, &SigningSettings::default())?;
 
         let actual = format!("{}", creq);
-        let expected = read!(creq: "get-vanilla-query-order-key-case")?;
+        let expected = read!(creq: "get-vanilla-query-order-key-case");
         assert_eq!(actual, expected);
 
         // Step 2: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-string-to-sign.html.
@@ -215,13 +215,13 @@ mod tests {
         let authorization = build_authorization_header(access, creq, sts, &signature);
         let x_azn_date = date.fmt_aws();
 
-        let s = read!(req: "get-vanilla-query-order-key-case")?;
+        let s = read!(req: "get-vanilla-query-order-key-case");
         let mut req = parse_request(s.as_bytes())?;
 
         let headers = req.headers_mut();
         headers.insert("authorization", authorization.parse()?);
         headers.insert("X-Amz-Date", x_azn_date.parse()?);
-        let expected = read!(sreq: "get-vanilla-query-order-key-case")?;
+        let expected = read!(sreq: "get-vanilla-query-order-key-case");
         let expected = parse_request(expected.as_bytes())?;
         assert_req_eq!(expected, req);
 
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn test_build_authorization_header() -> Result<(), Error> {
-        let s = read!(req: "get-vanilla-query-order-key-case")?;
+        let s = read!(req: "get-vanilla-query-order-key-case");
         let mut req = parse_request(s.as_bytes())?;
         let creq = CanonicalRequest::from(&mut req, &SigningSettings::default())?;
 
@@ -242,7 +242,7 @@ mod tests {
         let secret = "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY";
         let signing_key = generate_signing_key(secret, date.date(), "us-east-1", "service");
         let signature = calculate_signature(signing_key, &sts.fmt().as_bytes());
-        let expected_header = read!(authz: "get-vanilla-query-order-key-case")?;
+        let expected_header = read!(authz: "get-vanilla-query-order-key-case");
         let header = build_authorization_header("AKIDEXAMPLE", creq, sts, &signature);
         assert_eq!(expected_header, header);
 
@@ -265,14 +265,14 @@ mod tests {
 
     #[test]
     fn test_parse() -> Result<(), Error> {
-        let buf = read!(req: "post-header-key-case")?;
+        let buf = read!(req: "post-header-key-case");
         parse_request(buf.as_bytes())?;
         Ok(())
     }
 
     #[test]
     fn test_read_query_params() -> Result<(), Error> {
-        let buf = read!(req: "get-vanilla-query-order-key-case")?;
+        let buf = read!(req: "get-vanilla-query-order-key-case");
         parse_request(buf.as_bytes()).unwrap();
         Ok(())
     }
@@ -327,8 +327,8 @@ mod tests {
     #[test]
     fn test_string_to_sign() -> Result<(), Error> {
         let date = DateTime::parse_aws("20150830T123600Z")?;
-        let creq = read!(creq: "get-vanilla-query-order-key-case")?;
-        let expected_sts = read!(sts: "get-vanilla-query-order-key-case")?;
+        let creq = read!(creq: "get-vanilla-query-order-key-case");
+        let expected_sts = read!(sts: "get-vanilla-query-order-key-case");
         let encoded = encode_with_hex(creq);
 
         let actual = StringToSign::new(date, "us-east-1", "service", &encoded);
@@ -354,21 +354,21 @@ mod tests {
 
     #[test]
     fn parse_signed_request() -> Result<(), Error> {
-        let req = read!(sreq: "post-header-key-case")?;
+        let req = read!(sreq: "post-header-key-case");
         let _: Request<_> = parse_request(req.as_bytes())?;
         Ok(())
     }
 
     #[test]
     fn read_sts() -> Result<(), Error> {
-        let sts = read!(sts: "get-vanilla-query-order-key-case")?;
+        let sts = read!(sts: "get-vanilla-query-order-key-case");
         let _ = StringToSign::try_from(sts.as_ref())?;
         Ok(())
     }
 
     #[test]
     fn test_digest_of_canonical_request() -> Result<(), Error> {
-        let creq = read!(creq: "get-vanilla-query-order-key-case")?;
+        let creq = read!(creq: "get-vanilla-query-order-key-case");
         let actual = encode_with_hex(creq);
         let expected = "816cd5b414d056048ba4f7c5386d6e0533120fb1fcfa93762cf0fc39e2cf19e0";
 
@@ -378,13 +378,13 @@ mod tests {
 
     #[test]
     fn test_double_url_encode() -> Result<(), Error> {
-        let s = read!(req: "double-url-encode")?;
+        let s = read!(req: "double-url-encode");
         let req = parse_request(s.as_bytes())?;
         println!("{:?}", req);
         let creq = CanonicalRequest::from(&req, &SigningSettings::default())?;
 
         let actual = format!("{}", creq);
-        let expected = read!(creq: "double-url-encode")?;
+        let expected = read!(creq: "double-url-encode");
         println!("{}", actual);
         assert_eq!(actual, expected);
         Ok(())
@@ -452,22 +452,29 @@ macro_rules! assert_req_eq {
 #[macro_export]
 macro_rules! read {
     (req: $case:tt) => {
-        std::fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.req", $case, $case))
+        std::fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.req", $case, $case))?
+            // this replacement is necessary for tests to pass on Windows, as reading the
+            // sigv4 snapshots from the file system results in CRLF line endings being inserted.
+            .replace("\r\n", "\n")
     };
 
     (creq: $case:tt) => {
-        std::fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.creq", $case, $case))
+        std::fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.creq", $case, $case))?
+            .replace("\r\n", "\n")
     };
 
     (sreq: $case:tt) => {
-        std::fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.sreq", $case, $case))
+        std::fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.sreq", $case, $case))?
+            .replace("\r\n", "\n")
     };
 
     (sts: $case:tt) => {
-        std::fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.sts", $case, $case))
+        std::fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.sts", $case, $case))?
+            .replace("\r\n", "\n")
     };
 
     (authz: $case:tt) => {
-        std::fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.authz", $case, $case))
+        std::fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.authz", $case, $case))?
+            .replace("\r\n", "\n")
     };
 }
