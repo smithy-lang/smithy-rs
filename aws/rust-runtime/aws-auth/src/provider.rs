@@ -61,7 +61,7 @@ impl Error for CredentialsError {
 }
 
 pub type CredentialsResult = Result<Credentials, CredentialsError>;
-type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// An asynchronous credentials provider
 ///

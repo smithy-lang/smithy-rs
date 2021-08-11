@@ -14,3 +14,6 @@ tracing = "0.1"
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+smithy-client = { path = "../../sdk/build/aws-sdk/smithy-client", features = ["test-util", "hyper-rustls"]}
+tokio = { version = "1", features = ["full"]}
+tracing-test = "0.1.0"

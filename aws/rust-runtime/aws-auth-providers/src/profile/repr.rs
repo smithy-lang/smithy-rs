@@ -25,8 +25,18 @@ use aws_types::profile::{Profile, ProfileSet};
 /// that don't actually have implementations.
 #[derive(Debug)]
 pub struct ProfileChain<'a> {
-    base: BaseProvider<'a>,
-    chain: Vec<RoleArn<'a>>,
+    pub(crate) base: BaseProvider<'a>,
+    pub(crate) chain: Vec<RoleArn<'a>>,
+}
+
+impl<'a> ProfileChain<'a> {
+    pub fn base(&self) -> &BaseProvider<'a> {
+        &self.base
+    }
+
+    pub fn chain(&self) -> &[RoleArn<'a>] {
+        &self.chain.as_slice()
+    }
 }
 
 /// A base member of the profile chain
@@ -77,12 +87,12 @@ pub enum BaseProvider<'a> {
 #[derive(Debug)]
 pub struct RoleArn<'a> {
     /// Role to assume
-    role_arn: &'a str,
+    pub role_arn: &'a str,
     /// external_id parameter to pass to the assume role provider
-    external_id: Option<&'a str>,
+    pub external_id: Option<&'a str>,
 
     /// session name parameter to pass to the assume role provider
-    session_name: Option<&'a str>,
+    pub session_name: Option<&'a str>,
 }
 
 /// Resolve a ProfileChain from a ProfileSet or return an error
@@ -279,8 +289,8 @@ mod tests {
         let expected = test_case.output;
         match (expected, actual) {
             (TestOutput::Error(s), Err(e)) => assert!(
-                format!("{:?}", e).contains(&s),
-                "expected {:?} to contain `{}`",
+                format!("{}", e).contains(&s),
+                "expected {} to contain `{}`",
                 e,
                 s
             ),
