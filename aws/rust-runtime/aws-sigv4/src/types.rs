@@ -1,5 +1,10 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 use crate::{
-    header::HeaderValue, sign::encode_bytes_with_hex, Error, PayloadChecksumKind, SignableBody,
+    header::HeaderValue, sign::sha256_hex_string, Error, PayloadChecksumKind, SignableBody,
     SigningSettings, UriEncoding, DATE_FORMAT, HMAC_256, X_AMZ_CONTENT_SHA_256, X_AMZ_DATE,
     X_AMZ_SECURITY_TOKEN,
 };
@@ -103,7 +108,7 @@ impl CanonicalRequest {
         // - use the precomputed hash
         // - use `UnsignedPayload`
         let payload_hash = match body {
-            SignableBody::Bytes(data) => encode_bytes_with_hex(data),
+            SignableBody::Bytes(data) => sha256_hex_string(data),
             SignableBody::Precomputed(digest) => digest,
             SignableBody::UnsignedPayload => UNSIGNED_PAYLOAD.to_string(),
         };
