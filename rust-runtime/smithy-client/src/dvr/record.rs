@@ -99,7 +99,7 @@ fn record_body(
                     // This happens if the real connection is closed during recording.
                     // Need to think more carefully if this is the correct thing to log in this
                     // case.
-                    if let Err(_) = sender.send_data(data).await {
+                    if sender.send_data(data).await.is_err() {
                         event_bus.lock().unwrap().push(Event {
                             connection_id: event_id,
                             action: Action::Eof {
@@ -148,6 +148,7 @@ where
 {
     type Response = http::Response<SdkBody>;
     type Error = BoxError;
+    #[allow(clippy::type_complexity)]
     type Future =
         Pin<Box<dyn Future<Output = Result<http::Response<SdkBody>, Self::Error>> + Send>>;
 

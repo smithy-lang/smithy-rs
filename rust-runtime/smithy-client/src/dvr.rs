@@ -95,9 +95,9 @@ impl<'a, B> From<&'a http::Request<B>> for Request {
 }
 
 fn headers_to_map(headers: &http::HeaderMap<http::HeaderValue>) -> HashMap<String, Vec<String>> {
-    let mut out = HashMap::new();
+    let mut out: HashMap<_, Vec<_>> = HashMap::new();
     for (header_name, header_value) in headers.iter() {
-        let entry = out.entry(header_name.to_string()).or_insert(vec![]);
+        let entry = out.entry(header_name.to_string()).or_default();
         entry.push(header_value.to_str().unwrap().to_string());
     }
     out

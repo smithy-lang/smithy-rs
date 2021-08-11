@@ -43,11 +43,9 @@ impl ReplayingConnection {
 
     /// Build a replay connection from a sequence of events
     pub fn new(events: Vec<Event>) -> Self {
-        let mut event_map = HashMap::new();
+        let mut event_map: HashMap<_, VecDeque<_>> = HashMap::new();
         for event in events {
-            let event_buffer = event_map
-                .entry(event.connection_id)
-                .or_insert(VecDeque::new());
+            let event_buffer = event_map.entry(event.connection_id).or_default();
             event_buffer.push_back(event);
         }
         ReplayingConnection {
