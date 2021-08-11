@@ -4,45 +4,69 @@
  */
 
 use super::{
-    header::HeaderValue, Error, PayloadChecksumKind, SignableBody, SigningSettings, UriEncoding,
-    HMAC_256, X_AMZ_CONTENT_SHA_256, X_AMZ_DATE, X_AMZ_SECURITY_TOKEN,
+    Error, PayloadChecksumKind, SignableBody, SigningSettings, UriEncoding, HMAC_256,
+    X_AMZ_CONTENT_SHA_256, X_AMZ_DATE, X_AMZ_SECURITY_TOKEN,
 };
 use crate::date_fmt::{format_date, format_date_time, parse_date, parse_date_time};
 use crate::sign::sha256_hex_string;
 use chrono::{Date, DateTime, Utc};
-use http::{
-    header::{HeaderName, USER_AGENT},
-    HeaderMap, Method, Request,
-};
+use http::header::{HeaderName, USER_AGENT};
+use http::{HeaderMap, HeaderValue, Method, Request};
 use percent_encoding::{AsciiSet, CONTROLS};
 use serde_urlencoded as qs;
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
-    convert::TryFrom,
-    fmt,
-};
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::convert::TryFrom;
+use std::fmt;
+use std::fmt::Formatter;
 
 const UNSIGNED_PAYLOAD: &str = "UNSIGNED-PAYLOAD";
 
-pub(crate) trait AsSigV4 {
-    fn fmt(&self) -> String;
+/// base set of characters that must be URL encoded
+const BASE_SET: &AsciiSet = &CONTROLS
+    .add(b' ')
+    .add(b'/')
+    // RFC-3986 §3.3 allows sub-delims (defined in section2.2) to be in the path component.
+    // This includes both colon ':' and comma ',' characters.
+    // Smithy protocol tests & AWS services percent encode these expected values. Signing
+    // will fail if these values are not percent encoded
+    .add(b':')
+    .add(b',')
+    .add(b'?')
+    .add(b'#')
+    .add(b'[')
+    .add(b']')
+    .add(b'@')
+    .add(b'!')
+    .add(b'$')
+    .add(b'&')
+    .add(b'\'')
+    .add(b'(')
+    .add(b')')
+    .add(b'*')
+    .add(b'+')
+    .add(b';')
+    .add(b'=')
+    .add(b'%');
+
+fn percent_encode(value: &str) -> String {
+    percent_encoding::percent_encode(&value.as_bytes(), BASE_SET).to_string()
 }
 
-#[derive(Default, Debug, PartialEq)]
-pub(crate) struct CanonicalRequest {
-    pub(crate) method: Method,
-    pub(crate) path: String,
-    pub(crate) params: String,
-    pub(crate) headers: HeaderMap,
-    pub(crate) signed_headers: SignedHeaders,
-    pub(crate) payload_hash: String,
-}
-
-pub(crate) struct AddedHeaders {
+pub struct AddedHeaders {
     pub x_amz_date: HeaderValue,
     pub x_amz_content_256: Option<HeaderValue>,
     pub x_amz_security_token: Option<HeaderValue>,
+}
+
+#[derive(Default, Debug, PartialEq)]
+pub struct CanonicalRequest {
+    pub method: Method,
+    pub path: String,
+    pub params: String,
+    pub headers: HeaderMap,
+    pub signed_headers: SignedHeaders,
+    pub payload_hash: String,
 }
 
 impl CanonicalRequest {
@@ -61,7 +85,7 @@ impl CanonicalRequest {
     /// `%25`
     /// - If settings.payload_checksum_kind is XAmzSha256, add a x-amz-content-sha256 with the body
     /// checksum. This is the same checksum used as the "payload_hash" in the canonical request
-    pub(crate) fn from<B>(
+    pub fn from<B>(
         req: &Request<B>,
         body: SignableBody,
         settings: &SigningSettings,
@@ -88,13 +112,9 @@ impl CanonicalRequest {
             let mut out = String::new();
             for (i, (k, v)) in params.into_iter().enumerate() {
                 let last = i == n - 1;
-                out.push_str(
-                    &percent_encoding::percent_encode(&k.as_bytes(), BASE_SET).to_string(),
-                );
+                out.push_str(&percent_encode(&k));
                 out.push('=');
-                out.push_str(
-                    &percent_encoding::percent_encode(&v.as_bytes(), BASE_SET).to_string(),
-                );
+                out.push_str(&percent_encode(&v));
                 if !last {
                     out.push('&');
                 }
@@ -147,53 +167,16 @@ impl CanonicalRequest {
             out.x_amz_content_256 = Some(header);
         }
 
-        #[allow(clippy::mutable_key_type)]
-        let mut signed_headers = BTreeSet::new();
-        for (name, _) in canonical_headers.iter() {
-            // The user agent header should not be signed because it may
-            // be alterted by proxies
+        let mut signed_headers = Vec::with_capacity(canonical_headers.len());
+        for (name, _) in &canonical_headers {
+            // The user agent header should not be signed because it may be altered by proxies
             if name != USER_AGENT {
-                signed_headers.insert(CanonicalHeaderName(name.clone()));
+                signed_headers.push(CanonicalHeaderName(name.clone()));
             }
         }
-        creq.signed_headers = SignedHeaders {
-            inner: signed_headers,
-        };
+        creq.signed_headers = SignedHeaders::new(signed_headers);
         creq.headers = canonical_headers;
         Ok((creq, out))
-    }
-}
-
-/// base set of characters that must be URL encoded
-pub const BASE_SET: &AsciiSet = &CONTROLS
-    .add(b' ')
-    .add(b'/')
-    // RFC-3986 §3.3 allows sub-delims (defined in section2.2) to be in the path component.
-    // This includes both colon ':' and comma ',' characters.
-    // Smithy protocol tests & AWS services percent encode these expected values. Signing
-    // will fail if these values are not percent encoded
-    .add(b':')
-    .add(b',')
-    .add(b'?')
-    .add(b'#')
-    .add(b'[')
-    .add(b']')
-    .add(b'@')
-    .add(b'!')
-    .add(b'$')
-    .add(b'&')
-    .add(b'\'')
-    .add(b'(')
-    .add(b')')
-    .add(b'*')
-    .add(b'+')
-    .add(b';')
-    .add(b'=')
-    .add(b'%');
-
-impl AsSigV4 for CanonicalRequest {
-    fn fmt(&self) -> String {
-        self.to_string()
     }
 }
 
@@ -219,13 +202,14 @@ impl fmt::Display for CanonicalRequest {
 }
 
 #[derive(Debug, PartialEq, Default)]
-pub(crate) struct SignedHeaders {
-    inner: BTreeSet<CanonicalHeaderName>,
+pub struct SignedHeaders {
+    inner: Vec<CanonicalHeaderName>,
 }
 
-impl AsSigV4 for SignedHeaders {
-    fn fmt(&self) -> String {
-        self.to_string()
+impl SignedHeaders {
+    fn new(mut inner: Vec<CanonicalHeaderName>) -> Self {
+        inner.sort();
+        SignedHeaders { inner }
     }
 }
 
@@ -243,7 +227,7 @@ impl fmt::Display for SignedHeaders {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub(crate) struct CanonicalHeaderName(HeaderName);
+pub struct CanonicalHeaderName(HeaderName);
 
 impl PartialOrd for CanonicalHeaderName {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -258,15 +242,16 @@ impl Ord for CanonicalHeaderName {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub(crate) struct Scope<'a> {
-    pub(crate) date: Date<Utc>,
-    pub(crate) region: &'a str,
-    pub(crate) service: &'a str,
+pub struct Scope<'a> {
+    pub date: Date<Utc>,
+    pub region: &'a str,
+    pub service: &'a str,
 }
 
-impl<'a> AsSigV4 for Scope<'a> {
-    fn fmt(&self) -> String {
-        format!(
+impl<'a> fmt::Display for Scope<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
             "{}/{}/{}/aws4_request",
             format_date(&self.date),
             self.region,
@@ -294,12 +279,12 @@ impl<'a> TryFrom<&'a str> for Scope<'a> {
 }
 
 #[derive(PartialEq, Debug)]
-pub(crate) struct StringToSign<'a> {
-    pub(crate) scope: Scope<'a>,
-    pub(crate) date: DateTime<Utc>,
-    pub(crate) region: &'a str,
-    pub(crate) service: &'a str,
-    pub(crate) hashed_creq: &'a str,
+pub struct StringToSign<'a> {
+    pub scope: Scope<'a>,
+    pub date: DateTime<Utc>,
+    pub region: &'a str,
+    pub service: &'a str,
+    pub hashed_creq: &'a str,
 }
 
 impl<'a> TryFrom<&'a str> for StringToSign<'a> {
@@ -344,13 +329,14 @@ impl<'a> StringToSign<'a> {
     }
 }
 
-impl<'a> AsSigV4 for StringToSign<'a> {
-    fn fmt(&self) -> String {
-        format!(
+impl<'a> fmt::Display for StringToSign<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
             "{}\n{}\n{}\n{}",
             HMAC_256,
             format_date_time(&self.date),
-            self.scope.fmt(),
+            self.scope.to_string(),
             self.hashed_creq
         )
     }

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+// Some of the functions in this file are unused when disabling certain features
+#![allow(dead_code)]
 use chrono::{Date, DateTime, NaiveDate, NaiveDateTime, ParseError, Utc};
 
 const DATE_TIME_FORMAT: &str = "%Y%m%dT%H%M%SZ";

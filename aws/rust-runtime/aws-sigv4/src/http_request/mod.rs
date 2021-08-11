@@ -5,24 +5,22 @@
 
 //! Utilities to sign HTTP requests.
 
-use crate::http_request::types::{AsSigV4, CanonicalRequest, StringToSign};
+use crate::http_request::canonical_request::{CanonicalRequest, StringToSign};
 use crate::sign::{calculate_signature, generate_signing_key, sha256_hex_string};
 use chrono::{DateTime, Utc};
-use http::{
-    header::{self, HeaderName},
-    HeaderValue,
-};
+use http::header::{HeaderName, HeaderValue};
+use std::error::Error as StdError;
 use std::time::SystemTime;
 use std::{iter, str};
 
-mod types;
+mod canonical_request;
 
 const HMAC_256: &str = "AWS4-HMAC-SHA256";
 const X_AMZ_SECURITY_TOKEN: &str = "x-amz-security-token";
 const X_AMZ_DATE: &str = "x-amz-date";
 const X_AMZ_CONTENT_SHA_256: &str = "x-amz-content-sha256";
 
-type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
+pub type Error = Box<dyn StdError + Send + Sync + 'static>;
 
 /// Signs the given `request` with the `credentials`, `region`, and `service_name`.
 /// This will directly add the signature headers to the request.
@@ -136,7 +134,7 @@ pub enum SignableBody<'a> {
 /// - x-amz-date
 /// - x-amz-content-sha-256
 /// - x-amz-security-token
-pub fn sign_core<'a, B>(
+fn sign_core<'a, B>(
     req: &'a http::Request<B>,
     body: SignableBody,
     config: &'a Config<'a>,
@@ -155,12 +153,12 @@ pub fn sign_core<'a, B>(
     let (creq, extra_headers) = CanonicalRequest::from(req, body, settings, date, *security_token)?;
 
     // Step 2: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-string-to-sign.html.
-    let encoded_creq = &sha256_hex_string(creq.fmt().as_bytes());
+    let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
     let sts = StringToSign::new(date, region, service_name, encoded_creq);
 
     // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
     let signing_key = generate_signing_key(secret_key, date.date(), region, service_name);
-    let signature = calculate_signature(signing_key, &sts.fmt().as_bytes());
+    let signature = calculate_signature(signing_key, &sts.to_string().as_bytes());
 
     // Step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
     let mut authorization: HeaderValue =
@@ -200,19 +198,71 @@ impl<'a> Credentials<'a> {
     }
 }
 
+// add signature to authorization header
+// Authorization: algorithm Credential=access key ID/credential scope, SignedHeaders=SignedHeaders, Signature=signature
+fn build_authorization_header(
+    access_key: &str,
+    creq: &CanonicalRequest,
+    sts: StringToSign,
+    signature: &str,
+) -> String {
+    format!(
+        "{} Credential={}/{}, SignedHeaders={}, Signature={}",
+        HMAC_256,
+        access_key,
+        sts.scope.to_string(),
+        creq.signed_headers,
+        signature
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         build_authorization_header, Error, PayloadChecksumKind, SignableBody, SigningSettings,
     };
     use crate::date_fmt::{format_date_time, parse_date_time};
-    use crate::http_request::types::{AsSigV4, CanonicalRequest, Scope, StringToSign};
+    use crate::http_request::canonical_request::{CanonicalRequest, Scope, StringToSign};
     use crate::sign::{calculate_signature, generate_signing_key, sha256_hex_string};
-    use crate::{assert_req_eq, read};
     use http::{HeaderValue, Method, Request, Uri, Version};
     use pretty_assertions::assert_eq;
     use std::fs;
     use std::{convert::TryFrom, str::FromStr};
+
+    macro_rules! assert_req_eq {
+        ($a:tt, $b:tt) => {
+            assert_eq!(format!("{:?}", $a), format!("{:?}", $b))
+        };
+    }
+
+    macro_rules! read {
+        (req: $case:tt) => {
+            fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.req", $case, $case))?
+                // this replacement is necessary for tests to pass on Windows, as reading the
+                // sigv4 snapshots from the file system results in CRLF line endings being inserted.
+                .replace("\r\n", "\n")
+        };
+
+        (creq: $case:tt) => {
+            fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.creq", $case, $case))?
+                .replace("\r\n", "\n")
+        };
+
+        (sreq: $case:tt) => {
+            fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.sreq", $case, $case))?
+                .replace("\r\n", "\n")
+        };
+
+        (sts: $case:tt) => {
+            fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.sts", $case, $case))?
+                .replace("\r\n", "\n")
+        };
+
+        (authz: $case:tt) => {
+            fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.authz", $case, $case))?
+                .replace("\r\n", "\n")
+        };
+    }
 
     #[test]
     fn read_request() -> Result<(), Error> {
@@ -239,14 +289,14 @@ mod tests {
         assert_eq!(actual, expected);
 
         // Step 2: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-string-to-sign.html.
-        let encoded_creq = &sha256_hex_string(creq.fmt().as_bytes());
+        let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
         let sts = StringToSign::new(date, "us-east-1", "service", encoded_creq);
 
         // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
         let secret = "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY";
 
         let signing_key = generate_signing_key(secret, date.date(), "us-east-1", "service");
-        let signature = calculate_signature(signing_key, &sts.fmt().as_bytes());
+        let signature = calculate_signature(signing_key, &sts.to_string().as_bytes());
         let access = "AKIDEXAMPLE";
 
         // step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
@@ -290,7 +340,7 @@ mod tests {
         );
         // assert that the sha256 header was added
         assert_eq!(
-            creq.signed_headers.fmt(),
+            creq.signed_headers.to_string(),
             "host;x-amz-content-sha256;x-amz-date"
         );
 
@@ -303,7 +353,7 @@ mod tests {
             None,
         )?;
         assert_eq!(new_headers.x_amz_content_256, None);
-        assert_eq!(creq.signed_headers.fmt(), "host;x-amz-date");
+        assert_eq!(creq.signed_headers.to_string(), "host;x-amz-date");
         Ok(())
     }
 
@@ -376,12 +426,12 @@ mod tests {
         )?
         .0;
 
-        let encoded_creq = &sha256_hex_string(creq.fmt().as_bytes());
+        let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
         let sts = StringToSign::new(date, "us-east-1", "service", encoded_creq);
 
         let secret = "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY";
         let signing_key = generate_signing_key(secret, date.date(), "us-east-1", "service");
-        let signature = calculate_signature(signing_key, &sts.fmt().as_bytes());
+        let signature = calculate_signature(signing_key, &sts.to_string().as_bytes());
         let expected_header = read!(authz: "get-vanilla-query-order-key-case");
         let header = build_authorization_header("AKIDEXAMPLE", &creq, sts, &signature);
         assert_eq!(expected_header, header);
@@ -398,7 +448,7 @@ mod tests {
             region: "us-east-1",
             service: "iam",
         };
-        assert_eq!(format!("{}\n", scope.fmt()), expected);
+        assert_eq!(format!("{}\n", scope.to_string()), expected);
 
         Ok(())
     }
@@ -454,7 +504,7 @@ mod tests {
         let encoded = sha256_hex_string(creq.as_bytes());
 
         let actual = StringToSign::new(date, "us-east-1", "service", &encoded);
-        assert_eq!(expected_sts, actual.fmt());
+        assert_eq!(expected_sts, actual.to_string());
 
         Ok(())
     }
@@ -521,7 +571,8 @@ mod tests {
 
     #[test]
     fn test_tilde_in_uri() -> Result<(), Error> {
-        let req = http::Request::builder().uri("https://s3.us-east-1.amazonaws.com/my-bucket?list-type=2&prefix=~objprefix&single&k=&unreserved=-_.~").body("").unwrap();
+        let req = http::Request::builder()
+            .uri("https://s3.us-east-1.amazonaws.com/my-bucket?list-type=2&prefix=~objprefix&single&k=&unreserved=-_.~").body("").unwrap();
         let date = parse_date_time("20210511T154045Z")?;
         let creq = CanonicalRequest::from(
             &req,
@@ -570,59 +621,4 @@ mod tests {
         let req = builder.body(bytes::Bytes::new())?;
         Ok(req)
     }
-}
-
-// add signature to authorization header
-// Authorization: algorithm Credential=access key ID/credential scope, SignedHeaders=SignedHeaders, Signature=signature
-fn build_authorization_header(
-    access_key: &str,
-    creq: &CanonicalRequest,
-    sts: StringToSign,
-    signature: &str,
-) -> String {
-    format!(
-        "{} Credential={}/{}, SignedHeaders={}, Signature={}",
-        HMAC_256,
-        access_key,
-        sts.scope.fmt(),
-        creq.signed_headers,
-        signature
-    )
-}
-
-#[macro_export]
-macro_rules! assert_req_eq {
-    ($a:tt, $b:tt) => {
-        assert_eq!(format!("{:?}", $a), format!("{:?}", $b))
-    };
-}
-
-#[macro_export]
-macro_rules! read {
-    (req: $case:tt) => {
-        fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.req", $case, $case))?
-            // this replacement is necessary for tests to pass on Windows, as reading the
-            // sigv4 snapshots from the file system results in CRLF line endings being inserted.
-            .replace("\r\n", "\n")
-    };
-
-    (creq: $case:tt) => {
-        fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.creq", $case, $case))?
-            .replace("\r\n", "\n")
-    };
-
-    (sreq: $case:tt) => {
-        fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.sreq", $case, $case))?
-            .replace("\r\n", "\n")
-    };
-
-    (sts: $case:tt) => {
-        fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.sts", $case, $case))?
-            .replace("\r\n", "\n")
-    };
-
-    (authz: $case:tt) => {
-        fs::read_to_string(format!("./aws-sig-v4-test-suite/{}/{}.authz", $case, $case))?
-            .replace("\r\n", "\n")
-    };
 }

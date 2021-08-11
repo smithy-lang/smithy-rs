@@ -13,6 +13,7 @@ use ring::{
 };
 
 /// HashedPayload = Lowercase(HexEncode(Hash(requestPayload)))
+#[allow(dead_code)] // Unused when compiling without certain features
 pub(crate) fn sha256_hex_string(bytes: impl AsRef<[u8]>) -> String {
     // hex::encode returns a lowercase string
     hex::encode(digest::digest(&digest::SHA256, bytes.as_ref()))
