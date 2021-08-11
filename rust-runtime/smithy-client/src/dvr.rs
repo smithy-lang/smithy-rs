@@ -242,8 +242,7 @@ mod tests {
             connection.events().as_slice(),
             network_traffic.events.as_slice()
         );
-        let received_requests = inner.take_requests();
-        let requests: Vec<_> = received_requests.values().collect();
+        let requests = inner.take_requests();
         assert_eq!(
             requests[0].uri(),
             &Uri::from_static("https://www.example.com")
