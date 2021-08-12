@@ -33,10 +33,11 @@ use aws_hyper::DynConnector;
 use aws_sdk_sts::Region;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::profile::ProfileParseError;
+use tracing::Instrument;
 
+use crate::default_connector;
 use crate::profile::exec::named::NamedProviderFactory;
 use crate::profile::exec::{ClientConfiguration, ProviderChain};
-use tracing::Instrument;
 
 mod exec;
 mod repr;
@@ -48,7 +49,7 @@ impl AsyncProvideCredentials for ProfileFileCredentialProvider {
     {
         Box::pin(self.load_credentials().instrument(tracing::info_span!(
             "load_credentials",
-            provider = "ProfileFile"
+            provider = "Profile"
         )))
     }
 }
@@ -62,7 +63,7 @@ impl AsyncProvideCredentials for ProfileFileCredentialProvider {
 /// constructed with the builder:
 /// ```rust,no_run
 /// use aws_auth_providers::profile::ProfileFileCredentialProvider;
-/// let provider = ProfileFileCredentialProvider::builder().connector(todo!()).build();
+/// let provider = ProfileFileCredentialProvider::builder().build();
 /// ```
 ///
 /// This provider supports several different credentials formats:
@@ -82,7 +83,7 @@ impl AsyncProvideCredentials for ProfileFileCredentialProvider {
 ///
 /// NOTE: Currently only the `Environment` credential source is supported although it is possible to
 /// provide custom sources:
-/// ```rust,no_run
+/// ```rust
 /// use aws_auth_providers::profile::ProfileFileCredentialProvider;
 /// use aws_auth::provider::{CredentialsResult, AsyncProvideCredentials, BoxFuture};
 /// use std::sync::Arc;
@@ -99,8 +100,7 @@ impl AsyncProvideCredentials for ProfileFileCredentialProvider {
 ///     }
 /// }
 /// let provider = ProfileFileCredentialProvider::builder()
-///     .with_custom_provider("Custom", Arc::new(MyCustomProvider) as Arc<dyn AsyncProvideCredentials>)
-///     .connector(todo!())
+///     .with_custom_provider("Custom", MyCustomProvider)
 ///     .build();
 /// ```
 ///
@@ -151,7 +151,10 @@ impl ProfileFileCredentialProvider {
                 .instrument(tracing::info_span!("load_assume_role", provider = ?provider))
                 .await;
             match next_creds {
-                Ok(next_creds) => creds = next_creds,
+                Ok(next_creds) => {
+                    tracing::info!(creds = ?next_creds, "loaded assume role credentials");
+                    creds = next_creds
+                }
                 Err(e) => {
                     tracing::warn!(provider = ?provider, "failed to load assume role credentials");
                     return Err(e);
@@ -232,7 +235,7 @@ pub struct Builder {
     env: Option<Env>,
     region: Option<Region>,
     connector: Option<DynConnector>,
-    custom_providers: HashMap<String, Arc<dyn AsyncProvideCredentials>>,
+    custom_providers: HashMap<Cow<'static, str>, Arc<dyn AsyncProvideCredentials>>,
 }
 
 impl Builder {
@@ -241,8 +244,18 @@ impl Builder {
         self
     }
 
+    pub fn set_fs(&mut self, fs: Option<Fs>) -> &mut Self {
+        self.fs = fs;
+        self
+    }
+
     pub fn env(mut self, env: Env) -> Self {
         self.env = Some(env);
+        self
+    }
+
+    pub fn set_env(&mut self, env: Option<Env>) -> &mut Self {
+        self.env = env;
         self
     }
 
@@ -251,28 +264,39 @@ impl Builder {
         self
     }
 
+    pub fn set_connector(&mut self, connector: Option<DynConnector>) -> &mut Self {
+        self.connector = connector;
+        self
+    }
+
     pub fn region(mut self, region: Region) -> Self {
         self.region = Some(region);
         self
     }
 
+    pub fn set_region(&mut self, region: Option<Region>) -> &mut Self {
+        self.region = region;
+        self
+    }
+
     pub fn with_custom_provider(
         mut self,
-        name: impl Into<String>,
-        provider: impl Into<Arc<dyn AsyncProvideCredentials>>,
+        name: impl Into<Cow<'static, str>>,
+        provider: impl AsyncProvideCredentials + 'static,
     ) -> Self {
-        self.custom_providers.insert(name.into(), provider.into());
+        self.custom_providers
+            .insert(name.into(), Arc::new(provider));
         self
     }
 
     pub fn build(self) -> ProfileFileCredentialProvider {
         let build_span = tracing::info_span!("build_profile_provider");
         let _enter = build_span.enter();
-        let fs = self.fs.unwrap_or_else(Fs::real);
-        let env = self.env.unwrap_or_else(Env::real);
+        let fs = self.fs.unwrap_or_default();
+        let env = self.env.unwrap_or_default();
         let mut named_providers = self.custom_providers;
         named_providers
-            .entry("Environment".to_string())
+            .entry("Environment".into())
             .or_insert_with(|| {
                 Arc::new(EnvironmentVariableCredentialsProvider::new_with_env(
                     env.clone(),
@@ -281,9 +305,11 @@ impl Builder {
         // TODO: ECS, IMDS, and other named providers
         let factory = exec::named::NamedProviderFactory::new(named_providers);
         let chain = build_provider_chain(&fs, &env, &factory);
-        let connector = self.connector;
+        let connector = self.connector.or_else(default_connector).expect(
+            "a connector must be provided or the `rustls` or `native-tls` features must be enabled",
+        );
         let core_client = aws_hyper::Builder::<()>::new()
-            .map_connector(|_| connector.expect("a connector must be provided"))
+            .map_connector(|_| connector)
             .build();
         ProfileFileCredentialProvider {
             inner: chain,

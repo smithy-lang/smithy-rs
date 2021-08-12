@@ -34,6 +34,12 @@ use std::sync::Arc;
 /// ```
 pub struct Fs(fs::Inner);
 
+impl Default for Fs {
+    fn default() -> Self {
+        Fs::real()
+    }
+}
+
 impl Fs {
     pub fn real() -> Self {
         Fs(fs::Inner::Real)
@@ -105,6 +111,12 @@ mod fs {
 /// - Real process environments are pointer-sized
 #[derive(Clone)]
 pub struct Env(env::Inner);
+
+impl Default for Env {
+    fn default() -> Self {
+        Self::real()
+    }
+}
 
 impl Env {
     pub fn get(&self, k: &str) -> Result<String, VarError> {
