@@ -223,6 +223,9 @@ jobs:
       env:
         RUSTC_FORCE_INCREMENTAL: 1
         RUSTFLAGS: -D warnings
+        # Note: the .cargo/config.toml is lost because we untar the SDK rather than checking out the repo,
+        # so we have to manually restore the target directory override
+        CARGO_TARGET_DIR: ../target
 
   test-sdk:
     name: AWS Rust SDK Tier 1 - cargo test
@@ -260,6 +263,9 @@ jobs:
       env:
         RUSTC_FORCE_INCREMENTAL: 1
         RUSTFLAGS: -D warnings
+        # Note: the .cargo/config.toml is lost because we untar the SDK rather than checking out the repo,
+        # so we have to manually restore the target directory override
+        CARGO_TARGET_DIR: ../target
 
   docs-sdk:
     name: AWS Rust SDK Tier 1 - cargo docs
@@ -272,7 +278,10 @@ jobs:
           ~/.cargo/registry
           ~/.cargo/git
           target
-        key: ${{ runner.os }}-cargodocs
+        key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-
+          ${{ runner.os }}-${{ env.rust_version }}-
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
@@ -293,6 +302,9 @@ jobs:
       working-directory: aws-sdk
       env:
         RUSTDOCFLAGS: -D warnings
+        # Note: the .cargo/config.toml is lost because we untar the SDK rather than checking out the repo,
+        # so we have to manually restore the target directory override
+        CARGO_TARGET_DIR: ../target
 
   clippy-sdk:
     name: AWS Rust SDK Tier 1 - cargo clippy
@@ -305,7 +317,10 @@ jobs:
           ~/.cargo/registry
           ~/.cargo/git
           target
-        key: ${{ runner.os }}-cargoclippy
+        key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-
+          ${{ runner.os }}-${{ env.rust_version }}-
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
@@ -324,6 +339,10 @@ jobs:
     - name: Cargo Clippy
       run: cargo clippy -- -D warnings
       working-directory: aws-sdk
+      env:
+        # Note: the .cargo/config.toml is lost because we untar the SDK rather than checking out the repo,
+        # so we have to manually restore the target directory override
+        CARGO_TARGET_DIR: ../target
 
   standalone-integration-tests-check:
     name: AWS Rust SDK Standalone Integration Tests - cargo check
