@@ -23,7 +23,7 @@ struct Opt {
     verbose: bool,
 }
 
-/// Lists the objects in an Amazon S3 bucket.
+/// Lists the versions of the objects in an Amazon S3 bucket.
 /// # Arguments
 ///
 /// * `-b BUCKET` - The name of the bucket.
@@ -57,12 +57,14 @@ async fn main() -> Result<(), Error> {
     let conf = Config::builder().region(region).build();
     let client = Client::from_conf(conf);
 
-    let resp = client.list_objects_v2().bucket(&bucket).send().await?;
+    let resp = client.list_object_versions().bucket(&bucket).send().await?;
 
-    println!("Objects:");
-
-    for object in resp.contents.unwrap_or_default() {
-        println!("  {}", object.key.as_deref().unwrap_or_default());
+    for version in resp.versions.unwrap_or_default() {
+        println!(" {}", version.key.as_deref().unwrap_or_default());
+        println!(
+            "  version ID: {}",
+            version.version_id.as_deref().unwrap_or_default()
+        );
     }
 
     Ok(())

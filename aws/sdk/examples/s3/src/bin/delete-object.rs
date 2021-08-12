@@ -18,15 +18,20 @@ struct Opt {
     #[structopt(short, long)]
     bucket: String,
 
+    /// The object to delete.
+    #[structopt(short, long)]
+    key: String,
+
     /// Whether to display additional information.
     #[structopt(short, long)]
     verbose: bool,
 }
 
-/// Lists the objects in an Amazon S3 bucket.
+/// Deletes an object in an Amazon S3 bucket.
 /// # Arguments
 ///
 /// * `-b BUCKET` - The name of the bucket.
+/// * `-k KEY` - The names of the object to delete.
 /// * `[-r REGION]` - The Region in which the client is created.
 ///   If not supplied, uses the value of the **AWS_REGION** environment variable.
 ///   If the environment variable is not set, defaults to **us-west-2**.
@@ -38,6 +43,7 @@ async fn main() -> Result<(), Error> {
     let Opt {
         region,
         bucket,
+        key,
         verbose,
     } = Opt::from_args();
 
@@ -51,19 +57,21 @@ async fn main() -> Result<(), Error> {
         println!("S3 client version: {}", PKG_VERSION);
         println!("Region:            {}", region.region().unwrap().as_ref());
         println!("Bucket:            {}", &bucket);
+        println!("Key:               {}", &key);
         println!();
     }
 
     let conf = Config::builder().region(region).build();
     let client = Client::from_conf(conf);
 
-    let resp = client.list_objects_v2().bucket(&bucket).send().await?;
+    client
+        .delete_object()
+        .bucket(&bucket)
+        .key(key)
+        .send()
+        .await?;
 
-    println!("Objects:");
-
-    for object in resp.contents.unwrap_or_default() {
-        println!("  {}", object.key.as_deref().unwrap_or_default());
-    }
+    println!("Object deleted.");
 
     Ok(())
 }
