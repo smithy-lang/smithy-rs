@@ -126,13 +126,13 @@ impl SigV4Signer {
         } else {
             PayloadChecksumKind::NoHeader
         };
-        let sigv4_config = aws_sigv4::http_request::Config {
+        let sigv4_config = aws_sigv4::http_request::SigningParams {
             access_key: credentials.access_key_id(),
             secret_key: credentials.secret_access_key(),
             security_token: credentials.session_token(),
             region: request_config.region.as_ref(),
             service_name: request_config.service.as_ref(),
-            date: request_config.request_ts,
+            date_time: request_config.request_ts.into(),
             settings,
         };
 

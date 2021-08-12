@@ -7,10 +7,8 @@
 
 use crate::http_request::canonical_request::{CanonicalRequest, StringToSign};
 use crate::sign::{calculate_signature, generate_signing_key, sha256_hex_string};
-use chrono::{DateTime, Utc};
 use http::header::{HeaderName, HeaderValue};
 use std::error::Error as StdError;
-use std::time::SystemTime;
 use std::{iter, str};
 
 mod canonical_request;
@@ -22,31 +20,17 @@ const X_AMZ_CONTENT_SHA_256: &str = "x-amz-content-sha256";
 
 pub type Error = Box<dyn StdError + Send + Sync + 'static>;
 
-/// Signs the given `request` with the `credentials`, `region`, and `service_name`.
+/// Signs the given `request` with the signing params.
 /// This will directly add the signature headers to the request.
-pub fn sign<B>(
-    request: &mut http::Request<B>,
-    credential: &Credentials,
-    region: &str,
-    service_name: &str,
+pub fn sign<'a, B>(
+    request: &'a mut http::Request<B>,
+    params: &'a SigningParams<'a>,
 ) -> Result<(), Error>
 where
     B: AsRef<[u8]>,
 {
     let signable_body = SignableBody::Bytes(request.body().as_ref());
-    for (header_name, header_value) in calculate_signing_headers(
-        &request,
-        signable_body,
-        &Config {
-            access_key: &credential.access_key,
-            secret_key: &credential.secret_key,
-            security_token: credential.security_token.as_deref(),
-            region,
-            service_name,
-            date: SystemTime::now(),
-            settings: Default::default(),
-        },
-    )? {
+    for (header_name, header_value) in calculate_signing_headers(&request, signable_body, params)? {
         request
             .headers_mut()
             .append(HeaderName::from_static(header_name), header_value);
@@ -55,18 +39,7 @@ where
     Ok(())
 }
 
-pub struct Config<'a> {
-    pub access_key: &'a str,
-    pub secret_key: &'a str,
-    pub security_token: Option<&'a str>,
-
-    pub region: &'a str,
-    pub service_name: &'a str,
-
-    pub date: SystemTime,
-
-    pub settings: SigningSettings,
-}
+pub type SigningParams<'a> = super::SigningParams<'a, SigningSettings>;
 
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
@@ -139,28 +112,27 @@ pub enum SignableBody<'a> {
 pub fn calculate_signing_headers<'a, B>(
     request: &'a http::Request<B>,
     body: SignableBody,
-    config: &'a Config<'a>,
+    params: &'a SigningParams<'a>,
 ) -> Result<impl Iterator<Item = (&'static str, HeaderValue)>, Error> {
     // Step 1: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-canonical-request.html.
-    let Config {
+    let SigningParams {
         access_key,
         secret_key,
         security_token,
         region,
         service_name,
-        date,
+        date_time,
         settings,
-    } = config;
-    let date = DateTime::<Utc>::from(*date);
+    } = params;
     let (creq, extra_headers) =
-        CanonicalRequest::from(request, body, settings, date, *security_token)?;
+        CanonicalRequest::from(request, body, settings, *date_time, *security_token)?;
 
     // Step 2: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-string-to-sign.html.
     let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
-    let sts = StringToSign::new(date, region, service_name, encoded_creq);
+    let sts = StringToSign::new(*date_time, region, service_name, encoded_creq);
 
     // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
-    let signing_key = generate_signing_key(secret_key, date.date(), region, service_name);
+    let signing_key = generate_signing_key(secret_key, date_time.date(), region, service_name);
     let signature = calculate_signature(signing_key, &sts.to_string().as_bytes());
 
     // Step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
@@ -182,23 +154,6 @@ pub fn calculate_signing_headers<'a, B>(
     Ok(auth.chain(date).chain(iter::from_fn(move || {
         security_token.take().or_else(|| content.take())
     })))
-}
-
-#[derive(Debug, PartialEq, Default, Clone)]
-pub struct Credentials<'a> {
-    pub access_key: &'a str,
-    pub secret_key: &'a str,
-    pub security_token: Option<&'a str>,
-}
-
-impl<'a> Credentials<'a> {
-    pub fn new(access_key: &'a str, secret_key: &'a str, security_token: Option<&'a str>) -> Self {
-        Self {
-            access_key,
-            secret_key,
-            security_token,
-        }
-    }
 }
 
 // add signature to authorization header
