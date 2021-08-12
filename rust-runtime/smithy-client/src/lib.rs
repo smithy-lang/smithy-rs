@@ -20,6 +20,8 @@ mod builder;
 pub use builder::Builder;
 
 #[cfg(feature = "test-util")]
+pub mod dvr;
+#[cfg(feature = "test-util")]
 pub mod test_connection;
 
 #[cfg(feature = "hyper")]

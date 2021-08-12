@@ -389,7 +389,7 @@
       "selected_profile": "A"
     },
     "output": {
-      "Error": "CredentialLoop"
+      "Error": "profile formed an infinite loop"
     }
   },
   {
@@ -410,7 +410,7 @@
       "selected_profile": "A"
     },
     "output": {
-      "Error": "CredentialLoop"
+      "Error": "profile formed an infinite loop"
     }
   }
 ]
