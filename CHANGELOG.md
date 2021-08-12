@@ -1,5 +1,6 @@
 vNext (Month Day, Year)
 -----------------------
+
 **New this week**
 
 - (When complete) Add profile file provider for region (#594, #xyz)
@@ -7,6 +8,7 @@ vNext (Month Day, Year)
 - Add profile file credential provider implementation. This implementation currently does not support credential sources
   for assume role providers other than environment variables. (#640)
 - Add Event Stream support to aws-sigv4 (#648)
+- :bug: Fix name collision that occurred when a model had both a union and a structure named `Result` (#643)
 
 v0.20 (August 10th, 2021)
 --------------------------
