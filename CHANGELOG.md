@@ -9,6 +9,8 @@ vNext (Month Day, Year)
   for assume role providers other than environment variables. (#640)
 - Add Event Stream support to aws-sigv4 (#648)
 - :bug: Fix name collision that occurred when a model had both a union and a structure named `Result` (#643)
+- Add initial implementation of a default provider chain. (#650)
+- Update smithy-client to simplify creating HTTP/HTTPS connectors (#650)
 
 v0.20 (August 10th, 2021)
 --------------------------

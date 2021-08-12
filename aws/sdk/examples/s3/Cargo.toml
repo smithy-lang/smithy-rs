@@ -9,6 +9,9 @@ edition = "2018"
 [dependencies]
 aws-sdk-s3 = { package = "aws-sdk-s3", path = "../../build/aws-sdk/s3" }
 aws-types = { path = "../../build/aws-sdk/aws-types" }
+aws-auth-providers = { path = "../../build/aws-sdk/aws-auth-providers" }
+
 tokio = { version = "1", features = ["full"] }
+
 structopt = { version = "0.3", default-features = false }
 tracing-subscriber = "0.2.18"
