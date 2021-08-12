@@ -7,6 +7,7 @@
 
 use crate::http_request::canonical_request::{CanonicalRequest, StringToSign};
 use crate::sign::{calculate_signature, generate_signing_key, sha256_hex_string};
+use crate::SigningOutput;
 use http::header::{HeaderName, HeaderValue};
 use std::error::Error as StdError;
 use std::{iter, str};
@@ -25,18 +26,20 @@ pub type Error = Box<dyn StdError + Send + Sync + 'static>;
 pub fn sign<'a, B>(
     request: &'a mut http::Request<B>,
     params: &'a SigningParams<'a>,
-) -> Result<(), Error>
+) -> Result<SigningOutput<()>, Error>
 where
     B: AsRef<[u8]>,
 {
     let signable_body = SignableBody::Bytes(request.body().as_ref());
-    for (header_name, header_value) in calculate_signing_headers(&request, signable_body, params)? {
+    let (signing_headers, signature) =
+        calculate_signing_headers(&request, signable_body, params)?.into_parts();
+    for (header_name, header_value) in signing_headers {
         request
             .headers_mut()
             .append(HeaderName::from_static(header_name), header_value);
     }
 
-    Ok(())
+    Ok(SigningOutput::new((), signature))
 }
 
 pub type SigningParams<'a> = super::SigningParams<'a, SigningSettings>;
@@ -113,7 +116,7 @@ pub fn calculate_signing_headers<'a, B>(
     request: &'a http::Request<B>,
     body: SignableBody,
     params: &'a SigningParams<'a>,
-) -> Result<impl Iterator<Item = (&'static str, HeaderValue)>, Error> {
+) -> Result<SigningOutput<impl Iterator<Item = (&'static str, HeaderValue)>>, Error> {
     // Step 1: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-canonical-request.html.
     let SigningParams {
         access_key,
@@ -151,9 +154,12 @@ pub fn calculate_signing_headers<'a, B>(
         .map(|content| (X_AMZ_CONTENT_SHA_256, content));
     let auth = iter::once(("authorization", authorization));
     let date = iter::once(date);
-    Ok(auth.chain(date).chain(iter::from_fn(move || {
-        security_token.take().or_else(|| content.take())
-    })))
+    Ok(SigningOutput::new(
+        auth.chain(date).chain(iter::from_fn(move || {
+            security_token.take().or_else(|| content.take())
+        })),
+        signature,
+    ))
 }
 
 // add signature to authorization header

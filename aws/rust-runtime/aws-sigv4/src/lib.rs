@@ -36,3 +36,27 @@ pub struct SigningParams<'a, S> {
     /// Additional signing settings. These differ between HTTP and Event Stream.
     pub settings: S,
 }
+
+/// Container for the signed output and the signature.
+pub struct SigningOutput<T> {
+    output: T,
+    signature: String,
+}
+
+impl<T> SigningOutput<T> {
+    pub fn new(output: T, signature: String) -> Self {
+        Self { output, signature }
+    }
+
+    pub fn output(&self) -> &T {
+        &self.output
+    }
+
+    pub fn signature(&self) -> &str {
+        &self.signature
+    }
+
+    pub fn into_parts(self) -> (T, String) {
+        (self.output, self.signature)
+    }
+}

@@ -4,7 +4,9 @@
  */
 
 use aws_auth::Credentials;
-use aws_sigv4::http_request::{PayloadChecksumKind, SigningSettings, UriEncoding};
+use aws_sigv4::http_request::{
+    calculate_signing_headers, PayloadChecksumKind, SigningSettings, UriEncoding,
+};
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
 use http::header::HeaderName;
@@ -13,6 +15,7 @@ use std::error::Error;
 use std::fmt;
 use std::time::SystemTime;
 
+use crate::middleware::Signature;
 pub use aws_sigv4::http_request::SignableBody;
 
 #[derive(Eq, PartialEq, Clone, Copy)]
@@ -114,7 +117,7 @@ impl SigV4Signer {
         request_config: &RequestConfig<'_>,
         credentials: &Credentials,
         request: &mut http::Request<SdkBody>,
-    ) -> Result<(), SigningError> {
+    ) -> Result<Signature, SigningError> {
         let mut settings = SigningSettings::default();
         settings.uri_encoding = if operation_config.signing_options.double_uri_encode {
             UriEncoding::Double
@@ -150,16 +153,15 @@ impl SigV4Signer {
                     .map(SignableBody::Bytes)
                     .unwrap_or(SignableBody::UnsignedPayload)
             });
-        for (key, value) in aws_sigv4::http_request::calculate_signing_headers(
-            request,
-            signable_body,
-            &sigv4_config,
-        )? {
+
+        let (signing_headers, signature) =
+            calculate_signing_headers(request, signable_body, &sigv4_config)?.into_parts();
+        for (key, value) in signing_headers {
             request
                 .headers_mut()
                 .append(HeaderName::from_static(key), value);
         }
 
-        Ok(())
+        Ok(Signature::new(signature))
     }
 }

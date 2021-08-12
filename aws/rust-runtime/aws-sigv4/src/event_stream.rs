@@ -7,6 +7,7 @@
 
 use crate::date_fmt::{format_date, format_date_time};
 use crate::sign::{calculate_signature, generate_signing_key, sha256_hex_string};
+use crate::SigningOutput;
 use chrono::{DateTime, SubsecRound, Utc};
 use smithy_eventstream::frame::{write_headers_to, Header, HeaderValue, Message};
 use std::io::Write;
@@ -53,7 +54,7 @@ pub fn sign_message<'a>(
     message: &'a Message,
     last_signature: &'a str,
     params: &'a SigningParams<'a>,
-) -> Message {
+) -> SigningOutput<Message> {
     // Truncate the sub-seconds up front since the timestamp written to the signed message header
     // needs to exactly match the string formatted timestamp, which doesn't include sub-seconds.
     let date_time = params.date_time.trunc_subsecs(0);
@@ -74,15 +75,18 @@ pub fn sign_message<'a>(
     let signature = calculate_signature(signing_key, &string_to_sign);
 
     // Generate the signed wrapper event frame
-    Message::new(message_payload)
-        .add_header(Header::new(
-            ":chunk-signature",
-            HeaderValue::ByteArray(hex::decode(signature).unwrap().into()),
-        ))
-        .add_header(Header::new(
-            ":date",
-            HeaderValue::Timestamp(date_time.into()),
-        ))
+    SigningOutput::new(
+        Message::new(message_payload)
+            .add_header(Header::new(
+                ":chunk-signature",
+                HeaderValue::ByteArray(hex::decode(&signature).unwrap().into()),
+            ))
+            .add_header(Header::new(
+                ":date",
+                HeaderValue::Timestamp(date_time.into()),
+            )),
+        signature,
+    )
 }
 
 #[cfg(test)]
@@ -148,13 +152,11 @@ mod tests {
         };
 
         let last_signature = sha256_hex_string(b"last message sts");
-        let signed = sign_message(&message_to_sign, &last_signature, &params);
+        let (signed, signature) =
+            sign_message(&message_to_sign, &last_signature, &params).into_parts();
         assert_eq!(":chunk-signature", signed.headers()[0].name().as_str());
         if let HeaderValue::ByteArray(bytes) = signed.headers()[0].value() {
-            assert_eq!(
-                "1ea04a4f6becd85ae3e38e379ffaf4bb95042603f209512476cc6416868b31ee",
-                hex::encode(bytes)
-            );
+            assert_eq!(signature, hex::encode(bytes));
         } else {
             panic!("expected byte array for :chunk-signature header");
         }
