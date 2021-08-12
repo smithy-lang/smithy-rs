@@ -8,8 +8,8 @@ vNext (Month Day, Year)
 - Add profile file credential provider implementation. This implementation currently does not support credential sources
   for assume role providers other than environment variables. (#640)
 - :bug: Fix name collision that occurred when a model had both a union and a structure named `Result` (#643)
-- Add initial implementation of a default provider chain. (#todo)
-- Update smithy-client to simplify creating HTTP/HTTPS connectors (#todo)
+- Add initial implementation of a default provider chain. (#650)
+- Update smithy-client to simplify creating HTTP/HTTPS connectors (#650)
 
 v0.20 (August 10th, 2021)
 --------------------------
