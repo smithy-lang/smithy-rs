@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 use std::env::VarError;
 use std::ffi::OsString;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// File system abstraction
@@ -48,13 +48,11 @@ impl Fs {
         Fs(fs::Inner::Fake { fs })
     }
 
-    pub fn exists(&self, path: impl AsRef<Path>) -> bool {
-        use fs::Inner;
-        let path = path.as_ref();
-        match &self.0 {
-            Inner::Real => path.exists(),
-            Inner::Fake { fs, .. } => fs.contains_key(path.as_os_str()),
-        }
+    pub fn from_test_dir(dir: impl Into<PathBuf>, root: impl Into<PathBuf>) -> Self {
+        Self(fs::Inner::Namespaced {
+            real_path: dir.into(),
+            namespaced_to: root.into(),
+        })
     }
 
     pub fn read_to_end(&self, path: impl AsRef<Path>) -> std::io::Result<Vec<u8>> {
@@ -66,6 +64,15 @@ impl Fs {
                 .get(path.as_os_str())
                 .cloned()
                 .ok_or_else(|| std::io::ErrorKind::NotFound.into()),
+            Inner::Namespaced {
+                real_path,
+                namespaced_to,
+            } => {
+                let actual_path = path
+                    .strip_prefix(namespaced_to)
+                    .map_err(|_| std::io::Error::from(std::io::ErrorKind::NotFound))?;
+                std::fs::read(real_path.join(actual_path))
+            }
         }
     }
 }
@@ -73,10 +80,17 @@ impl Fs {
 mod fs {
     use std::collections::HashMap;
     use std::ffi::OsString;
+    use std::path::PathBuf;
 
     pub enum Inner {
         Real,
-        Fake { fs: HashMap<OsString, Vec<u8>> },
+        Fake {
+            fs: HashMap<OsString, Vec<u8>>,
+        },
+        Namespaced {
+            real_path: PathBuf,
+            namespaced_to: PathBuf,
+        },
     }
 }
 
