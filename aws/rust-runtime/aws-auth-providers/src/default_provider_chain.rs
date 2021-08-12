@@ -95,8 +95,6 @@ impl Builder {
     /// Assume role profiles may specify named credential sources:
     /// ```ini
     /// [default]
-    /// ```ini
-    /// [default]
     /// role_arn = arn:aws:iam::123456789:role/RoleA
     /// credential_source = MyCustomProvider
     /// ```
@@ -118,6 +116,7 @@ impl Builder {
     /// let provider_chain = DefaultProviderChain::builder()
     ///     .with_custom_credential_source("MyCustomProvider", MyCustomProvider)
     ///     .build();
+    /// ```
     pub fn with_custom_credential_source(
         mut self,
         name: impl Into<Cow<'static, str>>,
