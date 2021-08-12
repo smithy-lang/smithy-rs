@@ -7,6 +7,8 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.knowledge.OperationIndex
+import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
@@ -256,7 +258,7 @@ class HttpProtocolTestGenerator(
         writeInline("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        write("let mut http_response = #T::new()", RuntimeType.HttpResponseBuilder)
+        write("let http_response = #T::new()", RuntimeType.HttpResponseBuilder)
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
         }
@@ -268,21 +270,25 @@ class HttpProtocolTestGenerator(
             """,
             RuntimeType.sdkBody(runtimeConfig = protocolConfig.runtimeConfig)
         )
+        write(
+            "let mut op_response = #T::new(http_response);",
+            RuntimeType.operationModule(protocolConfig.runtimeConfig).member("Response")
+        )
         rustTemplate(
             """
             use #{parse_http_response};
             let parser = #{op}::new();
-            let parsed = parser.parse_unloaded(&mut http_response);
+            let parsed = parser.parse_unloaded(&mut op_response);
             let parsed = parsed.unwrap_or_else(|| {
+                let (http_response, _) = op_response.into_parts();
                 let http_response = http_response.map(|body|#{bytes}::copy_from_slice(body.bytes().unwrap()));
-                <#{op} as #{parse_http_response}<#{sdk_body}>>::parse_loaded(&parser, &http_response)
+                <#{op} as #{parse_http_response}>::parse_loaded(&parser, &http_response)
             });
         """,
             "op" to operationSymbol,
             "bytes" to RuntimeType.Bytes,
             "parse_http_response" to CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType()
                 .member("response::ParseHttpResponse"),
-            "sdk_body" to RuntimeType.sdkBody(runtimeConfig = protocolConfig.runtimeConfig)
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = operationShape.errorSymbol(protocolConfig.symbolProvider)
@@ -306,7 +312,21 @@ class HttpProtocolTestGenerator(
                                     );"""
                     )
                 } else {
-                    rust("""assert_eq!(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""")
+                    when (protocolConfig.model.expectShape(member.target)) {
+                        is DoubleShape, is FloatShape -> {
+                            addUseImports(
+                                RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "FloatEquals").toSymbol()
+                            )
+                            rust(
+                                """
+                                assert!(parsed.$memberName.float_equals(&expected_output.$memberName),
+                                    "Unexpected value for `$memberName` {:?} vs. {:?}", expected_output.$memberName, parsed.$memberName);
+                                """
+                            )
+                        }
+                        else ->
+                            rust("""assert_eq!(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""")
+                    }
                 }
             }
         }

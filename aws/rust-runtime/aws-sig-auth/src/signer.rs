@@ -4,7 +4,7 @@
  */
 
 use aws_auth::Credentials;
-use aws_sigv4_poc::{PayloadChecksumKind, SigningSettings, UriEncoding};
+use aws_sigv4::{PayloadChecksumKind, SigningSettings, UriEncoding};
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
 use http::header::HeaderName;
@@ -13,7 +13,7 @@ use std::error::Error;
 use std::fmt;
 use std::time::SystemTime;
 
-pub use aws_sigv4_poc::SignableBody;
+pub use aws_sigv4::SignableBody;
 
 #[derive(Eq, PartialEq, Clone, Copy)]
 pub enum SigningAlgorithm {
@@ -126,7 +126,7 @@ impl SigV4Signer {
         } else {
             PayloadChecksumKind::NoHeader
         };
-        let sigv4_config = aws_sigv4_poc::Config {
+        let sigv4_config = aws_sigv4::Config {
             access_key: credentials.access_key_id(),
             secret_key: credentials.secret_access_key(),
             security_token: credentials.session_token(),
@@ -150,7 +150,7 @@ impl SigV4Signer {
                     .map(SignableBody::Bytes)
                     .unwrap_or(SignableBody::UnsignedPayload)
             });
-        for (key, value) in aws_sigv4_poc::sign_core(request, signable_body, &sigv4_config)? {
+        for (key, value) in aws_sigv4::sign_core(request, signable_body, &sigv4_config)? {
             request
                 .headers_mut()
                 .append(HeaderName::from_static(key), value);

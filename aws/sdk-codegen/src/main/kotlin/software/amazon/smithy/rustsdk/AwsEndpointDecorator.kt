@@ -115,7 +115,7 @@ class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private 
             is OperationSection.MutateRequest -> writable {
                 rust(
                     """
-                #T::set_endpoint_resolver(&mut ${section.request}.config_mut(), ${section.config}.endpoint_resolver.clone());
+                #T::set_endpoint_resolver(&mut ${section.request}.properties_mut(), ${section.config}.endpoint_resolver.clone());
                 """,
                     runtimeConfig.awsEndpointDependency().asType()
                 )
