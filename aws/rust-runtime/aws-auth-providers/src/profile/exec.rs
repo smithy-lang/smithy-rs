@@ -144,13 +144,16 @@ pub mod named {
     use std::sync::Arc;
 
     use aws_auth::provider::AsyncProvideCredentials;
+    use std::borrow::Cow;
 
     pub struct NamedProviderFactory {
-        providers: HashMap<String, Arc<dyn AsyncProvideCredentials>>,
+        providers: HashMap<Cow<'static, str>, Arc<dyn AsyncProvideCredentials>>,
     }
 
     impl NamedProviderFactory {
-        pub fn new(providers: HashMap<String, Arc<dyn AsyncProvideCredentials>>) -> Self {
+        pub fn new(
+            providers: HashMap<Cow<'static, str>, Arc<dyn AsyncProvideCredentials>>,
+        ) -> Self {
             Self { providers }
         }
 

@@ -5,6 +5,8 @@
 
 use aws_sdk_s3::{Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region;
+
+use aws_auth_providers::DefaultProviderChain;
 use aws_types::region::ProvideRegion;
 use structopt::StructOpt;
 
@@ -46,6 +48,7 @@ async fn main() -> Result<(), Error> {
         .or_else(Region::new("us-west-2"));
 
     println!();
+    let credential_provider = DefaultProviderChain::builder().region(&region).build();
 
     if verbose {
         println!("S3 client version: {}", PKG_VERSION);
@@ -54,8 +57,12 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let conf = Config::builder().region(region).build();
-    let client = Client::from_conf(conf);
+    let config = Config::builder()
+        .region(region)
+        .credentials_provider(credential_provider)
+        .build();
+
+    let client = Client::from_conf(config);
 
     let resp = client.list_objects_v2().bucket(&bucket).send().await?;
 
