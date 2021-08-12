@@ -9,5 +9,8 @@ members = [
     "aws-hyper",
     "aws-inlineable",
     "aws-sig-auth",
-    "aws-types"
+    "aws-types",
+    "aws-sigv4"
 ]
+
+exclude = ["aws-auth-providers"]

@@ -67,7 +67,7 @@ class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : OperationCust
         is OperationSection.MutateRequest -> writable {
             rust(
                 """
-                ${section.request}.config_mut().insert(#T::AwsUserAgent::new_from_environment(crate::API_METADATA.clone()));
+                ${section.request}.properties_mut().insert(#T::AwsUserAgent::new_from_environment(crate::API_METADATA.clone()));
                 """,
                 runtimeConfig.userAgentModule()
             )
