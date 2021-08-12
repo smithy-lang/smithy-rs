@@ -8,8 +8,9 @@
 
 use chrono::{DateTime, Utc};
 
-mod date_fmt;
 pub mod sign;
+
+mod date_fmt;
 
 #[cfg(feature = "sign-eventstream")]
 pub mod event_stream;

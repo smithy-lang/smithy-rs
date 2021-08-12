@@ -110,7 +110,11 @@ impl CanonicalRequest {
             let mut out = String::new();
             let mut params: Vec<(Cow<str>, Cow<str>)> =
                 form_urlencoded::parse(query.as_bytes()).collect();
-            params.sort_by(|a, b| a.0.cmp(&b.0));
+            // Sort by param name, and then by param value
+            params.sort_by(|a, b| match a.0.cmp(&b.0) {
+                Ordering::Equal => a.1.cmp(&b.1),
+                ordering => ordering,
+            });
             for (key, value) in params {
                 if !first {
                     out.push('&');
