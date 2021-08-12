@@ -1,11 +1,13 @@
 vNext (Month Day, Year)
 -----------------------
+
 **New this week**
 
 - (When complete) Add profile file provider for region (#594, #xyz)
 - Add experimental `dvr` module to smithy-client. This will enable easier testing of HTTP traffic. (#640)
 - Add profile file credential provider implementation. This implementation currently does not support credential sources
   for assume role providers other than environment variables. (#640)
+- :bug: Fix name collision that occurred when a model had both a union and a structure named `Result` (#643)
 
 v0.20 (August 10th, 2021)
 --------------------------
