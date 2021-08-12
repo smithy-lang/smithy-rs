@@ -80,7 +80,8 @@ class HttpBoundProtocolGenerator(
     private val codegenScope = arrayOf(
         "ParseStrict" to RuntimeType.parseStrict(runtimeConfig),
         "ParseResponse" to RuntimeType.parseResponse(runtimeConfig),
-        "Response" to RuntimeType.Http("Response"),
+        "http" to RuntimeType.http,
+        "operation" to RuntimeType.operationModule(runtimeConfig),
         "Bytes" to RuntimeType.Bytes,
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "BuildError" to runtimeConfig.operationBuildError()
@@ -221,7 +222,7 @@ class HttpBoundProtocolGenerator(
             """
             impl #{ParseStrict} for $operationName {
                 type Output = std::result::Result<#{O}, #{E}>;
-                fn parse(&self, response: &#{Response}<#{Bytes}>) -> Self::Output {
+                fn parse(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
                      if !response.status().is_success() && response.status().as_u16() != $successCode {
                         #{parse_error}(response)
                      } else {
@@ -245,16 +246,16 @@ class HttpBoundProtocolGenerator(
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
-                impl #{ParseResponse}<#{SdkBody}> for $operationName {
+                impl #{ParseResponse} for $operationName {
                     type Output = std::result::Result<#{O}, #{E}>;
-                    fn parse_unloaded(&self, response: &mut http::Response<#{SdkBody}>) -> Option<Self::Output> {
+                    fn parse_unloaded(&self, response: &mut #{operation}::Response) -> Option<Self::Output> {
                         // This is an error, defer to the non-streaming parser
-                        if !response.status().is_success() && response.status().as_u16() != $successCode {
+                        if !response.http().status().is_success() && response.http().status().as_u16() != $successCode {
                             return None;
                         }
                         Some(#{parse_streaming_response}(response))
                     }
-                    fn parse_loaded(&self, response: &http::Response<#{Bytes}>) -> Self::Output {
+                    fn parse_loaded(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
                         // if streaming, we only hit this case if its an error
                         #{parse_error}(response)
                     }
@@ -276,7 +277,7 @@ class HttpBoundProtocolGenerator(
         return RuntimeType.forInlineFun(fnName, "operation_deser") {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(response: &#{Response}<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol
@@ -350,11 +351,12 @@ class HttpBoundProtocolGenerator(
         return RuntimeType.forInlineFun(fnName, "operation_deser") {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(response: &mut #{Response}<#{SdkBody}>) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(op_response: &mut #{operation}::Response) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol
             ) {
+                write("let response = op_response.http_mut();")
                 withBlock("Ok({", "})") {
                     renderShapeParser(
                         operationShape,
@@ -375,7 +377,7 @@ class HttpBoundProtocolGenerator(
         return RuntimeType.forInlineFun(fnName, "operation_deser") {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(response: &#{Response}<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol

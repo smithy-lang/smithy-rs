@@ -35,7 +35,7 @@ class EndpointPrefixGenerator(private val protocolConfig: ProtocolConfig, privat
                     endpointTraitBindings.render(this, "self")
                 }
                 rustBlock("match endpoint_prefix") {
-                    rust("Ok(prefix) => { request.config_mut().insert(prefix); },")
+                    rust("Ok(prefix) => { request.properties_mut().insert(prefix); },")
                     rust("Err(err) => return Err(${buildError.serializationError(this, "err")})")
                 }
             }
