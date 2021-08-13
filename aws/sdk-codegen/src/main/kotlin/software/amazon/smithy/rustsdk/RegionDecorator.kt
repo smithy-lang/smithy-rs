@@ -110,7 +110,7 @@ class RegionConfigPlugin : OperationCustomization() {
                 rust(
                     """
                 if let Some(region) = &${section.config}.region {
-                    ${section.request}.config_mut().insert(region.clone());
+                    ${section.request}.properties_mut().insert(region.clone());
                 }
                 """
                 )
