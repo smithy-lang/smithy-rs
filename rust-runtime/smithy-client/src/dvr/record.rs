@@ -10,8 +10,6 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::task::{Context, Poll};
 
 use http_body::Body;
-use hyper::client::HttpConnector;
-use hyper_rustls::HttpsConnector;
 use tokio::task::JoinHandle;
 use tower::{BoxError, Service};
 
@@ -31,15 +29,13 @@ pub struct RecordingConnection<S> {
     pub(crate) inner: S,
 }
 
-impl RecordingConnection<hyper::Client<HttpsConnector<HttpConnector>, SdkBody>> {
+impl RecordingConnection<crate::conns::Https> {
     /// Construct a recording connection wrapping a default HTTPS implementation
     #[cfg(feature = "hyper-rustls")]
     pub fn https() -> Self {
-        let https = hyper_rustls::HttpsConnector::with_native_roots();
-        let client = hyper::Client::builder().build::<_, SdkBody>(https);
         Self {
             data: Default::default(),
-            inner: client,
+            inner: crate::conns::https(),
             num_events: Arc::new(AtomicUsize::new(0)),
         }
     }
