@@ -192,7 +192,7 @@ map XmlMapsNestedNestedNamespaceInputOutputMap {
     params: {
         field: "hello"
     },
-    headers: { "Content-Md5": "240240a9803ad7032101319e42a45c31" },
+    headers: { "Content-Md5": "JAJAqYA61wMhATGeQqRcMQ==" },
     protocol: "aws.protocols#restXml"
 }])
 @httpChecksumRequired

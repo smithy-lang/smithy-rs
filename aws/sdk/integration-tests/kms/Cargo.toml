@@ -9,10 +9,11 @@ edition = "2018"
 
 [dependencies]
 aws-sdk-kms = { path = "../../build/aws-sdk/kms" }
+smithy-client = { path = "../../build/aws-sdk/smithy-client", features = ["test-util"] }
 smithy-http = { path = "../../build/aws-sdk/smithy-http" }
 smithy-types = { path = "../../build/aws-sdk/smithy-types" }
 http = "0.2.3"
-aws-hyper = { path = "../../build/aws-sdk/aws-hyper", features = ["test-util"] }
+aws-hyper = { path = "../../build/aws-sdk/aws-hyper" }
 aws-auth = { path = "../../build/aws-sdk/aws-auth" }
 aws-http = { path = "../../build/aws-sdk/aws-http" }
 tokio = { version = "1", features = ["full"]}

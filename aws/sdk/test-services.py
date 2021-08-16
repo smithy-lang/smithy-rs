@@ -28,7 +28,12 @@ def main():
             services.add(service)
 
     services = sorted(list(services))
+    aws_packages = set()
+    for aws_package in os.listdir('../rust-runtime'):
+        if aws_package.startswith('aws-') and 'inlineable' not in aws_package:
+            aws_packages.add(aws_package)
     as_arguments = [f'-p aws-sdk-{service}' for service in services]
+    as_arguments.extend([f'-p {aws_package}' for aws_package in aws_packages])
 
     print(' '.join(as_arguments), end='')
 

@@ -1,5 +1,6 @@
 on:
   push:
+    branches: [main]
     tags:
     - '*'
   pull_request:
@@ -31,6 +32,7 @@ jobs:
           ${{ runner.os }}-gradle-
     - name: ktlint
       run: ./gradlew ktlint
+
   unit-tests:
     name: Codegen unit tests
     runs-on: ubuntu-latest
@@ -64,6 +66,7 @@ jobs:
       run: ./gradlew :codegen:test
     - name: aws tests
       run: ./gradlew :aws:sdk-codegen:test
+
   integration-tests:
     name: Codegen integration tests
     runs-on: ubuntu-latest
@@ -106,9 +109,14 @@ jobs:
         path: |
           codegen-test/build/smithyprojections/codegen-test/*/rust-codegen/
           codegen-test/build/smithyprojections/codegen-test/Cargo.toml
+
   runtime-tests:
     name: Rust runtime tests
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        runtime: [., ./aws]
+    runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v2
     - uses: actions/cache@v2
@@ -124,12 +132,25 @@ jobs:
         components: ${{ env.rust_toolchain_components }}
         default: true
     - name: Format Check
-      run: rustfmt --check --edition 2018 $(find -name '*.rs' -print)
-    - name: execute runtime tests
-      run: ./rust-runtime/test.sh
+      run: rustfmt --check --edition 2018 $(find -name '*.rs' -print | grep -v /target/)
+      # windows doesn't support using --check like this
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+    - name: clippy check
+      run: cargo clippy -- -D warnings
+      working-directory: ${{ matrix.runtime }}/rust-runtime/
+      # don't bother running Clippy twice, it will have the same results on Windows
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+    - name: run tests
+      run: cargo test --all-features
+      working-directory: ${{ matrix.runtime }}/rust-runtime/
+    - name: generate docs
+      run: cargo doc --no-deps --document-private-items
+      working-directory: ${{ matrix.runtime }}/rust-runtime/
+      env:
+        RUSTDOCFLAGS: -D warnings
 
   generate-sdk:
-    name: Generate an AWS SDK
+    name: AWS Rust SDK Tier 1 - Generate
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -153,8 +174,6 @@ jobs:
         java-version: ${{ env.java_version }}
     - name: Generate the SDK
       run: ./gradlew :aws:sdk:assemble
-    - name: Generate the SDK...again?
-      run: ./gradlew :aws:sdk:assemble
     - name: Generate a list of services with tests
       run: python aws/sdk/test-services.py > aws/sdk/build/aws-sdk/services-with-tests
     - name: Generate a name for the SDK
@@ -165,47 +184,11 @@ jobs:
     - uses: actions/upload-artifact@v2
       name: Upload SDK Artifact
       with:
-        name: aws-sdk-${{ env.name }}-${{ github.sha }}
+        name: aws-sdk-${{ env.name }}-tier1-${{ github.sha }}
         path: sdk.tar
 
-  check-sdk:
-    name: cargo check AWS SDK
-    needs: generate-sdk
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.rust_version }}
-        components: ${{ env.rust_toolchain_components }}
-        default: true
-    - name: Generate a name for the SDK
-      id: gen-name
-      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
-    - uses: actions/download-artifact@v2
-      name: Download SDK Artifact
-      with:
-        name: aws-sdk-${{ env.name }}-${{ github.sha }}
-        path: artifact
-    - name: untar
-      run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
-    - uses: actions/cache@v2
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-
-          ${{ runner.os }}-${{ env.rust_version }}-
-    - name: Cargo Check
-      run: cargo check --lib --tests --benches
-      working-directory: aws-sdk
-      env:
-        RUSTFLAGS: -D warnings
-        CARGO_TARGET_DIR: ../target
   test-sdk:
-    name: cargo test AWS SDK
+    name: AWS Rust SDK Tier 1 - cargo test
     needs: generate-sdk
     runs-on: ubuntu-latest
     steps:
@@ -220,7 +203,7 @@ jobs:
     - uses: actions/download-artifact@v2
       name: Download SDK Artifact
       with:
-        name: aws-sdk-${{ env.name }}-${{ github.sha }}
+        name: aws-sdk-${{ env.name }}-tier1-${{ github.sha }}
         path: artifact
     - name: untar
       run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
@@ -235,14 +218,17 @@ jobs:
           ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-
           ${{ runner.os }}-${{ env.rust_version }}-
     - name: Cargo Test
-      run: cargo test $(cat services-with-tests)
+      run: cargo test $(cat service-with-tests)
       working-directory: aws-sdk
       env:
         RUSTC_FORCE_INCREMENTAL: 1
         RUSTFLAGS: -D warnings
+        # Note: the .cargo/config.toml is lost because we untar the SDK rather than checking out the repo,
+        # so we have to manually restore the target directory override
         CARGO_TARGET_DIR: ../target
+
   docs-sdk:
-    name: cargo docs AWS SDK
+    name: AWS Rust SDK Tier 1 - cargo docs
     needs: generate-sdk
     runs-on: ubuntu-latest
     steps:
@@ -252,7 +238,10 @@ jobs:
           ~/.cargo/registry
           ~/.cargo/git
           target
-        key: ${{ runner.os }}-cargodocs
+        key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-
+          ${{ runner.os }}-${{ env.rust_version }}-
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
@@ -264,7 +253,7 @@ jobs:
     - uses: actions/download-artifact@v2
       name: Download SDK Artifact
       with:
-        name: aws-sdk-${{ env.name }}-${{ github.sha }}
+        name: aws-sdk-${{ env.name }}-tier1-${{ github.sha }}
         path: artifact
     - name: untar
       run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
@@ -273,8 +262,12 @@ jobs:
       working-directory: aws-sdk
       env:
         RUSTDOCFLAGS: -D warnings
+        # Note: the .cargo/config.toml is lost because we untar the SDK rather than checking out the repo,
+        # so we have to manually restore the target directory override
+        CARGO_TARGET_DIR: ../target
+
   clippy-sdk:
-    name: cargo clippy AWS SDK
+    name: AWS Rust SDK Tier 1 - cargo clippy
     needs: generate-sdk
     runs-on: ubuntu-latest
     steps:
@@ -284,7 +277,10 @@ jobs:
           ~/.cargo/registry
           ~/.cargo/git
           target
-        key: ${{ runner.os }}-cargoclippy
+        key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-
+          ${{ runner.os }}-${{ env.rust_version }}-
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
@@ -296,16 +292,57 @@ jobs:
     - uses: actions/download-artifact@v2
       name: Download SDK Artifact
       with:
-        name: aws-sdk-${{ env.name }}-${{ github.sha }}
+        name: aws-sdk-${{ env.name }}-tier1-${{ github.sha }}
         path: artifact
     - name: untar
       run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
     - name: Cargo Clippy
       run: cargo clippy -- -D warnings
       working-directory: aws-sdk
+      env:
+        # Note: the .cargo/config.toml is lost because we untar the SDK rather than checking out the repo,
+        # so we have to manually restore the target directory override
+        CARGO_TARGET_DIR: ../target
+
+  standalone-integration-tests-check:
+    name: AWS Rust SDK Standalone Integration Tests - cargo check
+    needs: generate-sdk
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - uses: actions/download-artifact@v2
+      name: Download SDK Artifact
+      with:
+        name: aws-sdk-${{ env.name }}-tier1-${{ github.sha }}
+        path: artifact
+    - name: untar
+      run: mkdir -p aws/sdk/build/aws-sdk && cd aws/sdk/build/aws-sdk && tar -xvf ../../../../artifact/sdk.tar
+    - name: Check integration tests
+      run: cargo check
+      working-directory: aws/sdk/integration-tests
+      env:
+        RUSTC_FORCE_INCREMENTAL: 1
+        RUSTFLAGS: -D warnings
 
   all-services-check:
-    name: cargo check all services
+    name: AWS Rust SDK Tier 2 - Generate and cargo check
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -327,10 +364,8 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: ${{ env.java_version }}
-    - name: generate a check all services
-      run: ./gradlew :aws:sdk:cargoCheck
-      env:
-        GENERATE_ALL_SERVICES: 'true'
+    - name: Generate and check all services
+      run: ./gradlew -Paws.fullsdk=true :aws:sdk:cargoCheck
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
@@ -339,5 +374,5 @@ jobs:
     - uses: actions/upload-artifact@v2
       name: Upload SDK Artifact
       with:
-        name: aws-sdk-${{ env.name }}-allservices-${{ github.sha }}
+        name: aws-sdk-${{ env.name }}-${{ github.sha }}
         path: sdk.tar

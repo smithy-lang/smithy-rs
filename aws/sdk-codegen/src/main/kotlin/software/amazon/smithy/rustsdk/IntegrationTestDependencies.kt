@@ -49,7 +49,8 @@ class IntegrationTestDependencies(
     override fun section(section: LibRsSection) = when (section) {
         LibRsSection.Body -> writable {
             if (hasTests) {
-                addDependency(runtimeConfig.awsHyper().copy(scope = DependencyScope.Dev))
+                val smithyClient = CargoDependency.SmithyClient(runtimeConfig).copy(features = listOf("test-util"), scope = DependencyScope.Dev)
+                addDependency(smithyClient)
                 addDependency(SerdeJson)
                 addDependency(Tokio)
             }
@@ -62,6 +63,5 @@ class IntegrationTestDependencies(
 }
 
 val Criterion = CargoDependency("criterion", CratesIo("0.3"), scope = DependencyScope.Dev)
-val SerdeJson = CargoDependency("serde_json", CratesIo("1"), features = emptyList())
+val SerdeJson = CargoDependency("serde_json", CratesIo("1"), features = emptyList(), scope = DependencyScope.Dev)
 val Tokio = CargoDependency("tokio", CratesIo("1"), features = listOf("macros", "test-util"), scope = DependencyScope.Dev)
-fun RuntimeConfig.awsHyper() = awsRuntimeDependency("aws-hyper", features = listOf("test-util"))
