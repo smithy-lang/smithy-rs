@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use smithy_types::Instant;
 use std::error::Error as StdError;
 use std::fmt;
 
@@ -21,6 +22,7 @@ pub enum Error {
     MessageTooLong,
     PayloadTooLong,
     PreludeChecksumMismatch(u32, u32),
+    TimestampValueTooLarge(Instant),
 }
 
 impl StdError for Error {}
@@ -48,6 +50,11 @@ impl fmt::Display for Error {
                 f,
                 "prelude checksum 0x{:X} didn't match expected checksum 0x{:X}",
                 actual, expected
+            ),
+            TimestampValueTooLarge(time) => write!(
+                f,
+                "timestamp value {:?} is too large to fit into an i64",
+                time
             ),
         }
     }

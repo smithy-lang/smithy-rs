@@ -61,7 +61,13 @@ val CodegenTests = listOf(
     ),
     CodegenTest(
         "crate#Config",
-        "naming_test", """
+        "naming_test_ops", """
+            , "codegen": { "renameErrors": false }
+        """.trimIndent()
+    ),
+    CodegenTest(
+        "naming_obs_structs#NamingObstacleCourseStructs",
+        "naming_test_structs", """
             , "codegen": { "renameErrors": false }
         """.trimIndent()
     )

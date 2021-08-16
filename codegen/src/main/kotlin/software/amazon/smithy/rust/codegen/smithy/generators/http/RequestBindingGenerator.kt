@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators.http
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
@@ -19,8 +20,10 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.assignment
+import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -36,6 +39,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.isPrimitive
 
 fun HttpTrait.uriFormatString(): String {
     return uri.rustFormatString("/", "/")
@@ -71,6 +75,7 @@ class RequestBindingGenerator(
 ) {
     private val index = HttpBindingIndex.of(model)
     private val buildError = runtimeConfig.operationBuildError()
+    private val Encoder = CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
 
     constructor(
         protocolConfig: ProtocolConfig,
@@ -193,6 +198,9 @@ class RequestBindingGenerator(
         ifSet(memberType, memberSymbol, "&self.$memberName") { field ->
             listForEach(memberType, field) { innerField, targetId ->
                 val innerMemberType = model.expectShape(targetId)
+                if (innerMemberType.isPrimitive()) {
+                    rust("let mut encoder = #T::from(${autoDeref(innerField)});", Encoder)
+                }
                 val formatted = headerFmtFun(this, innerMemberType, memberShape, innerField)
                 val safeName = safeName("formatted")
                 write("let $safeName = $formatted;")
@@ -241,10 +249,10 @@ class RequestBindingGenerator(
             target.isListShape || target.isMemberShape -> {
                 throw IllegalArgumentException("lists should be handled at a higher level")
             }
-            else -> {
-                val func = writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_default"))
-                "$func(&$targetName)"
+            target.isPrimitive() -> {
+                "encoder.encode()"
             }
+            else -> throw CodegenException("unexpected shape: $target")
         }
     }
 
@@ -263,12 +271,13 @@ class RequestBindingGenerator(
         }
         val combinedArgs = listOf(formatString, *args.toTypedArray())
         writer.addImport(RuntimeType.stdfmt.member("Write").toSymbol(), null)
-        writer.rustBlock("fn uri_base(&self, output: &mut String) -> Result<(), #T>", runtimeConfig.operationBuildError()) {
+        writer.rustBlock(
+            "fn uri_base(&self, output: &mut String) -> Result<(), #T>",
+            runtimeConfig.operationBuildError()
+        ) {
             httpTrait.uri.labels.map { label ->
                 val member = inputShape.expectMember(label.content)
-                assignment(local(member)) {
-                    serializeLabel(member, label)
-                }
+                serializeLabel(member, label, local(member))
             }
             rust("""write!(output, ${combinedArgs.joinToString(", ")}).expect("formatting should succeed");""")
             rust("Ok(())")
@@ -374,13 +383,12 @@ class RequestBindingGenerator(
                 throw IllegalArgumentException("lists should be handled at a higher level")
             }
             else -> {
-                val func = writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_default"))
-                "$func(&$targetName)"
+                "${writer.format(Encoder)}::from(${autoDeref(targetName)}).encode()"
             }
         }
     }
 
-    private fun RustWriter.serializeLabel(member: MemberShape, label: SmithyPattern.Segment) {
+    private fun RustWriter.serializeLabel(member: MemberShape, label: SmithyPattern.Segment, outputVar: String) {
         val target = model.expectShape(member.target)
         val symbol = symbolProvider.toSymbol(member)
         val buildError = {
@@ -390,37 +398,37 @@ class RequestBindingGenerator(
                 "cannot be empty or unset"
             )
         }
-        rustBlock("") {
-            rust("let input = &self.${symbolProvider.toMemberName(member)};")
-            if (symbol.isOptional()) {
-                rust("let input = input.as_ref().ok_or(${buildError()})?;")
+        val input = safeName("input")
+        rust("let $input = &self.${symbolProvider.toMemberName(member)};")
+        if (symbol.isOptional()) {
+            rust("let $input = $input.as_ref().ok_or(${buildError()})?;")
+        }
+        when {
+            target.isStringShape -> {
+                val func = format(RuntimeType.LabelFormat(runtimeConfig, "fmt_string"))
+                rust("let $outputVar = $func($input, ${label.isGreedyLabel});")
             }
-            when {
-                target.isStringShape -> {
-                    val func = format(RuntimeType.LabelFormat(runtimeConfig, "fmt_string"))
-                    rust("let formatted = $func(input, ${label.isGreedyLabel});")
-                }
-                target.isTimestampShape -> {
-                    val timestampFormat =
-                        index.determineTimestampFormat(member, HttpBinding.Location.LABEL, defaultTimestampFormat)
-                    val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                    val func = format(RuntimeType.LabelFormat(runtimeConfig, "fmt_timestamp"))
-                    rust("let formatted = $func(&input, ${format(timestampFormatType)});")
-                }
-                else -> {
-                    val func = format(RuntimeType.LabelFormat(runtimeConfig, "fmt_default"))
-                    rust("let formatted = $func(input);")
-                }
+            target.isTimestampShape -> {
+                val timestampFormat =
+                    index.determineTimestampFormat(member, HttpBinding.Location.LABEL, defaultTimestampFormat)
+                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                val func = format(RuntimeType.LabelFormat(runtimeConfig, "fmt_timestamp"))
+                rust("let $outputVar = $func(&$input, ${format(timestampFormatType)});")
             }
-            rust(
-                """
-                if formatted.is_empty() {
+            else -> {
+                rust(
+                    "let mut ${outputVar}_encoder = #T::from(${autoDeref(input)}); let $outputVar = ${outputVar}_encoder.encode();",
+                    Encoder
+                )
+            }
+        }
+        rust(
+            """
+                if $outputVar.is_empty() {
                     return Err(${buildError()})
                 }
-                formatted
             """
-            )
-        }
+        )
     }
     /** End URI generation **/
 }

@@ -5,7 +5,7 @@
 
 use crate::signer::{OperationSigningConfig, RequestConfig, SigV4Signer, SigningError};
 use aws_auth::Credentials;
-use aws_sigv4_poc::SignableBody;
+use aws_sigv4::http_request::SignableBody;
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
 use smithy_http::middleware::MapRequest;
@@ -13,6 +13,20 @@ use smithy_http::operation::Request;
 use smithy_http::property_bag::PropertyBag;
 use std::time::SystemTime;
 use thiserror::Error;
+
+/// Container for the request signature for use in the property bag.
+#[non_exhaustive]
+pub struct Signature(String);
+
+impl Signature {
+    pub fn new(signature: String) -> Self {
+        Self(signature)
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
 /// Middleware stage to sign requests with SigV4
 ///
@@ -94,9 +108,11 @@ impl MapRequest for SigV4SigningStage {
         req.augment(|mut req, config| {
             let (operation_config, request_config, creds) = signing_config(config)?;
 
-            self.signer
+            let signature = self
+                .signer
                 .sign(&operation_config, &request_config, &creds, &mut req)
                 .map_err(|err| SigningStageError::SigningFailure(err))?;
+            config.insert(signature);
             Ok(req)
         })
     }
@@ -104,12 +120,12 @@ impl MapRequest for SigV4SigningStage {
 
 #[cfg(test)]
 mod test {
-    use crate::middleware::{SigV4SigningStage, SigningStageError};
+    use crate::middleware::{SigV4SigningStage, Signature, SigningStageError};
     use crate::signer::{OperationSigningConfig, SigV4Signer};
     use aws_auth::Credentials;
     use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
     use aws_endpoint::{set_endpoint_resolver, AwsEndpointStage};
-    use aws_types::region::Region;
+    use aws_types::region::{Region, SigningRegion};
     use aws_types::SigningService;
     use http::header::AUTHORIZATION;
     use smithy_http::body::SdkBody;
@@ -118,6 +134,30 @@ mod test {
     use std::convert::Infallible;
     use std::sync::Arc;
     use std::time::{Duration, UNIX_EPOCH};
+
+    #[test]
+    fn places_signature_in_property_bag() {
+        let req = http::Request::new(SdkBody::from(""));
+        let region = Region::new("us-east-1");
+        let req = operation::Request::new(req)
+            .augment(|req, properties| {
+                properties.insert(region.clone());
+                properties.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
+                properties.insert(SigningService::from_static("kinesis"));
+                properties.insert(OperationSigningConfig::default_config());
+                properties.insert(Credentials::from_keys("AKIAfoo", "bar", None));
+                properties.insert(SigningRegion::from(region));
+                Result::<_, Infallible>::Ok(req)
+            })
+            .expect("succeeds");
+
+        let signer = SigV4SigningStage::new(SigV4Signer::new());
+        let req = signer.apply(req).unwrap();
+
+        let property_bag = req.properties();
+        let signature = property_bag.get::<Signature>();
+        assert!(signature.is_some());
+    }
 
     // check that the endpoint middleware followed by signing middleware produce the expected result
     #[test]
@@ -143,21 +183,18 @@ mod test {
         let endpoint = AwsEndpointStage;
         let signer = SigV4SigningStage::new(SigV4Signer::new());
         let mut req = endpoint.apply(req).expect("add endpoint should succeed");
-        let mut errs = vec![];
-        errs.push(
-            signer
-                .apply(req.try_clone().expect("can clone"))
-                .expect_err("no signing config"),
-        );
+        let mut errs = vec![signer
+            .apply(req.try_clone().expect("can clone"))
+            .expect_err("no signing config")];
         let mut config = OperationSigningConfig::default_config();
         config.signing_options.content_sha256_header = true;
-        req.config_mut().insert(config);
+        req.properties_mut().insert(config);
         errs.push(
             signer
                 .apply(req.try_clone().expect("can clone"))
                 .expect_err("no cred provider"),
         );
-        req.config_mut()
+        req.properties_mut()
             .insert(Credentials::from_keys("AKIAfoo", "bar", None));
         let req = signer.apply(req).expect("signing succeeded");
         // make sure we got the correct error types in any order
