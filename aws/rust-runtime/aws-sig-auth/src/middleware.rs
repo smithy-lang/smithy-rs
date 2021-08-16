@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::signer::{OperationSigningConfig, RequestConfig, SigV4Signer, SigningError};
+use crate::signer::{
+    OperationSigningConfig, RequestConfig, SigV4Signer, SigningError, SigningRequirements,
+};
 use aws_auth::Credentials;
 use aws_sigv4::http_request::SignableBody;
 use aws_types::region::SigningRegion;
@@ -106,7 +108,18 @@ impl MapRequest for SigV4SigningStage {
 
     fn apply(&self, req: Request) -> Result<Request, Self::Error> {
         req.augment(|mut req, config| {
-            let (operation_config, request_config, creds) = signing_config(config)?;
+            let operation_config = config
+                .get::<OperationSigningConfig>()
+                .ok_or(SigningStageError::MissingSigningConfig)?;
+            let (operation_config, request_config, creds) =
+                match &operation_config.signing_requirements {
+                    SigningRequirements::Disabled => return Ok(req),
+                    SigningRequirements::Optional => match signing_config(config) {
+                        Ok(parts) => parts,
+                        Err(_) => return Ok(req),
+                    },
+                    SigningRequirements::Required => signing_config(config)?,
+                };
 
             let signature = self
                 .signer

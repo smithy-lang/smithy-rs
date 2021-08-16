@@ -40,10 +40,12 @@ pub enum HttpSignatureType {
 /// Although these fields MAY be customized on a per request basis, they are generally static
 /// for a given operation
 #[derive(Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct OperationSigningConfig {
     pub algorithm: SigningAlgorithm,
     pub signature_type: HttpSignatureType,
     pub signing_options: SigningOptions,
+    pub signing_requirements: SigningRequirements,
 }
 
 impl OperationSigningConfig {
@@ -58,8 +60,23 @@ impl OperationSigningConfig {
                 double_uri_encode: true,
                 content_sha256_header: false,
             },
+            signing_requirements: SigningRequirements::Required,
         }
     }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum SigningRequirements {
+    /// A signature MAY be added if credentials are defined
+    Optional,
+
+    /// A signature MUST be added.
+    ///
+    /// If no credentials are provided, this will return an error without dispatching the operation.
+    Required,
+
+    /// A signature MUST NOT be added.
+    Disabled,
 }
 
 #[derive(Clone, Eq, PartialEq)]
