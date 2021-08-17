@@ -55,7 +55,7 @@ async fn assume_role_saml_unsigned() {
         .build();
     let (server, request) = capture_request(None);
     let client = aws_sdk_sts::Client::from_conf_conn(conf, server);
-    let resp = client.assume_role_with_saml().send().await;
+    let _ = client.assume_role_with_saml().send().await;
     // web identity should be unsigned
     assert_eq!(
         request.expect_request().headers().get("AUTHORIZATION"),
