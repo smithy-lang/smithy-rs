@@ -63,16 +63,14 @@ where
             Err(SdkError::ServiceError { err, raw }) => (err, raw),
             Err(_) => return RetryKind::NotRetryable,
         };
-        if let Some(response) = &response {
-            if let Some(retry_after_delay) = response
-                .http()
-                .headers()
-                .get("x-amz-retry-after")
-                .and_then(|header| header.to_str().ok())
-                .and_then(|header| header.parse::<u64>().ok())
-            {
-                return RetryKind::Explicit(Duration::from_millis(retry_after_delay));
-            }
+        if let Some(retry_after_delay) = response
+            .http()
+            .headers()
+            .get("x-amz-retry-after")
+            .and_then(|header| header.to_str().ok())
+            .and_then(|header| header.parse::<u64>().ok())
+        {
+            return RetryKind::Explicit(Duration::from_millis(retry_after_delay));
         }
         if let Some(kind) = err.retryable_error_kind() {
             return RetryKind::Error(kind);
@@ -85,11 +83,9 @@ where
                 return RetryKind::Error(ErrorKind::TransientError);
             }
         };
-        if let Some(status) = response.as_ref().map(|resp| resp.http().status().as_u16()) {
-            if TRANSIENT_ERROR_STATUS_CODES.contains(&status) {
-                return RetryKind::Error(ErrorKind::TransientError);
-            };
-        }
+        if TRANSIENT_ERROR_STATUS_CODES.contains(&response.http().status().as_u16()) {
+            return RetryKind::Error(ErrorKind::TransientError);
+        };
         // TODO: is IDPCommunicationError modeled yet?
         RetryKind::NotRetryable
     }
@@ -137,7 +133,7 @@ mod test {
     ) -> Result<SdkSuccess<()>, SdkError<E>> {
         Err(SdkError::ServiceError {
             err,
-            raw: Some(operation::Response::new(raw.map(|b| SdkBody::from(b)))),
+            raw: operation::Response::new(raw.map(|b| SdkBody::from(b))),
         })
     }
 

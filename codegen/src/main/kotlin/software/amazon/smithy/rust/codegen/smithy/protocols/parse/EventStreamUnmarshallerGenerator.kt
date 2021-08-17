@@ -86,7 +86,7 @@ class EventStreamUnmarshallerGenerator(
                 """
                 fn unmarshall(
                     &self,
-                    message: #{Message}
+                    message: &#{Message}
                 ) -> std::result::Result<#{UnmarshalledMessage}<Self::Output, Self::Error>, #{Error}>
                 """,
                 *codegenScope

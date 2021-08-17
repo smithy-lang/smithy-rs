@@ -13,7 +13,7 @@ use futures_core::Stream;
 use hyper::body::HttpBody;
 use pin_project::pin_project;
 use smithy_eventstream::frame::{
-    DecodedFrame, MarshallMessage, MessageFrameDecoder, SignMessage, UnmarshallMessage,
+    DecodedFrame, MarshallMessage, Message, MessageFrameDecoder, SignMessage, UnmarshallMessage,
     UnmarshalledMessage,
 };
 use std::error::Error as StdError;
@@ -153,7 +153,7 @@ impl<T, E> Receiver<T, E> {
     /// it returns an `Ok(None)`. If there is a transport layer error, it will return
     /// `Err(SdkError::DispatchFailure)`. Service-modeled errors will be a part of the returned
     /// messages.
-    pub async fn recv(&mut self) -> Result<Option<T>, SdkError<E>> {
+    pub async fn recv(&mut self) -> Result<Option<T>, SdkError<E, Message>> {
         let next_chunk = self
             .body
             .data()
@@ -170,12 +170,12 @@ impl<T, E> Receiver<T, E> {
             {
                 return match self
                     .unmarshaller
-                    .unmarshall(message)
+                    .unmarshall(&message)
                     .map_err(|err| SdkError::DispatchFailure(Box::new(err)))?
                 {
                     UnmarshalledMessage::Event(event) => Ok(Some(event)),
                     UnmarshalledMessage::Error(err) => {
-                        Err(SdkError::ServiceError { err, raw: None })
+                        Err(SdkError::ServiceError { err, raw: message })
                     }
                 };
             }
@@ -240,7 +240,7 @@ mod tests {
 
         fn unmarshall(
             &self,
-            message: Message,
+            message: &Message,
         ) -> Result<UnmarshalledMessage<Self::Output, Self::Error>, EventStreamError> {
             Ok(UnmarshalledMessage::Event(TestMessage(
                 std::str::from_utf8(&message.payload()[..]).unwrap().into(),

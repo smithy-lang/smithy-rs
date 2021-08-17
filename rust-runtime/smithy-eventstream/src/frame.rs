@@ -51,7 +51,7 @@ pub trait UnmarshallMessage: fmt::Debug {
 
     fn unmarshall(
         &self,
-        message: Message,
+        message: &Message,
     ) -> Result<UnmarshalledMessage<Self::Output, Self::Error>, Error>;
 }
 

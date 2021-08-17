@@ -19,7 +19,7 @@ pub struct SdkSuccess<O> {
 
 /// Failed SDK Result
 #[derive(Debug)]
-pub enum SdkError<E> {
+pub enum SdkError<E, R = operation::Response> {
     /// The request failed during construction. It was not dispatched over the network.
     ConstructionFailure(BoxError),
 
@@ -35,13 +35,10 @@ pub enum SdkError<E> {
     },
 
     /// An error response was received from the service
-    ServiceError {
-        err: E,
-        raw: Option<operation::Response>,
-    },
+    ServiceError { err: E, raw: R },
 }
 
-impl<E> Display for SdkError<E>
+impl<E, R> Display for SdkError<E, R>
 where
     E: Error,
 {
