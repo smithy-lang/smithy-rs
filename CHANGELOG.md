@@ -13,7 +13,7 @@ vNext (Month Day, Year)
 - Update smithy-client to simplify creating HTTP/HTTPS connectors (#650)
 - Remove Bintray/JCenter source from gradle build. (#651)
 - Add support for the smithy auth trait. This enables authorizations that explicitly disable authorization to work when no credentials have been provided. (#652)
-- :bug: Fix STS Assume Role with WebIdentity & Assume role with SAML to support clients with no credentials provided.
+- :bug: Fix STS Assume Role with WebIdentity & Assume role with SAML to support clients with no credentials provided (#652)
 
 v0.20 (August 10th, 2021)
 --------------------------
