@@ -3,6 +3,7 @@ vNext (Month Day, Year)
 
 **New this week**
 
+- (When complete) Add Event Stream support (#653, #xyz)
 - (When complete) Add profile file provider for region (#594, #xyz)
 - Add experimental `dvr` module to smithy-client. This will enable easier testing of HTTP traffic. (#640)
 - Add profile file credential provider implementation. This implementation currently does not support credential sources
