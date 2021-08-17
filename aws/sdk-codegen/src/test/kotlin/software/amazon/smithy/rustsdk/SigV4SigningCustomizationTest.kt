@@ -7,7 +7,6 @@ package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
-import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.stubConfigProject
 import software.amazon.smithy.rust.codegen.testutil.unitTest
@@ -17,7 +16,7 @@ internal class SigV4SigningCustomizationTest {
     fun `generates a valid config`() {
         val project = stubConfigProject(
             SigV4SigningConfig(
-                TestRuntimeConfig,
+                AwsTestRuntimeConfig,
                 SigV4Trait.builder().name("test-service").build()
             )
         )
