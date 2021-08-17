@@ -5,7 +5,6 @@
 
 use aws_sdk_sts::{Credentials, Region};
 use smithy_client::test_connection::capture_request;
-use std::time::Duration;
 
 #[tokio::test]
 async fn assume_role_signed() {
