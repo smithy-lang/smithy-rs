@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.util.orNull
 import java.util.logging.Logger
 
+// TODO(EventStream): Remove this class once the Event Stream implementation is stable
 /** Transformer to REMOVE operations that use EventStreaming until event streaming is supported */
 object RemoveEventStreamOperations {
     private val logger = Logger.getLogger(javaClass.name)

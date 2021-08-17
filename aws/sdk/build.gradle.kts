@@ -235,6 +235,8 @@ task("generateSmithyBuild") {
         projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices))
     }
     inputs.property("servicelist", awsServices.sortedBy { it.module }.toString())
+    // TODO(EventStream): Remove this when removing SMITHYRS_EXPERIMENTAL_EVENTSTREAM
+    inputs.property("_eventStreamCacheInvalidation", System.getenv("SMITHYRS_EXPERIMENTAL_EVENTSTREAM"))
     inputs.dir(projectDir.resolve("aws-models"))
     outputs.file(projectDir.resolve("smithy-build.json"))
 }

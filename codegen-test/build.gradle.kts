@@ -106,6 +106,8 @@ task("generateSmithyBuild") {
     doFirst {
         projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(CodegenTests))
     }
+    // TODO(EventStream): Remove this when removing SMITHYRS_EXPERIMENTAL_EVENTSTREAM
+    inputs.property("_eventStreamCacheInvalidation", System.getenv("SMITHYRS_EXPERIMENTAL_EVENTSTREAM"))
 }
 
 
