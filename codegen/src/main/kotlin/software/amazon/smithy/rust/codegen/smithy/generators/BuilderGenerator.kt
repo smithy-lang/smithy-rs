@@ -51,12 +51,12 @@ class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
 /** setter names will never hit a reserved word and therefore never need escaping */
 fun MemberShape.setterName(): String = "set_${this.memberName.toSnakeCase()}"
 
-open class BuilderGenerator(
-    protected val model: Model,
-    protected val symbolProvider: RustSymbolProvider,
-    protected val shape: StructureShape
+class BuilderGenerator(
+    private val model: Model,
+    private val symbolProvider: RustSymbolProvider,
+    private val shape: StructureShape
 ) {
-    protected val runtimeConfig = symbolProvider.config().runtimeConfig
+    private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
 
