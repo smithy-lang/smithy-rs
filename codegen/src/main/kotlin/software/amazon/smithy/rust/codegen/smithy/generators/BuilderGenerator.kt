@@ -107,13 +107,13 @@ class BuilderGenerator(
     }
 
     // TODO(EventStream): [DX] Update builders to take EventInputStream as Into<EventInputStream>
-    open fun renderBuilderMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
+    private fun renderBuilderMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
         // builder members are crate-public to enable using them
         // directly in serializers/deserializers
         writer.write("pub(crate) $memberName: #T,", memberSymbol)
     }
 
-    open fun renderBuilderMemberFn(
+    private fun renderBuilderMemberFn(
         writer: RustWriter,
         coreType: RustType,
         member: MemberShape,
@@ -138,7 +138,7 @@ class BuilderGenerator(
         }
     }
 
-    open fun renderBuilderMemberSetterFn(
+    private fun renderBuilderMemberSetterFn(
         writer: RustWriter,
         outerType: RustType,
         member: MemberShape,
