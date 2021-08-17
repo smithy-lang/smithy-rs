@@ -58,6 +58,7 @@ impl AsyncProvideCredentials for DefaultProviderChain {
 #[derive(Default)]
 pub struct Builder {
     profile_file_builder: crate::profile::Builder,
+    web_identity_builder: crate::web_identity_token::Builder,
     credential_cache: aws_auth::provider::lazy_caching::builder::Builder,
     env: Option<Env>,
 }
@@ -68,6 +69,7 @@ impl Builder {
     /// When unset, the default region resolver chain will be used.
     pub fn region(mut self, region: &dyn ProvideRegion) -> Self {
         self.profile_file_builder.set_region(region.region());
+        self.web_identity_builder.set_region(region.region());
         self
     }
 
@@ -76,7 +78,9 @@ impl Builder {
     /// If a connector other than Hyper is used or if the Tokio/Hyper features have been disabled
     /// this method MUST be used to specify a custom connector.
     pub fn connector(mut self, connector: DynConnector) -> Self {
-        self.profile_file_builder.set_connector(Some(connector));
+        self.profile_file_builder
+            .set_connector(Some(connector.clone()));
+        self.web_identity_builder.set_connector(Some(connector));
         self
     }
 
@@ -133,7 +137,8 @@ impl Builder {
     ///
     /// This method exists primarily for testing credential providers
     pub fn fs(mut self, fs: Fs) -> Self {
-        self.profile_file_builder.set_fs(Some(fs));
+        self.profile_file_builder.set_fs(fs.clone());
+        self.web_identity_builder.set_fs(fs);
         self
     }
 
@@ -143,7 +148,8 @@ impl Builder {
     /// This method exists primarily for testing credential providers
     pub fn env(mut self, env: Env) -> Self {
         self.env = Some(env.clone());
-        self.profile_file_builder.set_env(Some(env));
+        self.profile_file_builder.set_env(env.clone());
+        self.web_identity_builder.set_env(env);
         self
     }
 
@@ -151,8 +157,10 @@ impl Builder {
         let profile_provider = self.profile_file_builder.build();
         let env_provider =
             EnvironmentVariableCredentialsProvider::new_with_env(self.env.unwrap_or_default());
+        let web_identity_token_provider = self.web_identity_builder.build();
         let provider_chain = crate::chain::ChainProvider::first_try("Environment", env_provider)
-            .or_else("Profile", profile_provider);
+            .or_else("Profile", profile_provider)
+            .or_else("WebIdentityToken", web_identity_token_provider);
         let cached_provider = self.credential_cache.load(provider_chain);
         DefaultProviderChain(cached_provider.build())
     }
@@ -160,53 +168,58 @@ impl Builder {
 
 #[cfg(test)]
 mod test {
-    use crate::DefaultProviderChain;
-    use aws_auth::provider::AsyncProvideCredentials;
-    use aws_hyper::DynConnector;
-    use aws_types::os_shim_internal::{Env, Fs};
-    use smithy_client::dvr::ReplayingConnection;
-    use tracing_test::traced_test;
 
-    #[tokio::test]
-    async fn prefer_environment() {
-        let env = Env::from_slice(&[
-            ("AWS_ACCESS_KEY_ID", "correct_key"),
-            ("AWS_SECRET_ACCESS_KEY", "correct_secret"),
-            ("HOME", "/Users/me"),
-        ]);
-
-        let fs = Fs::from_test_dir("test-data/aws-config/e2e-assume-role", "/Users/me");
-        // empty connection will error if it is used
-        let connection = ReplayingConnection::new(vec![]);
-        let provider = DefaultProviderChain::builder()
-            .fs(fs)
-            .env(env)
-            .connector(DynConnector::new(connection))
-            .build();
-        // empty connection will error if it is used
-        let creds = provider.provide_credentials().await.expect("valid creds");
-        assert_eq!(creds.access_key_id(), "correct_key");
-        assert_eq!(creds.secret_access_key(), "correct_secret")
+    macro_rules! make_test {
+        ($name: ident) => {
+            #[traced_test]
+            #[tokio::test]
+            async fn $name() {
+                crate::test_case::TestEnvironment::from_dir(concat!(
+                    "./test-data/default-provider-chain/",
+                    stringify!($name)
+                ))
+                .unwrap()
+                .execute(|fs, env, conn| {
+                    crate::default_provider_chain::Builder::default()
+                        .env(env)
+                        .fs(fs)
+                        .region(&Region::from_static("us-east-1"))
+                        .connector(conn)
+                        .build()
+                })
+                .await
+            }
+        };
     }
 
-    #[traced_test]
-    #[tokio::test]
-    async fn fallback_to_profile() {
-        let env = Env::from_slice(&[
-            // access keys not in environment
-            ("HOME", "/Users/me"),
-        ]);
+    use aws_sdk_sts::Region;
 
-        let fs = Fs::from_test_dir("./test-data/static-keys/aws-config", "/Users/me/.aws");
-        // empty connection will error if it is used
-        let connection = ReplayingConnection::new(vec![]);
-        let provider = DefaultProviderChain::builder()
-            .fs(fs)
-            .env(env)
-            .connector(DynConnector::new(connection))
-            .build();
-        let creds = provider.provide_credentials().await.expect("valid creds");
-        assert_eq!(creds.access_key_id(), "correct_key");
-        assert_eq!(creds.secret_access_key(), "correct_secret")
+    use tracing_test::traced_test;
+
+    make_test!(prefer_environment);
+    make_test!(profile_static_keys);
+    make_test!(web_identity_token_env);
+    make_test!(web_identity_source_profile_no_env);
+    make_test!(web_identity_token_invalid_jwt);
+    make_test!(web_identity_token_source_profile);
+    make_test!(web_identity_token_profile);
+    make_test!(profile_overrides_web_identity);
+
+    #[tokio::test]
+    #[ignore]
+    async fn update_test() {
+        crate::test_case::TestEnvironment::from_dir(concat!(
+            "./test-data/default-provider-chain/web_identity_token_source_profile",
+        ))
+        .unwrap()
+        .execute_and_update(|fs, env, conn| {
+            crate::default_provider_chain::Builder::default()
+                .env(env)
+                .fs(fs)
+                .region(&Region::from_static("us-east-1"))
+                .connector(conn)
+                .build()
+        })
+        .await
     }
 }

@@ -1,5 +1,0 @@
-{
-  "events": [],
-  "docs": "test case with an empty config file, leading to no network requests",
-  "version": "V0"
-}

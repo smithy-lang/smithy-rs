@@ -32,7 +32,8 @@ use std::sync::Arc;
 ///     map
 /// });
 /// ```
-pub struct Fs(fs::Inner);
+#[derive(Clone)]
+pub struct Fs(Arc<fs::Inner>);
 
 impl Default for Fs {
     fn default() -> Self {
@@ -42,29 +43,50 @@ impl Default for Fs {
 
 impl Fs {
     pub fn real() -> Self {
-        Fs(fs::Inner::Real)
+        Fs(Arc::new(fs::Inner::Real))
     }
 
     pub fn from_raw_map(fs: HashMap<OsString, Vec<u8>>) -> Self {
-        Fs(fs::Inner::Fake { fs })
+        Fs(Arc::new(fs::Inner::Fake { fs }))
     }
 
     pub fn from_map(data: HashMap<String, Vec<u8>>) -> Self {
         let fs = data.into_iter().map(|(k, v)| (k.into(), v)).collect();
-        Fs(fs::Inner::Fake { fs })
+        Fs(Arc::new(fs::Inner::Fake { fs }))
     }
 
-    pub fn from_test_dir(dir: impl Into<PathBuf>, root: impl Into<PathBuf>) -> Self {
-        Self(fs::Inner::Namespaced {
-            real_path: dir.into(),
-            namespaced_to: root.into(),
-        })
+    /// Create a test filesystem rooted in real files
+    ///
+    /// Creates a test filesystem from the contents of `test_directory` rooted into `namespaced_to`.
+    ///
+    /// Example:
+    /// Given:
+    /// ```bash
+    /// $ ls
+    /// ./my-test-dir/aws-config
+    /// ./my-test-dir/aws-config/config
+    /// $ cat ./my-test-dir/aws-config/config
+    /// test-config
+    /// ```
+    /// ```rust,no_run
+    /// use aws_types::os_shim_internal::{Env, Fs};
+    /// let env = Env::from_slice(&[("HOME", "/Users/me")]);
+    /// let fs = Fs::from_test_dir("my-test-dir/aws-config", "/Users/me/.aws/config");
+    /// assert_eq!(fs.read_to_end("/Users/me/.aws/config").unwrap(), "test-config");
+    pub fn from_test_dir(
+        test_directory: impl Into<PathBuf>,
+        namespaced_to: impl Into<PathBuf>,
+    ) -> Self {
+        Self(Arc::new(fs::Inner::Namespaced {
+            real_path: test_directory.into(),
+            namespaced_to: namespaced_to.into(),
+        }))
     }
 
     pub fn read_to_end(&self, path: impl AsRef<Path>) -> std::io::Result<Vec<u8>> {
         use fs::Inner;
         let path = path.as_ref();
-        match &self.0 {
+        match &self.0.as_ref() {
             Inner::Real => std::fs::read(path),
             Inner::Fake { fs } => fs
                 .get(path.as_os_str())
@@ -110,7 +132,7 @@ mod fs {
 /// - Faked process environments are wrapped in an internal Arc
 /// - Real process environments are pointer-sized
 #[derive(Clone)]
-pub struct Env(env::Inner);
+pub struct Env(Arc<env::Inner>);
 
 impl Default for Env {
     fn default() -> Self {
@@ -121,7 +143,7 @@ impl Default for Env {
 impl Env {
     pub fn get(&self, k: &str) -> Result<String, VarError> {
         use env::Inner;
-        match &self.0 {
+        match &self.0.as_ref() {
             Inner::Real => std::env::var(k),
             Inner::Fake(map) => map.get(k).cloned().ok_or(VarError::NotPresent),
         }
@@ -140,7 +162,7 @@ impl Env {
     /// ```
     pub fn from_slice<'a>(vars: &[(&'a str, &'a str)]) -> Self {
         use env::Inner;
-        Self(Inner::Fake(Arc::new(
+        Self(Arc::new(Inner::Fake(
             vars.iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .collect(),
@@ -151,23 +173,49 @@ impl Env {
     ///
     /// Calls will be delegated to [`std::env::var`](std::env::var).
     pub fn real() -> Self {
-        Self(env::Inner::Real)
+        Self(Arc::new(env::Inner::Real))
     }
 }
 
 impl From<HashMap<String, String>> for Env {
     fn from(hash_map: HashMap<String, String>) -> Self {
-        Self(env::Inner::Fake(Arc::new(hash_map)))
+        Self(Arc::new(env::Inner::Fake(hash_map)))
     }
 }
 
 mod env {
     use std::collections::HashMap;
-    use std::sync::Arc;
 
-    #[derive(Clone)]
     pub enum Inner {
         Real,
-        Fake(Arc<HashMap<String, String>>),
+        Fake(HashMap<String, String>),
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::os_shim_internal::{Env, Fs};
+    use std::env::VarError;
+
+    #[test]
+    fn env_works() {
+        let env = Env::from_slice(&[("FOO", "BAR")]);
+        assert_eq!(env.get("FOO").unwrap(), "BAR");
+        assert_eq!(
+            env.get("OTHER").expect_err("no present"),
+            VarError::NotPresent
+        )
+    }
+
+    #[test]
+    fn fs_works() {
+        let fs = Fs::from_test_dir("test-data", "/users/test-data");
+        let _ = fs
+            .read_to_end("/users/test-data/file-location-tests.json")
+            .expect("file exists");
+
+        let _ = fs
+            .read_to_end("doesntexist")
+            .expect_err("file doesnt exists");
     }
 }
