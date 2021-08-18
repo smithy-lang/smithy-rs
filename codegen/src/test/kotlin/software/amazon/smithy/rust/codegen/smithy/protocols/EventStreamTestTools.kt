@@ -88,6 +88,7 @@ private fun fillInBaseModel(
         MessageWithStruct: MessageWithStruct,
         MessageWithUnion: MessageWithUnion,
         MessageWithHeaders: MessageWithHeaders,
+        MessageWithHeaderAndPayload: MessageWithHeaderAndPayload,
         MessageWithNoHeaderPayloadTraits: MessageWithNoHeaderPayloadTraits,
         SomeError: SomeError,
     }
@@ -112,17 +113,98 @@ object EventStreamTestModels {
     data class TestCase(
         val protocolShapeId: String,
         val model: Model,
+        val contentType: String,
+        val validTestStruct: String,
+        val validMessageWithNoHeaderPayloadTraits: String,
+        val validTestUnion: String,
         val protocolBuilder: (ProtocolConfig) -> Protocol,
-    )
+    ) {
+        override fun toString(): String = protocolShapeId
+    }
 
     class ModelArgumentsProvider : ArgumentsProvider {
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
             Stream.of(
-                Arguments.of(TestCase("aws.protocols#restJson1", restJson1()) { RestJson(it) }),
-                Arguments.of(TestCase("aws.protocols#restXml", restXml()) { RestXml(it) }),
-                Arguments.of(TestCase("aws.protocols#awsJson1_1", awsJson11()) { AwsJson(it, AwsJsonVersion.Json11) }),
-                Arguments.of(TestCase("aws.protocols#awsQuery", awsQuery()) { AwsQueryProtocol(it) }),
-                Arguments.of(TestCase("aws.protocols#ec2Query", ec2Query()) { Ec2QueryProtocol(it) }),
+                Arguments.of(
+                    TestCase(
+                        protocolShapeId = "aws.protocols#restJson1",
+                        model = restJson1(),
+                        contentType = "application/json",
+                        validTestStruct = """{"someString":"hello","someInt":5}""",
+                        validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
+                        validTestUnion = """{"Foo":"hello"}""",
+                    ) { RestJson(it) }
+                ),
+                Arguments.of(
+                    TestCase(
+                        protocolShapeId = "aws.protocols#awsJson1_1",
+                        model = awsJson11(),
+                        contentType = "application/x-amz-json-1.1",
+                        validTestStruct = """{"someString":"hello","someInt":5}""",
+                        validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
+                        validTestUnion = """{"Foo":"hello"}""",
+                    ) { AwsJson(it, AwsJsonVersion.Json11) }
+                ),
+                Arguments.of(
+                    TestCase(
+                        protocolShapeId = "aws.protocols#restXml",
+                        model = restXml(),
+                        contentType = "text/xml",
+                        validTestStruct = """
+                            <TestStruct>
+                                <someString>hello</someString>
+                                <someInt>5</someInt>
+                            </TestStruct>
+                        """.trimIndent(),
+                        validMessageWithNoHeaderPayloadTraits = """
+                            <MessageWithNoHeaderPayloadTraits>
+                                <someString>hello</someString>
+                                <someInt>5</someInt>
+                            </MessageWithNoHeaderPayloadTraits>
+                        """.trimIndent(),
+                        validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>"
+                    ) { RestXml(it) }
+                ),
+                Arguments.of(
+                    TestCase(
+                        protocolShapeId = "aws.protocols#awsQuery",
+                        model = awsQuery(),
+                        contentType = "application/x-www-form-urlencoded",
+                        validTestStruct = """
+                            <TestStruct>
+                                <someString>hello</someString>
+                                <someInt>5</someInt>
+                            </TestStruct>
+                        """.trimIndent(),
+                        validMessageWithNoHeaderPayloadTraits = """
+                            <MessageWithNoHeaderPayloadTraits>
+                                <someString>hello</someString>
+                                <someInt>5</someInt>
+                            </MessageWithNoHeaderPayloadTraits>
+                        """.trimIndent(),
+                        validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>"
+                    ) { AwsQueryProtocol(it) }
+                ),
+                Arguments.of(
+                    TestCase(
+                        protocolShapeId = "aws.protocols#ec2Query",
+                        model = ec2Query(),
+                        contentType = "application/x-www-form-urlencoded",
+                        validTestStruct = """
+                            <TestStruct>
+                                <someString>hello</someString>
+                                <someInt>5</someInt>
+                            </TestStruct>
+                        """.trimIndent(),
+                        validMessageWithNoHeaderPayloadTraits = """
+                            <MessageWithNoHeaderPayloadTraits>
+                                <someString>hello</someString>
+                                <someInt>5</someInt>
+                            </MessageWithNoHeaderPayloadTraits>
+                        """.trimIndent(),
+                        validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>"
+                    ) { Ec2QueryProtocol(it) }
+                ),
             )
     }
 }

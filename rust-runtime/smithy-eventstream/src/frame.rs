@@ -81,7 +81,7 @@ mod value {
     #[derive(Clone, Debug, PartialEq)]
     pub enum HeaderValue {
         Bool(bool),
-        Byte(u8),
+        Byte(i8),
         Int16(i16),
         Int32(i32),
         Int64(i64),
@@ -99,7 +99,7 @@ mod value {
             }
         }
 
-        pub fn as_byte(&self) -> Result<u8, &Self> {
+        pub fn as_byte(&self) -> Result<i8, &Self> {
             match self {
                 HeaderValue::Byte(value) => Ok(*value),
                 _ => Err(self),
@@ -172,7 +172,7 @@ mod value {
             match value_type {
                 TYPE_TRUE => Ok(HeaderValue::Bool(true)),
                 TYPE_FALSE => Ok(HeaderValue::Bool(false)),
-                TYPE_BYTE => read_value!(buffer, Byte, u8, get_u8),
+                TYPE_BYTE => read_value!(buffer, Byte, i8, get_i8),
                 TYPE_INT16 => read_value!(buffer, Int16, i16, get_i16),
                 TYPE_INT32 => read_value!(buffer, Int32, i32, get_i32),
                 TYPE_INT64 => read_value!(buffer, Int64, i64, get_i64),
@@ -215,7 +215,7 @@ mod value {
                 Bool(val) => buffer.put_u8(if *val { TYPE_TRUE } else { TYPE_FALSE }),
                 Byte(val) => {
                     buffer.put_u8(TYPE_BYTE);
-                    buffer.put_u8(*val);
+                    buffer.put_i8(*val);
                 }
                 Int16(val) => {
                     buffer.put_u8(TYPE_INT16);
@@ -262,7 +262,7 @@ mod value {
             Ok(match value_type {
                 TYPE_TRUE => HeaderValue::Bool(true),
                 TYPE_FALSE => HeaderValue::Bool(false),
-                TYPE_BYTE => HeaderValue::Byte(u8::arbitrary(unstruct)?),
+                TYPE_BYTE => HeaderValue::Byte(i8::arbitrary(unstruct)?),
                 TYPE_INT16 => HeaderValue::Int16(i16::arbitrary(unstruct)?),
                 TYPE_INT32 => HeaderValue::Int32(i32::arbitrary(unstruct)?),
                 TYPE_INT64 => HeaderValue::Int64(i64::arbitrary(unstruct)?),

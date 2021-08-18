@@ -4,14 +4,39 @@
  */
 
 use smithy_eventstream::error::Error;
-use smithy_eventstream::frame::{Header, Message};
+use smithy_eventstream::frame::{Header, HeaderValue, Message};
 use smithy_eventstream::str_bytes::StrBytes;
+use smithy_types::{Blob, Instant};
 
 pub struct ResponseHeaders<'a> {
     pub content_type: &'a StrBytes,
     pub message_type: &'a StrBytes,
     pub smithy_type: &'a StrBytes,
 }
+
+macro_rules! expect_shape_fn {
+    (fn $fn_name:ident[$val_typ:ident] -> $result_typ:ident { $val_name:ident -> $val_expr:expr }) => {
+        pub fn $fn_name(header: &Header) -> Result<$result_typ, Error> {
+            match header.value() {
+                HeaderValue::$val_typ($val_name) => Ok($val_expr),
+                _ => Err(Error::Unmarshalling(format!(
+                    "expected '{}' header value to be {}",
+                    header.name().as_str(),
+                    stringify!($val_typ)
+                ))),
+            }
+        }
+    };
+}
+
+expect_shape_fn!(fn expect_bool[Bool] -> bool { value -> *value });
+expect_shape_fn!(fn expect_byte[Byte] -> i8 { value -> *value });
+expect_shape_fn!(fn expect_int16[Int16] -> i16 { value -> *value });
+expect_shape_fn!(fn expect_int32[Int32] -> i32 { value -> *value });
+expect_shape_fn!(fn expect_int64[Int64] -> i64 { value -> *value });
+expect_shape_fn!(fn expect_byte_array[ByteArray] -> Blob { bytes -> Blob::new(bytes.as_ref()) });
+expect_shape_fn!(fn expect_string[String] -> String { value -> value.as_str().into() });
+expect_shape_fn!(fn expect_timestamp[Timestamp] -> Instant { value -> *value });
 
 fn expect_header_str_value<'a>(
     header: Option<&'a Header>,
