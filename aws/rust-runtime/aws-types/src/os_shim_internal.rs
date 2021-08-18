@@ -144,7 +144,7 @@ mod fs {
 /// - Faked process environments are wrapped in an internal Arc
 /// - Real process environments are pointer-sized
 #[derive(Clone)]
-pub struct Env(Arc<env::Inner>);
+pub struct Env(env::Inner);
 
 impl Default for Env {
     fn default() -> Self {
@@ -155,7 +155,7 @@ impl Default for Env {
 impl Env {
     pub fn get(&self, k: &str) -> Result<String, VarError> {
         use env::Inner;
-        match &self.0.as_ref() {
+        match &self.0 {
             Inner::Real => std::env::var(k),
             Inner::Fake(map) => map.get(k).cloned().ok_or(VarError::NotPresent),
         }
@@ -173,34 +173,35 @@ impl Env {
     /// assert_eq!(mock_env.get("HOME").unwrap(), "/home/myname");
     /// ```
     pub fn from_slice<'a>(vars: &[(&'a str, &'a str)]) -> Self {
-        use env::Inner;
-        Self(Arc::new(Inner::Fake(
-            vars.iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
-        )))
+        let map: HashMap<_, _> = vars
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        Self::from(map)
     }
 
     /// Create a process environment that uses the real process environment
     ///
     /// Calls will be delegated to [`std::env::var`](std::env::var).
     pub fn real() -> Self {
-        Self(Arc::new(env::Inner::Real))
+        Self(env::Inner::Real)
     }
 }
 
 impl From<HashMap<String, String>> for Env {
     fn from(hash_map: HashMap<String, String>) -> Self {
-        Self(Arc::new(env::Inner::Fake(hash_map)))
+        Self(env::Inner::Fake(Arc::new(hash_map)))
     }
 }
 
 mod env {
     use std::collections::HashMap;
+    use std::sync::Arc;
 
+    #[derive(Clone)]
     pub enum Inner {
         Real,
-        Fake(HashMap<String, String>),
+        Fake(Arc<HashMap<String, String>>),
     }
 }
 
