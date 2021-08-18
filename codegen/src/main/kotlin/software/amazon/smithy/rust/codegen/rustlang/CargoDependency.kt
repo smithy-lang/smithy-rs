@@ -121,12 +121,15 @@ data class CargoDependency(
     private val location: DependencyLocation,
     val scope: DependencyScope = DependencyScope.Compile,
     val optional: Boolean = false,
-    private val features: List<String> = listOf()
+    val features: Set<String> = emptySet()
 ) : RustDependency(name) {
 
     fun withFeature(feature: String): CargoDependency {
-        return copy(features = features.toMutableList().apply { add(feature) })
+        return copy(features = features.toMutableSet().apply { add(feature) })
     }
+
+    fun canMergeWith(other: CargoDependency): Boolean =
+        name == other.name && location == other.location && scope == other.scope
 
     override fun version(): String = when (location) {
         is CratesIo -> location.version

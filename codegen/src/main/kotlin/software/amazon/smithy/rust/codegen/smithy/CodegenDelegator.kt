@@ -101,8 +101,10 @@ fun CodegenWriterDelegator<RustWriter>.finalize(
     this.useFileWriter("src/lib.rs", "crate::lib") { writer ->
         LibRsGenerator(settings.moduleDescription, modules, libRsCustomizations).render(writer)
     }
-    val cargoDependencies =
-        this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<CargoDependency>().distinct()
+    val cargoDependencies = mergeDependencyFeatures(
+        this.dependencies.map { RustDependency.fromSymbolDependency(it) }
+            .filterIsInstance<CargoDependency>().distinct()
+    )
     this.useFileWriter("Cargo.toml") {
         val cargoToml = CargoTomlGenerator(
             settings,
@@ -113,4 +115,25 @@ fun CodegenWriterDelegator<RustWriter>.finalize(
         cargoToml.render()
     }
     flushWriters()
+}
+
+internal fun mergeDependencyFeatures(cargoDependencies: List<CargoDependency>): List<CargoDependency> {
+    val dependencies = cargoDependencies.toMutableList()
+    dependencies.sortBy { it.name }
+
+    var index = 1
+    while (index < dependencies.size) {
+        val first = dependencies[index - 1]
+        val second = dependencies[index]
+        if (first.canMergeWith(second)) {
+            dependencies[index - 1] = first.copy(
+                features = first.features + second.features,
+                optional = first.optional && second.optional
+            )
+            dependencies.removeAt(index)
+        } else {
+            index += 1
+        }
+    }
+    return dependencies
 }

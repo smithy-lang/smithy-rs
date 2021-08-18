@@ -10,7 +10,7 @@ description = "AWS SigV4 signer"
 [features]
 sign-http = ["http", "http-body", "percent-encoding", "form_urlencoded"]
 sign-eventstream = ["smithy-eventstream"]
-default = ["sign-http", "sign-eventstream"]
+default = ["sign-http"]
 
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
