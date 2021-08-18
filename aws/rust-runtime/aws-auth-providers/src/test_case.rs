@@ -10,7 +10,7 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
-use aws_auth::provider::AsyncProvideCredentials;
+use aws_auth::provider::{AsyncProvideCredentials, CredentialsResult};
 use aws_hyper::DynConnector;
 use aws_types::os_shim_internal::{Env, Fs};
 use serde::Deserialize;
@@ -41,6 +41,13 @@ impl From<&aws_auth::Credentials> for Credentials {
     }
 }
 
+/// Credentials test environment
+///
+/// A credentials test environment is a directory containing:
+/// - an `fs` directory. This is loaded into the test as if it was mounted at `/`
+/// - an `env.json` file containing environment variables
+/// - an  `http-traffic.json` file containing an http traffic log from [`dvr`](smithy_client::dvr)
+/// - a `test-case.json` file defining the expected output of the test
 pub struct TestEnvironment {
     env: Env,
     fs: Fs,
@@ -88,6 +95,10 @@ impl TestEnvironment {
         })
     }
 
+    /// Execute the test suite & record a new traffic log
+    ///
+    /// A connector will be created with the factory, then request traffic will be recorded.
+    /// Response are generated from the existing http-traffic.json.
     pub async fn execute_and_update<P>(&self, make_provider: impl Fn(Fs, Env, DynConnector) -> P)
     where
         P: AsyncProvideCredentials,
@@ -100,18 +111,20 @@ impl TestEnvironment {
             self.env.clone(),
             DynConnector::new(connector.clone()),
         );
-        let _ = provider.provide_credentials().await;
+        let result = provider.provide_credentials().await;
         std::fs::write(
             self.base_dir.join("http-traffic-recorded.json"),
             serde_json::to_string(&connector.network_traffic()).unwrap(),
         )
         .unwrap();
+        self.check_results(&result);
     }
 
     fn log_info(&self) {
         eprintln!("test case: {}. {}", self.metadata.name, self.metadata.docs);
     }
 
+    /// Execute a test case. Failures lead to panics.
     pub async fn execute<P>(&self, make_provider: impl Fn(Fs, Env, DynConnector) -> P)
     where
         P: AsyncProvideCredentials,
@@ -124,6 +137,15 @@ impl TestEnvironment {
         );
         let result = provider.provide_credentials().await;
         self.log_info();
+        self.check_results(&result);
+        // todo: validate bodies
+        match connector.validate(&["CONTENT-TYPE", "HOST"], |_expected, _actual| Ok(())) {
+            Ok(()) => {}
+            Err(e) => panic!("{}", e),
+        }
+    }
+
+    fn check_results(&self, result: &CredentialsResult) {
         match (&result, &self.metadata.result) {
             (Ok(actual), TestResult::Ok(expected)) => {
                 assert_eq!(
@@ -148,11 +170,6 @@ impl TestEnvironment {
                 "expected an error containing: `{}`, but credentials were returned: {:?}",
                 substr, creds
             ),
-        }
-        // todo: validate bodies
-        match connector.validate(&["CONTENT-TYPE", "HOST"], |_expected, _actual| Ok(())) {
-            Ok(()) => {}
-            Err(e) => panic!("{}", e),
         }
     }
 }

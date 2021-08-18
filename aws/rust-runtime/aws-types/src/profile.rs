@@ -63,8 +63,8 @@ use std::collections::HashMap;
 /// [other]
 /// aws_access_key_id = 456
 /// ```
-pub fn load(fs: &Fs, env: &Env) -> Result<ProfileSet, ProfileParseError> {
-    let source = source::load(&env, &fs);
+pub async fn load(fs: &Fs, env: &Env) -> Result<ProfileSet, ProfileParseError> {
+    let source = source::load(&env, &fs).await;
     ProfileSet::parse(source)
 }
 

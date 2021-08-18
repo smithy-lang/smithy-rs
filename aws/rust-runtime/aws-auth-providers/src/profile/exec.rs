@@ -30,8 +30,8 @@ pub struct AssumeRoleProvider {
 }
 
 pub struct ClientConfiguration {
-    pub core_client: StandardClient,
-    pub region: Option<Region>,
+    pub(crate) core_client: StandardClient,
+    pub(crate) region: Option<Region>,
 }
 
 impl AssumeRoleProvider {

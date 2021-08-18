@@ -7,6 +7,7 @@
 //! - Reading environment variables
 //! - Reading from the file system
 
+use crate::os_shim_internal::fs::Fake;
 use std::collections::HashMap;
 use std::env::VarError;
 use std::ffi::OsString;
@@ -33,7 +34,7 @@ use std::sync::Arc;
 /// });
 /// ```
 #[derive(Clone)]
-pub struct Fs(Arc<fs::Inner>);
+pub struct Fs(fs::Inner);
 
 impl Default for Fs {
     fn default() -> Self {
@@ -43,16 +44,16 @@ impl Default for Fs {
 
 impl Fs {
     pub fn real() -> Self {
-        Fs(Arc::new(fs::Inner::Real))
+        Fs(fs::Inner::Real)
     }
 
     pub fn from_raw_map(fs: HashMap<OsString, Vec<u8>>) -> Self {
-        Fs(Arc::new(fs::Inner::Fake { fs }))
+        Fs(fs::Inner::Fake(Arc::new(Fake::MapFs(fs))))
     }
 
     pub fn from_map(data: HashMap<String, Vec<u8>>) -> Self {
         let fs = data.into_iter().map(|(k, v)| (k.into(), v)).collect();
-        Fs(Arc::new(fs::Inner::Fake { fs }))
+        Self::from_raw_map(fs)
     }
 
     /// Create a test filesystem rooted in real files
@@ -77,30 +78,37 @@ impl Fs {
         test_directory: impl Into<PathBuf>,
         namespaced_to: impl Into<PathBuf>,
     ) -> Self {
-        Self(Arc::new(fs::Inner::Namespaced {
+        Self(fs::Inner::Fake(Arc::new(Fake::NamespacedFs {
             real_path: test_directory.into(),
             namespaced_to: namespaced_to.into(),
-        }))
+        })))
     }
 
-    pub fn read_to_end(&self, path: impl AsRef<Path>) -> std::io::Result<Vec<u8>> {
+    /// Read the entire contents of a file
+    ///
+    /// **Note**: This function is currently `async` primarily for forward compatibility. Currently,
+    /// this function does not use Tokio (or any other runtime) to perform IO, the IO is performed
+    /// directly within the function.
+    pub async fn read_to_end(&self, path: impl AsRef<Path>) -> std::io::Result<Vec<u8>> {
         use fs::Inner;
         let path = path.as_ref();
-        match &self.0.as_ref() {
+        match &self.0 {
             Inner::Real => std::fs::read(path),
-            Inner::Fake { fs } => fs
-                .get(path.as_os_str())
-                .cloned()
-                .ok_or_else(|| std::io::ErrorKind::NotFound.into()),
-            Inner::Namespaced {
-                real_path,
-                namespaced_to,
-            } => {
-                let actual_path = path
-                    .strip_prefix(namespaced_to)
-                    .map_err(|_| std::io::Error::from(std::io::ErrorKind::NotFound))?;
-                std::fs::read(real_path.join(actual_path))
-            }
+            Inner::Fake(fake) => match fake.as_ref() {
+                Fake::MapFs(fs) => fs
+                    .get(path.as_os_str())
+                    .cloned()
+                    .ok_or_else(|| std::io::ErrorKind::NotFound.into()),
+                Fake::NamespacedFs {
+                    real_path,
+                    namespaced_to,
+                } => {
+                    let actual_path = path
+                        .strip_prefix(namespaced_to)
+                        .map_err(|_| std::io::Error::from(std::io::ErrorKind::NotFound))?;
+                    std::fs::read(real_path.join(actual_path))
+                }
+            },
         }
     }
 }
@@ -109,13 +117,17 @@ mod fs {
     use std::collections::HashMap;
     use std::ffi::OsString;
     use std::path::PathBuf;
+    use std::sync::Arc;
 
+    #[derive(Clone)]
     pub enum Inner {
         Real,
-        Fake {
-            fs: HashMap<OsString, Vec<u8>>,
-        },
-        Namespaced {
+        Fake(Arc<Fake>),
+    }
+
+    pub enum Fake {
+        MapFs(HashMap<OsString, Vec<u8>>),
+        NamespacedFs {
             real_path: PathBuf,
             namespaced_to: PathBuf,
         },
@@ -195,6 +207,7 @@ mod env {
 #[cfg(test)]
 mod test {
     use crate::os_shim_internal::{Env, Fs};
+    use futures_util::FutureExt;
     use std::env::VarError;
 
     #[test]
@@ -212,10 +225,14 @@ mod test {
         let fs = Fs::from_test_dir("test-data", "/users/test-data");
         let _ = fs
             .read_to_end("/users/test-data/file-location-tests.json")
+            .now_or_never()
+            .expect("future should not poll")
             .expect("file exists");
 
         let _ = fs
             .read_to_end("doesntexist")
+            .now_or_never()
+            .expect("future should not poll")
             .expect_err("file doesnt exists");
     }
 }

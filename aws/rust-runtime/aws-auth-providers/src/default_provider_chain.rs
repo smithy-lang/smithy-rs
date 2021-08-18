@@ -205,6 +205,10 @@ mod test {
     make_test!(web_identity_token_profile);
     make_test!(profile_overrides_web_identity);
 
+    /// Helper that uses `execute_and_update` instead of execute
+    ///
+    /// If you run this, it will add another HTTP traffic log which re-records the request
+    /// data
     #[tokio::test]
     #[ignore]
     async fn update_test() {

@@ -34,9 +34,10 @@ use aws_sdk_sts::Region;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::profile::ProfileParseError;
 use aws_types::region::ProvideRegion;
+use tokio::sync::RwLock;
 use tracing::Instrument;
 
-use crate::default_connector;
+use crate::must_have_connector;
 use crate::profile::exec::named::NamedProviderFactory;
 use crate::profile::exec::{ClientConfiguration, ProviderChain};
 
@@ -118,8 +119,13 @@ impl AsyncProvideCredentials for ProfileFileCredentialProvider {
 ///
 /// Other more complex configurations are possible, consult `test-data/assume-role-tests.json`.
 pub struct ProfileFileCredentialProvider {
-    inner: Result<ProviderChain, ProfileFileError>,
+    inner: RwLock<Inner>,
+    factory: NamedProviderFactory,
     client_config: ClientConfiguration,
+    fs: Fs,
+    env: Env,
+    region: Option<Region>,
+    connector: DynConnector,
 }
 
 impl ProfileFileCredentialProvider {
@@ -128,7 +134,35 @@ impl ProfileFileCredentialProvider {
     }
 
     async fn load_credentials(&self) -> CredentialsResult {
-        let inner = self.inner.as_ref().map_err(|err| match err {
+        // 1. grab a read lock, use it to see if the base profile has already been loaded
+        // 2. If it's loaded, great, lets use it.
+        //    If not, upgrade to a write lock and use that to load the profile file.
+        // 3. Finally, downgrade to ensure no one swapped in the intervening time, then use try_load()
+        //    to pull the new state.
+        let mut initial_read = self.inner.read().await;
+        let inner = initial_read.try_load_profile();
+        let inner = match inner {
+            Some(result) => result,
+            None => {
+                drop(inner);
+                drop(initial_read);
+                let mut write_guard = self.inner.write().await;
+                write_guard
+                    .load_profile(
+                        &self.fs,
+                        &self.env,
+                        &self.region,
+                        &self.connector,
+                        &self.factory,
+                    )
+                    .await;
+                initial_read = write_guard.downgrade();
+                initial_read
+                    .try_load_profile()
+                    .expect("unreachable, load_profile will never leave it unloaded.")
+            }
+        };
+        let inner = inner.map_err(|err| match err {
             ProfileFileError::NoProfilesDefined => CredentialsError::CredentialsNotLoaded,
             _ => CredentialsError::InvalidConfiguration(
                 format!("ProfileFile provider could not be built: {}", &err).into(),
@@ -166,6 +200,42 @@ impl ProfileFileCredentialProvider {
             }
         }
         Ok(creds)
+    }
+}
+
+enum Inner {
+    NotLoaded,
+    ErrorLoading(ProfileFileError),
+    Loaded(ProviderChain),
+}
+
+impl Inner {
+    fn try_load_profile(&self) -> Option<Result<&ProviderChain, &ProfileFileError>> {
+        match self {
+            Inner::NotLoaded => None,
+            Inner::ErrorLoading(err) => Some(Err(err)),
+            Inner::Loaded(chain) => Some(Ok(chain)),
+        }
+    }
+
+    async fn load_profile(
+        &mut self,
+        fs: &Fs,
+        env: &Env,
+        region: &dyn ProvideRegion,
+        connector: &DynConnector,
+        factory: &NamedProviderFactory,
+    ) {
+        match self {
+            Inner::NotLoaded => {
+                let new_chain = build_provider_chain(fs, env, region, connector, factory).await;
+                match new_chain {
+                    Ok(chain) => *self = Inner::Loaded(chain),
+                    Err(error) => *self = Inner::ErrorLoading(error),
+                };
+            }
+            _ => {}
+        }
     }
 }
 
@@ -298,9 +368,9 @@ impl Builder {
     pub fn build(self) -> ProfileFileCredentialProvider {
         let build_span = tracing::info_span!("build_profile_provider");
         let _enter = build_span.enter();
+        let env = self.env.clone();
         let fs = self.fs;
-        let env = self.env;
-        let mut named_providers = self.custom_providers;
+        let mut named_providers = self.custom_providers.clone();
         named_providers
             .entry("Environment".into())
             .or_insert_with(|| {
@@ -310,31 +380,34 @@ impl Builder {
             });
         // TODO: ECS, IMDS, and other named providers
         let factory = exec::named::NamedProviderFactory::new(named_providers);
-        let connector = self.connector.or_else(default_connector).expect(
-            "a connector must be provided or the `rustls` or `native-tls` features must be enabled",
-        );
-        let chain = build_provider_chain(&fs, &env, &self.region, &connector, &factory);
+        let connector = self.connector.clone().unwrap_or_else(must_have_connector);
         let core_client = aws_hyper::Builder::<()>::new()
-            .map_connector(|_| connector)
+            .map_connector(|_| connector.clone())
             .build();
+
         ProfileFileCredentialProvider {
-            inner: chain,
+            inner: RwLock::new(Inner::NotLoaded),
+            factory,
             client_config: ClientConfiguration {
                 core_client,
-                region: self.region,
+                region: self.region.clone(),
             },
+            fs,
+            env,
+            region: self.region.clone(),
+            connector,
         }
     }
 }
 
-fn build_provider_chain(
+async fn build_provider_chain(
     fs: &Fs,
     env: &Env,
     region: &dyn ProvideRegion,
     connector: &DynConnector,
     factory: &NamedProviderFactory,
 ) -> Result<ProviderChain, ProfileFileError> {
-    let profile_set = aws_types::profile::load(&fs, &env).map_err(|err| {
+    let profile_set = aws_types::profile::load(&fs, &env).await.map_err(|err| {
         tracing::warn!(err = %err, "failed to parse profile");
         ProfileFileError::CouldNotParseProfile(err)
     })?;
@@ -345,7 +418,6 @@ fn build_provider_chain(
 
 #[cfg(test)]
 mod test {
-
     use aws_sdk_sts::Region;
     use tracing_test::traced_test;
 
