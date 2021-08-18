@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.isEventStream
 import software.amazon.smithy.rust.codegen.util.isInputEventStream
 
 /**
@@ -51,8 +52,17 @@ class SigV4SigningDecorator : RustCodegenDecorator {
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations.letIf(applies(protocolConfig)) {
-            it + SigV4SigningConfig(protocolConfig.runtimeConfig, protocolConfig.serviceShape.expectTrait())
+        return baseCustomizations.letIf(applies(protocolConfig)) { customizations ->
+            val serviceHasEventStream = protocolConfig.serviceShape.operations
+                .any { id ->
+                    protocolConfig.model.expectShape(id, OperationShape::class.java)
+                        .isEventStream(protocolConfig.model)
+                }
+            customizations + SigV4SigningConfig(
+                protocolConfig.runtimeConfig,
+                serviceHasEventStream,
+                protocolConfig.serviceShape.expectTrait()
+            )
         }
     }
 
@@ -72,11 +82,15 @@ class SigV4SigningDecorator : RustCodegenDecorator {
     }
 }
 
-class SigV4SigningConfig(runtimeConfig: RuntimeConfig, private val sigV4Trait: SigV4Trait) : ConfigCustomization() {
+class SigV4SigningConfig(
+    runtimeConfig: RuntimeConfig,
+    private val serviceHasEventStream: Boolean,
+    private val sigV4Trait: SigV4Trait
+) : ConfigCustomization() {
     private val codegenScope = arrayOf(
         "SigV4Signer" to RuntimeType(
             "SigV4Signer",
-            runtimeConfig.awsRuntimeDependency("aws-sig-auth", listOf("sign-eventstream")),
+            runtimeConfig.awsRuntimeDependency("aws-sig-auth", setOf("sign-eventstream")),
             "aws_sig_auth::event_stream"
         ),
         "PropertyBag" to RuntimeType(
@@ -98,14 +112,23 @@ class SigV4SigningConfig(runtimeConfig: RuntimeConfig, private val sigV4Trait: S
                     pub fn signing_service(&self) -> &'static str {
                         ${sigV4Trait.name.dq()}
                     }
-
-                    /// Creates a new Event Stream `SignMessage` implementor.
-                    pub fn new_event_stream_signer(&self, properties: std::sync::Arc<std::sync::Mutex<#{PropertyBag}>>) -> #{SigV4Signer} {
-                        #{SigV4Signer}::new(properties)
-                    }
                     """,
                     *codegenScope
                 )
+                if (serviceHasEventStream) {
+                    rustTemplate(
+                        """
+                        /// Creates a new Event Stream `SignMessage` implementor.
+                        pub fn new_event_stream_signer(
+                            &self,
+                            properties: std::sync::Arc<std::sync::Mutex<#{PropertyBag}>>
+                        ) -> #{SigV4Signer} {
+                            #{SigV4Signer}::new(properties)
+                        }
+                        """,
+                        *codegenScope
+                    )
+                }
             }
             else -> emptySection
         }
