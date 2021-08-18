@@ -70,10 +70,12 @@ impl Fs {
     /// test-config
     /// ```
     /// ```rust,no_run
+    /// # async fn docs() {
     /// use aws_types::os_shim_internal::{Env, Fs};
     /// let env = Env::from_slice(&[("HOME", "/Users/me")]);
     /// let fs = Fs::from_test_dir("my-test-dir/aws-config", "/Users/me/.aws/config");
-    /// assert_eq!(fs.read_to_end("/Users/me/.aws/config").unwrap(), "test-config");
+    /// assert_eq!(fs.read_to_end("/Users/me/.aws/config").await.unwrap(), b"test-config");
+    /// # }
     pub fn from_test_dir(
         test_directory: impl Into<PathBuf>,
         namespaced_to: impl Into<PathBuf>,

@@ -268,7 +268,7 @@ mod tests {
 
         let fs = Fs::from_map(fs);
 
-        let _src = load(&env, &fs);
+        let _src = load(&env, &fs).now_or_never();
         assert!(logs_contain("config file loaded"));
         assert!(logs_contain("performing home directory substitution"));
     }
