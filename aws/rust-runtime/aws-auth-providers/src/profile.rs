@@ -34,7 +34,6 @@ use aws_sdk_sts::Region;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::profile::ProfileParseError;
 use aws_types::region::ProvideRegion;
-use tokio::sync::RwLock;
 use tracing::Instrument;
 
 use crate::must_have_connector;
@@ -67,6 +66,10 @@ impl AsyncProvideCredentials for ProfileFileCredentialProvider {
 /// use aws_auth_providers::profile::ProfileFileCredentialProvider;
 /// let provider = ProfileFileCredentialProvider::builder().build();
 /// ```
+///
+/// **Note:** Profile providers to not implement any caching. They will reload and reparse the profile
+/// from the file system when called. See [lazy_caching](aws_auth::provider::lazy_caching) for
+/// more information about caching.
 ///
 /// This provider supports several different credentials formats:
 /// ### Credentials defined explicitly within the file
@@ -119,7 +122,6 @@ impl AsyncProvideCredentials for ProfileFileCredentialProvider {
 ///
 /// Other more complex configurations are possible, consult `test-data/assume-role-tests.json`.
 pub struct ProfileFileCredentialProvider {
-    inner: RwLock<Inner>,
     factory: NamedProviderFactory,
     client_config: ClientConfiguration,
     fs: Fs,
@@ -139,36 +141,21 @@ impl ProfileFileCredentialProvider {
         //    If not, upgrade to a write lock and use that to load the profile file.
         // 3. Finally, downgrade to ensure no one swapped in the intervening time, then use try_load()
         //    to pull the new state.
-        let mut initial_read = self.inner.read().await;
-        let inner = initial_read.try_load_profile();
-        let inner = match inner {
-            Some(result) => result,
-            None => {
-                drop(inner);
-                drop(initial_read);
-                let mut write_guard = self.inner.write().await;
-                write_guard
-                    .load_profile(
-                        &self.fs,
-                        &self.env,
-                        &self.region,
-                        &self.connector,
-                        &self.factory,
-                    )
-                    .await;
-                initial_read = write_guard.downgrade();
-                initial_read
-                    .try_load_profile()
-                    .expect("unreachable, load_profile will never leave it unloaded.")
-            }
-        };
-        let inner = inner.map_err(|err| match err {
+        let profile = build_provider_chain(
+            &self.fs,
+            &self.env,
+            &self.region,
+            &self.connector,
+            &self.factory,
+        )
+        .await;
+        let inner_provider = profile.map_err(|err| match err {
             ProfileFileError::NoProfilesDefined => CredentialsError::CredentialsNotLoaded,
             _ => CredentialsError::InvalidConfiguration(
                 format!("ProfileFile provider could not be built: {}", &err).into(),
             ),
         })?;
-        let mut creds = match inner
+        let mut creds = match inner_provider
             .base()
             .provide_credentials()
             .instrument(tracing::info_span!("load_base_credentials"))
@@ -183,7 +170,7 @@ impl ProfileFileCredentialProvider {
                 return Err(CredentialsError::ProviderError(e.into()));
             }
         };
-        for provider in inner.chain().iter() {
+        for provider in inner_provider.chain().iter() {
             let next_creds = provider
                 .credentials(creds, &self.client_config)
                 .instrument(tracing::info_span!("load_assume_role", provider = ?provider))
@@ -200,42 +187,6 @@ impl ProfileFileCredentialProvider {
             }
         }
         Ok(creds)
-    }
-}
-
-enum Inner {
-    NotLoaded,
-    ErrorLoading(ProfileFileError),
-    Loaded(ProviderChain),
-}
-
-impl Inner {
-    fn try_load_profile(&self) -> Option<Result<&ProviderChain, &ProfileFileError>> {
-        match self {
-            Inner::NotLoaded => None,
-            Inner::ErrorLoading(err) => Some(Err(err)),
-            Inner::Loaded(chain) => Some(Ok(chain)),
-        }
-    }
-
-    async fn load_profile(
-        &mut self,
-        fs: &Fs,
-        env: &Env,
-        region: &dyn ProvideRegion,
-        connector: &DynConnector,
-        factory: &NamedProviderFactory,
-    ) {
-        match self {
-            Inner::NotLoaded => {
-                let new_chain = build_provider_chain(fs, env, region, connector, factory).await;
-                match new_chain {
-                    Ok(chain) => *self = Inner::Loaded(chain),
-                    Err(error) => *self = Inner::ErrorLoading(error),
-                };
-            }
-            _ => {}
-        }
     }
 }
 
@@ -386,7 +337,6 @@ impl Builder {
             .build();
 
         ProfileFileCredentialProvider {
-            inner: RwLock::new(Inner::NotLoaded),
             factory,
             client_config: ClientConfiguration {
                 core_client,
