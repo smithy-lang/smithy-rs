@@ -11,6 +11,9 @@ vNext (Month Day, Year)
 - :bug: Fix name collision that occurred when a model had both a union and a structure named `Result` (#643)
 - Add initial implementation of a default provider chain. (#650)
 - Update smithy-client to simplify creating HTTP/HTTPS connectors (#650)
+- Remove Bintray/JCenter source from gradle build. (#651)
+- Add support for the smithy auth trait. This enables authorizations that explicitly disable authorization to work when no credentials have been provided. (#652)
+- :bug: Fix STS Assume Role with WebIdentity & Assume role with SAML to support clients with no credentials provided (#652)
 
 v0.20 (August 10th, 2021)
 --------------------------
