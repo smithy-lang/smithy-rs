@@ -49,13 +49,13 @@ async fn main() -> Result<(), Error> {
         println!("CloudFormation client version: {}", PKG_VERSION);
         println!(
             "Region:                        {}",
-            region.region().unwrap().as_ref()
+            region.region().await.unwrap().as_ref()
         );
         println!("Stack:                         {}", &stack_name);
         println!();
     }
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region).build().await;
     let client = Client::from_conf(conf);
 
     client.delete_stack().stack_name(stack_name).send().await?;

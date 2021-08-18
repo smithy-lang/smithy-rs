@@ -147,7 +147,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
             customizations.forEach {
                 it.section(ServiceConfig.BuilderImpl)(this)
             }
-            rustBlock("pub fn build(self) -> Config") {
+            rustBlock("pub async fn build(self) -> Config") {
                 rustBlock("Config") {
                     customizations.forEach {
                         it.section(ServiceConfig.BuilderBuild)(this)

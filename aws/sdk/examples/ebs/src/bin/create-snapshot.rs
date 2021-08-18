@@ -55,11 +55,11 @@ async fn main() -> Result<(), Error> {
     if verbose {
         println!("EBS version: {}", PKG_VERSION);
         println!("Description: {}", description);
-        println!("Region:      {}", region.region().unwrap().as_ref());
+        println!("Region:      {}", region.region().await.unwrap().as_ref());
         println!();
     }
 
-    let config = Config::builder().region(region).build();
+    let config = Config::builder().region(region).build().await;
     let client = Client::from_conf(config);
 
     let snapshot = client

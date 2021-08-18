@@ -42,12 +42,12 @@ async fn main() -> Result<(), Error> {
         );
         println!(
             "Region:                            {:?}",
-            region_provider.region()
+            region_provider.region().await
         );
         println!();
     }
 
-    let config = Config::builder().region(region_provider).build();
+    let config = Config::builder().region(region_provider).build().await;
     let client = Client::from_conf(config);
 
     let response = client.describe_scaling_plans().send().await?;

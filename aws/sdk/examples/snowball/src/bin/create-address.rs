@@ -106,7 +106,7 @@ async fn main() -> Result<(), Error> {
         println!("Snowball version:       {}", PKG_VERSION);
         println!(
             "Region:                 {}",
-            region_provider.region().unwrap().as_ref()
+            region_provider.region().await.unwrap().as_ref()
         );
         println!("City:                   {}", &city);
         println!("Company:                {:?}", &company);
@@ -139,7 +139,7 @@ async fn main() -> Result<(), Error> {
         .set_is_restricted(Some(false))
         .build();
 
-    let conf = Config::builder().region(region_provider).build();
+    let conf = Config::builder().region(region_provider).build().await;
     let client = Client::from_conf(conf);
 
     let result = client.create_address().address(new_address).send().await?;

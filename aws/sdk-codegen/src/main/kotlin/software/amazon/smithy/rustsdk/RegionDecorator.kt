@@ -80,12 +80,12 @@ class RegionProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization()
             is ServiceConfig.ConfigStruct -> rust("pub(crate) region: Option<#T::Region>,", region)
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
-                rust("region: Option<#T::Region>,", region)
+                rust("region: Option<Box<dyn #T::ProvideRegion>>,", region)
             ServiceConfig.BuilderImpl ->
                 rust(
                     """
-            pub fn region(mut self, region_provider: impl #1T::ProvideRegion) -> Self {
-                self.region = region_provider.region();
+            pub fn region(mut self, region_provider: impl #1T::ProvideRegion + 'static) -> Self {
+                self.region = Some(Box::new(region_provider));
                 self
             }
             """,
@@ -93,8 +93,11 @@ class RegionProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization()
                 )
             ServiceConfig.BuilderBuild -> rust(
                 """region: {
-                    use #1T::ProvideRegion;
-                    self.region.or_else(||#1T::default_provider().region())
+                    use aws_types::region::ProvideRegion;
+                    match self.region {
+                        Some(provider) => provider.region().await,
+                        None => #1T::default_provider().region().await
+                    }
                 },""",
                 region
             )

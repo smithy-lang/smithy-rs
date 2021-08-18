@@ -9,7 +9,7 @@ use std::process::exit;
 #[tokio::main]
 async fn main() -> Result<(), sqs::Error> {
     tracing_subscriber::fmt::init();
-    let client = sqs::Client::from_env();
+    let client = sqs::Client::from_env().await;
     let queues = client.list_queues().send().await?;
     let mut queue_urls = queues.queue_urls.unwrap_or_default();
     let queue_url = match queue_urls.pop() {

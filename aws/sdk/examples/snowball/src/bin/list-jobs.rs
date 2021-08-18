@@ -41,12 +41,12 @@ async fn main() -> Result<(), Error> {
         println!("Snowball version: {}", PKG_VERSION);
         println!(
             "Region:           {}",
-            region_provider.region().unwrap().as_ref()
+            region_provider.region().await.unwrap().as_ref()
         );
         println!();
     }
 
-    let conf = Config::builder().region(region_provider).build();
+    let conf = Config::builder().region(region_provider).build().await;
     let client = Client::from_conf(conf);
 
     println!("Jobs:");

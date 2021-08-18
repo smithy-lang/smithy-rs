@@ -39,11 +39,11 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("AutoScaling version: {}", PKG_VERSION);
-        println!("Region:              {:?}", region_provider.region());
+        println!("Region:              {:?}", region_provider.region().await);
         println!();
     }
 
-    let conf = Config::builder().region(region_provider).build();
+    let conf = Config::builder().region(region_provider).build().await;
     let client = Client::from_conf(conf);
 
     let resp = client.describe_auto_scaling_groups().send().await?;

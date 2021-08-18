@@ -12,7 +12,7 @@ use sts::Credentials;
 #[tokio::main]
 async fn main() -> Result<(), dynamodb::Error> {
     tracing_subscriber::fmt::init();
-    let client = sts::Client::from_env();
+    let client = sts::Client::from_env().await;
 
     // `LazyCachingCredentialsProvider` will load credentials if it doesn't have any non-expired
     // credentials cached. See the docs on the builder for the various configuration options,
@@ -44,7 +44,8 @@ async fn main() -> Result<(), dynamodb::Error> {
 
     let dynamodb_conf = dynamodb::Config::builder()
         .credentials_provider(sts_provider)
-        .build();
+        .build()
+        .await;
 
     let client = dynamodb::Client::from_conf(dynamodb_conf);
     println!("tables: {:?}", client.list_tables().send().await?);

@@ -43,7 +43,8 @@ impl AssumeRoleProvider {
         let config = Config::builder()
             .credentials_provider(input_credentials)
             .region(client_config.region.clone())
-            .build();
+            .build()
+            .await;
         let session_name = &self
             .session_name
             .as_ref()

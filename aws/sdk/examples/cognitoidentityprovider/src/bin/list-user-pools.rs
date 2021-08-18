@@ -39,12 +39,12 @@ async fn main() -> Result<(), Error> {
         println!("Cognito client version: {}", PKG_VERSION);
         println!(
             "Region:                 {}",
-            region.region().unwrap().as_ref()
+            region.region().await.unwrap().as_ref()
         );
         println!();
     }
 
-    let config = Config::builder().region(region).build();
+    let config = Config::builder().region(region).build().await;
     let client = Client::from_conf(config);
 
     let response = client.list_user_pools().max_results(10).send().await?;

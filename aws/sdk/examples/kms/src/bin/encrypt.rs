@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::region::ProvideRegion;
+use aws_types::region::{ChainProvider, ProvideRegion};
 use kms::{Blob, Client, Config, Error, Region, PKG_VERSION};
 use std::fs::File;
 use std::io::Write;
@@ -54,24 +54,22 @@ async fn main() -> Result<(), Error> {
         verbose,
     } = Opt::from_args();
 
-    let region = default_region
-        .as_ref()
-        .map(|region| Region::new(region.clone()))
-        .or_else(|| aws_types::region::default_provider().region())
-        .unwrap_or_else(|| Region::new("us-west-2"));
+    let region = ChainProvider::first_try(default_region.map(Region::new))
+        .or_default_provider()
+        .or_else(Region::new("us-west-2"));
 
     println!();
 
     if verbose {
         println!("KMS version: {}", PKG_VERSION);
-        println!("Region:      {:?}", &region);
+        println!("Region:      {:?}", region.region().await);
         println!("Key:         {}", &key);
         println!("Text:        {}", &text);
         println!("Output file: {}", &out_file);
         println!();
     }
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region).build().await;
     let client = Client::from_conf(conf);
 
     let blob = Blob::new(text.as_bytes());

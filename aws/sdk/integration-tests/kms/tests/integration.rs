@@ -39,7 +39,8 @@ async fn generate_random_cn() {
     let conf = Config::builder()
         .region(Region::new("cn-north-1"))
         .credentials_provider(creds)
-        .build();
+        .build()
+        .await;
     let client = kms::Client::from_conf_conn(conf, conn.clone());
     let _ = client
         .generate_random()

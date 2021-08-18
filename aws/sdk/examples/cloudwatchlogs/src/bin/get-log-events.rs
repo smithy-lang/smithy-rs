@@ -9,7 +9,7 @@ use cloudwatchlogs::Client;
 async fn main() -> Result<(), cloudwatchlogs::Error> {
     tracing_subscriber::fmt::init();
 
-    let client = Client::from_env();
+    let client = Client::from_env().await;
     /* uncomment to create a log group */
     /*
     client

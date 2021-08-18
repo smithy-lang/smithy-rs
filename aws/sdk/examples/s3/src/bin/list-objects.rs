@@ -48,11 +48,16 @@ async fn main() -> Result<(), Error> {
         .or_else(Region::new("us-west-2"));
 
     println!();
-    let credential_provider = DefaultProviderChain::builder().region(&region).build();
+    let credential_provider = DefaultProviderChain::builder()
+        .region(region.region().await.expect("require required"))
+        .build();
 
     if verbose {
         println!("S3 client version: {}", PKG_VERSION);
-        println!("Region:            {}", region.region().unwrap().as_ref());
+        println!(
+            "Region:            {}",
+            region.region().await.unwrap().as_ref()
+        );
         println!("Bucket:            {}", &bucket);
         println!();
     }
@@ -60,7 +65,8 @@ async fn main() -> Result<(), Error> {
     let config = Config::builder()
         .region(region)
         .credentials_provider(credential_provider)
-        .build();
+        .build()
+        .await;
 
     let client = Client::from_conf(config);
 

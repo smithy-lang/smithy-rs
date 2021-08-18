@@ -48,7 +48,7 @@ async fn main() -> Result<(), Error> {
 
     println!();
 
-    let r_rgr = region.region().unwrap();
+    let r_rgr = region.region().await.unwrap();
     let r_str = r_rgr.as_ref();
 
     if verbose {
@@ -58,7 +58,7 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region).build().await;
     let client = Client::from_conf(conf);
 
     let constraint = BucketLocationConstraint::from(r_str);

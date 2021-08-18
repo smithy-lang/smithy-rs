@@ -89,7 +89,7 @@ async fn main() -> Result<(), Error> {
         println!("DynamoDB client version: {}", PKG_VERSION);
         println!(
             "Region:                  {}",
-            region.region().unwrap().as_ref()
+            region.region().await.unwrap().as_ref()
         );
         println!("Table:  {}", table);
         println!("User:   {}", username);
@@ -101,7 +101,7 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let config = Config::builder().region(region).build();
+    let config = Config::builder().region(region).build().await;
 
     let client = Client::from_conf(config);
 

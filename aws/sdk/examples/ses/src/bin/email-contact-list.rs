@@ -61,12 +61,12 @@ async fn main() -> Result<(), Error> {
     let region = default_region
         .as_ref()
         .map(|region| Region::new(region.clone()))
-        .or_else(|| aws_types::region::default_provider().region())
+        .or_else(|| aws_types::region::default_provider().region().await)
         .unwrap_or_else(|| Region::new("us-west-2"));
 
     if verbose {
         println!("SES client version: {}", ses::PKG_VERSION);
-        println!("Region:             {:?}", &region);
+        println!("Region:             {:?}", region.region().await);
         println!("From address:       {}", &from_address);
         println!("Contact list:       {}", &contact_list);
         println!("Subject:            {}", &subject);
@@ -74,7 +74,7 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region).build().await;
     let client = Client::from_conf(conf);
 
     // Get list of email addresses from contact list.

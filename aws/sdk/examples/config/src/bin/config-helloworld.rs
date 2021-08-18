@@ -50,11 +50,11 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("Config client version: {}", config::PKG_VERSION);
-        println!("Region:               {:?}", region.region());
+        println!("Region:               {:?}", region.region().await);
         println!();
     }
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region).build().await;
     // parse resource type from user input
     let parsed = ResourceType::from(resource_type.as_str());
     if matches!(parsed, ResourceType::Unknown(_)) {

@@ -42,13 +42,13 @@ async fn main() -> Result<(), Error> {
         println!("SNS client version:   {}", PKG_VERSION);
         println!(
             "Region:               {}",
-            region.region().unwrap().as_ref()
+            region.region().await.unwrap().as_ref()
         );
 
         println!();
     }
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region).build().await;
     let client = Client::from_conf(conf);
 
     let resp = client.list_topics().send().await?;

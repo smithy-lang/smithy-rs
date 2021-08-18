@@ -178,7 +178,7 @@ class HttpProtocolTestGenerator(
             """.make_token("00000000-0000-4000-8000-000000000000")"""
         } else ""
         rust(
-            """let config = #T::Config::builder()$customToken.build();""",
+            """let config = #T::Config::builder()$customToken.build().await;""",
             RuntimeType.Config
         )
         writeInline("let input =")

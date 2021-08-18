@@ -56,7 +56,7 @@ async fn main() -> Result<(), Error> {
         println!("CloudFormation client version: {}", PKG_VERSION);
         println!(
             "Region:                        {}",
-            region.region().unwrap().as_ref()
+            region.region().await.unwrap().as_ref()
         );
         println!("Stack:                         {}", &stack_name);
         println!("Template:                      {}", &template_file);
@@ -67,7 +67,7 @@ async fn main() -> Result<(), Error> {
     let contents =
         fs::read_to_string(template_file).expect("Something went wrong reading the file");
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region).build().await;
     let client = Client::from_conf(conf);
 
     client

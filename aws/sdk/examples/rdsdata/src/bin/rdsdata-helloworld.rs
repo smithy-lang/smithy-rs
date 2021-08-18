@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::region::ProvideRegion;
+use aws_types::region::{self, ProvideRegion};
 use rdsdata::{Client, Config, Error, Region, PKG_VERSION};
 use structopt::StructOpt;
 
@@ -56,17 +56,15 @@ async fn main() -> Result<(), Error> {
         verbose,
     } = Opt::from_args();
 
-    let region = default_region
-        .as_ref()
-        .map(|region| Region::new(region.clone()))
-        .or_else(|| aws_types::region::default_provider().region())
-        .unwrap_or_else(|| Region::new("us-west-2"));
+    let region = region::ChainProvider::first_try(default_region.map(Region::new))
+        .or_default_provider()
+        .or_else(Region::new("us-west-2"));
 
     println!();
 
     if verbose {
         println!("RDS data version: {}", PKG_VERSION);
-        println!("Region:           {:?}", &region);
+        println!("Region:           {:?}", region.region().await);
         println!("Resource ARN:     {}", &resource_arn);
         println!("Secrets ARN:      {}", &secret_arn);
         println!("Query:");
@@ -74,7 +72,7 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region).build().await;
     let client = Client::from_conf(conf);
 
     let st = client

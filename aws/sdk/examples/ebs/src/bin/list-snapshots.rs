@@ -40,12 +40,12 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("EC2 version: {}", PKG_VERSION);
-        println!("Region:      {}", region.region().unwrap().as_ref());
+        println!("Region:      {}", region.region().await.unwrap().as_ref());
 
         println!();
     }
 
-    let config = Config::builder().region(region).build();
+    let config = Config::builder().region(region).build().await;
     let client = Client::from_conf(config);
 
     // "self" represents your account ID.

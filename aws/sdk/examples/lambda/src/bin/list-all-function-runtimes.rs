@@ -21,7 +21,7 @@ struct Opt {
 async fn show_lambdas(verbose: bool, reg: String) {
     let r = reg.clone();
     let region = lambda::Region::new(reg);
-    let config = lambda::Config::builder().region(region).build();
+    let config = lambda::Config::builder().region(region).build().await;
     let client = lambda::Client::from_conf(config);
 
     let resp = client.list_functions().send().await;
@@ -63,13 +63,13 @@ async fn main() -> Result<(), lambda::Error> {
         println!("Lambda client version: {}", lambda::PKG_VERSION);
         println!(
             "Region:                {:?}",
-            region_provider.region().unwrap().as_ref()
+            region_provider.region().await.unwrap().as_ref()
         );
         println!();
     }
 
     // Get list of available regions.
-    let config = ec2::Config::builder().region(region_provider).build();
+    let config = ec2::Config::builder().region(region_provider).build().await;
     let ec2_client = ec2::Client::from_conf(config);
     let resp = ec2_client.describe_regions().send().await;
 
