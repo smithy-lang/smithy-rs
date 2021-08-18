@@ -513,7 +513,7 @@ class HttpBoundProtocolGenerator(
         }
 
         val err = if (StructureGenerator.fallibleBuilder(outputShape, symbolProvider)) {
-            ".map_err(|s|${format(errorSymbol)}::unhandled(s))?"
+            ".map_err(${format(errorSymbol)}::unhandled)?"
         } else ""
         rust("output.build()$err")
     }

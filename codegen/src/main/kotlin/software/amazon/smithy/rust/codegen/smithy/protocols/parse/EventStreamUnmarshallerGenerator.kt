@@ -152,7 +152,7 @@ class EventStreamUnmarshallerGenerator(
                 renderParseProtocolPayload(unionMember)
             }
             rustTemplate(
-                "return Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(parsed)));",
+                "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(parsed)))",
                 "Output" to unionSymbol,
                 *codegenScope
             )
@@ -176,7 +176,7 @@ class EventStreamUnmarshallerGenerator(
                 }
             }
             rustTemplate(
-                "return Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(builder.build())));",
+                "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(builder.build())))",
                 "Output" to unionSymbol,
                 *codegenScope
             )
