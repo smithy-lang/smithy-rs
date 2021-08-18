@@ -1,4 +1,6 @@
 {
+  "docs": "web identity token request/response where the response is a assume role error",
+  "version": "V0",
   "events": [
     {
       "connection_id": 0,
@@ -98,7 +100,5 @@
         }
       }
     }
-  ],
-  "docs": "todo docs",
-  "version": "V0"
+  ]
 }
