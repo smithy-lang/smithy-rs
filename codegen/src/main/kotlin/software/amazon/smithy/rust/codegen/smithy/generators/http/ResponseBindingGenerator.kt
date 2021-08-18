@@ -151,8 +151,8 @@ class ResponseBindingGenerator(
                 ) {
                     // Streaming unions are Event Streams and should be handled separately
                     val target = model.expectShape(binding.member.target)
-                    if (target.isUnionShape) {
-                        bindEventStreamOutput(operationShape, target as UnionShape)
+                    if (target is UnionShape) {
+                        bindEventStreamOutput(operationShape, target)
                     } else {
                         deserializeStreamingBody(binding)
                     }

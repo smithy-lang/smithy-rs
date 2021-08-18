@@ -170,9 +170,6 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
                 "smithy_http::event_stream"
             )
 
-        fun eventStreamInlinables(runtimeConfig: RuntimeConfig): RuntimeType =
-            forInlineDependency(InlineDependency.eventStream(runtimeConfig))
-
         fun jsonErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.jsonErrors(runtimeConfig))
 

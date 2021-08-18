@@ -3,16 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use smithy_eventstream::error::Error;
-use smithy_eventstream::frame::{Header, HeaderValue, Message};
-use smithy_eventstream::str_bytes::StrBytes;
+use crate::error::Error;
+use crate::frame::{Header, HeaderValue, Message};
+use crate::str_bytes::StrBytes;
 use smithy_types::{Blob, Instant};
-
-pub struct ResponseHeaders<'a> {
-    pub content_type: &'a StrBytes,
-    pub message_type: &'a StrBytes,
-    pub smithy_type: &'a StrBytes,
-}
 
 macro_rules! expect_shape_fn {
     (fn $fn_name:ident[$val_typ:ident] -> $result_typ:ident { $val_name:ident -> $val_expr:expr }) => {
@@ -37,6 +31,12 @@ expect_shape_fn!(fn expect_int64[Int64] -> i64 { value -> *value });
 expect_shape_fn!(fn expect_byte_array[ByteArray] -> Blob { bytes -> Blob::new(bytes.as_ref()) });
 expect_shape_fn!(fn expect_string[String] -> String { value -> value.as_str().into() });
 expect_shape_fn!(fn expect_timestamp[Timestamp] -> Instant { value -> *value });
+
+pub struct ResponseHeaders<'a> {
+    pub content_type: &'a StrBytes,
+    pub message_type: &'a StrBytes,
+    pub smithy_type: &'a StrBytes,
+}
 
 fn expect_header_str_value<'a>(
     header: Option<&'a Header>,
@@ -87,8 +87,8 @@ pub fn parse_response_headers(message: &Message) -> Result<ResponseHeaders, Erro
 
 #[cfg(test)]
 mod tests {
-    use crate::event_stream::parse_response_headers;
-    use smithy_eventstream::frame::{Header, HeaderValue, Message};
+    use super::parse_response_headers;
+    use crate::frame::{Header, HeaderValue, Message};
 
     #[test]
     fn normal_message() {

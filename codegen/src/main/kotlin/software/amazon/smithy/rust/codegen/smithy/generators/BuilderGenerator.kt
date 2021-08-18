@@ -106,7 +106,7 @@ class BuilderGenerator(
         }
     }
 
-    // TODO(EventStream): [DX] Update builders to take EventInputStream as Into<EventInputStream>
+    // TODO(EventStream): [DX] Consider updating builders to take EventInputStream as Into<EventInputStream>
     private fun renderBuilderMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
         // builder members are crate-public to enable using them
         // directly in serializers/deserializers

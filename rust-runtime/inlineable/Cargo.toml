@@ -11,7 +11,6 @@ are to allow this crate to be compilable and testable in isolation, no client co
 [dependencies]
 "bytes" = "1"
 "http" = "0.2.1"
-"smithy-eventstream" = { path = "../smithy-eventstream" }
 "smithy-types" = { path = "../smithy-types" }
 "smithy-http" = { path = "../smithy-http" }
 "smithy-json" = { path = "../smithy-json" }
