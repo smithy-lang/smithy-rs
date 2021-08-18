@@ -43,15 +43,16 @@ impl ReplayingConnection {
                 conn_id
             ))?;
             if actual.uri() != expected.uri() {
-                Err(format!(
+                return Err(format!(
                     "URI did not match. Expected: {}. Found: {}",
                     expected.uri(),
                     actual.uri()
-                ))?
+                )
+                .into());
             }
             body_comparer(expected.body().as_ref(), actual.body().as_ref())?;
             let expected_headers = checked_headers
-                .into_iter()
+                .iter()
                 .flat_map(|key| {
                     let _ = expected.headers().get(*key)?;
                     Some((
