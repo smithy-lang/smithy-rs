@@ -15,12 +15,15 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.model.traits.EventHeaderTrait
+import software.amazon.smithy.model.traits.EventPayloadTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -30,11 +33,10 @@ import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
-// TODO(EventStream): [TEST] Unit test EventStreamUnmarshallerGenerator
 class EventStreamUnmarshallerGenerator(
     private val protocol: Protocol,
     private val model: Model,
-    private val runtimeConfig: RuntimeConfig,
+    runtimeConfig: RuntimeConfig,
     private val symbolProvider: RustSymbolProvider,
     private val operationShape: OperationShape,
     private val unionShape: UnionShape,
@@ -43,14 +45,15 @@ class EventStreamUnmarshallerGenerator(
     private val operationErrorSymbol = operationShape.errorSymbol(symbolProvider)
     private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
     private val codegenScope = arrayOf(
-        "UnmarshallMessage" to RuntimeType("UnmarshallMessage", smithyEventStream, "smithy_eventstream::frame"),
-        "UnmarshalledMessage" to RuntimeType("UnmarshalledMessage", smithyEventStream, "smithy_eventstream::frame"),
-        "Message" to RuntimeType("Message", smithyEventStream, "smithy_eventstream::frame"),
+        "Blob" to RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "smithy_types"),
+        "Error" to RuntimeType("Error", smithyEventStream, "smithy_eventstream::error"),
         "Header" to RuntimeType("Header", smithyEventStream, "smithy_eventstream::frame"),
         "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "smithy_eventstream::frame"),
-        "Error" to RuntimeType("Error", smithyEventStream, "smithy_eventstream::error"),
         "Inlineables" to RuntimeType.eventStreamInlinables(runtimeConfig),
-        "SmithyError" to RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "smithy_types")
+        "Message" to RuntimeType("Message", smithyEventStream, "smithy_eventstream::frame"),
+        "SmithyError" to RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "smithy_types"),
+        "UnmarshallMessage" to RuntimeType("UnmarshallMessage", smithyEventStream, "smithy_eventstream::frame"),
+        "UnmarshalledMessage" to RuntimeType("UnmarshalledMessage", smithyEventStream, "smithy_eventstream::frame"),
     )
 
     fun render(): RuntimeType {
@@ -118,7 +121,7 @@ class EventStreamUnmarshallerGenerator(
     private fun RustWriter.renderUnmarshallEvent() {
         rustBlock("match response_headers.smithy_type.as_str()") {
             for (member in unionShape.members()) {
-                val target = model.expectShape(member.target)
+                val target = model.expectShape(member.target, StructureShape::class.java)
                 if (!target.hasTrait<ErrorTrait>()) {
                     rustBlock("${member.memberName.dq()} => ") {
                         renderUnmarshallUnionMember(member, target)
@@ -135,37 +138,72 @@ class EventStreamUnmarshallerGenerator(
         }
     }
 
-    private fun RustWriter.renderUnmarshallUnionMember(member: MemberShape, target: Shape) {
-        rustTemplate(
-            "return Ok(#{UnmarshalledMessage}::Event(#{Output}::${member.memberName.toPascalCase()}(",
-            "Output" to unionSymbol,
-            *codegenScope
-        )
+    private fun RustWriter.renderUnmarshallUnionMember(unionMember: MemberShape, unionStruct: StructureShape) {
+        val unionMemberName = unionMember.memberName.toPascalCase()
+        val payloadOnly =
+            unionStruct.members().none { it.hasTrait<EventPayloadTrait>() || it.hasTrait<EventHeaderTrait>() }
+        if (payloadOnly) {
+            withBlock("let parsed = ", ";") {
+                renderParseProtocolPayload(unionMember)
+            }
+            rustTemplate(
+                "return Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(parsed)));",
+                "Output" to unionSymbol,
+                *codegenScope
+            )
+        } else {
+            rust("let builder = #T::builder();", symbolProvider.toSymbol(unionStruct))
+            for (member in unionStruct.members()) {
+                val target = model.expectShape(member.target)
+                if (member.hasTrait<EventHeaderTrait>()) {
+                    // TODO(EventStream): Add `@eventHeader` unmarshalling support
+                } else if (member.hasTrait<EventPayloadTrait>()) {
+                    renderUnmarshallEventPayload(member, target)
+                }
+            }
+            rustTemplate(
+                "return Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(builder.build())));",
+                "Output" to unionSymbol,
+                *codegenScope
+            )
+        }
+    }
+
+    private fun RustWriter.renderUnmarshallEventPayload(member: MemberShape, target: Shape) {
         // TODO(EventStream): [RPC] Don't blow up on an initial-message that's not part of the union (:event-type will be "initial-request" or "initial-response")
         // TODO(EventStream): [RPC] Incorporate initial-message into original output (:event-type will be "initial-request" or "initial-response")
+        val memberName = symbolProvider.toMemberName(member)
         when (target) {
             is BlobShape -> {
-                rust("unimplemented!(\"TODO(EventStream): Implement blob unmarshalling\")")
+                withBlock("let builder = builder.$memberName(", ");") {
+                    rustTemplate("#{Blob}::new(message.payload().as_ref())", *codegenScope)
+                }
             }
             is StringShape -> {
-                rust("unimplemented!(\"TODO(EventStream): Implement string unmarshalling\")")
+                rust("// TODO(EventStream): Implement string unmarshalling")
             }
             is UnionShape, is StructureShape -> {
-                // TODO(EventStream): Check :content-type against expected content-type, error if unexpected
-                val parser = protocol.structuredDataParser(operationShape).payloadParser(member)
-                rustTemplate(
-                    """
-                    #{parser}(&message.payload()[..])
-                        .map_err(|err| {
-                            #{Error}::Unmarshalling(format!("failed to unmarshall ${member.memberName}: {}", err))
-                        })?
-                    """,
-                    "parser" to parser,
-                    *codegenScope
-                )
+                withBlock("let builder = builder.$memberName(", ");") {
+                    renderParseProtocolPayload(member)
+                }
             }
         }
-        rust(")))")
+    }
+
+    private fun RustWriter.renderParseProtocolPayload(member: MemberShape) {
+        // TODO(EventStream): Check :content-type against expected content-type, error if unexpected
+        val parser = protocol.structuredDataParser(operationShape).payloadParser(member)
+        val memberName = member.memberName.toPascalCase()
+        rustTemplate(
+            """
+                #{parser}(&message.payload()[..])
+                    .map_err(|err| {
+                        #{Error}::Unmarshalling(format!("failed to unmarshall $memberName: {}", err))
+                    })?
+            """,
+            "parser" to parser,
+            *codegenScope
+        )
     }
 
     private fun RustWriter.renderUnmarshallError() {

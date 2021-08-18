@@ -37,6 +37,7 @@ pub trait MarshallMessage: fmt::Debug {
 }
 
 /// A successfully unmarshalled message that is either an `Event` or an `Error`.
+#[derive(Debug)]
 pub enum UnmarshalledMessage<T, E> {
     Event(T),
     Error(E),
