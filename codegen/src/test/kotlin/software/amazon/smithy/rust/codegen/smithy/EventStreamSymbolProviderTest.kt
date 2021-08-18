@@ -19,7 +19,7 @@ class EventStreamSymbolProviderTest {
     @Test
     fun `it should adjust types for operations with event streams`() {
         // Transform the model so that it has synthetic inputs/outputs
-        val model = OperationNormalizer(
+        val model = OperationNormalizer.transform(
             """
             namespace test
 
@@ -38,7 +38,7 @@ class EventStreamSymbolProviderTest {
             }
             service TestService { version: "123", operations: [TestOperation] }
             """.asSmithyModel()
-        ).transformModel()
+        )
 
         val service = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
         val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, DefaultConfig), model)
@@ -56,7 +56,7 @@ class EventStreamSymbolProviderTest {
 
     @Test
     fun `it should leave alone types for operations without event streams`() {
-        val model = OperationNormalizer(
+        val model = OperationNormalizer.transform(
             """
             namespace test
 
@@ -74,7 +74,7 @@ class EventStreamSymbolProviderTest {
             }
             service TestService { version: "123", operations: [TestOperation] }
             """.asSmithyModel()
-        ).transformModel()
+        )
 
         val service = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
         val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, DefaultConfig), model)

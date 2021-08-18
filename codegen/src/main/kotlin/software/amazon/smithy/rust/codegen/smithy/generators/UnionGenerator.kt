@@ -9,16 +9,12 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.smithy.letIf
-import software.amazon.smithy.rust.codegen.util.hasTrait
-import software.amazon.smithy.rust.codegen.util.isEventStream
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -28,12 +24,7 @@ class UnionGenerator(
     private val writer: RustWriter,
     private val shape: UnionShape
 ) {
-    private val sortedMembers: List<MemberShape> = shape.allMembers.values
-        .sortedBy { symbolProvider.toMemberName(it) }
-        .letIf(shape.isEventStream()) { members ->
-            // Filter out all error union members for Event Stream unions since these get handled as actual SdkErrors
-            members.filter { member -> !model.expectShape(member.target).hasTrait<ErrorTrait>() }
-        }
+    private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
 
     fun render() {
         renderUnion()

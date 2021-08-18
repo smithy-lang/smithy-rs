@@ -23,8 +23,6 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGene
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 
@@ -45,10 +43,7 @@ class AwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFac
         return HttpBoundProtocolGenerator(protocolConfig, AwsJson(protocolConfig, version))
     }
 
-    override fun transformModel(model: Model): Model {
-        // For AwsJson10, the body matches 1:1 with the input
-        return OperationNormalizer(model).transformModel().let(RemoveEventStreamOperations::transform)
-    }
+    override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport = ProtocolSupport(
         requestSerialization = true,

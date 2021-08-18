@@ -26,8 +26,7 @@ internal class OperationNormalizerTest {
         """.asSmithyModel()
         val operationId = ShapeId.from("smithy.test#Empty")
         model.expectShape(operationId, OperationShape::class.java).input.isPresent shouldBe false
-        val sut = OperationNormalizer(model)
-        val modified = sut.transformModel()
+        val modified = OperationNormalizer.transform(model)
         val operation = modified.expectShape(operationId, OperationShape::class.java)
         operation.input.isPresent shouldBe true
         operation.input.get().name shouldBe "EmptyInput"
@@ -55,8 +54,7 @@ internal class OperationNormalizerTest {
         """.asSmithyModel()
         val operationId = ShapeId.from("smithy.test#MyOp")
         model.expectShape(operationId, OperationShape::class.java).input.isPresent shouldBe true
-        val sut = OperationNormalizer(model)
-        val modified = sut.transformModel()
+        val modified = OperationNormalizer.transform(model)
         val operation = modified.expectShape(operationId, OperationShape::class.java)
         operation.input.isPresent shouldBe true
         val inputId = operation.input.get()
@@ -79,8 +77,7 @@ internal class OperationNormalizerTest {
         """.asSmithyModel()
         val operationId = ShapeId.from("smithy.test#MyOp")
         model.expectShape(operationId, OperationShape::class.java).output.isPresent shouldBe true
-        val sut = OperationNormalizer(model)
-        val modified = sut.transformModel()
+        val modified = OperationNormalizer.transform(model)
         val operation = modified.expectShape(operationId, OperationShape::class.java)
         operation.output.isPresent shouldBe true
         val outputId = operation.output.get()

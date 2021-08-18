@@ -17,6 +17,7 @@ internal class SigV4SigningCustomizationTest {
         val project = stubConfigProject(
             SigV4SigningConfig(
                 AwsTestRuntimeConfig,
+                true,
                 SigV4Trait.builder().name("test-service").build()
             )
         )

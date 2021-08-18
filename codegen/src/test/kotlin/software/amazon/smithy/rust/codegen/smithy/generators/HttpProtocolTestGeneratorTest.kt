@@ -22,8 +22,6 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
-import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.util.CommandFailed
@@ -163,9 +161,7 @@ class HttpProtocolTestGeneratorTest {
                 return TestProtocol(protocolConfig)
             }
 
-            override fun transformModel(model: Model): Model {
-                return OperationNormalizer(model).transformModel().let(RemoveEventStreamOperations::transform)
-            }
+            override fun transformModel(model: Model): Model = model
 
             override fun support(): ProtocolSupport {
                 return ProtocolSupport(true, true, true, true)

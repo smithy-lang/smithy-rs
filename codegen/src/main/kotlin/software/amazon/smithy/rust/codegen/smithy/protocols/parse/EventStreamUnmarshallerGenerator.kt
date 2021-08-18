@@ -19,7 +19,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.EventHeaderTrait
 import software.amazon.smithy.model.traits.EventPayloadTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -34,7 +33,9 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
@@ -127,10 +128,8 @@ class EventStreamUnmarshallerGenerator(
         rustBlock("match response_headers.smithy_type.as_str()") {
             for (member in unionShape.members()) {
                 val target = model.expectShape(member.target, StructureShape::class.java)
-                if (!target.hasTrait<ErrorTrait>()) {
-                    rustBlock("${member.memberName.dq()} => ") {
-                        renderUnmarshallUnionMember(member, target)
-                    }
+                rustBlock("${member.memberName.dq()} => ") {
+                    renderUnmarshallUnionMember(member, target)
                 }
             }
             rustBlock("smithy_type => ") {
@@ -242,14 +241,17 @@ class EventStreamUnmarshallerGenerator(
     }
 
     private fun RustWriter.renderUnmarshallError() {
-        rustBlock("match response_headers.smithy_type.as_str()") {
-            for (member in unionShape.members()) {
-                val target = model.expectShape(member.target)
-                if (target.hasTrait<ErrorTrait>() && target is StructureShape) {
+        val syntheticUnion = unionShape.expectTrait<SyntheticEventStreamUnionTrait>()
+        if (syntheticUnion.errorMembers.isNotEmpty()) {
+            rustBlock("match response_headers.smithy_type.as_str()") {
+                for (member in syntheticUnion.errorMembers) {
+                    val target = model.expectShape(member.target, StructureShape::class.java)
                     rustBlock("${member.memberName.dq()} => ") {
                         val parser = protocol.structuredDataParser(operationShape).errorParser(target)
                         if (parser != null) {
                             rust("let mut builder = #T::builder();", symbolProvider.toSymbol(target))
+                            // TODO(EventStream): Errors on the operation can be disjoint with errors in the union,
+                            // so we need to generate a new top-level Error type for each event stream union.
                             rustTemplate(
                                 """
                                 builder = #{parser}(&message.payload()[..], builder)
@@ -270,8 +272,8 @@ class EventStreamUnmarshallerGenerator(
                         }
                     }
                 }
+                rust("_ => {}")
             }
-            rust("_ => {}")
         }
         // TODO(EventStream): Generic error parsing; will need to refactor `parseGenericError` to
         // operate on bodies rather than responses. This should be easy for all but restJson,

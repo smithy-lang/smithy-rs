@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.CombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.TestWriterDelegator
@@ -220,7 +221,7 @@ data class TestEventStreamProject(
 
 object EventStreamTestTools {
     fun generateTestProject(model: Model): TestEventStreamProject {
-        val model = OperationNormalizer(model).transformModel()
+        val model = EventStreamNormalizer.transform(OperationNormalizer.transform(model))
         val serviceShape = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
         val operationShape = model.expectShape(ShapeId.from("test#TestStreamOp")) as OperationShape
         val unionShape = model.expectShape(ShapeId.from("test#TestStream")) as UnionShape

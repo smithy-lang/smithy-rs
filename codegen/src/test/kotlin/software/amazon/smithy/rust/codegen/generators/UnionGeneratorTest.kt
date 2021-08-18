@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.generators
 
 import io.kotest.matchers.string.shouldContain
-import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -76,29 +75,6 @@ class UnionGeneratorTest {
             MyUnion::Doc(smithy_types::Document::Null);
             """
         )
-    }
-
-    @Test
-    fun `filter out errors for Event Stream unions`() {
-        val writer = generateUnion(
-            """
-            @error("client") structure BadRequestException { }
-            @error("client") structure ConflictException { }
-            structure NormalMessage { }
-
-            @streaming
-            union MyUnion {
-                BadRequestException: BadRequestException,
-                ConflictException: ConflictException,
-                NormalMessage: NormalMessage,
-            }
-            """
-        )
-
-        val code = writer.toString()
-        code shouldNotContain "BadRequestException"
-        code shouldNotContain "ConflictException"
-        code shouldContain "NormalMessage"
     }
 
     private fun generateUnion(modelSmithy: String, unionName: String = "MyUnion"): RustWriter {
