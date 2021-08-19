@@ -557,6 +557,7 @@ mod tests {
         let mut headers = [httparse::EMPTY_HEADER; 64];
         let mut req = httparse::Request::new(&mut headers);
         let _ = req.parse(s).unwrap();
+        let _ = req.parse(b"\n");
 
         let version = match req.version.unwrap() {
             1 => Version::HTTP_11,
