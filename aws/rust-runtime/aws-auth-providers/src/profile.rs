@@ -33,9 +33,10 @@ use aws_hyper::DynConnector;
 use aws_sdk_sts::Region;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::profile::ProfileParseError;
+use aws_types::region::ProvideRegion;
 use tracing::Instrument;
 
-use crate::default_connector;
+use crate::must_have_connector;
 use crate::profile::exec::named::NamedProviderFactory;
 use crate::profile::exec::{ClientConfiguration, ProviderChain};
 
@@ -65,6 +66,10 @@ impl AsyncProvideCredentials for ProfileFileCredentialProvider {
 /// use aws_auth_providers::profile::ProfileFileCredentialProvider;
 /// let provider = ProfileFileCredentialProvider::builder().build();
 /// ```
+///
+/// **Note:** Profile providers to not implement any caching. They will reload and reparse the profile
+/// from the file system when called. See [lazy_caching](aws_auth::provider::lazy_caching) for
+/// more information about caching.
 ///
 /// This provider supports several different credentials formats:
 /// ### Credentials defined explicitly within the file
@@ -117,8 +122,12 @@ impl AsyncProvideCredentials for ProfileFileCredentialProvider {
 ///
 /// Other more complex configurations are possible, consult `test-data/assume-role-tests.json`.
 pub struct ProfileFileCredentialProvider {
-    inner: Result<ProviderChain, ProfileFileError>,
+    factory: NamedProviderFactory,
     client_config: ClientConfiguration,
+    fs: Fs,
+    env: Env,
+    region: Option<Region>,
+    connector: DynConnector,
 }
 
 impl ProfileFileCredentialProvider {
@@ -127,10 +136,26 @@ impl ProfileFileCredentialProvider {
     }
 
     async fn load_credentials(&self) -> CredentialsResult {
-        let inner = self.inner.as_ref().map_err(|err| {
-            CredentialsError::Unhandled(format!("failed to load: {}", &err).into())
+        // 1. grab a read lock, use it to see if the base profile has already been loaded
+        // 2. If it's loaded, great, lets use it.
+        //    If not, upgrade to a write lock and use that to load the profile file.
+        // 3. Finally, downgrade to ensure no one swapped in the intervening time, then use try_load()
+        //    to pull the new state.
+        let profile = build_provider_chain(
+            &self.fs,
+            &self.env,
+            &self.region,
+            &self.connector,
+            &self.factory,
+        )
+        .await;
+        let inner_provider = profile.map_err(|err| match err {
+            ProfileFileError::NoProfilesDefined => CredentialsError::CredentialsNotLoaded,
+            _ => CredentialsError::InvalidConfiguration(
+                format!("ProfileFile provider could not be built: {}", &err).into(),
+            ),
         })?;
-        let mut creds = match inner
+        let mut creds = match inner_provider
             .base()
             .provide_credentials()
             .instrument(tracing::info_span!("load_base_credentials"))
@@ -142,10 +167,10 @@ impl ProfileFileCredentialProvider {
             }
             Err(e) => {
                 tracing::warn!(error = %e, "failed to load base credentials");
-                return Err(e);
+                return Err(CredentialsError::ProviderError(e.into()));
             }
         };
-        for provider in inner.chain().iter() {
+        for provider in inner_provider.chain().iter() {
             let next_creds = provider
                 .credentials(creds, &self.client_config)
                 .instrument(tracing::info_span!("load_assume_role", provider = ?provider))
@@ -157,7 +182,7 @@ impl ProfileFileCredentialProvider {
                 }
                 Err(e) => {
                     tracing::warn!(provider = ?provider, "failed to load assume role credentials");
-                    return Err(e);
+                    return Err(CredentialsError::ProviderError(e.into()));
                 }
             }
         }
@@ -169,6 +194,7 @@ impl ProfileFileCredentialProvider {
 #[non_exhaustive]
 pub enum ProfileFileError {
     CouldNotParseProfile(ProfileParseError),
+    NoProfilesDefined,
     CredentialLoop {
         profiles: Vec<String>,
         next: String,
@@ -216,6 +242,7 @@ impl Display for ProfileFileError {
                 "profile referenced `{}` provider but that provider is not supported",
                 name
             ),
+            ProfileFileError::NoProfilesDefined => write!(f, "No profiles were defined"),
         }
     }
 }
@@ -231,8 +258,8 @@ impl Error for ProfileFileError {
 
 #[derive(Default)]
 pub struct Builder {
-    fs: Option<Fs>,
-    env: Option<Env>,
+    fs: Fs,
+    env: Env,
     region: Option<Region>,
     connector: Option<DynConnector>,
     custom_providers: HashMap<Cow<'static, str>, Arc<dyn AsyncProvideCredentials>>,
@@ -240,21 +267,21 @@ pub struct Builder {
 
 impl Builder {
     pub fn fs(mut self, fs: Fs) -> Self {
-        self.fs = Some(fs);
+        self.fs = fs;
         self
     }
 
-    pub fn set_fs(&mut self, fs: Option<Fs>) -> &mut Self {
+    pub fn set_fs(&mut self, fs: Fs) -> &mut Self {
         self.fs = fs;
         self
     }
 
     pub fn env(mut self, env: Env) -> Self {
-        self.env = Some(env);
+        self.env = env;
         self
     }
 
-    pub fn set_env(&mut self, env: Option<Env>) -> &mut Self {
+    pub fn set_env(&mut self, env: Env) -> &mut Self {
         self.env = env;
         self
     }
@@ -292,9 +319,9 @@ impl Builder {
     pub fn build(self) -> ProfileFileCredentialProvider {
         let build_span = tracing::info_span!("build_profile_provider");
         let _enter = build_span.enter();
-        let fs = self.fs.unwrap_or_default();
-        let env = self.env.unwrap_or_default();
-        let mut named_providers = self.custom_providers;
+        let env = self.env.clone();
+        let fs = self.fs;
+        let mut named_providers = self.custom_providers.clone();
         named_providers
             .entry("Environment".into())
             .or_insert_with(|| {
@@ -304,215 +331,89 @@ impl Builder {
             });
         // TODO: ECS, IMDS, and other named providers
         let factory = exec::named::NamedProviderFactory::new(named_providers);
-        let chain = build_provider_chain(&fs, &env, &factory);
-        let connector = self.connector.or_else(default_connector).expect(
-            "a connector must be provided or the `rustls` or `native-tls` features must be enabled",
-        );
+        let connector = self.connector.clone().unwrap_or_else(must_have_connector);
         let core_client = aws_hyper::Builder::<()>::new()
-            .map_connector(|_| connector)
+            .map_connector(|_| connector.clone())
             .build();
+
         ProfileFileCredentialProvider {
-            inner: chain,
+            factory,
             client_config: ClientConfiguration {
                 core_client,
-                region: self.region,
+                region: self.region.clone(),
             },
+            fs,
+            env,
+            region: self.region.clone(),
+            connector,
         }
     }
 }
 
-fn build_provider_chain(
+async fn build_provider_chain(
     fs: &Fs,
     env: &Env,
+    region: &dyn ProvideRegion,
+    connector: &DynConnector,
     factory: &NamedProviderFactory,
 ) -> Result<ProviderChain, ProfileFileError> {
-    let profile_set = aws_types::profile::load(&fs, &env).map_err(|err| {
+    let profile_set = aws_types::profile::load(&fs, &env).await.map_err(|err| {
         tracing::warn!(err = %err, "failed to parse profile");
         ProfileFileError::CouldNotParseProfile(err)
     })?;
     let repr = repr::resolve_chain(&profile_set)?;
     tracing::info!(chain = ?repr, "constructed abstract provider from config file");
-    exec::ProviderChain::from_repr(repr, &factory)
+    exec::ProviderChain::from_repr(fs.clone(), connector, region, repr, &factory)
 }
 
 #[cfg(test)]
 mod test {
-    use std::fmt::Debug;
-    use std::future::Future;
-    use std::time::{Duration, UNIX_EPOCH};
-
-    use aws_auth::provider::AsyncProvideCredentials;
-    use aws_hyper::DynConnector;
     use aws_sdk_sts::Region;
-    use aws_types::os_shim_internal::{Env, Fs};
-    use smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
     use tracing_test::traced_test;
 
-    use crate::profile::{Builder, ProfileFileCredentialProvider};
+    use crate::profile::Builder;
+    use crate::test_case::TestEnvironment;
 
-    /// Record an interaction with a `ProfileFileCredentialProvider` to a network traffic trace
-    #[allow(dead_code)]
-    async fn record_test<F, T>(
-        test_name: &str,
-        f: impl Fn(ProfileFileCredentialProvider) -> F,
-    ) -> (RecordingConnection<impl Debug>, T)
-    where
-        F: Future<Output = T>,
-    {
-        let fs = Fs::from_test_dir(
-            format!("test-data/{}/aws-config", test_name),
-            "/Users/me/.aws",
-        );
-        let env = Env::from_slice(&[("HOME", "/Users/me")]);
-        let http_traffic_path = format!("test-data/{}/http-traffic.json", test_name);
-        let conn = RecordingConnection::https();
-        let provider = Builder::default()
-            .env(env)
-            .fs(fs)
-            .region(Region::from_static("us-east-1"))
-            .connector(DynConnector::new(conn.clone()));
-        let provider = provider.build();
-        let result = f(provider).await;
-        let traffic = serde_json::to_string(&conn.network_traffic()).unwrap();
-        std::fs::write(http_traffic_path, traffic).unwrap();
-        (conn, result)
+    macro_rules! make_test {
+        ($name: ident) => {
+            #[traced_test]
+            #[tokio::test]
+            async fn $name() {
+                TestEnvironment::from_dir(concat!(
+                    "./test-data/profile-provider/",
+                    stringify!($name)
+                ))
+                .unwrap()
+                .execute(|fs, env, conn| {
+                    Builder::default()
+                        .env(env)
+                        .fs(fs)
+                        .region(Region::from_static("us-east-1"))
+                        .connector(conn)
+                        .build()
+                })
+                .await
+            }
+        };
     }
 
-    async fn execute_test<F, T>(
-        test_name: &str,
-        f: impl Fn(ProfileFileCredentialProvider) -> F,
-    ) -> (ReplayingConnection, T)
-    where
-        F: Future<Output = T>,
-    {
-        let fs = Fs::from_test_dir(
-            format!("test-data/{}/aws-config", test_name),
-            "/Users/me/.aws",
-        );
-        let env = Env::from_slice(&[("HOME", "/Users/me")]);
-        let events =
-            std::fs::read_to_string(format!("test-data/{}/http-traffic.json", test_name)).unwrap();
-        let traffic: NetworkTraffic = serde_json::from_str(&events).unwrap();
-        let conn = ReplayingConnection::new(traffic.events().clone());
-        let provider = Builder::default()
-            .env(env)
-            .fs(fs)
-            .region(Region::from_static("us-east-1"))
-            .connector(DynConnector::new(conn.clone()));
-        let provider = provider.build();
-        (conn, f(provider).await)
-    }
-
-    #[tokio::test]
-    async fn success_test() {
-        let (conn, creds) = execute_test("e2e-assume-role", |provider| async move {
-            provider.provide_credentials().await
-        })
-        .await;
-        let creds = creds.expect("credentials should be valid");
-        assert_eq!(creds.access_key_id(), "ASIARTESTID");
-        assert_eq!(creds.secret_access_key(), "TESTSECRETKEY");
-        assert_eq!(creds.session_token(), Some("TESTSESSIONTOKEN"));
-        assert_eq!(
-            creds.expiry(),
-            Some(UNIX_EPOCH + Duration::from_secs(1628193482))
-        );
-        let reqs = conn.take_requests();
-        assert_eq!(reqs.len(), 1);
-        let req = reqs.first().unwrap();
-        // TODO: perform more request validation
-        assert_eq!(
-            req.uri().to_string(),
-            "https://sts.us-east-1.amazonaws.com/"
-        );
-    }
+    make_test!(e2e_assume_role);
+    make_test!(empty_config);
+    make_test!(retry_on_error);
+    make_test!(invalid_config);
 
     #[tokio::test]
     async fn region_override() {
-        let (conn, creds) = execute_test("region-override", |mut provider| async move {
-            // manually override the region, normally this will be set by the builder during
-            // provider construction
-            provider.client_config.region = Some(Region::new("us-east-2"));
-            provider.provide_credentials().await
-        })
-        .await;
-        let creds = creds.expect("credentials should be valid");
-        assert_eq!(creds.access_key_id(), "ASIARTESTID");
-        assert_eq!(creds.secret_access_key(), "TESTSECRETKEY");
-        assert_eq!(creds.session_token(), Some("TESTSESSIONTOKEN"));
-        assert_eq!(
-            creds.expiry(),
-            Some(UNIX_EPOCH + Duration::from_secs(1628193482))
-        );
-        let reqs = conn.take_requests();
-        assert_eq!(reqs.len(), 1);
-        let req = reqs.first().unwrap();
-        // TODO: perform more request validation
-        assert_eq!(
-            req.uri().to_string(),
-            "https://sts.us-east-2.amazonaws.com/"
-        );
-    }
-
-    #[tokio::test]
-    #[traced_test]
-    async fn invalid_profile() {
-        let (conn, _) = execute_test("invalid-config", |provider| async move {
-            let error = provider
-                .provide_credentials()
-                .await
-                .expect_err("config was invalid");
-            assert!(
-                format!("{}", error).contains("could not parse profile file"),
-                "{} should contain correct error",
-                error
-            )
-        })
-        .await;
-        assert!(
-            conn.take_requests().is_empty(),
-            "no network traffic should occur"
-        );
-    }
-
-    #[traced_test]
-    #[tokio::test]
-    async fn no_profile() {
-        let (conn, _) = execute_test("empty-config", |provider| async move {
-            let error = provider
-                .provide_credentials()
-                .await
-                .expect_err("config was invalid");
-            assert!(
-                format!("{}", error).contains("profile `default` was not defined"),
-                "{} should contain correct error",
-                error
-            )
-        })
-        .await;
-        assert!(
-            conn.take_requests().is_empty(),
-            "no network traffic should occur"
-        );
-    }
-
-    #[tokio::test]
-    #[traced_test]
-    async fn retry_on_error() {
-        let (conn, creds) = execute_test("retry-on-error", |provider| async move {
-            provider
-                .provide_credentials()
-                .await
-                .expect("eventual success")
-        })
-        .await;
-        assert_eq!(creds.access_key_id(), "ASIARTESTID");
-        assert_eq!(creds.secret_access_key(), "TESTSECRETKEY");
-        assert_eq!(creds.session_token(), Some("TESTSESSIONTOKEN"));
-        assert_eq!(
-            creds.expiry(),
-            Some(UNIX_EPOCH + Duration::from_secs(1628193482))
-        );
-        assert_eq!(conn.take_requests().len(), 2);
+        TestEnvironment::from_dir("./test-data/profile-provider/region_override")
+            .unwrap()
+            .execute(|fs, env, conn| {
+                Builder::default()
+                    .env(env)
+                    .fs(fs)
+                    .region(Region::from_static("us-east-2"))
+                    .connector(conn)
+                    .build()
+            })
+            .await
     }
 }
