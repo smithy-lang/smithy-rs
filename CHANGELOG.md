@@ -16,6 +16,8 @@ vNext (Month Day, Year)
 - :bug: Fix STS Assume Role with WebIdentity & Assume role with SAML to support clients with no credentials provided (#652)
 - Add support for WebIdentityToken providers via profile & environment variables. (#654)
 - (internal): Update sigv4 tests to work around behavior change in httparse 1.5. (#656)
+- Update AWS SDK models (#657)
+- :tada: Add Chime Identity, Chime Messaging, and Snow Device Management support (#657)
 
 v0.20 (August 10th, 2021)
 --------------------------
