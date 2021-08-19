@@ -49,9 +49,10 @@ fn default_connector() -> Option<DynConnector> {
 ///
 /// This provider chain will use defaults for all settings. The region will be resolved with the default
 /// provider chain. To construct a custom provider, use [`default_provider_chain::Builder`](default_provider_chain::Builder).
-pub fn default_provider() -> impl AsyncProvideCredentials {
-    let resolved_region = aws_types::region::default_provider();
-    default_provider_chain::Builder::default()
-        .region(&resolved_region)
-        .build()
+pub async fn default_provider() -> impl AsyncProvideCredentials {
+    use aws_types::region::ProvideRegion;
+    let resolved_region = aws_types::region::default_provider().region().await;
+    let mut builder = default_provider_chain::Builder::default();
+    builder.set_region(resolved_region);
+    builder.build()
 }

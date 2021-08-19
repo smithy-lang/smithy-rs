@@ -363,7 +363,7 @@ async fn build_provider_chain(
     })?;
     let repr = repr::resolve_chain(&profile_set)?;
     tracing::info!(chain = ?repr, "constructed abstract provider from config file");
-    exec::ProviderChain::from_repr(fs.clone(), connector, region, repr, &factory)
+    exec::ProviderChain::from_repr(fs.clone(), connector, region.region().await, repr, &factory)
 }
 
 #[cfg(test)]

@@ -68,8 +68,13 @@ impl Builder {
     ///
     /// When unset, the default region resolver chain will be used.
     pub fn region(mut self, region: Region) -> Self {
-        self.profile_file_builder.set_region(Some(region.clone()));
-        self.web_identity_builder.set_region(Some(region));
+        self.set_region(Some(region));
+        self
+    }
+
+    pub fn set_region(&mut self, region: Option<Region>) -> &mut Self {
+        self.profile_file_builder.set_region(region.clone());
+        self.web_identity_builder.set_region(region);
         self
     }
 
@@ -183,7 +188,7 @@ mod test {
                     crate::default_provider_chain::Builder::default()
                         .env(env)
                         .fs(fs)
-                        .region(&Region::from_static("us-east-1"))
+                        .region(Region::from_static("us-east-1"))
                         .connector(conn)
                         .build()
                 })
