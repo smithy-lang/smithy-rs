@@ -138,13 +138,12 @@ An example of a problematic version set:
              └─────────────────────┘
 ```
 
-To mitigate this risk, we will instead introduce `aws-types`. `aws-core` is intended to be permanently stable. Changes
-to `aws-types` need to be made with extreme care. Likely, `aws-core` will launch at `0.1` and only experience minor
-version bumps until a single breaking change at 1.0.
+To mitigate this risk, we will need to make `aws-types` essentially permanently stable. Changes
+to `aws-types` need to be made with extreme care. This will ensure that two versions of `aws-types` never end up in a customer's dependency tree.
 
-This will ensure that two versions of `aws-types` never end up in a customer's dependency tree.
+We will dramatically reduce the surface area of `aws-types` to contain only interfaces.
 
-Several breaking changes will be made as part of this, notably, the config file parsing will be moved out of aws-types.
+Several breaking changes will be made as part of this, notably, the profile file parsing will be moved out of aws-types.
 
 ## Changes Checklist
 
