@@ -142,13 +142,18 @@ class AwsJson(
         return RuntimeType.forInlineFun("parse_generic_error", "json_deser") {
             it.rustTemplate(
                 """
-                pub fn parse_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
-                    #{json_errors}::parse_generic_error(response)
+                pub fn parse_generic_error(
+                    payload: &#{Bytes},
+                    _http_status: Option<u16>,
+                    headers: Option<&#{HeaderMap}<#{HeaderValue}>>,
+                ) -> Result<#{Error}, #{JsonError}> {
+                    #{json_errors}::parse_generic_error(payload, headers)
                 }
                 """,
-                "Response" to RuntimeType.http.member("Response"),
                 "Bytes" to RuntimeType.Bytes,
                 "Error" to RuntimeType.GenericError(runtimeConfig),
+                "HeaderMap" to RuntimeType.http.member("HeaderMap"),
+                "HeaderValue" to RuntimeType.http.member("HeaderValue"),
                 "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::Error"),
                 "json_errors" to RuntimeType.jsonErrors(runtimeConfig)
             )

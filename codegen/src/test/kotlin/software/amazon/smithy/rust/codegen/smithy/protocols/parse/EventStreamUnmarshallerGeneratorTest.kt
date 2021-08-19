@@ -42,7 +42,6 @@ class EventStreamUnmarshallerGeneratorTest {
 
         test.project.lib { writer ->
             // TODO(EventStream): Add test for bad content type
-            // TODO(EventStream): Add test for generic error parsing
             writer.rust(
                 """
                 use smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
@@ -238,6 +237,26 @@ class EventStreamUnmarshallerGeneratorTest {
                 }
                 """,
                 "some_error",
+            )
+
+            writer.unitTest(
+                """
+                let message = msg(
+                    "exception",
+                    "UnmodeledError",
+                    "${testCase.contentType}",
+                    br#"${testCase.validUnmodeledError}"#
+                );
+                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                assert!(result.is_ok(), "expected ok, got: {:?}", result);
+                match expect_error(result.unwrap()).kind {
+                    TestStreamOpErrorKind::Unhandled(err) => {
+                        assert!(format!("{}", err).contains("message: \"unmodeled error\""));
+                    },
+                    kind => panic!("expected generic error, but got {:?}", kind),
+                }
+                """,
+                "generic_error",
             )
         }
         test.project.compileAndTest()

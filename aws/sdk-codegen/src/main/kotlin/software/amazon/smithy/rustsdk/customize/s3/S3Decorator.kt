@@ -58,26 +58,34 @@ class S3Decorator : RustCodegenDecorator {
 
 class S3(protocolConfig: ProtocolConfig) : RestXml(protocolConfig) {
     private val runtimeConfig = protocolConfig.runtimeConfig
+
     override fun parseGenericError(operationShape: OperationShape): RuntimeType {
         return RuntimeType.forInlineFun("parse_generic_error", "xml_deser") {
             it.rustBlockTemplate(
-                "pub fn parse_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
-                "Response" to RuntimeType.http.member("Response"),
+                """
+                pub fn parse_generic_error(
+                    payload: &#{Bytes},
+                    http_status: Option<u16>,
+                    headers: Option<&#{HeaderMap}<#{HeaderValue}>>,
+                ) -> Result<#{Error}, #{XmlError}>
+                """,
                 "Bytes" to RuntimeType.Bytes,
                 "Error" to RuntimeType.GenericError(runtimeConfig),
+                "HeaderMap" to RuntimeType.http.member("HeaderMap"),
+                "HeaderValue" to RuntimeType.http.member("HeaderValue"),
                 "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
             ) {
                 rustTemplate(
                     """
-                    if response.body().is_empty() {
+                    if payload.is_empty() {
                         let mut err = #{Error}::builder();
-                        if response.status().as_u16() == 404 {
+                        if http_status.unwrap_or(0) == 404 {
                             err.code("NotFound");
                         }
                         Ok(err.build())
                     } else {
-                        let base_err = #{base_errors}::parse_generic_error(response.body().as_ref())?;
-                        Ok(#{s3_errors}::parse_extended_error(base_err, &response))
+                        let base_err = #{base_errors}::parse_generic_error(payload.as_ref())?;
+                        Ok(#{s3_errors}::parse_extended_error(base_err, headers))
                     }
                     """,
                     "base_errors" to restXmlErrors,

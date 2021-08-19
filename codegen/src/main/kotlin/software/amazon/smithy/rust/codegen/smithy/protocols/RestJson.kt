@@ -57,16 +57,20 @@ class RestJson(private val protocolConfig: ProtocolConfig) : Protocol {
     override fun parseGenericError(operationShape: OperationShape): RuntimeType {
         return RuntimeType.forInlineFun("parse_generic_error", "json_deser") {
             it.rustBlockTemplate(
-                "pub fn parse_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}>",
-                "Response" to RuntimeType.http.member("Response"),
+                """
+                pub fn parse_generic_error(
+                    payload: &#{Bytes},
+                    _http_status: Option<u16>,
+                    headers: Option<&#{HeaderMap}<#{HeaderValue}>>,
+                ) -> Result<#{Error}, #{JsonError}>
+                """,
                 "Bytes" to RuntimeType.Bytes,
                 "Error" to RuntimeType.GenericError(runtimeConfig),
+                "HeaderMap" to RuntimeType.http.member("HeaderMap"),
+                "HeaderValue" to RuntimeType.http.member("HeaderValue"),
                 "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::Error")
             ) {
-                rust(
-                    "#T::parse_generic_error(response)",
-                    RuntimeType.jsonErrors(runtimeConfig)
-                )
+                rust("#T::parse_generic_error(payload, headers)", RuntimeType.jsonErrors(runtimeConfig))
             }
         }
     }

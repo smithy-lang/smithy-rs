@@ -119,6 +119,7 @@ object EventStreamTestModels {
         val validMessageWithNoHeaderPayloadTraits: String,
         val validTestUnion: String,
         val validSomeError: String,
+        val validUnmodeledError: String,
         val protocolBuilder: (ProtocolConfig) -> Protocol,
     ) {
         override fun toString(): String = protocolShapeId
@@ -136,6 +137,7 @@ object EventStreamTestModels {
                         validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
                         validTestUnion = """{"Foo":"hello"}""",
                         validSomeError = """{"Message":"some error"}""",
+                        validUnmodeledError = """{"Message":"unmodeled error"}""",
                     ) { RestJson(it) }
                 ),
                 Arguments.of(
@@ -147,6 +149,7 @@ object EventStreamTestModels {
                         validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
                         validTestUnion = """{"Foo":"hello"}""",
                         validSomeError = """{"Message":"some error"}""",
+                        validUnmodeledError = """{"Message":"unmodeled error"}""",
                     ) { AwsJson(it, AwsJsonVersion.Json11) }
                 ),
                 Arguments.of(
@@ -175,7 +178,16 @@ object EventStreamTestModels {
                                     <Message>some error</Message>
                                 </Error>
                             </ErrorResponse>
-                        """.trimIndent()
+                        """.trimIndent(),
+                        validUnmodeledError = """
+                            <ErrorResponse>
+                                <Error>
+                                    <Type>UnmodeledError</Type>
+                                    <Code>UnmodeledError</Code>
+                                    <Message>unmodeled error</Message>
+                                </Error>
+                            </ErrorResponse>
+                        """.trimIndent(),
                     ) { RestXml(it) }
                 ),
                 Arguments.of(
@@ -204,7 +216,16 @@ object EventStreamTestModels {
                                     <Message>some error</Message>
                                 </Error>
                             </ErrorResponse>
-                        """.trimIndent()
+                        """.trimIndent(),
+                        validUnmodeledError = """
+                            <ErrorResponse>
+                                <Error>
+                                    <Type>UnmodeledError</Type>
+                                    <Code>UnmodeledError</Code>
+                                    <Message>unmodeled error</Message>
+                                </Error>
+                            </ErrorResponse>
+                        """.trimIndent(),
                     ) { AwsQueryProtocol(it) }
                 ),
                 Arguments.of(
@@ -233,9 +254,20 @@ object EventStreamTestModels {
                                         <Code>SomeError</Code>
                                         <Message>some error</Message>
                                     </Error>
-                                </Error>
+                                </Errors>
                             </Response>
-                        """.trimIndent()
+                        """.trimIndent(),
+                        validUnmodeledError = """
+                            <Response>
+                                <Errors>
+                                    <Error>
+                                        <Type>UnmodeledError</Type>
+                                        <Code>UnmodeledError</Code>
+                                        <Message>unmodeled error</Message>
+                                    </Error>
+                                </Errors>
+                            </Response>
+                        """.trimIndent(),
                     ) { Ec2QueryProtocol(it) }
                 ),
             )

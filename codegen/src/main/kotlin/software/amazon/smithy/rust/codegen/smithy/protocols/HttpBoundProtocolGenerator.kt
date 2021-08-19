@@ -66,7 +66,15 @@ interface Protocol {
     fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator
 
     /**
-     fn parse_generic(response: &Response<Bytes>) -> smithy_types::error::Error
+     * Generates a function signature like the following:
+     * ```rust
+     * fn parse_generic(
+     *     payload: &Bytes,
+     *     http_status: Option<u16>,
+     *     headers: Option<&HeaderMap<HeaderValue>>
+     * ) -> smithy_types::error::Error
+     * ```
+     * Status and headers are optional to support non-HTTP protocols, such as Event Stream message frames.
      **/
     fun parseGenericError(operationShape: OperationShape): RuntimeType
 }
@@ -333,7 +341,13 @@ class HttpBoundProtocolGenerator(
             ) {
 
                 rust(
-                    "let generic = #T(&response).map_err(#T::unhandled)?;",
+                    """
+                    let generic = #T(
+                        response.body(),
+                        Some(response.status().as_u16()),
+                        Some(response.headers()),
+                    ).map_err(#T::unhandled)?;
+                    """,
                     protocol.parseGenericError(operationShape),
                     errorSymbol
                 )

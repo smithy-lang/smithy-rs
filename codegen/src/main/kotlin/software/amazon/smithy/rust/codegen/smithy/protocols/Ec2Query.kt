@@ -61,18 +61,22 @@ class Ec2QueryProtocol(private val protocolConfig: ProtocolConfig) : Protocol {
         Ec2QuerySerializerGenerator(protocolConfig)
 
     override fun parseGenericError(operationShape: OperationShape): RuntimeType {
-        /**
-         fn parse_generic(response: &Response<Bytes>) -> Result<smithy_types::error::Generic, T: Error>
-         **/
         return RuntimeType.forInlineFun("parse_generic_error", "xml_deser") {
             it.rustBlockTemplate(
-                "pub fn parse_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
-                "Response" to RuntimeType.http.member("Response"),
+                """
+                pub fn parse_generic_error(
+                    payload: &#{Bytes},
+                    _http_status: Option<u16>,
+                    _headers: Option<&#{HeaderMap}<#{HeaderValue}>>,
+                ) -> Result<#{Error}, #{XmlError}>
+                """,
                 "Bytes" to RuntimeType.Bytes,
                 "Error" to RuntimeType.GenericError(runtimeConfig),
+                "HeaderMap" to RuntimeType.http.member("HeaderMap"),
+                "HeaderValue" to RuntimeType.http.member("HeaderValue"),
                 "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
             ) {
-                rust("#T::parse_generic_error(response.body().as_ref())", ec2QueryErrors)
+                rust("#T::parse_generic_error(payload.as_ref())", ec2QueryErrors)
             }
         }
     }

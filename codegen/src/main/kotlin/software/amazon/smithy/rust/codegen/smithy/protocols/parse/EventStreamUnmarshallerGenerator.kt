@@ -53,13 +53,14 @@ class EventStreamUnmarshallerGenerator(
     private val codegenScope = arrayOf(
         "Blob" to RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "smithy_types"),
         "Error" to RuntimeType("Error", smithyEventStream, "smithy_eventstream::error"),
+        "expect_fns" to RuntimeType("smithy", smithyEventStream, "smithy_eventstream"),
         "Header" to RuntimeType("Header", smithyEventStream, "smithy_eventstream::frame"),
         "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "smithy_eventstream::frame"),
-        "expect_fns" to RuntimeType("smithy", smithyEventStream, "smithy_eventstream"),
         "Message" to RuntimeType("Message", smithyEventStream, "smithy_eventstream::frame"),
+        "OpError" to operationErrorSymbol,
         "SmithyError" to RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "smithy_types"),
-        "UnmarshallMessage" to RuntimeType("UnmarshallMessage", smithyEventStream, "smithy_eventstream::frame"),
         "UnmarshalledMessage" to RuntimeType("UnmarshalledMessage", smithyEventStream, "smithy_eventstream::frame"),
+        "UnmarshallMessage" to RuntimeType("UnmarshallMessage", smithyEventStream, "smithy_eventstream::frame"),
     )
 
     fun render(): RuntimeType {
@@ -241,6 +242,17 @@ class EventStreamUnmarshallerGenerator(
     }
 
     private fun RustWriter.renderUnmarshallError() {
+        rustTemplate(
+            """
+            let generic = match #{parse_generic_error}(message.payload(), None, None) {
+                Ok(generic) => generic,
+                Err(err) => return Ok(#{UnmarshalledMessage}::Error(#{OpError}::unhandled(err))),
+            };
+            """,
+            "parse_generic_error" to protocol.parseGenericError(operationShape),
+            *codegenScope
+        )
+
         val syntheticUnion = unionShape.expectTrait<SyntheticEventStreamUnionTrait>()
         if (syntheticUnion.errorMembers.isNotEmpty()) {
             rustBlock("match response_headers.smithy_type.as_str()") {
@@ -261,11 +273,10 @@ class EventStreamUnmarshallerGenerator(
                                 return Ok(#{UnmarshalledMessage}::Error(
                                     #{OpError}::new(
                                         #{OpError}Kind::${member.memberName.toPascalCase()}(builder.build()),
-                                        #{SmithyError}::builder().build(),
+                                        generic,
                                     )
                                 ))
                                 """,
-                                "OpError" to operationErrorSymbol,
                                 "parser" to parser,
                                 *codegenScope
                             )
@@ -275,10 +286,7 @@ class EventStreamUnmarshallerGenerator(
                 rust("_ => {}")
             }
         }
-        // TODO(EventStream): Generic error parsing; will need to refactor `parseGenericError` to
-        // operate on bodies rather than responses. This should be easy for all but restJson,
-        // which pulls the error type out of a header.
-        rust("unimplemented!(\"event stream generic error parsing\")")
+        rustTemplate("Ok(#{UnmarshalledMessage}::Error(#{OpError}::generic(generic)))", *codegenScope)
     }
 
     private fun UnionShape.eventStreamUnmarshallerType(): RuntimeType {
