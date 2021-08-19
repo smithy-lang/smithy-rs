@@ -555,9 +555,11 @@ mod tests {
 
     fn parse_request(s: &[u8]) -> Result<Request<bytes::Bytes>, Error> {
         let mut headers = [httparse::EMPTY_HEADER; 64];
+        // httparse 1.5 requres two trailing newlines to head the header section.
+        let mut with_newline = Vec::from(s);
+        with_newline.push(b'\n');
         let mut req = httparse::Request::new(&mut headers);
-        let _ = req.parse(s).unwrap();
-        let _ = req.parse(b"\n");
+        let _ = req.parse(&with_newline).unwrap();
 
         let version = match req.version.unwrap() {
             1 => Version::HTTP_11,
