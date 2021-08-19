@@ -40,7 +40,8 @@ async fn main() {
     let config = aws_config::config_loader()
             .region(Region::new("us-east-1"))
             .sleep(async_std_sleep)
-            .load().await;
+            .load()
+            .await;
 
     // with no custom configuration:
     let config = aws_config::load_config().await;
