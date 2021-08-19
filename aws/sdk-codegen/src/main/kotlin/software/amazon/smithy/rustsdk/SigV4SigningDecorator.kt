@@ -7,9 +7,12 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.aws.traits.auth.UnsignedPayloadTrait
+import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -55,7 +58,7 @@ class SigV4SigningDecorator : RustCodegenDecorator {
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
         return baseCustomizations.letIf(applies(protocolConfig)) {
-            it + SigV4SigningFeature(operation, protocolConfig.runtimeConfig, protocolConfig.serviceShape)
+            it + SigV4SigningFeature(operation, protocolConfig.runtimeConfig, protocolConfig.serviceShape, protocolConfig.model)
         }
     }
 }
@@ -94,11 +97,14 @@ fun disableDoubleEncode(service: ServiceShape) = when {
 class SigV4SigningFeature(
     private val operation: OperationShape,
     runtimeConfig: RuntimeConfig,
-    private val service: ServiceShape
+    private val service: ServiceShape,
+    model: Model
 ) :
     OperationCustomization() {
     private val codegenScope =
         arrayOf("sig_auth" to runtimeConfig.sigAuth().asType(), "aws_types" to awsTypes(runtimeConfig).asType())
+
+    private val serviceIndex = ServiceIndex.of(model)
 
     override fun section(section: OperationSection): Writable {
         return when (section) {
@@ -119,14 +125,23 @@ class SigV4SigningFeature(
                 if (operation.hasTrait<UnsignedPayloadTrait>()) {
                     rust("signing_config.signing_options.content_sha256_header = true;")
                     rustTemplate(
-                        "${section.request}.config_mut().insert(#{sig_auth}::signer::SignableBody::UnsignedPayload);",
+                        "${section.request}.properties_mut().insert(#{sig_auth}::signer::SignableBody::UnsignedPayload);",
                         *codegenScope
                     )
                 }
+                // some operations are either unsigned or optionally signed:
+                val authSchemes = serviceIndex.getEffectiveAuthSchemes(service, operation)
+                if (!authSchemes.containsKey(SigV4Trait.ID)) {
+                    rustTemplate("signing_config.signing_requirements = #{sig_auth}::signer::SigningRequirements::Disabled;", *codegenScope)
+                } else {
+                    if (operation.hasTrait<OptionalAuthTrait>()) {
+                        rustTemplate("signing_config.signing_requirements = #{sig_auth}::signer::SigningRequirements::Optional;", *codegenScope)
+                    }
+                }
                 rustTemplate(
                     """
-                ${section.request}.config_mut().insert(signing_config);
-                ${section.request}.config_mut().insert(#{aws_types}::SigningService::from_static(${section.config}.signing_service()));
+                ${section.request}.properties_mut().insert(signing_config);
+                ${section.request}.properties_mut().insert(#{aws_types}::SigningService::from_static(${section.config}.signing_service()));
                 """,
                     *codegenScope
                 )

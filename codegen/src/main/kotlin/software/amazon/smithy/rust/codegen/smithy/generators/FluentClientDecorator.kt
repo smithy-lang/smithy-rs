@@ -280,7 +280,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         M: #{client}::bounds::SmithyMiddleware<C>,
                         R: #{client}::retry::NewRequestPolicy,
                     """,
-                    "client" to CargoDependency.SmithyClient(runtimeConfig).asType(),
+                    "client" to clientDep.asType(),
                 ) {
                     rustTemplate(
                         """
@@ -301,7 +301,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         "ok" to symbolProvider.toSymbol(operation.outputShape(model)),
                         "operation_err" to operation.errorSymbol(symbolProvider),
                         "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType().copy(name = "result::SdkError"),
-                        "client" to CargoDependency.SmithyClient(runtimeConfig).asType(),
+                        "client" to clientDep.asType(),
                     )
                     members.forEach { member ->
                         val memberName = symbolProvider.toMemberName(member)

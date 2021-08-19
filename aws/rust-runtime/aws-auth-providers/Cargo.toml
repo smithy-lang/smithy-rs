@@ -1,0 +1,27 @@
+[package]
+name = "aws-auth-providers"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
+edition = "2018"
+
+[features]
+rustls = ["smithy-client/rustls"]
+native-tls = ["smithy-client/native-tls"]
+rt-tokio = ["smithy-async/rt-tokio"]
+default = ["rustls", "rt-tokio"]
+
+[dependencies]
+aws-auth = { path = "../../sdk/build/aws-sdk/aws-auth" }
+aws-types = { path = "../../sdk/build/aws-sdk/aws-types" }
+aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sts"}
+aws-hyper = { path = "../../sdk/build/aws-sdk/aws-hyper"}
+smithy-async = { path = "../../sdk/build/aws-sdk/smithy-async" }
+tracing = "0.1"
+smithy-client = { path = "../../sdk/build/aws-sdk/smithy-client" }
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+smithy-client = { path = "../../sdk/build/aws-sdk/smithy-client", features = ["test-util", "hyper-rustls"]}
+tokio = { version = "1", features = ["full"]}
+tracing-test = "0.1.0"
