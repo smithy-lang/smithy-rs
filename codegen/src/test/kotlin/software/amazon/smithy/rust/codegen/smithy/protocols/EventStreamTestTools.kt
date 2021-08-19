@@ -118,6 +118,7 @@ object EventStreamTestModels {
         val validTestStruct: String,
         val validMessageWithNoHeaderPayloadTraits: String,
         val validTestUnion: String,
+        val validSomeError: String,
         val protocolBuilder: (ProtocolConfig) -> Protocol,
     ) {
         override fun toString(): String = protocolShapeId
@@ -134,6 +135,7 @@ object EventStreamTestModels {
                         validTestStruct = """{"someString":"hello","someInt":5}""",
                         validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
                         validTestUnion = """{"Foo":"hello"}""",
+                        validSomeError = """{"Message":"some error"}""",
                     ) { RestJson(it) }
                 ),
                 Arguments.of(
@@ -144,6 +146,7 @@ object EventStreamTestModels {
                         validTestStruct = """{"someString":"hello","someInt":5}""",
                         validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
                         validTestUnion = """{"Foo":"hello"}""",
+                        validSomeError = """{"Message":"some error"}""",
                     ) { AwsJson(it, AwsJsonVersion.Json11) }
                 ),
                 Arguments.of(
@@ -163,7 +166,16 @@ object EventStreamTestModels {
                                 <someInt>5</someInt>
                             </MessageWithNoHeaderPayloadTraits>
                         """.trimIndent(),
-                        validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>"
+                        validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
+                        validSomeError = """
+                            <ErrorResponse>
+                                <Error>
+                                    <Type>SomeError</Type>
+                                    <Code>SomeError</Code>
+                                    <Message>some error</Message>
+                                </Error>
+                            </ErrorResponse>
+                        """.trimIndent()
                     ) { RestXml(it) }
                 ),
                 Arguments.of(
@@ -183,7 +195,16 @@ object EventStreamTestModels {
                                 <someInt>5</someInt>
                             </MessageWithNoHeaderPayloadTraits>
                         """.trimIndent(),
-                        validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>"
+                        validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
+                        validSomeError = """
+                            <ErrorResponse>
+                                <Error>
+                                    <Type>SomeError</Type>
+                                    <Code>SomeError</Code>
+                                    <Message>some error</Message>
+                                </Error>
+                            </ErrorResponse>
+                        """.trimIndent()
                     ) { AwsQueryProtocol(it) }
                 ),
                 Arguments.of(
@@ -203,7 +224,18 @@ object EventStreamTestModels {
                                 <someInt>5</someInt>
                             </MessageWithNoHeaderPayloadTraits>
                         """.trimIndent(),
-                        validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>"
+                        validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
+                        validSomeError = """
+                            <Response>
+                                <Errors>
+                                    <Error>
+                                        <Type>SomeError</Type>
+                                        <Code>SomeError</Code>
+                                        <Message>some error</Message>
+                                    </Error>
+                                </Error>
+                            </Response>
+                        """.trimIndent()
                     ) { Ec2QueryProtocol(it) }
                 ),
             )

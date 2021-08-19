@@ -42,12 +42,12 @@ class EventStreamUnmarshallerGeneratorTest {
 
         test.project.lib { writer ->
             // TODO(EventStream): Add test for bad content type
-            // TODO(EventStream): Add test for modeled error parsing
             // TODO(EventStream): Add test for generic error parsing
             writer.rust(
                 """
                 use smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
                 use smithy_types::{Blob, Instant};
+                use crate::error::*;
                 use crate::model::*;
 
                 fn msg(
@@ -56,15 +56,25 @@ class EventStreamUnmarshallerGeneratorTest {
                     content_type: &'static str,
                     payload: &'static [u8],
                 ) -> Message {
-                    Message::new(payload)
+                    let message = Message::new(payload)
                         .add_header(Header::new(":message-type", HeaderValue::String(message_type.into())))
-                        .add_header(Header::new(":event-type", HeaderValue::String(event_type.into())))
-                        .add_header(Header::new(":content-type", HeaderValue::String(content_type.into())))
+                        .add_header(Header::new(":content-type", HeaderValue::String(content_type.into())));
+                    if message_type == "event" {
+                        message.add_header(Header::new(":event-type", HeaderValue::String(event_type.into())))
+                    } else {
+                        message.add_header(Header::new(":exception-type", HeaderValue::String(event_type.into())))
+                    }
                 }
                 fn expect_event<T: std::fmt::Debug, E: std::fmt::Debug>(unmarshalled: UnmarshalledMessage<T, E>) -> T {
                     match unmarshalled {
                         UnmarshalledMessage::Event(event) => event,
                         _ => panic!("expected event, got: {:?}", unmarshalled),
+                    }
+                }
+                fn expect_error<T: std::fmt::Debug, E: std::fmt::Debug>(unmarshalled: UnmarshalledMessage<T, E>) -> E {
+                    match unmarshalled {
+                        UnmarshalledMessage::Error(error) => error,
+                        _ => panic!("expected error, got: {:?}", unmarshalled),
                     }
                 }
                 """
@@ -210,6 +220,24 @@ class EventStreamUnmarshallerGeneratorTest {
                 );
                 """,
                 "message_with_no_header_payload_traits",
+            )
+
+            writer.unitTest(
+                """
+                let message = msg(
+                    "exception",
+                    "SomeError",
+                    "${testCase.contentType}",
+                    br#"${testCase.validSomeError}"#
+                );
+                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                assert!(result.is_ok(), "expected ok, got: {:?}", result);
+                match expect_error(result.unwrap()).kind {
+                    TestStreamOpErrorKind::SomeError(err) => assert_eq!(Some("some error"), err.message()),
+                    kind => panic!("expected SomeError, but got {:?}", kind),
+                }
+                """,
+                "some_error",
             )
         }
         test.project.compileAndTest()
