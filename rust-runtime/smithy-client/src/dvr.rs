@@ -81,6 +81,18 @@ pub struct Response {
     headers: HashMap<String, Vec<String>>,
 }
 
+impl From<&Request> for http::Request<()> {
+    fn from(request: &Request) -> Self {
+        let mut builder = http::Request::builder().uri(request.uri.as_str());
+        for (k, values) in request.headers.iter() {
+            for v in values {
+                builder = builder.header(k, v);
+            }
+        }
+        builder.method(request.method.as_str()).body(()).unwrap()
+    }
+}
+
 impl<'a, B> From<&'a http::Request<B>> for Request {
     fn from(req: &'a http::Request<B>) -> Self {
         let uri = req.uri().to_string();
@@ -193,6 +205,14 @@ impl BodyData {
     pub fn into_bytes(self) -> Vec<u8> {
         match self {
             BodyData::Utf8(string) => string.into_bytes(),
+            BodyData::Base64(string) => base64::decode(string).unwrap(),
+        }
+    }
+
+    /// Copy [`BodyData`](BodyData) into a `Vec<u8>`
+    pub fn copy_to_vec(&self) -> Vec<u8> {
+        match self {
+            BodyData::Utf8(string) => string.as_bytes().into(),
             BodyData::Base64(string) => base64::decode(string).unwrap(),
         }
     }
