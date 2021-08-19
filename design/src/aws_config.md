@@ -16,7 +16,7 @@ This document proposes an overhaul to the Config design to facilitate three thin
 
 ## New customer experience
 
-With the new shared config, customers must always `aws-config` as a dependency if they want access to the automatic
+With the new shared config, customers must always take `aws-config` as a dependency if they want access to the automatic
 configuration loading.
 
 In Cargo.toml:
