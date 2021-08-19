@@ -36,10 +36,14 @@ use aws_config::SharedConfig;
 
 async fn main() {
     // loading a shared config may make network calls, etc.
+    // with some custom configuration:
     let config = aws_config::config_loader()
             .region(Region::new("us-east-1"))
             .sleep(async_std_sleep)
             .load().await;
+
+    // with no custom configuration:
+    let config = aws_config::load_config().await;
     // does not consume config so that config can be used to construct other service clients.
     let client = aws_sdk_dynamodb::Client::new(&config);
     let tables = client.list_tables().await?;
