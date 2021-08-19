@@ -83,7 +83,8 @@ async fn generate_random() {
     let conf = Config::builder()
         .region(Region::new("us-east-1"))
         .credentials_provider(creds)
-        .build();
+        .build()
+        .await;
     let mut op = GenerateRandom::builder()
         .number_of_bytes(64)
         .build()
@@ -128,7 +129,8 @@ async fn generate_random_malformed_response() {
     let conf = Config::builder()
         .region(Region::new("us-east-1"))
         .credentials_provider(creds)
-        .build();
+        .build()
+        .await;
     let op = GenerateRandom::builder()
         .number_of_bytes(64)
         .build()
