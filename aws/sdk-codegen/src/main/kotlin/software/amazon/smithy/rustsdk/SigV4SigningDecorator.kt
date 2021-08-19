@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.isEventStream
 import software.amazon.smithy.rust.codegen.util.isInputEventStream
+import software.amazon.smithy.rust.codegen.util.orNull
 
 /**
  * The SigV4SigningDecorator:
@@ -55,8 +56,10 @@ class SigV4SigningDecorator : RustCodegenDecorator {
         return baseCustomizations.letIf(applies(protocolConfig)) { customizations ->
             val serviceHasEventStream = protocolConfig.serviceShape.operations
                 .any { id ->
-                    protocolConfig.model.expectShape(id, OperationShape::class.java)
-                        .isEventStream(protocolConfig.model)
+                    // Some models like `kinesisanalytics` have StructureShapes in their operation list,
+                    // so don't assume they're always OperationShape.
+                    val shape = protocolConfig.model.getShape(id).orNull()
+                    shape is OperationShape && shape.isEventStream(protocolConfig.model)
                 }
             customizations + SigV4SigningConfig(
                 protocolConfig.runtimeConfig,
