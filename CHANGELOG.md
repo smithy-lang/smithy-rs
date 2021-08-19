@@ -15,6 +15,7 @@ vNext (Month Day, Year)
 - Add support for the smithy auth trait. This enables authorizations that explicitly disable authorization to work when no credentials have been provided. (#652)
 - :bug: Fix STS Assume Role with WebIdentity & Assume role with SAML to support clients with no credentials provided (#652)
 - Add support for WebIdentityToken providers via profile & environment variables. (#654)
+- (internal): Update sigv4 tests to work around behavior change in httparse 1.5. (#656)
 
 v0.20 (August 10th, 2021)
 --------------------------

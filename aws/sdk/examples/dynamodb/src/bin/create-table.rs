@@ -3,18 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use std::process;
-
-use dynamodb::model::{
+use aws_sdk_dynamodb::model::{
     AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType,
 };
-use dynamodb::{Client, Config, Region};
-
-use aws_types::region::{EnvironmentProvider, ProvideRegion};
-
+use aws_sdk_dynamodb::{Client, Config, Error, Region, PKG_VERSION};
+use aws_types::region;
+use aws_types::region::ProvideRegion;
+use std::process;
 use structopt::StructOpt;
-use tracing_subscriber::fmt::format::FmtSpan;
-use tracing_subscriber::fmt::SubscriberBuilder;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
@@ -26,7 +22,7 @@ struct Opt {
     #[structopt(short, long)]
     table: String,
 
-    /// The region
+    /// The primary key
     #[structopt(short, long)]
     key: String,
 
@@ -35,8 +31,18 @@ struct Opt {
     verbose: bool,
 }
 
+/// Creates a DynamoDB table.
+/// # Arguments
+///
+/// * `-k KEY` - The primary key for the table.
+/// * `-t TABLE` - The name of the table.
+/// * `[-d DEFAULT-REGION]` - The region in which the client is created.
+///    If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
+///    If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display additional information.
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Error> {
+    tracing_subscriber::fmt::init();
     let Opt {
         table,
         key,
@@ -44,21 +50,22 @@ async fn main() {
         verbose,
     } = Opt::from_args();
 
-    let region = EnvironmentProvider::new()
-        .region()
-        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
-        .unwrap_or_else(|| Region::new("us-west-2"));
+    let region = region::ChainProvider::first_try(region.map(Region::new))
+        .or_default_provider()
+        .or_else(Region::new("us-west-2"));
+
+    println!();
 
     if verbose {
-        println!("DynamoDB client version: {}\n", dynamodb::PKG_VERSION);
-        println!("Region: {:?}", &region);
-        println!("Table:  {}", table);
-        println!("Key:    {}\n", key);
+        println!("DynamoDB client version: {}", PKG_VERSION);
+        println!(
+            "Region:                  {}",
+            region.region().unwrap().as_ref()
+        );
+        println!("Table:                   {}", table);
+        println!("Key:                     {}", key);
 
-        SubscriberBuilder::default()
-            .with_env_filter("info")
-            .with_span_events(FmtSpan::CLOSE)
-            .init();
+        println!();
     }
 
     let config = Config::builder().region(region).build();
@@ -95,4 +102,6 @@ async fn main() {
             process::exit(1);
         }
     };
+
+    Ok(())
 }
