@@ -117,23 +117,17 @@ fun CodegenWriterDelegator<RustWriter>.finalize(
     flushWriters()
 }
 
-internal fun mergeDependencyFeatures(cargoDependencies: List<CargoDependency>): List<CargoDependency> {
-    val dependencies = cargoDependencies.toMutableList()
-    dependencies.sortBy { it.name }
-
-    var index = 1
-    while (index < dependencies.size) {
-        val first = dependencies[index - 1]
-        val second = dependencies[index]
-        if (first.canMergeWith(second)) {
-            dependencies[index - 1] = first.copy(
-                features = first.features + second.features,
-                optional = first.optional && second.optional
-            )
-            dependencies.removeAt(index)
-        } else {
-            index += 1
-        }
-    }
-    return dependencies
+private fun CargoDependency.mergeWith(other: CargoDependency): CargoDependency {
+    check(key == other.key)
+    return copy(
+        features = features + other.features,
+        optional = optional && other.optional
+    )
 }
+
+internal fun mergeDependencyFeatures(cargoDependencies: List<CargoDependency>): List<CargoDependency> =
+    cargoDependencies.groupBy { it.key }
+        .mapValues { group -> group.value.reduce { acc, next -> acc.mergeWith(next) } }
+        .values
+        .toList()
+        .sortedBy { it.name }

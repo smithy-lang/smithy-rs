@@ -28,12 +28,9 @@ object EventStreamNormalizer {
     }
 
     private fun syntheticEquivalent(model: Model, union: UnionShape): UnionShape {
-        val partitions = union.members().partition { member ->
+        val (errorMembers, eventMembers) = union.members().partition { member ->
             model.expectShape(member.target).hasTrait<ErrorTrait>()
         }
-        val errorMembers = partitions.first
-        val eventMembers = partitions.second
-
         return union.toBuilder()
             .members(eventMembers)
             .addTrait(SyntheticEventStreamUnionTrait(errorMembers))

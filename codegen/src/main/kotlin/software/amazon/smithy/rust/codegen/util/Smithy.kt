@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
@@ -66,6 +67,12 @@ fun OperationShape.isOutputEventStream(model: Model): Boolean {
 }
 fun OperationShape.isEventStream(model: Model): Boolean {
     return isInputEventStream(model) || isOutputEventStream(model)
+}
+fun ServiceShape.hasEventStreamOperations(model: Model): Boolean = operations.any { id ->
+    // Don't assume all of the looked up operation ids are operation shapes. Our
+    // synthetic input/output structure shapes can have the same name as an operation,
+    // as is the case with `kinesisanalytics`.
+    model.getShape(id).orNull()?.let { it is OperationShape && it.isEventStream(model) } ?: false
 }
 
 /*

@@ -123,13 +123,13 @@ data class CargoDependency(
     val optional: Boolean = false,
     val features: Set<String> = emptySet()
 ) : RustDependency(name) {
+    val key: Triple<String, DependencyLocation, DependencyScope> get() = Triple(name, location, scope)
+
+    fun canMergeWith(other: CargoDependency): Boolean = key == other.key
 
     fun withFeature(feature: String): CargoDependency {
         return copy(features = features.toMutableSet().apply { add(feature) })
     }
-
-    fun canMergeWith(other: CargoDependency): Boolean =
-        name == other.name && location == other.location && scope == other.scope
 
     override fun version(): String = when (location) {
         is CratesIo -> location.version

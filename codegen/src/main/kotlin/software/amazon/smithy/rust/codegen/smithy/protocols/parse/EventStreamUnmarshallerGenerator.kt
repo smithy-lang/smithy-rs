@@ -55,7 +55,7 @@ class EventStreamUnmarshallerGenerator(
         "Error" to RuntimeType("Error", smithyEventStream, "smithy_eventstream::error"),
         "Header" to RuntimeType("Header", smithyEventStream, "smithy_eventstream::frame"),
         "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "smithy_eventstream::frame"),
-        "ExpectFns" to RuntimeType("smithy", smithyEventStream, "smithy_eventstream"),
+        "expect_fns" to RuntimeType("smithy", smithyEventStream, "smithy_eventstream"),
         "Message" to RuntimeType("Message", smithyEventStream, "smithy_eventstream::frame"),
         "SmithyError" to RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "smithy_types"),
         "UnmarshallMessage" to RuntimeType("UnmarshallMessage", smithyEventStream, "smithy_eventstream::frame"),
@@ -102,7 +102,7 @@ class EventStreamUnmarshallerGenerator(
             ) {
                 rustBlockTemplate(
                     """
-                    let response_headers = #{ExpectFns}::parse_response_headers(&message)?;
+                    let response_headers = #{expect_fns}::parse_response_headers(&message)?;
                     match response_headers.message_type.as_str()
                     """,
                     *codegenScope
@@ -186,14 +186,14 @@ class EventStreamUnmarshallerGenerator(
         val memberName = symbolProvider.toMemberName(member)
         withBlock("builder = builder.$memberName(", ");") {
             when (val target = model.expectShape(member.target)) {
-                is BooleanShape -> rustTemplate("#{ExpectFns}::expect_bool(header)?", *codegenScope)
-                is ByteShape -> rustTemplate("#{ExpectFns}::expect_byte(header)?", *codegenScope)
-                is ShortShape -> rustTemplate("#{ExpectFns}::expect_int16(header)?", *codegenScope)
-                is IntegerShape -> rustTemplate("#{ExpectFns}::expect_int32(header)?", *codegenScope)
-                is LongShape -> rustTemplate("#{ExpectFns}::expect_int64(header)?", *codegenScope)
-                is BlobShape -> rustTemplate("#{ExpectFns}::expect_byte_array(header)?", *codegenScope)
-                is StringShape -> rustTemplate("#{ExpectFns}::expect_string(header)?", *codegenScope)
-                is TimestampShape -> rustTemplate("#{ExpectFns}::expect_timestamp(header)?", *codegenScope)
+                is BooleanShape -> rustTemplate("#{expect_fns}::expect_bool(header)?", *codegenScope)
+                is ByteShape -> rustTemplate("#{expect_fns}::expect_byte(header)?", *codegenScope)
+                is ShortShape -> rustTemplate("#{expect_fns}::expect_int16(header)?", *codegenScope)
+                is IntegerShape -> rustTemplate("#{expect_fns}::expect_int32(header)?", *codegenScope)
+                is LongShape -> rustTemplate("#{expect_fns}::expect_int64(header)?", *codegenScope)
+                is BlobShape -> rustTemplate("#{expect_fns}::expect_byte_array(header)?", *codegenScope)
+                is StringShape -> rustTemplate("#{expect_fns}::expect_string(header)?", *codegenScope)
+                is TimestampShape -> rustTemplate("#{expect_fns}::expect_timestamp(header)?", *codegenScope)
                 else -> throw IllegalStateException("unsupported event stream header shape type: $target")
             }
         }
