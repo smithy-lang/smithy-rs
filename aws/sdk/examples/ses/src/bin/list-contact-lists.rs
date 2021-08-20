@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use aws_types::region;
 use ses::{Client, Config, Error, Region};
 
 use structopt::StructOpt;
@@ -32,19 +33,18 @@ async fn main() -> Result<(), Error> {
         verbose,
     } = Opt::from_args();
 
-    let region = default_region
-        .as_ref()
-        .map(|region| Region::new(region.clone()))
-        .or_else(|| aws_types::region::default_provider().region().await)
-        .unwrap_or_else(|| Region::new("us-west-2"));
+    let region_provider = region::ChainProvider::first_try(default_region.map(Region::new))
+        .or_default_provider()
+        .or_else(Region::new("us-west-2"));
+    let region = region_provider.region().await;
 
     if verbose {
         println!("SES client version: {}", ses::PKG_VERSION);
-        println!("Region:             {:?}", region.region().await);
+        println!("Region:             {:?}", &region);
         println!();
     }
 
-    let conf = Config::builder().region(region.region().await).build();
+    let conf = Config::builder().region(region).build();
     let client = Client::from_conf(conf);
 
     let resp = client.list_contact_lists().send().await;
