@@ -63,7 +63,7 @@ fn types_are_debug() {
 }
 
 async fn create_alias_op() -> Parts<CreateAlias, AwsErrorRetryPolicy> {
-    let conf = kms::Config::builder().build().await;
+    let conf = kms::Config::builder().build();
     let (_, parts) = CreateAlias::builder()
         .build()
         .unwrap()

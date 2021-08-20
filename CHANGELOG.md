@@ -1,9 +1,14 @@
 vNext (Month Day, Year)
 -----------------------
+**Breaking Changes**
+- `ProvideRegion` is now asynchronous. Code that called `provider.region()` must be changed to `provider.region().await`.
+- `<awsservice>::Config::from_env()` is now also asynchronous because it must load a region
+- `<awsservice>::Config::builder()` will **not** load a default region unspecified. A region must be specified directly.
 
 **New this week**
 
 - (When complete) Add profile file provider for region (#594, #xyz)
+
 
 v0.21 (August 19th, 2021)
 -------------------------
