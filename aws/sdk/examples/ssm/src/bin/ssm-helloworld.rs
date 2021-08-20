@@ -57,12 +57,13 @@ async fn main() {
 
     let region = EnvironmentProvider::new()
         .region()
+        .await
         .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
         .unwrap_or_else(|| Region::new("us-west-2"));
 
     if verbose {
         println!("SSM client version:   {}", ssm::PKG_VERSION);
-        println!("Region:               {:?}", &region);
+        println!("Region:               {:?}", region.region().await);
         println!("Parameter name:       {}", name);
         println!("Paramter value:       {}", parameter_value);
         println!("Paramter description: {}", description);
@@ -70,7 +71,7 @@ async fn main() {
         tracing_subscriber::fmt::init();
     }
 
-    let config = Config::builder().region(region).build();
+    let config = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(config);
 
     match client

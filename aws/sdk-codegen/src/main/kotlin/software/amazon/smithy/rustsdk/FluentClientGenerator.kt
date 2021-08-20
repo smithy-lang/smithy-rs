@@ -114,8 +114,11 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
             rustTemplate(
                 """
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
-                pub fn from_env() -> Self {
-                    Self::from_conf(crate::Config::builder().build())
+                pub async fn from_env() -> Self {
+                    // backwards compatibility shim
+                    use aws_types::region::ProvideRegion;
+                    let region = aws_types::region::default_provider().region().await;
+                    Self::from_conf(crate::Config::builder().region(region).build())
                 }
 
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]

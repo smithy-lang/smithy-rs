@@ -15,7 +15,7 @@ use aws_sdk_dynamodb::operation::DescribeTable;
 use aws_sdk_dynamodb::output::DescribeTableOutput;
 use aws_sdk_dynamodb::{Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region;
-use aws_types::region::ProvideRegion;
+
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use smithy_http::operation::Operation;
@@ -36,7 +36,7 @@ struct Opt {
     #[structopt(short, long)]
     region: Option<String>,
 
-    /// Activate verbose mode    
+    /// Activate verbose mode
     #[structopt(short, long)]
     verbose: bool,
 }
@@ -251,7 +251,7 @@ async fn main() -> Result<(), Error> {
         println!("DynamoDB client version: {}", PKG_VERSION);
         println!(
             "Region:                  {}",
-            region.region().unwrap().as_ref()
+            region.region().await.unwrap().as_ref()
         );
         println!("Table:                   {}", table);
         println!("Key:                     {}", key);
@@ -264,7 +264,7 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(conf);
 
     /* Create table */

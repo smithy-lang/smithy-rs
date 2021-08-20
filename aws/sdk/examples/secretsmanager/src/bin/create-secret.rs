@@ -51,6 +51,7 @@ async fn main() {
 
     let region = EnvironmentProvider::new()
         .region()
+        .await
         .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
         .unwrap_or_else(|| Region::new("us-west-2"));
 
@@ -59,7 +60,7 @@ async fn main() {
             "SecretsManager client version: {}\n",
             secretsmanager::PKG_VERSION
         );
-        println!("Region:       {:?}", &region);
+        println!("Region:       {:?}", region.region().await);
         println!("Secret name:  {}", name);
         println!("Secret value: {}", secret_value);
 
@@ -69,7 +70,7 @@ async fn main() {
             .init();
     }
 
-    let config = Config::builder().region(region).build();
+    let config = Config::builder().region(region.region().await).build();
 
     let client = Client::from_conf(config);
 

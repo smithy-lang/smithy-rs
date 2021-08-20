@@ -5,6 +5,10 @@
 
 use crate::os_shim_internal::Env;
 use std::borrow::Cow;
+use std::fmt::{Display, Formatter};
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 /// The region to send requests to.
 ///
@@ -27,6 +31,12 @@ impl AsRef<str> for Region {
     }
 }
 
+impl Display for Region {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl Region {
     pub fn new(region: impl Into<Cow<'static, str>>) -> Self {
         Self(region.into())
@@ -38,6 +48,17 @@ impl Region {
 
 pub struct ChainProvider {
     providers: Vec<Box<dyn ProvideRegion>>,
+}
+
+impl ChainProvider {
+    pub async fn region(&self) -> Option<Region> {
+        for provider in &self.providers {
+            if let Some(region) = provider.region().await {
+                return Some(region);
+            }
+        }
+        None
+    }
 }
 
 /// Implement a region provider based on a series of region providers
@@ -70,19 +91,34 @@ impl ChainProvider {
 }
 
 impl ProvideRegion for Option<Region> {
-    fn region(&self) -> Option<Region> {
-        self.clone()
+    fn region(&self) -> RegionFuture {
+        RegionFuture::ready(self.clone())
     }
 }
 
 impl ProvideRegion for ChainProvider {
-    fn region(&self) -> Option<Region> {
-        for provider in &self.providers {
-            if let Some(region) = provider.region() {
-                return Some(region);
-            }
-        }
-        None
+    fn region(&self) -> RegionFuture {
+        RegionFuture::new(self.region())
+    }
+}
+
+pub struct RegionFuture<'a>(Pin<Box<dyn Future<Output = Option<Region>> + Send + 'a>>);
+
+impl<'a> RegionFuture<'a> {
+    pub fn new(f: impl Future<Output = Option<Region>> + Send + 'a) -> Self {
+        RegionFuture(Box::pin(f))
+    }
+
+    pub fn ready(region: Option<Region>) -> Self {
+        Self::new(std::future::ready(region))
+    }
+}
+
+impl Future for RegionFuture<'_> {
+    type Output = Option<Region>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.0.as_mut().poll(cx)
     }
 }
 
@@ -91,18 +127,18 @@ impl ProvideRegion for ChainProvider {
 /// For most cases [`default_provider`](default_provider) will be the best option, implementing
 /// a standard provider chain.
 pub trait ProvideRegion: Send + Sync {
-    fn region(&self) -> Option<Region>;
+    fn region(&self) -> RegionFuture;
 }
 
 impl ProvideRegion for Region {
-    fn region(&self) -> Option<Region> {
-        Some(self.clone())
+    fn region(&self) -> RegionFuture {
+        RegionFuture::ready(Some(self.clone()))
     }
 }
 
 impl<'a> ProvideRegion for &'a Region {
-    fn region(&self) -> Option<Region> {
-        Some((*self).clone())
+    fn region(&self) -> RegionFuture {
+        RegionFuture::ready(Some((*self).clone()))
     }
 }
 
@@ -129,12 +165,14 @@ impl EnvironmentProvider {
 }
 
 impl ProvideRegion for EnvironmentProvider {
-    fn region(&self) -> Option<Region> {
-        self.env
-            .get("AWS_REGION")
-            .or_else(|_| self.env.get("AWS_DEFAULT_REGION"))
-            .map(Region::new)
-            .ok()
+    fn region(&self) -> RegionFuture {
+        RegionFuture::ready(
+            self.env
+                .get("AWS_REGION")
+                .or_else(|_| self.env.get("AWS_DEFAULT_REGION"))
+                .map(Region::new)
+                .ok(),
+        )
     }
 }
 
@@ -166,6 +204,7 @@ impl SigningRegion {
 mod test {
     use crate::os_shim_internal::Env;
     use crate::region::{EnvironmentProvider, ProvideRegion, Region};
+    use futures_util::FutureExt;
 
     fn test_provider(vars: &[(&str, &str)]) -> EnvironmentProvider {
         EnvironmentProvider {
@@ -175,7 +214,13 @@ mod test {
 
     #[test]
     fn no_region() {
-        assert_eq!(test_provider(&[]).region(), None);
+        assert_eq!(
+            test_provider(&[])
+                .region()
+                .now_or_never()
+                .expect("no polling"),
+            None
+        );
     }
 
     #[test]
@@ -184,13 +229,19 @@ mod test {
             ("AWS_REGION", "us-east-1"),
             ("AWS_DEFAULT_REGION", "us-east-2"),
         ]);
-        assert_eq!(provider.region(), Some(Region::new("us-east-1")));
+        assert_eq!(
+            provider.region().now_or_never().expect("no polling"),
+            Some(Region::new("us-east-1"))
+        );
     }
 
     #[test]
     fn fallback_to_default_region() {
         assert_eq!(
-            test_provider(&[("AWS_DEFAULT_REGION", "us-east-2")]).region(),
+            test_provider(&[("AWS_DEFAULT_REGION", "us-east-2")])
+                .region()
+                .now_or_never()
+                .expect("no polling"),
             Some(Region::new("us-east-2"))
         );
     }

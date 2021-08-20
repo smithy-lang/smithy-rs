@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::region::ProvideRegion;
+use aws_types::region::ChainProvider;
 use kms::{Client, Config, Error, Region, PKG_VERSION};
 use std::process;
 use structopt::StructOpt;
@@ -41,11 +41,9 @@ async fn main() -> Result<(), Error> {
         verbose,
     } = Opt::from_args();
 
-    let region = default_region
-        .as_ref()
-        .map(|region| Region::new(region.clone()))
-        .or_else(|| aws_types::region::default_provider().region())
-        .unwrap_or_else(|| Region::new("us-west-2"));
+    let region = ChainProvider::first_try(default_region.map(Region::new))
+        .or_default_provider()
+        .or_else(Region::new("us-west-2"));
 
     // Trap out-of-range-values:
     match length {
@@ -60,12 +58,12 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("KMS version: {}", PKG_VERSION);
-        println!("Region:      {:?}", &region);
+        println!("Region:      {:?}", region.region().await);
         println!("Length:      {}", &length);
         println!();
     }
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(conf);
 
     let resp = client

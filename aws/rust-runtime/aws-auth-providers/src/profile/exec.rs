@@ -10,7 +10,7 @@ use aws_auth::Credentials;
 use aws_hyper::{DynConnector, StandardClient};
 use aws_sdk_sts::operation::AssumeRole;
 use aws_sdk_sts::Config;
-use aws_types::region::{ProvideRegion, Region};
+use aws_types::region::Region;
 
 use crate::profile::repr::BaseProvider;
 use crate::profile::ProfileFileError;
@@ -93,7 +93,7 @@ impl ProviderChain {
     pub fn from_repr(
         fs: Fs,
         connector: &DynConnector,
-        region: &dyn ProvideRegion,
+        region: Option<Region>,
         repr: repr::ProfileChain,
         factory: &named::NamedProviderFactory,
     ) -> Result<Self, ProfileFileError> {
@@ -187,7 +187,7 @@ mod test {
         let chain = ProviderChain::from_repr(
             Default::default(),
             &stub_connector(),
-            &Region::new("us-east-1"),
+            Some(Region::new("us-east-1")),
             ProfileChain {
                 base: BaseProvider::NamedSource("floozle"),
                 chain: vec![],

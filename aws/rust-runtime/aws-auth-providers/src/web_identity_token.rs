@@ -37,7 +37,6 @@
 use aws_hyper::{DynConnector, StandardClient};
 use aws_sdk_sts::Region;
 use aws_types::os_shim_internal::{Env, Fs};
-use aws_types::region::ProvideRegion;
 
 use crate::{must_have_connector, sts_util};
 use aws_auth::provider::{AsyncProvideCredentials, BoxFuture, CredentialsError, CredentialsResult};
@@ -172,8 +171,8 @@ impl Builder {
         self
     }
 
-    pub fn region(mut self, region: &dyn ProvideRegion) -> Self {
-        self.region = region.region();
+    pub fn region(mut self, region: Option<Region>) -> Self {
+        self.region = region;
         self
     }
 
@@ -200,7 +199,7 @@ impl Builder {
 async fn load_credentials(
     fs: &Fs,
     client: &StandardClient,
-    region: &dyn ProvideRegion,
+    region: &Region,
     token_file: impl AsRef<Path>,
     role_arn: &str,
     session_name: &str,
@@ -211,11 +210,6 @@ async fn load_credentials(
         .map_err(|err| CredentialsError::ProviderError(err.into()))?;
     let token = String::from_utf8(token).map_err(|_utf_8_error| {
         CredentialsError::Unhandled("WebIdentityToken was not valid UTF-8".into())
-    })?;
-    let region = region.region().ok_or_else(|| {
-        CredentialsError::InvalidConfiguration(
-            "region is required for WebIdentityTokenProvider".into(),
-        )
     })?;
     let conf = aws_sdk_sts::Config::builder()
         .region(region.clone())
@@ -253,7 +247,7 @@ mod test {
         // empty environment
         let env = Env::from_slice(&[]);
         let provider = Builder::default()
-            .region(&Region::new("us-east-1"))
+            .region(Some(Region::new("us-east-1")))
             .env(env)
             .build();
         let err = provider
@@ -270,7 +264,7 @@ mod test {
     async fn missing_env_var() {
         let env = Env::from_slice(&[(ENV_VAR_TOKEN_FILE, "/token.jwt")]);
         let provider = Builder::default()
-            .region(&Region::new("us-east-1"))
+            .region(Some(Region::new("us-east-1")))
             .env(env)
             .build();
         let err = provider
@@ -297,7 +291,7 @@ mod test {
         ]);
         let fs = Fs::from_map(HashMap::new());
         let provider = Builder::default()
-            .region(&Region::new("us-east-1"))
+            .region(Some(Region::new("us-east-1")))
             .fs(fs)
             .env(env)
             .build();
