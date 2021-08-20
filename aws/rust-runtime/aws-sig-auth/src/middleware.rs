@@ -24,8 +24,10 @@ impl Signature {
     pub fn new(signature: String) -> Self {
         Self(signature)
     }
+}
 
-    pub fn as_str(&self) -> &str {
+impl AsRef<str> for Signature {
+    fn as_ref(&self) -> &str {
         &self.0
     }
 }

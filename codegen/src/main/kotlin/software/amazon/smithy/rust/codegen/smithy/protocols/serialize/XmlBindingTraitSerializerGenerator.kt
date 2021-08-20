@@ -121,7 +121,7 @@ class XmlBindingTraitSerializerGenerator(
                         let mut writer = #{XmlWriter}::new(&mut out);
                         ##[allow(unused_mut)]
                         let mut root = writer.start_el(${operationXmlName.dq()})${inputShape.xmlNamespace().apply()};
-                    """,
+                        """,
                         *codegenScope
                     )
                     serializeStructure(inputShape, xmlMembers, Ctx.Element("root", "&input"))
@@ -140,10 +140,9 @@ class XmlBindingTraitSerializerGenerator(
         val target = model.expectShape(member.target, StructureShape::class.java)
         return RuntimeType.forInlineFun(fnName, "xml_ser") {
             val t = symbolProvider.toSymbol(member).rustType().stripOuter<RustType.Option>().render(true)
-            it.rustBlock(
-                "pub fn $fnName(input: &$t) -> Result<#T, String>",
-
-                RuntimeType.sdkBody(runtimeConfig),
+            it.rustBlockTemplate(
+                "pub fn $fnName(input: &$t) -> std::result::Result<std::vec::Vec<u8>, String>",
+                *codegenScope
             ) {
                 rust("let mut out = String::new();")
                 // create a scope for writer. This ensure that writer has been dropped before returning the
@@ -156,7 +155,7 @@ class XmlBindingTraitSerializerGenerator(
                         let mut root = writer.start_el(${xmlIndex.payloadShapeName(member).dq()})${
                         target.xmlNamespace().apply()
                         };
-                    """,
+                        """,
                         *codegenScope
                     )
                     serializeStructure(
@@ -165,7 +164,7 @@ class XmlBindingTraitSerializerGenerator(
                         Ctx.Element("root", "&input")
                     )
                 }
-                rustTemplate("Ok(#{SdkBody}::from(out))", *codegenScope)
+                rustTemplate("Ok(out.into_bytes())", *codegenScope)
             }
         }
     }

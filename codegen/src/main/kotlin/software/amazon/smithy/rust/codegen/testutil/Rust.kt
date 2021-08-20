@@ -157,7 +157,12 @@ class TestWriterDelegator(fileManifest: FileManifest, symbolProvider: RustSymbol
     val baseDir: Path = fileManifest.baseDir
 }
 
-fun TestWriterDelegator.compileAndTest() {
+/**
+ * Setting `runClippy` to true can be helpful when debugging clippy failures, but
+ * should generally be set to false to avoid invalidating the Cargo cache between
+ * every unit test run.
+ */
+fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
     val stubModel = """
     namespace fake
     service Fake {
@@ -183,6 +188,9 @@ fun TestWriterDelegator.compileAndTest() {
         // cargo fmt errors are useless, ignore
     }
     "cargo test".runCommand(baseDir, mapOf("RUSTFLAGS" to "-A dead_code"))
+    if (runClippy) {
+        "cargo clippy".runCommand(baseDir)
+    }
 }
 
 // TODO: unify these test helpers a bit
