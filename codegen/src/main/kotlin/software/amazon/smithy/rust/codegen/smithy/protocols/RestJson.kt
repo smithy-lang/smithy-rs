@@ -42,7 +42,7 @@ class RestJson(private val protocolConfig: ProtocolConfig) : Protocol {
     private val runtimeConfig = protocolConfig.runtimeConfig
 
     override val httpBindingResolver: HttpBindingResolver =
-        HttpTraitHttpBindingResolver(protocolConfig.model, "application/json", "application/json")
+        HttpTraitHttpBindingResolver(protocolConfig.model, "application/json", "application/json", "application/json")
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 

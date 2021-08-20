@@ -53,7 +53,7 @@ open class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
     }
 
     override val httpBindingResolver: HttpBindingResolver =
-        HttpTraitHttpBindingResolver(protocolConfig.model, "application/xml", null)
+        HttpTraitHttpBindingResolver(protocolConfig.model, "application/xml", "application/xml", null)
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format =
         TimestampFormatTrait.Format.DATE_TIME

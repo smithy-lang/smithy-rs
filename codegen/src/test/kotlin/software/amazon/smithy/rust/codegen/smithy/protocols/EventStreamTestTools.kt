@@ -114,7 +114,8 @@ object EventStreamTestModels {
     data class TestCase(
         val protocolShapeId: String,
         val model: Model,
-        val contentType: String,
+        val requestContentType: String,
+        val responseContentType: String,
         val validTestStruct: String,
         val validMessageWithNoHeaderPayloadTraits: String,
         val validTestUnion: String,
@@ -132,7 +133,8 @@ object EventStreamTestModels {
                     TestCase(
                         protocolShapeId = "aws.protocols#restJson1",
                         model = restJson1(),
-                        contentType = "application/json",
+                        requestContentType = "application/json",
+                        responseContentType = "application/json",
                         validTestStruct = """{"someString":"hello","someInt":5}""",
                         validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
                         validTestUnion = """{"Foo":"hello"}""",
@@ -144,7 +146,8 @@ object EventStreamTestModels {
                     TestCase(
                         protocolShapeId = "aws.protocols#awsJson1_1",
                         model = awsJson11(),
-                        contentType = "application/x-amz-json-1.1",
+                        requestContentType = "application/x-amz-json-1.1",
+                        responseContentType = "application/x-amz-json-1.1",
                         validTestStruct = """{"someString":"hello","someInt":5}""",
                         validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
                         validTestUnion = """{"Foo":"hello"}""",
@@ -156,7 +159,8 @@ object EventStreamTestModels {
                     TestCase(
                         protocolShapeId = "aws.protocols#restXml",
                         model = restXml(),
-                        contentType = "text/xml",
+                        requestContentType = "application/xml",
+                        responseContentType = "application/xml",
                         validTestStruct = """
                             <TestStruct>
                                 <someString>hello</someString>
@@ -194,7 +198,8 @@ object EventStreamTestModels {
                     TestCase(
                         protocolShapeId = "aws.protocols#awsQuery",
                         model = awsQuery(),
-                        contentType = "application/x-www-form-urlencoded",
+                        requestContentType = "application/x-www-form-urlencoded",
+                        responseContentType = "text/xml",
                         validTestStruct = """
                             <TestStruct>
                                 <someString>hello</someString>
@@ -232,7 +237,8 @@ object EventStreamTestModels {
                     TestCase(
                         protocolShapeId = "aws.protocols#ec2Query",
                         model = ec2Query(),
-                        contentType = "application/x-www-form-urlencoded",
+                        requestContentType = "application/x-www-form-urlencoded",
+                        responseContentType = "text/xml",
                         validTestStruct = """
                             <TestStruct>
                                 <someString>hello</someString>

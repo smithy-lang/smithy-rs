@@ -137,7 +137,8 @@ class HttpBoundProtocolGenerator(
             runtimeConfig,
             symbolProvider,
             unionShape,
-            serializerGenerator
+            serializerGenerator,
+            httpBindingResolver.requestContentType(operationShape),
         ).render()
 
         // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the

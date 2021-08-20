@@ -177,7 +177,8 @@ class ResponseBindingGenerator(
             runtimeConfig,
             symbolProvider,
             operationShape,
-            target
+            target,
+            protocol.httpBindingResolver.responseContentType(operationShape),
         ).render()
         rustTemplate(
             """

@@ -37,11 +37,11 @@ class EventStreamUnmarshallerGeneratorTest {
             TestRuntimeConfig,
             test.symbolProvider,
             test.operationShape,
-            test.streamShape
+            test.streamShape,
+            testCase.responseContentType
         )
 
         test.project.lib { writer ->
-            // TODO(EventStream): Add test for bad content type
             writer.rust(
                 """
                 use smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
@@ -96,7 +96,7 @@ class EventStreamUnmarshallerGeneratorTest {
 
             writer.unitTest(
                 """
-                let message = msg("event", "MessageWithString", "application/octet-stream", b"hello, world!");
+                let message = msg("event", "MessageWithString", "text/plain", b"hello, world!");
                 let result = ${writer.format(generator.render())}().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
@@ -112,7 +112,7 @@ class EventStreamUnmarshallerGeneratorTest {
                 let message = msg(
                     "event",
                     "MessageWithStruct",
-                    "${testCase.contentType}",
+                    "${testCase.responseContentType}",
                     br#"${testCase.validTestStruct}"#
                 );
                 let result = ${writer.format(generator.render())}().unmarshall(&message);
@@ -135,7 +135,7 @@ class EventStreamUnmarshallerGeneratorTest {
                 let message = msg(
                     "event",
                     "MessageWithUnion",
-                    "${testCase.contentType}",
+                    "${testCase.responseContentType}",
                     br#"${testCase.validTestUnion}"#
                 );
                 let result = ${writer.format(generator.render())}().unmarshall(&message);
@@ -204,7 +204,7 @@ class EventStreamUnmarshallerGeneratorTest {
                 let message = msg(
                     "event",
                     "MessageWithNoHeaderPayloadTraits",
-                    "${testCase.contentType}",
+                    "${testCase.responseContentType}",
                     br#"${testCase.validMessageWithNoHeaderPayloadTraits}"#
                 );
                 let result = ${writer.format(generator.render())}().unmarshall(&message);
@@ -226,7 +226,7 @@ class EventStreamUnmarshallerGeneratorTest {
                 let message = msg(
                     "exception",
                     "SomeError",
-                    "${testCase.contentType}",
+                    "${testCase.responseContentType}",
                     br#"${testCase.validSomeError}"#
                 );
                 let result = ${writer.format(generator.render())}().unmarshall(&message);
@@ -244,7 +244,7 @@ class EventStreamUnmarshallerGeneratorTest {
                 let message = msg(
                     "exception",
                     "UnmodeledError",
-                    "${testCase.contentType}",
+                    "${testCase.responseContentType}",
                     br#"${testCase.validUnmodeledError}"#
                 );
                 let result = ${writer.format(generator.render())}().unmarshall(&message);
@@ -257,6 +257,21 @@ class EventStreamUnmarshallerGeneratorTest {
                 }
                 """,
                 "generic_error",
+            )
+
+            writer.unitTest(
+                """
+                let message = msg(
+                    "event",
+                    "MessageWithStruct",
+                    "wrong-content-type",
+                    br#"${testCase.validTestStruct}"#
+                );
+                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                assert!(result.is_err(), "expected error, got: {:?}", result);
+                assert!(format!("{}", result.err().unwrap()).contains("expected :content-type to be"));
+                """,
+                "bad_content_type",
             )
         }
         test.project.compileAndTest()

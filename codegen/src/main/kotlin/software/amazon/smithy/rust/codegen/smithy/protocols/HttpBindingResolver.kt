@@ -81,6 +81,11 @@ interface HttpBindingResolver {
      * Determines the request content type for given [operationShape].
      */
     fun requestContentType(operationShape: OperationShape): String
+
+    /**
+     * Determines the response content type for given [operationShape].
+     */
+    fun responseContentType(operationShape: OperationShape): String
 }
 
 /**
@@ -89,6 +94,7 @@ interface HttpBindingResolver {
 class HttpTraitHttpBindingResolver(
     model: Model,
     private val defaultRequestContentType: String,
+    private val defaultResponseContentType: String,
     private val documentRequestContentType: String?,
 ) : HttpBindingResolver {
     private val httpIndex: HttpBindingIndex = HttpBindingIndex.of(model)
@@ -115,6 +121,10 @@ class HttpTraitHttpBindingResolver(
         httpIndex.determineRequestContentType(operationShape, documentRequestContentType)
             .orElse(defaultRequestContentType)
 
+    override fun responseContentType(operationShape: OperationShape): String =
+        httpIndex.determineResponseContentType(operationShape, documentRequestContentType)
+            .orElse(defaultResponseContentType)
+
     // Sort the members after extracting them from the map to have a consistent order
     private fun mappedBindings(bindings: Map<String, HttpBinding>): List<HttpBindingDescriptor> =
         bindings.values.map(::HttpBindingDescriptor).sortedBy { it.memberName }
@@ -128,6 +138,7 @@ open class StaticHttpBindingResolver(
     private val model: Model,
     private val httpTrait: HttpTrait,
     private val requestContentType: String,
+    private val responseContentType: String,
 ) : HttpBindingResolver {
     private fun bindings(shape: ToShapeId?) =
         shape?.let { model.expectShape(it.toShapeId()) }?.members()
@@ -147,4 +158,6 @@ open class StaticHttpBindingResolver(
         bindings(errorShape)
 
     override fun requestContentType(operationShape: OperationShape): String = requestContentType
+
+    override fun responseContentType(operationShape: OperationShape): String = responseContentType
 }

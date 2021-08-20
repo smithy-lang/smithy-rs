@@ -49,7 +49,8 @@ class Ec2QueryProtocol(private val protocolConfig: ProtocolConfig) : Protocol {
             .method("POST")
             .uri(UriPattern.parse("/"))
             .build(),
-        "application/x-www-form-urlencoded"
+        "application/x-www-form-urlencoded",
+        "text/xml"
     )
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.DATE_TIME

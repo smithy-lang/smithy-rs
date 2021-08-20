@@ -74,7 +74,7 @@ class ResponseBindingGeneratorTest {
     private fun RustWriter.renderOperation() {
         operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
         rustBlock("impl PutObjectOutput") {
-            val bindings = HttpTraitHttpBindingResolver(model, "dont-care", "dont-care")
+            val bindings = HttpTraitHttpBindingResolver(model, "dont-care", "dont-care", "dont-care")
                 .responseBindings(operationShape)
                 .filter { it.location == HttpLocation.HEADER }
             bindings.forEach { binding ->

@@ -102,7 +102,7 @@ class JsonSerializerGeneratorTest {
         val symbolProvider = testSymbolProvider(model)
         val parserSerializer = JsonSerializerGenerator(
             testProtocolConfig(model),
-            HttpTraitHttpBindingResolver(model, "application/json", null)
+            HttpTraitHttpBindingResolver(model, "application/json", "application/json", null)
         )
         val operationGenerator = parserSerializer.operationSerializer(model.lookup("test#Op"))
         val documentGenerator = parserSerializer.documentSerializer()

@@ -49,7 +49,7 @@ private val awsQueryHttpTrait = HttpTrait.builder()
     .build()
 
 class AwsQueryBindingResolver(private val model: Model) :
-    StaticHttpBindingResolver(model, awsQueryHttpTrait, "application/x-www-form-urlencoded") {
+    StaticHttpBindingResolver(model, awsQueryHttpTrait, "application/x-www-form-urlencoded", "text/xml") {
     override fun errorCode(errorShape: ToShapeId): String {
         val error = model.expectShape(errorShape.toShapeId())
         return error.getTrait<AwsQueryErrorTrait>()?.code ?: errorShape.toShapeId().name

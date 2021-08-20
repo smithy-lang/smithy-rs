@@ -110,7 +110,7 @@ class JsonParserGeneratorTest {
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = JsonParserGenerator(
             testProtocolConfig(model),
-            HttpTraitHttpBindingResolver(model, "application/json", "application/json")
+            HttpTraitHttpBindingResolver(model, "application/json", "application/json", "application/json")
         )
         val operationGenerator = parserGenerator.operationParser(model.lookup("test#Op"))
         val documentGenerator = parserGenerator.documentParser(model.lookup("test#Op"))

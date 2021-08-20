@@ -37,6 +37,7 @@ class EventStreamMarshallerGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val unionShape: UnionShape,
     private val serializerGenerator: StructuredDataSerializerGenerator,
+    private val payloadContentType: String,
 ) {
     private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
     private val codegenScope = arrayOf(
@@ -135,8 +136,7 @@ class EventStreamMarshallerGenerator(
                 rust("inner.$memberName.${ctx.conversionFn}()")
             }
         } else {
-            // TODO(EventStream): Select content-type based on protocol
-            addStringHeader(":content-type", "\"TODO\".into()")
+            addStringHeader(":content-type", "${payloadContentType.dq()}.into()")
 
             val serializerFn = serializerGenerator.payloadSerializer(member)
             rustTemplate(

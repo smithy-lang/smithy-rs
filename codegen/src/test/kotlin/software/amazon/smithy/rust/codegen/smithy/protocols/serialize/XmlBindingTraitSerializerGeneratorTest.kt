@@ -107,7 +107,7 @@ internal class XmlBindingTraitSerializerGeneratorTest {
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = XmlBindingTraitSerializerGenerator(
             testProtocolConfig(model),
-            HttpTraitHttpBindingResolver(model, "application/xml", null)
+            HttpTraitHttpBindingResolver(model, "application/xml", "application/xml", null)
         )
         val operationParser = parserGenerator.payloadSerializer(model.lookup("test#OpInput\$payload"))
 

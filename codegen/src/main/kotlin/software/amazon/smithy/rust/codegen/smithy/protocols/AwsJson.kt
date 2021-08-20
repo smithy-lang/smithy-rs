@@ -82,6 +82,8 @@ class AwsJsonHttpBindingResolver(
 
     override fun requestContentType(operationShape: OperationShape): String =
         "application/x-amz-json-${awsJsonVersion.value}"
+
+    override fun responseContentType(operationShape: OperationShape): String = requestContentType(operationShape)
 }
 
 /**
