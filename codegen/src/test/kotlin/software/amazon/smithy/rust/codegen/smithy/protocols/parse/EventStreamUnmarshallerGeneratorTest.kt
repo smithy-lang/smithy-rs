@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.testutil.unitTest
 
 class EventStreamUnmarshallerGeneratorTest {
     @ParameterizedTest
-    @ArgumentsSource(EventStreamTestModels.ModelArgumentsProvider::class)
+    @ArgumentsSource(EventStreamTestModels.UnmarshallTestCasesProvider::class)
     fun test(testCase: EventStreamTestModels.TestCase) {
         val test = EventStreamTestTools.generateTestProject(testCase.model)
 

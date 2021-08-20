@@ -105,11 +105,13 @@ private fun fillInBaseModel(
 """
 
 object EventStreamTestModels {
-    fun restJson1(): Model = fillInBaseModel("restJson1").asSmithyModel()
-    fun restXml(): Model = fillInBaseModel("restXml").asSmithyModel()
-    fun awsJson11(): Model = fillInBaseModel("awsJson1_1").asSmithyModel()
-    fun awsQuery(): Model = fillInBaseModel("awsQuery", "@xmlNamespace(uri: \"https://example.com\")").asSmithyModel()
-    fun ec2Query(): Model = fillInBaseModel("ec2Query", "@xmlNamespace(uri: \"https://example.com\")").asSmithyModel()
+    private fun restJson1(): Model = fillInBaseModel("restJson1").asSmithyModel()
+    private fun restXml(): Model = fillInBaseModel("restXml").asSmithyModel()
+    private fun awsJson11(): Model = fillInBaseModel("awsJson1_1").asSmithyModel()
+    private fun awsQuery(): Model =
+        fillInBaseModel("awsQuery", "@xmlNamespace(uri: \"https://example.com\")").asSmithyModel()
+    private fun ec2Query(): Model =
+        fillInBaseModel("ec2Query", "@xmlNamespace(uri: \"https://example.com\")").asSmithyModel()
 
     data class TestCase(
         val protocolShapeId: String,
@@ -126,157 +128,176 @@ object EventStreamTestModels {
         override fun toString(): String = protocolShapeId
     }
 
-    class ModelArgumentsProvider : ArgumentsProvider {
+    private val testCases = listOf(
+        //
+        // restJson1
+        //
+        TestCase(
+            protocolShapeId = "aws.protocols#restJson1",
+            model = restJson1(),
+            requestContentType = "application/json",
+            responseContentType = "application/json",
+            validTestStruct = """{"someString":"hello","someInt":5}""",
+            validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
+            validTestUnion = """{"Foo":"hello"}""",
+            validSomeError = """{"Message":"some error"}""",
+            validUnmodeledError = """{"Message":"unmodeled error"}""",
+        ) { RestJson(it) },
+
+        //
+        // awsJson1_1
+        //
+        TestCase(
+            protocolShapeId = "aws.protocols#awsJson1_1",
+            model = awsJson11(),
+            requestContentType = "application/x-amz-json-1.1",
+            responseContentType = "application/x-amz-json-1.1",
+            validTestStruct = """{"someString":"hello","someInt":5}""",
+            validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
+            validTestUnion = """{"Foo":"hello"}""",
+            validSomeError = """{"Message":"some error"}""",
+            validUnmodeledError = """{"Message":"unmodeled error"}""",
+        ) { AwsJson(it, AwsJsonVersion.Json11) },
+
+        //
+        // restXml
+        //
+        TestCase(
+            protocolShapeId = "aws.protocols#restXml",
+            model = restXml(),
+            requestContentType = "application/xml",
+            responseContentType = "application/xml",
+            validTestStruct = """
+                        <TestStruct>
+                            <someString>hello</someString>
+                            <someInt>5</someInt>
+                        </TestStruct>
+            """.trimIndent(),
+            validMessageWithNoHeaderPayloadTraits = """
+                        <MessageWithNoHeaderPayloadTraits>
+                            <someString>hello</someString>
+                            <someInt>5</someInt>
+                        </MessageWithNoHeaderPayloadTraits>
+            """.trimIndent(),
+            validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
+            validSomeError = """
+                        <ErrorResponse>
+                            <Error>
+                                <Type>SomeError</Type>
+                                <Code>SomeError</Code>
+                                <Message>some error</Message>
+                            </Error>
+                        </ErrorResponse>
+            """.trimIndent(),
+            validUnmodeledError = """
+                        <ErrorResponse>
+                            <Error>
+                                <Type>UnmodeledError</Type>
+                                <Code>UnmodeledError</Code>
+                                <Message>unmodeled error</Message>
+                            </Error>
+                        </ErrorResponse>
+            """.trimIndent(),
+        ) { RestXml(it) },
+
+        //
+        // awsQuery
+        //
+        TestCase(
+            protocolShapeId = "aws.protocols#awsQuery",
+            model = awsQuery(),
+            requestContentType = "application/x-www-form-urlencoded",
+            responseContentType = "text/xml",
+            validTestStruct = """
+                        <TestStruct>
+                            <someString>hello</someString>
+                            <someInt>5</someInt>
+                        </TestStruct>
+            """.trimIndent(),
+            validMessageWithNoHeaderPayloadTraits = """
+                        <MessageWithNoHeaderPayloadTraits>
+                            <someString>hello</someString>
+                            <someInt>5</someInt>
+                        </MessageWithNoHeaderPayloadTraits>
+            """.trimIndent(),
+            validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
+            validSomeError = """
+                        <ErrorResponse>
+                            <Error>
+                                <Type>SomeError</Type>
+                                <Code>SomeError</Code>
+                                <Message>some error</Message>
+                            </Error>
+                        </ErrorResponse>
+            """.trimIndent(),
+            validUnmodeledError = """
+                        <ErrorResponse>
+                            <Error>
+                                <Type>UnmodeledError</Type>
+                                <Code>UnmodeledError</Code>
+                                <Message>unmodeled error</Message>
+                            </Error>
+                        </ErrorResponse>
+            """.trimIndent(),
+        ) { AwsQueryProtocol(it) },
+
+        //
+        // ec2Query
+        //
+        TestCase(
+            protocolShapeId = "aws.protocols#ec2Query",
+            model = ec2Query(),
+            requestContentType = "application/x-www-form-urlencoded",
+            responseContentType = "text/xml",
+            validTestStruct = """
+                        <TestStruct>
+                            <someString>hello</someString>
+                            <someInt>5</someInt>
+                        </TestStruct>
+            """.trimIndent(),
+            validMessageWithNoHeaderPayloadTraits = """
+                        <MessageWithNoHeaderPayloadTraits>
+                            <someString>hello</someString>
+                            <someInt>5</someInt>
+                        </MessageWithNoHeaderPayloadTraits>
+            """.trimIndent(),
+            validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
+            validSomeError = """
+                        <Response>
+                            <Errors>
+                                <Error>
+                                    <Type>SomeError</Type>
+                                    <Code>SomeError</Code>
+                                    <Message>some error</Message>
+                                </Error>
+                            </Errors>
+                        </Response>
+            """.trimIndent(),
+            validUnmodeledError = """
+                        <Response>
+                            <Errors>
+                                <Error>
+                                    <Type>UnmodeledError</Type>
+                                    <Code>UnmodeledError</Code>
+                                    <Message>unmodeled error</Message>
+                                </Error>
+                            </Errors>
+                        </Response>
+            """.trimIndent(),
+        ) { Ec2QueryProtocol(it) },
+    )
+
+    class UnmarshallTestCasesProvider : ArgumentsProvider {
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
-            Stream.of(
-                Arguments.of(
-                    TestCase(
-                        protocolShapeId = "aws.protocols#restJson1",
-                        model = restJson1(),
-                        requestContentType = "application/json",
-                        responseContentType = "application/json",
-                        validTestStruct = """{"someString":"hello","someInt":5}""",
-                        validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
-                        validTestUnion = """{"Foo":"hello"}""",
-                        validSomeError = """{"Message":"some error"}""",
-                        validUnmodeledError = """{"Message":"unmodeled error"}""",
-                    ) { RestJson(it) }
-                ),
-                Arguments.of(
-                    TestCase(
-                        protocolShapeId = "aws.protocols#awsJson1_1",
-                        model = awsJson11(),
-                        requestContentType = "application/x-amz-json-1.1",
-                        responseContentType = "application/x-amz-json-1.1",
-                        validTestStruct = """{"someString":"hello","someInt":5}""",
-                        validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
-                        validTestUnion = """{"Foo":"hello"}""",
-                        validSomeError = """{"Message":"some error"}""",
-                        validUnmodeledError = """{"Message":"unmodeled error"}""",
-                    ) { AwsJson(it, AwsJsonVersion.Json11) }
-                ),
-                Arguments.of(
-                    TestCase(
-                        protocolShapeId = "aws.protocols#restXml",
-                        model = restXml(),
-                        requestContentType = "application/xml",
-                        responseContentType = "application/xml",
-                        validTestStruct = """
-                            <TestStruct>
-                                <someString>hello</someString>
-                                <someInt>5</someInt>
-                            </TestStruct>
-                        """.trimIndent(),
-                        validMessageWithNoHeaderPayloadTraits = """
-                            <MessageWithNoHeaderPayloadTraits>
-                                <someString>hello</someString>
-                                <someInt>5</someInt>
-                            </MessageWithNoHeaderPayloadTraits>
-                        """.trimIndent(),
-                        validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
-                        validSomeError = """
-                            <ErrorResponse>
-                                <Error>
-                                    <Type>SomeError</Type>
-                                    <Code>SomeError</Code>
-                                    <Message>some error</Message>
-                                </Error>
-                            </ErrorResponse>
-                        """.trimIndent(),
-                        validUnmodeledError = """
-                            <ErrorResponse>
-                                <Error>
-                                    <Type>UnmodeledError</Type>
-                                    <Code>UnmodeledError</Code>
-                                    <Message>unmodeled error</Message>
-                                </Error>
-                            </ErrorResponse>
-                        """.trimIndent(),
-                    ) { RestXml(it) }
-                ),
-                Arguments.of(
-                    TestCase(
-                        protocolShapeId = "aws.protocols#awsQuery",
-                        model = awsQuery(),
-                        requestContentType = "application/x-www-form-urlencoded",
-                        responseContentType = "text/xml",
-                        validTestStruct = """
-                            <TestStruct>
-                                <someString>hello</someString>
-                                <someInt>5</someInt>
-                            </TestStruct>
-                        """.trimIndent(),
-                        validMessageWithNoHeaderPayloadTraits = """
-                            <MessageWithNoHeaderPayloadTraits>
-                                <someString>hello</someString>
-                                <someInt>5</someInt>
-                            </MessageWithNoHeaderPayloadTraits>
-                        """.trimIndent(),
-                        validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
-                        validSomeError = """
-                            <ErrorResponse>
-                                <Error>
-                                    <Type>SomeError</Type>
-                                    <Code>SomeError</Code>
-                                    <Message>some error</Message>
-                                </Error>
-                            </ErrorResponse>
-                        """.trimIndent(),
-                        validUnmodeledError = """
-                            <ErrorResponse>
-                                <Error>
-                                    <Type>UnmodeledError</Type>
-                                    <Code>UnmodeledError</Code>
-                                    <Message>unmodeled error</Message>
-                                </Error>
-                            </ErrorResponse>
-                        """.trimIndent(),
-                    ) { AwsQueryProtocol(it) }
-                ),
-                Arguments.of(
-                    TestCase(
-                        protocolShapeId = "aws.protocols#ec2Query",
-                        model = ec2Query(),
-                        requestContentType = "application/x-www-form-urlencoded",
-                        responseContentType = "text/xml",
-                        validTestStruct = """
-                            <TestStruct>
-                                <someString>hello</someString>
-                                <someInt>5</someInt>
-                            </TestStruct>
-                        """.trimIndent(),
-                        validMessageWithNoHeaderPayloadTraits = """
-                            <MessageWithNoHeaderPayloadTraits>
-                                <someString>hello</someString>
-                                <someInt>5</someInt>
-                            </MessageWithNoHeaderPayloadTraits>
-                        """.trimIndent(),
-                        validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
-                        validSomeError = """
-                            <Response>
-                                <Errors>
-                                    <Error>
-                                        <Type>SomeError</Type>
-                                        <Code>SomeError</Code>
-                                        <Message>some error</Message>
-                                    </Error>
-                                </Errors>
-                            </Response>
-                        """.trimIndent(),
-                        validUnmodeledError = """
-                            <Response>
-                                <Errors>
-                                    <Error>
-                                        <Type>UnmodeledError</Type>
-                                        <Code>UnmodeledError</Code>
-                                        <Message>unmodeled error</Message>
-                                    </Error>
-                                </Errors>
-                            </Response>
-                        """.trimIndent(),
-                    ) { Ec2QueryProtocol(it) }
-                ),
-            )
+            testCases.map { Arguments.of(it) }.stream()
+    }
+
+    class MarshallTestCasesProvider : ArgumentsProvider {
+        override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
+            // Don't include awsQuery or ec2Query for now since marshall support for them is unimplemented
+            testCases
+                .filter { testCase -> !testCase.protocolShapeId.contains("Query") }
+                .map { Arguments.of(it) }.stream()
     }
 }
 
@@ -319,8 +340,10 @@ object EventStreamTestTools {
         println("file:///${project.baseDir}/src/error.rs")
         println("file:///${project.baseDir}/src/event_stream.rs")
         println("file:///${project.baseDir}/src/event_stream_serde.rs")
+        println("file:///${project.baseDir}/src/json_ser.rs")
         println("file:///${project.baseDir}/src/lib.rs")
         println("file:///${project.baseDir}/src/model.rs")
+        println("file:///${project.baseDir}/src/operation_ser.rs")
         return TestEventStreamProject(model, serviceShape, operationShape, unionShape, symbolProvider, project)
     }
 

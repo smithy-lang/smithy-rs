@@ -8,10 +8,16 @@ package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
+import software.amazon.smithy.model.shapes.BooleanShape
+import software.amazon.smithy.model.shapes.ByteShape
+import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EventHeaderTrait
 import software.amazon.smithy.model.traits.EventPayloadTrait
@@ -22,15 +28,16 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
-// TODO(EventStream): [TEST] Unit test EventStreamMarshallerGenerator
 class EventStreamMarshallerGenerator(
     private val model: Model,
     runtimeConfig: RuntimeConfig,
@@ -90,7 +97,7 @@ class EventStreamMarshallerGenerator(
                         rustBlock("Self::Input::${member.memberName.toPascalCase()}(inner) => ") {
                             addStringHeader(":event-type", "${eventType.dq()}.into()")
                             val target = model.expectShape(member.target, StructureShape::class.java)
-                            serializeEvent(target)
+                            renderMarshallEvent(member, target)
                         }
                     }
                 }
@@ -99,21 +106,59 @@ class EventStreamMarshallerGenerator(
         }
     }
 
-    private fun RustWriter.serializeEvent(struct: StructureShape) {
-        for (member in struct.members()) {
+    private fun RustWriter.renderMarshallEvent(unionMember: MemberShape, struct: StructureShape) {
+        val headerMembers = struct.members().filter { it.hasTrait<EventHeaderTrait>() }
+        val payloadMember = struct.members().firstOrNull { it.hasTrait<EventPayloadTrait>() }
+        for (member in headerMembers) {
             val memberName = symbolProvider.toMemberName(member)
             val target = model.expectShape(member.target)
-            if (member.hasTrait<EventPayloadTrait>()) {
-                serializeUnionMember(memberName, member, target)
-            } else if (member.hasTrait<EventHeaderTrait>()) {
-                TODO("TODO(EventStream): Implement @eventHeader trait")
-            } else {
-                throw IllegalStateException("Event Stream members must be a header or payload")
+            renderMarshallEventHeader(memberName, member, target)
+        }
+        if (payloadMember != null) {
+            val memberName = symbolProvider.toMemberName(payloadMember)
+            val target = model.expectShape(payloadMember.target)
+            renderMarshallEventPayload("inner.$memberName", payloadMember, target)
+        } else if (headerMembers.isEmpty()) {
+            renderMarshallEventPayload("inner", unionMember, struct)
+        } else {
+            addStringHeader(":content-type", "application/octet-stream".dq() + ".into()")
+            rust("Vec::new()")
+        }
+    }
+
+    private fun RustWriter.renderMarshallEventHeader(memberName: String, member: MemberShape, target: Shape) {
+        val headerName = member.memberName
+        handleOptional(
+            symbolProvider.toSymbol(member).isOptional(),
+            "inner.$memberName",
+            "value",
+            { input -> renderAddHeader(headerName, input, target) },
+        )
+    }
+
+    private fun RustWriter.renderAddHeader(headerName: String, inputName: String, target: Shape) {
+        withBlock("headers.push(", ");") {
+            rustTemplate("#{Header}::new", *codegenScope)
+            withBlock("(", ")") {
+                rust("${headerName.dq()},")
+                rustTemplate("#{HeaderValue}::", *codegenScope)
+                when (target) {
+                    is BooleanShape -> rust("Bool($inputName)")
+                    is ByteShape -> rust("Byte($inputName)")
+                    is ShortShape -> rust("Int16($inputName)")
+                    is IntegerShape -> rust("Int32($inputName)")
+                    is LongShape -> rust("Int64($inputName)")
+                    is BlobShape -> rust("ByteArray($inputName.into_inner().into())")
+                    is StringShape -> rust("String($inputName.into())")
+                    is TimestampShape -> rust("Timestamp($inputName)")
+                    else -> throw IllegalStateException("unsupported event stream header shape type: $target")
+                }
             }
         }
     }
 
-    private fun RustWriter.serializeUnionMember(memberName: String, member: MemberShape, target: Shape) {
+    private fun RustWriter.renderMarshallEventPayload(inputExpr: String, member: MemberShape, target: Shape) {
+        val optional = symbolProvider.toSymbol(member).isOptional()
         if (target is BlobShape || target is StringShape) {
             data class PayloadContext(val conversionFn: String, val contentType: String)
             val ctx = when (target) {
@@ -122,31 +167,54 @@ class EventStreamMarshallerGenerator(
                 else -> throw IllegalStateException("unreachable")
             }
             addStringHeader(":content-type", "${ctx.contentType.dq()}.into()")
-            if (member.isOptional) {
-                rust(
-                    """
-                    if let Some(inner_payload) = inner.$memberName {
-                        inner_payload.${ctx.conversionFn}()
-                    } else {
-                        Vec::new()
-                    }
-                    """
-                )
-            } else {
-                rust("inner.$memberName.${ctx.conversionFn}()")
-            }
+            handleOptional(
+                optional,
+                inputExpr,
+                "inner_payload",
+                { input -> rust("$input.${ctx.conversionFn}()") },
+                { rust("Vec::new()") }
+            )
         } else {
             addStringHeader(":content-type", "${payloadContentType.dq()}.into()")
 
             val serializerFn = serializerGenerator.payloadSerializer(member)
-            rustTemplate(
-                """
-                        #{serializerFn}(&inner.$memberName)
+            handleOptional(
+                optional,
+                inputExpr,
+                "inner_payload",
+                { input ->
+                    rustTemplate(
+                        """
+                        #{serializerFn}(&$input)
                             .map_err(|err| #{Error}::Marshalling(format!("{}", err)))?
                         """,
-                "serializerFn" to serializerFn,
-                *codegenScope
+                        "serializerFn" to serializerFn,
+                        *codegenScope
+                    )
+                },
+                { rust("unimplemented!(\"TODO(EventStream): Figure out what to do when there's no payload\")") }
             )
+        }
+    }
+
+    private fun RustWriter.handleOptional(
+        optional: Boolean,
+        inputExpr: String,
+        someName: String,
+        writeSomeCase: RustWriter.(String) -> Unit,
+        writeNoneCase: (RustWriter.() -> Unit)? = null,
+    ) {
+        if (optional) {
+            rustBlock("if let Some($someName) = $inputExpr") {
+                writeSomeCase(someName)
+            }
+            if (writeNoneCase != null) {
+                rustBlock(" else ") {
+                    writeNoneCase()
+                }
+            }
+        } else {
+            writeSomeCase(inputExpr)
         }
     }
 
