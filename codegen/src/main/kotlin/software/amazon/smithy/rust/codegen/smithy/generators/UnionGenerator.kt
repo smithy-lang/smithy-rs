@@ -24,12 +24,12 @@ class UnionGenerator(
     private val writer: RustWriter,
     private val shape: UnionShape
 ) {
+    private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
 
     fun render() {
         renderUnion()
     }
 
-    private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
     private fun renderUnion() {
         val unionSymbol = symbolProvider.toSymbol(shape)
         val containerMeta = unionSymbol.expectRustMetadata()

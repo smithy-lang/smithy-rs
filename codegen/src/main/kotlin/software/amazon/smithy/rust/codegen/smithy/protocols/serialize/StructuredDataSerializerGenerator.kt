@@ -11,30 +11,30 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
 interface StructuredDataSerializerGenerator {
     /**
-     * Generate a parse function for a given targeted as a payload.
-     * Entry point for payload-based parsing.
-     * Roughly:
+     * Generate a serializer for a request payload. Expected signature:
      * ```rust
+     * fn serialize_some_payload(input: &PayloadSmithyType) -> Result<Vec<u8>, Error> {
+     *     ...
+     * }
      * ```
      */
     fun payloadSerializer(member: MemberShape): RuntimeType
 
-    /** Generate a serializer for operation input
-     * Because only a subset of fields of the operation may be impacted by the document, a builder is passed
-     * through:
-     *
+    /**
+     * Generate a serializer for an operation input.
      * ```rust
-     * fn parse_some_operation(inp: &[u8], builder: my_operation::Builder) -> Result<my_operation::Builder, XmlError> {
-     *   ...
+     * fn serialize_some_operation(input: &SomeSmithyType) -> Result<SdkBody, Error> {
+     *     ...
      * }
      * ```
      */
     fun operationSerializer(operationShape: OperationShape): RuntimeType?
 
     /**
+     * Generate a serializer for a document.
      * ```rust
-     * fn parse_document(inp: &[u8]) -> Result<Document, Error> {
-     *   ...
+     * fn serialize_document(input: &Document) -> Result<SdkBody, Error> {
+     *     ...
      * }
      * ```
      */

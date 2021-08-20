@@ -20,17 +20,13 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGene
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 
 class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
     override fun buildProtocolGenerator(
         protocolConfig: ProtocolConfig
     ): HttpBoundProtocolGenerator = HttpBoundProtocolGenerator(protocolConfig, RestJson(protocolConfig))
 
-    override fun transformModel(model: Model): Model {
-        return OperationNormalizer(model).transformModel().let(RemoveEventStreamOperations::transform)
-    }
+    override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(

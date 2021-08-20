@@ -80,7 +80,7 @@ class Ec2QuerySerializerGeneratorTest {
 
     @Test
     fun `generates valid serializers`() {
-        val model = RecursiveShapeBoxer.transform(OperationNormalizer(baseModel).transformModel())
+        val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = Ec2QuerySerializerGenerator(testProtocolConfig(model))
         val operationGenerator = parserGenerator.operationSerializer(model.lookup("test#Op"))

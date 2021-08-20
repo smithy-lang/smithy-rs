@@ -7,6 +7,7 @@ vNext (Month Day, Year)
 
 **New this week**
 
+- (When complete) Add Event Stream support (#653, #xyz)
 - (When complete) Add profile file provider for region (#594, #xyz)
 
 
