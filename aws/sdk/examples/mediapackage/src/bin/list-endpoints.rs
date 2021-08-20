@@ -4,7 +4,7 @@
  */
 
 /// Lists your AWS Elemental MediaPackage endpoint URLs.
-use aws_types::region::{ChainProvider, ProvideRegion};
+use aws_types::region::ChainProvider;
 use mediapackage::{Client, Config, Error, Region, PKG_VERSION};
 use structopt::StructOpt;
 
@@ -47,7 +47,7 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let conf = Config::builder().region(region).build().await;
+    let conf = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(conf);
 
     let or_endpoints = client.list_origin_endpoints().send().await?;

@@ -8,7 +8,7 @@ use aws_sdk_dynamodb::model::{
 };
 use aws_sdk_dynamodb::{Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region;
-use aws_types::region::ProvideRegion;
+
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -47,7 +47,7 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let conf = Config::builder().region(region).build().await;
+    let conf = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(conf);
 
     let tables = client.list_tables().send().await?;

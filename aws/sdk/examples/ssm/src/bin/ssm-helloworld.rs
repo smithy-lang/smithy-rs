@@ -71,7 +71,7 @@ async fn main() {
         tracing_subscriber::fmt::init();
     }
 
-    let config = Config::builder().region(region).build().await;
+    let config = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(config);
 
     match client

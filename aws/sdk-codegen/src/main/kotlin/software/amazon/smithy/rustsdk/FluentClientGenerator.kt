@@ -115,7 +115,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                 """
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub async fn from_env() -> Self {
-                    Self::from_conf(crate::Config::builder().build().await)
+                    Self::from_conf(crate::Config::builder().build())
                 }
 
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]

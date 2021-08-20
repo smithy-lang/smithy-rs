@@ -7,7 +7,7 @@ use std::process;
 
 use ssm::{Client, Config, Region};
 
-use aws_types::region::{EnvironmentProvider, ProvideRegion};
+use aws_types::region;
 
 use structopt::StructOpt;
 
@@ -33,20 +33,19 @@ struct Opt {
 async fn main() {
     let Opt { region, verbose } = Opt::from_args();
 
-    let region = EnvironmentProvider::new()
-        .region()
-        .await
-        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
-        .unwrap_or_else(|| Region::new("us-west-2"));
+    let region_provider = region::ChainProvider::first_try(region.map(Region::new))
+        .or_default_provider()
+        .or_else(Region::new("us-west-2"));
+    let region = region_provider.region().await;
 
     if verbose {
         println!("SSM client version:   {}", ssm::PKG_VERSION);
-        println!("Region:               {:?}", region.region().await);
+        println!("Region:               {:?}", region.as_ref().unwrap());
 
         tracing_subscriber::fmt::init();
     }
 
-    let config = Config::builder().region(region).build().await;
+    let config = Config::builder().region(region).build();
     let client = Client::from_conf(config);
 
     println!("Parameter names:");

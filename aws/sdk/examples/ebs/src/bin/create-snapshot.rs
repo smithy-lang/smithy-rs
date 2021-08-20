@@ -6,7 +6,7 @@
 use aws_sdk_ebs::model::ChecksumAlgorithm;
 use aws_sdk_ebs::{ByteStream, Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region;
-use aws_types::region::ProvideRegion;
+
 use sha2::Digest;
 use structopt::StructOpt;
 
@@ -59,7 +59,7 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let config = Config::builder().region(region).build().await;
+    let config = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(config);
 
     let snapshot = client

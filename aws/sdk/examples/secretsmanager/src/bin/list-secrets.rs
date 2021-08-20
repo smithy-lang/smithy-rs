@@ -54,7 +54,7 @@ async fn main() {
             .init();
     }
 
-    let config = Config::builder().region(region).build().await;
+    let config = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(config);
 
     match client.list_secrets().send().await {

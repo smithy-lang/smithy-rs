@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::region::{ChainProvider, ProvideRegion};
+use aws_types::region::ChainProvider;
 
 use sagemaker::{Client, Config, Region};
 
@@ -46,7 +46,7 @@ async fn main() -> Result<(), sagemaker::Error> {
         println!();
     }
 
-    let conf = Config::builder().region(region).build().await;
+    let conf = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(conf);
     let job_details = client.list_training_jobs().send().await?;
 

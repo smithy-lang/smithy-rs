@@ -6,7 +6,7 @@
 use aws_sdk_s3::model::{BucketLocationConstraint, CreateBucketConfiguration};
 use aws_sdk_s3::{Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region;
-use aws_types::region::ProvideRegion;
+
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -58,7 +58,7 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let conf = Config::builder().region(region).build().await;
+    let conf = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(conf);
 
     let constraint = BucketLocationConstraint::from(r_str);

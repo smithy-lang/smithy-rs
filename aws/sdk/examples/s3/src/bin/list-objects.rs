@@ -7,7 +7,7 @@ use aws_sdk_s3::{Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region;
 
 use aws_auth_providers::DefaultProviderChain;
-use aws_types::region::ProvideRegion;
+
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -43,21 +43,19 @@ async fn main() -> Result<(), Error> {
         verbose,
     } = Opt::from_args();
 
-    let region = region::ChainProvider::first_try(region.map(Region::new))
+    let region_provider = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
+    let region = region_provider.region().await.expect("fallback exists");
 
     println!();
     let credential_provider = DefaultProviderChain::builder()
-        .region(region.region().await.expect("require required"))
+        .region(region.clone())
         .build();
 
     if verbose {
         println!("S3 client version: {}", PKG_VERSION);
-        println!(
-            "Region:            {}",
-            region.region().await.unwrap().as_ref()
-        );
+        println!("Region:            {}", region);
         println!("Bucket:            {}", &bucket);
         println!();
     }
@@ -65,8 +63,7 @@ async fn main() -> Result<(), Error> {
     let config = Config::builder()
         .region(region)
         .credentials_provider(credential_provider)
-        .build()
-        .await;
+        .build();
 
     let client = Client::from_conf(config);
 

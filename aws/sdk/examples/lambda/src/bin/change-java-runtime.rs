@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::region::{self, ProvideRegion};
+use aws_types::region::{self};
 use lambda::model::Runtime;
 use lambda::{Client, Config, Error, Region, PKG_VERSION};
 use structopt::StructOpt;
@@ -44,20 +44,18 @@ async fn main() -> Result<(), Error> {
     let region_provider = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
+    let region = region_provider.region().await;
 
     println!();
 
     if verbose {
         println!("Lambda version:      {}", PKG_VERSION);
-        println!(
-            "Region:              {}",
-            region_provider.region().await.unwrap().as_ref()
-        );
+        println!("Region:              {}", region.as_ref().unwrap());
         println!("Lambda function ARN: {}", &arn);
         println!();
     }
 
-    let config = Config::builder().region(region_provider).build().await;
+    let config = Config::builder().region(region).build();
     let client = Client::from_conf(config);
 
     // Get function's runtime

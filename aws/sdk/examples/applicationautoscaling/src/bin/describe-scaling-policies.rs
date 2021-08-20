@@ -5,7 +5,7 @@
 
 use applicationautoscaling::model::ServiceNamespace;
 use applicationautoscaling::{Client, Config, Error, Region};
-use aws_types::region::{self, ProvideRegion};
+use aws_types::region::{self};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -35,20 +35,18 @@ async fn main() -> Result<(), Error> {
     let region_provider = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
+    let region = region_provider.region().await;
 
     if verbose {
         println!(
             "Application Auto Scaling client version: {}",
             applicationautoscaling::PKG_VERSION
         );
-        println!(
-            "Region:                                  {:?}",
-            region_provider.region().await
-        );
+        println!("Region:                                  {:?}", region);
         println!();
     }
 
-    let config = Config::builder().region(region_provider).build().await;
+    let config = Config::builder().region(region).build();
     let client = Client::from_conf(config);
 
     let response = client

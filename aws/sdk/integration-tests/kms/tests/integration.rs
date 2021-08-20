@@ -39,8 +39,7 @@ async fn generate_random_cn() {
     let conf = Config::builder()
         .region(Region::new("cn-north-1"))
         .credentials_provider(creds)
-        .build()
-        .await;
+        .build();
     let client = kms::Client::from_conf_conn(conf, conn.clone());
     let _ = client
         .generate_random()
@@ -83,8 +82,7 @@ async fn generate_random() {
     let conf = Config::builder()
         .region(Region::new("us-east-1"))
         .credentials_provider(creds)
-        .build()
-        .await;
+        .build();
     let mut op = GenerateRandom::builder()
         .number_of_bytes(64)
         .build()
@@ -129,8 +127,7 @@ async fn generate_random_malformed_response() {
     let conf = Config::builder()
         .region(Region::new("us-east-1"))
         .credentials_provider(creds)
-        .build()
-        .await;
+        .build();
     let op = GenerateRandom::builder()
         .number_of_bytes(64)
         .build()

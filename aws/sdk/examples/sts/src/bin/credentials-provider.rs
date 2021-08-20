@@ -5,6 +5,8 @@
 
 use aws_auth::provider::lazy_caching::LazyCachingCredentialsProvider;
 use aws_auth::provider::{async_provide_credentials_fn, CredentialsError};
+use aws_types::region::ProvideRegion;
+
 use sts::Credentials;
 
 /// Implements a basic version of ProvideCredentials with AWS STS
@@ -44,8 +46,8 @@ async fn main() -> Result<(), dynamodb::Error> {
 
     let dynamodb_conf = dynamodb::Config::builder()
         .credentials_provider(sts_provider)
-        .build()
-        .await;
+        .region(aws_types::region::default_provider().region().await)
+        .build();
 
     let client = dynamodb::Client::from_conf(dynamodb_conf);
     println!("tables: {:?}", client.list_tables().send().await?);

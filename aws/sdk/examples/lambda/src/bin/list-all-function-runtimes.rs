@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::region::{self, ProvideRegion};
+use aws_types::region;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -21,7 +21,7 @@ struct Opt {
 async fn show_lambdas(verbose: bool, reg: String) {
     let r = reg.clone();
     let region = lambda::Region::new(reg);
-    let config = lambda::Config::builder().region(region).build().await;
+    let config = lambda::Config::builder().region(region).build();
     let client = lambda::Client::from_conf(config);
 
     let resp = client.list_functions().send().await;
@@ -55,21 +55,19 @@ async fn main() -> Result<(), lambda::Error> {
     let region_provider = region::ChainProvider::first_try(region.map(ec2::Region::new))
         .or_default_provider()
         .or_else(ec2::Region::new("us-west-2"));
+    let region = region_provider.region().await;
 
     println!();
 
     if verbose {
         println!("EC2 client version:    {}", ec2::PKG_VERSION);
         println!("Lambda client version: {}", lambda::PKG_VERSION);
-        println!(
-            "Region:                {:?}",
-            region_provider.region().await.unwrap().as_ref()
-        );
+        println!("Region:                {:?}", region.as_ref().unwrap());
         println!();
     }
 
     // Get list of available regions.
-    let config = ec2::Config::builder().region(region_provider).build().await;
+    let config = ec2::Config::builder().region(region).build();
     let ec2_client = ec2::Client::from_conf(config);
     let resp = ec2_client.describe_regions().send().await;
 

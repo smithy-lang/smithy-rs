@@ -6,8 +6,7 @@ async fn main() -> Result<(), batch::Error> {
 
     let conf = batch::Config::builder()
         .region(Region::new("us-east-2"))
-        .build()
-        .await;
+        .build();
     let client = batch::Client::from_conf(conf);
     let rsp = client.describe_compute_environments().send().await?;
 

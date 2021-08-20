@@ -5,6 +5,7 @@
 
 use crate::os_shim_internal::Env;
 use std::borrow::Cow;
+use std::fmt::{Display, Formatter};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -30,6 +31,12 @@ impl AsRef<str> for Region {
     }
 }
 
+impl Display for Region {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl Region {
     pub fn new(region: impl Into<Cow<'static, str>>) -> Self {
         Self(region.into())
@@ -44,7 +51,7 @@ pub struct ChainProvider {
 }
 
 impl ChainProvider {
-    async fn load_region(&self) -> Option<Region> {
+    pub async fn region(&self) -> Option<Region> {
         for provider in &self.providers {
             if let Some(region) = provider.region().await {
                 return Some(region);
@@ -91,7 +98,7 @@ impl ProvideRegion for Option<Region> {
 
 impl ProvideRegion for ChainProvider {
     fn region(&self) -> RegionFuture {
-        RegionFuture::new(self.load_region())
+        RegionFuture::new(self.region())
     }
 }
 

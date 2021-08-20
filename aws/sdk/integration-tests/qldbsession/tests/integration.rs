@@ -48,8 +48,7 @@ async fn signv4_use_correct_service_name() {
     let conf = Config::builder()
         .region(Region::new("us-east-1"))
         .credentials_provider(creds)
-        .build()
-        .await;
+        .build();
 
     let mut op = SendCommand::builder()
         .start_session(

@@ -5,7 +5,7 @@
 
 use aws_sdk_cloudformation::{Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region;
-use aws_types::region::ProvideRegion;
+
 use std::fs;
 use structopt::StructOpt;
 
@@ -67,7 +67,7 @@ async fn main() -> Result<(), Error> {
     let contents =
         fs::read_to_string(template_file).expect("Something went wrong reading the file");
 
-    let conf = Config::builder().region(region).build().await;
+    let conf = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(conf);
 
     client

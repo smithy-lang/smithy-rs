@@ -1,5 +1,5 @@
 use aws_types::region;
-use aws_types::region::ProvideRegion;
+
 use config::model::ResourceType;
 use config::{Client, Config, Error, Region};
 use structopt::StructOpt;
@@ -54,7 +54,7 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let conf = Config::builder().region(region).build().await;
+    let conf = Config::builder().region(region.region().await).build();
     // parse resource type from user input
     let parsed = ResourceType::from(resource_type.as_str());
     if matches!(parsed, ResourceType::Unknown(_)) {

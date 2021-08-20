@@ -5,7 +5,7 @@
 
 use route53::{Client, Config, Region};
 
-use aws_types::region::{self, ProvideRegion};
+use aws_types::region::{self};
 
 use structopt::StructOpt;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -50,7 +50,7 @@ async fn main() -> Result<(), route53::Error> {
             .init();
     }
 
-    let conf = Config::builder().region(region).build().await;
+    let conf = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(conf);
     let hosted_zone_count = client.get_hosted_zone_count().send().await?;
 

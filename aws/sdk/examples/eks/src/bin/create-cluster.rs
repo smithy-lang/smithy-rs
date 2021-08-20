@@ -40,7 +40,9 @@ async fn main() -> Result<(), aws_sdk_eks::Error> {
     let region = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
-    let conf = aws_sdk_eks::Config::builder().region(region).build().await;
+    let conf = aws_sdk_eks::Config::builder()
+        .region(region.region().await)
+        .build();
     let client = aws_sdk_eks::Client::from_conf(conf);
     let cluster = client
         .create_cluster()

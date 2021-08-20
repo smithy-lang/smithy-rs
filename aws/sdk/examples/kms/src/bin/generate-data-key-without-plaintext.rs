@@ -2,7 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-use aws_types::region::{ChainProvider, ProvideRegion};
+use aws_types::region::ChainProvider;
 use kms::model::DataKeySpec;
 use kms::{Client, Config, Error, Region, PKG_VERSION};
 use structopt::StructOpt;
@@ -53,7 +53,7 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let conf = Config::builder().region(region).build().await;
+    let conf = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(conf);
 
     let resp = client
