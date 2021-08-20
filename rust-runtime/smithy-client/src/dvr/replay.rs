@@ -4,7 +4,7 @@
  */
 
 use crate::dvr::{Action, ConnectionId, Direction, Event};
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use http::{Request, Version};
 use http_body::Body;
 use smithy_http::body::SdkBody;
@@ -17,7 +17,8 @@ use std::task::{Context, Poll};
 /// Replay traffic recorded by a [`RecordingConnection`](super::RecordingConnection)
 #[derive(Clone, Debug)]
 pub struct ReplayingConnection {
-    events: Arc<Mutex<HashMap<ConnectionId, VecDeque<Event>>>>,
+    live_events: Arc<Mutex<HashMap<ConnectionId, VecDeque<Event>>>>,
+    verifiable_events: Arc<HashMap<ConnectionId, Request<Bytes>>>,
     num_events: Arc<AtomicUsize>,
     recorded_requests: Arc<Mutex<HashMap<ConnectionId, http::Request<Bytes>>>>,
 }
@@ -25,6 +26,50 @@ pub struct ReplayingConnection {
 impl ReplayingConnection {
     fn next_id(&self) -> ConnectionId {
         ConnectionId(self.num_events.fetch_add(1, Ordering::Relaxed))
+    }
+
+    /// Validate actual requests against expected requests
+    pub fn validate(
+        self,
+        checked_headers: &[&str],
+        body_comparer: impl Fn(&[u8], &[u8]) -> Result<(), Box<dyn Error>>,
+    ) -> Result<(), Box<dyn Error>> {
+        let actual_requests = self.recorded_requests.lock().unwrap();
+        for conn_id in 0..self.verifiable_events.len() {
+            let conn_id = ConnectionId(conn_id);
+            let expected = self.verifiable_events.get(&conn_id).unwrap();
+            let actual = actual_requests.get(&conn_id).ok_or(format!(
+                "expected connection {:?} but request was never sent",
+                conn_id
+            ))?;
+            if actual.uri() != expected.uri() {
+                return Err(format!(
+                    "URI did not match. Expected: {}. Found: {}",
+                    expected.uri(),
+                    actual.uri()
+                )
+                .into());
+            }
+            body_comparer(expected.body().as_ref(), actual.body().as_ref())?;
+            let expected_headers = checked_headers
+                .iter()
+                .flat_map(|key| {
+                    let _ = expected.headers().get(*key)?;
+                    Some((
+                        *key,
+                        expected
+                            .headers()
+                            .get_all(*key)
+                            .iter()
+                            .map(|h| h.to_str().unwrap())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    ))
+                })
+                .collect::<Vec<_>>();
+            protocol_test_helpers::validate_headers(actual, expected_headers.as_slice())?;
+        }
+        Ok(())
     }
 
     /// Return all the recorded requests for further analysis
@@ -48,10 +93,36 @@ impl ReplayingConnection {
             let event_buffer = event_map.entry(event.connection_id).or_default();
             event_buffer.push_back(event);
         }
+        let verifiable_events = event_map
+            .iter()
+            .map(|(id, events)| {
+                let mut body = BytesMut::new();
+                for event in events {
+                    if let Action::Data {
+                        direction: Direction::Request,
+                        data,
+                    } = &event.action
+                    {
+                        body.extend_from_slice(&data.copy_to_vec());
+                    }
+                }
+                let initial_request = events.iter().next().expect("must have one event");
+                let request = match &initial_request.action {
+                    Action::Request { request } => {
+                        http::Request::from(request).map(|_| Bytes::from(body))
+                    }
+                    _ => panic!("invalid first event"),
+                };
+                (*id, request)
+            })
+            .collect();
+        let verifiable_events = Arc::new(verifiable_events);
+
         ReplayingConnection {
-            events: Arc::new(Mutex::new(event_map)),
+            live_events: Arc::new(Mutex::new(event_map)),
             num_events: Arc::new(AtomicUsize::new(0)),
             recorded_requests: Default::default(),
+            verifiable_events,
         }
     }
 }
@@ -122,7 +193,7 @@ impl tower::Service<http::Request<SdkBody>> for ReplayingConnection {
     fn call(&mut self, mut req: Request<SdkBody>) -> Self::Future {
         let event_id = self.next_id();
         let mut events = self
-            .events
+            .live_events
             .lock()
             .unwrap()
             .remove(&event_id)
