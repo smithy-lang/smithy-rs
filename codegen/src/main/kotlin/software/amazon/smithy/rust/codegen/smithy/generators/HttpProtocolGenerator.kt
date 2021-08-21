@@ -195,7 +195,7 @@ abstract class HttpProtocolGenerator(
         ) {
             withBlock("Ok({", "})") {
                 features.forEach { it.section(OperationSection.MutateInput("self", "_config"))(this) }
-                rust("let properties = std::sync::Arc::new(std::sync::Mutex::new(smithy_http::property_bag::PropertyBag::new()));")
+                rust("let properties = smithy_http::property_bag::SharedPropertyBag::new();")
                 rust("let request = self.request_builder_base()?;")
                 withBlock("let body =", ";") {
                     body("self", shape)

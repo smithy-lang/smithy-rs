@@ -10,19 +10,18 @@ use aws_sigv4::SigningParams;
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
 use smithy_eventstream::frame::{Message, SignMessage, SignMessageError};
-use smithy_http::property_bag::PropertyBag;
-use std::sync::{Arc, Mutex, MutexGuard};
+use smithy_http::property_bag::SharedPropertyBag;
 use std::time::SystemTime;
 
 /// Event Stream SigV4 signing implementation.
 #[derive(Debug)]
 pub struct SigV4Signer {
-    properties: Arc<Mutex<PropertyBag>>,
+    properties: SharedPropertyBag,
     last_signature: Option<String>,
 }
 
 impl SigV4Signer {
-    pub fn new(properties: Arc<Mutex<PropertyBag>>) -> Self {
+    pub fn new(properties: SharedPropertyBag) -> Self {
         Self {
             properties,
             last_signature: None,
@@ -32,17 +31,17 @@ impl SigV4Signer {
 
 impl SignMessage for SigV4Signer {
     fn sign(&mut self, message: Message) -> Result<Message, SignMessageError> {
-        let properties = PropertyAccessor(self.properties.lock().unwrap());
+        let properties = self.properties.acquire();
         if self.last_signature.is_none() {
             // The Signature property should exist in the property bag for all Event Stream requests.
-            self.last_signature = Some(properties.expect::<Signature>().as_ref().into())
+            self.last_signature = Some(properties.get::<Signature>().unwrap().as_ref().into())
         }
 
         // Every single one of these values would have been retrieved during the initial request,
         // so we can safely assume they all exist in the property bag at this point.
-        let credentials = properties.expect::<Credentials>();
-        let region = properties.expect::<SigningRegion>();
-        let signing_service = properties.expect::<SigningService>();
+        let credentials = properties.get::<Credentials>().unwrap();
+        let region = properties.get::<SigningRegion>().unwrap();
+        let signing_service = properties.get::<SigningService>().unwrap();
         let time = properties
             .get::<SystemTime>()
             .copied()
@@ -65,21 +64,6 @@ impl SignMessage for SigV4Signer {
     }
 }
 
-// TODO(EventStream): Make a new type around `Arc<Mutex<PropertyBag>>` called `SharedPropertyBag`
-// and abstract the mutex away entirely.
-struct PropertyAccessor<'a>(MutexGuard<'a, PropertyBag>);
-
-impl<'a> PropertyAccessor<'a> {
-    fn get<T: Send + Sync + 'static>(&self) -> Option<&T> {
-        self.0.get::<T>()
-    }
-
-    fn expect<T: Send + Sync + 'static>(&self) -> &T {
-        self.get::<T>()
-            .expect("property should have been inserted into property bag via middleware")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::event_stream::SigV4Signer;
@@ -89,8 +73,7 @@ mod tests {
     use aws_types::region::SigningRegion;
     use aws_types::SigningService;
     use smithy_eventstream::frame::{HeaderValue, Message, SignMessage};
-    use smithy_http::property_bag::PropertyBag;
-    use std::sync::{Arc, Mutex};
+    use smithy_http::property_bag::SharedPropertyBag;
     use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
@@ -104,7 +87,7 @@ mod tests {
         properties.insert(SigningRegion::from(region));
         properties.insert(Signature::new("initial-signature".into()));
 
-        let mut signer = SigV4Signer::new(Arc::new(Mutex::new(properties)));
+        let mut signer = SigV4Signer::new(properties.into());
         let mut signatures = Vec::new();
         for _ in 0..5 {
             let signed = signer
