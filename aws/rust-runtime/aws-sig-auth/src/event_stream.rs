@@ -5,12 +5,12 @@
 
 use crate::middleware::Signature;
 use aws_auth::Credentials;
-use aws_sigv4::event_stream::sign_message;
+use aws_sigv4::event_stream::{sign_empty_message, sign_message};
 use aws_sigv4::SigningParams;
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
 use smithy_eventstream::frame::{Message, SignMessage, SignMessageError};
-use smithy_http::property_bag::SharedPropertyBag;
+use smithy_http::property_bag::{PropertyBag, SharedPropertyBag};
 use std::time::SystemTime;
 
 /// Event Stream SigV4 signing implementation.
@@ -27,6 +27,27 @@ impl SigV4Signer {
             last_signature: None,
         }
     }
+
+    fn signing_params(properties: &PropertyBag) -> SigningParams<()> {
+        // Every single one of these values would have been retrieved during the initial request,
+        // so we can safely assume they all exist in the property bag at this point.
+        let credentials = properties.get::<Credentials>().unwrap();
+        let region = properties.get::<SigningRegion>().unwrap();
+        let signing_service = properties.get::<SigningService>().unwrap();
+        let time = properties
+            .get::<SystemTime>()
+            .copied()
+            .unwrap_or_else(SystemTime::now);
+        SigningParams {
+            access_key: credentials.access_key_id(),
+            secret_key: credentials.secret_access_key(),
+            security_token: credentials.session_token(),
+            region: region.as_ref(),
+            service_name: signing_service.as_ref(),
+            date_time: time.into(),
+            settings: (),
+        }
+    }
 }
 
 impl SignMessage for SigV4Signer {
@@ -37,29 +58,25 @@ impl SignMessage for SigV4Signer {
             self.last_signature = Some(properties.get::<Signature>().unwrap().as_ref().into())
         }
 
-        // Every single one of these values would have been retrieved during the initial request,
-        // so we can safely assume they all exist in the property bag at this point.
-        let credentials = properties.get::<Credentials>().unwrap();
-        let region = properties.get::<SigningRegion>().unwrap();
-        let signing_service = properties.get::<SigningService>().unwrap();
-        let time = properties
-            .get::<SystemTime>()
-            .copied()
-            .unwrap_or_else(SystemTime::now);
-        let params = SigningParams {
-            access_key: credentials.access_key_id(),
-            secret_key: credentials.secret_access_key(),
-            security_token: credentials.session_token(),
-            region: region.as_ref(),
-            service_name: signing_service.as_ref(),
-            date_time: time.into(),
-            settings: (),
+        let (signed_message, signature) = {
+            let params = Self::signing_params(&properties);
+            sign_message(&message, self.last_signature.as_ref().unwrap(), &params).into_parts()
         };
-
-        let (signed_message, signature) =
-            sign_message(&message, self.last_signature.as_ref().unwrap(), &params).into_parts();
         self.last_signature = Some(signature);
+        Ok(signed_message)
+    }
 
+    fn sign_empty(&mut self) -> Result<Message, SignMessageError> {
+        let properties = self.properties.acquire();
+        if self.last_signature.is_none() {
+            // The Signature property should exist in the property bag for all Event Stream requests.
+            self.last_signature = Some(properties.get::<Signature>().unwrap().as_ref().into())
+        }
+        let (signed_message, signature) = {
+            let params = Self::signing_params(&properties);
+            sign_empty_message(self.last_signature.as_ref().unwrap(), &params).into_parts()
+        };
+        self.last_signature = Some(signature);
         Ok(signed_message)
     }
 }
@@ -73,7 +90,7 @@ mod tests {
     use aws_types::region::SigningRegion;
     use aws_types::SigningService;
     use smithy_eventstream::frame::{HeaderValue, Message, SignMessage};
-    use smithy_http::property_bag::SharedPropertyBag;
+    use smithy_http::property_bag::PropertyBag;
     use std::time::{Duration, UNIX_EPOCH};
 
     #[test]

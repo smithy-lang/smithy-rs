@@ -68,6 +68,7 @@ pub struct MessageStreamAdapter<T, E> {
     signer: Box<dyn SignMessage + Send + Sync>,
     #[pin]
     stream: Pin<Box<dyn Stream<Item = Result<T, BoxError>> + Send>>,
+    end_signal_sent: bool,
     _phantom: PhantomData<E>,
 }
 
@@ -84,6 +85,7 @@ where
             marshaller: Box::new(marshaller),
             signer: Box::new(signer),
             stream,
+            end_signal_sent: false,
             _phantom: Default::default(),
         }
     }
@@ -112,6 +114,15 @@ where
                         .map_err(|err| SdkError::ConstructionFailure(err))?;
                     let mut buffer = Vec::new();
                     message
+                        .write_to(&mut buffer)
+                        .map_err(|err| SdkError::ConstructionFailure(Box::new(err)))?;
+                    Poll::Ready(Some(Ok(Bytes::from(buffer))))
+                } else if !*this.end_signal_sent {
+                    *this.end_signal_sent = true;
+                    let mut buffer = Vec::new();
+                    this.signer
+                        .sign_empty()
+                        .map_err(|err| SdkError::ConstructionFailure(err))?
                         .write_to(&mut buffer)
                         .map_err(|err| SdkError::ConstructionFailure(Box::new(err)))?;
                     Poll::Ready(Some(Ok(Bytes::from(buffer))))
@@ -322,6 +333,10 @@ mod tests {
             message.write_to(&mut buffer).unwrap();
             Ok(Message::new(buffer).add_header(Header::new("signed", HeaderValue::Bool(true))))
         }
+
+        fn sign_empty(&mut self) -> Result<Message, SignMessageError> {
+            Ok(Message::new(&b""[..]).add_header(Header::new("signed", HeaderValue::Bool(true))))
+        }
     }
 
     fn check_compatible_with_hyper_wrap_stream<S, O, E>(stream: S) -> S
@@ -352,6 +367,12 @@ mod tests {
         assert_eq!(&HeaderValue::Bool(true), sent.headers()[0].value());
         let inner = Message::read_from(&mut (&sent.payload()[..])).unwrap();
         assert_eq!(&b"test"[..], &inner.payload()[..]);
+
+        let mut end_signal_bytes = adapter.next().await.unwrap().unwrap();
+        let end_signal = Message::read_from(&mut end_signal_bytes).unwrap();
+        assert_eq!("signed", end_signal.headers()[0].name().as_str());
+        assert_eq!(&HeaderValue::Bool(true), end_signal.headers()[0].value());
+        assert_eq!(0, end_signal.payload().len());
     }
 
     #[tokio::test]

@@ -4,7 +4,9 @@
  */
 
 use async_stream::stream;
-use aws_sdk_transcribestreaming::model::{AudioEvent, AudioStream, LanguageCode, MediaEncoding};
+use aws_sdk_transcribestreaming::model::{
+    AudioEvent, AudioStream, LanguageCode, MediaEncoding, TranscriptResultStream,
+};
 use aws_sdk_transcribestreaming::{Blob, Client, Config, Region};
 use bytes::BufMut;
 use std::time::Duration;
@@ -41,15 +43,29 @@ async fn main() {
         .await
         .unwrap();
 
+    let mut full_message = String::new();
     loop {
         match output.transcript_result_stream.recv().await {
-            Ok(Some(transcription)) => {
-                println!("Received transcription response:\n{:?}\n", transcription)
-            }
+            Ok(Some(transcription)) => match transcription {
+                TranscriptResultStream::TranscriptEvent(event) => {
+                    let transcript = event.transcript.unwrap();
+                    for result in transcript.results.unwrap_or_else(|| Vec::new()) {
+                        if result.is_partial {
+                            println!("Partial: {:?}", result);
+                        } else {
+                            let first_alternative = &result.alternatives.as_ref().unwrap()[0];
+                            full_message += first_alternative.transcript.as_ref().unwrap();
+                            full_message.push('\n');
+                        }
+                    }
+                }
+                otherwise => panic!("received unexpected event type: {:?}", otherwise),
+            },
             Ok(None) => break,
             Err(err) => println!("Received an error: {:?}", err),
         }
     }
+    println!("\nFully transcribed message:\n\n{}", full_message);
     println!("Done.")
 }
 
