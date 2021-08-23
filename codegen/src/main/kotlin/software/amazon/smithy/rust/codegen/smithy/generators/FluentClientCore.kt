@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 
 class FluentClientCore(private val model: Model) {
     fun RustWriter.renderVecHelper(member: MemberShape, memberName: String, coreType: RustType.Vec) {
-        docs("Appends an item to `${member.memberName}.`")
+        docs("Appends an item to `${member.memberName}`.")
         rust("///")
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         documentShape(member, model)
@@ -32,7 +32,7 @@ class FluentClientCore(private val model: Model) {
     }
 
     fun RustWriter.renderMapHelper(member: MemberShape, memberName: String, coreType: RustType.HashMap) {
-        docs("Adds a key-value pair to `${member.memberName}.`")
+        docs("Adds a key-value pair to `${member.memberName}`.")
         rust("///")
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         documentShape(member, model)

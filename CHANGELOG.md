@@ -9,6 +9,7 @@ vNext (Month Day, Year)
 
 - (When complete) Add Event Stream support (#653, #xyz)
 - (When complete) Add profile file provider for region (#594, #xyz)
+- Improve documentation on collection-aware builders (#TODO)
 
 
 v0.21 (August 19th, 2021)
