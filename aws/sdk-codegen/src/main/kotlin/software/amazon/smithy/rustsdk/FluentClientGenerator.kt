@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientCore
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
@@ -77,6 +78,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
     private val model = protocolConfig.model
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val hyperDep = runtimeConfig.awsRuntimeDependency("aws-hyper").copy(optional = true)
+    private val core = FluentClientCore(model)
 
     fun render(writer: RustWriter) {
         writer.rustTemplate(
@@ -192,8 +194,8 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         val memberSymbol = symbolProvider.toSymbol(member)
                         val outerType = memberSymbol.rustType()
                         when (val coreType = outerType.stripOuter<RustType.Option>()) {
-                            is RustType.Vec -> renderVecHelper(member, memberName, coreType)
-                            is RustType.HashMap -> renderMapHelper(member, memberName, coreType)
+                            is RustType.Vec -> with(core) { renderVecHelper(member, memberName, coreType) }
+                            is RustType.HashMap -> with(core) { renderMapHelper(member, memberName, coreType) }
                             else -> {
                                 val signature = when (coreType) {
                                     is RustType.String,
@@ -220,33 +222,6 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                     }
                 }
             }
-        }
-    }
-
-    private fun RustWriter.renderMapHelper(member: MemberShape, memberName: String, coreType: RustType.HashMap) {
-        documentShape(member, model)
-        val k = coreType.key
-        val v = coreType.member
-
-        rustBlock("pub fn $memberName(mut self, k: impl Into<${k.render()}>, v: impl Into<${v.render()}>) -> Self") {
-            rust(
-                """
-                self.inner = self.inner.$memberName(k, v);
-                self
-            """
-            )
-        }
-    }
-
-    private fun RustWriter.renderVecHelper(member: MemberShape, memberName: String, coreType: RustType.Vec) {
-        documentShape(member, model)
-        rustBlock("pub fn $memberName(mut self, inp: impl Into<${coreType.member.render(true)}>) -> Self") {
-            rust(
-                """
-                self.inner = self.inner.$memberName(inp);
-                self
-            """
-            )
         }
     }
 }
