@@ -146,7 +146,7 @@ class HttpProtocolTestGenerator(
         val Tokio = CargoDependency(
             "tokio",
             CratesIo("1"),
-            features = listOf("macros", "test-util", "rt"),
+            features = setOf("macros", "test-util", "rt"),
             scope = DependencyScope.Dev
         )
         testModuleWriter.addDependency(Tokio)
@@ -258,7 +258,7 @@ class HttpProtocolTestGenerator(
         writeInline("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        write("let mut http_response = #T::new()", RuntimeType.HttpResponseBuilder)
+        write("let http_response = #T::new()", RuntimeType.HttpResponseBuilder)
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
         }
@@ -270,21 +270,25 @@ class HttpProtocolTestGenerator(
             """,
             RuntimeType.sdkBody(runtimeConfig = protocolConfig.runtimeConfig)
         )
+        write(
+            "let mut op_response = #T::new(http_response);",
+            RuntimeType.operationModule(protocolConfig.runtimeConfig).member("Response")
+        )
         rustTemplate(
             """
             use #{parse_http_response};
             let parser = #{op}::new();
-            let parsed = parser.parse_unloaded(&mut http_response);
+            let parsed = parser.parse_unloaded(&mut op_response);
             let parsed = parsed.unwrap_or_else(|| {
+                let (http_response, _) = op_response.into_parts();
                 let http_response = http_response.map(|body|#{bytes}::copy_from_slice(body.bytes().unwrap()));
-                <#{op} as #{parse_http_response}<#{sdk_body}>>::parse_loaded(&parser, &http_response)
+                <#{op} as #{parse_http_response}>::parse_loaded(&parser, &http_response)
             });
         """,
             "op" to operationSymbol,
             "bytes" to RuntimeType.Bytes,
             "parse_http_response" to CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType()
                 .member("response::ParseHttpResponse"),
-            "sdk_body" to RuntimeType.sdkBody(runtimeConfig = protocolConfig.runtimeConfig)
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = operationShape.errorSymbol(protocolConfig.symbolProvider)

@@ -21,16 +21,27 @@ val smithyVersion: String by project
 
 val sdkOutputDir = buildDir.resolve("aws-sdk")
 val runtimeModules = listOf(
-    "smithy-types",
-    "smithy-json",
-    "smithy-query",
-    "smithy-xml",
+    "protocol-test-helpers",
+    "smithy-async",
+    "smithy-client",
+    "smithy-eventstream",
     "smithy-http",
     "smithy-http-tower",
-    "smithy-client",
-    "protocol-test-helpers"
+    "smithy-json",
+    "smithy-query",
+    "smithy-types",
+    "smithy-xml"
 )
-val awsModules = listOf("aws-auth", "aws-endpoint", "aws-types", "aws-hyper", "aws-sig-auth", "aws-http")
+val awsModules = listOf(
+    "aws-auth",
+    "aws-auth-providers",
+    "aws-endpoint",
+    "aws-http",
+    "aws-hyper",
+    "aws-sig-auth",
+    "aws-sigv4",
+    "aws-types"
+)
 
 buildscript {
     val smithyVersion: String by project
@@ -200,7 +211,7 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                       },
                       "service": "${it.service}",
                       "module": "aws-sdk-${it.module}",
-                      "moduleVersion": "0.0.13-alpha",
+                      "moduleVersion": "${getProperty("aws.sdk.version")}",
                       "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
                       "license": "Apache-2.0"
                       ${it.extraConfig ?: ""}
@@ -224,6 +235,8 @@ task("generateSmithyBuild") {
         projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices))
     }
     inputs.property("servicelist", awsServices.sortedBy { it.module }.toString())
+    // TODO(EventStream): Remove this when removing SMITHYRS_EXPERIMENTAL_EVENTSTREAM
+    inputs.property("_eventStreamCacheInvalidation", System.getenv("SMITHYRS_EXPERIMENTAL_EVENTSTREAM") ?: "0")
     inputs.dir(projectDir.resolve("aws-models"))
     outputs.file(projectDir.resolve("smithy-build.json"))
 }
@@ -284,7 +297,11 @@ tasks.register<Copy>("relocateAwsRuntime") {
  * those paths need to be replaced in the final build. We should probably fix this with some symlinking.
  */
 fun rewritePathDependency(line: String): String {
-    return line.replace("../../rust-runtime/", "")
+
+    // some runtime crates are actually dependent on the generated bindings:
+    return line.replace("../sdk/build/aws-sdk/", "")
+        // others use relative dependencies::
+        .replace("../../rust-runtime/", "")
 }
 
 tasks.register<Copy>("relocateRuntime") {

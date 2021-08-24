@@ -101,8 +101,10 @@ fun CodegenWriterDelegator<RustWriter>.finalize(
     this.useFileWriter("src/lib.rs", "crate::lib") { writer ->
         LibRsGenerator(settings.moduleDescription, modules, libRsCustomizations).render(writer)
     }
-    val cargoDependencies =
-        this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<CargoDependency>().distinct()
+    val cargoDependencies = mergeDependencyFeatures(
+        this.dependencies.map { RustDependency.fromSymbolDependency(it) }
+            .filterIsInstance<CargoDependency>().distinct()
+    )
     this.useFileWriter("Cargo.toml") {
         val cargoToml = CargoTomlGenerator(
             settings,
@@ -114,3 +116,18 @@ fun CodegenWriterDelegator<RustWriter>.finalize(
     }
     flushWriters()
 }
+
+private fun CargoDependency.mergeWith(other: CargoDependency): CargoDependency {
+    check(key == other.key)
+    return copy(
+        features = features + other.features,
+        optional = optional && other.optional
+    )
+}
+
+internal fun mergeDependencyFeatures(cargoDependencies: List<CargoDependency>): List<CargoDependency> =
+    cargoDependencies.groupBy { it.key }
+        .mapValues { group -> group.value.reduce { acc, next -> acc.mergeWith(next) } }
+        .values
+        .toList()
+        .sortedBy { it.name }

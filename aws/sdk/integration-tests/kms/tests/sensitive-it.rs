@@ -11,7 +11,7 @@ use kms::operation::{CreateAlias, GenerateRandom};
 use kms::output::GenerateRandomOutput;
 use kms::Blob;
 use smithy_http::body::SdkBody;
-use smithy_http::operation::Parts;
+use smithy_http::operation::{self, Parts};
 use smithy_http::response::ParseStrictResponse;
 use smithy_http::result::SdkError;
 use smithy_http::retry::ClassifyResponse;
@@ -32,26 +32,26 @@ fn assert_send_sync<T: Send + Sync + 'static>() {}
 fn assert_send_fut<T: Send + 'static>(_: T) {}
 fn assert_debug<T: std::fmt::Debug>() {}
 
-#[test]
-fn types_are_send_sync() {
+#[tokio::test]
+async fn types_are_send_sync() {
     assert_send_sync::<kms::Error>();
     assert_send_sync::<kms::SdkError<CreateAliasError>>();
     assert_send_sync::<kms::error::CreateAliasError>();
     assert_send_sync::<kms::output::CreateAliasOutput>();
     assert_send_sync::<kms::Client>();
     assert_send_sync::<GenerateRandom>();
-    assert_send_fut(kms::Client::from_env().list_keys().send());
+    assert_send_fut(kms::Client::from_env().await.list_keys().send());
 }
 
-#[test]
-fn client_is_debug() {
-    let client = kms::Client::from_env();
+#[tokio::test]
+async fn client_is_debug() {
+    let client = kms::Client::from_env().await;
     assert_ne!(format!("{:?}", client), "");
 }
 
-#[test]
-fn client_is_clone() {
-    let client = kms::Client::from_env();
+#[tokio::test]
+async fn client_is_clone() {
+    let client = kms::Client::from_env().await;
     let _ = client.clone();
 }
 
@@ -62,7 +62,7 @@ fn types_are_debug() {
     assert_debug::<kms::client::fluent_builders::CreateAlias>();
 }
 
-fn create_alias_op() -> Parts<CreateAlias, AwsErrorRetryPolicy> {
+async fn create_alias_op() -> Parts<CreateAlias, AwsErrorRetryPolicy> {
     let conf = kms::Config::builder().build();
     let (_, parts) = CreateAlias::builder()
         .build()
@@ -74,9 +74,9 @@ fn create_alias_op() -> Parts<CreateAlias, AwsErrorRetryPolicy> {
 }
 
 /// Parse a semi-real response body and assert that the correct retry status is returned
-#[test]
-fn errors_are_retryable() {
-    let op = create_alias_op();
+#[tokio::test]
+async fn errors_are_retryable() {
+    let op = create_alias_op().await;
     let http_response = http::Response::builder()
         .status(400)
         .body(Bytes::from_static(
@@ -88,15 +88,15 @@ fn errors_are_retryable() {
         .parse(&http_response)
         .map_err(|e| SdkError::ServiceError {
             err: e,
-            raw: http_response.map(SdkBody::from),
+            raw: operation::Response::new(http_response.map(SdkBody::from)),
         });
     let retry_kind = op.retry_policy.classify(err.as_ref());
     assert_eq!(retry_kind, RetryKind::Error(ErrorKind::ThrottlingError));
 }
 
-#[test]
-fn unmodeled_errors_are_retryable() {
-    let op = create_alias_op();
+#[tokio::test]
+async fn unmodeled_errors_are_retryable() {
+    let op = create_alias_op().await;
     let http_response = http::Response::builder()
         .status(400)
         .body(Bytes::from_static(br#"{ "code": "ThrottlingException" }"#))
@@ -106,7 +106,7 @@ fn unmodeled_errors_are_retryable() {
         .parse(&http_response)
         .map_err(|e| SdkError::ServiceError {
             err: e,
-            raw: http_response.map(SdkBody::from),
+            raw: operation::Response::new(http_response.map(SdkBody::from)),
         });
     let retry_kind = op.retry_policy.classify(err.as_ref());
     assert_eq!(retry_kind, RetryKind::Error(ErrorKind::ThrottlingError));

@@ -40,6 +40,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.EventStreamMarshallerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
 import software.amazon.smithy.rust.codegen.util.dq
@@ -47,6 +48,8 @@ import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.isEventStream
+import software.amazon.smithy.rust.codegen.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -80,10 +83,13 @@ class HttpBoundProtocolGenerator(
     private val codegenScope = arrayOf(
         "ParseStrict" to RuntimeType.parseStrict(runtimeConfig),
         "ParseResponse" to RuntimeType.parseResponse(runtimeConfig),
-        "Response" to RuntimeType.Http("Response"),
+        "http" to RuntimeType.http,
+        "hyper" to CargoDependency.HyperWithStream.asType(),
+        "operation" to RuntimeType.operationModule(runtimeConfig),
         "Bytes" to RuntimeType.Bytes,
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-        "BuildError" to runtimeConfig.operationBuildError()
+        "BuildError" to runtimeConfig.operationBuildError(),
+        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType()
     )
 
     override fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata {
@@ -102,8 +108,48 @@ class HttpBoundProtocolGenerator(
             BodyMetadata(takesOwnership = false)
         } else {
             val member = inputShape.expectMember(payloadMemberName)
-            serializeViaPayload(member, serializerGenerator)
+            if (operationShape.isInputEventStream(model)) {
+                serializeViaEventStream(operationShape, member, serializerGenerator)
+            } else {
+                serializeViaPayload(member, serializerGenerator)
+            }
         }
+    }
+
+    private fun RustWriter.serializeViaEventStream(
+        operationShape: OperationShape,
+        memberShape: MemberShape,
+        serializerGenerator: StructuredDataSerializerGenerator
+    ): BodyMetadata {
+        val memberName = symbolProvider.toMemberName(memberShape)
+        val unionShape = model.expectShape(memberShape.target, UnionShape::class.java)
+
+        val marshallerConstructorFn = EventStreamMarshallerGenerator(
+            model,
+            runtimeConfig,
+            symbolProvider,
+            unionShape,
+            serializerGenerator
+        ).render()
+
+        // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the
+        // parameters that are not `@eventHeader` or `@eventPayload`.
+        rustTemplate(
+            """
+            {
+                let marshaller = #{marshallerConstructorFn}();
+                let signer = _config.new_event_stream_signer(properties.clone());
+                let adapter: #{SmithyHttp}::event_stream::MessageStreamAdapter<_, #{OperationError}> =
+                    self.$memberName.into_body_stream(marshaller, signer);
+                let body: #{SdkBody} = #{hyper}::Body::wrap_stream(adapter).into();
+                body
+            }
+            """,
+            *codegenScope,
+            "marshallerConstructorFn" to marshallerConstructorFn,
+            "OperationError" to operationShape.errorSymbol(symbolProvider)
+        )
+        return BodyMetadata(takesOwnership = true)
     }
 
     private fun RustWriter.serializeViaPayload(
@@ -174,6 +220,10 @@ class HttpBoundProtocolGenerator(
                 BodyMetadata(takesOwnership = true)
             }
             is StructureShape, is UnionShape -> {
+                check(
+                    !((targetShape as? UnionShape)?.isEventStream() ?: false)
+                ) { "Event Streams should be handled further up" }
+
                 // JSON serialize the structure or union targeted
                 rust(
                     """#T(&$payloadName).map_err(|err|#T::SerializationError(err.into()))?""",
@@ -221,7 +271,7 @@ class HttpBoundProtocolGenerator(
             """
             impl #{ParseStrict} for $operationName {
                 type Output = std::result::Result<#{O}, #{E}>;
-                fn parse(&self, response: &#{Response}<#{Bytes}>) -> Self::Output {
+                fn parse(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
                      if !response.status().is_success() && response.status().as_u16() != $successCode {
                         #{parse_error}(response)
                      } else {
@@ -245,16 +295,16 @@ class HttpBoundProtocolGenerator(
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
-                impl #{ParseResponse}<#{SdkBody}> for $operationName {
+                impl #{ParseResponse} for $operationName {
                     type Output = std::result::Result<#{O}, #{E}>;
-                    fn parse_unloaded(&self, response: &mut http::Response<#{SdkBody}>) -> Option<Self::Output> {
+                    fn parse_unloaded(&self, response: &mut #{operation}::Response) -> Option<Self::Output> {
                         // This is an error, defer to the non-streaming parser
-                        if !response.status().is_success() && response.status().as_u16() != $successCode {
+                        if !response.http().status().is_success() && response.http().status().as_u16() != $successCode {
                             return None;
                         }
                         Some(#{parse_streaming_response}(response))
                     }
-                    fn parse_loaded(&self, response: &http::Response<#{Bytes}>) -> Self::Output {
+                    fn parse_loaded(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
                         // if streaming, we only hit this case if its an error
                         #{parse_error}(response)
                     }
@@ -276,7 +326,7 @@ class HttpBoundProtocolGenerator(
         return RuntimeType.forInlineFun(fnName, "operation_deser") {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(response: &#{Response}<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol
@@ -350,11 +400,12 @@ class HttpBoundProtocolGenerator(
         return RuntimeType.forInlineFun(fnName, "operation_deser") {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(response: &mut #{Response}<#{SdkBody}>) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(op_response: &mut #{operation}::Response) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol
             ) {
+                write("let response = op_response.http_mut();")
                 withBlock("Ok({", "})") {
                     renderShapeParser(
                         operationShape,
@@ -375,7 +426,7 @@ class HttpBoundProtocolGenerator(
         return RuntimeType.forInlineFun(fnName, "operation_deser") {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(response: &#{Response}<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol
@@ -428,7 +479,7 @@ class HttpBoundProtocolGenerator(
         bindings: List<HttpBindingDescriptor>,
         errorSymbol: RuntimeType,
     ) {
-        val httpBindingGenerator = ResponseBindingGenerator(protocolConfig, operationShape)
+        val httpBindingGenerator = ResponseBindingGenerator(protocol, protocolConfig, operationShape)
         val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
         rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
@@ -462,7 +513,7 @@ class HttpBoundProtocolGenerator(
         }
 
         val err = if (StructureGenerator.fallibleBuilder(outputShape, symbolProvider)) {
-            ".map_err(|s|${format(errorSymbol)}::unhandled(s))?"
+            ".map_err(${format(errorSymbol)}::unhandled)?"
         } else ""
         rust("output.build()$err")
     }
@@ -507,6 +558,7 @@ class HttpBoundProtocolGenerator(
                     rust("#T($body).map_err(#T::unhandled)", structuredDataParser.payloadParser(member), errorSymbol)
                 }
                 val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
+                    operationShape,
                     binding,
                     errorSymbol,
                     docHandler = docShapeHandler,

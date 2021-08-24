@@ -1,0 +1,11 @@
+# Note: this workspace exists solely for the convenience of running tests. These packages will all eventually
+# end up in the final SDK workspace.
+[workspace]
+members = [
+    "dynamodb",
+    "iam",
+    "kms",
+    "qldbsession",
+    "s3",
+    "sts"
+]

@@ -63,8 +63,8 @@ use std::collections::HashMap;
 /// [other]
 /// aws_access_key_id = 456
 /// ```
-pub fn load(fs: &Fs, env: &Env) -> Result<ProfileSet, ProfileParseError> {
-    let source = source::load(&env, &fs);
+pub async fn load(fs: &Fs, env: &Env) -> Result<ProfileSet, ProfileParseError> {
+    let source = source::load(&env, &fs).await;
     ProfileSet::parse(source)
 }
 
@@ -76,6 +76,57 @@ pub struct ProfileSet {
 }
 
 impl ProfileSet {
+    /// Create a new Profile set directly from a HashMap
+    ///
+    /// This method creates a ProfileSet directly from a hashmap with no normalization.
+    ///
+    /// ## Note
+    ///
+    /// This is probably not what you want! In general, [`load`](load) should be used instead
+    /// because it will perform input normalization. However, for tests which operate on the
+    /// normalized profile, this method exists to facilitate easy construction of a ProfileSet
+    pub fn new(
+        profiles: HashMap<String, HashMap<String, String>>,
+        selected_profile: impl Into<Cow<'static, str>>,
+    ) -> Self {
+        let mut base = ProfileSet::empty();
+        base.selected_profile = selected_profile.into();
+        for (name, profile) in profiles {
+            base.profiles.insert(
+                name.clone(),
+                Profile::new(
+                    name,
+                    profile
+                        .into_iter()
+                        .map(|(k, v)| (k.clone(), Property::new(k, v)))
+                        .collect(),
+                ),
+            );
+        }
+        base
+    }
+
+    /// Retrieves a key-value pair from the currently selected profile
+    pub fn get(&self, key: &str) -> Option<&str> {
+        self.profiles
+            .get(self.selected_profile.as_ref())
+            .and_then(|profile| profile.get(key))
+    }
+
+    /// Retrieve a named profile from the profile set
+    pub fn get_profile(&self, profile_name: &str) -> Option<&Profile> {
+        self.profiles.get(profile_name)
+    }
+
+    pub fn selected_profile(&self) -> &str {
+        self.selected_profile.as_ref()
+    }
+
+    /// Returns true if no profiles are contained in this profile set
+    pub fn is_empty(&self) -> bool {
+        self.profiles.is_empty()
+    }
+
     fn parse(source: Source) -> Result<Self, ProfileParseError> {
         let mut base = ProfileSet::empty();
         base.selected_profile = source.profile;
@@ -99,18 +150,6 @@ impl ProfileSet {
             selected_profile: "default".into(),
         }
     }
-
-    /// Retrieves a key-value pair from the currently selected profile
-    pub fn get(&self, key: &str) -> Option<&Property> {
-        self.profiles
-            .get(self.selected_profile.as_ref())
-            .and_then(|profile| profile.get(key))
-    }
-
-    /// Retrieve a named profile from the profile set
-    pub fn get_profile(&self, profile_name: &str) -> Option<&Profile> {
-        self.profiles.get(profile_name)
-    }
 }
 
 /// An individual configuration profile
@@ -127,8 +166,12 @@ impl Profile {
         Self { name, properties }
     }
 
-    pub fn get(&self, name: &str) -> Option<&Property> {
-        self.properties.get(name)
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn get(&self, name: &str) -> Option<&str> {
+        self.properties.get(name).map(|prop| prop.value())
     }
 }
 
@@ -177,6 +220,23 @@ mod test {
             check(test);
         }
         Ok(())
+    }
+
+    #[test]
+    fn empty_source_empty_profile() {
+        let source = Source {
+            config_file: File {
+                path: "~/.aws/config".to_string(),
+                contents: "".into(),
+            },
+            credentials_file: File {
+                path: "~/.aws/credentials".to_string(),
+                contents: "".into(),
+            },
+            profile: "default".into(),
+        };
+        let profile_set = ProfileSet::parse(source).expect("empty profiles are valid");
+        assert_eq!(profile_set.is_empty(), true);
     }
 
     /// Run all tests from the fuzzing corpus to validate coverage
@@ -237,7 +297,7 @@ mod test {
                 path: "~/.aws/credentials".to_string(),
                 contents: input.credentials_file.unwrap_or_default(),
             },
-            profile: Default::default(),
+            profile: "default".into(),
         }
     }
 

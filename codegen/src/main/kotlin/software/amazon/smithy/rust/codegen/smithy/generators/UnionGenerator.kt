@@ -24,12 +24,12 @@ class UnionGenerator(
     private val writer: RustWriter,
     private val shape: UnionShape
 ) {
+    private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
 
     fun render() {
         renderUnion()
     }
 
-    private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
     private fun renderUnion() {
         val unionSymbol = symbolProvider.toSymbol(shape)
         val containerMeta = unionSymbol.expectRustMetadata()
@@ -51,7 +51,7 @@ class UnionGenerator(
                 if (sortedMembers.size == 1) {
                     Attribute.Custom("allow(irrefutable_let_patterns)").render(this)
                 }
-                rustBlock("pub fn as_$funcNamePart(&self) -> Result<&#T, &Self>", memberSymbol) {
+                rustBlock("pub fn as_$funcNamePart(&self) -> std::result::Result<&#T, &Self>", memberSymbol) {
                     rust("if let ${unionSymbol.name}::$variantName(val) = &self { Ok(&val) } else { Err(&self) }")
                 }
                 rustBlock("pub fn is_$funcNamePart(&self) -> bool") {

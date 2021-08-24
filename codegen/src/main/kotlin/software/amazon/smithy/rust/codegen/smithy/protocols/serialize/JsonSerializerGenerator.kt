@@ -141,7 +141,7 @@ class JsonSerializerGenerator(
         val target = model.expectShape(member.target, StructureShape::class.java)
         return RuntimeType.forInlineFun(fnName, "operation_ser") { writer ->
             writer.rustBlockTemplate(
-                "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
+                "pub fn $fnName(input: &#{target}) -> std::result::Result<std::vec::Vec<u8>, #{Error}>",
                 *codegenScope,
                 "target" to symbolProvider.toSymbol(target)
             ) {
@@ -149,7 +149,7 @@ class JsonSerializerGenerator(
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
                 serializeStructure(StructContext("object", "input", target))
                 rust("object.finish();")
-                rustTemplate("Ok(#{SdkBody}::from(out))", *codegenScope)
+                rustTemplate("Ok(out.into_bytes())", *codegenScope)
             }
         }
     }

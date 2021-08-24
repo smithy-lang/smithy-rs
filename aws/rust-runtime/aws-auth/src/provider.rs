@@ -3,6 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+//! AWS credential providers, generic caching provider implementations, and traits to implement custom providers.
+//!
+//! Credentials providers acquire AWS credentials from environment variables, files,
+//! or calls to AWS services such as STS. Custom credential provider implementations can
+//! be provided by implementing [`ProvideCredentials`] for synchronous use-cases, or
+//! [`AsyncProvideCredentials`] for async use-cases. Generic credential caching implementations,
+//! for example,
+//! [`LazyCachingCredentialsProvider`](crate::provider::lazy_caching::LazyCachingCredentialsProvider),
+//! are also provided as part of this module.
+
 mod cache;
 pub mod env;
 pub mod lazy_caching;
@@ -14,21 +24,60 @@ use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::future::{self, Future};
+use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum CredentialsError {
+    /// No credentials were available for this provider
     CredentialsNotLoaded,
+
+    /// Loading credentials from this provider exceeded the maximum allowed duration
+    ProviderTimedOut(Duration),
+
+    /// The provider was given an invalid configuration
+    ///
+    /// For example:
+    /// - syntax error in ~/.aws/config
+    /// - assume role profile that forms an infinite loop
+    InvalidConfiguration(Box<dyn Error + Send + Sync + 'static>),
+
+    /// The provider experienced an error during credential resolution
+    ///
+    /// This may include errors like a 503 from STS or a file system error when attempting to
+    /// read a configuration file.
+    ProviderError(Box<dyn Error + Send + Sync + 'static>),
+
+    /// An unexpected error occured during credential resolution
+    ///
+    /// If the error is something that can occur during expected usage of a provider, `ProviderError`
+    /// should be returned instead. Unhandled is reserved for exceptional cases, for example:
+    /// - Returned data not UTF-8
+    /// - A provider returns data that is missing required fields
     Unhandled(Box<dyn Error + Send + Sync + 'static>),
 }
 
 impl Display for CredentialsError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            CredentialsError::CredentialsNotLoaded => write!(f, "CredentialsNotLoaded"),
-            CredentialsError::Unhandled(err) => write!(f, "{}", err),
+            CredentialsError::CredentialsNotLoaded => {
+                write!(f, "The provider could not provide credentials or required configuration was not set")
+            }
+            CredentialsError::ProviderTimedOut(d) => write!(
+                f,
+                "Credentials provider timed out after {} seconds",
+                d.as_secs()
+            ),
+            CredentialsError::Unhandled(err) => write!(f, "Unexpected credentials error: {}", err),
+            CredentialsError::InvalidConfiguration(err) => {
+                write!(f, "The credentials provider was not properly: {}", err)
+            }
+            CredentialsError::ProviderError(err) => {
+                write!(f, "An error occured while loading credentials: {}", err)
+            }
         }
     }
 }
@@ -43,7 +92,7 @@ impl Error for CredentialsError {
 }
 
 pub type CredentialsResult = Result<Credentials, CredentialsError>;
-type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// An asynchronous credentials provider
 ///
@@ -62,13 +111,18 @@ pub type CredentialsProvider = Arc<dyn AsyncProvideCredentials>;
 ///
 /// See [`async_provide_credentials_fn`] for more details.
 #[derive(Copy, Clone)]
-pub struct AsyncProvideCredentialsFn<T: Send + Sync> {
+pub struct AsyncProvideCredentialsFn<'c, T, F>
+where
+    T: Fn() -> F + Send + Sync + 'c,
+    F: Future<Output = CredentialsResult> + Send + 'static,
+{
     f: T,
+    phantom: PhantomData<&'c T>,
 }
 
-impl<T, F> AsyncProvideCredentials for AsyncProvideCredentialsFn<T>
+impl<'c, T, F> AsyncProvideCredentials for AsyncProvideCredentialsFn<'c, T, F>
 where
-    T: Fn() -> F + Send + Sync,
+    T: Fn() -> F + Send + Sync + 'c,
     F: Future<Output = CredentialsResult> + Send + 'static,
 {
     fn provide_credentials<'a>(&'a self) -> BoxFuture<'a, CredentialsResult>
@@ -99,12 +153,15 @@ where
 ///     Ok(credentials)
 /// });
 /// ```
-pub fn async_provide_credentials_fn<T, F>(f: T) -> AsyncProvideCredentialsFn<T>
+pub fn async_provide_credentials_fn<'c, T, F>(f: T) -> AsyncProvideCredentialsFn<'c, T, F>
 where
-    T: Fn() -> F + Send + Sync,
+    T: Fn() -> F + Send + Sync + 'c,
     F: Future<Output = CredentialsResult> + Send + 'static,
 {
-    AsyncProvideCredentialsFn { f }
+    AsyncProvideCredentialsFn {
+        f,
+        phantom: Default::default(),
+    }
 }
 
 /// A synchronous credentials provider
@@ -145,7 +202,9 @@ pub fn set_provider(config: &mut PropertyBag, provider: Arc<dyn AsyncProvideCred
 
 #[cfg(test)]
 mod test {
-    use crate::provider::{AsyncProvideCredentials, BoxFuture, CredentialsResult};
+    use crate::provider::{
+        async_provide_credentials_fn, AsyncProvideCredentials, BoxFuture, CredentialsResult,
+    };
     use crate::Credentials;
     use async_trait::async_trait;
 
@@ -173,5 +232,35 @@ mod test {
             let inner_fut = self.inner.creds();
             Box::pin(async move { Ok(inner_fut.await) })
         }
+    }
+
+    // Test that the closure passed to `async_provide_credentials_fn` is allowed to borrow things
+    #[tokio::test]
+    async fn async_provide_credentials_fn_closure_can_borrow() {
+        fn check_is_str_ref(_input: &str) {}
+        async fn test_async_provider(input: String) -> CredentialsResult {
+            Ok(Credentials::from_keys(&input, &input, None))
+        }
+
+        let things_to_borrow = vec!["one".to_string(), "two".to_string()];
+
+        let mut providers = Vec::new();
+        for thing in &things_to_borrow {
+            let provider = async_provide_credentials_fn(move || {
+                check_is_str_ref(thing);
+                test_async_provider(thing.into())
+            });
+            providers.push(provider);
+        }
+
+        let (two, one) = (providers.pop().unwrap(), providers.pop().unwrap());
+        assert_eq!(
+            "one",
+            one.provide_credentials().await.unwrap().access_key_id()
+        );
+        assert_eq!(
+            "two",
+            two.provide_credentials().await.unwrap().access_key_id()
+        );
     }
 }

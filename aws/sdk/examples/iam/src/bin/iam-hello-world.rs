@@ -6,7 +6,7 @@
 #[tokio::main]
 async fn main() -> Result<(), iam::Error> {
     tracing_subscriber::fmt::init();
-    let client = iam::Client::from_env();
+    let client = iam::Client::from_env().await;
     let rsp = client.list_policies().send().await?;
     for policy in rsp.policies.unwrap_or_default() {
         println!(
