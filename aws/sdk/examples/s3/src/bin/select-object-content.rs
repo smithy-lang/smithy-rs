@@ -9,7 +9,7 @@ use aws_sdk_s3::model::{
     OutputSerialization, SelectObjectContentEventStream,
 };
 use aws_sdk_s3::{Client, Config, Error, Region, PKG_VERSION};
-use aws_types::region::{default_provider, ProvideRegion};
+use aws_types::region;
 
 use structopt::StructOpt;
 
@@ -55,16 +55,16 @@ async fn main() -> Result<(), Error> {
 
     let region = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
-        .or_else(Region::new("us-east-2"));
+        .or_else(Region::new("us-east-2"))
+        .region()
+        .await
+        .unwrap();
 
     println!();
 
     if verbose {
         println!("S3 client version: {}", PKG_VERSION);
-        println!(
-            "Region:            {}",
-            region.region().await.unwrap().as_ref()
-        );
+        println!("Region:            {}", region.as_ref());
         println!();
     }
 
@@ -103,7 +103,7 @@ async fn main() -> Result<(), Error> {
         .send()
         .await?;
 
-    while Some(event) = output.payload.recv().await? {
+    while let Some(event) = output.payload.recv().await? {
         match event {
             SelectObjectContentEventStream::Records(records) => {
                 println!(
