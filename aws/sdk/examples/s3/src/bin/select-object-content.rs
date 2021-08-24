@@ -103,35 +103,31 @@ async fn main() -> Result<(), Error> {
         .send()
         .await?;
 
-    loop {
-        match output.payload.recv().await {
-            Ok(None) => break,
-            Ok(Some(event)) => match event {
-                SelectObjectContentEventStream::Records(records) => {
-                    println!(
-                        "Record: {}",
-                        records
-                            .payload
-                            .as_ref()
-                            .map(|p| std::str::from_utf8(p.as_ref()).unwrap())
-                            .unwrap_or("")
-                    );
-                }
-                SelectObjectContentEventStream::Stats(stats) => {
-                    println!("Stats: {:?}", stats.details.unwrap());
-                }
-                SelectObjectContentEventStream::Progress(progress) => {
-                    println!("Progress: {:?}", progress.details.unwrap());
-                }
-                SelectObjectContentEventStream::Cont(_) => {
-                    println!("Continuation Event");
-                }
-                SelectObjectContentEventStream::End(_) => {
-                    println!("End Event");
-                }
-                otherwise => panic!("Unknown event type: {:?}", otherwise),
-            },
-            Err(err) => println!("Received error: {:?}", err),
+    while Some(event) = output.payload.recv().await? {
+        match event {
+            SelectObjectContentEventStream::Records(records) => {
+                println!(
+                    "Record: {}",
+                    records
+                        .payload
+                        .as_ref()
+                        .map(|p| std::str::from_utf8(p.as_ref()).unwrap())
+                        .unwrap_or("")
+                );
+            }
+            SelectObjectContentEventStream::Stats(stats) => {
+                println!("Stats: {:?}", stats.details.unwrap());
+            }
+            SelectObjectContentEventStream::Progress(progress) => {
+                println!("Progress: {:?}", progress.details.unwrap());
+            }
+            SelectObjectContentEventStream::Cont(_) => {
+                println!("Continuation Event");
+            }
+            SelectObjectContentEventStream::End(_) => {
+                println!("End Event");
+            }
+            otherwise => panic!("Unknown event type: {:?}", otherwise),
         }
     }
 

@@ -52,9 +52,10 @@ where
     }
 }
 
-impl<E> Error for SdkError<E>
+impl<E, R> Error for SdkError<E, R>
 where
     E: Error + 'static,
+    R: Debug,
 {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {

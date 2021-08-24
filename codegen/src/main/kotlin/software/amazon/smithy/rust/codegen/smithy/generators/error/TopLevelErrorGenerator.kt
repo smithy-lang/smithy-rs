@@ -69,12 +69,14 @@ class TopLevelErrorGenerator(protocolConfig: ProtocolConfig, private val operati
         }
     }
 
-    private fun RustWriter.renderImplFrom(
-        operationShape: OperationShape,
-    ) {
+    private fun RustWriter.renderImplFrom(operationShape: OperationShape) {
         val operationError = operationShape.errorSymbol(symbolProvider)
-        rustBlock("impl From<#T<#T>> for Error", sdkError, operationError) {
-            rustBlock("fn from(err: #T<#T>) -> Self", sdkError, operationError) {
+        rustBlock(
+            "impl<R> From<#T<#T, R>> for Error where R: Send + Sync + std::fmt::Debug + 'static",
+            sdkError,
+            operationError
+        ) {
+            rustBlock("fn from(err: #T<#T, R>) -> Self", sdkError, operationError) {
                 rustBlock("match err") {
                     val operationErrors = operationShape.errors.map { model.expectShape(it) }
                     rustBlock("#T::ServiceError { err, ..} => match err.kind", sdkError) {
