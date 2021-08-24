@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -24,7 +23,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 
-class FluentClientDecorator : RustCodegenDecorator {
+class AwsFluentClientDecorator : RustCodegenDecorator {
     override val name: String = "FluentClient"
     override val order: Byte = 0
 
@@ -32,7 +31,7 @@ class FluentClientDecorator : RustCodegenDecorator {
         val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("client")), public = true)
         rustCrate.withModule(RustModule("client", module)) { writer ->
             FluentClientGenerator(protocolConfig).render(writer)
-            AwsClientExtensions(protocolConfig.runtimeConfig).render(writer)
+            AwsFluentClientExtensions(protocolConfig.runtimeConfig).render(writer)
         }
         val awsHyper = "aws-hyper"
         rustCrate.addFeature(Feature("client", true, listOf(awsHyper, "smithy-client")))
@@ -56,7 +55,7 @@ class FluentClientDecorator : RustCodegenDecorator {
     }
 }
 
-class AwsClientExtensions(runtimeConfig: RuntimeConfig) {
+private class AwsFluentClientExtensions(runtimeConfig: RuntimeConfig) {
     private val hyperDep = runtimeConfig.awsRuntimeDependency("aws-hyper").copy(optional = true)
 
     fun render(writer: RustWriter) {
