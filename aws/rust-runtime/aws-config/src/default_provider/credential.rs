@@ -7,12 +7,12 @@ use std::borrow::Cow;
 
 use crate::meta::credential::lazy_caching;
 use crate::meta::credential::lazy_caching::LazyCachingCredentialsProvider;
-use aws_hyper::DynConnector;
 use aws_types::credential::provide_credentials::future;
 use aws_types::credential::ProvideCredentials;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
 use smithy_async::rt::sleep::AsyncSleep;
+use smithy_client::DynConnector;
 
 /// Default AWS Credential Provider Chain
 ///

@@ -10,12 +10,12 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
-use aws_hyper::DynConnector;
 use aws_types::credential;
 use aws_types::credential::ProvideCredentials;
 use aws_types::os_shim_internal::{Env, Fs};
 use serde::Deserialize;
 use smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
+use smithy_client::DynConnector;
 
 /// Test case credentials
 ///

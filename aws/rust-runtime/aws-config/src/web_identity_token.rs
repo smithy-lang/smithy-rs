@@ -34,9 +34,9 @@
 //!   web_identity_token_file = /token.jwt
 //!   ```
 
-use aws_hyper::{DynConnector, StandardClient};
 use aws_sdk_sts::Region;
 use aws_types::os_shim_internal::{Env, Fs};
+use smithy_client::DynConnector;
 
 use crate::connector::must_have_connector;
 use crate::sts;
@@ -56,7 +56,7 @@ const ENV_VAR_SESSION_NAME: &str = "AWS_ROLE_SESSION_NAME";
 pub struct WebIdentityTokenCredentialProvider {
     source: Source,
     fs: Fs,
-    client: StandardClient,
+    client: aws_sdk_sts::RawClient,
     region: Option<Region>,
 }
 
@@ -186,9 +186,7 @@ impl Builder {
 
     pub fn build(self) -> WebIdentityTokenCredentialProvider {
         let connector = self.connector.unwrap_or_else(must_have_connector);
-        let client = aws_hyper::Builder::<()>::new()
-            .map_connector(|_| connector)
-            .build();
+        let client = aws_sdk_sts::RawClient::new(connector);
         let source = self.source.unwrap_or_else(|| Source::Env(Env::default()));
         WebIdentityTokenCredentialProvider {
             source,
@@ -201,7 +199,7 @@ impl Builder {
 
 async fn load_credentials(
     fs: &Fs,
-    client: &StandardClient,
+    client: &aws_sdk_sts::RawClient,
     region: &Region,
     token_file: impl AsRef<Path>,
     role_arn: &str,

@@ -69,7 +69,7 @@ impl<S> tower::Layer<S> for AwsMiddleware {
 ///    S::Error: Into<BoxError> + Send + Sync + 'static,
 ///    S::Future: Send + 'static,
 /// ```
-pub type Client<C> = smithy_client::Client<C, AwsMiddleware>;
+pub type Client<C = DynConnector> = smithy_client::Client<C, AwsMiddleware>;
 
 #[doc(inline)]
 pub use smithy_client::erase::DynConnector;

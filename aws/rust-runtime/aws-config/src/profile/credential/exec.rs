@@ -5,7 +5,6 @@
 
 use std::sync::Arc;
 
-use aws_hyper::{DynConnector, StandardClient};
 use aws_sdk_sts::operation::AssumeRole;
 use aws_sdk_sts::{Config, Credentials};
 use aws_types::region::Region;
@@ -18,6 +17,7 @@ use crate::web_identity_token::{WebIdentityTokenCredentialProvider, WebIdentityT
 use aws_types::credential;
 use aws_types::credential::{CredentialsError, ProvideCredentials};
 use aws_types::os_shim_internal::Fs;
+use smithy_client::DynConnector;
 use std::fmt::{Debug, Formatter};
 
 #[derive(Debug)]
@@ -28,7 +28,7 @@ pub struct AssumeRoleProvider {
 }
 
 pub struct ClientConfiguration {
-    pub(crate) core_client: StandardClient,
+    pub(crate) core_client: aws_sdk_sts::RawClient<DynConnector>,
     pub(crate) region: Option<Region>,
 }
 

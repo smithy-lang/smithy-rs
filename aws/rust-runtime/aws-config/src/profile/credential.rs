@@ -333,9 +333,7 @@ impl Builder {
         // TODO: ECS, IMDS, and other named providers
         let factory = exec::named::NamedProviderFactory::new(named_providers);
         let connector = self.connector.clone().unwrap_or_else(must_have_connector);
-        let core_client = aws_hyper::Builder::<()>::new()
-            .map_connector(|_| connector.clone())
-            .build();
+        let core_client = aws_sdk_sts::RawClient::new(connector.clone());
 
         Provider {
             factory,
