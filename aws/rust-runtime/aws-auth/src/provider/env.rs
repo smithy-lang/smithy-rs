@@ -3,30 +3,25 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+//! Credential provider implementation that pulls from environment variables
+
 use crate::provider::{CredentialsError, ProvideCredentials};
 use crate::Credentials;
-use std::collections::HashMap;
+use aws_types::os_shim_internal::Env;
 use std::env::VarError;
 
 /// Load Credentials from Environment Variables
 pub struct EnvironmentVariableCredentialsProvider {
-    env: Box<dyn Fn(&str) -> Result<String, VarError> + Send + Sync>,
+    env: Env,
 }
 
 impl EnvironmentVariableCredentialsProvider {
     pub fn new() -> Self {
-        EnvironmentVariableCredentialsProvider { env: Box::new(var) }
+        Self::new_with_env(Env::real())
     }
 
-    /// Create a EnvironmentVariable provider from a HashMap for testing
-    pub fn for_map(env: HashMap<String, String>) -> Self {
-        EnvironmentVariableCredentialsProvider {
-            env: Box::new(move |key: &str| {
-                env.get(key)
-                    .ok_or(VarError::NotPresent)
-                    .map(|k| k.to_string())
-            }),
-        }
+    pub fn new_with_env(env: Env) -> Self {
+        Self { env }
     }
 }
 
@@ -36,19 +31,17 @@ impl Default for EnvironmentVariableCredentialsProvider {
     }
 }
 
-fn var(key: &str) -> Result<String, VarError> {
-    std::env::var(key)
-}
-
 const ENV_PROVIDER: &str = "EnvironmentVariable";
 
 impl ProvideCredentials for EnvironmentVariableCredentialsProvider {
     fn provide_credentials(&self) -> Result<Credentials, CredentialsError> {
-        let access_key = (self.env)("AWS_ACCESS_KEY_ID").map_err(to_cred_error)?;
-        let secret_key = (self.env)("AWS_SECRET_ACCESS_KEY")
-            .or_else(|_| (self.env)("SECRET_ACCESS_KEY"))
+        let access_key = self.env.get("AWS_ACCESS_KEY_ID").map_err(to_cred_error)?;
+        let secret_key = self
+            .env
+            .get("AWS_SECRET_ACCESS_KEY")
+            .or_else(|_| self.env.get("SECRET_ACCESS_KEY"))
             .map_err(to_cred_error)?;
-        let session_token = (self.env)("AWS_SESSION_TOKEN").ok();
+        let session_token = self.env.get("AWS_SESSION_TOKEN").ok();
         Ok(Credentials::new(
             access_key,
             secret_key,
@@ -70,15 +63,20 @@ fn to_cred_error(err: VarError) -> CredentialsError {
 mod test {
     use super::EnvironmentVariableCredentialsProvider;
     use crate::provider::{CredentialsError, ProvideCredentials};
-    use std::collections::HashMap;
+    use aws_types::os_shim_internal::Env;
+
+    fn make_provider(vars: &[(&str, &str)]) -> EnvironmentVariableCredentialsProvider {
+        EnvironmentVariableCredentialsProvider {
+            env: Env::from_slice(vars),
+        }
+    }
 
     #[test]
     fn valid_no_token() {
-        let mut env = HashMap::new();
-        env.insert("AWS_ACCESS_KEY_ID".to_owned(), "access".to_owned());
-        env.insert("AWS_SECRET_ACCESS_KEY".to_owned(), "secret".to_owned());
-
-        let provider = EnvironmentVariableCredentialsProvider::for_map(env);
+        let provider = make_provider(&[
+            ("AWS_ACCESS_KEY_ID", "access"),
+            ("AWS_SECRET_ACCESS_KEY", "secret"),
+        ]);
         let creds = provider.provide_credentials().expect("valid credentials");
         assert_eq!(creds.session_token(), None);
         assert_eq!(creds.access_key_id(), "access");
@@ -87,12 +85,12 @@ mod test {
 
     #[test]
     fn valid_with_token() {
-        let mut env = HashMap::new();
-        env.insert("AWS_ACCESS_KEY_ID".to_owned(), "access".to_owned());
-        env.insert("AWS_SECRET_ACCESS_KEY".to_owned(), "secret".to_owned());
-        env.insert("AWS_SESSION_TOKEN".to_owned(), "token".to_owned());
+        let provider = make_provider(&[
+            ("AWS_ACCESS_KEY_ID", "access"),
+            ("AWS_SECRET_ACCESS_KEY", "secret"),
+            ("AWS_SESSION_TOKEN", "token"),
+        ]);
 
-        let provider = EnvironmentVariableCredentialsProvider::for_map(env);
         let creds = provider.provide_credentials().expect("valid credentials");
         assert_eq!(creds.session_token().unwrap(), "token");
         assert_eq!(creds.access_key_id(), "access");
@@ -101,12 +99,12 @@ mod test {
 
     #[test]
     fn secret_key_fallback() {
-        let mut env = HashMap::new();
-        env.insert("AWS_ACCESS_KEY_ID".to_owned(), "access".to_owned());
-        env.insert("SECRET_ACCESS_KEY".to_owned(), "secret".to_owned());
-        env.insert("AWS_SESSION_TOKEN".to_owned(), "token".to_owned());
+        let provider = make_provider(&[
+            ("AWS_ACCESS_KEY_ID", "access"),
+            ("SECRET_ACCESS_KEY", "secret"),
+            ("AWS_SESSION_TOKEN", "token"),
+        ]);
 
-        let provider = EnvironmentVariableCredentialsProvider::for_map(env);
         let creds = provider.provide_credentials().expect("valid credentials");
         assert_eq!(creds.session_token().unwrap(), "token");
         assert_eq!(creds.access_key_id(), "access");
@@ -115,8 +113,7 @@ mod test {
 
     #[test]
     fn missing() {
-        let env = HashMap::new();
-        let provider = EnvironmentVariableCredentialsProvider::for_map(env);
+        let provider = make_provider(&[]);
         let err = provider
             .provide_credentials()
             .expect_err("no credentials defined");

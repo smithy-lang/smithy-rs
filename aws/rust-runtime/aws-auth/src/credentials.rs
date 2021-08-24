@@ -16,9 +16,10 @@ use zeroize::Zeroizing;
 ///
 /// When `Credentials` is dropped, its contents are zeroed in memory. Credentials uses an interior Arc to ensure
 /// that even when cloned, credentials don't exist in multiple memory locations.
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Credentials(Arc<Inner>);
 
+#[derive(Clone, Eq, PartialEq)]
 struct Inner {
     access_key_id: Zeroizing<String>,
     secret_access_key: Zeroizing<String>,
@@ -39,8 +40,14 @@ struct Inner {
 impl Debug for Credentials {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut creds = f.debug_struct("Credentials");
-        creds.field("provider_name", &self.0.provider_name);
-        creds.field("access_key_id", &self.0.access_key_id);
+        creds
+            .field("provider_name", &self.0.provider_name)
+            .field("access_key_id", &self.0.access_key_id.as_str())
+            .field("secret_access_key", &"** redacted **");
+        if let Some(expiry) = self.expiry() {
+            // TODO: format the expiry nicely
+            creds.field("expires_after", &expiry);
+        }
         creds.finish()
     }
 }
@@ -87,6 +94,10 @@ impl Credentials {
 
     pub fn expiry(&self) -> Option<SystemTime> {
         self.0.expires_after
+    }
+
+    pub fn expiry_mut(&mut self) -> &mut Option<SystemTime> {
+        &mut Arc::make_mut(&mut self.0).expires_after
     }
 
     pub fn session_token(&self) -> Option<&str> {

@@ -114,7 +114,18 @@ class Instantiator(
 
             // Simple Shapes
             is StringShape -> renderString(writer, shape, arg as StringNode)
-            is NumberShape -> writer.write(arg.asNumberNode().get())
+            is NumberShape -> when (arg) {
+                is StringNode -> {
+                    val numberSymbol = symbolProvider.toSymbol(shape)
+                    // support Smithy custom values, such as Infinity
+                    writer.rust(
+                        """<#T as #T>::parse_smithy_primitive(${arg.value.dq()}).expect("invalid string for number")""",
+                        numberSymbol,
+                        CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse")
+                    )
+                }
+                is NumberNode -> writer.write(arg.value)
+            }
             is BooleanShape -> writer.write(arg.asBooleanNode().get().toString())
             is DocumentShape -> writer.rustBlock("") {
                 val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
