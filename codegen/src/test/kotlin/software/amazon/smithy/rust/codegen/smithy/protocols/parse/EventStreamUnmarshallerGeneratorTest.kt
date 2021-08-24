@@ -37,8 +37,7 @@ class EventStreamUnmarshallerGeneratorTest {
             TestRuntimeConfig,
             test.symbolProvider,
             test.operationShape,
-            test.streamShape,
-            testCase.responseContentType
+            test.streamShape
         )
 
         test.project.lib { writer ->
@@ -263,7 +262,7 @@ class EventStreamUnmarshallerGeneratorTest {
                 """
                 let message = msg(
                     "event",
-                    "MessageWithStruct",
+                    "MessageWithBlob",
                     "wrong-content-type",
                     br#"${testCase.validTestStruct}"#
                 );

@@ -47,7 +47,6 @@ class EventStreamUnmarshallerGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val operationShape: OperationShape,
     private val unionShape: UnionShape,
-    private val payloadContentType: String,
 ) {
     private val unionSymbol = symbolProvider.toSymbol(unionShape)
     private val operationErrorSymbol = operationShape.errorSymbol(symbolProvider)
@@ -123,10 +122,9 @@ class EventStreamUnmarshallerGenerator(
     }
 
     private fun expectedContentType(payloadTarget: Shape): String? = when (payloadTarget) {
-        null -> null
         is BlobShape -> "application/octet-stream"
         is StringShape -> "text/plain"
-        else -> payloadContentType
+        else -> null
     }
 
     private fun RustWriter.renderUnmarshallEvent() {
