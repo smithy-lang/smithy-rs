@@ -13,4 +13,4 @@ members = [
     "aws-sigv4"
 ]
 
-exclude = ["aws-auth-providers"]
+exclude = ["aws-auth-providers", "aws-config"]

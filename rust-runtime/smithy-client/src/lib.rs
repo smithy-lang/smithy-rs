@@ -12,6 +12,7 @@
 
 pub mod bounds;
 pub mod erase;
+pub use erase::DynConnector;
 pub mod retry;
 
 // https://github.com/rust-lang/rust/issues/72081

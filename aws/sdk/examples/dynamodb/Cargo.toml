@@ -11,6 +11,7 @@ aws-sdk-dynamodb = { package = "aws-sdk-dynamodb", path = "../../build/aws-sdk/d
 aws-http = { path = "../../build/aws-sdk/aws-http"}
 aws-hyper = { path = "../../build/aws-sdk/aws-hyper"}
 aws-types = { path = "../../build/aws-sdk/aws-types" }
+aws-config = { path = "../../build/aws-sdk/aws-config"}
 smithy-http = { path = "../../build/aws-sdk/smithy-http" }
 smithy-types = { path = "../../build/aws-sdk/smithy-types" }
 tokio = { version = "1", features = ["full"] }

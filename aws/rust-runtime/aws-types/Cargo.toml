@@ -10,6 +10,8 @@ license = "Apache-2.0"
 [dependencies]
 lazy_static = "1"
 tracing = "0.1"
+zeroize = "1.4.1"
+smithy-async = { path = "../../../rust-runtime/smithy-async"}
 
 [dev-dependencies]
 tracing-test = "0.1.0"

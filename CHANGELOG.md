@@ -123,7 +123,7 @@ v0.17 (July 15th 2021)
 **New this Week**
 
 - :tada: Add support for Autoscaling (#576, #582)
-- `AsyncProvideCredentials` now introduces an additional lifetime parameter, simplifying bridging it
+- `ProvideCredentials` now introduces an additional lifetime parameter, simplifying bridging it
   with `#[async_trait]` interfaces
 - Fix S3 bug when content type was set explicitly (aws-sdk-rust#131, #566, @eagletmt)
 

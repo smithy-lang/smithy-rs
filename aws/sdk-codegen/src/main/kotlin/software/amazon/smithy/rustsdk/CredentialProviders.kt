@@ -54,7 +54,7 @@ class CredentialsProviderDecorator : RustCodegenDecorator {
  */
 class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
     private val credentialsProvider = credentialsProvider(runtimeConfig)
-    private val defaultProvider = defaultProvider(runtimeConfig)
+    private val defaultProvider = defaultProvider()
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rust(
@@ -77,7 +77,7 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                 )
             }
             ServiceConfig.BuilderBuild -> rust(
-                "credentials_provider: self.credentials_provider.unwrap_or_else(|| std::sync::Arc::new(#T())),",
+                "credentials_provider: self.credentials_provider.unwrap_or_else(|| std::sync::Arc::new(#T)),",
                 defaultProvider
             )
         }
@@ -111,10 +111,10 @@ class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
 
 fun awsAuth(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-auth")
 fun credentialsProvider(runtimeConfig: RuntimeConfig) =
-    RuntimeType("AsyncProvideCredentials", awsAuth(runtimeConfig), "aws_auth::provider")
+    RuntimeType("ProvideCredentials", awsTypes(runtimeConfig), "aws_types::credential")
 
-fun defaultProvider(runtimeConfig: RuntimeConfig) =
-    RuntimeType("default_provider", awsAuth(runtimeConfig), "aws_auth::provider")
+fun defaultProvider() =
+    RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("no_credentials")).member("NoCredentials")
 
 fun setProvider(runtimeConfig: RuntimeConfig) =
-    RuntimeType("set_provider", awsAuth(runtimeConfig), "aws_auth::provider")
+    RuntimeType("set_provider", awsAuth(runtimeConfig), "aws_auth")

@@ -40,7 +40,8 @@ val awsModules = listOf(
     "aws-hyper",
     "aws-sig-auth",
     "aws-sigv4",
-    "aws-types"
+    "aws-types",
+    "aws-config"
 )
 
 buildscript {

@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-#[allow(dead_code)]
-mod s3_errors;
+mod parser;
 
-#[allow(dead_code)]
-mod no_credentials;
+pub mod credential;
+
+pub mod region;
+
+pub use parser::{Profile, ProfileSet, Property};

@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::provider::{CredentialsError, CredentialsProvider};
 use smithy_http::middleware::AsyncMapRequest;
 use smithy_http::operation::Request;
 use std::future::Future;
@@ -51,7 +50,7 @@ impl CredentialsStage {
 }
 
 mod error {
-    use crate::provider::CredentialsError;
+    use aws_types::credential::CredentialsError;
     use std::error::Error as StdError;
     use std::fmt;
 
@@ -86,6 +85,8 @@ mod error {
     }
 }
 
+use crate::CredentialsProvider;
+use aws_types::credential::CredentialsError;
 pub use error::*;
 
 type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
@@ -102,12 +103,34 @@ impl AsyncMapRequest for CredentialsStage {
 #[cfg(test)]
 mod tests {
     use super::CredentialsStage;
-    use crate::provider::{async_provide_credentials_fn, set_provider, CredentialsError};
-    use crate::Credentials;
+    use crate::set_provider;
+    use aws_types::credential::provide_credentials::future;
+    use aws_types::credential::{CredentialsError, ProvideCredentials};
+    use aws_types::Credentials;
     use smithy_http::body::SdkBody;
     use smithy_http::middleware::AsyncMapRequest;
     use smithy_http::operation;
     use std::sync::Arc;
+
+    struct Unhandled;
+    impl ProvideCredentials for Unhandled {
+        fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
+        where
+            Self: 'a,
+        {
+            future::ProvideCredentials::ready(Err(CredentialsError::Unhandled("whoops".into())))
+        }
+    }
+
+    struct NoCreds;
+    impl ProvideCredentials for NoCreds {
+        fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
+        where
+            Self: 'a,
+        {
+            future::ProvideCredentials::ready(Err(CredentialsError::CredentialsNotLoaded))
+        }
+    }
 
     #[tokio::test]
     async fn no_cred_provider_is_ok() {
@@ -121,12 +144,7 @@ mod tests {
     #[tokio::test]
     async fn provider_failure_is_failure() {
         let mut req = operation::Request::new(http::Request::new(SdkBody::from("some body")));
-        set_provider(
-            &mut req.properties_mut(),
-            Arc::new(async_provide_credentials_fn(|| async {
-                Err(CredentialsError::Unhandled("whoops".into()))
-            })),
-        );
+        set_provider(&mut req.properties_mut(), Arc::new(Unhandled));
         CredentialsStage::new()
             .apply(req)
             .await
@@ -136,12 +154,7 @@ mod tests {
     #[tokio::test]
     async fn credentials_not_loaded_is_ok() {
         let mut req = operation::Request::new(http::Request::new(SdkBody::from("some body")));
-        set_provider(
-            &mut req.properties_mut(),
-            Arc::new(async_provide_credentials_fn(|| async {
-                Err(CredentialsError::CredentialsNotLoaded)
-            })),
-        );
+        set_provider(&mut req.properties_mut(), Arc::new(NoCreds));
         CredentialsStage::new()
             .apply(req)
             .await
