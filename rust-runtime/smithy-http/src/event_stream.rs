@@ -142,6 +142,11 @@ pub struct Receiver<T, E> {
     decoder: MessageFrameDecoder,
     buffer: SegmentedBuf<Bytes>,
     body: SdkBody,
+    /// Event Stream has optional initial response frames an with `:message-type` of
+    /// `initial-response`. If `try_recv_initial()` is called and the next message isn't an
+    /// initial response, then the message will be stored in `buffered_message` so that it can
+    /// be returned with the next call of `recv()`.
+    buffered_message: Option<Message>,
     _phantom: PhantomData<E>,
 }
 
@@ -156,15 +161,23 @@ impl<T, E> Receiver<T, E> {
             decoder: MessageFrameDecoder::new(),
             buffer: SegmentedBuf::new(),
             body,
+            buffered_message: None,
             _phantom: Default::default(),
         }
     }
 
-    /// Asynchronously tries to receive a message from the stream. If the stream has ended,
-    /// it returns an `Ok(None)`. If there is a transport layer error, it will return
-    /// `Err(SdkError::DispatchFailure)`. Service-modeled errors will be a part of the returned
-    /// messages.
-    pub async fn recv(&mut self) -> Result<Option<T>, SdkError<E, Message>> {
+    fn unmarshall(&self, message: Message) -> Result<Option<T>, SdkError<E, Message>> {
+        match self
+            .unmarshaller
+            .unmarshall(&message)
+            .map_err(|err| SdkError::DispatchFailure(Box::new(err)))?
+        {
+            UnmarshalledMessage::Event(event) => Ok(Some(event)),
+            UnmarshalledMessage::Error(err) => Err(SdkError::ServiceError { err, raw: message }),
+        }
+    }
+
+    async fn next_message(&mut self) -> Result<Option<Message>, SdkError<E, Message>> {
         let next_chunk = self
             .body
             .data()
@@ -179,19 +192,51 @@ impl<T, E> Receiver<T, E> {
                 .decode_frame(&mut self.buffer)
                 .map_err(|err| SdkError::DispatchFailure(Box::new(err)))?
             {
-                return match self
-                    .unmarshaller
-                    .unmarshall(&message)
-                    .map_err(|err| SdkError::DispatchFailure(Box::new(err)))?
-                {
-                    UnmarshalledMessage::Event(event) => Ok(Some(event)),
-                    UnmarshalledMessage::Error(err) => {
-                        Err(SdkError::ServiceError { err, raw: message })
-                    }
-                };
+                return Ok(Some(message));
             }
         }
         Ok(None)
+    }
+
+    /// Tries to receive the initial response message that has `:event-type` of `initial-response`.
+    /// If a different event type is received, then it is buffered and `Ok(None)` is returned.
+    #[doc(hidden)]
+    pub async fn try_recv_initial(&mut self) -> Result<Option<Message>, SdkError<E, Message>> {
+        if let Some(message) = self.next_message().await? {
+            if let Some(event_type) = message
+                .headers()
+                .iter()
+                .find(|h| h.name().as_str() == ":event-type")
+            {
+                if event_type
+                    .value()
+                    .as_string()
+                    .map(|s| s.as_str() == "initial-response")
+                    .unwrap_or(false)
+                {
+                    return Ok(Some(message));
+                }
+            } else {
+                // Buffer the message so that it can be returned by the next call to `recv()`
+                self.buffered_message = Some(message);
+            }
+        }
+        Ok(None)
+    }
+
+    /// Asynchronously tries to receive a message from the stream. If the stream has ended,
+    /// it returns an `Ok(None)`. If there is a transport layer error, it will return
+    /// `Err(SdkError::DispatchFailure)`. Service-modeled errors will be a part of the returned
+    /// messages.
+    pub async fn recv(&mut self) -> Result<Option<T>, SdkError<E, Message>> {
+        if let Some(buffered) = self.buffered_message.take() {
+            return self.unmarshall(buffered);
+        }
+        if let Some(message) = self.next_message().await? {
+            self.unmarshall(message)
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -212,6 +257,22 @@ mod tests {
     };
     use std::error::Error as StdError;
     use std::io::{Error as IOError, ErrorKind};
+
+    fn encode_initial_response() -> Bytes {
+        let mut buffer = Vec::new();
+        Message::new(Bytes::new())
+            .add_header(Header::new(
+                ":message-type",
+                HeaderValue::String("event".into()),
+            ))
+            .add_header(Header::new(
+                ":event-type",
+                HeaderValue::String("initial-response".into()),
+            ))
+            .write_to(&mut buffer)
+            .unwrap();
+        buffer.into()
+    }
 
     fn encode_message(message: &str) -> Bytes {
         let mut buffer = Vec::new();
@@ -314,6 +375,38 @@ mod tests {
             receiver.recv().await,
             Err(SdkError::DispatchFailure(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn receive_initial_response() {
+        let chunks: Vec<Result<_, IOError>> =
+            vec![Ok(encode_initial_response()), Ok(encode_message("one"))];
+        let chunk_stream = futures_util::stream::iter(chunks);
+        let body = SdkBody::from(Body::wrap_stream(chunk_stream));
+        let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
+        assert!(receiver.try_recv_initial().await.unwrap().is_some());
+        assert_eq!(
+            TestMessage("one".into()),
+            receiver.recv().await.unwrap().unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn receive_no_initial_response() {
+        let chunks: Vec<Result<_, IOError>> =
+            vec![Ok(encode_message("one")), Ok(encode_message("two"))];
+        let chunk_stream = futures_util::stream::iter(chunks);
+        let body = SdkBody::from(Body::wrap_stream(chunk_stream));
+        let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
+        assert!(receiver.try_recv_initial().await.unwrap().is_none());
+        assert_eq!(
+            TestMessage("one".into()),
+            receiver.recv().await.unwrap().unwrap()
+        );
+        assert_eq!(
+            TestMessage("two".into()),
+            receiver.recv().await.unwrap().unwrap()
+        );
     }
 
     #[derive(Debug)]
