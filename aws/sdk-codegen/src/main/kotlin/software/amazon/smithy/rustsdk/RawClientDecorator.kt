@@ -3,10 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-#[allow(dead_code)]
-mod s3_errors;
+package software.amazon.smithy.rustsdk
 
-#[allow(dead_code)]
-mod default_middleware;
-#[allow(dead_code)]
-mod no_credentials;
+class RawClientDecorator

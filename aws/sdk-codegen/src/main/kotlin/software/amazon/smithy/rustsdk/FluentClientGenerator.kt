@@ -25,6 +25,8 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
@@ -38,6 +40,15 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
+private fun middleware(runtimeConfig: RuntimeConfig) = RuntimeType.forInlineDependency(
+    InlineAwsDependency.forRustFile(
+        "default_middleware",
+        CargoDependency.SmithyClient(runtimeConfig),
+        CargoDependency.SmithyHttpTower(runtimeConfig),
+        CargoDependency.Tower.copy(optional = false)
+    )
+)
+
 class FluentClientDecorator : RustCodegenDecorator {
     override val name: String = "FluentClient"
     override val order: Byte = 0
@@ -47,10 +58,10 @@ class FluentClientDecorator : RustCodegenDecorator {
         rustCrate.withModule(RustModule("client", module)) { writer ->
             FluentClientGenerator(protocolConfig).render(writer)
         }
-        val awsHyper = "aws-hyper"
-        rustCrate.addFeature(Feature("client", true, listOf(awsHyper)))
-        rustCrate.addFeature(Feature("rustls", default = true, listOf("$awsHyper/rustls")))
-        rustCrate.addFeature(Feature("native-tls", default = false, listOf("$awsHyper/native-tls")))
+        val smithyClient = "smithy-client"
+        rustCrate.addFeature(Feature("client", true, listOf()))
+        rustCrate.addFeature(Feature("rustls", default = true, listOf("$smithyClient/rustls")))
+        rustCrate.addFeature(Feature("native-tls", default = false, listOf("$smithyClient/native-tls")))
     }
 
     override fun libRsCustomizations(
@@ -62,6 +73,10 @@ class FluentClientDecorator : RustCodegenDecorator {
                 is LibRsSection.Body -> writable {
                     Attribute.Cfg.feature("client").render(this)
                     rust("pub use client::Client;")
+                    rustTemplate(
+                        "pub use #{middleware}::Client as RawClient;",
+                        "middleware" to middleware(protocolConfig.runtimeConfig)
+                    )
                 }
                 else -> emptySection
             }
@@ -76,29 +91,30 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
     private val runtimeConfig = protocolConfig.runtimeConfig
-    private val hyperDep = runtimeConfig.awsRuntimeDependency("aws-hyper").copy(optional = true)
+    private val codegenScope =
+        arrayOf("middleware" to middleware(runtimeConfig), "aws_types" to awsTypes(runtimeConfig).asType())
 
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
             ##[derive(std::fmt::Debug)]
-            pub(crate) struct Handle<C = #{aws_hyper}::DynConnector> {
-                client: #{aws_hyper}::Client<C>,
+            pub(crate) struct Handle<C = #{middleware}::DynConnector> {
+                client: #{middleware}::Client<C>,
                 conf: crate::Config
             }
 
             ##[derive(Clone, std::fmt::Debug)]
-            pub struct Client<C = #{aws_hyper}::DynConnector> {
+            pub struct Client<C = #{middleware}::DynConnector> {
                 handle: std::sync::Arc<Handle<C>>
             }
         """,
-            "aws_hyper" to hyperDep.asType()
+            *codegenScope
         )
         writer.rustBlock("impl<C> Client<C>") {
             rustTemplate(
                 """
                 pub fn from_conf_conn(conf: crate::Config, conn: C) -> Self {
-                    let client = #{aws_hyper}::Client::new(conn);
+                    let client = #{middleware}::Client::new(conn);
                     Self { handle: std::sync::Arc::new(Handle { client, conf })}
                 }
 
@@ -107,28 +123,28 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                 }
 
             """,
-                "aws_hyper" to hyperDep.asType()
+                *codegenScope
             )
         }
         writer.rustBlock("impl Client") {
             rustTemplate(
                 """
-                ##[cfg(any(feature = "rustls", feature = "native-tls"))]
-                pub fn from_conf(conf: crate::Config) -> Self {
-                    let client = #{aws_hyper}::Client::https();
+                pub fn new(shared_config: &#{aws_types}::config::Config) -> Self {
+                    let client = #{middleware}::raw_client(&shared_config);
+                    let conf = crate::config::Builder::from(shared_config).build();
                     Self { handle: std::sync::Arc::new(Handle { client, conf })}
                 }
 
             """,
-                "aws_hyper" to hyperDep.asType()
+                *codegenScope
             )
         }
         writer.rustBlockTemplate(
             """
             impl<C> Client<C>
-                where C: #{aws_hyper}::SmithyConnector,
+                where C: #{middleware}::SmithyConnector,
             """,
-            "aws_hyper" to hyperDep.asType()
+            *codegenScope
         ) {
             operations.forEach { operation ->
                 val name = symbolProvider.toSymbol(operation).name
@@ -149,12 +165,12 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                 rustTemplate(
                     """
                     ##[derive(std::fmt::Debug)]
-                    pub struct $name<C = #{aws_hyper}::DynConnector> {
+                    pub struct $name<C = #{middleware}::DynConnector> {
                         handle: std::sync::Arc<super::Handle<C>>,
                         inner: #{ty}
                     }""",
                     "ty" to input.builderSymbol(symbolProvider),
-                    "aws_hyper" to hyperDep.asType()
+                    *codegenScope
                 )
 
                 rustBlock("impl<C> $name<C>") {
@@ -165,7 +181,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         }
 
                         pub async fn send(self) -> std::result::Result<#{ok}, #{sdk_err}<#{operation_err}>>
-                          where C: #{aws_hyper}::SmithyConnector,
+                          where C: #{middleware}::SmithyConnector,
                         {
                             let input = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
                             let op = input.make_operation(&self.handle.conf)
@@ -176,7 +192,7 @@ class FluentClientGenerator(protocolConfig: ProtocolConfig) {
                         "ok" to symbolProvider.toSymbol(operation.outputShape(model)),
                         "operation_err" to operation.errorSymbol(symbolProvider),
                         "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType().copy(name = "result::SdkError"),
-                        "aws_hyper" to hyperDep.asType()
+                        *codegenScope
                     )
                     members.forEach { member ->
                         val memberName = symbolProvider.toMemberName(member)

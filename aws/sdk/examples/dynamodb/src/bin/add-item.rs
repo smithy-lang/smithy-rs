@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_sdk_dynamodb::model::AttributeValue;
-use aws_sdk_dynamodb::{Client, Config, Error, Region, PKG_VERSION};
-use aws_types::region;
+use std::process;
 
 use aws_config::meta::region::ProviderChain;
-use std::process;
+use aws_sdk_dynamodb::model::AttributeValue;
+use aws_sdk_dynamodb::{Client, Error, Region, PKG_VERSION};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -100,12 +99,8 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let shared_config = aws_config::load_config_from_environment().await;
-    let config = aws_sdk_dynamodb::config::Builder::from(&shared_config)
-        .region(region)
-        .build();
-
-    let client = Client::from_conf(config);
+    let shared_config = aws_config::env_loader().with_region(region).load().await;
+    let client = Client::new(&shared_config);
 
     let user_av = AttributeValue::S(String::from(&username));
     let type_av = AttributeValue::S(String::from(&p_type));

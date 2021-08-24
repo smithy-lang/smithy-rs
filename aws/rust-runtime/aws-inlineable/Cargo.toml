@@ -10,6 +10,9 @@ are to allow this crate to be compilable and testable in isolation, no client co
 
 [dependencies]
 aws-types = { path = "../../rust-runtime/aws-types" }
+aws-auth = { path = "../../rust-runtime/aws-auth" }
+aws-http = { path = "../../rust-runtime/aws-http" }
 smithy-xml = { path = "../../../rust-runtime/smithy-xml" }
 smithy-types = { path = "../../../rust-runtime/smithy-types" }
+smithy-client = { path = "../../../rust-runtime/smithy-client"}
 http = "0.2.4"
