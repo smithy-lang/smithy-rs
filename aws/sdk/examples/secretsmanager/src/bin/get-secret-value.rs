@@ -6,7 +6,7 @@ use std::process;
 
 use secretsmanager::{Client, Config, Region};
 
-use aws_types::region::{EnvironmentProvider, ProvideRegion};
+use aws_types::region;
 
 use structopt::StructOpt;
 
@@ -45,10 +45,10 @@ async fn main() {
         verbose,
     } = Opt::from_args();
 
-    let region = EnvironmentProvider::new()
-        .region()
-        .or_else(|| region.as_ref().map(|region| Region::new(region.clone())))
-        .unwrap_or_else(|| Region::new("us-west-2"));
+    let region_provider = region::ChainProvider::first_try(region.map(Region::new))
+        .or_default_provider()
+        .or_else(Region::new("us-west-2"));
+    let region = region_provider.region().await;
 
     if verbose {
         println!(

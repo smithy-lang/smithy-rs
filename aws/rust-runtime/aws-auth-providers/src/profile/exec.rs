@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use aws_auth::provider::{AsyncProvideCredentials, CredentialsError, CredentialsResult};
 use aws_auth::Credentials;
-use aws_hyper::StandardClient;
+use aws_hyper::{DynConnector, StandardClient};
 use aws_sdk_sts::operation::AssumeRole;
 use aws_sdk_sts::Config;
 use aws_types::region::Region;
@@ -16,6 +16,10 @@ use crate::profile::repr::BaseProvider;
 use crate::profile::ProfileFileError;
 
 use super::repr;
+use crate::sts_util;
+use crate::sts_util::default_session_name;
+use crate::web_identity_token::{WebIdentityTokenCredentialProvider, WebIdentityTokenRole};
+use aws_types::os_shim_internal::Fs;
 use std::fmt::{Debug, Formatter};
 
 #[derive(Debug)]
@@ -26,8 +30,8 @@ pub struct AssumeRoleProvider {
 }
 
 pub struct ClientConfiguration {
-    pub core_client: StandardClient,
-    pub region: Option<Region>,
+    pub(crate) core_client: StandardClient,
+    pub(crate) region: Option<Region>,
 }
 
 impl AssumeRoleProvider {
@@ -40,14 +44,15 @@ impl AssumeRoleProvider {
             .credentials_provider(input_credentials)
             .region(client_config.region.clone())
             .build();
+        let session_name = &self
+            .session_name
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| sts_util::default_session_name("assume-role-from-profile"));
         let operation = AssumeRole::builder()
             .role_arn(&self.role_arn)
             .set_external_id(self.external_id.clone())
-            .role_session_name(
-                self.session_name
-                    .as_deref()
-                    .unwrap_or("assume-role-provider-session"),
-            )
+            .role_session_name(session_name)
             .build()
             .expect("operation is valid")
             .make_operation(&config)
@@ -56,32 +61,9 @@ impl AssumeRoleProvider {
             .core_client
             .call(operation)
             .await
-            .map_err(|err| CredentialsError::Unhandled(err.into()))?
-            .credentials
-            .ok_or_else(|| {
-                CredentialsError::Unhandled(
-                    "assume role provider did not return credentials".into(),
-                )
-            })?;
-        let expiration = assume_role_creds
-            .expiration
-            .ok_or_else(|| CredentialsError::Unhandled("missing expiration".into()))?;
-        let expiration = expiration.to_system_time().ok_or_else(|| {
-            CredentialsError::Unhandled(
-                format!("expiration is before unix epoch: {:?}", &expiration).into(),
-            )
-        })?;
-        Ok(Credentials::new(
-            assume_role_creds.access_key_id.ok_or_else(|| {
-                CredentialsError::Unhandled("access key id missing from result".into())
-            })?,
-            assume_role_creds
-                .secret_access_key
-                .ok_or_else(|| CredentialsError::Unhandled("secret access token missing".into()))?,
-            assume_role_creds.session_token,
-            Some(expiration),
-            "AssumeRoleProvider",
-        ))
+            .map_err(|err| CredentialsError::ProviderError(err.into()))?
+            .credentials;
+        crate::sts_util::into_credentials(assume_role_creds, "AssumeRoleProvider")
     }
 }
 
@@ -109,6 +91,9 @@ impl ProviderChain {
 
 impl ProviderChain {
     pub fn from_repr(
+        fs: Fs,
+        connector: &DynConnector,
+        region: Option<Region>,
         repr: repr::ProfileChain,
         factory: &named::NamedProviderFactory,
     ) -> Result<Self, ProfileFileError> {
@@ -121,6 +106,25 @@ impl ProviderChain {
                     })?
             }
             BaseProvider::AccessKey(key) => Arc::new(key.clone()),
+            BaseProvider::WebIdentityTokenRole {
+                role_arn,
+                web_identity_token_file,
+                session_name,
+            } => {
+                let provider = WebIdentityTokenCredentialProvider::builder()
+                    .static_configuration(WebIdentityTokenRole {
+                        web_identity_token_file: web_identity_token_file.into(),
+                        role_arn: role_arn.to_string(),
+                        session_name: session_name
+                            .map(|sess| sess.to_string())
+                            .unwrap_or_else(|| default_session_name("web-identity-token-profile")),
+                    })
+                    .fs(fs)
+                    .connector(connector.clone())
+                    .region(region)
+                    .build();
+                Arc::new(provider)
+            }
         };
         tracing::info!(base = ?repr.base(), "first credentials will be loaded from {:?}", repr.base());
         let chain = repr
@@ -168,12 +172,22 @@ mod test {
     use crate::profile::exec::named::NamedProviderFactory;
     use crate::profile::exec::ProviderChain;
     use crate::profile::repr::{BaseProvider, ProfileChain};
+    use aws_hyper::DynConnector;
+    use aws_sdk_sts::Region;
+    use smithy_client::dvr;
     use std::collections::HashMap;
+
+    fn stub_connector() -> DynConnector {
+        DynConnector::new(dvr::ReplayingConnection::new(vec![]))
+    }
 
     #[test]
     fn error_on_unknown_provider() {
         let factory = NamedProviderFactory::new(HashMap::new());
         let chain = ProviderChain::from_repr(
+            Default::default(),
+            &stub_connector(),
+            Some(Region::new("us-east-1")),
             ProfileChain {
                 base: BaseProvider::NamedSource("floozle"),
                 chain: vec![],

@@ -10080,7 +10080,7 @@
                 "target": "com.amazonaws.ec2#KeyPair"
             },
             "traits": {
-                "smithy.api#documentation": "<p>Creates a 2048-bit RSA key pair with the specified name. Amazon EC2 stores the public\n            key and displays the private key for you to save to a file. The private key is returned\n            as an unencrypted PEM encoded PKCS#1 private key. If a key with the specified name\n            already exists, Amazon EC2 returns an error.</p>\n         <p>You can have up to five thousand key pairs per Region.</p>\n\t\t       <p>The key pair returned to you is available only in the Region in which you create it.\n            If you prefer, you can create your own key pair using a third-party tool and upload it\n            to any Region using <a>ImportKeyPair</a>.</p>\n         <p>For more information, see <a href=\"https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html\">Key Pairs</a> in the\n                <i>Amazon Elastic Compute Cloud User Guide</i>.</p>"
+                "smithy.api#documentation": "<p>Creates an ED25519 or 2048-bit RSA key pair with the specified name. Amazon EC2 stores the public\n            key and displays the private key for you to save to a file. The private key is returned\n            as an unencrypted PEM encoded PKCS#1 private key. If a key with the specified name\n            already exists, Amazon EC2 returns an error.</p>\n\t\t       <p>The key pair returned to you is available only in the Amazon Web Services Region in which you create it.\n            If you prefer, you can create your own key pair using a third-party tool and upload it\n            to any Region using <a>ImportKeyPair</a>.</p>\n         <p>You can have up to 5,000 key pairs per Amazon Web Services Region.</p>\n         <p>For more information, see <a href=\"https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html\">Amazon EC2 key pairs</a> in the\n                <i>Amazon Elastic Compute Cloud User Guide</i>.</p>"
             }
         },
         "com.amazonaws.ec2#CreateKeyPairRequest": {
@@ -10099,6 +10099,12 @@
                         "aws.protocols#ec2QueryName": "DryRun",
                         "smithy.api#documentation": "<p>Checks whether you have the required permissions for the action, without actually making the request, \n   and provides an error response. If you have the required permissions, the error response is <code>DryRunOperation</code>. \n   Otherwise, it is <code>UnauthorizedOperation</code>.</p>",
                         "smithy.api#xmlName": "dryRun"
+                    }
+                },
+                "KeyType": {
+                    "target": "com.amazonaws.ec2#KeyType",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The type of key pair. Note that ED25519 keys are not supported for Windows instances, EC2 Instance Connect, and EC2 Serial Console.</p>\n        <p>Default: <code>rsa</code>\n         </p>"
                     }
                 },
                 "TagSpecifications": {
@@ -11477,7 +11483,7 @@
                 "target": "com.amazonaws.ec2#CreateSecurityGroupResult"
             },
             "traits": {
-                "smithy.api#documentation": "<p>Creates a security group.</p>\n         <p>A security group acts as a virtual firewall for your instance to control inbound and outbound traffic.\n         For more information, see\n\t\t\t\t<a href=\"https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-network-security.html\">Amazon EC2 Security Groups</a> in \n\t\t\t\tthe <i>Amazon Elastic Compute Cloud User Guide</i> and \n\t\t\t\t<a href=\"https://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_SecurityGroups.html\">Security Groups for Your VPC</a> in the\n\t\t\t\t<i>Amazon Virtual Private Cloud User Guide</i>.</p>\n         <p>When you create a security group, you specify a friendly name of your choice. You can have a security group for use in EC2-Classic with the same name as a security group for use in a VPC. However, you can't have two security groups for use in EC2-Classic with the same name or two security groups for use in a VPC with the same name.</p>\n         <p>You have a default security group for use in EC2-Classic and a default security group for use in your VPC. If you don't specify a security group when you launch an instance, the instance is launched into the appropriate default security group. A default security group includes a default rule that grants instances unrestricted network access to each other.</p>\n         <p>You can add or remove rules from your security groups using \n\t\t\t\t\t<a>AuthorizeSecurityGroupIngress</a>,\n\t\t\t\t\t<a>AuthorizeSecurityGroupEgress</a>,\n\t\t\t\t\t<a>RevokeSecurityGroupIngress</a>, and\n\t\t\t\t\t<a>RevokeSecurityGroupEgress</a>.</p>\n         <p>For more information about VPC security group limits, see <a href=\"https://docs.aws.amazon.com/vpc/latest/userguide/amazon-vpc-limits.html\">Amazon VPC Limits</a>.</p>"
+                "smithy.api#documentation": "<p>Creates a security group.</p>\n         <p>A security group acts as a virtual firewall for your instance to control inbound and outbound traffic.\n         For more information, see\n\t\t\t\t<a href=\"https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-network-security.html\">Amazon EC2 security groups</a> in \n\t\t\t\tthe <i>Amazon Elastic Compute Cloud User Guide</i> and \n\t\t\t\t<a href=\"https://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_SecurityGroups.html\">Security groups for your VPC</a> in the\n\t\t\t\t<i>Amazon Virtual Private Cloud User Guide</i>.</p>\n         <p>When you create a security group, you specify a friendly name of your choice. You can have a security group for use in EC2-Classic with the same name as a security group for use in a VPC. However, you can't have two security groups for use in EC2-Classic with the same name or two security groups for use in a VPC with the same name.</p>\n         <p>You have a default security group for use in EC2-Classic and a default security group for use in your VPC. If you don't specify a security group when you launch an instance, the instance is launched into the appropriate default security group. A default security group includes a default rule that grants instances unrestricted network access to each other.</p>\n         <p>You can add or remove rules from your security groups using \n\t\t\t\t\t<a>AuthorizeSecurityGroupIngress</a>,\n\t\t\t\t\t<a>AuthorizeSecurityGroupEgress</a>,\n\t\t\t\t\t<a>RevokeSecurityGroupIngress</a>, and\n\t\t\t\t\t<a>RevokeSecurityGroupEgress</a>.</p>\n         <p>For more information about VPC security group limits, see <a href=\"https://docs.aws.amazon.com/vpc/latest/userguide/amazon-vpc-limits.html\">Amazon VPC Limits</a>.</p>"
             }
         },
         "com.amazonaws.ec2#CreateSecurityGroupRequest": {
@@ -21062,7 +21068,7 @@
                 "target": "com.amazonaws.ec2#DescribeKeyPairsResult"
             },
             "traits": {
-                "smithy.api#documentation": "<p>Describes the specified key pairs or all of your key pairs.</p>\n         <p>For more information about key pairs, see <a href=\"https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html\">Key Pairs</a> \n\t\t\t\tin the <i>Amazon Elastic Compute Cloud User Guide</i>.</p>",
+                "smithy.api#documentation": "<p>Describes the specified key pairs or all of your key pairs.</p>\n         <p>For more information about key pairs, see <a href=\"https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html\">Amazon EC2 key pairs</a> \n\t\t\t\tin the <i>Amazon Elastic Compute Cloud User Guide</i>.</p>",
                 "smithy.api#suppress": [
                     "WaitableTraitInvalidErrorType"
                 ],
@@ -23856,7 +23862,7 @@
                 "target": "com.amazonaws.ec2#DescribeSecurityGroupsResult"
             },
             "traits": {
-                "smithy.api#documentation": "<p>Describes the specified security groups or all of your security groups.</p>\n         <p>A security group is for use with instances either in the EC2-Classic platform  \n\t\t\t\tor in a specific VPC. For more information, see\n\t\t\t\t<a href=\"https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-network-security.html\">Amazon EC2 Security Groups</a> in \n\t\t\t\tthe <i>Amazon Elastic Compute Cloud User Guide</i> and \n\t\t\t\t<a href=\"https://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_SecurityGroups.html\">Security Groups for Your VPC</a> in the\n\t\t\t\t<i>Amazon Virtual Private Cloud User Guide</i>.</p>",
+                "smithy.api#documentation": "<p>Describes the specified security groups or all of your security groups.</p>\n         <p>A security group is for use with instances either in the EC2-Classic platform  \n\t\t\t\tor in a specific VPC. For more information, see\n\t\t\t\t<a href=\"https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-network-security.html\">Amazon EC2 security groups</a> in \n\t\t\t\tthe <i>Amazon Elastic Compute Cloud User Guide</i> and \n\t\t\t\t<a href=\"https://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_SecurityGroups.html\">Security groups for your VPC</a> in the\n\t\t\t\t<i>Amazon Virtual Private Cloud User Guide</i>.</p>",
                 "smithy.api#paginated": {
                     "inputToken": "NextToken",
                     "outputToken": "NextToken",
@@ -37092,7 +37098,7 @@
                 "target": "com.amazonaws.ec2#ImportKeyPairResult"
             },
             "traits": {
-                "smithy.api#documentation": "<p>Imports the public key from an RSA key pair that you created with a third-party tool. \n        Compare this with <a>CreateKeyPair</a>, in which Amazon Web Services creates the key pair and gives the keys to you \n        (Amazon Web Services keeps a copy of the public key). With ImportKeyPair, you create the key pair and give Amazon Web Services just the public key. \n        The private key is never transferred between you and Amazon Web Services.</p>\n         <p>For more information about key pairs, see <a href=\"https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html\">Key Pairs</a> \n\t\t\t\tin the <i>Amazon Elastic Compute Cloud User Guide</i>.</p>"
+                "smithy.api#documentation": "<p>Imports the public key from an RSA or ED25519 key pair that you created with a third-party tool. \n        Compare this with <a>CreateKeyPair</a>, in which Amazon Web Services creates the key pair and gives the keys to you \n        (Amazon Web Services keeps a copy of the public key). With ImportKeyPair, you create the key pair and give Amazon Web Services just the public key. \n        The private key is never transferred between you and Amazon Web Services.</p>\n         <p>For more information about key pairs, see <a href=\"https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html\">Amazon EC2 key pairs</a> \n\t\t\t\tin the <i>Amazon Elastic Compute Cloud User Guide</i>.</p>"
             }
         },
         "com.amazonaws.ec2#ImportKeyPairRequest": {
@@ -42547,7 +42553,7 @@
                     "target": "com.amazonaws.ec2#SensitiveUserData",
                     "traits": {
                         "aws.protocols#ec2QueryName": "KeyMaterial",
-                        "smithy.api#documentation": "<p>An unencrypted PEM encoded RSA private key.</p>",
+                        "smithy.api#documentation": "<p>An unencrypted PEM encoded RSA or ED25519 private key.</p>",
                         "smithy.api#xmlName": "keyMaterial"
                     }
                 },
@@ -42607,7 +42613,7 @@
                     "target": "com.amazonaws.ec2#String",
                     "traits": {
                         "aws.protocols#ec2QueryName": "KeyFingerprint",
-                        "smithy.api#documentation": "<p>If you used <a>CreateKeyPair</a> to create the key pair, this is the SHA-1 digest of the DER encoded private key. \n        If you used <a>ImportKeyPair</a> to provide Amazon Web Services the public key, this is the MD5 public key fingerprint as specified in section 4 of RFC4716.</p>",
+                        "smithy.api#documentation": "<p>If you used <a>CreateKeyPair</a> to create the key pair:</p>\n         <ul>\n            <li>\n               <p>For RSA key pairs, the key fingerprint is the SHA-1 digest of the DER encoded private key. \n               </p>\n           </li>\n            <li>\n               <p>For ED25519 key pairs, the key fingerprint is the base64-encoded SHA-256 digest, which \n                   is the default for OpenSSH, starting with <a href=\"http://www.openssh.com/txt/release-6.8\">OpenSSH 6.8</a>.</p>\n           </li>\n         </ul>\n         <p>If you used <a>ImportKeyPair</a> to provide Amazon Web Services the public key:</p>\n         <ul>\n            <li>\n               <p>For RSA key pairs, the key fingerprint is the MD5 public key fingerprint as specified in section 4 of RFC4716.</p>\n           </li>\n            <li>\n               <p>For ED25519 key pairs, the key fingerprint is the base64-encoded SHA-256\n                    digest, which is the default for OpenSSH, starting with <a href=\"http://www.openssh.com/txt/release-6.8\">OpenSSH 6.8</a>.</p>\n           </li>\n         </ul>",
                         "smithy.api#xmlName": "keyFingerprint"
                     }
                 },
@@ -42617,6 +42623,14 @@
                         "aws.protocols#ec2QueryName": "KeyName",
                         "smithy.api#documentation": "<p>The name of the key pair.</p>",
                         "smithy.api#xmlName": "keyName"
+                    }
+                },
+                "KeyType": {
+                    "target": "com.amazonaws.ec2#KeyType",
+                    "traits": {
+                        "aws.protocols#ec2QueryName": "KeyType",
+                        "smithy.api#documentation": "<p>The type of key pair.</p>",
+                        "smithy.api#xmlName": "keyType"
                     }
                 },
                 "Tags": {
@@ -42643,6 +42657,21 @@
         },
         "com.amazonaws.ec2#KeyPairName": {
             "type": "string"
+        },
+        "com.amazonaws.ec2#KeyType": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "rsa",
+                        "name": "rsa"
+                    },
+                    {
+                        "value": "ed25519",
+                        "name": "ed25519"
+                    }
+                ]
+            }
         },
         "com.amazonaws.ec2#KmsKeyId": {
             "type": "string"

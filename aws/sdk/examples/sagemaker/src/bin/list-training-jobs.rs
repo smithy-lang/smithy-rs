@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::region::ProvideRegion;
+use aws_types::region::ChainProvider;
 
 use sagemaker::{Client, Config, Region};
 
@@ -26,7 +26,7 @@ struct Opt {
 /// * `[-d DEFAULT-REGION]` - The region in which the client is created.
 ///    If not supplied, uses the value of the **AWS_DEFAULT_REGION** environment variable.
 ///    If the environment variable is not set, defaults to **us-west-2**.
-/// * `[-v]` - Whether to display additional information.#[tokio::main]
+/// * `[-v]` - Whether to display additional information.
 #[tokio::main]
 async fn main() -> Result<(), sagemaker::Error> {
     tracing_subscriber::fmt::init();
@@ -36,19 +36,17 @@ async fn main() -> Result<(), sagemaker::Error> {
         verbose,
     } = Opt::from_args();
 
-    let region = default_region
-        .as_ref()
-        .map(|region| Region::new(region.clone()))
-        .or_else(|| aws_types::region::default_provider().region())
-        .unwrap_or_else(|| Region::new("us-west-2"));
+    let region = ChainProvider::first_try(default_region.map(Region::new))
+        .or_default_provider()
+        .or_else(Region::new("us-west-2"));
 
     if verbose {
         println!("SageMaker client version: {}", sagemaker::PKG_VERSION);
-        println!("Region:                   {:?}", &region);
+        println!("Region:                   {:?}", region.region().await);
         println!();
     }
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(conf);
     let job_details = client.list_training_jobs().send().await?;
 

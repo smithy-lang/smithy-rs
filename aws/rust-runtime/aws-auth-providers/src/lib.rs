@@ -12,6 +12,9 @@ pub mod profile;
 
 /// Credentials Provider that evaluates a series of providers
 pub mod chain;
+mod sts_util;
+mod test_case;
+pub mod web_identity_token;
 
 // create a default connector given the currently enabled cargo features.
 // rustls  | native tls | result
@@ -20,6 +23,10 @@ pub mod chain;
 // yes     | no         | rustls
 // no      | yes        | native_tls
 // no      | no         | no default
+
+fn must_have_connector() -> DynConnector {
+    default_connector().expect("A connector was not available. Either set a custom connector or enable the `rustls` and `native-tls` crate features.")
+}
 
 #[cfg(feature = "rustls")]
 fn default_connector() -> Option<DynConnector> {
@@ -39,6 +46,13 @@ fn default_connector() -> Option<DynConnector> {
 // because this doesn't provide any configuration, a runtime and connector must be provided.
 #[cfg(all(any(feature = "native-tls", feature = "rustls"), feature = "rt-tokio"))]
 /// Default AWS provider chain
-pub fn default_provider() -> impl AsyncProvideCredentials {
-    default_provider_chain::Builder::default().build()
+///
+/// This provider chain will use defaults for all settings. The region will be resolved with the default
+/// provider chain. To construct a custom provider, use [`default_provider_chain::Builder`](default_provider_chain::Builder).
+pub async fn default_provider() -> impl AsyncProvideCredentials {
+    use aws_types::region::ProvideRegion;
+    let resolved_region = aws_types::region::default_provider().region().await;
+    let mut builder = default_provider_chain::Builder::default();
+    builder.set_region(resolved_region);
+    builder.build()
 }

@@ -1,5 +1,5 @@
 use aws_sdk_ecr::{Config, Region};
-use aws_types::region;
+use aws_types::region::{self};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -27,7 +27,8 @@ async fn main() -> Result<(), aws_sdk_ecr::Error> {
     let provider = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-east-2"));
-    let client = aws_sdk_ecr::Client::from_conf(Config::builder().region(provider).build());
+    let region = provider.region().await;
+    let client = aws_sdk_ecr::Client::from_conf(Config::builder().region(region).build());
     let rsp = client
         .list_images()
         .repository_name(&repository)

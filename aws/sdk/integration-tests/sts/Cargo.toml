@@ -1,0 +1,18 @@
+# This Cargo.toml is unused in generated code. It exists solely to enable these tests to compile in-situ
+[package]
+name = "sts-tests"
+version = "0.1.0"
+authors = ["Russell Cohen <rcoh@amazon.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aws-sdk-sts = { path = "../../build/aws-sdk/sts" }
+smithy-client = { path = "../../build/aws-sdk/smithy-client", features = ["test-util"] }
+smithy-http = { path = "../../build/aws-sdk/smithy-http" }
+tracing-subscriber = "0.2"
+
+[dev-dependencies]
+tokio  = { version = "1", features = ["full"]}
+aws-hyper = { path = "../../build/aws-sdk/aws-hyper"}

@@ -19,7 +19,7 @@ pub struct SdkSuccess<O> {
 
 /// Failed SDK Result
 #[derive(Debug)]
-pub enum SdkError<E> {
+pub enum SdkError<E, R = operation::Response> {
     /// The request failed during construction. It was not dispatched over the network.
     ConstructionFailure(BoxError),
 
@@ -35,16 +35,16 @@ pub enum SdkError<E> {
     },
 
     /// An error response was received from the service
-    ServiceError { err: E, raw: operation::Response },
+    ServiceError { err: E, raw: R },
 }
 
-impl<E> Display for SdkError<E>
+impl<E, R> Display for SdkError<E, R>
 where
     E: Error,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            SdkError::ConstructionFailure(err) => Display::fmt(&err, f),
+            SdkError::ConstructionFailure(err) => write!(f, "failed to construct request: {}", err),
             SdkError::DispatchFailure(err) => Display::fmt(&err, f),
             SdkError::ResponseError { err, .. } => Display::fmt(&err, f),
             SdkError::ServiceError { err, .. } => Display::fmt(&err, f),
