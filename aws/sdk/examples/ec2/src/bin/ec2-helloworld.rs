@@ -45,7 +45,7 @@ async fn main() -> Result<(), Error> {
     let client = Client::from_conf(config);
     let rsp = client.describe_regions().send().await?;
 
-    println!("Regions:");
+    println!("Regions for your account:");
     for region in rsp.regions.unwrap_or_default() {
         println!("  {}", region.region_name.unwrap());
     }
