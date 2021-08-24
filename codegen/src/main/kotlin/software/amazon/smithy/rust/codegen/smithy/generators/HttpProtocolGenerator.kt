@@ -151,22 +151,11 @@ abstract class HttpProtocolGenerator(
         return with(writer) { "${format(operationT)}<$output, $retry>" }
     }
 
-    private fun buildOperationTypeOutput(
-        writer: RustWriter,
-        shape: OperationShape,
-    ): String {
-        val outputSymbol = symbolProvider.toSymbol(shape)
-        return with(writer) { "${format(outputSymbol)}" }
-    }
+    private fun buildOperationTypeOutput(writer: RustWriter, shape: OperationShape): String =
+        writer.format(symbolProvider.toSymbol(shape))
 
-    private fun buildOperationTypeRetry(
-        writer: RustWriter,
-        features: List<OperationCustomization>,
-    ): String {
-        val retryType = features.mapNotNull { it.retryType() }.firstOrNull()?.let { writer.format(it) } ?: "()"
-
-        return with(writer) { "$retryType" }
-    }
+    private fun buildOperationTypeRetry(writer: RustWriter, features: List<OperationCustomization>): String =
+        features.mapNotNull { it.retryType() }.firstOrNull()?.let { writer.format(it) } ?: "()"
 
     private fun buildOperation(
         implBlockWriter: RustWriter,

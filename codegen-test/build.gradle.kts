@@ -100,16 +100,12 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
     """
 }
 
-
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
     doFirst {
         projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(CodegenTests))
     }
-    // TODO(EventStream): [CLEANUP] Remove this when removing SMITHYRS_EXPERIMENTAL_EVENTSTREAM
-    inputs.property("_eventStreamCacheInvalidation", System.getenv("SMITHYRS_EXPERIMENTAL_EVENTSTREAM") ?: "0")
 }
-
 
 fun generateCargoWorkspace(tests: List<CodegenTest>): String {
     return """
