@@ -30,7 +30,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
     override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
         val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("client")), public = true)
         rustCrate.withModule(RustModule("client", module)) { writer ->
-            FluentClientGenerator(protocolConfig).render(writer)
+            FluentClientGenerator(protocolConfig, includeSmithyGenericClientDocs = false).render(writer)
             AwsFluentClientExtensions(protocolConfig.runtimeConfig).render(writer)
         }
         val awsHyper = "aws-hyper"
