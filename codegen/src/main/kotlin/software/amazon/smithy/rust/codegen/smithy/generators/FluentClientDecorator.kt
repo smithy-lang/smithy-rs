@@ -195,7 +195,8 @@ class FluentClientGenerator(
                     }
                     """,
                     "Inner" to input.builderSymbol(symbolProvider),
-                    *generics.codegenScope.toTypedArray()
+                    *generics.codegenScope.toTypedArray(),
+                    "client" to clientDep.asType(),
                 )
 
                 rustBlockTemplate(
