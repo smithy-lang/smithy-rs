@@ -1,0 +1,41 @@
+[package]
+name = "aws-config"
+version = "0.1.0"
+authors = ["Russell Cohen <rcoh@amazon.com>"]
+edition = "2018"
+exclude = ["test-data/*"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default-provider = ["profile", "imds", "meta", "sts"]
+profile = ["sts", "web-identity-token"]
+# note: IMDS currently unsupported
+imds = []
+meta = ["tokio"]
+sts = ["aws-sdk-sts"]
+web-identity-token = ["sts"]
+sso = []
+rustls = ["smithy-client/rustls"]
+native-tls = ["smithy-client/native-tls"]
+rt-tokio = ["smithy-async/rt-tokio"]
+
+default = ["default-provider", "rustls"]
+
+[dependencies]
+aws-types = { path = "../../sdk/build/aws-sdk/aws-types" }
+smithy-async = { path = "../../sdk/build/aws-sdk/smithy-async" }
+smithy-client = { path = "../../sdk/build/aws-sdk/smithy-client" }
+tracing = { version = "0.1" }
+tokio = { version = "1", features = ["sync"], optional = true }
+aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sts", optional = true }
+
+[dev-dependencies]
+futures-util = "0.3.16"
+tracing-test = "0.1.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+test-env-log = "0.2.7"
+env_logger = "0.9.0"
+arbitrary = "1.0.1"
+smithy-client = { path = "../../sdk/build/aws-sdk/smithy-client", features = ["test-util"] }
