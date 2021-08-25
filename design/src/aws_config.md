@@ -75,13 +75,102 @@ async fn main() -> Result<(), dynamodb::Error> {
 ### Sharing a config between multiple services
 
 The `Config` produced by `aws-config` doesn't just work with DynamoDB, but with any AWS service. If we wanted to read
-our Dynamodb DB tables aloud with Polly, we could create a Polly client as well.
+our Dynamodb DB tables aloud with Polly, we could create a Polly client as well. First, we'll need to add Polly to our `Cargo.toml`:
+
+```toml
+[dependencies]
+aws-sdk-dynamo = "0.1"
+aws-sdk-polly = "0.1"
+aws-config = "0.5"
+
+tokio = { version = "1", features = ["full"] }
+```
+
+Then, we can use the config object to build both service clients. Your region override, will work for both clients:
+
+```rust
+use aws_sdk_dynamodb as dynamodb;
+use aws_sdk_polly as polly;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> { // error type changed to `Box<dyn Error>` because we now have dynamo and polly errors
+   let config = aws_config::env_loader().with_region(Region::new("us-west-2")).await;
+
+   let dynamodb = dynamodb::Client::new(&config);
+   let polly = polly::Client::new(&config);
+
+   let resp = dynamodb.list_tables().send().await;
+   let tables = resp.tables.unwrap_or_default();
+   let table_sentence = format!("my dynamo DB tables are: {}", tables.join(", "));
+   let audio = polly.output_format(OutputFormat::Mp3)
+     .text(table_sentence)
+     .voice_id(VoiceId::Joanna)
+     .send()
+     .await?;
+
+   // Get MP3 data from the response and save it
+   let mut blob = resp
+           .audio_stream
+           .collect()
+           .await
+           .expect("failed to read data");
+
+   let mut file = tokio::fs::File::create("tables.mp3")
+           .await
+           .expect("failed to create file");
+
+   file.write_all_buf(&mut blob)
+           .await
+           .expect("failed to write to file");
+   Ok(())
+}
+```
+
+### Specifying a custom credential provider
+
+You may want to opt-out of the standard credential provider chain, if, for example, you have your own source of credential information.
+
+To do this, you'll want to implement the `ProvideCredentials` trait.
+
+> NOTE: `aws_types::Credentials` already implements `ProvideCredentials`. If you want to use the SDK with static credentials, you're already done!
+
+```rust
+use aws_types::credential::{ProvideCredentials, provide_credentials::future, Result}
+
+struct MyCustomProvider;
+
+impl MyCustomProvider {
+   pub async fn load_credentials(&self) -> Result {
+      todo!() // A regular async function
+   }
+}
+
+impl ProvideCredentials for MyCustomProvider {
+   fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
+      where
+              Self: 'a,
+   {
+      future::ProvideCredentials::new(self.load_credentials())
+   }
+}
+```
+> Hint: If your credential provider is not asynchronous, you can use `ProvideCredentials::ready` instead to save an allocation.
+
+After writing your custom provider, you'll use it in when constructing the configuration:
+
+```rust
+#[tokio::main]
+async fn main() {
+   let config = aws_config::env_loader().with_credential_provider(MyCustomProvider).await;
+   let dynamodb = dynamodb::new(&config);
+}
+```
 
 ## Proposed Design
 
 Achieving this design consists of three high level changes:
 
-1. Add a `SharedConfig` struct to `aws-types`. This contains a config, but with no logic to be loaded from the
+1. Add a `Config` struct to `aws-types`. This contains a config, but with no logic to be loaded from the
    environment in any way.
 2. Add an `aws-config` crate. `aws-config` contains the logic to load configuration from the environment. No generated
    service clients will depend on `aws-config`. This is critical to avoid circular dependencies and to
@@ -94,35 +183,34 @@ Services will continue to have their own `Config` structs. These will continue t
 however, they won't have any default resolvers built in. Each AWS config will implement `From<&aws_types::SharedConfig>`
 .
 
+https://github.com/awslabs/smithy-rs/blob/shared-config-impl/aws/rust-runtime/aws-types/src/config.rs#L11-L16
+
 ```rust
-struct SharedConfig {
+struct Config {
     ...
 }
 
-impl SharedConfig {
-    pub fn new_connector(&self, version: HttpVersion) -> Option<DynConnector> {
-        todo!()
-    }
+impl Config {
+   pub fn region(&self) -> Option<&Region> {
+      self.region.as_ref()
+   }
 
-    pub fn credentials_provider(&self) -> impl ProvideCredentials {
-        todo!()
-    }
+   pub fn credentials_provider(&self) -> Option<Arc<dyn ProvideCredentials>> {
+      self.credentials_provider.clone()
+   }
 
-    pub fn region(&self) -> Option<Region> {
-        todo!()
-    }
+   pub fn connector(&self) -> &DynConnector {
+      &self.connector
+   }
 
-    pub fn sleep(&self) -> impl Sleep {
-        todo!()
-    }
-
-    pub fn retry_config(&self) ->...// eg. mode, max attempts etc.
-
-    pub fn timeout_config(&self) -> // eg. request timeout, read timeout, etc.
+   pub fn builder() -> Builder {
+      Builder::default()
+   }
 }
+
 ```
 
-The `Builder` for `SharedConfig` allows customers to provide individual overrides and handles the insertion of the
+The `Builder` for `Config` allows customers to provide individual overrides and handles the insertion of the
 default chain for regions, sleep, connectors, and credentials.
 
 ## Sleep + Connector
@@ -187,3 +275,6 @@ Several breaking changes will be made as part of this, notably, the config file 
 - [ ] Code generate `<everservice>::Client::new(&shared_config)`
 - [ ] Deprecate `<everyservice>::from_env`, message points to `Client::new`
 - [ ] Remove `<everyservice>::from_env`
+
+## Open Issues
+- [ ] Connector construction needs to be a function of HTTP settings
