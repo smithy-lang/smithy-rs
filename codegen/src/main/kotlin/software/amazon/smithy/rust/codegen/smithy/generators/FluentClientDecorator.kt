@@ -208,7 +208,6 @@ class FluentClientGenerator(
                         pub(crate) fn new(handle: std::sync::Arc<super::Handle${generics.inst}>) -> Self {
                             Self { handle, inner: Default::default() }
                         }
-
                         pub async fn send(self) -> std::result::Result<#{ok}, #{sdk_err}<#{operation_err}>>
                         where
                             R::Policy: #{client}::bounds::SmithyRetryPolicy<#{input}OperationOutputAlias,
