@@ -56,14 +56,14 @@ async fn main() -> Result<(), Error> {
         println!("Auto Scaling client version: {}", PKG_VERSION);
         println!(
             "Region:                      {}",
-            region.region().unwrap().as_ref()
+            region.region().await.unwrap().as_ref()
         );
         println!("Auto Scaling group name:     {}", &autoscaling_name);
         println!("Instance ID:                 {}", &instance_id);
         println!();
     }
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(conf);
 
     client
