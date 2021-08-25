@@ -48,7 +48,7 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("EC2 client version: {}", PKG_VERSION);
-        println!("Region:             {}", region.region().unwrap().as_ref());
+        println!("Region:             {}", region.region().await.unwrap().as_ref());
 
         if instance_id.is_some() {
             println!("Instance ID:        {:?}", instance_id);
@@ -57,7 +57,7 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let config = Config::builder().region(region).build();
+    let config = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(config);
 
     let mut ids: Vec<String> = Vec::new();

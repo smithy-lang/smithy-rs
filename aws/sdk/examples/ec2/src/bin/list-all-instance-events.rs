@@ -22,7 +22,7 @@ struct Opt {
 /// Shows the scheduled events for the instances in the Region.
 async fn show_events(reg: String) {
     let region = Region::new(reg.clone());
-    let config = Config::builder().region(region).build();
+    let config = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(config);
 
     let resp = client.describe_instance_status().send().await;
@@ -72,12 +72,12 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("EC2 client version: {}", PKG_VERSION);
-        println!("Region:             {}", region.region().unwrap().as_ref());
+        println!("Region:             {}", region.region().await.unwrap().as_ref());
         println!();
     }
 
     // Get list of available regions.
-    let config = Config::builder().region(region).build();
+    let config = Config::builder().region(region.region().await).build();
     let ec2_client = Client::from_conf(config);
     let resp = ec2_client.describe_regions().send().await;
 
