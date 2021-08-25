@@ -21,9 +21,8 @@ pin_project! {
 }
 
 pin_project! {
-    /// Utility Future
     #[project = NowOrLaterProj]
-    pub enum Inner<T, F> {
+    enum Inner<T, F> {
         #[non_exhaustive]
         Now { value: Option<T> },
         #[non_exhaustive]
