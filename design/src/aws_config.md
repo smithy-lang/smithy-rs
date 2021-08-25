@@ -14,41 +14,68 @@ This document proposes an overhaul to the Config design to facilitate three thin
    things that are expensive to create.
 3. Shareable: A config object should be usable to configure multiple AWS services.
 
-## New customer experience
+## Usage Guide
 
-With the new shared config, customers must always `aws-config` as a dependency if they want access to the automatic
-configuration loading.
+> The following is proposal of the usage guide customers for customers using the AWS SDK.
 
-In Cargo.toml:
+### Getting Started
+
+Using the SDK requires two crates:
+
+1. `aws-sdk-<someservice>`: The service you want to use (eg. `dynamodb`, `s3`, `sesv2`)
+2. `aws-config`: AWS metaconfiguration. This crate contains all the of logic to load configuration for the SDK (regions,
+   credentials, retry configuration, etc.)
+
+Add the following to your Cargo.toml:
 
 ```toml
 [dependencies]
 aws-sdk-dynamo = "0.1"
 aws-config = "0.5"
+
+tokio = { version = "1", features = ["full"] }
 ```
 
-When creating a client, customers will create a `SharedConfig` struct, then use it to construct the service client.
-The `SharedConfig` struct is defined centrally in `aws-types`. (See [stability](#stability-and-versioning))
+Let's write a small example project to list tables:
 
 ```rust
-// pub use of aws_types::SharedConfig
-use aws_config::SharedConfig;
+use aws_sdk_dynamodb as dynamodb;
 
-async fn main() {
-    // loading a shared config may make network calls, etc.
-    // with some custom configuration:
-    let config = aws_config::config_loader()
-            .region(Region::new("us-east-1"))
-            .sleep(async_std_sleep)
-            .load().await;
-
-    // with no custom configuration:
-    let config = aws_config::load_config().await;
-    // does not consume config so that config can be used to construct other service clients.
-    let client = aws_sdk_dynamodb::Client::new(&config);
-    let tables = client.list_tables().await?;
+#[tokio::main]
+async fn main() -> Result<(), dynamodb::Error> {
+    let config = aws_config::load_config_from_environment().await;
+    let dynamodb = dynamodb::Client::new(&config);
+    let resp = dynamodb.list_tables().send().await;
+    println!("my tables: {}", resp.tables.unwrap_or_default());
+    Ok(())
 }
 ```
+
+> Tip: Every AWS service exports a top level `Error` type (eg. [aws_sdk_dynamodb::Error](https://awslabs.github.io/aws-sdk-rust/aws_sdk_dynamodb/enum.Error.html)).
+> Individual operations return specific error types that contain only the [error variants returned by the operation](https://awslabs.github.io/aws-sdk-rust/aws_sdk_dynamodb/error/struct.ListTablesError.html).
+> Because all the individual errors implement `Into<dynamodb::Error>`, you can use `dynamodb::Error` as the return type along with `?`.
+
+Next, we'll explore some other ways to configure the SDK. Perhaps you want to override the region loaded from the
+environment with your region. In this case, we'll want more control over how we load config,
+using `aws_config::env_loader()` directly:
+
+```rust
+use aws_sdk_dynamodb as dynamodb;
+
+#[tokio::main]
+async fn main() -> Result<(), dynamodb::Error> {
+    let config = aws_config::env_loader().with_region(Region::new("us-west-2")).await;
+    let dynamodb = dynamodb::Client::new(&config);
+    let resp = dynamodb.list_tables().send().await;
+    println!("my tables: {}", resp.tables.unwrap_or_default());
+    Ok(())
+}
+```
+
+### Sharing a config between multiple services
+
+The `Config` produced by `aws-config` doesn't just work with DynamoDB, but with any AWS service. If we wanted to read
+our Dynamodb DB tables aloud with Polly, we could create a Polly client as well.
 
 ## Proposed Design
 
