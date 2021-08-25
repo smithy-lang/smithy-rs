@@ -54,7 +54,7 @@ async fn main() -> Result<(), Error> {
         println!("Config client version: {}", PKG_VERSION);
         println!(
             "Region:                {}",
-            region.region().unwrap().as_ref()
+            region.region().await.unwrap().as_ref()
         );
         println!("Resource ID:           {}", &id);
         println!("Resource type:         {}", &resource_type);
@@ -72,7 +72,7 @@ async fn main() -> Result<(), Error> {
             ResourceType::values()
         )
     }
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(conf);
 
     let rsp = client

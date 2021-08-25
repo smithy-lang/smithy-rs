@@ -90,7 +90,7 @@ async fn main() -> Result<(), Error> {
         println!("Config client version:          {}", PKG_VERSION);
         println!(
             "Region:                         {}",
-            region.region().unwrap().as_ref()
+            region.region().await.unwrap().as_ref()
         );
         println!("Resource type:                  {}", type_);
         println!("Config (delivery channel) name: {}", name);
@@ -102,7 +102,7 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(conf);
 
     // If we already have a configuration recorder in the Region, we cannot create another.
