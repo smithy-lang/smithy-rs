@@ -133,9 +133,15 @@ class FluentClientGenerator(
             }
 
             ${clientDocComments()}
-            ##[derive(Clone, std::fmt::Debug)]
+            ##[derive(std::fmt::Debug)]
             pub struct Client${generics.decl} {
                 handle: std::sync::Arc<Handle${generics.inst}>
+            }
+
+            impl${generics.inst} std::clone::Clone for Client${generics.inst} {
+                fn clone(&self) -> Self {
+                    Self { handle: self.handle.clone() }
+                }
             }
 
             ##[doc(inline)]
