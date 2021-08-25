@@ -10,11 +10,11 @@ use aws_types::{credential, Credentials};
 use std::env::VarError;
 
 /// Load Credentials from Environment Variables
-pub struct Provider {
+pub struct EnvironmentVariableCredentialsProvider {
     env: Env,
 }
 
-impl Provider {
+impl EnvironmentVariableCredentialsProvider {
     fn credentials(&self) -> credential::Result {
         let access_key = self.env.get("AWS_ACCESS_KEY_ID").map_err(to_cred_error)?;
         let secret_key = self
@@ -33,7 +33,7 @@ impl Provider {
     }
 }
 
-impl Provider {
+impl EnvironmentVariableCredentialsProvider {
     pub fn new() -> Self {
         Self::new_with_env(Env::real())
     }
@@ -43,7 +43,7 @@ impl Provider {
     }
 }
 
-impl Default for Provider {
+impl Default for EnvironmentVariableCredentialsProvider {
     fn default() -> Self {
         Self::new()
     }
@@ -51,7 +51,7 @@ impl Default for Provider {
 
 const ENV_PROVIDER: &str = "EnvironmentVariable";
 
-impl ProvideCredentials for Provider {
+impl ProvideCredentials for EnvironmentVariableCredentialsProvider {
     fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
     where
         Self: 'a,
@@ -69,13 +69,13 @@ fn to_cred_error(err: VarError) -> CredentialsError {
 
 #[cfg(test)]
 mod test {
-    use super::Provider;
+    use super::EnvironmentVariableCredentialsProvider;
     use aws_types::credential::{CredentialsError, ProvideCredentials};
     use aws_types::os_shim_internal::Env;
     use futures_util::FutureExt;
 
-    fn make_provider(vars: &[(&str, &str)]) -> Provider {
-        Provider {
+    fn make_provider(vars: &[(&str, &str)]) -> EnvironmentVariableCredentialsProvider {
+        EnvironmentVariableCredentialsProvider {
             env: Env::from_slice(vars),
         }
     }
@@ -147,7 +147,7 @@ mod test {
 
     #[test]
     fn real_environment() {
-        let provider = Provider::new();
+        let provider = EnvironmentVariableCredentialsProvider::new();
         // we don't know what's in the env, just make sure it doesn't crash.
         let _ = provider.provide_credentials();
     }

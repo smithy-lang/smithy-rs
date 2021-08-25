@@ -12,12 +12,14 @@ use smithy_client::DynConnector;
 use std::sync::Arc;
 
 pub mod region {
-    use crate::meta::region::{ProvideRegion, ProviderChain};
+    use crate::meta::region::{ProvideRegion, RegionProviderChain};
 
     use crate::profile;
     pub fn default_provider() -> impl ProvideRegion {
-        ProviderChain::first_try(crate::environment::region::Provider::new())
-            .or_else(profile::region::Provider::new())
+        RegionProviderChain::first_try(
+            crate::environment::region::EnvironmentVariableRegionProvider::new(),
+        )
+        .or_else(profile::region::ProfileFileRegionProvider::new())
     }
 }
 
@@ -44,7 +46,7 @@ impl Loader {
     }
 
     pub async fn load(self) -> aws_types::config::Config {
-        let chained = meta::region::ProviderChain::first_try(self.region)
+        let chained = meta::region::RegionProviderChain::first_try(self.region)
             .or_else(default_provider::region::default_provider());
         let credential_provider = match self.credential_provider {
             Some(provider) => provider,

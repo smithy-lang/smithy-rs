@@ -7,18 +7,19 @@ use crate::meta::region::{future, ProvideRegion};
 use aws_types::os_shim_internal::Env;
 use aws_types::region::Region;
 
-pub struct Provider {
+#[derive(Debug)]
+pub struct EnvironmentVariableRegionProvider {
     env: Env,
 }
 
 #[allow(clippy::redundant_closure)] // https://github.com/rust-lang/rust-clippy/issues/7218
-impl Provider {
+impl EnvironmentVariableRegionProvider {
     pub fn new() -> Self {
-        Provider { env: Env::real() }
+        EnvironmentVariableRegionProvider { env: Env::real() }
     }
 }
 
-impl ProvideRegion for Provider {
+impl ProvideRegion for EnvironmentVariableRegionProvider {
     fn region(&self) -> future::ProvideRegion {
         let region = self
             .env

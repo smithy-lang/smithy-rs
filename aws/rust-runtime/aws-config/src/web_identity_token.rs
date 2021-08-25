@@ -53,14 +53,14 @@ const ENV_VAR_SESSION_NAME: &str = "AWS_ROLE_SESSION_NAME";
 /// Credential provider to load credentials from Web Identity  Tokens
 ///
 /// See Module documentation for more details
-pub struct WebIdentityTokenCredentialProvider {
+pub struct WebIdentityTokenCredentialsProvider {
     source: Source,
     fs: Fs,
     client: aws_sdk_sts::RawClient,
     region: Option<Region>,
 }
 
-impl WebIdentityTokenCredentialProvider {
+impl WebIdentityTokenCredentialsProvider {
     pub fn builder() -> Builder {
         Builder::default()
     }
@@ -79,7 +79,7 @@ pub struct WebIdentityTokenRole {
     pub session_name: String,
 }
 
-impl ProvideCredentials for WebIdentityTokenCredentialProvider {
+impl ProvideCredentials for WebIdentityTokenCredentialsProvider {
     fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
     where
         Self: 'a,
@@ -88,7 +88,7 @@ impl ProvideCredentials for WebIdentityTokenCredentialProvider {
     }
 }
 
-impl WebIdentityTokenCredentialProvider {
+impl WebIdentityTokenCredentialsProvider {
     fn source(&self) -> Result<Cow<WebIdentityTokenRole>, CredentialsError> {
         match &self.source {
             Source::Env(env) => {
@@ -184,11 +184,11 @@ impl Builder {
         self
     }
 
-    pub fn build(self) -> WebIdentityTokenCredentialProvider {
+    pub fn build(self) -> WebIdentityTokenCredentialsProvider {
         let connector = self.connector.unwrap_or_else(must_have_connector);
         let client = aws_sdk_sts::RawClient::new(connector);
         let source = self.source.unwrap_or_else(|| Source::Env(Env::default()));
-        WebIdentityTokenCredentialProvider {
+        WebIdentityTokenCredentialsProvider {
             source,
             fs: self.fs,
             client,

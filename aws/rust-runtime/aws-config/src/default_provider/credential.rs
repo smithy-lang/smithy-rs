@@ -28,7 +28,7 @@ use smithy_client::DynConnector;
 /// Create a default chain with a custom region:
 /// ```rust
 /// use aws_types::region::Region;
-/// let credentials_provider = aws_config::default_provider::credential::DefaultProviderChain::builder()
+/// let credentials_provider = aws_config::default_provider::credential::DefaultProvider::builder()
 ///     .region(Region::new("us-west-1"))
 ///     .build();
 /// ```
@@ -37,7 +37,7 @@ use smithy_client::DynConnector;
 /// ```rust
 /// let credentials_provider = aws_config::default_provider::credential::default_provider();
 /// ```
-pub struct DefaultProviderChain(LazyCachingCredentialsProvider);
+pub struct DefaultProvider(LazyCachingCredentialsProvider);
 
 pub async fn default_provider() -> impl ProvideCredentials {
     use crate::meta::region::ProvideRegion;
@@ -45,13 +45,13 @@ pub async fn default_provider() -> impl ProvideCredentials {
     Builder::default().region(region).build()
 }
 
-impl DefaultProviderChain {
+impl DefaultProvider {
     pub fn builder() -> Builder {
         Builder::default()
     }
 }
 
-impl ProvideCredentials for DefaultProviderChain {
+impl ProvideCredentials for DefaultProvider {
     fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
     where
         Self: 'a,
@@ -117,7 +117,7 @@ impl Builder {
     /// Typically, these are built-in providers like `Environment`, however, custom sources may
     /// also be used. Using custom sources must be registered:
     /// ```rust
-    /// use aws_config::default_provider::credential::DefaultProviderChain;
+    /// use aws_config::default_provider::credential::DefaultProvider;
     /// use aws_types::credential::{ProvideCredentials, CredentialsError};
     /// use aws_types::Credentials;
     /// use aws_types::credential::provide_credentials::future;
@@ -128,7 +128,7 @@ impl Builder {
     ///     }
     /// }
     /// // assume role can now use `MyCustomProvider`
-    /// let provider_chain = DefaultProviderChain::builder()
+    /// let provider_chain = DefaultProvider::builder()
     ///     .with_custom_credential_source("MyCustomProvider", MyCustomProvider)
     ///     .build();
     /// ```
@@ -164,17 +164,21 @@ impl Builder {
         self
     }
 
-    pub fn build(self) -> DefaultProviderChain {
+    pub fn build(self) -> DefaultProvider {
         let profile_provider = self.profile_file_builder.build();
         let env_provider =
-            crate::environment::credential::Provider::new_with_env(self.env.unwrap_or_default());
+            crate::environment::credential::EnvironmentVariableCredentialsProvider::new_with_env(
+                self.env.unwrap_or_default(),
+            );
         let web_identity_token_provider = self.web_identity_builder.build();
-        let provider_chain =
-            crate::meta::credential::chain::ProviderChain::first_try("Environment", env_provider)
-                .or_else("Profile", profile_provider)
-                .or_else("WebIdentityToken", web_identity_token_provider);
+        let provider_chain = crate::meta::credential::chain::CredentialsProviderChain::first_try(
+            "Environment",
+            env_provider,
+        )
+        .or_else("Profile", profile_provider)
+        .or_else("WebIdentityToken", web_identity_token_provider);
         let cached_provider = self.credential_cache.load(provider_chain);
-        DefaultProviderChain(cached_provider.build())
+        DefaultProvider(cached_provider.build())
     }
 }
 

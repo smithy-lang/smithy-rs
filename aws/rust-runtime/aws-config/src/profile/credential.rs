@@ -44,7 +44,7 @@ use smithy_client::erase::DynConnector;
 mod exec;
 mod repr;
 
-impl ProvideCredentials for Provider {
+impl ProvideCredentials for ProfileFileCredentialsProvider {
     fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
     where
         Self: 'a,
@@ -64,8 +64,8 @@ impl ProvideCredentials for Provider {
 /// Generally, this will be constructed via the default provider chain, however, it can be manually
 /// constructed with the builder:
 /// ```rust,no_run
-/// use aws_config::profile::credential::Provider;
-/// let provider = Provider::builder().build();
+/// use aws_config::profile::credential::ProfileFileCredentialsProvider;
+/// let provider = ProfileFileCredentialsProvider::builder().build();
 /// ```
 ///
 /// **Note:** Profile providers to not implement any caching. They will reload and reparse the profile
@@ -92,7 +92,7 @@ impl ProvideCredentials for Provider {
 /// ```rust
 /// use aws_types::credential::{self, ProvideCredentials};
 /// use aws_types::credential::provide_credentials::future;
-/// use aws_config::profile::credential::Provider;
+/// use aws_config::profile::credential::ProfileFileCredentialsProvider;
 /// struct MyCustomProvider;
 /// impl MyCustomProvider {
 ///     async fn load_credentials(&self) -> credential::Result {
@@ -105,7 +105,7 @@ impl ProvideCredentials for Provider {
 ///         future::ProvideCredentials::new(self.load_credentials())
 ///     }
 /// }
-/// let provider = Provider::builder()
+/// let provider = ProfileFileCredentialsProvider::builder()
 ///     .with_custom_provider("Custom", MyCustomProvider)
 ///     .build();
 /// ```
@@ -122,7 +122,7 @@ impl ProvideCredentials for Provider {
 /// ```
 ///
 /// Other more complex configurations are possible, consult `test-data/assume-role-tests.json`.
-pub struct Provider {
+pub struct ProfileFileCredentialsProvider {
     factory: NamedProviderFactory,
     client_config: ClientConfiguration,
     fs: Fs,
@@ -131,7 +131,7 @@ pub struct Provider {
     connector: DynConnector,
 }
 
-impl Provider {
+impl ProfileFileCredentialsProvider {
     pub fn builder() -> Builder {
         Builder::default()
     }
@@ -317,7 +317,7 @@ impl Builder {
         self
     }
 
-    pub fn build(self) -> Provider {
+    pub fn build(self) -> ProfileFileCredentialsProvider {
         let build_span = tracing::info_span!("build_profile_provider");
         let _enter = build_span.enter();
         let env = self.env.clone();
@@ -326,7 +326,7 @@ impl Builder {
         named_providers
             .entry("Environment".into())
             .or_insert_with(|| {
-                Arc::new(crate::environment::credential::Provider::new_with_env(
+                Arc::new(crate::environment::credential::EnvironmentVariableCredentialsProvider::new_with_env(
                     env.clone(),
                 ))
             });
@@ -335,7 +335,7 @@ impl Builder {
         let connector = self.connector.clone().unwrap_or_else(must_have_connector);
         let core_client = aws_sdk_sts::RawClient::new(connector.clone());
 
-        Provider {
+        ProfileFileCredentialsProvider {
             factory,
             client_config: ClientConfiguration {
                 core_client,

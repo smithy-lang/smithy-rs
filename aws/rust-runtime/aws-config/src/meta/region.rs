@@ -5,11 +5,11 @@
 
 use aws_types::region::Region;
 
-pub struct ProviderChain {
+pub struct RegionProviderChain {
     providers: Vec<Box<dyn ProvideRegion>>,
 }
 
-impl ProviderChain {
+impl RegionProviderChain {
     pub async fn region(&self) -> Option<Region> {
         for provider in &self.providers {
             if let Some(region) = provider.region().await {
@@ -26,16 +26,16 @@ impl ProviderChain {
 /// ```rust
 /// use aws_types::region::Region;
 /// use std::env;
-/// use aws_config::meta::region::ProviderChain;
+/// use aws_config::meta::region::RegionProviderChain;
 /// // region provider that first checks the `CUSTOM_REGION` environment variable,
 /// // then checks the default provider chain, then falls back to us-east-2
-/// let provider = ProviderChain::first_try(env::var("CUSTOM_REGION").ok().map(Region::new))
+/// let provider = RegionProviderChain::first_try(env::var("CUSTOM_REGION").ok().map(Region::new))
 ///     .or_default_provider()
 ///     .or_else(Region::new("us-east-2"));
 /// ```
-impl ProviderChain {
+impl RegionProviderChain {
     pub fn first_try(provider: impl ProvideRegion + 'static) -> Self {
-        ProviderChain {
+        RegionProviderChain {
             providers: vec![Box::new(provider)],
         }
     }
@@ -58,7 +58,7 @@ impl ProvideRegion for Option<Region> {
     }
 }
 
-impl ProvideRegion for ProviderChain {
+impl ProvideRegion for RegionProviderChain {
     fn region(&self) -> future::ProvideRegion {
         future::ProvideRegion::new(self.region())
     }

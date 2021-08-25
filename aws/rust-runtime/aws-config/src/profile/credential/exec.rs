@@ -13,7 +13,7 @@ use super::repr;
 use crate::profile::credential::repr::BaseProvider;
 use crate::profile::credential::ProfileFileError;
 use crate::sts;
-use crate::web_identity_token::{WebIdentityTokenCredentialProvider, WebIdentityTokenRole};
+use crate::web_identity_token::{WebIdentityTokenCredentialsProvider, WebIdentityTokenRole};
 use aws_types::credential;
 use aws_types::credential::{CredentialsError, ProvideCredentials};
 use aws_types::os_shim_internal::Fs;
@@ -109,7 +109,7 @@ impl ProviderChain {
                 web_identity_token_file,
                 session_name,
             } => {
-                let provider = WebIdentityTokenCredentialProvider::builder()
+                let provider = WebIdentityTokenCredentialsProvider::builder()
                     .static_configuration(WebIdentityTokenRole {
                         web_identity_token_file: web_identity_token_file.into(),
                         role_arn: role_arn.to_string(),

@@ -17,22 +17,22 @@ use tracing::Instrument;
 ///
 /// ## Example
 /// ```rust
-/// use aws_config::meta::credential::chain::ProviderChain;
+/// use aws_config::meta::credential::chain::CredentialsProviderChain;
 /// use aws_types::Credentials;
 /// use aws_config::environment;
-/// let provider = ProviderChain::first_try("Environment", environment::credential::Provider::new())
+/// let provider = CredentialsProviderChain::first_try("Environment", environment::credential::EnvironmentVariableCredentialsProvider::new())
 ///     .or_else("Static", Credentials::from_keys("someacceskeyid", "somesecret", None));
 /// ```
-pub struct ProviderChain {
+pub struct CredentialsProviderChain {
     providers: Vec<(Cow<'static, str>, Box<dyn ProvideCredentials>)>,
 }
 
-impl ProviderChain {
+impl CredentialsProviderChain {
     pub fn first_try(
         name: impl Into<Cow<'static, str>>,
         provider: impl ProvideCredentials + 'static,
     ) -> Self {
-        ProviderChain {
+        CredentialsProviderChain {
             providers: vec![(name.into(), Box::new(provider))],
         }
     }
@@ -67,7 +67,7 @@ impl ProviderChain {
     }
 }
 
-impl ProvideCredentials for ProviderChain {
+impl ProvideCredentials for CredentialsProviderChain {
     fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials
     where
         Self: 'a,

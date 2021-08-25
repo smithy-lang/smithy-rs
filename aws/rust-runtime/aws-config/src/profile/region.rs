@@ -7,13 +7,13 @@ use crate::meta::region::{future, ProvideRegion};
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
 
-pub struct Provider {
+pub struct ProfileFileRegionProvider {
     fs: Fs,
     env: Env,
     profile_override: Option<String>,
 }
 
-impl Provider {
+impl ProfileFileRegionProvider {
     pub fn new() -> Self {
         Self {
             fs: Fs::real(),
@@ -38,7 +38,7 @@ impl Provider {
     }
 }
 
-impl ProvideRegion for Provider {
+impl ProvideRegion for ProfileFileRegionProvider {
     fn region(&self) -> future::ProvideRegion {
         future::ProvideRegion::new(self.region())
     }
