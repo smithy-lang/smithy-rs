@@ -75,11 +75,41 @@ class FluentClientDecorator : RustCodegenDecorator {
     }
 }
 
+data class ClientGenerics(
+    val connectorDefault: String? = null,
+    val middlewareDefault: String? = null,
+    val retryDefault: String? = "#{client}::retry::Standard",
+    val codegenScope: List<Pair<String, Any>> = emptyList(),
+) {
+    /** Declaration with defaults set */
+    val decl: String by lazy {
+        "<C${fmtDefault(connectorDefault)}, M${fmtDefault(middlewareDefault)}, R${fmtDefault(retryDefault)}>"
+    }
+
+    /** Instantiation */
+    val inst: String = "<C, M, R>"
+
+    /** Trait bounds */
+    val bounds: String = """
+        C: #{client}::bounds::SmithyConnector,
+        M: #{client}::bounds::SmithyMiddleware<C>,
+        R: #{client}::retry::NewRequestPolicy,
+    """.trimIndent()
+
+    private fun fmtDefault(default: String?): String {
+        return when (default) {
+            null -> ""
+            else -> "= $default"
+        }
+    }
+}
+
 class FluentClientGenerator(
     protocolConfig: ProtocolConfig,
     // Whether to include Client construction details that are relevant to generic Smithy generated clients,
     // but not necessarily relevant to customized clients, such as the ones with the AWS SDK.
-    private val includeSmithyGenericClientDocs: Boolean
+    private val includeSmithyGenericClientDocs: Boolean,
+    private val generics: ClientGenerics = ClientGenerics()
 ) {
     private val serviceShape = protocolConfig.serviceShape
     private val operations =
@@ -97,28 +127,28 @@ class FluentClientGenerator(
         writer.rustTemplate(
             """
             ##[derive(Debug)]
-            pub(crate) struct Handle<C, M, R> {
-                client: #{client}::Client<C, M, R>,
+            pub(crate) struct Handle${generics.decl} {
+                client: #{client}::Client${generics.inst},
                 conf: crate::Config,
             }
 
             ${clientDocComments()}
             ##[derive(Clone, std::fmt::Debug)]
-            pub struct Client<C, M, R = #{client}::retry::Standard> {
-                handle: std::sync::Arc<Handle<C, M, R>>
+            pub struct Client${generics.decl} {
+                handle: std::sync::Arc<Handle${generics.inst}>
             }
 
             ##[doc(inline)]
             pub use #{client}::Builder;
 
-            impl<C, M, R> From<#{client}::Client<C, M, R>> for Client<C, M, R> {
-                fn from(client: #{client}::Client<C, M, R>) -> Self {
+            impl${generics.inst} From<#{client}::Client${generics.inst}> for Client${generics.inst} {
+                fn from(client: #{client}::Client${generics.inst}) -> Self {
                     Self::with_config(client, crate::Config::builder().build())
                 }
             }
 
-            impl<C, M, R> Client<C, M, R> {
-                pub fn with_config(client: #{client}::Client<C, M, R>, conf: crate::Config) -> Self {
+            impl${generics.inst} Client${generics.inst} {
+                pub fn with_config(client: #{client}::Client${generics.inst}, conf: crate::Config) -> Self {
                     Self {
                         handle: std::sync::Arc::new(Handle {
                             client,
@@ -132,23 +162,18 @@ class FluentClientGenerator(
                 }
             }
             """,
-            "client" to clientDep.asType()
+            "client" to clientDep.asType(),
+            *generics.codegenScope.toTypedArray()
         )
         writer.rustBlockTemplate(
-            """
-            impl<C, M, R> Client<C, M, R>
-              where
-                C: #{client}::bounds::SmithyConnector,
-                M: #{client}::bounds::SmithyMiddleware<C>,
-                R: #{client}::retry::NewRequestPolicy,
-            """,
+            "impl${generics.inst} Client${generics.inst} where ${generics.bounds}",
             "client" to clientDep.asType(),
         ) {
             operations.forEach { operation ->
                 val name = symbolProvider.toSymbol(operation).name
                 rust(
                     """
-                    pub fn ${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}(&self) -> fluent_builders::$name<C, M, R> {
+                    pub fn ${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}(&self) -> fluent_builders::$name${generics.inst} {
                         fluent_builders::$name::new(self.handle.clone())
                     }
                     """
@@ -161,35 +186,34 @@ class FluentClientGenerator(
                 val input = operation.inputShape(model)
                 val members: List<MemberShape> = input.allMembers.values.toList()
 
-                rust(
+                rustTemplate(
                     """
                     ##[derive(std::fmt::Debug)]
-                    pub struct $name<C, M, R> {
-                        handle: std::sync::Arc<super::Handle<C, M, R>>,
-                        inner: #T
+                    pub struct $name${generics.decl} {
+                        handle: std::sync::Arc<super::Handle${generics.inst}>,
+                        inner: #{Inner}
                     }
                     """,
-                    input.builderSymbol(symbolProvider)
+                    "Inner" to input.builderSymbol(symbolProvider),
+                    *generics.codegenScope.toTypedArray()
                 )
 
                 rustBlockTemplate(
-                    """
-                    impl<C, M, R> $name<C, M, R>
-                      where
-                        C: #{client}::bounds::SmithyConnector,
-                        M: #{client}::bounds::SmithyMiddleware<C>,
-                        R: #{client}::retry::NewRequestPolicy,
-                    """,
+                    "impl${generics.inst} $name${generics.inst} where ${generics.bounds}",
                     "client" to clientDep.asType(),
                 ) {
                     rustTemplate(
                         """
-                        pub(crate) fn new(handle: std::sync::Arc<super::Handle<C, M, R>>) -> Self {
+                        pub(crate) fn new(handle: std::sync::Arc<super::Handle${generics.inst}>) -> Self {
                             Self { handle, inner: Default::default() }
                         }
 
-                        pub async fn send(self) -> std::result::Result<#{ok}, #{sdk_err}<#{operation_err}>> where
-                            R::Policy: #{client}::bounds::SmithyRetryPolicy<#{input}OperationOutputAlias, #{ok}, #{operation_err}, #{input}OperationRetryAlias>,
+                        pub async fn send(self) -> std::result::Result<#{ok}, #{sdk_err}<#{operation_err}>>
+                        where
+                            R::Policy: #{client}::bounds::SmithyRetryPolicy<#{input}OperationOutputAlias,
+                            #{ok},
+                            #{operation_err},
+                            #{input}OperationRetryAlias>,
                         {
                             let input = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
                             let op = input.make_operation(&self.handle.conf)

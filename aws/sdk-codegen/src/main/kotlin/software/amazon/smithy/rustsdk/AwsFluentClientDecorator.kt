@@ -6,6 +6,7 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
@@ -16,8 +17,10 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.ClientGenerics
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
@@ -28,9 +31,31 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
     override val order: Byte = 0
 
     override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
+        val rc = protocolConfig.runtimeConfig
         val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("client")), public = true)
         rustCrate.withModule(RustModule("client", module)) { writer ->
-            FluentClientGenerator(protocolConfig, includeSmithyGenericClientDocs = false).render(writer)
+            FluentClientGenerator(
+                protocolConfig,
+                includeSmithyGenericClientDocs = false,
+                generics = ClientGenerics(
+                    connectorDefault = "#{AwsFluentClient_DynConnector}",
+                    middlewareDefault = "#{AwsFluentClient_AwsMiddleware}",
+                    retryDefault = "#{AwsFluentClient_Standard}",
+                    codegenScope = listOf(
+                        "AwsFluentClient_DynConnector" to RuntimeType(
+                            "DynConnector",
+                            CargoDependency.SmithyClient(rc).copy(optional = true),
+                            "smithy_client::erase"
+                        ),
+                        "AwsFluentClient_AwsMiddleware" to AwsRuntimeType.AwsMiddleware(rc),
+                        "AwsFluentClient_Standard" to RuntimeType(
+                            "Standard",
+                            CargoDependency.SmithyClient(rc).copy(optional = true),
+                            "smithy_client::retry"
+                        ),
+                    )
+                ),
+            ).render(writer)
             AwsFluentClientExtensions(protocolConfig.runtimeConfig).render(writer)
         }
         val awsHyper = "aws-hyper"

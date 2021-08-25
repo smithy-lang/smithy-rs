@@ -30,6 +30,8 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation = when (runtimeCrateLocation) 
 
 object AwsRuntimeType {
     val S3Errors by lazy { RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("s3_errors")) }
+    fun AwsMiddleware(rc: RuntimeConfig, optional: Boolean = true): RuntimeType =
+        RuntimeType("AwsMiddleware", rc.awsRuntimeDependency("aws-hyper").copy(optional = optional), "aws_hyper")
 }
 
 fun RuntimeConfig.awsRuntimeDependency(name: String, features: Set<String> = setOf()): CargoDependency =
