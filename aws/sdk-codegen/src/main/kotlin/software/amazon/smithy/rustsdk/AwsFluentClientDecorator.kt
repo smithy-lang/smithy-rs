@@ -26,12 +26,23 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 
+private class Types(runtimeConfig: RuntimeConfig) {
+    private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig).copy(optional = true)
+    private val awsHyperDep = runtimeConfig.awsRuntimeDependency("aws-hyper").copy(optional = true)
+
+    val awsHyper = awsHyperDep.asType()
+
+    val AwsMiddleware = RuntimeType("AwsMiddleware", awsHyperDep, "aws_hyper")
+    val DynConnector = RuntimeType("DynConnector", smithyClientDep, "smithy_client::erase")
+    val Standard = RuntimeType("Standard", smithyClientDep, "smithy_client::retry")
+}
+
 class AwsFluentClientDecorator : RustCodegenDecorator {
     override val name: String = "FluentClient"
     override val order: Byte = 0
 
     override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
-        val rc = protocolConfig.runtimeConfig
+        val types = Types(protocolConfig.runtimeConfig)
         val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("client")), public = true)
         rustCrate.withModule(RustModule("client", module)) { writer ->
             FluentClientGenerator(
@@ -42,21 +53,13 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
                     middlewareDefault = "#{AwsFluentClient_AwsMiddleware}",
                     retryDefault = "#{AwsFluentClient_Standard}",
                     codegenScope = listOf(
-                        "AwsFluentClient_DynConnector" to RuntimeType(
-                            "DynConnector",
-                            CargoDependency.SmithyClient(rc).copy(optional = true),
-                            "smithy_client::erase"
-                        ),
-                        "AwsFluentClient_AwsMiddleware" to AwsRuntimeType.AwsMiddleware(rc),
-                        "AwsFluentClient_Standard" to RuntimeType(
-                            "Standard",
-                            CargoDependency.SmithyClient(rc).copy(optional = true),
-                            "smithy_client::retry"
-                        ),
+                        "AwsFluentClient_AwsMiddleware" to types.AwsMiddleware,
+                        "AwsFluentClient_DynConnector" to types.DynConnector,
+                        "AwsFluentClient_Standard" to types.Standard,
                     )
                 ),
             ).render(writer)
-            AwsFluentClientExtensions(protocolConfig.runtimeConfig).render(writer)
+            AwsFluentClientExtensions(types).render(writer)
         }
         val awsHyper = "aws-hyper"
         rustCrate.addFeature(Feature("client", true, listOf(awsHyper, "smithy-client")))
@@ -80,10 +83,19 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
     }
 }
 
-private class AwsFluentClientExtensions(runtimeConfig: RuntimeConfig) {
-    private val hyperDep = runtimeConfig.awsRuntimeDependency("aws-hyper").copy(optional = true)
-
+private class AwsFluentClientExtensions(private val types: Types) {
     fun render(writer: RustWriter) {
+        writer.rustBlock("impl<C> Client<C, aws_hyper::AwsMiddleware, smithy_client::retry::Standard>") {
+            rustTemplate(
+                """
+                pub fn from_conf_conn(conf: crate::Config, conn: C) -> Self {
+                    let client = #{aws_hyper}::Client::new(conn);
+                    Self { handle: std::sync::Arc::new(Handle { client, conf }) }
+                }
+                """,
+                "aws_hyper" to types.awsHyper,
+            )
+        }
         writer.rustBlock("impl Client<smithy_client::erase::DynConnector, aws_hyper::AwsMiddleware, smithy_client::retry::Standard>") {
             rustTemplate(
                 """
@@ -98,10 +110,10 @@ private class AwsFluentClientExtensions(runtimeConfig: RuntimeConfig) {
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn from_conf(conf: crate::Config) -> Self {
                     let client = #{aws_hyper}::Client::https();
-                    Self { handle: std::sync::Arc::new(Handle { client, conf })}
+                    Self { handle: std::sync::Arc::new(Handle { client, conf }) }
                 }
                 """,
-                "aws_hyper" to hyperDep.asType()
+                "aws_hyper" to types.awsHyper,
             )
         }
     }
