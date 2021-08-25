@@ -37,7 +37,10 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("EC2 client version: {}", PKG_VERSION);
-        println!("Region:             {}", region.region().await.unwrap().as_ref());
+        println!(
+            "Region:             {}",
+            region.region().await.unwrap().as_ref()
+        );
     }
 
     let config = Config::builder().region(region.region().await).build();
