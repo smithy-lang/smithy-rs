@@ -222,8 +222,8 @@ Tokio/Hyper features.
 ## The `.build()` method on service config
 
 Currently, the `.build()` method on service config will fill in defaults. As part of this change, `.build()` called on
-the service config with missing properties would be a runtime panic. Most customers would utilize the `From`
-implementation.
+the service config with missing properties would be a runtime panic. Most customers would utilize the `From<&aws_types::Config>` implementation
+implementation rather than constructing the builder directly.
 
 ## Stability and Versioning
 
@@ -270,7 +270,7 @@ Several breaking changes will be made as part of this, notably, the profile file
 - [ ] os_shim_internal moved to ??? `smithy-types`?
 - [ ] Add `SharedConfig` to `aws-types`. Ensure that it's set up to add new members while remaining backwards
   compatible.
-- [ ] Code generate `From<&SharedConfig> for <everyservice>::Config`
+- [ ] Code generate `From<&aws_types::Config> for <everyservice>::Config`
 - [ ] Code generate `<everservice>::Client::new(&shared_config)`
 - [ ] Deprecate `<everyservice>::from_env`, message points to `Client::new`
 - [ ] Remove `<everyservice>::from_env`
