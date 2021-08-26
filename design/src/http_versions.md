@@ -111,38 +111,42 @@ Customers need to be able to provide HTTP settings, such as timeouts, for all co
 These should come out of the `SharedConfig` when it is used. Connector creation also needs to be customizable
 so that alternate HTTP implementations can be used, or so that a fake implementation can be used for tests.
 
-To accomplish this, `SharedConfig` will have a `connector_fn` member. A customer would configure
+To accomplish this, `SharedConfig` will have a `make_connector` member. A customer would configure
 it as such:
 
 ```rust
 let config = some_shared_config_loader()
     .with_http_settings(my_http_settings)
-    .with_connector_fn(|settings: &HttpSettings, http_version: HttpVersion| {
-        Some(MyCustomConnector::new(settings, http_version))
+    .with_make_connector(|reqs: &MakeConnectorRequirements| {
+        Some(MyCustomConnector::new(reqs))
     })
     .await;
 ```
 
-A default `connector_fn` would be provided that creates a Hyper connector based on the Cargo feature flags.
-This might look something like this:
+The passed in `MakeConnectorRequirements` will hold the customer-provided `HttpSettings` as well
+as any Smithy-modeled requirements, which will just be `HttpVersion` for now. The `MakeConnectorRequirements`
+struct will be marked `non_exhaustive` so that new requirements can be added to it as the SDK evolves.
+
+A default `make_connector` implementation would be provided that creates a Hyper connector based on the
+Cargo feature flags. This might look something like this:
 
 ```rust
 #[cfg(feature = "rustls")]
-pub fn default_connector(settings: &HttpSettings, http_version: HttpVersion) -> HyperAdapter {
+pub fn default_connector(reqs: &HttpRequirements) -> HyperAdapter {
     let https = hyper_rustls::HttpsConnector::with_native_roots();
     let mut builder = hyper::Client::builder();
-    builder = configure_settings(builder, settings);
-    if let Http2 = http_version {
+    builder = configure_settings(builder, &reqs.http_settings);
+    if let Http2 = &reqs.http_version {
         builder = builder.http2_only(true);
     }
     HyperAdapter::from(builder.build::<_, SdkBody>(https))
 }
 ```
 
-For any given service, `connector_fn` could be called multiple times to create connectors
-for all required HTTP versions.
+For any given service, `make_connector` could be called multiple times to create connectors
+for all required HTTP versions and settings.
 
-**Note:** the `connector_fn` returns an `Option` since an HTTP version may not be required, but rather, preferred
+**Note:** the `make_connector` returns an `Option` since an HTTP version may not be required, but rather, preferred
 according to a Smithy model. For operations that list out `["h2", "HTTP/1.1"]` as the desired versions,
 a customer could choose to provide only an HTTP 1 connector, and the operation should still succeed.
 
@@ -150,23 +154,28 @@ Solving the Connector Selection Problem
 ---------------------------------------
 
 Each service operation needs to be able to select a connector that meets its requirements best
-from the customer provided connectors. As of now, the only selection criteria is the HTTP version.
-Since connector creation is not a cheap process, connectors will need to be cached after they are
-created, and shared between successive service calls.
+from the customer provided connectors. Initially, the only selection criteria will be the HTTP version,
+but later when per-operation HTTP settings are implemented, the connector will also need to be keyed off of those
+settings. Since connector creation is not a cheap process, connectors will need to be cached after they are
+created.
 
 This caching is currently handled by the `Handle` in the fluent client, which holds on to the
-Smithy client.
+Smithy client. This cache needs to be adjusted to:
+- Support multiple connectors, keyed off of the customer provided `HttpSettings`, and also off of the Smithy modeled requirements.
+- Be lazy initialized. Services that have a mix of Event Stream and non-streaming operations shouldn't create
+  an HTTP/2 client if the customer doesn't intend to use the Event Stream operations that require it.
 
-To add connector selection, the `Handle` will be adjusted to hold multiple, annotated, Smithy clients:
+To accomplish this, the `Handle` will hold a cache that is optimized for many reads and few writes:
 
 ```rust
-enum ConnectorHttpVersion<C, M, R> {
-    Http1_1(smithy_client::Client<C, M, R>),
-    Http2(smithy_client::Client<C, M, R>),
+#[derive(Debug, Hash, Eq, PartialEq)]
+struct ConnectorKey {
+    http_settings: HttpSettings,
+    http_version: HttpVersion,
 }
 
 struct Handle<C, M, R> {
-    clients: Vec<ConnectorHttpVersion<C, M, R>>,
+    clients: RwLock<HashMap<HttpRequirements<'static>, smithy_client::Client<C, M, R>>>,
     conf: crate::Config,
 }
 
@@ -175,44 +184,76 @@ pub struct Client<C, M, R = Standard> {
 }
 ```
 
-This arrangement will require that the connector type be the same between HTTP implementations,
+With how the generics are organized, the connector type will have to be the same between HTTP implementations,
 but this should be fine since it is generally a thin wrapper around a separate HTTP implementor.
-For cases where it is not, the custom connector type can host its own dyn Trait solution.
+For cases where it is not, the custom connector type can host its own `dyn Trait` solution.
 
-When generating the fluent client, the code generator knows which HTTP version is preferred for each operation.
-So when it generates the `send()` method, it can list out a prioritized list of `HttpVersion`:
+The `HttpRequirements` struct will hold `HttpSettings` as copy-on-write so that it can be used
+for cache lookup without having to clone `HttpSettings`:
 
 ```rust
-impl<C, M, R> AssumeRole<C, M, R> where ...{
-    pub async fn send(self) -> Result<AssumeRoleOutput, SdkError<AssumeRoleError>> where ... {
-        // Setup code omitted ...
+struct HttpRequirements<'a> {
+    http_settings: Cow<'a, HttpSettings>,
+    http_version: HttpVersion,
+}
 
-        // Make the actual request
-        self.handle.select_client(&[HttpVersion::Http2, HttpVersion::Http1])?
-            .call(op)
-            .await
+impl<'a> HttpRequirements<'a> {
+    // Needed for converting a borrowed HttpRequirements into an owned cache key for cache population
+    pub fn into_owned(self) -> HttpRequirements<'static> {
+        Self {
+            http_settings: Cow::Owned(self.http_settings.into_owned()),
+            http_version: self.http_version,
+        }
     }
 }
 ```
 
-The slice passed to `select_client()` would be the list from the Smithy protocol trait (`http` or `eventStreamHttp`
-depending on th eoperation). The selection implementation will be an `O(n*m)` loop over the `ConnectorHttpVersion` list,
-which will be fine since both `n` and `m` will only ever be 1-2 items, or if another protocol version is introduced
-later, maybe 1-3.
+With the cache established, each operation needs to be aware of its requirements. The code generator will be
+updated to store a prioritized list of `HttpVersion` in the property bag in an input's `make_operation()` method.
+This prioritized list will come from the Smithy protocol trait's `http` or `eventStreamHttp` attribute, depending
+on the operation. The fluent client will then pull this list out of the property bag so that it can determine which
+connector to use. This indirection is necessary so that an operation still holds all information
+needed to make a service call from the Smithy client directly.
 
-If an operation requires a specific protocol version, and if the `connector_fn` can't provide that version,
-then the `select_client()` function will return `SdkError::ConstructionFailure` indicating the error.
+**Note:** This may be extended in the future to be more than just `HttpVersion`, for example, when per-operation
+HTTP setting overrides are implemented. This doc is not attempting to solve that problem.
+
+In the fluent client, this will look as follows:
+
+```rust
+impl<C, M, R> AssumeRole<C, M, R> where ... {
+    pub async fn send(self) -> Result<AssumeRoleOutput, SdkError<AssumeRoleError>> where ... {
+        let input = self.create_input()?;
+        let op = input.make_operation(&self.handle.conf)?;
+
+        // Grab the `make_connector` implementation
+        let make_connector = self.config.make_connector();
+
+        // Acquire the prioritized HttpVersion list
+        let http_versions = op.properties().get::<HttpVersionList>();
+
+        // Make the actual request (using default HttpSettings until modifying those is implemented)
+        let client = self.handle
+            .get_or_create_client(make_connector, &default_http_settings(), &http_versions)
+            .await?;
+        client.call(op).await
+    }
+}
+```
+
+If an operation requires a specific protocol version, and if the `make_connection` implementation can't
+provide that it, then the `get_or_create_client()` function will return `SdkError::ConstructionFailure`
+indicating the error.
 
 Changes Checklist
 -----------------
 
 - [ ] Create `HttpVersion` in `smithy-http` with `Http1_1` and `Http2`
 - [ ] Refactor existing `https()` connector creation functions to take `HttpVersion`
-- [ ] Add `connector_fn` to `SharedConfig`, and wire up the `https()` functions as a default
-- [ ] Create a private `ConnectorHttpVersion` for use in the fluent clients
-- [ ] Update `Handle` to have a `Vec<ConnectorHttpVersion>`
+- [ ] Add `make_connector` to `SharedConfig`, and wire up the `https()` functions as a default
+- [ ] Create `HttpRequirements` in `smithy-http`
+- [ ] Implement the connector cache on `Handle`
 - [ ] Implement function to calculate a minimum required set of HTTP versions from a Smithy model in the code generator
-- [ ] Update `new()` on fluent clients to construct the minimum set of required connectors to go into the `Handle`
-- [ ] Implement `select_client` on `Handle`
-- [ ] Update the fluent client `send()` function code gen to call `select_client()` with the preferred HTTP versions
+- [ ] Update the `make_operation` code gen to put an `HttpVersionList` into the operation property bag
+- [ ] Update the fluent client `send()` function code gen grab the HTTP version list and acquire the correct connector with it
 - [ ] Add required defaulting for models that don't set the optional `http` and `eventStreamHttp` protocol trait attributes
