@@ -5,7 +5,6 @@
 
 use aws_sdk_ec2::{Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region;
-use aws_types::region::ProvideRegion;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -35,6 +34,7 @@ async fn show_events(reg: String) {
             "  Events scheduled for instance ID: {}",
             status.instance_id.as_deref().unwrap_or_default()
         );
+
         for event in status.events.unwrap_or_default() {
             println!("    Event ID:     {}", event.instance_event_id.unwrap());
             println!("    Description:  {}", event.description.unwrap());
@@ -62,6 +62,7 @@ async fn show_events(reg: String) {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
+
     let Opt { region, verbose } = Opt::from_args();
 
     let region = region::ChainProvider::first_try(region.map(Region::new))
@@ -82,6 +83,7 @@ async fn main() -> Result<(), Error> {
     // Get list of available regions.
     let config = Config::builder().region(region.region().await).build();
     let ec2_client = Client::from_conf(config);
+
     let resp = ec2_client.describe_regions().send().await;
 
     // Show the events for that EC2 instances in that Region.

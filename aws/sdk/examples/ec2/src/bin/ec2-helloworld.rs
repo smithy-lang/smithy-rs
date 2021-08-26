@@ -5,7 +5,6 @@
 
 use aws_sdk_ec2::{Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region;
-use aws_types::region::ProvideRegion;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -35,6 +34,8 @@ async fn main() -> Result<(), Error> {
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
 
+    println!();
+
     if verbose {
         println!("EC2 client version: {}", PKG_VERSION);
         println!(
@@ -44,8 +45,8 @@ async fn main() -> Result<(), Error> {
     }
 
     let config = Config::builder().region(region.region().await).build();
-
     let client = Client::from_conf(config);
+
     let rsp = client.describe_regions().send().await?;
 
     println!("Regions for your account:");

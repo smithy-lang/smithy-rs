@@ -5,7 +5,6 @@
 
 use aws_sdk_ec2::{Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region;
-use aws_types::region::ProvideRegion;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -34,6 +33,7 @@ struct Opt {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
+
     let Opt {
         region,
         instance_id,
@@ -43,6 +43,8 @@ async fn main() -> Result<(), Error> {
     let region = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
+
+    println!();
 
     if verbose {
         println!("EC2 client version: {}", PKG_VERSION);
