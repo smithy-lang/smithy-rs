@@ -123,7 +123,7 @@ fun loadServiceMembership(): Membership {
     val membershipOverride = getProperty("aws.services")?.let { parseMembership(it) }
     println(membershipOverride)
     val fullSdk = parseMembership(getProperty("aws.services.fullsdk") ?: throw kotlin.Exception("never list missing"))
-    val tier1 = parseMembership(getProperty("aws.services.group1") ?: throw kotlin.Exception("group1 list missing"))
+    val tier1 = parseMembership(getProperty("aws.services.smoketest") ?: throw kotlin.Exception("smoketest list missing"))
     return membershipOverride ?: if ((getProperty("aws.fullsdk") ?: "") == "true") {
         fullSdk
     } else {

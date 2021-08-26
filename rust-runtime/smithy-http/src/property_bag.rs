@@ -174,7 +174,32 @@ impl fmt::Debug for PropertyBag {
     }
 }
 
-/// A new-type of [`PropertyBag`] that can be safely shared across threads and cheaply cloned.
+/// A wrapper of [`PropertyBag`] that can be safely shared across threads and cheaply cloned.
+///
+/// To access properties, use either `acquire` or `acquire_mut`. This can be one line for
+/// single property accesses, for example:
+/// ```rust
+/// # use smithy_http::property_bag::SharedPropertyBag;
+/// # let properties = SharedPropertyBag::new();
+/// let my_string = properties.acquire().get::<String>();
+/// ```
+///
+/// For multiple accesses, the acquire result should be stored as a local since calling
+/// acquire repeatedly will be slower than calling it once:
+/// ```rust
+/// # use smithy_http::property_bag::SharedPropertyBag;
+/// # let properties = SharedPropertyBag::new();
+/// let props = properties.acquire();
+/// let my_string = props.get::<String>();
+/// let my_vec = props.get::<Vec<String>>();
+/// ```
+///
+/// Use `acquire_mut` to insert properties into the bag:
+/// ```rust
+/// # use smithy_http::property_bag::SharedPropertyBag;
+/// # let properties = SharedPropertyBag::new();
+/// properties.acquire_mut().insert("example".to_string());
+/// ```
 #[derive(Clone, Debug, Default)]
 pub struct SharedPropertyBag(Arc<Mutex<PropertyBag>>);
 

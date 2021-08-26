@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
@@ -76,7 +77,11 @@ class TopLevelErrorGenerator(protocolConfig: ProtocolConfig, private val operati
             sdkError,
             operationError
         ) {
-            rustBlock("fn from(err: #T<#T, R>) -> Self", sdkError, operationError) {
+            rustBlockTemplate(
+                "fn from(err: #{SdkError}<#{OpError}, R>) -> Self",
+                "SdkError" to sdkError,
+                "OpError" to operationError
+            ) {
                 rustBlock("match err") {
                     val operationErrors = operationShape.errors.map { model.expectShape(it) }
                     rustBlock("#T::ServiceError { err, ..} => match err.kind", sdkError) {

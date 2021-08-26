@@ -183,8 +183,7 @@ class EventStreamMarshallerGeneratorTest {
                     .add_header(Header::new("long", HeaderValue::Int64(9_000_000_000i64)))
                     .add_header(Header::new("short", HeaderValue::Int16(16_000i16)))
                     .add_header(Header::new("string", HeaderValue::String("test".into())))
-                    .add_header(Header::new("timestamp", HeaderValue::Timestamp(Instant::from_epoch_seconds(5))))
-                    .add_header(Header::new(":content-type", HeaderValue::String("application/octet-stream".into())));
+                    .add_header(Header::new("timestamp", HeaderValue::Timestamp(Instant::from_epoch_seconds(5))));
                 assert_eq!(expected_message, actual_message);
                 """,
                 "message_with_headers",

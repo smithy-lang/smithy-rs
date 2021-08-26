@@ -55,7 +55,13 @@ impl SignMessage for SigV4Signer {
         let properties = self.properties.acquire();
         if self.last_signature.is_none() {
             // The Signature property should exist in the property bag for all Event Stream requests.
-            self.last_signature = Some(properties.get::<Signature>().unwrap().as_ref().into())
+            self.last_signature = Some(
+                properties
+                    .get::<Signature>()
+                    .expect("property bag contains initial Signature")
+                    .as_ref()
+                    .into(),
+            )
         }
 
         let (signed_message, signature) = {

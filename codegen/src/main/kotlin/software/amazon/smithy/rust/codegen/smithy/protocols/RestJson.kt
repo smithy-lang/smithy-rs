@@ -10,7 +10,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
@@ -50,7 +49,7 @@ class RestJson(private val protocolConfig: ProtocolConfig) : Protocol {
     )
 
     override val httpBindingResolver: HttpBindingResolver =
-        HttpTraitHttpBindingResolver(protocolConfig.model, "application/json", "application/json", "application/json")
+        HttpTraitHttpBindingResolver(protocolConfig.model, ProtocolContentTypes.consistent("application/json"))
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 

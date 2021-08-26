@@ -106,9 +106,9 @@ class EventStreamMarshallerGenerator(
         }
     }
 
-    private fun RustWriter.renderMarshallEvent(unionMember: MemberShape, struct: StructureShape) {
-        val headerMembers = struct.members().filter { it.hasTrait<EventHeaderTrait>() }
-        val payloadMember = struct.members().firstOrNull { it.hasTrait<EventPayloadTrait>() }
+    private fun RustWriter.renderMarshallEvent(unionMember: MemberShape, eventStruct: StructureShape) {
+        val headerMembers = eventStruct.members().filter { it.hasTrait<EventHeaderTrait>() }
+        val payloadMember = eventStruct.members().firstOrNull { it.hasTrait<EventPayloadTrait>() }
         for (member in headerMembers) {
             val memberName = symbolProvider.toMemberName(member)
             val target = model.expectShape(member.target)
@@ -119,9 +119,8 @@ class EventStreamMarshallerGenerator(
             val target = model.expectShape(payloadMember.target)
             renderMarshallEventPayload("inner.$memberName", payloadMember, target)
         } else if (headerMembers.isEmpty()) {
-            renderMarshallEventPayload("inner", unionMember, struct)
+            renderMarshallEventPayload("inner", unionMember, eventStruct)
         } else {
-            addStringHeader(":content-type", "application/octet-stream".dq() + ".into()")
             rust("Vec::new()")
         }
     }
@@ -138,23 +137,25 @@ class EventStreamMarshallerGenerator(
 
     private fun RustWriter.renderAddHeader(headerName: String, inputName: String, target: Shape) {
         withBlock("headers.push(", ");") {
-            rustTemplate("#{Header}::new", *codegenScope)
-            withBlock("(", ")") {
-                rust("${headerName.dq()},")
-                rustTemplate("#{HeaderValue}::", *codegenScope)
-                when (target) {
-                    is BooleanShape -> rust("Bool($inputName)")
-                    is ByteShape -> rust("Byte($inputName)")
-                    is ShortShape -> rust("Int16($inputName)")
-                    is IntegerShape -> rust("Int32($inputName)")
-                    is LongShape -> rust("Int64($inputName)")
-                    is BlobShape -> rust("ByteArray($inputName.into_inner().into())")
-                    is StringShape -> rust("String($inputName.into())")
-                    is TimestampShape -> rust("Timestamp($inputName)")
-                    else -> throw IllegalStateException("unsupported event stream header shape type: $target")
-                }
-            }
+            rustTemplate(
+                "#{Header}::new(${headerName.dq()}, #{HeaderValue}::${headerValue(inputName, target)})",
+                *codegenScope
+            )
         }
+    }
+
+    // Event stream header types: https://awslabs.github.io/smithy/1.0/spec/core/stream-traits.html#eventheader-trait
+    // Note: there are no floating point header types for Event Stream.
+    private fun headerValue(inputName: String, target: Shape): String = when (target) {
+        is BooleanShape -> "Bool($inputName)"
+        is ByteShape -> "Byte($inputName)"
+        is ShortShape -> "Int16($inputName)"
+        is IntegerShape -> "Int32($inputName)"
+        is LongShape -> "Int64($inputName)"
+        is BlobShape -> "ByteArray($inputName.into_inner().into())"
+        is StringShape -> "String($inputName.into())"
+        is TimestampShape -> "Timestamp($inputName)"
+        else -> throw IllegalStateException("unsupported event stream header shape type: $target")
     }
 
     private fun RustWriter.renderMarshallEventPayload(inputExpr: String, member: MemberShape, target: Shape) {
