@@ -19,16 +19,12 @@ impl ErrorExt for smithy_types::Error {
 
 pub fn parse_extended_error(
     error: smithy_types::Error,
-    headers: Option<&HeaderMap<HeaderValue>>,
+    headers: &HeaderMap<HeaderValue>,
 ) -> smithy_types::Error {
     let mut builder = error.into_builder();
     let host_id = headers
-        .map(|headers| {
-            headers
-                .get("x-amz-id-2")
-                .and_then(|header_value| header_value.to_str().ok())
-        })
-        .flatten();
+        .get("x-amz-id-2")
+        .and_then(|header_value| header_value.to_str().ok());
     if let Some(host_id) = host_id {
         builder.custom(EXTENDED_REQUEST_ID, host_id);
     }
@@ -54,7 +50,7 @@ mod test {
             .request_id("456")
             .build();
 
-        let error = parse_extended_error(error, Some(resp.headers()));
+        let error = parse_extended_error(error, resp.headers());
         assert_eq!(
             error
                 .extended_request_id()
@@ -71,7 +67,7 @@ mod test {
             .request_id("456")
             .build();
 
-        let error = parse_extended_error(error, Some(resp.headers()));
+        let error = parse_extended_error(error, resp.headers());
         assert_eq!(error.extended_request_id(), None);
     }
 }

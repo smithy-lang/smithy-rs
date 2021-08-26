@@ -259,12 +259,12 @@ class EventStreamUnmarshallerGenerator(
     private fun RustWriter.renderUnmarshallError() {
         rustTemplate(
             """
-            let generic = match #{parse_generic_error}(message.payload(), None, None) {
+            let generic = match #{parse_generic_error}(message.payload()) {
                 Ok(generic) => generic,
                 Err(err) => return Ok(#{UnmarshalledMessage}::Error(#{OpError}::unhandled(err))),
             };
             """,
-            "parse_generic_error" to protocol.parseGenericError(operationShape),
+            "parse_generic_error" to protocol.parseEventStreamGenericError(operationShape),
             *codegenScope
         )
 

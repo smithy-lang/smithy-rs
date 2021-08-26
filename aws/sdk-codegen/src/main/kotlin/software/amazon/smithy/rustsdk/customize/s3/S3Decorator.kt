@@ -58,39 +58,36 @@ class S3Decorator : RustCodegenDecorator {
 
 class S3(protocolConfig: ProtocolConfig) : RestXml(protocolConfig) {
     private val runtimeConfig = protocolConfig.runtimeConfig
+    private val errorScope = arrayOf(
+        "Bytes" to RuntimeType.Bytes,
+        "Error" to RuntimeType.GenericError(runtimeConfig),
+        "HeaderMap" to RuntimeType.http.member("HeaderMap"),
+        "Response" to RuntimeType.http.member("Response"),
+        "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError"),
+        "base_errors" to restXmlErrors,
+        "s3_errors" to AwsRuntimeType.S3Errors,
+    )
 
-    override fun parseGenericError(operationShape: OperationShape): RuntimeType {
-        return RuntimeType.forInlineFun("parse_generic_error", "xml_deser") {
+    override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType {
+        return RuntimeType.forInlineFun("parse_http_generic_error", "xml_deser") {
             it.rustBlockTemplate(
-                """
-                pub fn parse_generic_error(
-                    payload: &#{Bytes},
-                    http_status: Option<u16>,
-                    headers: Option<&#{HeaderMap}<#{HeaderValue}>>,
-                ) -> Result<#{Error}, #{XmlError}>
-                """,
-                "Bytes" to RuntimeType.Bytes,
-                "Error" to RuntimeType.GenericError(runtimeConfig),
-                "HeaderMap" to RuntimeType.http.member("HeaderMap"),
-                "HeaderValue" to RuntimeType.http.member("HeaderValue"),
-                "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
+                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
+                *errorScope
             ) {
                 rustTemplate(
                     """
-                    if payload.is_empty() {
+                    if response.body().is_empty() {
                         let mut err = #{Error}::builder();
-                        if http_status.unwrap_or(0) == 404 {
+                        if response.status().as_u16() == 404 {
                             err.code("NotFound");
                         }
                         Ok(err.build())
                     } else {
-                        let base_err = #{base_errors}::parse_generic_error(payload.as_ref())?;
-                        Ok(#{s3_errors}::parse_extended_error(base_err, headers))
+                        let base_err = #{base_errors}::parse_generic_error(response.body().as_ref())?;
+                        Ok(#{s3_errors}::parse_extended_error(base_err, response.headers()))
                     }
                     """,
-                    "base_errors" to restXmlErrors,
-                    "s3_errors" to AwsRuntimeType.S3Errors,
-                    "Error" to RuntimeType.GenericError(runtimeConfig)
+                    *errorScope
                 )
             }
         }

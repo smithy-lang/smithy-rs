@@ -42,6 +42,14 @@ class Ec2QueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
 class Ec2QueryProtocol(private val protocolConfig: ProtocolConfig) : Protocol {
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val ec2QueryErrors: RuntimeType = RuntimeType.ec2QueryErrors(runtimeConfig)
+    private val errorScope = arrayOf(
+        "Bytes" to RuntimeType.Bytes,
+        "Error" to RuntimeType.GenericError(runtimeConfig),
+        "HeaderMap" to RuntimeType.http.member("HeaderMap"),
+        "Response" to RuntimeType.http.member("Response"),
+        "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
+    )
+
     override val httpBindingResolver: HttpBindingResolver = StaticHttpBindingResolver(
         protocolConfig.model,
         HttpTrait.builder()
@@ -61,24 +69,23 @@ class Ec2QueryProtocol(private val protocolConfig: ProtocolConfig) : Protocol {
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         Ec2QuerySerializerGenerator(protocolConfig)
 
-    override fun parseGenericError(operationShape: OperationShape): RuntimeType {
-        return RuntimeType.forInlineFun("parse_generic_error", "xml_deser") {
-            it.rustBlockTemplate(
-                """
-                pub fn parse_generic_error(
-                    payload: &#{Bytes},
-                    _http_status: Option<u16>,
-                    _headers: Option<&#{HeaderMap}<#{HeaderValue}>>,
-                ) -> Result<#{Error}, #{XmlError}>
-                """,
-                "Bytes" to RuntimeType.Bytes,
-                "Error" to RuntimeType.GenericError(runtimeConfig),
-                "HeaderMap" to RuntimeType.http.member("HeaderMap"),
-                "HeaderValue" to RuntimeType.http.member("HeaderValue"),
-                "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
+    override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_http_generic_error", "xml_deser") { writer ->
+            writer.rustBlockTemplate(
+                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
+                *errorScope
+            ) {
+                rust("#T::parse_generic_error(response.body().as_ref())", ec2QueryErrors)
+            }
+        }
+
+    override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_event_stream_generic_error", "xml_deser") { writer ->
+            writer.rustBlockTemplate(
+                "pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{XmlError}>",
+                *errorScope
             ) {
                 rust("#T::parse_generic_error(payload.as_ref())", ec2QueryErrors)
             }
         }
-    }
 }

@@ -17,19 +17,6 @@ pub fn is_error<B>(response: &http::Response<B>) -> bool {
     !response.status().is_success()
 }
 
-fn error_type_from_header(
-    headers: Option<&HeaderMap<HeaderValue>>,
-) -> Result<Option<&str>, ToStrError> {
-    headers
-        .map(|headers| {
-            headers
-                .get("X-Amzn-Errortype")
-                .map(|v| v.to_str())
-                .transpose()
-        })
-        .unwrap_or(Ok(None))
-}
-
 fn sanitize_error_code(error_code: &str) -> &str {
     // Trim a trailing URL from the error code, beginning with a `:`
     let error_code = match error_code.find(':') {
@@ -42,16 +29,6 @@ fn sanitize_error_code(error_code: &str) -> &str {
         Some(idx) => &error_code[idx + 1..],
         None => &error_code,
     }
-}
-
-fn request_id(headers: Option<&HeaderMap<HeaderValue>>) -> Option<&str> {
-    headers
-        .map(|headers| {
-            headers
-                .get("X-Amzn-Requestid")
-                .and_then(|v| v.to_str().ok())
-        })
-        .flatten()
 }
 
 struct ErrorBody<'a> {
@@ -98,9 +75,22 @@ fn parse_error_body(bytes: &[u8]) -> Result<ErrorBody, DeserializeError> {
     })
 }
 
+fn error_type_from_header(headers: &HeaderMap<HeaderValue>) -> Result<Option<&str>, ToStrError> {
+    headers
+        .get("X-Amzn-Errortype")
+        .map(|v| v.to_str())
+        .transpose()
+}
+
+fn request_id(headers: &HeaderMap<HeaderValue>) -> Option<&str> {
+    headers
+        .get("X-Amzn-Requestid")
+        .and_then(|v| v.to_str().ok())
+}
+
 pub fn parse_generic_error(
     payload: &Bytes,
-    headers: Option<&HeaderMap<HeaderValue>>,
+    headers: &HeaderMap<HeaderValue>,
 ) -> Result<SmithyError, DeserializeError> {
     let ErrorBody { code, message } = parse_error_body(payload.as_ref())?;
 
@@ -137,7 +127,7 @@ mod test {
             ))
             .unwrap();
         assert_eq!(
-            parse_generic_error(response.body(), Some(response.headers())).unwrap(),
+            parse_generic_error(response.body(), response.headers()).unwrap(),
             Error::builder()
                 .code("FooError")
                 .message("Go to foo")
@@ -219,7 +209,7 @@ mod test {
             ))
             .unwrap();
         assert_eq!(
-            parse_generic_error(response.body(), Some(response.headers())).unwrap(),
+            parse_generic_error(response.body(), response.headers()).unwrap(),
             Error::builder()
                 .code("ResourceNotFoundException")
                 .message("Functions from 'us-west-2' are not reachable from us-east-1")
