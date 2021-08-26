@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::region::ProvideRegion;
+use aws_types::region::ChainProvider;
 
 use sagemaker::{Client, Config, Region};
 
@@ -36,18 +36,16 @@ async fn main() -> Result<(), sagemaker::Error> {
         verbose,
     } = Opt::from_args();
 
-    let region = default_region
-        .as_ref()
-        .map(|region| Region::new(region.clone()))
-        .or_else(|| aws_types::region::default_provider().region())
-        .unwrap_or_else(|| Region::new("us-west-2"));
+    let region = ChainProvider::first_try(default_region.map(Region::new))
+        .or_default_provider()
+        .or_else(Region::new("us-west-2"));
 
     if verbose {
         println!("SageMaker client version: {}", sagemaker::PKG_VERSION);
-        println!("Region:                   {:?}", &region);
+        println!("Region:                   {:?}", region.region().await);
     }
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(conf);
     let notebooks = client.list_notebook_instances().send().await?;
 

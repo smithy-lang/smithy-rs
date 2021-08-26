@@ -6,7 +6,7 @@
 use aws_sdk_dynamodb::model::AttributeValue;
 use aws_sdk_dynamodb::{Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region;
-use aws_types::region::ProvideRegion;
+
 use std::process;
 use structopt::StructOpt;
 
@@ -89,7 +89,7 @@ async fn main() -> Result<(), Error> {
         println!("DynamoDB client version: {}", PKG_VERSION);
         println!(
             "Region:                  {}",
-            region.region().unwrap().as_ref()
+            region.region().await.unwrap().as_ref()
         );
         println!("Table:  {}", table);
         println!("User:   {}", username);
@@ -101,7 +101,7 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let config = Config::builder().region(region).build();
+    let config = Config::builder().region(region.region().await).build();
 
     let client = Client::from_conf(config);
 

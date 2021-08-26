@@ -5,7 +5,7 @@
 
 use aws_sdk_ec2::{Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region;
-use aws_types::region::ProvideRegion;
+
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -50,12 +50,12 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("EC2 version: {}", PKG_VERSION);
-        println!("Region:      {}", region.region().unwrap().as_ref());
+        println!("Region:      {}", region.region().await.unwrap().as_ref());
         println!("Snapshot ID: {}", snapshot_id);
         println!();
     }
 
-    let config = Config::builder().region(region).build();
+    let config = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(config);
 
     client

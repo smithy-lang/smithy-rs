@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -75,28 +76,26 @@ class RegionDecorator : RustCodegenDecorator {
 
 class RegionProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
     private val region = region(runtimeConfig)
+    private val codegenScope = arrayOf("Region" to region.member("Region"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
-            is ServiceConfig.ConfigStruct -> rust("pub(crate) region: Option<#T::Region>,", region)
+            is ServiceConfig.ConfigStruct -> rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
-                rust("region: Option<#T::Region>,", region)
+                rustTemplate("region: Option<#{Region}>,", *codegenScope)
             ServiceConfig.BuilderImpl ->
-                rust(
+                rustTemplate(
                     """
-            pub fn region(mut self, region_provider: impl #1T::ProvideRegion) -> Self {
-                self.region = region_provider.region();
+            pub fn region(mut self, region: impl Into<Option<#{Region}>>) -> Self {
+                self.region = region.into();
                 self
             }
             """,
-                    region
+                    *codegenScope
                 )
-            ServiceConfig.BuilderBuild -> rust(
-                """region: {
-                    use #1T::ProvideRegion;
-                    self.region.or_else(||#1T::default_provider().region())
-                },""",
-                region
+            ServiceConfig.BuilderBuild -> rustTemplate(
+                """region: self.region,""",
+                *codegenScope
             )
         }
     }

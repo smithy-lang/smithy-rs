@@ -49,6 +49,7 @@ async fn main() -> Result<(), Error> {
     let region = region::ChainProvider::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
+    let region = region_provider.region().await;
 
     println!();
 

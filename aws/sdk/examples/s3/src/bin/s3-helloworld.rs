@@ -5,7 +5,7 @@
 
 use aws_sdk_s3::{ByteStream, Client, Config, Error, Region, PKG_VERSION};
 use aws_types::region;
-use aws_types::region::ProvideRegion;
+
 use std::path::Path;
 use std::process;
 use structopt::StructOpt;
@@ -57,13 +57,16 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("S3 client version: {}", PKG_VERSION);
-        println!("Region:            {}", region.region().unwrap().as_ref());
+        println!(
+            "Region:            {}",
+            region.region().await.unwrap().as_ref()
+        );
         println!("Bucket:            {}", &bucket);
         println!("Key:               {}", &key);
         println!();
     }
 
-    let conf = Config::builder().region(region).build();
+    let conf = Config::builder().region(region.region().await).build();
     let client = Client::from_conf(conf);
 
     let resp = client.list_buckets().send().await?;

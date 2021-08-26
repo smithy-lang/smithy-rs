@@ -159,6 +159,11 @@ impl Request {
         }
     }
 
+    /// Creates a new operation `Request` from its parts.
+    pub fn from_parts(inner: http::Request<SdkBody>, properties: Arc<Mutex<PropertyBag>>) -> Self {
+        Request { inner, properties }
+    }
+
     /// Allows modification of the HTTP request and associated properties with a fallible closure.
     pub fn augment<T>(
         self,

@@ -146,7 +146,7 @@ class HttpProtocolTestGenerator(
         val Tokio = CargoDependency(
             "tokio",
             CratesIo("1"),
-            features = listOf("macros", "test-util", "rt"),
+            features = setOf("macros", "test-util", "rt"),
             scope = DependencyScope.Dev
         )
         testModuleWriter.addDependency(Tokio)

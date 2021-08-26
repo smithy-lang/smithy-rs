@@ -1,23 +1,38 @@
 vNext (Month Day, Year)
 -----------------------
+**Breaking Changes**
+- `ProvideRegion` is now asynchronous. Code that called `provider.region()` must be changed to `provider.region().await`.
+- `<awsservice>::Config::from_env()` is now also asynchronous because it must load a region
+- `<awsservice>::Config::builder()` will **not** load a default region unspecified. A region must be specified directly.
 
 **New this week**
 
+- (When complete) Add Event Stream support (#653, #xyz)
 - (When complete) Add profile file provider for region (#594, #xyz)
-- Add experimental `dvr` module to smithy-client. This will enable easier testing of HTTP traffic. (#640)
-- Add profile file credential provider implementation. This implementation currently does not support credential sources
-  for assume role providers other than environment variables. (#640)
-- Add Event Stream support to aws-sigv4 (#648)
-- :bug: Fix name collision that occurred when a model had both a union and a structure named `Result` (#643)
-- Add initial implementation of a default provider chain. (#650)
-- Update smithy-client to simplify creating HTTP/HTTPS connectors (#650)
-- Remove Bintray/JCenter source from gradle build. (#651)
-- Add support for the smithy auth trait. This enables authorizations that explicitly disable authorization to work when no credentials have been provided. (#652)
-- :bug: Fix STS Assume Role with WebIdentity & Assume role with SAML to support clients with no credentials provided (#652)
-- Add support for WebIdentityToken providers via profile & environment variables. (#654)
-- (internal): Update sigv4 tests to work around behavior change in httparse 1.5. (#656)
-- Update AWS SDK models (#657)
+- Improve documentation on collection-aware builders (#664)
+
+
+v0.21 (August 19th, 2021)
+-------------------------
+
+**New This Week**
+
 - :tada: Add Chime Identity, Chime Messaging, and Snow Device Management support (#657)
+- :tada: Add profile file credential provider implementation. This implementation currently does not support credential sources for assume role providers other than environment variables. (#640)
+- :tada: Add support for WebIdentityToken providers via profile & environment variables. (#654)
+- :bug: Fix name collision that occurred when a model had both a union and a structure named `Result` (#643)
+- :bug: Fix STS Assume Role with WebIdentity & Assume role with SAML to support clients with no credentials provided (#652)
+- Update AWS SDK models (#657)
+- Add initial implementation of a default provider chain. (#650)
+
+**Internal Changes**
+
+- Update sigv4 tests to work around behavior change in httparse 1.5. (#656)
+- Remove Bintray/JCenter source from gradle build. (#651)
+- Add experimental `dvr` module to smithy-client. This will enable easier testing of HTTP traffic. (#640)
+- Update smithy-client to simplify creating HTTP/HTTPS connectors (#650)
+- Add Event Stream support to aws-sigv4 (#648)
+- Add support for the smithy auth trait. This enables authorizations that explicitly disable authorization to work when no credentials have been provided. (#652)
 
 v0.20 (August 10th, 2021)
 --------------------------

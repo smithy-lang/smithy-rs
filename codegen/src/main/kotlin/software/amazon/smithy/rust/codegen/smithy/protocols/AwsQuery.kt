@@ -24,17 +24,13 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.parse.AwsQueryParser
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.AwsQuerySerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.util.getTrait
 
 class AwsQueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
     override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): HttpBoundProtocolGenerator =
         HttpBoundProtocolGenerator(protocolConfig, AwsQueryProtocol(protocolConfig))
 
-    override fun transformModel(model: Model): Model {
-        return OperationNormalizer(model).transformModel().let(RemoveEventStreamOperations::transform)
-    }
+    override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
