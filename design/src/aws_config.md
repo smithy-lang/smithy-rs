@@ -195,13 +195,11 @@ impl Config {
       self.region.as_ref()
    }
 
-   pub fn credentials_provider(&self) -> Option<Arc<dyn ProvideCredentials>> {
+   pub fn credentials_provider(&self) -> Option<ShardCredentialsProvider> {
       self.credentials_provider.clone()
    }
-
-   pub fn connector(&self) -> &DynConnector {
-      &self.connector
-   }
+   
+   pub fn make_connector(&self) -> todo!()
 
    pub fn builder() -> Builder {
       Builder::default()
