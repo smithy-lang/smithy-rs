@@ -66,9 +66,23 @@ interface Protocol {
     fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator
 
     /**
-     fn parse_generic(response: &Response<Bytes>) -> smithy_types::error::Error
+     * Generates a function signature like the following:
+     * ```rust
+     * fn parse_http_generic_error(response: &Response<Bytes>) -> smithy_types::error::Error
+     * ```
      **/
-    fun parseGenericError(operationShape: OperationShape): RuntimeType
+    fun parseHttpGenericError(operationShape: OperationShape): RuntimeType
+
+    /**
+     * Generates a function signature like the following:
+     * ```rust
+     * fn parse_event_stream_generic_error(payload: &Bytes) -> smithy_types::error::Error
+     * ```
+     *
+     * Event Stream generic errors are almost identical to HTTP generic errors, except that
+     * there are no response headers or statuses available to further inform the error parsing.
+     **/
+    fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType
 }
 
 class HttpBoundProtocolGenerator(
@@ -129,7 +143,8 @@ class HttpBoundProtocolGenerator(
             runtimeConfig,
             symbolProvider,
             unionShape,
-            serializerGenerator
+            serializerGenerator,
+            httpBindingResolver.requestContentType(operationShape),
         ).render()
 
         // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the
@@ -331,10 +346,9 @@ class HttpBoundProtocolGenerator(
                 "O" to outputSymbol,
                 "E" to errorSymbol
             ) {
-
                 rust(
-                    "let generic = #T(&response).map_err(#T::unhandled)?;",
-                    protocol.parseGenericError(operationShape),
+                    "let generic = #T(response).map_err(#T::unhandled)?;",
+                    protocol.parseHttpGenericError(operationShape),
                     errorSymbol
                 )
                 if (operationShape.errors.isNotEmpty()) {

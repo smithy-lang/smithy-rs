@@ -20,7 +20,7 @@ val DECORATORS = listOf(
     SigV4SigningDecorator(),
     RetryPolicyDecorator(),
     IntegrationTestDecorator(),
-    FluentClientDecorator(),
+    AwsFluentClientDecorator(),
     CrateLicenseDecorator(),
 
     // Service specific decorators

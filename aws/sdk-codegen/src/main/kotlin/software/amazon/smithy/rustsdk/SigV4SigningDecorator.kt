@@ -88,8 +88,8 @@ class SigV4SigningConfig(
             runtimeConfig.awsRuntimeDependency("aws-sig-auth", setOf("sign-eventstream")),
             "aws_sig_auth::event_stream"
         ),
-        "PropertyBag" to RuntimeType(
-            "PropertyBag",
+        "SharedPropertyBag" to RuntimeType(
+            "SharedPropertyBag",
             CargoDependency.SmithyHttp(runtimeConfig),
             "smithy_http::property_bag"
         )
@@ -116,7 +116,7 @@ class SigV4SigningConfig(
                         /// Creates a new Event Stream `SignMessage` implementor.
                         pub fn new_event_stream_signer(
                             &self,
-                            properties: std::sync::Arc<std::sync::Mutex<#{PropertyBag}>>
+                            properties: #{SharedPropertyBag}
                         ) -> #{SigV4Signer} {
                             #{SigV4Signer}::new(properties)
                         }

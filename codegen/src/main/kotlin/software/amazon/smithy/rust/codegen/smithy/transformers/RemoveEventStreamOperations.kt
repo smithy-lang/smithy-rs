@@ -9,22 +9,22 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.util.orNull
 import java.util.logging.Logger
 
-// TODO(EventStream): Remove this class once the Event Stream implementation is stable
+// TODO(EventStream): [CLEANUP] Remove this class once the Event Stream implementation is stable
 /** Transformer to REMOVE operations that use EventStreaming until event streaming is supported */
 object RemoveEventStreamOperations {
     private val logger = Logger.getLogger(javaClass.name)
 
-    private fun eventStreamEnabled(): Boolean =
-        System.getenv()["SMITHYRS_EXPERIMENTAL_EVENTSTREAM"] == "1"
-
-    fun transform(model: Model): Model {
-        if (eventStreamEnabled()) {
+    fun transform(model: Model, settings: RustSettings): Model {
+        // If Event Stream is allowed in build config, then don't remove the operations
+        if (settings.codegenConfig.eventStreamAllowList.contains(settings.moduleName)) {
             return model
         }
+
         return ModelTransformer.create().filterShapes(model) { parentShape ->
             if (parentShape !is OperationShape) {
                 true
