@@ -1,7 +1,10 @@
 RFC: Supporting multiple HTTP versions for SDKs that use Event Stream
 =====================================================================
 
-> Status: RFC. For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
+> Status: Merged.
+
+For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
+
 
 Most AWS SDK operations use HTTP/1.1, but bi-directional streaming operations that use the Event Stream
 message framing format need to use HTTP/2 (h2).
