@@ -46,6 +46,13 @@ class RestXmlFactory(private val generator: (ProtocolConfig) -> Protocol = { Res
 open class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
     private val restXml = protocolConfig.serviceShape.expectTrait<RestXmlTrait>()
     private val runtimeConfig = protocolConfig.runtimeConfig
+    private val errorScope = arrayOf(
+        "Bytes" to RuntimeType.Bytes,
+        "Error" to RuntimeType.GenericError(runtimeConfig),
+        "HeaderMap" to RuntimeType.http.member("HeaderMap"),
+        "Response" to RuntimeType.http.member("Response"),
+        "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
+    )
 
     protected val restXmlErrors: RuntimeType = when (restXml.isNoErrorWrapping) {
         true -> RuntimeType.unwrappedXmlErrors(runtimeConfig)
@@ -53,7 +60,7 @@ open class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
     }
 
     override val httpBindingResolver: HttpBindingResolver =
-        HttpTraitHttpBindingResolver(protocolConfig.model, "application/xml", null)
+        HttpTraitHttpBindingResolver(protocolConfig.model, ProtocolContentTypes.consistent("application/xml"))
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format =
         TimestampFormatTrait.Format.DATE_TIME
@@ -66,20 +73,23 @@ open class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
         return XmlBindingTraitSerializerGenerator(protocolConfig, httpBindingResolver)
     }
 
-    override fun parseGenericError(operationShape: OperationShape): RuntimeType {
-        /**
-         fn parse_generic(response: &Response<Bytes>) -> Result<smithy_types::error::Generic, T: Error>
-         **/
-        return RuntimeType.forInlineFun("parse_generic_error", "xml_deser") {
-            it.rustBlockTemplate(
-                "pub fn parse_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
-                "Response" to RuntimeType.http.member("Response"),
-                "Bytes" to RuntimeType.Bytes,
-                "Error" to RuntimeType.GenericError(runtimeConfig),
-                "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
+    override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_http_generic_error", "xml_deser") { writer ->
+            writer.rustBlockTemplate(
+                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
+                *errorScope
             ) {
                 rust("#T::parse_generic_error(response.body().as_ref())", restXmlErrors)
             }
         }
-    }
+
+    override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_event_stream_generic_error", "xml_deser") { writer ->
+            writer.rustBlockTemplate(
+                "pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{XmlError}>",
+                *errorScope
+            ) {
+                rust("#T::parse_generic_error(payload.as_ref())", restXmlErrors)
+            }
+        }
 }

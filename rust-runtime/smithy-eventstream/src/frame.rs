@@ -26,6 +26,8 @@ pub type SignMessageError = Box<dyn StdError + Send + Sync + 'static>;
 /// Signs an Event Stream message.
 pub trait SignMessage: fmt::Debug {
     fn sign(&mut self, message: Message) -> Result<Message, SignMessageError>;
+
+    fn sign_empty(&mut self) -> Result<Message, SignMessageError>;
 }
 
 /// Converts a Smithy modeled Event Stream type into a [`Message`](Message).
