@@ -152,7 +152,10 @@ mod test {
 
     #[test]
     fn places_signature_in_property_bag() {
-        let req = http::Request::new(SdkBody::from(""));
+        let req = http::Request::builder()
+            .uri("https://test-service.test-region.amazonaws.com/")
+            .body(SdkBody::from(""))
+            .unwrap();
         let region = Region::new("us-east-1");
         let req = operation::Request::new(req)
             .augment(|req, properties| {

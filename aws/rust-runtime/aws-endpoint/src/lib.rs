@@ -11,21 +11,16 @@ pub use partition::Partition;
 #[doc(hidden)]
 pub use partition::PartitionResolver;
 
-use std::error::Error;
-use std::fmt;
-use std::fmt::{Debug, Display, Formatter};
-use std::sync::Arc;
-
-use http::HeaderValue;
-
 use aws_types::region::{Region, SigningRegion};
 use aws_types::SigningService;
-use http::header::HOST;
 use smithy_http::endpoint::{Endpoint, EndpointPrefix};
 use smithy_http::middleware::MapRequest;
 use smithy_http::operation::Request;
 use smithy_http::property_bag::PropertyBag;
-use std::convert::TryFrom;
+use std::error::Error;
+use std::fmt;
+use std::fmt::{Debug, Display, Formatter};
+use std::sync::Arc;
 
 /// Endpoint to connect to an AWS Service
 ///
@@ -202,14 +197,6 @@ impl MapRequest for AwsEndpointStage {
             endpoint
                 .endpoint
                 .set_endpoint(http_req.uri_mut(), props.get::<EndpointPrefix>());
-            // host is only None if authority is not. `set_endpoint` guarantees that authority is not None
-            let host = http_req
-                .uri()
-                .host()
-                .expect("authority is guaranteed to be non-empty after `set_endpoint`");
-            let host = HeaderValue::try_from(host)
-                .expect("authority must only contain valid header characters");
-            http_req.headers_mut().insert(HOST, host);
             Ok(http_req)
         })
     }
@@ -229,7 +216,6 @@ mod test {
 
     use crate::partition::endpoint::{Metadata, Protocol, SignatureVersion};
     use crate::{set_endpoint_resolver, AwsEndpointStage, CredentialScope};
-    use http::header::HOST;
 
     #[test]
     fn default_endpoint_updates_request() {
@@ -262,10 +248,6 @@ mod test {
         assert_eq!(
             req.uri(),
             &Uri::from_static("https://kinesis.us-east-1.amazonaws.com")
-        );
-        assert_eq!(
-            req.headers().get(HOST).expect("host header must be set"),
-            "kinesis.us-east-1.amazonaws.com"
         );
     }
 
