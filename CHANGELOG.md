@@ -11,6 +11,9 @@ vNext (Month Day, Year)
 - (When complete) Add profile file provider for region (#594, #xyz)
 - Improve documentation on collection-aware builders (#664)
 
+**Internal Changes**
+- Add NowOrLater future to smithy-async (#todo)
+
 
 v0.21 (August 19th, 2021)
 -------------------------
