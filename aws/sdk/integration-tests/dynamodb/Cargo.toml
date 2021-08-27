@@ -11,6 +11,7 @@ edition = "2018"
 aws-auth = { path = "../../build/aws-sdk/aws-auth" }
 aws-http = { path = "../../build/aws-sdk/aws-http" }
 aws-hyper = { path = "../../build/aws-sdk/aws-hyper" }
+aws-types = { path = "../../build/aws-sdk/aws-types" }
 aws-sdk-dynamodb = { path = "../../build/aws-sdk/dynamodb" }
 bytes = "1"
 criterion = { version = "0.3.4" }
