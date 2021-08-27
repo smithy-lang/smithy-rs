@@ -42,6 +42,14 @@ class Ec2QueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
 class Ec2QueryProtocol(private val protocolConfig: ProtocolConfig) : Protocol {
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val ec2QueryErrors: RuntimeType = RuntimeType.ec2QueryErrors(runtimeConfig)
+    private val errorScope = arrayOf(
+        "Bytes" to RuntimeType.Bytes,
+        "Error" to RuntimeType.GenericError(runtimeConfig),
+        "HeaderMap" to RuntimeType.http.member("HeaderMap"),
+        "Response" to RuntimeType.http.member("Response"),
+        "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
+    )
+
     override val httpBindingResolver: HttpBindingResolver = StaticHttpBindingResolver(
         protocolConfig.model,
         HttpTrait.builder()
@@ -49,7 +57,8 @@ class Ec2QueryProtocol(private val protocolConfig: ProtocolConfig) : Protocol {
             .method("POST")
             .uri(UriPattern.parse("/"))
             .build(),
-        "application/x-www-form-urlencoded"
+        "application/x-www-form-urlencoded",
+        "text/xml"
     )
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.DATE_TIME
@@ -60,20 +69,23 @@ class Ec2QueryProtocol(private val protocolConfig: ProtocolConfig) : Protocol {
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         Ec2QuerySerializerGenerator(protocolConfig)
 
-    override fun parseGenericError(operationShape: OperationShape): RuntimeType {
-        /**
-         fn parse_generic(response: &Response<Bytes>) -> Result<smithy_types::error::Generic, T: Error>
-         **/
-        return RuntimeType.forInlineFun("parse_generic_error", "xml_deser") {
-            it.rustBlockTemplate(
-                "pub fn parse_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
-                "Response" to RuntimeType.http.member("Response"),
-                "Bytes" to RuntimeType.Bytes,
-                "Error" to RuntimeType.GenericError(runtimeConfig),
-                "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
+    override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_http_generic_error", "xml_deser") { writer ->
+            writer.rustBlockTemplate(
+                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
+                *errorScope
             ) {
                 rust("#T::parse_generic_error(response.body().as_ref())", ec2QueryErrors)
             }
         }
-    }
+
+    override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_event_stream_generic_error", "xml_deser") { writer ->
+            writer.rustBlockTemplate(
+                "pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{XmlError}>",
+                *errorScope
+            ) {
+                rust("#T::parse_generic_error(payload.as_ref())", ec2QueryErrors)
+            }
+        }
 }

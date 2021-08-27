@@ -137,7 +137,7 @@ class XmlBindingTraitSerializerGenerator(
 
     override fun payloadSerializer(member: MemberShape): RuntimeType {
         val fnName = symbolProvider.serializeFunctionName(member)
-        val target = model.expectShape(member.target, StructureShape::class.java)
+        val target = model.expectShape(member.target)
         return RuntimeType.forInlineFun(fnName, "xml_ser") {
             val t = symbolProvider.toSymbol(member).rustType().stripOuter<RustType.Option>().render(true)
             it.rustBlockTemplate(
@@ -158,11 +158,15 @@ class XmlBindingTraitSerializerGenerator(
                         """,
                         *codegenScope
                     )
-                    serializeStructure(
-                        target,
-                        XmlMemberIndex.fromMembers(target.members().toList()),
-                        Ctx.Element("root", "&input")
-                    )
+                    when (target) {
+                        is StructureShape -> serializeStructure(
+                            target,
+                            XmlMemberIndex.fromMembers(target.members().toList()),
+                            Ctx.Element("root", "&input")
+                        )
+                        is UnionShape -> serializeUnion(target, Ctx.Element("root", "&input"))
+                        else -> throw IllegalStateException("xml payloadSerializer only supports structs and unions")
+                    }
                 }
                 rustTemplate("Ok(out.into_bytes())", *codegenScope)
             }

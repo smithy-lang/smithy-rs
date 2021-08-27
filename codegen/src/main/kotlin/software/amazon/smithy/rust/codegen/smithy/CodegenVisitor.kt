@@ -82,7 +82,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         model.let(RecursiveShapeBoxer::transform)
             .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
             .let(OperationNormalizer::transform)
-            .let(RemoveEventStreamOperations::transform)
+            .let { RemoveEventStreamOperations.transform(it, settings) }
             .let(EventStreamNormalizer::transform)
 
     fun execute() {
