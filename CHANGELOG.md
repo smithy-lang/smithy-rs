@@ -12,6 +12,10 @@ vNext (Month Day, Year)
 - (When complete) Add profile file provider for region (#594, #xyz)
 - Improve documentation on collection-aware builders (#664)
 - Add support for Transcribe `StartStreamTranscription` and S3 `SelectObjectContent` operations (#667)
+- Add support for shared configuration between multiple services (#673)
+
+**Internal Changes**
+- Add NowOrLater future to smithy-async (#672)
 
 
 v0.21 (August 19th, 2021)

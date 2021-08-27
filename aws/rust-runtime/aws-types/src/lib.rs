@@ -5,6 +5,7 @@
 
 pub mod build_metadata;
 // internal APIs, may be unstable
+pub mod config;
 #[doc(hidden)]
 pub mod os_shim_internal;
 pub mod profile;
