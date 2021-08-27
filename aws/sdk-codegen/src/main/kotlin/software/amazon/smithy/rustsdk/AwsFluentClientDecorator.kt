@@ -31,10 +31,10 @@ private class Types(runtimeConfig: RuntimeConfig) {
     private val awsHyperDep = runtimeConfig.awsRuntimeDependency("aws-hyper").copy(optional = true)
 
     val awsHyper = awsHyperDep.asType()
+    val smithyClientRetry = RuntimeType("retry", smithyClientDep, "smithy_client")
 
     val AwsMiddleware = RuntimeType("AwsMiddleware", awsHyperDep, "aws_hyper")
     val DynConnector = RuntimeType("DynConnector", smithyClientDep, "smithy_client::erase")
-    val Standard = RuntimeType("Standard", smithyClientDep, "smithy_client::retry")
 }
 
 class AwsFluentClientDecorator : RustCodegenDecorator {
@@ -51,11 +51,11 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
                 generics = ClientGenerics(
                     connectorDefault = "#{AwsFluentClient_DynConnector}",
                     middlewareDefault = "#{AwsFluentClient_AwsMiddleware}",
-                    retryDefault = "#{AwsFluentClient_Standard}",
+                    retryDefault = "#{AwsFluentClient_retry}::Standard",
                     codegenScope = listOf(
                         "AwsFluentClient_AwsMiddleware" to types.AwsMiddleware,
                         "AwsFluentClient_DynConnector" to types.DynConnector,
-                        "AwsFluentClient_Standard" to types.Standard,
+                        "AwsFluentClient_retry" to types.smithyClientRetry,
                     )
                 ),
             ).render(writer)
