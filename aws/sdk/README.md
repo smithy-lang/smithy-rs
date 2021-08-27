@@ -28,4 +28,4 @@ You can use gradle properties to opt/out of generating specific services:
 The generation logic is as follows:
 1. If `aws.services` is specified, generate an SDK based on the inclusion/exclusion list.
 2. Otherwise, if `aws.fullsdk` is specified generate an SDK based on `aws.services.fullsdk`.
-3. Otherwise, generate an SDK based on `aws.services.tier1`
+3. Otherwise, generate an SDK based on `aws.services.smoketest`

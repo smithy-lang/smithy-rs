@@ -151,22 +151,11 @@ abstract class HttpProtocolGenerator(
         return with(writer) { "${format(operationT)}<$output, $retry>" }
     }
 
-    private fun buildOperationTypeOutput(
-        writer: RustWriter,
-        shape: OperationShape,
-    ): String {
-        val outputSymbol = symbolProvider.toSymbol(shape)
-        return with(writer) { "${format(outputSymbol)}" }
-    }
+    private fun buildOperationTypeOutput(writer: RustWriter, shape: OperationShape): String =
+        writer.format(symbolProvider.toSymbol(shape))
 
-    private fun buildOperationTypeRetry(
-        writer: RustWriter,
-        features: List<OperationCustomization>,
-    ): String {
-        val retryType = features.mapNotNull { it.retryType() }.firstOrNull()?.let { writer.format(it) } ?: "()"
-
-        return with(writer) { "$retryType" }
-    }
+    private fun buildOperationTypeRetry(writer: RustWriter, features: List<OperationCustomization>): String =
+        features.mapNotNull { it.retryType() }.firstOrNull()?.let { writer.format(it) } ?: "()"
 
     private fun buildOperation(
         implBlockWriter: RustWriter,
@@ -195,7 +184,7 @@ abstract class HttpProtocolGenerator(
         ) {
             withBlock("Ok({", "})") {
                 features.forEach { it.section(OperationSection.MutateInput("self", "_config"))(this) }
-                rust("let properties = std::sync::Arc::new(std::sync::Mutex::new(smithy_http::property_bag::PropertyBag::new()));")
+                rust("let properties = smithy_http::property_bag::SharedPropertyBag::new();")
                 rust("let request = self.request_builder_base()?;")
                 withBlock("let body =", ";") {
                     body("self", shape)

@@ -4,12 +4,14 @@ vNext (Month Day, Year)
 - `ProvideRegion` is now asynchronous. Code that called `provider.region()` must be changed to `provider.region().await`.
 - `<awsservice>::Config::from_env()` is now also asynchronous because it must load a region
 - `<awsservice>::Config::builder()` will **not** load a default region unspecified. A region must be specified directly.
+- `Request` and `Response` in `smithy_http::operation` now use `SharedPropertyBag` instead of `Arc<Mutex<PropertyBag>>`. Use the `acquire` and `acquire_mut` methods to get a reference to the underlying `PropertyBag` to access properties. (#667)
 
 **New this week**
 
 - (When complete) Add Event Stream support (#653, #xyz)
 - (When complete) Add profile file provider for region (#594, #xyz)
 - Improve documentation on collection-aware builders (#664)
+- Add support for Transcribe `StartStreamTranscription` and S3 `SelectObjectContent` operations (#667)
 
 
 v0.21 (August 19th, 2021)
