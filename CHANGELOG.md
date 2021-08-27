@@ -12,7 +12,7 @@ vNext (Month Day, Year)
 - Improve documentation on collection-aware builders (#664)
 
 **Internal Changes**
-- Add NowOrLater future to smithy-async (#todo)
+- Add NowOrLater future to smithy-async (#672)
 
 
 v0.21 (August 19th, 2021)
