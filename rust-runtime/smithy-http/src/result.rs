@@ -29,10 +29,7 @@ pub enum SdkError<E, R = operation::Response> {
 
     /// A response was received but it was not parseable according the the protocol (for example
     /// the server hung up while the body was being read)
-    ResponseError {
-        raw: operation::Response,
-        err: BoxError,
-    },
+    ResponseError { err: BoxError, raw: R },
 
     /// An error response was received from the service
     ServiceError { err: E, raw: R },

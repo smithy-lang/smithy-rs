@@ -167,13 +167,17 @@ impl<T, E> Receiver<T, E> {
     }
 
     fn unmarshall(&self, message: Message) -> Result<Option<T>, SdkError<E, Message>> {
-        match self
-            .unmarshaller
-            .unmarshall(&message)
-            .map_err(|err| SdkError::DispatchFailure(Box::new(err)))?
-        {
-            UnmarshalledMessage::Event(event) => Ok(Some(event)),
-            UnmarshalledMessage::Error(err) => Err(SdkError::ServiceError { err, raw: message }),
+        match self.unmarshaller.unmarshall(&message) {
+            Ok(unmarshalled) => match unmarshalled {
+                UnmarshalledMessage::Event(event) => Ok(Some(event)),
+                UnmarshalledMessage::Error(err) => {
+                    Err(SdkError::ServiceError { err, raw: message })
+                }
+            },
+            Err(err) => Err(SdkError::ResponseError {
+                raw: message,
+                err: Box::new(err),
+            }),
         }
     }
 
