@@ -10,7 +10,7 @@ vNext (Month Day, Year)
 - `ProvideRegion` has been moved to `aws_config::meta::region::ProvideRegion`. (#675)
 - `aws_types::region::ChainProvider` has been moved to `aws_config::meta::region::RegionProviderChain` (#675).
 - `ProvideRegion` is now asynchronous. Code that called `provider.region()` must be changed to `provider.region().await`.
-- `<awsservice>::Config::builder()` will **not** load a default region unspecified. To preserve previous behavior:
+- `<awsservice>::Config::builder()` will **not** load a default region. To preserve previous behavior:
   1. Add a dependency on `aws-config`
   2. ```rust
      let shared_config = aws_config::load_from_env().await;
