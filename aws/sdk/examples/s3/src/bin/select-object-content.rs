@@ -4,12 +4,12 @@
  */
 
 use aws_auth_providers::DefaultProviderChain;
+use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::model::{
     CompressionType, CsvInput, CsvOutput, ExpressionType, FileHeaderInfo, InputSerialization,
     OutputSerialization, SelectObjectContentEventStream,
 };
-use aws_sdk_s3::{Client, Config, Error, Region, PKG_VERSION};
-use aws_types::region;
+use aws_sdk_s3::{Client, Error, Region, PKG_VERSION};
 
 use structopt::StructOpt;
 
@@ -53,27 +53,24 @@ async fn main() -> Result<(), Error> {
         verbose,
     } = Opt::from_args();
 
-    let region = region::ChainProvider::first_try(region.map(Region::new))
+    let region_provider = RegionProviderChain::first_try(region.map(Region::new))
         .or_default_provider()
-        .or_else(Region::new("us-east-2"))
-        .region()
-        .await
-        .unwrap();
+        .or_else(Region::new("us-east-2"));
+    let shared_config = aws_config::from_env().region(region_provider).load().await;
 
     println!();
 
     if verbose {
         println!("S3 client version: {}", PKG_VERSION);
-        println!("Region:            {}", region.as_ref());
+        println!("Region:            {}", shared_config.region().unwrap());
         println!();
     }
 
     let credential_provider = DefaultProviderChain::builder()
-        .region(region.clone())
+        .region(shared_config.region().unwrap().clone())
         .build();
 
-    let config = Config::builder()
-        .region(region)
+    let config = aws_sdk_s3::config::Builder::from(&shared_config)
         .credentials_provider(credential_provider)
         .build();
 

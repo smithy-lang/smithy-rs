@@ -1,0 +1,27 @@
+[package]
+name = "aws-config"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
+edition = "2018"
+exclude = ["test-data/*"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default-provider = ["profile", "imds", "meta", "sts"]
+profile = ["sts", "web-identity-token"]
+# note: IMDS currently unsupported
+imds = []
+meta = []
+sts = []
+web-identity-token = ["sts"]
+sso = []
+
+default = ["default-provider"]
+
+[dependencies]
+aws-types = { path = "../../sdk/build/aws-sdk/aws-types" }
+smithy-async = { path = "../../sdk/build/aws-sdk/smithy-async" }
+tracing = { version = "0.1" }
+
+[dev-dependencies]
+futures-util = "0.3.16"

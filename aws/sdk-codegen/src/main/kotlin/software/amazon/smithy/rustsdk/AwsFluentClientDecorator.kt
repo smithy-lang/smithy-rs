@@ -30,6 +30,7 @@ private class Types(runtimeConfig: RuntimeConfig) {
     private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig).copy(optional = true)
     private val awsHyperDep = runtimeConfig.awsRuntimeDependency("aws-hyper").copy(optional = true)
 
+    val awsTypes = awsTypes(runtimeConfig).asType()
     val awsHyper = awsHyperDep.asType()
     val smithyClientRetry = RuntimeType("retry", smithyClientDep, "smithy_client")
 
@@ -100,11 +101,8 @@ private class AwsFluentClientExtensions(private val types: Types) {
             rustTemplate(
                 """
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
-                pub async fn from_env() -> Self {
-                    // backwards compatibility shim
-                    use aws_types::region::ProvideRegion;
-                    let region = aws_types::region::default_provider().region().await;
-                    Self::from_conf(crate::Config::builder().region(region).build())
+                pub fn new(config: &#{aws_types}::config::Config) -> Self {
+                    Self::from_conf(config.into())
                 }
 
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
@@ -114,6 +112,7 @@ private class AwsFluentClientExtensions(private val types: Types) {
                 }
                 """,
                 "aws_hyper" to types.awsHyper,
+                "aws_types" to types.awsTypes
             )
         }
     }

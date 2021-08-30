@@ -7,6 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+aws-config = { path = "../../build/aws-sdk/aws-config" }
 ec2 = { package = "aws-sdk-ec2", path = "../../build/aws-sdk/ec2" }
 lambda = { package = "aws-sdk-lambda", path = "../../build/aws-sdk/lambda" }
 aws-types = { path = "../../build/aws-sdk/aws-types" }

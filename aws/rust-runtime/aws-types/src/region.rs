@@ -3,12 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::os_shim_internal::Env;
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 
 /// The region to send requests to.
 ///
@@ -46,136 +42,6 @@ impl Region {
     }
 }
 
-pub struct ChainProvider {
-    providers: Vec<Box<dyn ProvideRegion>>,
-}
-
-impl ChainProvider {
-    pub async fn region(&self) -> Option<Region> {
-        for provider in &self.providers {
-            if let Some(region) = provider.region().await {
-                return Some(region);
-            }
-        }
-        None
-    }
-}
-
-/// Implement a region provider based on a series of region providers
-///
-/// # Example
-/// ```rust
-/// use aws_types::region::{ChainProvider, Region};
-/// use std::env;
-/// // region provider that first checks the `CUSTOM_REGION` environment variable,
-/// // then checks the default provider chain, then falls back to us-east-2
-/// let provider = ChainProvider::first_try(env::var("CUSTOM_REGION").ok().map(Region::new))
-///     .or_default_provider()
-///     .or_else(Region::new("us-east-2"));
-/// ```
-impl ChainProvider {
-    pub fn first_try(provider: impl ProvideRegion + 'static) -> Self {
-        ChainProvider {
-            providers: vec![Box::new(provider)],
-        }
-    }
-    pub fn or_else(mut self, fallback: impl ProvideRegion + 'static) -> Self {
-        self.providers.push(Box::new(fallback));
-        self
-    }
-
-    pub fn or_default_provider(mut self) -> Self {
-        self.providers.push(Box::new(default_provider()));
-        self
-    }
-}
-
-impl ProvideRegion for Option<Region> {
-    fn region(&self) -> RegionFuture {
-        RegionFuture::ready(self.clone())
-    }
-}
-
-impl ProvideRegion for ChainProvider {
-    fn region(&self) -> RegionFuture {
-        RegionFuture::new(self.region())
-    }
-}
-
-pub struct RegionFuture<'a>(Pin<Box<dyn Future<Output = Option<Region>> + Send + 'a>>);
-
-impl<'a> RegionFuture<'a> {
-    pub fn new(f: impl Future<Output = Option<Region>> + Send + 'a) -> Self {
-        RegionFuture(Box::pin(f))
-    }
-
-    pub fn ready(region: Option<Region>) -> Self {
-        Self::new(std::future::ready(region))
-    }
-}
-
-impl Future for RegionFuture<'_> {
-    type Output = Option<Region>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.0.as_mut().poll(cx)
-    }
-}
-
-/// Provide a [`Region`](Region) to use with AWS requests
-///
-/// For most cases [`default_provider`](default_provider) will be the best option, implementing
-/// a standard provider chain.
-pub trait ProvideRegion: Send + Sync {
-    fn region(&self) -> RegionFuture;
-}
-
-impl ProvideRegion for Region {
-    fn region(&self) -> RegionFuture {
-        RegionFuture::ready(Some(self.clone()))
-    }
-}
-
-impl<'a> ProvideRegion for &'a Region {
-    fn region(&self) -> RegionFuture {
-        RegionFuture::ready(Some((*self).clone()))
-    }
-}
-
-pub fn default_provider() -> impl ProvideRegion {
-    EnvironmentProvider::new()
-}
-
-#[non_exhaustive]
-pub struct EnvironmentProvider {
-    env: Env,
-}
-
-impl Default for EnvironmentProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[allow(clippy::redundant_closure)] // https://github.com/rust-lang/rust-clippy/issues/7218
-impl EnvironmentProvider {
-    pub fn new() -> Self {
-        EnvironmentProvider { env: Env::real() }
-    }
-}
-
-impl ProvideRegion for EnvironmentProvider {
-    fn region(&self) -> RegionFuture {
-        RegionFuture::ready(
-            self.env
-                .get("AWS_REGION")
-                .or_else(|_| self.env.get("AWS_DEFAULT_REGION"))
-                .map(Region::new)
-                .ok(),
-        )
-    }
-}
-
 /// The region to use when signing requests
 ///
 /// Generally, user code will not need to interact with `SigningRegion`. See `[Region](crate::Region)`.
@@ -197,52 +63,5 @@ impl From<Region> for SigningRegion {
 impl SigningRegion {
     pub fn from_static(region: &'static str) -> Self {
         SigningRegion(Cow::Borrowed(region))
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::os_shim_internal::Env;
-    use crate::region::{EnvironmentProvider, ProvideRegion, Region};
-    use futures_util::FutureExt;
-
-    fn test_provider(vars: &[(&str, &str)]) -> EnvironmentProvider {
-        EnvironmentProvider {
-            env: Env::from_slice(vars),
-        }
-    }
-
-    #[test]
-    fn no_region() {
-        assert_eq!(
-            test_provider(&[])
-                .region()
-                .now_or_never()
-                .expect("no polling"),
-            None
-        );
-    }
-
-    #[test]
-    fn prioritize_aws_region() {
-        let provider = test_provider(&[
-            ("AWS_REGION", "us-east-1"),
-            ("AWS_DEFAULT_REGION", "us-east-2"),
-        ]);
-        assert_eq!(
-            provider.region().now_or_never().expect("no polling"),
-            Some(Region::new("us-east-1"))
-        );
-    }
-
-    #[test]
-    fn fallback_to_default_region() {
-        assert_eq!(
-            test_provider(&[("AWS_DEFAULT_REGION", "us-east-2")])
-                .region()
-                .now_or_never()
-                .expect("no polling"),
-            Some(Region::new("us-east-2"))
-        );
     }
 }
