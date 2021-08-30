@@ -1,10 +1,42 @@
 #![deny(missing_docs)]
 
-//! aws-config provides implementations of region, credential, and connector resolution.
+//! `aws-config` provides implementations of region, credential (todo), and connector (todo) resolution.
 //!
-//! These implementations can be used adhoc, or via [`from_env`](from_env) to assemble a
-//! [`Config`](aws_types::config::Config). With a [`Config`](aws_types::config::Config) you can configure
+//! These implementations can be used either adhoc or via [`from_env`](from_env)/[`ConfigLoader`](ConfigLoader).
+//! [`ConfigLoader`](ConfigLoader) can combine different configuration sources into an AWS shared-config:
+//! [`Config`](aws_types::config::Config). [`Config`](aws_types::config::Config) can be used configure
 //! an AWS service client.
+//!
+//! ## Examples
+//! Load default SDK configuration:
+//! ```rust
+//! # mod aws_sdk_dynamodb {
+//! #   pub struct Client;
+//! #   impl Client {
+//! #     pub fn new(config: &aws_types::config::Config) -> Self { Client }
+//! #   }
+//! # }
+//! # async fn docs() {
+//! let config = aws_config::load_from_env().await;
+//! let client = aws_sdk_dynamodb::Client::new(&config);
+//! # }
+//! ```
+//!
+//! Load SDK configuration with a region override:
+//! ```rust
+//! use aws_config::meta::region::RegionProviderChain;
+//! # mod aws_sdk_dynamodb {
+//! #   pub struct Client;
+//! #   impl Client {
+//! #     pub fn new(config: &aws_types::config::Config) -> Self { Client }
+//! #   }
+//! # }
+//! # async fn docs() {
+//! let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
+//! let config = aws_config::from_env().region(region_provider).load().await;
+//! let client = aws_sdk_dynamodb::Client::new(&config);
+//! # }
+//! ```
 
 /// Providers that implement the default AWS provider chain
 #[cfg(feature = "default-provider")]
