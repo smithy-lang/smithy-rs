@@ -26,8 +26,9 @@ pub mod region {
 /// Load a cross-service [`Config`](aws_types::config::Config) from the environment
 ///
 /// This builder supports overriding individual components of the generated config. Overriding a component
-/// will prevent the standard resolution chain from occuring (eg. overriding a region will prevent an HTTP request
-/// to IMDS).
+/// will skip the standard resolution chain from **for that component**. For example,
+/// if you override the region provider, _even if that provider returns None_, the default region provider
+/// chain will not be used.
 #[derive(Default, Debug)]
 pub struct EnvLoader {
     region: Option<Box<dyn ProvideRegion>>,
