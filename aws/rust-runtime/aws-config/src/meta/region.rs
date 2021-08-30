@@ -82,7 +82,7 @@ impl ProvideRegion for Option<Region> {
 
 impl ProvideRegion for RegionProviderChain {
     fn region(&self) -> future::ProvideRegion {
-        future::ProvideRegion::new(self.region())
+        future::ProvideRegion::new(RegionProviderChain::region(self))
     }
 }
 
@@ -155,5 +155,29 @@ impl ProvideRegion for Box<dyn ProvideRegion> {
 impl ProvideRegion for &'static str {
     fn region(&self) -> future::ProvideRegion {
         future::ProvideRegion::ready(Some(Region::new(Cow::Borrowed(*self))))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::meta::region::RegionProviderChain;
+    use aws_types::region::Region;
+    use futures_util::FutureExt;
+
+    #[test]
+    fn provider_chain() {
+        let a = None;
+        let b = Some(Region::new("us-east-1"));
+        let chain = RegionProviderChain::first_try(a).or_else(b);
+        assert_eq!(
+            chain.region().now_or_never().expect("ready"),
+            Some(Region::new("us-east-1"))
+        );
+    }
+
+    #[test]
+    fn empty_chain() {
+        let chain = RegionProviderChain::first_try(None).or_else(None);
+        assert_eq!(chain.region().now_or_never().expect("ready"), None);
     }
 }
