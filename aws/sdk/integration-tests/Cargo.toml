@@ -7,5 +7,6 @@ members = [
     "kms",
     "qldbsession",
     "s3",
-    "sts"
+    "sts",
+    "transcribestreaming"
 ]
