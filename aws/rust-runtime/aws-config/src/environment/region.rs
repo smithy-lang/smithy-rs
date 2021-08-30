@@ -11,7 +11,7 @@ use aws_types::region::Region;
 ///
 /// This provider will first check the value of `AWS_REGION`, falling back to `AWS_DEFAULT_REGION`
 /// when `AWS_REGION` is unset.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct EnvironmentVariableRegionProvider {
     env: Env,
 }
