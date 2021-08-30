@@ -31,7 +31,6 @@ async fn signv4_use_correct_service_name() {
             .header("content-type", "application/x-amz-json-1.0")
             .header("x-amz-target", "QLDBSession.SendCommand")
             .header("content-length", "49")
-            .header("host", "session.qldb.us-east-1.amazonaws.com")
             .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210305/us-east-1/qldb/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-date;x-amz-security-token;x-amz-target;x-amz-user-agent, Signature=350f957e9b736ac3f636d16c59c0a3cee8c2780b0ffadc99bbca841b7f15bee4")
             // qldbsession uses the service name 'qldb' in signature ____________________________________^^^^
             .header("x-amz-date", "20210305T134922Z")

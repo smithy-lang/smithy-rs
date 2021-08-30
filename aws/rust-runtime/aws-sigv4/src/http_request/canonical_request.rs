@@ -187,13 +187,18 @@ impl CanonicalRequest {
         canonical_headers: &mut HeaderMap<HeaderValue>,
         uri: &Uri,
     ) -> HeaderValue {
-        let authority = uri
-            .authority()
-            .expect("request uri authority must be set for signing");
-        let header = HeaderValue::try_from(authority.as_str())
-            .expect("endpoint must contain valid header characters");
-        canonical_headers.insert(HOST, header.clone());
-        header
+        match canonical_headers.get(&HOST) {
+            Some(header) => header.clone(),
+            None => {
+                let authority = uri
+                    .authority()
+                    .expect("request uri authority must be set for signing");
+                let header = HeaderValue::try_from(authority.as_str())
+                    .expect("endpoint must contain valid header characters");
+                canonical_headers.insert(HOST, header.clone());
+                header
+            }
+        }
     }
 
     fn insert_date_header(
