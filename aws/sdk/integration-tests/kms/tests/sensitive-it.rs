@@ -40,18 +40,21 @@ async fn types_are_send_sync() {
     assert_send_sync::<kms::output::CreateAliasOutput>();
     assert_send_sync::<kms::Client>();
     assert_send_sync::<GenerateRandom>();
-    assert_send_fut(kms::Client::from_env().await.list_keys().send());
+    let conf = kms::Config::builder().build();
+    assert_send_fut(kms::Client::from_conf(conf).list_keys().send());
 }
 
 #[tokio::test]
 async fn client_is_debug() {
-    let client = kms::Client::from_env().await;
+    let conf = kms::Config::builder().build();
+    let client = kms::Client::from_conf(conf);
     assert_ne!(format!("{:?}", client), "");
 }
 
 #[tokio::test]
 async fn client_is_clone() {
-    let client = kms::Client::from_env().await;
+    let conf = kms::Config::builder().build();
+    let client = kms::Client::from_conf(conf);
     let _ = client.clone();
 }
 
