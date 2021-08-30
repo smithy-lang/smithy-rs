@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::region::ChainProvider;
-use kinesis::{Client, Config, Error, Region, PKG_VERSION};
+use aws_config::meta::region::RegionProviderChain;
+use kinesis::{Client, Error, Region, PKG_VERSION};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -51,15 +51,17 @@ async fn main() -> Result<(), Error> {
         verbose,
     } = Opt::from_args();
 
-    let region = ChainProvider::first_try(region.map(Region::new))
+    let region_provider = RegionProviderChain::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
+    let shared_config = aws_config::from_env().region(region_provider).load().await;
+    let client = Client::new(&shared_config);
 
     println!();
 
     if verbose {
         println!("Kinesis version: {}", PKG_VERSION);
-        println!("Region:          {:?}", region.region().await);
+        println!("Region:          {:?}", shared_config.region().unwrap());
         println!("Data:");
         println!();
         println!("{}", &data);
@@ -69,8 +71,6 @@ async fn main() -> Result<(), Error> {
         println!();
     }
 
-    let config = Config::builder().region(region.region().await).build();
-    let client = Client::from_conf(config);
     let blob = kinesis::Blob::new(data);
 
     client

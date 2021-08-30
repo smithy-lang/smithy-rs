@@ -30,3 +30,11 @@ pub mod meta;
 pub fn from_env() -> default_provider::EnvLoader {
     default_provider::EnvLoader::default()
 }
+
+/// Load a default configuration from the environment
+///
+/// Convenience wrapper equivalent to `aws_config::from_env().load().await`
+#[cfg(feature = "default-provider")]
+pub async fn load_from_env() -> aws_types::config::Config {
+    from_env().load().await
+}

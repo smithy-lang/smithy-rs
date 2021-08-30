@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_sdk_s3::{Client, Config, Error, Region, PKG_VERSION};
-use aws_types::region;
+use aws_config::meta::region::RegionProviderChain;
+use aws_sdk_s3::{Client, Error, Region, PKG_VERSION};
 
 use aws_auth_providers::DefaultProviderChain;
 
@@ -43,10 +43,11 @@ async fn main() -> Result<(), Error> {
         verbose,
     } = Opt::from_args();
 
-    let region_provider = region::ChainProvider::first_try(region.map(Region::new))
+    let region_provider = RegionProviderChain::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
     let region = region_provider.region().await.expect("fallback exists");
+    let shared_config = aws_config::from_env().region(region_provider).load().await;
 
     println!();
     let credential_provider = DefaultProviderChain::builder()
@@ -55,13 +56,12 @@ async fn main() -> Result<(), Error> {
 
     if verbose {
         println!("S3 client version: {}", PKG_VERSION);
-        println!("Region:            {}", region);
+        println!("Region:            {}", shared_config.region().unwrap());
         println!("Bucket:            {}", &bucket);
         println!();
     }
 
-    let config = Config::builder()
-        .region(region)
+    let config = aws_sdk_s3::config::Builder::from(&shared_config)
         .credentials_provider(credential_provider)
         .build();
 
