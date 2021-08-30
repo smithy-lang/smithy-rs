@@ -1,9 +1,21 @@
 vNext (Month Day, Year)
 -----------------------
 **Breaking Changes**
+- `<sevicename>::from_env()` has been removed (#675). A drop-in replacement is available:
+  1. Add a dependency on `aws-config`
+  2. ```rust
+        let client = <service>>::Client::new(&aws_config::load_from_env().await)
+     ```
+
+- `ProvideRegion` has been moved to `aws_config::meta::region::ProvideRegion`. (#675)
+- `aws_types::region::ChainProvider` has been moved to `aws_config::meta::region::RegionProviderChain` (#675).
 - `ProvideRegion` is now asynchronous. Code that called `provider.region()` must be changed to `provider.region().await`.
-- `<awsservice>::Config::from_env()` is now also asynchronous because it must load a region
-- `<awsservice>::Config::builder()` will **not** load a default region unspecified. A region must be specified directly.
+- `<awsservice>::Config::builder()` will **not** load a default region unspecified. To preserve previous behavior:
+  1. Add a dependency on `aws-config`
+  2. ```rust
+     let shared_config = aws_config::load_from_env().await;
+     let config = <service>::config::Builder::from(&shared_config).<other builder modifications>.build();
+     ```
 - `Request` and `Response` in `smithy_http::operation` now use `SharedPropertyBag` instead of `Arc<Mutex<PropertyBag>>`. Use the `acquire` and `acquire_mut` methods to get a reference to the underlying `PropertyBag` to access properties. (#667)
 
 **New this week**

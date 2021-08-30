@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-//! Default Provider chains for [`region`](region) and credentials (TODO)
+//! Default Provider chains for [`region`](default_provider::region) and credentials (TODO)
 
 use aws_types::config::Config;
 

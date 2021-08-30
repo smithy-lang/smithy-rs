@@ -127,7 +127,7 @@ pub mod future {
 
 /// Provide a [`Region`](Region) to use with AWS requests
 ///
-/// For most cases [`default_provider`](default_provider) will be the best option, implementing
+/// For most cases [`default_provider`](crate::default_provider::region::default_provider) will be the best option, implementing
 /// a standard provider chain.
 pub trait ProvideRegion: Send + Sync + Debug {
     /// Load a region from this provider
