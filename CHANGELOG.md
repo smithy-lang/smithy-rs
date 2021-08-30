@@ -2,16 +2,25 @@ vNext (Month Day, Year)
 -----------------------
 **Breaking Changes**
 - `<sevicename>::from_env()` has been removed (#675). A drop-in replacement is available:
-  1. Add a dependency on `aws-config`
-  2. ```rust
-        let client = <service>>::Client::new(&aws_config::load_from_env().await)
+  1. Add a dependency on `aws-config`:
+     ```toml
+     [dependencies]
+     aws-config = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha" }
+     ```
+  2. Update your client creation code:
+     ```rust
+     let client = <service>>::Client::new(&aws_config::load_from_env().await)
      ```
 
 - `ProvideRegion` has been moved to `aws_config::meta::region::ProvideRegion`. (#675)
 - `aws_types::region::ChainProvider` has been moved to `aws_config::meta::region::RegionProviderChain` (#675).
 - `ProvideRegion` is now asynchronous. Code that called `provider.region()` must be changed to `provider.region().await`.
 - `<awsservice>::Config::builder()` will **not** load a default region. To preserve previous behavior:
-  1. Add a dependency on `aws-config`
+  1. Add a dependency on `aws-config`:
+     ```toml
+     [dependencies]
+     aws-config = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha" }
+     ```
   2. ```rust
      let shared_config = aws_config::load_from_env().await;
      let config = <service>::config::Builder::from(&shared_config).<other builder modifications>.build();

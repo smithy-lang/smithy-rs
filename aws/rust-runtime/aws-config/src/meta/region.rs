@@ -8,7 +8,19 @@ use std::borrow::Cow;
 use std::fmt::Debug;
 use tracing::Instrument;
 
-/// Load a region by selecting the first from a series of region providers
+/// Load a region by selecting the first from a series of region providers.
+///
+/// # Example
+/// ```rust
+/// use aws_types::region::Region;
+/// use std::env;
+/// use aws_config::meta::region::RegionProviderChain;
+/// // region provider that first checks the `CUSTOM_REGION` environment variable,
+/// // then checks the default provider chain, then falls back to us-east-2
+/// let provider = RegionProviderChain::first_try(env::var("CUSTOM_REGION").ok().map(Region::new))
+///     .or_default_provider()
+///     .or_else(Region::new("us-east-2"));
+/// ```
 #[derive(Debug)]
 pub struct RegionProviderChain {
     providers: Vec<Box<dyn ProvideRegion>>,
@@ -30,22 +42,7 @@ impl RegionProviderChain {
         }
         None
     }
-}
 
-/// Implement a region provider based on a series of region providers
-///
-/// # Example
-/// ```rust
-/// use aws_types::region::Region;
-/// use std::env;
-/// use aws_config::meta::region::RegionProviderChain;
-/// // region provider that first checks the `CUSTOM_REGION` environment variable,
-/// // then checks the default provider chain, then falls back to us-east-2
-/// let provider = RegionProviderChain::first_try(env::var("CUSTOM_REGION").ok().map(Region::new))
-///     .or_default_provider()
-///     .or_else(Region::new("us-east-2"));
-/// ```
-impl RegionProviderChain {
     /// Create a default provider chain that starts by checking this provider.
     pub fn first_try(provider: impl ProvideRegion + 'static) -> Self {
         RegionProviderChain {
