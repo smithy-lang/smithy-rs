@@ -206,6 +206,7 @@ impl MapRequest for AwsEndpointStage {
 mod test {
     use std::sync::Arc;
 
+    use http::header::HOST;
     use http::Uri;
 
     use aws_types::region::{Region, SigningRegion};
@@ -235,10 +236,7 @@ mod test {
             set_endpoint_resolver(&mut props, provider);
         };
         let req = AwsEndpointStage.apply(req).expect("should succeed");
-        assert_eq!(
-            req.properties().get(),
-            Some(&SigningRegion::from(region.clone()))
-        );
+        assert_eq!(req.properties().get(), Some(&SigningRegion::from(region)));
         assert_eq!(
             req.properties().get(),
             Some(&SigningService::from_static("kinesis"))
@@ -249,6 +247,7 @@ mod test {
             req.uri(),
             &Uri::from_static("https://kinesis.us-east-1.amazonaws.com")
         );
+        assert!(req.headers().get(HOST).is_none());
     }
 
     #[test]
@@ -267,7 +266,7 @@ mod test {
         let mut req = operation::Request::new(req);
         {
             let mut props = req.properties_mut();
-            props.insert(region.clone());
+            props.insert(region);
             props.insert(SigningService::from_static("kinesis"));
             set_endpoint_resolver(&mut props, provider);
         };
