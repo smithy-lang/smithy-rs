@@ -34,7 +34,6 @@ val runtimeModules = listOf(
 )
 val awsModules = listOf(
     "aws-auth",
-    "aws-auth-providers",
     "aws-config",
     "aws-endpoint",
     "aws-http",
