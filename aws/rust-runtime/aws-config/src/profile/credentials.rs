@@ -57,7 +57,7 @@ impl ProvideCredentials for ProfileFileCredentialsProvider {
 /// AWS Profile based credentials provider
 ///
 /// This credentials provider will load credentials from `~/.aws/config` and `~/.aws/credentials`.
-/// The locations of these files are configurable, see [`profile::load`](aws_types::profile::load).
+/// The locations of these files are configurable, see [`profile::load`](aws_config::profile::load).
 ///
 /// Generally, this will be constructed via the default provider chain, however, it can be manually
 /// constructed with the builder:
