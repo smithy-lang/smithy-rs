@@ -3,8 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-mod credentials;
 pub mod middleware;
 pub mod provider;
 
-pub use credentials::Credentials;
+use aws_types::credentials::SharedCredentialsProvider;
+use smithy_http::property_bag::PropertyBag;
+
+pub fn set_provider(bag: &mut PropertyBag, provider: SharedCredentialsProvider) {
+    bag.insert(provider);
+}

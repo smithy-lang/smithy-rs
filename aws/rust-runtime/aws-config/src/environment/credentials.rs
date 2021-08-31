@@ -3,38 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-//! Credential provider implementation that pulls from environment variables
-
-use crate::provider::{CredentialsError, ProvideCredentials};
-use crate::Credentials;
-use aws_types::os_shim_internal::Env;
 use std::env::VarError;
 
+use aws_types::credentials::future;
+use aws_types::credentials::{CredentialsError, ProvideCredentials};
+use aws_types::os_shim_internal::Env;
+use aws_types::{credentials, Credentials};
+
 /// Load Credentials from Environment Variables
+///
+/// `EnvironmentVariableCredentialsProvider` uses the following variables:
+/// - `AWS_ACCESS_KEY_ID`
+/// - `AWS_SECRET_ACCESS_KEY` with fallback to `SECRET_ACCESS_KEY`
+/// - `AWS_SESSION_TOKEN`
+#[derive(Debug)]
 pub struct EnvironmentVariableCredentialsProvider {
     env: Env,
 }
 
 impl EnvironmentVariableCredentialsProvider {
-    pub fn new() -> Self {
-        Self::new_with_env(Env::real())
-    }
-
-    pub fn new_with_env(env: Env) -> Self {
-        Self { env }
-    }
-}
-
-impl Default for EnvironmentVariableCredentialsProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-const ENV_PROVIDER: &str = "EnvironmentVariable";
-
-impl ProvideCredentials for EnvironmentVariableCredentialsProvider {
-    fn provide_credentials(&self) -> Result<Credentials, CredentialsError> {
+    fn credentials(&self) -> credentials::Result {
         let access_key = self.env.get("AWS_ACCESS_KEY_ID").map_err(to_cred_error)?;
         let secret_key = self
             .env
@@ -52,6 +40,38 @@ impl ProvideCredentials for EnvironmentVariableCredentialsProvider {
     }
 }
 
+impl EnvironmentVariableCredentialsProvider {
+    /// Create a `EnvironmentVariableCredentialsProvider`
+    pub fn new() -> Self {
+        Self::new_with_env(Env::real())
+    }
+
+    #[doc(hidden)]
+    /// Create a new `EnvironmentVariableCredentialsProvider` with `Env` overriden
+    ///
+    /// This function is intended for tests that mock out the process environment.
+    pub fn new_with_env(env: Env) -> Self {
+        Self { env }
+    }
+}
+
+impl Default for EnvironmentVariableCredentialsProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+const ENV_PROVIDER: &str = "EnvironmentVariable";
+
+impl ProvideCredentials for EnvironmentVariableCredentialsProvider {
+    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
+    where
+        Self: 'a,
+    {
+        future::ProvideCredentials::ready(self.credentials())
+    }
+}
+
 fn to_cred_error(err: VarError) -> CredentialsError {
     match err {
         VarError::NotPresent => CredentialsError::CredentialsNotLoaded,
@@ -61,9 +81,11 @@ fn to_cred_error(err: VarError) -> CredentialsError {
 
 #[cfg(test)]
 mod test {
-    use super::EnvironmentVariableCredentialsProvider;
-    use crate::provider::{CredentialsError, ProvideCredentials};
+    use aws_types::credentials::{CredentialsError, ProvideCredentials};
     use aws_types::os_shim_internal::Env;
+    use futures_util::FutureExt;
+
+    use super::EnvironmentVariableCredentialsProvider;
 
     fn make_provider(vars: &[(&str, &str)]) -> EnvironmentVariableCredentialsProvider {
         EnvironmentVariableCredentialsProvider {
@@ -77,7 +99,11 @@ mod test {
             ("AWS_ACCESS_KEY_ID", "access"),
             ("AWS_SECRET_ACCESS_KEY", "secret"),
         ]);
-        let creds = provider.provide_credentials().expect("valid credentials");
+        let creds = provider
+            .provide_credentials()
+            .now_or_never()
+            .unwrap()
+            .expect("valid credentials");
         assert_eq!(creds.session_token(), None);
         assert_eq!(creds.access_key_id(), "access");
         assert_eq!(creds.secret_access_key(), "secret");
@@ -91,7 +117,11 @@ mod test {
             ("AWS_SESSION_TOKEN", "token"),
         ]);
 
-        let creds = provider.provide_credentials().expect("valid credentials");
+        let creds = provider
+            .provide_credentials()
+            .now_or_never()
+            .unwrap()
+            .expect("valid credentials");
         assert_eq!(creds.session_token().unwrap(), "token");
         assert_eq!(creds.access_key_id(), "access");
         assert_eq!(creds.secret_access_key(), "secret");
@@ -105,7 +135,11 @@ mod test {
             ("AWS_SESSION_TOKEN", "token"),
         ]);
 
-        let creds = provider.provide_credentials().expect("valid credentials");
+        let creds = provider
+            .provide_credentials()
+            .now_or_never()
+            .unwrap()
+            .expect("valid credentials");
         assert_eq!(creds.session_token().unwrap(), "token");
         assert_eq!(creds.access_key_id(), "access");
         assert_eq!(creds.secret_access_key(), "secret");
@@ -116,6 +150,8 @@ mod test {
         let provider = make_provider(&[]);
         let err = provider
             .provide_credentials()
+            .now_or_never()
+            .unwrap()
             .expect_err("no credentials defined");
         if let CredentialsError::Unhandled(_) = err {
             panic!("wrong error type")

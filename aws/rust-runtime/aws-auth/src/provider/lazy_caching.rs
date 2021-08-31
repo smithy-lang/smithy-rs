@@ -7,7 +7,7 @@
 
 use crate::provider::cache::Cache;
 use crate::provider::time::TimeSource;
-use crate::provider::{AsyncProvideCredentials, BoxFuture, CredentialsError, CredentialsResult};
+use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
 use smithy_async::future::timeout::Timeout;
 use smithy_async::rt::sleep::AsyncSleep;
 use std::sync::Arc;
@@ -18,17 +18,18 @@ const DEFAULT_LOAD_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_CREDENTIAL_EXPIRATION: Duration = Duration::from_secs(15 * 60);
 const DEFAULT_BUFFER_TIME: Duration = Duration::from_secs(10);
 
-/// `LazyCachingCredentialsProvider` implements [`AsyncProvideCredentials`] by caching
-/// credentials that it loads by calling a user-provided [`AsyncProvideCredentials`] implementation.
+/// `LazyCachingCredentialsProvider` implements [`ProvideCredentials`] by caching
+/// credentials that it loads by calling a user-provided [`ProvideCredentials`] implementation.
 ///
-/// For example, you can provide an [`AsyncProvideCredentials`] implementation that calls
+/// For example, you can provide an [`ProvideCredentials`] implementation that calls
 /// AWS STS's AssumeRole operation to get temporary credentials, and `LazyCachingCredentialsProvider`
 /// will cache those credentials until they expire.
+#[derive(Debug)]
 pub struct LazyCachingCredentialsProvider {
     time: Box<dyn TimeSource>,
     sleeper: Box<dyn AsyncSleep>,
     cache: Cache,
-    loader: Arc<dyn AsyncProvideCredentials>,
+    loader: Arc<dyn ProvideCredentials>,
     load_timeout: Duration,
     default_credential_expiration: Duration,
 }
@@ -37,7 +38,7 @@ impl LazyCachingCredentialsProvider {
     fn new(
         time: impl TimeSource,
         sleeper: Box<dyn AsyncSleep>,
-        loader: Arc<dyn AsyncProvideCredentials>,
+        loader: Arc<dyn ProvideCredentials>,
         load_timeout: Duration,
         default_credential_expiration: Duration,
         buffer_time: Duration,
@@ -58,8 +59,8 @@ impl LazyCachingCredentialsProvider {
     }
 }
 
-impl AsyncProvideCredentials for LazyCachingCredentialsProvider {
-    fn provide_credentials<'a>(&'a self) -> BoxFuture<'a, CredentialsResult>
+impl ProvideCredentials for LazyCachingCredentialsProvider {
+    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials
     where
         Self: 'a,
     {
@@ -70,7 +71,7 @@ impl AsyncProvideCredentials for LazyCachingCredentialsProvider {
         let cache = self.cache.clone();
         let default_credential_expiration = self.default_credential_expiration;
 
-        Box::pin(async move {
+        future::ProvideCredentials::new(async move {
             // Attempt to get cached credentials, or clear the cache if they're expired
             if let Some(credentials) = cache.yield_or_clear_if_expired(now).await {
                 Ok(credentials)
@@ -109,7 +110,7 @@ pub mod builder {
         DEFAULT_LOAD_TIMEOUT,
     };
     use crate::provider::time::SystemTimeSource;
-    use crate::provider::AsyncProvideCredentials;
+    use aws_types::credentials::ProvideCredentials;
     use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
     use std::sync::Arc;
     use std::time::Duration;
@@ -119,11 +120,9 @@ pub mod builder {
     /// # Example
     ///
     /// ```
-    /// use aws_auth::Credentials;
     /// use aws_auth::provider::async_provide_credentials_fn;
     /// use aws_auth::provider::lazy_caching::LazyCachingCredentialsProvider;
-    /// use std::sync::Arc;
-    /// use std::time::Duration;
+    /// use aws_types::Credentials;
     ///
     /// let provider = LazyCachingCredentialsProvider::builder()
     ///     .load(async_provide_credentials_fn(|| async {
@@ -135,7 +134,7 @@ pub mod builder {
     #[derive(Default)]
     pub struct Builder {
         sleep: Option<Box<dyn AsyncSleep>>,
-        load: Option<Arc<dyn AsyncProvideCredentials>>,
+        load: Option<Arc<dyn ProvideCredentials>>,
         load_timeout: Option<Duration>,
         buffer_time: Option<Duration>,
         default_credential_expiration: Option<Duration>,
@@ -146,9 +145,9 @@ pub mod builder {
             Default::default()
         }
 
-        /// An implementation of [`AsyncProvideCredentials`] that will be used to load
+        /// An implementation of [`ProvideCredentials`] that will be used to load
         /// the cached credentials once they're expired.
-        pub fn load(mut self, loader: impl AsyncProvideCredentials + 'static) -> Self {
+        pub fn load(mut self, loader: impl ProvideCredentials + 'static) -> Self {
             self.load = Some(Arc::new(loader));
             self
         }
@@ -162,7 +161,7 @@ pub mod builder {
             self
         }
 
-        /// (Optional) Timeout for the given [`AsyncProvideCredentials`] implementation.
+        /// (Optional) Timeout for the given [`ProvideCredentials`] implementation.
         /// Defaults to 5 seconds.
         pub fn load_timeout(mut self, timeout: Duration) -> Self {
             self.load_timeout = Some(timeout);
@@ -179,7 +178,7 @@ pub mod builder {
         }
 
         /// (Optional) Default expiration time to set on credentials if they don't
-        /// have an expiration time. This is only used if the given [`AsyncProvideCredentials`]
+        /// have an expiration time. This is only used if the given [`ProvideCredentials`]
         /// returns [`Credentials`](crate::Credentials) that don't have their `expiry` set.
         /// This must be at least 15 minutes.
         pub fn default_credential_expiration(mut self, duration: Duration) -> Self {
@@ -217,20 +216,18 @@ pub mod builder {
 
 #[cfg(test)]
 mod tests {
+    use crate::provider::async_provide_credentials_fn;
     use crate::provider::lazy_caching::{
         LazyCachingCredentialsProvider, TimeSource, DEFAULT_BUFFER_TIME,
         DEFAULT_CREDENTIAL_EXPIRATION, DEFAULT_LOAD_TIMEOUT,
     };
-    use crate::provider::{
-        async_provide_credentials_fn, AsyncProvideCredentials, CredentialsError, CredentialsResult,
-    };
-    use crate::Credentials;
+    use aws_types::credentials::{self, Credentials, CredentialsError, ProvideCredentials};
     use smithy_async::rt::sleep::TokioSleep;
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, SystemTime};
     use tracing::info;
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     struct TestTime {
         time: Arc<Mutex<SystemTime>>,
     }
@@ -255,7 +252,7 @@ mod tests {
 
     fn test_provider<T: TimeSource>(
         time: T,
-        load_list: Vec<CredentialsResult>,
+        load_list: Vec<credentials::Result>,
     ) -> LazyCachingCredentialsProvider {
         let load_list = Arc::new(Mutex::new(load_list));
         LazyCachingCredentialsProvider::new(

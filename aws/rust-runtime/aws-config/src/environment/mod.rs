@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-// TODO:
-// pub mod credentials;
+/// Load credentials from the environment
+pub mod credentials;
 /// Load regions from the environment
 pub mod region;

@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::provider::{CredentialsError, CredentialsResult};
-use crate::Credentials;
+use aws_types::credentials::CredentialsError;
+use aws_types::{credentials, Credentials};
 use std::future::Future;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::sync::{OnceCell, RwLock};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) struct Cache {
     /// Amount of time before the actual credential expiration time
     /// where credentials are considered expired.
@@ -41,7 +41,7 @@ impl Cache {
     /// and the others will await that thread's result rather than multiple refreshes occurring.
     /// The function given to acquire a credentials future, `f`, will not be called
     /// if another thread is chosen to load the credentials.
-    pub async fn get_or_load<F, Fut>(&self, f: F) -> CredentialsResult
+    pub async fn get_or_load<F, Fut>(&self, f: F) -> credentials::Result
     where
         F: FnOnce() -> Fut,
         Fut: Future<Output = Result<(Credentials, SystemTime), CredentialsError>>,
@@ -84,8 +84,8 @@ fn expired(expiration: SystemTime, buffer_time: Duration, now: SystemTime) -> bo
 #[cfg(test)]
 mod tests {
     use super::{expired, Cache};
-    use crate::provider::CredentialsError;
-    use crate::Credentials;
+    use aws_types::credentials::CredentialsError;
+    use aws_types::Credentials;
     use std::time::{Duration, SystemTime};
 
     fn credentials(expired_secs: u64) -> Result<(Credentials, SystemTime), CredentialsError> {

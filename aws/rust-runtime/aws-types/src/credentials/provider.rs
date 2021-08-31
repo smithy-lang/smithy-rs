@@ -5,7 +5,7 @@
 
 use crate::Credentials;
 use std::error::Error;
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -102,7 +102,7 @@ pub mod future {
 }
 
 /// Asynchronous Credentials Provider
-pub trait ProvideCredentials: Send + Sync {
+pub trait ProvideCredentials: Send + Sync + Debug {
     fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
     where
         Self: 'a;
@@ -130,7 +130,7 @@ impl ProvideCredentials for Arc<dyn ProvideCredentials> {
 ///
 /// Newtype wrapper around ProvideCredentials that implements Clone using an internal
 /// Arc.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SharedCredentialsProvider(Arc<dyn ProvideCredentials>);
 
 impl SharedCredentialsProvider {
