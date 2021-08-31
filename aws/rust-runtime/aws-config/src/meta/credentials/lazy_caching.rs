@@ -231,6 +231,7 @@ mod tests {
     use aws_types::Credentials;
     use smithy_async::rt::sleep::TokioSleep;
     use tracing::info;
+    use tracing_test::traced_test;
 
     use crate::meta::credentials::credential_fn::async_provide_credentials_fn;
 
@@ -300,7 +301,8 @@ mod tests {
         assert_eq!(Some(epoch_secs(expired_secs)), creds.expiry());
     }
 
-    #[test_env_log::test(tokio::test)]
+    #[traced_test]
+    #[tokio::test]
     async fn initial_populate_credentials() {
         let time = TestTime::new(epoch_secs(100));
         let loader = Arc::new(async_provide_credentials_fn(|| async {
@@ -326,7 +328,8 @@ mod tests {
         );
     }
 
-    #[test_env_log::test(tokio::test)]
+    #[traced_test]
+    #[tokio::test]
     async fn reload_expired_credentials() {
         let time = TestTime::new(epoch_secs(100));
         let time_inner = time.time.clone();
@@ -349,7 +352,8 @@ mod tests {
         expect_creds(3000, &provider).await;
     }
 
-    #[test_env_log::test(tokio::test)]
+    #[traced_test]
+    #[tokio::test]
     async fn load_failed_error() {
         let time = TestTime::new(epoch_secs(100));
         let time_inner = time.time.clone();
@@ -366,7 +370,8 @@ mod tests {
         assert!(provider.provide_credentials().await.is_err());
     }
 
-    #[test_env_log::test]
+    #[traced_test]
+    #[test]
     fn load_contention() {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_time()
@@ -411,7 +416,8 @@ mod tests {
         }
     }
 
-    #[test_env_log::test(tokio::test)]
+    #[tokio::test]
+    #[traced_test]
     async fn load_timeout() {
         let time = TestTime::new(epoch_secs(100));
         let provider = LazyCachingCredentialsProvider::new(

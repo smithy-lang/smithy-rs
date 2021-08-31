@@ -87,6 +87,7 @@ mod tests {
     use aws_types::credentials::CredentialsError;
     use aws_types::Credentials;
     use std::time::{Duration, SystemTime};
+    use tracing_test::traced_test;
 
     fn credentials(expired_secs: u64) -> Result<(Credentials, SystemTime), CredentialsError> {
         let expiry = epoch_secs(expired_secs);
@@ -106,7 +107,8 @@ mod tests {
         assert!(!expired(ts, Duration::from_secs(10), epoch_secs(10)));
     }
 
-    #[test_env_log::test(tokio::test)]
+    #[traced_test]
+    #[tokio::test]
     async fn cache_clears_if_expired_only() {
         let cache = Cache::new(Duration::from_secs(10));
         assert!(cache
