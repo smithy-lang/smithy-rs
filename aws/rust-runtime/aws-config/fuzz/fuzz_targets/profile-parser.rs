@@ -1,6 +1,6 @@
 #![no_main]
+use aws_config::profile;
 use aws_types::os_shim_internal::{Env, Fs};
-use aws_types::profile;
 use libfuzzer_sys::fuzz_target;
 use std::collections::HashMap;
 use std::ffi::OsString;

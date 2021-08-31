@@ -9,7 +9,6 @@ pub mod config;
 pub mod credentials;
 #[doc(hidden)]
 pub mod os_shim_internal;
-pub mod profile;
 pub mod region;
 
 pub use credentials::Credentials;
