@@ -11,8 +11,8 @@
 //! implement your own credential provider.
 //!
 //! ### With static credentials
-//! [`Credentials`](credentials::Credentials) implement
-//! [`ProvideCredentials](provide_credentials::ProvideCredentials) directly, so no custom provider
+//! [`Credentials`](crate::Credentials) implement
+//! [`ProvideCredentials](crate::credentials::ProvideCredentials) directly, so no custom provider
 //! implementation is required:
 //! ```rust
 //! use aws_types::Credentials;
@@ -34,7 +34,7 @@
 //! ```
 //! ### With dynamically loaded credentials
 //! If you are loading credentials dynamically, you can provide your own implementation of
-//! [`ProvideCredentials`](provide_credentials::ProvideCredentials). Generally, this is best done by
+//! [`ProvideCredentials`](crate::credentials::ProvideCredentials). Generally, this is best done by
 //! defining an inherent `async fn` on your structure, then calling that method directly from
 //! the trait implementation.
 //! ```rust

@@ -8,8 +8,8 @@ use smithy_http::operation::Request;
 use std::future::Future;
 use std::pin::Pin;
 
-/// Middleware stage that requests credentials from a [CredentialsProvider] and places them in
-/// the property bag of the request.
+/// Middleware stage that loads credentials from a [CredentialsProvider](aws_types::credentials::ProvideCredentials)
+/// and places them in the property bag of the request.
 ///
 /// [CredentialsStage] implements [`AsyncMapRequest`](smithy_http::middleware::AsyncMapRequest), and:
 /// 1. Retrieves a `CredentialsProvider` from the property bag.
