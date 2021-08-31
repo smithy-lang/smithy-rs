@@ -35,9 +35,6 @@ aws-hyper = { path = "../../sdk/build/aws-sdk/aws-hyper", optional = true }
 
 [dev-dependencies]
 futures-util = "0.3.16"
-
-# TODO: unify usages of test-env-log and tracing-test
-test-env-log = "0.2.7"
 tracing-test = "0.1.0"
 
 tokio = { version = "1", features = ["full"] }
