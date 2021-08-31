@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::region::ChainProvider;
-use kms::{Blob, Client, Config, Error, Region, PKG_VERSION};
+use aws_config::meta::region::RegionProviderChain;
+use kms::{Blob, Client, Error, Region, PKG_VERSION};
 use std::fs;
 use std::fs::File;
 use std::io::Write;
@@ -14,7 +14,7 @@ use structopt::StructOpt;
 struct Opt {
     /// The default AWS Region.
     #[structopt(short, long)]
-    default_region: Option<String>,
+    region: Option<String>,
 
     /// The original encryption key.
     #[structopt(short, long)]
@@ -57,28 +57,27 @@ async fn main() -> Result<(), Error> {
         new_key,
         input_file,
         output_file,
-        default_region,
+        region,
         verbose,
     } = Opt::from_args();
 
-    let region = ChainProvider::first_try(default_region.map(Region::new))
+    let region_provider = RegionProviderChain::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
+    let shared_config = aws_config::from_env().region(region_provider).load().await;
+    let client = Client::new(&shared_config);
 
     println!();
 
     if verbose {
         println!("KMS version:     {}", PKG_VERSION);
-        println!("Region:          {:?}", region.region().await);
+        println!("Region:          {:?}", shared_config.region().unwrap());
         println!("Input key:       {}", &first_key);
         println!("Output key:      {}", &new_key);
         println!("Input filename:  {}", &input_file);
         println!("Output filename: {}", &output_file);
         println!();
     }
-
-    let conf = Config::builder().region(region.region().await).build();
-    let client = Client::from_conf(conf);
 
     // Get blob from input file
     // Open input text file and get contents as a string

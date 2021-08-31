@@ -5,7 +5,6 @@
 
 use aws_auth::provider::lazy_caching::LazyCachingCredentialsProvider;
 use aws_auth::provider::{async_provide_credentials_fn, CredentialsError};
-use aws_types::region::ProvideRegion;
 
 use sts::Credentials;
 
@@ -14,7 +13,8 @@ use sts::Credentials;
 #[tokio::main]
 async fn main() -> Result<(), dynamodb::Error> {
     tracing_subscriber::fmt::init();
-    let client = sts::Client::from_env().await;
+    let shared_config = aws_config::load_from_env().await;
+    let client = sts::Client::new(&shared_config);
 
     // `LazyCachingCredentialsProvider` will load credentials if it doesn't have any non-expired
     // credentials cached. See the docs on the builder for the various configuration options,
@@ -44,9 +44,8 @@ async fn main() -> Result<(), dynamodb::Error> {
         }))
         .build();
 
-    let dynamodb_conf = dynamodb::Config::builder()
+    let dynamodb_conf = dynamodb::config::Builder::from(&shared_config)
         .credentials_provider(sts_provider)
-        .region(aws_types::region::default_provider().region().await)
         .build();
 
     let client = dynamodb::Client::from_conf(dynamodb_conf);

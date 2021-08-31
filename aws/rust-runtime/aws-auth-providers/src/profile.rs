@@ -29,11 +29,11 @@ use std::sync::Arc;
 
 use aws_auth::provider::env::EnvironmentVariableCredentialsProvider;
 use aws_auth::provider::{AsyncProvideCredentials, BoxFuture, CredentialsError, CredentialsResult};
+use aws_config::meta::region::ProvideRegion;
 use aws_hyper::DynConnector;
 use aws_sdk_sts::Region;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::profile::ProfileParseError;
-use aws_types::region::ProvideRegion;
 use tracing::Instrument;
 
 use crate::must_have_connector;

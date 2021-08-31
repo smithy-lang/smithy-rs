@@ -49,6 +49,12 @@ class SharedConfigDecorator : RustCodegenDecorator {
                         builder
                     }
                 }
+
+                impl From<&#{Config}> for Config {
+                    fn from(config: &#{Config}) -> Self {
+                        Builder::from(config).build()
+                    }
+                }
             """,
                 *codegenScope
             )

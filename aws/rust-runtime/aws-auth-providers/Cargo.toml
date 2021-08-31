@@ -12,6 +12,7 @@ default = ["rustls", "rt-tokio"]
 
 [dependencies]
 aws-auth = { path = "../../sdk/build/aws-sdk/aws-auth" }
+aws-config = { path = "../../sdk/build/aws-sdk/aws-config"}
 aws-types = { path = "../../sdk/build/aws-sdk/aws-types" }
 aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sts"}
 aws-hyper = { path = "../../sdk/build/aws-sdk/aws-hyper"}

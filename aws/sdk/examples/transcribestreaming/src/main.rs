@@ -4,11 +4,12 @@
  */
 
 use async_stream::stream;
-use aws_auth_providers::DefaultProviderChain;
+
+use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_transcribestreaming::model::{
     AudioEvent, AudioStream, LanguageCode, MediaEncoding, TranscriptResultStream,
 };
-use aws_sdk_transcribestreaming::{Blob, Client, Config, Error, Region};
+use aws_sdk_transcribestreaming::{Blob, Client, Error, Region};
 use bytes::BufMut;
 use std::time::Duration;
 
@@ -18,15 +19,9 @@ const CHUNK_SIZE: usize = 8192;
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
 
-    let region = Region::from_static("us-west-2");
-    let credential_provider = DefaultProviderChain::builder()
-        .region(region.clone())
-        .build();
-    let config = Config::builder()
-        .region(region)
-        .credentials_provider(credential_provider)
-        .build();
-    let client = Client::from_conf(config);
+    let region_provider = RegionProviderChain::default_provider().or_else(Region::new("us-west-2"));
+    let shared_config = aws_config::from_env().region(region_provider).load().await;
+    let client = Client::new(&shared_config);
 
     let input_stream = stream! {
         let pcm = pcm_data();
