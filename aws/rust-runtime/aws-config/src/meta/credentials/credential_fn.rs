@@ -1,27 +1,6 @@
-/*
- * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
- */
-
-//! AWS credential providers, generic caching provider implementations, and traits to implement custom providers.
-//!
-//! Credentials providers acquire AWS credentials from environment variables, files,
-//! or calls to AWS services such as STS. Custom credential provider implementations can
-//! be provided by implementing [`ProvideCredentials`] for synchronous use-cases, or
-//! [`ProvideCredentials`] for async use-cases. Generic credential caching implementations,
-//! for example,
-//! [`LazyCachingCredentialsProvider`](crate::provider::lazy_caching::LazyCachingCredentialsProvider),
-//! are also provided as part of this module.
-
-mod cache;
-pub mod lazy_caching;
-mod time;
-
 use aws_types::credentials;
 use aws_types::credentials::ProvideCredentials;
-
-use std::fmt;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{self, Debug, Formatter};
 use std::future::Future;
 use std::marker::PhantomData;
 
@@ -61,7 +40,7 @@ where
 ///
 /// ```
 /// use aws_types::Credentials;
-/// use aws_auth::provider::async_provide_credentials_fn;
+/// use aws_config::meta::credentials::async_provide_credentials_fn;
 ///
 /// async fn load_credentials() -> Credentials {
 ///     todo!()
@@ -86,7 +65,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::provider::async_provide_credentials_fn;
+    use crate::meta::credentials::credential_fn::async_provide_credentials_fn;
     use async_trait::async_trait;
     use aws_types::credentials::ProvideCredentials;
     use aws_types::{credentials, Credentials};

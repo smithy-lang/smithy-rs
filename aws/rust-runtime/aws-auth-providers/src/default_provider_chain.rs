@@ -112,7 +112,7 @@ impl Builder {
     /// also be used. Using custom sources must be registered:
     /// ```rust
     /// use aws_auth::provider::{ProvideCredentials, CredentialsError};
-    /// use aws_auth::Credentials;
+    /// use aws_types::Credentials;
     /// use aws_auth_providers::DefaultProviderChain;
     /// struct MyCustomProvider;
     /// // there is a blanket implementation for `AsyncProvideCredentials` on ProvideCredentials

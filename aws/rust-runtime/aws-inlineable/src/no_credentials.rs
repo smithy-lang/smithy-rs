@@ -8,6 +8,7 @@ use aws_types::credentials::{CredentialsError, ProvideCredentials};
 
 /// Stub Provider for use when no credentials provider is used
 #[non_exhaustive]
+#[derive(Debug)]
 pub struct NoCredentials;
 
 impl ProvideCredentials for NoCredentials {

@@ -6,11 +6,15 @@
 use std::fmt::Debug;
 use std::time::SystemTime;
 
-/// Allows us to abstract time for tests.
+/// Wall Clock Time Source
+///
+/// By default, `SystemTime::now()` is used, however, this trait allows
+/// tests to provide their own time source.
 pub(super) trait TimeSource: Send + Sync + Debug + 'static {
     fn now(&self) -> SystemTime;
 }
 
+/// Load time from `SystemTime::now()`
 #[derive(Copy, Clone, Debug)]
 pub(super) struct SystemTimeSource;
 

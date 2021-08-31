@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_auth::Credentials;
 use aws_http::user_agent::AwsUserAgent;
 use aws_hyper::{Client, SdkError};
 use aws_sdk_kms as kms;
+use aws_types::Credentials;
 use http::header::AUTHORIZATION;
 use http::Uri;
 use kms::operation::GenerateRandom;

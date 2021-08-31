@@ -4,11 +4,11 @@
  */
 
 use aws_auth::provider::{CredentialsError, CredentialsResult};
-use aws_auth::Credentials as AwsCredentials;
 use aws_sdk_sts::model::Credentials as StsCredentials;
+use aws_types::Credentials as AwsCredentials;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Convert STS credentials to aws_auth::Credentials
+/// Convert STS credentials to aws_types::Credentials
 pub fn into_credentials(
     sts_credentials: Option<StsCredentials>,
     provider_name: &'static str,

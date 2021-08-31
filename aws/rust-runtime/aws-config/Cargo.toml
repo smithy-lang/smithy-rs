@@ -22,6 +22,12 @@ default = ["default-provider"]
 aws-types = { path = "../../sdk/build/aws-sdk/aws-types" }
 smithy-async = { path = "../../sdk/build/aws-sdk/smithy-async" }
 tracing = { version = "0.1" }
+tokio = { version = "1", features = ["sync"] }
 
 [dev-dependencies]
 futures-util = "0.3.16"
+test-env-log = "0.2.7"
+tokio = { version = "1", features = ["full"]}
+# used to test compatibility
+async-trait = "0.1.51"
+env_logger = "0.9.0"

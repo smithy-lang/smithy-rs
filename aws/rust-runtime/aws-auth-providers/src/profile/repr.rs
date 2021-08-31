@@ -13,8 +13,8 @@
 //! multiple actions into the same profile).
 
 use crate::profile::ProfileFileError;
-use aws_auth::Credentials;
 use aws_types::profile::{Profile, ProfileSet};
+use aws_types::Credentials;
 
 /// Chain of Profile Providers
 ///

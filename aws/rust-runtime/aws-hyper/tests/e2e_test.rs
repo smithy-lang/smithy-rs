@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_auth::Credentials;
 use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
 use aws_endpoint::set_endpoint_resolver;
 use aws_http::user_agent::AwsUserAgent;
@@ -11,6 +10,7 @@ use aws_http::AwsErrorRetryPolicy;
 use aws_hyper::{Client, RetryConfig};
 use aws_sig_auth::signer::OperationSigningConfig;
 use aws_types::region::Region;
+use aws_types::Credentials;
 use aws_types::SigningService;
 use bytes::Bytes;
 use http::header::{AUTHORIZATION, USER_AGENT};

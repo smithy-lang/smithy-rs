@@ -6,11 +6,11 @@
 use std::sync::Arc;
 
 use aws_auth::provider::{AsyncProvideCredentials, CredentialsError, CredentialsResult};
-use aws_auth::Credentials;
 use aws_hyper::{DynConnector, StandardClient};
 use aws_sdk_sts::operation::AssumeRole;
 use aws_sdk_sts::Config;
 use aws_types::region::Region;
+use aws_types::Credentials;
 
 use crate::profile::repr::BaseProvider;
 use crate::profile::ProfileFileError;

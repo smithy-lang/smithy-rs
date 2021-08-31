@@ -28,8 +28,8 @@ struct Credentials {
 ///
 /// Comparing equality on real credentials works, but it's a pain because the Debug implementation
 /// hides the actual keys
-impl From<&aws_auth::Credentials> for Credentials {
-    fn from(credentials: &aws_auth::Credentials) -> Self {
+impl From<&aws_types::Credentials> for Credentials {
+    fn from(credentials: &aws_types::Credentials) -> Self {
         Self {
             access_key_id: credentials.access_key_id().into(),
             secret_access_key: credentials.secret_access_key().into(),

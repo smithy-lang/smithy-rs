@@ -5,14 +5,18 @@
 
 //! Lazy, caching, credentials provider implementation
 
-use crate::provider::cache::Cache;
-use crate::provider::time::TimeSource;
-use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
-use smithy_async::future::timeout::Timeout;
-use smithy_async::rt::sleep::AsyncSleep;
+mod cache;
+mod time;
+
 use std::sync::Arc;
 use std::time::Duration;
+
+use smithy_async::future::timeout::Timeout;
+use smithy_async::rt::sleep::AsyncSleep;
 use tracing::{trace_span, Instrument};
+
+use self::{cache::Cache, time::TimeSource};
+use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
 
 const DEFAULT_LOAD_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_CREDENTIAL_EXPIRATION: Duration = Duration::from_secs(15 * 60);
@@ -105,24 +109,26 @@ impl ProvideCredentials for LazyCachingCredentialsProvider {
 }
 
 pub mod builder {
-    use crate::provider::lazy_caching::{
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use aws_types::credentials::ProvideCredentials;
+    use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
+
+    use super::{
         LazyCachingCredentialsProvider, DEFAULT_BUFFER_TIME, DEFAULT_CREDENTIAL_EXPIRATION,
         DEFAULT_LOAD_TIMEOUT,
     };
-    use crate::provider::time::SystemTimeSource;
-    use aws_types::credentials::ProvideCredentials;
-    use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
-    use std::sync::Arc;
-    use std::time::Duration;
+    use crate::meta::credentials::lazy_caching::time::SystemTimeSource;
 
     /// Builder for constructing a [`LazyCachingCredentialsProvider`].
     ///
     /// # Example
     ///
     /// ```
-    /// use aws_auth::provider::async_provide_credentials_fn;
-    /// use aws_auth::provider::lazy_caching::LazyCachingCredentialsProvider;
     /// use aws_types::Credentials;
+    /// use aws_config::meta::credentials::async_provide_credentials_fn;
+    /// use aws_config::meta::credentials::LazyCachingCredentialsProvider;
     ///
     /// let provider = LazyCachingCredentialsProvider::builder()
     ///     .load(async_provide_credentials_fn(|| async {
@@ -216,16 +222,20 @@ pub mod builder {
 
 #[cfg(test)]
 mod tests {
-    use crate::provider::async_provide_credentials_fn;
-    use crate::provider::lazy_caching::{
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, SystemTime};
+
+    use aws_types::credentials::{self, CredentialsError, ProvideCredentials};
+    use aws_types::Credentials;
+    use smithy_async::rt::sleep::TokioSleep;
+    use tracing::info;
+
+    use crate::meta::credentials::credential_fn::async_provide_credentials_fn;
+
+    use super::{
         LazyCachingCredentialsProvider, TimeSource, DEFAULT_BUFFER_TIME,
         DEFAULT_CREDENTIAL_EXPIRATION, DEFAULT_LOAD_TIMEOUT,
     };
-    use aws_types::credentials::{self, Credentials, CredentialsError, ProvideCredentials};
-    use smithy_async::rt::sleep::TokioSleep;
-    use std::sync::{Arc, Mutex};
-    use std::time::{Duration, SystemTime};
-    use tracing::info;
 
     #[derive(Clone, Debug)]
     struct TestTime {

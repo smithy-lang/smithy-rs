@@ -17,7 +17,7 @@ use tracing::Instrument;
 /// ```rust
 /// use aws_auth_providers::chain::ChainProvider;
 /// use aws_auth::provider::env::EnvironmentVariableCredentialsProvider;
-/// use aws_auth::Credentials;
+/// use aws_types::Credentials;
 /// let provider = ChainProvider::first_try("Environment", EnvironmentVariableCredentialsProvider::new())
 ///     .or_else("Static", Credentials::from_keys("someacceskeyid", "somesecret", None));
 /// ```

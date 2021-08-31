@@ -105,13 +105,39 @@ impl AsyncMapRequest for CredentialsStage {
 #[cfg(test)]
 mod tests {
     use super::CredentialsStage;
-    use crate::provider::async_provide_credentials_fn;
     use crate::set_provider;
-    use aws_types::credentials::{CredentialsError, SharedCredentialsProvider};
+    use aws_types::credential::provide_credentials::future;
+    use aws_types::credential::{CredentialsError, ProvideCredentials};
+    use aws_types::credentials::{
+        future, CredentialsError, ProvideCredentials, SharedCredentialsProvider,
+    };
     use aws_types::Credentials;
     use smithy_http::body::SdkBody;
     use smithy_http::middleware::AsyncMapRequest;
     use smithy_http::operation;
+    use std::sync::Arc;
+
+    #[derive(Debug)]
+    struct Unhandled;
+    impl ProvideCredentials for Unhandled {
+        fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
+        where
+            Self: 'a,
+        {
+            future::ProvideCredentials::ready(Err(CredentialsError::Unhandled("whoops".into())))
+        }
+    }
+
+    #[derive(Debug)]
+    struct NoCreds;
+    impl ProvideCredentials for NoCreds {
+        fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
+        where
+            Self: 'a,
+        {
+            future::ProvideCredentials::ready(Err(CredentialsError::CredentialsNotLoaded))
+        }
+    }
 
     #[tokio::test]
     async fn no_cred_provider_is_ok() {
@@ -127,9 +153,7 @@ mod tests {
         let mut req = operation::Request::new(http::Request::new(SdkBody::from("some body")));
         set_provider(
             &mut req.properties_mut(),
-            SharedCredentialsProvider::new(async_provide_credentials_fn(|| async {
-                Err(CredentialsError::Unhandled("whoops".into()))
-            })),
+            SharedCredentialsProvider::new(Unhandled),
         );
         CredentialsStage::new()
             .apply(req)
@@ -142,9 +166,7 @@ mod tests {
         let mut req = operation::Request::new(http::Request::new(SdkBody::from("some body")));
         set_provider(
             &mut req.properties_mut(),
-            SharedCredentialsProvider::new(async_provide_credentials_fn(|| async {
-                Err(CredentialsError::CredentialsNotLoaded)
-            })),
+            SharedCredentialsProvider::new(NoCreds),
         );
         CredentialsStage::new()
             .apply(req)
