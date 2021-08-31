@@ -34,6 +34,7 @@ vNext (Month Day, Year)
 - Improve documentation on collection-aware builders (#664)
 - Add support for Transcribe `StartStreamTranscription` and S3 `SelectObjectContent` operations (#667)
 - Add support for shared configuration between multiple services (#673)
+- :bug: Fix sigv4 signing when request ALPN negotiates to HTTP/2. (#674)
 
 **Internal Changes**
 - Add NowOrLater future to smithy-async (#672)

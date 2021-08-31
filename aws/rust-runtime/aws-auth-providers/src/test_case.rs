@@ -139,7 +139,7 @@ impl TestEnvironment {
         self.log_info();
         self.check_results(&result);
         // todo: validate bodies
-        match connector.validate(&["CONTENT-TYPE", "HOST"], |_expected, _actual| Ok(())) {
+        match connector.validate(&["CONTENT-TYPE"], |_expected, _actual| Ok(())) {
             Ok(()) => {}
             Err(e) => panic!("{}", e),
         }
