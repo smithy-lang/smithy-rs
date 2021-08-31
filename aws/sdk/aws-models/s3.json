@@ -12101,7 +12101,7 @@
       "type": "boolean"
     },
     "com.amazonaws.s3#Size": {
-      "type": "integer"
+      "type": "long"
     },
     "com.amazonaws.s3#SourceSelectionCriteria": {
       "type": "structure",
