@@ -11,23 +11,45 @@ default-provider = ["profile", "imds", "meta", "sts"]
 profile = ["sts", "web-identity-token"]
 # note: IMDS currently unsupported
 imds = []
-meta = []
-sts = []
+meta = ["tokio/sync"]
+sts = ["aws-sdk-sts", "aws-hyper"]
 web-identity-token = ["sts"]
 sso = []
 
-default = ["default-provider"]
+rustls = ["smithy-client/rustls"]
+native-tls = ["smithy-client/native-tls"]
+rt-tokio = ["smithy-async/rt-tokio"]
+
+default = ["default-provider", "rustls", "rt-tokio"]
 
 [dependencies]
 aws-types = { path = "../../sdk/build/aws-sdk/aws-types" }
 smithy-async = { path = "../../sdk/build/aws-sdk/smithy-async" }
+smithy-client = { path = "../../sdk/build/aws-sdk/smithy-client" }
 tracing = { version = "0.1" }
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["sync"], optional = true }
+aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sts", optional = true }
+
+# TODO: remove when middleware stacks are moved inside of clients directly
+aws-hyper = { path = "../../sdk/build/aws-sdk/aws-hyper", optional = true }
 
 [dev-dependencies]
 futures-util = "0.3.16"
+
+# TODO: unify usages of test-env-log and tracing-test
 test-env-log = "0.2.7"
-tokio = { version = "1", features = ["full"]}
+tracing-test = "0.1.0"
+
+tokio = { version = "1", features = ["full"] }
 # used to test compatibility
 async-trait = "0.1.51"
 env_logger = "0.9.0"
+
+# used for fuzzing profile parsing
+arbitrary = "1.0.2"
+
+# used for test case deserialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+smithy-client = { path = "../../sdk/build/aws-sdk/smithy-client", features = ["test-util"] }

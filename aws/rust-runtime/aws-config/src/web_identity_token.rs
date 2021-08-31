@@ -34,12 +34,13 @@
 //!   web_identity_token_file = /token.jwt
 //!   ```
 
-use aws_hyper::{DynConnector, StandardClient};
 use aws_sdk_sts::Region;
 use aws_types::os_shim_internal::{Env, Fs};
+use smithy_client::erase::DynConnector;
 
-use crate::{must_have_connector, sts_util};
-use aws_auth::provider::{AsyncProvideCredentials, BoxFuture, CredentialsError, CredentialsResult};
+use crate::connector::must_have_connector;
+use crate::sts;
+use aws_types::credentials::{self, future, CredentialsError, ProvideCredentials};
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
@@ -50,43 +51,51 @@ const ENV_VAR_SESSION_NAME: &str = "AWS_ROLE_SESSION_NAME";
 /// Credential provider to load credentials from Web Identity  Tokens
 ///
 /// See Module documentation for more details
-pub struct WebIdentityTokenCredentialProvider {
+#[derive(Debug)]
+pub struct WebIdentityTokenCredentialsProvider {
     source: Source,
     fs: Fs,
-    client: StandardClient,
+    client: aws_hyper::StandardClient,
     region: Option<Region>,
 }
 
-impl WebIdentityTokenCredentialProvider {
+impl WebIdentityTokenCredentialsProvider {
+    /// Builder for this credentials provider
     pub fn builder() -> Builder {
         Builder::default()
     }
 }
 
+#[derive(Debug)]
 enum Source {
     Env(Env),
-    Static(WebIdentityTokenRole),
+    Static(StaticConfiguration),
 }
 
-/// Hard-coded WebIdentityToken role
+/// Statically configured WebIdentityToken configuration
 #[derive(Debug, Clone)]
-pub struct WebIdentityTokenRole {
+pub struct StaticConfiguration {
+    /// Location of the file containing the web identity token
     pub web_identity_token_file: PathBuf,
+
+    /// RoleArn to assume
     pub role_arn: String,
+
+    /// Session name to use when assuming the role
     pub session_name: String,
 }
 
-impl AsyncProvideCredentials for WebIdentityTokenCredentialProvider {
-    fn provide_credentials<'a>(&'a self) -> BoxFuture<'a, CredentialsResult>
+impl ProvideCredentials for WebIdentityTokenCredentialsProvider {
+    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
     where
         Self: 'a,
     {
-        Box::pin(self.credentials())
+        future::ProvideCredentials::new(self.credentials())
     }
 }
 
-impl WebIdentityTokenCredentialProvider {
-    fn source(&self) -> Result<Cow<WebIdentityTokenRole>, CredentialsError> {
+impl WebIdentityTokenCredentialsProvider {
+    fn source(&self) -> Result<Cow<StaticConfiguration>, CredentialsError> {
         match &self.source {
             Source::Env(env) => {
                 let token_file = env
@@ -99,8 +108,8 @@ impl WebIdentityTokenCredentialProvider {
                 })?;
                 let session_name = env
                     .get(ENV_VAR_SESSION_NAME)
-                    .unwrap_or_else(|_| sts_util::default_session_name("web-identity-token"));
-                Ok(Cow::Owned(WebIdentityTokenRole {
+                    .unwrap_or_else(|_| sts::util::default_session_name("web-identity-token"));
+                Ok(Cow::Owned(StaticConfiguration {
                     web_identity_token_file: token_file.into(),
                     role_arn,
                     session_name,
@@ -127,6 +136,7 @@ impl WebIdentityTokenCredentialProvider {
     }
 }
 
+/// Builder for [`WebIdentityTokenCredentialsProvider`](WebIdentityTokenCredentialsProvider)
 #[derive(Default)]
 pub struct Builder {
     source: Option<Source>,
@@ -136,58 +146,77 @@ pub struct Builder {
 }
 
 impl Builder {
+    #[doc(hidden)]
+    /// Set the Fs used for this provider
     pub fn fs(mut self, fs: Fs) -> Self {
         self.fs = fs;
         self
     }
 
+    #[doc(hidden)]
+    /// Set the Fs used for this provider
     pub fn set_fs(&mut self, fs: Fs) -> &mut Self {
         self.fs = fs;
         self
     }
 
+    #[doc(hidden)]
+    /// Set the process environment used for this provider
     pub fn env(mut self, env: Env) -> Self {
         self.source = Some(Source::Env(env));
         self
     }
 
-    pub fn static_configuration(mut self, config: WebIdentityTokenRole) -> Self {
-        self.source = Some(Source::Static(config));
-        self
-    }
-
+    #[doc(hidden)]
+    /// Set the process environment used for this provider
     pub fn set_env(&mut self, env: Env) -> &mut Self {
         self.source = Some(Source::Env(env));
         self
     }
 
+    /// Configure this builder to use  [`StaticConfiguration`](StaticConfiguration)
+    ///
+    /// WebIdentityToken providers load credentials from the file system. They may either determine
+    /// the path from environment variables (default), or via a statically configured path.
+    pub fn static_configuration(mut self, config: StaticConfiguration) -> Self {
+        self.source = Some(Source::Static(config));
+        self
+    }
+
+    /// Sets the HTTPS connector used for this provider
     pub fn connector(mut self, connector: DynConnector) -> Self {
         self.connector = Some(connector);
         self
     }
 
+    /// Sets the HTTPS connector used for this provider
     pub fn set_connector(&mut self, connector: Option<DynConnector>) -> &mut Self {
         self.connector = connector;
         self
     }
 
+    /// Sets the region used for this provider
     pub fn region(mut self, region: Option<Region>) -> Self {
         self.region = region;
         self
     }
 
+    /// Sets the region used for this provider
     pub fn set_region(&mut self, region: Option<Region>) -> &mut Self {
         self.region = region;
         self
     }
 
-    pub fn build(self) -> WebIdentityTokenCredentialProvider {
+    /// Build a [`WebIdentityTokenCredentialsProvider`]
+    ///
+    /// ## Panics
+    /// If no connector has been enabled via crate features and no connector has been provided via the
+    /// builder, this function will panic.
+    pub fn build(self) -> WebIdentityTokenCredentialsProvider {
         let connector = self.connector.unwrap_or_else(must_have_connector);
-        let client = aws_hyper::Builder::<()>::new()
-            .map_connector(|_| connector)
-            .build();
+        let client = aws_hyper::Client::new(connector);
         let source = self.source.unwrap_or_else(|| Source::Env(Env::default()));
-        WebIdentityTokenCredentialProvider {
+        WebIdentityTokenCredentialsProvider {
             source,
             fs: self.fs,
             client,
@@ -198,12 +227,12 @@ impl Builder {
 
 async fn load_credentials(
     fs: &Fs,
-    client: &StandardClient,
+    client: &aws_hyper::StandardClient,
     region: &Region,
     token_file: impl AsRef<Path>,
     role_arn: &str,
     session_name: &str,
-) -> CredentialsResult {
+) -> credentials::Result {
     let token = fs
         .read_to_end(token_file)
         .await
@@ -227,7 +256,7 @@ async fn load_credentials(
         tracing::warn!(error = ?sdk_error, "sts returned an error assuming web identity role");
         CredentialsError::ProviderError(sdk_error.into())
     })?;
-    sts_util::into_credentials(resp.credentials, "WebIdentityToken")
+    sts::util::into_credentials(resp.credentials, "WebIdentityToken")
 }
 
 #[cfg(test)]
@@ -235,11 +264,11 @@ mod test {
     use crate::web_identity_token::{
         Builder, ENV_VAR_ROLE_ARN, ENV_VAR_SESSION_NAME, ENV_VAR_TOKEN_FILE,
     };
-    use aws_auth::provider::CredentialsError;
 
     use aws_sdk_sts::Region;
     use aws_types::os_shim_internal::{Env, Fs};
 
+    use aws_types::credentials::CredentialsError;
     use std::collections::HashMap;
 
     #[tokio::test]

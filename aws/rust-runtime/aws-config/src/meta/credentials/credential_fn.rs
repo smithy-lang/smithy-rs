@@ -32,7 +32,7 @@ where
     }
 }
 
-/// Returns a new [`AsyncProvideCredentialsFn`] with the given closure. This allows you
+/// Returns a new credentials provider built with the given closure. This allows you
 /// to create an [`ProvideCredentials`] implementation from an async block that returns
 /// a [`credentials::Result`].
 ///

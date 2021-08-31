@@ -49,6 +49,18 @@ pub mod environment;
 #[cfg(feature = "meta")]
 pub mod meta;
 
+#[cfg(feature = "profile")]
+pub mod profile;
+
+#[cfg(feature = "sts")]
+mod sts;
+
+#[cfg(test)]
+mod test_case;
+
+#[cfg(feature = "web-identity-token")]
+pub mod web_identity_token;
+
 /// Create an environment loader for AWS Configuration
 ///
 /// ## Example
@@ -154,5 +166,37 @@ mod loader {
                 .credentials_provider(credentials_provider)
                 .build()
         }
+    }
+}
+
+mod connector {
+
+    // create a default connector given the currently enabled cargo features.
+    // rustls  | native tls | result
+    // -----------------------------
+    // yes     | yes        | rustls
+    // yes     | no         | rustls
+    // no      | yes        | native_tls
+    // no      | no         | no default
+
+    use smithy_client::erase::DynConnector;
+
+    pub fn must_have_connector() -> DynConnector {
+        default_connector().expect("A connector was not available. Either set a custom connector or enable the `rustls` and `native-tls` crate features.")
+    }
+
+    #[cfg(feature = "rustls")]
+    fn default_connector() -> Option<DynConnector> {
+        Some(DynConnector::new(smithy_client::conns::https()))
+    }
+
+    #[cfg(all(not(feature = "rustls"), feature = "native-tls"))]
+    fn default_connector() -> Option<DynConnector> {
+        Some(DynConnector::new(smithy_client::conns::native_tls()))
+    }
+
+    #[cfg(not(any(feature = "rustls", feature = "native-tls")))]
+    fn default_connector() -> Option<DynConnector> {
+        None
     }
 }
