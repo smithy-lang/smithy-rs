@@ -6,7 +6,7 @@ import sys
 import os
 import os.path as path
 from pathlib import Path
-import shutil
+import subprocess
 
 # Ensure working directory is the script path
 script_path = path.dirname(path.realpath(__file__))
@@ -28,13 +28,26 @@ def discover_new_models(aws_models_repo, known_models):
             new_models.append(model)
     return new_models
 
+# HACK: Modify the S3 model directly to change the type of `Size` until Smithy
+# allows this transformation directly (https://github.com/awslabs/smithy/pull/900).
+def hack_s3_model(model_path):
+    result = subprocess.run(["jq", "-M", ".shapes[\"com.amazonaws.s3#Size\"].type = \"long\"", str(model_path)], capture_output = True, check = True)
+    hacked = result.stdout.decode("utf-8")
+    with open(model_path, "w") as file:
+        file.write(hacked)
+        if not hacked.endswith("\n"):
+            file.write("\n")
+
 def copy_model(source_path, model_path, model_name):
-    # Add a newline at the end when copying the model over
+    dest_path = Path("aws-models") / model_path
     source = source_path.read_text()
-    with open(Path("aws-models") / model_path, "w") as file:
+    # Add a newline at the end when copying the model over
+    with open(dest_path, "w") as file:
         file.write(source)
         if not source.endswith("\n"):
             file.write("\n")
+    if model_name == "s3":
+        hack_s3_model(dest_path)
 
 def copy_known_models(aws_models_repo):
     known_models = set()
