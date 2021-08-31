@@ -9,6 +9,7 @@ use aws_http::user_agent::AwsUserAgent;
 use aws_http::AwsErrorRetryPolicy;
 use aws_hyper::{Client, RetryConfig};
 use aws_sig_auth::signer::OperationSigningConfig;
+use aws_types::credentials::SharedCredentialsProvider;
 use aws_types::region::Region;
 use aws_types::Credentials;
 use aws_types::SigningService;
@@ -87,9 +88,13 @@ fn test_operation() -> Operation<TestOperationParser, AwsErrorRetryPolicy> {
                 signature_versions: SignatureVersion::V4,
             }),
         );
-        aws_auth::provider::set_provider(
+        aws_auth::set_provider(
             &mut conf,
-            Arc::new(Credentials::from_keys("access_key", "secret_key", None)),
+            SharedCredentialsProvider::new(Credentials::from_keys(
+                "access_key",
+                "secret_key",
+                None,
+            )),
         );
         conf.insert(Region::new("test-region"));
         conf.insert(OperationSigningConfig::default_config());

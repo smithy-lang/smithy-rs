@@ -13,9 +13,3 @@ pub use parser::{load, Profile, ProfileSet, Property};
 
 pub mod credentials;
 pub use credentials::ProfileFileCredentialsProvider;
-/*
-pub mod credential;
-
-pub mod region;
-
-pub use parser::{Profile, ProfileSet, Property};*/

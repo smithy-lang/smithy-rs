@@ -3,11 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-/*
- * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
- */
-
 //! Profile file parsing
 //!
 //! This file implements profile file parsing at a very literal level. Prior to actually being used,

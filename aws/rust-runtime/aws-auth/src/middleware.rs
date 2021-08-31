@@ -106,8 +106,6 @@ impl AsyncMapRequest for CredentialsStage {
 mod tests {
     use super::CredentialsStage;
     use crate::set_provider;
-    use aws_types::credential::provide_credentials::future;
-    use aws_types::credential::{CredentialsError, ProvideCredentials};
     use aws_types::credentials::{
         future, CredentialsError, ProvideCredentials, SharedCredentialsProvider,
     };
@@ -115,7 +113,6 @@ mod tests {
     use smithy_http::body::SdkBody;
     use smithy_http::middleware::AsyncMapRequest;
     use smithy_http::operation;
-    use std::sync::Arc;
 
     #[derive(Debug)]
     struct Unhandled;

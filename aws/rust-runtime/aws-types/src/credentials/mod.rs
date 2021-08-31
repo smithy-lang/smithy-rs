@@ -39,6 +39,7 @@
 //! the trait implementation.
 //! ```rust
 //! use aws_types::credentials::{CredentialsError, Credentials, ProvideCredentials, future, self};
+//! #[derive(Debug)]
 //! struct SubprocessCredentialProvider;
 //!
 //! async fn invoke_command(command: &str) -> String {
