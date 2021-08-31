@@ -8,8 +8,3 @@ pub mod region;
 
 /// Credential Providers
 pub mod credentials;
-
-// coming soon:
-// pub mod credentials:
-// - CredentialProviderChain
-// - LazyCachingProvider

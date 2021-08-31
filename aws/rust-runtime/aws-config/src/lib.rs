@@ -45,7 +45,7 @@ pub mod default_provider;
 /// Providers that load configuration from environment variables
 pub mod environment;
 
-/// Meta-Providers that combine multiple providers into a single provider
+/// Meta-providers that augment existing providers with new behavior
 #[cfg(feature = "meta")]
 pub mod meta;
 
