@@ -191,28 +191,48 @@ impl ProfileFileCredentialsProvider {
     }
 }
 
+/// An Error building a Credential source from an AWS Profile
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ProfileFileError {
+    /// The profile was not a valid AWS profile
     CouldNotParseProfile(ProfileParseError),
+
+    /// No profiles existed (the profile was empty)
     NoProfilesDefined,
+
+    /// The profile contained an infinite loop of `source_profile` references
     CredentialLoop {
+        /// Vec of profiles leading to the loop
         profiles: Vec<String>,
+        /// The next profile that caused the loop
         next: String,
     },
+
+    /// The profile was missing a credential source
     MissingCredentialSource {
+        /// The name of the profile
         profile: String,
+        /// Error message
         message: Cow<'static, str>,
     },
+    /// The profile contained an invalid credential source
     InvalidCredentialSource {
+        /// The name of the profile
         profile: String,
+        /// Error message
         message: Cow<'static, str>,
     },
+    /// The profile referred to a another profile by name that was not defined
     MissingProfile {
+        /// The name of the profile
         profile: String,
+        /// Error message
         message: Cow<'static, str>,
     },
+    /// The profile referred to `credential_source` that was not defined
     UnknownProvider {
+        /// The name of the provider
         name: String,
     },
 }
@@ -257,6 +277,7 @@ impl Error for ProfileFileError {
     }
 }
 
+/// Builder for [`ProfileFileCredentialsProvider`](ProfileFileCredentialsProvider)
 #[derive(Default)]
 pub struct Builder {
     fs: Fs,
@@ -267,46 +288,78 @@ pub struct Builder {
 }
 
 impl Builder {
+    #[doc(hidden)]
     pub fn fs(mut self, fs: Fs) -> Self {
         self.fs = fs;
         self
     }
 
+    #[doc(hidden)]
     pub fn set_fs(&mut self, fs: Fs) -> &mut Self {
         self.fs = fs;
         self
     }
 
+    #[doc(hidden)]
     pub fn env(mut self, env: Env) -> Self {
         self.env = env;
         self
     }
 
+    #[doc(hidden)]
     pub fn set_env(&mut self, env: Env) -> &mut Self {
         self.env = env;
         self
     }
 
+    /// Sets the HTTPS connector used for requests to AWS
     pub fn connector(mut self, connector: DynConnector) -> Self {
         self.connector = Some(connector);
         self
     }
 
+    /// Sets the HTTPS connector used for requests to AWS
     pub fn set_connector(&mut self, connector: Option<DynConnector>) -> &mut Self {
         self.connector = connector;
         self
     }
 
+    /// Sets the region used for requests to AWS
     pub fn region(mut self, region: Region) -> Self {
         self.region = Some(region);
         self
     }
 
+    /// Sets the region used for requests to AWS
     pub fn set_region(&mut self, region: Option<Region>) -> &mut Self {
         self.region = region;
         self
     }
 
+    /// Adds a custom credential source
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use aws_types::credentials::{self, ProvideCredentials, future};
+    /// use aws_config::profile::ProfileFileCredentialsProvider;
+    /// #[derive(Debug)]
+    /// struct MyCustomProvider;
+    /// impl MyCustomProvider {
+    ///     async fn load_credentials(&self) -> credentials::Result {
+    ///         todo!()
+    ///     }
+    /// }
+    ///
+    /// impl ProvideCredentials for MyCustomProvider {
+    ///   fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials where Self: 'a {
+    ///         future::ProvideCredentials::new(self.load_credentials())
+    ///     }
+    /// }
+    /// let provider = ProfileFileCredentialsProvider::builder()
+    ///     .with_custom_provider("Custom", MyCustomProvider)
+    ///     .build();
+    /// ```
     pub fn with_custom_provider(
         mut self,
         name: impl Into<Cow<'static, str>>,
@@ -317,6 +370,7 @@ impl Builder {
         self
     }
 
+    /// Builds a [`ProfileFileCredentialsProvider`](ProfileFileCredentialsProvider)
     pub fn build(self) -> ProfileFileCredentialsProvider {
         let build_span = tracing::info_span!("build_profile_provider");
         let _enter = build_span.enter();

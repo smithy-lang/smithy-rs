@@ -65,7 +65,7 @@ impl AssumeRoleProvider {
     }
 }
 
-pub(crate) struct ProviderChain {
+pub(super) struct ProviderChain {
     base: Arc<dyn ProvideCredentials>,
     chain: Vec<AssumeRoleProvider>,
 }

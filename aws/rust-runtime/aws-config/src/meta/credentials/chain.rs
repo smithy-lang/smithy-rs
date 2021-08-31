@@ -55,19 +55,19 @@ impl CredentialsProviderChain {
 
     #[cfg(feature = "default-provider")]
     /// Add a fallback to the default provider chain
-    pub fn or_default_provider(self) -> Self {
+    pub async fn or_default_provider(self) -> Self {
         self.or_else(
             "DefaultProviderChain",
-            crate::default_provider::credentials::default_provider(),
+            crate::default_provider::credentials::default_provider().await,
         )
     }
 
     #[cfg(feature = "default-provider")]
     /// Creates a credential provider chain that starts with the default provider
-    pub fn default_provider() -> Self {
+    pub async fn default_provider() -> Self {
         Self::first_try(
             "DefaultProviderChain",
-            crate::default_provider::credentials::default_provider(),
+            crate::default_provider::credentials::default_provider().await,
         )
     }
 

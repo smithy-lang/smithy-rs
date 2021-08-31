@@ -11,7 +11,7 @@
 mod parser;
 pub use parser::{load, Profile, ProfileSet, Property};
 
-mod credentials;
+pub mod credentials;
 pub use credentials::ProfileFileCredentialsProvider;
 /*
 pub mod credential;

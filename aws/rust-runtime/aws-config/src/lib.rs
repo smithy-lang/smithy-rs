@@ -159,7 +159,9 @@ mod loader {
             let credentials_provider = if let Some(provider) = self.credentials_provider {
                 provider
             } else {
-                SharedCredentialsProvider::new(credentials::default_provider())
+                let mut builder = credentials::DefaultCredentialsChain::builder();
+                builder.set_region(region.clone());
+                SharedCredentialsProvider::new(builder.build())
             };
             Config::builder()
                 .region(region)

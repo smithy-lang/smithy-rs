@@ -108,7 +108,8 @@ impl ProvideCredentials for LazyCachingCredentialsProvider {
     }
 }
 
-pub mod builder {
+pub use builder::Builder;
+mod builder {
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -147,6 +148,7 @@ pub mod builder {
     }
 
     impl Builder {
+        /// Creates a new builder
         pub fn new() -> Self {
             Default::default()
         }
@@ -185,7 +187,7 @@ pub mod builder {
 
         /// (Optional) Default expiration time to set on credentials if they don't
         /// have an expiration time. This is only used if the given [`ProvideCredentials`]
-        /// returns [`Credentials`](crate::Credentials) that don't have their `expiry` set.
+        /// returns [`Credentials`](aws_types::Credentials) that don't have their `expiry` set.
         /// This must be at least 15 minutes.
         pub fn default_credential_expiration(mut self, duration: Duration) -> Self {
             self.default_credential_expiration = Some(duration);

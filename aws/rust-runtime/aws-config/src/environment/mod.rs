@@ -5,5 +5,7 @@
 
 /// Load credentials from the environment
 pub mod credentials;
+pub use credentials::EnvironmentVariableCredentialsProvider;
 /// Load regions from the environment
 pub mod region;
+pub use region::EnvironmentVariableRegionProvider;
