@@ -6,20 +6,20 @@ use std::marker::PhantomData;
 
 /// A [`ProvideCredentials`] implemented by a closure.
 ///
-/// See [`async_provide_credentials_fn`] for more details.
+/// See [`provide_credentials_fn`] for more details.
 #[derive(Copy, Clone)]
-pub struct AsyncProvideCredentialsFn<'c, T> {
+pub struct ProvideCredentialsFn<'c, T> {
     f: T,
     phantom: PhantomData<&'c T>,
 }
 
-impl<T> Debug for AsyncProvideCredentialsFn<'_, T> {
+impl<T> Debug for ProvideCredentialsFn<'_, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "ProvideCredentialsFn")
     }
 }
 
-impl<'c, T, F> ProvideCredentials for AsyncProvideCredentialsFn<'c, T>
+impl<'c, T, F> ProvideCredentials for ProvideCredentialsFn<'c, T>
 where
     T: Fn() -> F + Send + Sync + 'c,
     F: Future<Output = credentials::Result> + Send + 'static,
@@ -40,24 +40,24 @@ where
 ///
 /// ```
 /// use aws_types::Credentials;
-/// use aws_config::meta::credentials::async_provide_credentials_fn;
+/// use aws_config::meta::credentials::provide_credentials_fn;
 ///
 /// async fn load_credentials() -> Credentials {
 ///     todo!()
 /// }
 ///
-/// async_provide_credentials_fn(|| async {
+/// provide_credentials_fn(|| async {
 ///     // Async process to retrieve credentials goes here
 ///     let credentials = load_credentials().await;
 ///     Ok(credentials)
 /// });
 /// ```
-pub fn async_provide_credentials_fn<'c, T, F>(f: T) -> AsyncProvideCredentialsFn<'c, T>
+pub fn provide_credentials_fn<'c, T, F>(f: T) -> ProvideCredentialsFn<'c, T>
 where
     T: Fn() -> F + Send + Sync + 'c,
     F: Future<Output = credentials::Result> + Send + 'static,
 {
-    AsyncProvideCredentialsFn {
+    ProvideCredentialsFn {
         f,
         phantom: Default::default(),
     }
@@ -65,7 +65,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::meta::credentials::credential_fn::async_provide_credentials_fn;
+    use crate::meta::credentials::credential_fn::provide_credentials_fn;
     use async_trait::async_trait;
     use aws_types::credentials::ProvideCredentials;
     use aws_types::{credentials, Credentials};
@@ -104,9 +104,9 @@ mod test {
         }
     }
 
-    // Test that the closure passed to `async_provide_credentials_fn` is allowed to borrow things
+    // Test that the closure passed to `provide_credentials_fn` is allowed to borrow things
     #[tokio::test]
-    async fn async_provide_credentials_fn_closure_can_borrow() {
+    async fn provide_credentials_fn_closure_can_borrow() {
         fn check_is_str_ref(_input: &str) {}
         async fn test_async_provider(input: String) -> credentials::Result {
             Ok(Credentials::from_keys(&input, &input, None))
@@ -116,7 +116,7 @@ mod test {
 
         let mut providers = Vec::new();
         for thing in &things_to_borrow {
-            let provider = async_provide_credentials_fn(move || {
+            let provider = provide_credentials_fn(move || {
                 check_is_str_ref(thing);
                 test_async_provider(thing.into())
             });

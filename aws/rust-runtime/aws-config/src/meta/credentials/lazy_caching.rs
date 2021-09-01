@@ -128,11 +128,11 @@ mod builder {
     ///
     /// ```
     /// use aws_types::Credentials;
-    /// use aws_config::meta::credentials::async_provide_credentials_fn;
+    /// use aws_config::meta::credentials::provide_credentials_fn;
     /// use aws_config::meta::credentials::LazyCachingCredentialsProvider;
     ///
     /// let provider = LazyCachingCredentialsProvider::builder()
-    ///     .load(async_provide_credentials_fn(|| async {
+    ///     .load(provide_credentials_fn(|| async {
     ///         // An async process to retrieve credentials would go here:
     ///         Ok(Credentials::from_keys("example", "example", None))
     ///     }))
@@ -233,7 +233,7 @@ mod tests {
     use tracing::info;
     use tracing_test::traced_test;
 
-    use crate::meta::credentials::credential_fn::async_provide_credentials_fn;
+    use crate::meta::credentials::credential_fn::provide_credentials_fn;
 
     use super::{
         LazyCachingCredentialsProvider, TimeSource, DEFAULT_BUFFER_TIME,
@@ -271,7 +271,7 @@ mod tests {
         LazyCachingCredentialsProvider::new(
             time,
             Box::new(TokioSleep::new()),
-            Arc::new(async_provide_credentials_fn(move || {
+            Arc::new(provide_credentials_fn(move || {
                 let list = load_list.clone();
                 async move {
                     let next = list.lock().unwrap().remove(0);
@@ -305,7 +305,7 @@ mod tests {
     #[tokio::test]
     async fn initial_populate_credentials() {
         let time = TestTime::new(epoch_secs(100));
-        let loader = Arc::new(async_provide_credentials_fn(|| async {
+        let loader = Arc::new(provide_credentials_fn(|| async {
             info!("refreshing the credentials");
             Ok(credentials(1000))
         }));
@@ -423,7 +423,7 @@ mod tests {
         let provider = LazyCachingCredentialsProvider::new(
             time,
             Box::new(TokioSleep::new()),
-            Arc::new(async_provide_credentials_fn(|| async {
+            Arc::new(provide_credentials_fn(|| async {
                 tokio::time::sleep(Duration::from_millis(10)).await;
                 Ok(credentials(1000))
             })),
