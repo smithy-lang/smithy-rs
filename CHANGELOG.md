@@ -162,6 +162,7 @@ impl ProvideCredentials for CustomCreds {
 - Update AWS SDK models (#677)
 - :bug: Fix sigv4 signing when request ALPN negotiates to HTTP/2. (#674)
 - :bug: Fix integer size on S3 `Size` (#679, aws-sdk-rust#209)
+- :bug: Fix JSON parsing issue for modeled empty structs (#683, aws-sdk-rust#212)
 
 **Internal Changes**
 - Add NowOrLater future to smithy-async (#672)
