@@ -56,6 +56,7 @@ use crate::sts;
 use aws_types::credentials::{self, future, CredentialsError, ProvideCredentials};
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
+use tracing::Instrument;
 
 const ENV_VAR_TOKEN_FILE: &str = "AWS_WEB_IDENTITY_TOKEN_FILE";
 const ENV_VAR_ROLE_ARN: &str = "AWS_ROLE_ARN";
@@ -145,6 +146,10 @@ impl WebIdentityTokenCredentialsProvider {
             &conf.role_arn,
             &conf.session_name,
         )
+        .instrument(tracing::info_span!(
+            "load_credentials",
+            provider = "WebIdentityToken"
+        ))
         .await
     }
 }

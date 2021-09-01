@@ -205,11 +205,13 @@ pub mod credentials {
         /// When unset, the value of the `AWS_PROFILE` environment variable will be used.
         pub fn profile_name(mut self, name: &str) -> Self {
             self.profile_file_builder = self.profile_file_builder.profile_name(name);
+            self.region_chain = self.region_chain.profile_name(name);
             self
         }
 
         /// Override the configuration used for this provider
         pub fn configure(mut self, config: ProviderConfig) -> Self {
+            self.region_chain = self.region_chain.configure(&config);
             self.conf = config;
             self
         }
@@ -264,6 +266,9 @@ pub mod credentials {
             };
         }
 
+        use crate::default_provider::credentials::DefaultCredentialsChain;
+        use crate::test_case::TestEnvironment;
+        use aws_types::credentials::ProvideCredentials;
         use tracing_test::traced_test;
 
         make_test!(prefer_environment);
@@ -274,6 +279,25 @@ pub mod credentials {
         make_test!(web_identity_token_source_profile);
         make_test!(web_identity_token_profile);
         make_test!(profile_overrides_web_identity);
+
+        #[tokio::test]
+        async fn profile_name_override() {
+            let (_, conf) =
+                TestEnvironment::from_dir("./test-data/default-provider-chain/profile_static_keys")
+                    .unwrap()
+                    .provider_config()
+                    .await;
+            let provider = DefaultCredentialsChain::builder()
+                .profile_name("secondary")
+                .configure(conf)
+                .build()
+                .await;
+            let creds = provider
+                .provide_credentials()
+                .await
+                .expect("creds should load");
+            assert_eq!(creds.access_key_id(), "correct_key_secondary");
+        }
 
         /// Helper that uses `execute_and_update` instead of execute
         ///

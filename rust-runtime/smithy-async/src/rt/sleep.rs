@@ -39,7 +39,7 @@ pub fn default_async_sleep() -> Option<Arc<dyn AsyncSleep>> {
 pub struct Sleep(Pin<Box<dyn Future<Output = ()> + Send + 'static>>);
 
 impl Sleep {
-    fn new(future: impl Future<Output = ()> + Send + 'static) -> Sleep {
+    pub fn new(future: impl Future<Output = ()> + Send + 'static) -> Sleep {
         Sleep(Box::pin(future))
     }
 }

@@ -6,12 +6,13 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, UNIX_EPOCH};
 
 use crate::provider_config::ProviderConfig;
 use aws_types::credentials::{self, ProvideCredentials};
 use aws_types::os_shim_internal::{Env, Fs};
 use serde::Deserialize;
+use smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
 use smithy_client::erase::DynConnector;
 use std::future::Future;
@@ -60,6 +61,14 @@ pub struct TestEnvironment {
     base_dir: PathBuf,
 }
 
+#[derive(Debug)]
+struct InstantSleep;
+impl AsyncSleep for InstantSleep {
+    fn sleep(&self, _duration: Duration) -> Sleep {
+        Sleep::new(std::future::ready(()))
+    }
+}
+
 #[derive(Deserialize)]
 enum TestResult {
     Ok(Credentials),
@@ -99,6 +108,24 @@ impl TestEnvironment {
         })
     }
 
+    pub async fn provider_config(
+        &self,
+    ) -> (RecordingConnection<ReplayingConnection>, ProviderConfig) {
+        let connector = RecordingConnection::new(ReplayingConnection::new(
+            self.network_traffic.events().clone(),
+        ));
+        (
+            connector.clone(),
+            ProviderConfig::without_region()
+                .with_fs(self.fs.clone())
+                .with_env(self.env.clone())
+                .with_connector(DynConnector::new(connector.clone()))
+                .with_sleep(InstantSleep)
+                .load_default_region()
+                .await,
+        )
+    }
+
     #[allow(dead_code)]
     /// Execute the test suite & record a new traffic log
     ///
@@ -109,16 +136,8 @@ impl TestEnvironment {
         F: Future<Output = P>,
         P: ProvideCredentials,
     {
-        let connector = RecordingConnection::new(ReplayingConnection::new(
-            self.network_traffic.events().clone(),
-        ));
-        let conf = ProviderConfig::without_region()
-            .with_fs(self.fs.clone())
-            .with_env(self.env.clone())
-            .with_connector(DynConnector::new(connector.clone()))
-            .load_default_region()
-            .await;
-        let provider = make_provider(conf).await;
+        let (connector, config) = self.provider_config().await;
+        let provider = make_provider(config).await;
         let result = provider.provide_credentials().await;
         std::fs::write(
             self.base_dir.join("http-traffic-recorded.json"),
