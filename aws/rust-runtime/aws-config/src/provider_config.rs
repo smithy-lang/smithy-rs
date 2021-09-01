@@ -6,10 +6,9 @@
 //! Configuration Options for Credential Providers
 
 use crate::connector::default_connector;
-use crate::sleep::default_sleep;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
-use smithy_async::rt::sleep::AsyncSleep;
+use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use smithy_client::erase::DynConnector;
 use std::sync::Arc;
 
@@ -36,7 +35,7 @@ impl Default for ProviderConfig {
             env: Env::default(),
             fs: Fs::default(),
             connector: default_connector(),
-            sleep: default_sleep(),
+            sleep: default_async_sleep(),
             region: None,
         }
     }

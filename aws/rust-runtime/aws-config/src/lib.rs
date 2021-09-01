@@ -208,19 +208,3 @@ mod connector {
         None
     }
 }
-
-mod sleep {
-    use smithy_async::rt::sleep::AsyncSleep;
-    use std::sync::Arc;
-
-    #[cfg(feature = "rt-tokio")]
-    pub fn default_sleep() -> Option<Arc<dyn AsyncSleep>> {
-        use smithy_async::rt::sleep::TokioSleep;
-        Some(Arc::new(TokioSleep::new()))
-    }
-
-    #[cfg(not(feature = "rt-tokio"))]
-    pub fn default_sleep() -> Option<Arc<dyn AsyncSleep>> {
-        None
-    }
-}
