@@ -149,16 +149,15 @@ mod builder {
     }
 
     impl Builder {
-        pub(crate) fn configure(mut self, config: &ProviderConfig) -> Self {
-            self.sleep = config.sleep();
-            self
-        }
-    }
-
-    impl Builder {
         /// Creates a new builder
         pub fn new() -> Self {
             Default::default()
+        }
+
+        /// Override configuration for the [Builder]
+        pub fn configure(mut self, config: &ProviderConfig) -> Self {
+            self.sleep = config.sleep();
+            self
         }
 
         /// An implementation of [`ProvideCredentials`] that will be used to load

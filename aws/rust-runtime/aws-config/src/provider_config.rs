@@ -7,10 +7,10 @@
 
 use crate::connector::default_connector;
 use crate::sleep::default_sleep;
-use aws_hyper::DynConnector;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
 use smithy_async::rt::sleep::AsyncSleep;
+use smithy_client::erase::DynConnector;
 use std::sync::Arc;
 
 /// Configuration options for Credential Providers
@@ -95,22 +95,29 @@ impl ProviderConfig {
         Self::without_region().load_default_region().await
     }
 
+    // When all crate features are disabled, these accessors are unused
+
+    #[allow(dead_code)]
     pub(crate) fn env(&self) -> Env {
         self.env.clone()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn fs(&self) -> Fs {
         self.fs.clone()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn connector(&self) -> Option<&DynConnector> {
         self.connector.as_ref()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn sleep(&self) -> Option<Arc<dyn AsyncSleep>> {
         self.sleep.clone()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn region(&self) -> Option<Region> {
         self.region.clone()
     }
@@ -121,6 +128,7 @@ impl ProviderConfig {
         self
     }
 
+    #[cfg(feature = "default-provider")]
     /// Use the [default region chain](crate::default_provider::region) to set the
     /// region for this configuration
     ///

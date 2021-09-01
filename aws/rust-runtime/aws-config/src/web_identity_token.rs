@@ -50,6 +50,7 @@
 use aws_sdk_sts::Region;
 use aws_types::os_shim_internal::{Env, Fs};
 
+use crate::connector::expect_connector;
 use crate::provider_config::ProviderConfig;
 use crate::sts;
 use aws_types::credentials::{self, future, CredentialsError, ProvideCredentials};
@@ -195,10 +196,7 @@ impl Builder {
     /// builder, this function will panic.
     pub fn build(self) -> WebIdentityTokenCredentialsProvider {
         let conf = self.config.unwrap_or_default();
-        let connector = conf
-            .connector()
-            .cloned()
-            .expect("A connector was not available. Either set a custom connector or enable the `rustls` and `native-tls` crate features.");
+        let connector = expect_connector(conf.connector().cloned());
         let client = aws_hyper::Client::new(connector);
         let source = self.source.unwrap_or_else(|| Source::Env(conf.env()));
         WebIdentityTokenCredentialsProvider {

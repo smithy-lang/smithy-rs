@@ -42,6 +42,7 @@
 #[cfg(feature = "default-provider")]
 pub mod default_provider;
 
+#[cfg(feature = "environment")]
 /// Providers that load configuration from environment variables
 pub mod environment;
 
@@ -89,6 +90,7 @@ pub async fn load_from_env() -> aws_types::config::Config {
 /// Load default sources for all configuration with override support
 pub use loader::ConfigLoader;
 
+#[cfg(feature = "default-provider")]
 mod loader {
     use crate::default_provider::{credentials, region};
     use crate::meta::region::ProvideRegion;
@@ -185,8 +187,10 @@ mod connector {
 
     use smithy_client::erase::DynConnector;
 
-    pub fn must_have_connector() -> DynConnector {
-        default_connector().expect("A connector was not available. Either set a custom connector or enable the `rustls` and `native-tls` crate features.")
+    // unused when all crate features are disabled
+    #[allow(dead_code)]
+    pub fn expect_connector(connector: Option<DynConnector>) -> DynConnector {
+        connector.expect("A connector was not available. Either set a custom connector or enable the `rustls` and `native-tls` crate features.")
     }
 
     #[cfg(feature = "rustls")]
@@ -206,11 +210,12 @@ mod connector {
 }
 
 mod sleep {
-    use smithy_async::rt::sleep::{AsyncSleep, TokioSleep};
+    use smithy_async::rt::sleep::AsyncSleep;
     use std::sync::Arc;
 
     #[cfg(feature = "rt-tokio")]
     pub fn default_sleep() -> Option<Arc<dyn AsyncSleep>> {
+        use smithy_async::rt::sleep::TokioSleep;
         Some(Arc::new(TokioSleep::new()))
     }
 

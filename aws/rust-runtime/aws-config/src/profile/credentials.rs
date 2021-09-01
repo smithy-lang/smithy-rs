@@ -32,7 +32,7 @@ use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
 use tracing::Instrument;
 
-use crate::connector::must_have_connector;
+use crate::connector::expect_connector;
 use crate::meta::region::ProvideRegion;
 use crate::profile::credentials::exec::named::NamedProviderFactory;
 use crate::profile::credentials::exec::{ClientConfiguration, ProviderChain};
@@ -366,10 +366,7 @@ impl Builder {
             });
         // TODO: ECS, IMDS, and other named providers
         let factory = exec::named::NamedProviderFactory::new(named_providers);
-        let connector = conf
-            .connector()
-            .cloned()
-            .unwrap_or_else(must_have_connector);
+        let connector = expect_connector(conf.connector().cloned());
         let core_client = aws_hyper::Client::new(connector.clone());
 
         ProfileFileCredentialsProvider {
