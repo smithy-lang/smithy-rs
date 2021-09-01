@@ -1,6 +1,131 @@
 vNext (Month Day, Year)
 -----------------------
+This release adds support for three commonly requested features:
+- More powerful credential chain
+- Support for constructing multiple clients from the same configuration
+- Support for transcribe streaming and S3 Select
+
+In addition, this overhauls client configuration which lead to a number of breaking changes. Detailed changes are inline.
+
+Current Credential Provider Support:
+- [x] Environment variables
+- [x] Web Identity Token Credentials
+- [ ] Profile file support (partial)
+  - [ ] Credentials
+    - [ ] SSO
+    - [ ] ECS Credential source
+    - [ ] IMDS credential source
+    - [x] Assume role from source profile
+    - [x] Static credentials source profile
+    - [x] WebTokenIdentity provider
+  - [ ] Region
+- [ ] IMDS
+- [ ] ECS
+
+## Upgrade Guide
+### If you use `<sdk>::Client::from_env`
+`from_env` loaded region & credentials from environment variables _only_. Default sources have been removed from the generated
+SDK clients and moved to the `aws-config` package. Note that the `aws-config` package default chain adds support for
+profile file and web identity token profiles.
+
+1. Add a dependency on `aws-config`:
+     ```toml
+     [dependencies]
+     aws-config = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha" }
+     ```
+2. Update your client creation code:
+   ```rust
+   // `shared_config` can be used to construct multiple different service clients!
+   let shared_config = aws_config::load_from_env().await;
+   // before: <service>::Client::from_env();
+   let client = <service>::Client::new(&shared_config)
+   ```
+
+### If you used `<client>::Config::builder()`
+`Config::build()` has been modified to _not_ fallback to a default provider. Instead, use `aws-config` to load and modify
+the default chain. Note that when you switch to `aws-config`, support for profile files and web identity tokens will be added.
+
+1. Add a dependency on `aws-config`:
+     ```toml
+     [dependencies]
+     aws-config = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha" }
+     ```
+
+2. Update your client creation code:
+
+   ```rust
+   fn before() {
+     let region = aws_types::region::ChainProvider::first_try(<1 provider>).or_default_provider();
+     let config = <service>::Config::builder().region(region).build();
+     let client = <service>::Client::from_conf(&config);
+   }
+
+   async fn after() {
+     use aws_config::meta::region::RegionProviderChain;
+     let region_provider = RegionProviderChain::first_try(<1 provider>).or_default_provider();
+     // `shared_config` can be used to construct multiple different service clients!
+     let shared_config = aws_config::from_env().region(region_provider).load().await;
+     let client = <service>::Client::new(&shared_config)
+   }
+   ```
+
+### If you used `aws-auth-providers`
+All credential providers that were in `aws-auth-providers` have been moved to `aws-config`. Unless you have a specific use case
+for a specific credential provider, you should use the default provider chain:
+
+```rust
+ let shared_config = aws_config::load_from_env().await;
+ let client = <service>::Client::new(&shared_config);
+```
+
+### If you maintain your own credential provider
+`AsyncProvideCredentials` has been renamed to `ProvideCredentials`. The trait has been moved from `aws-auth` to `aws-types`.
+The original `ProvideCredentials` trait has been removed. The return type has been changed to by a custom future.
+
+For synchronous use cases:
+```rust
+use aws_types::credentials::{ProvideCredentials, future};
+
+#[derive(Debug)]
+struct CustomCreds;
+impl ProvideCredentials for CustomCreds {
+  fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
+    where
+            Self: 'a,
+  {
+    // if your credentials are synchronous, use `::ready`
+    // if your credentials are loaded asynchronously, use `::new`
+    future::ProvideCredentials::ready(todo!()) // your credentials go here
+  }
+}
+```
+
+For asynchronous use cases:
+```rust
+use aws_types::credentials::{ProvideCredentials, future, Result};
+
+#[derive(Debug)]
+struct CustomAsyncCreds;
+impl CustomAsyncCreds {
+  async fn load_credentials(&self) -> Result {
+    Ok(Credentials::from_keys("my creds...", "secret", None))
+  }
+}
+
+impl ProvideCredentials for CustomCreds {
+  fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
+    where
+            Self: 'a,
+  {
+    future::ProvideCredentials::new(self.load_credentials())
+  }
+}
+```
+
 **Breaking Changes**
+- Credential providers from `aws-auth-providers` have been moved to `aws-config` (#678)
+- `AsyncProvideCredentials` has been renamed to `ProvideCredentials`. The original non-async provide credentials has been
+  removed. See the migration guide above.
 - `<sevicename>::from_env()` has been removed (#675). A drop-in replacement is available:
   1. Add a dependency on `aws-config`:
      ```toml
@@ -92,7 +217,7 @@ v0.20 (August 10th, 2021)
 **New This Week**
 
 - Add AssumeRoleProvider parser implementation. (#632)
-- The closure passed to `async_provide_credentials_fn` can now borrow values (#637)
+- The closure passed to `provide_credentials_fn` can now borrow values (#637)
 - Add `Sender`/`Receiver` implementations for Event Stream (#639)
 - Bring in the latest AWS models (#630)
 
@@ -174,7 +299,7 @@ v0.16 (July 6th 2021)
 - :tada: Add support for EBS (#567)
 - :tada: Add support for Cognito (#573)
 - :tada: Add support for Snowball (#579, @landonxjames)
-- Make it possible to asynchronously provide credentials with `async_provide_credentials_fn` (#572, #577)
+- Make it possible to asynchronously provide credentials with `provide_credentials_fn` (#572, #577)
 - Improve RDS, QLDB, Polly, and KMS examples (#561, #560, #558, #556, #550)
 - Update AWS SDK models (#575)
 - :bug: Bugfix: Fill in message from error response even when it doesn't match the modeled case format (#565)
