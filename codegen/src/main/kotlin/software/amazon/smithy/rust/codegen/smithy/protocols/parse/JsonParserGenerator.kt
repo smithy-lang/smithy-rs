@@ -121,7 +121,6 @@ class JsonParserGenerator(
                     """
                     let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
                     let tokens = &mut tokens_owned;
-                    #{expect_start_object}(tokens.next())?;
                     """,
                     *codegenScope
                 )
@@ -147,7 +146,6 @@ class JsonParserGenerator(
                     """
                     let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
                     let tokens = &mut tokens_owned;
-                    #{expect_start_object}(tokens.next())?;
                     """,
                     *codegenScope
                 )
@@ -205,7 +203,10 @@ class JsonParserGenerator(
 
     private fun RustWriter.deserializeStructInner(members: Collection<MemberShape>) {
         if (members.isEmpty()) {
+            rustTemplate("#{skip_value}(tokens)?;", *codegenScope)
             return
+        } else {
+            rustTemplate("#{expect_start_object}(tokens.next())?;", *codegenScope)
         }
         objectKeyLoop {
             rustBlock("match key.to_unescaped()?.as_ref()") {
@@ -332,7 +333,7 @@ class JsonParserGenerator(
                 "Shape" to symbolProvider.toSymbol(shape),
                 *codegenScope,
             ) {
-                startObjectOrNull {
+                startObjectOrNull(consumeStartToken = true) {
                     rust("let mut map = #T::new();", RustType.HashMap.RuntimeType)
                     objectKeyLoop {
                         withBlock("let key =", "?;") {
@@ -368,7 +369,7 @@ class JsonParserGenerator(
                 "Shape" to symbol,
                 *codegenScope,
             ) {
-                startObjectOrNull {
+                startObjectOrNull(consumeStartToken = false) {
                     Attribute.AllowUnusedMut.render(this)
                     rustTemplate("let mut builder = #{Shape}::builder();", *codegenScope, "Shape" to symbol)
                     deserializeStructInner(shape.members())
@@ -474,17 +475,30 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.startArrayOrNull(inner: RustWriter.() -> Unit) = startOrNull("array", inner)
-    private fun RustWriter.startObjectOrNull(inner: RustWriter.() -> Unit) = startOrNull("object", inner)
-    private fun RustWriter.startOrNull(objectOrArray: String, inner: RustWriter.() -> Unit) {
-        rustBlockTemplate("match tokens.next().transpose()?", *codegenScope) {
+    private fun RustWriter.startArrayOrNull(inner: RustWriter.() -> Unit) = startOrNull("array", true, inner)
+    private fun RustWriter.startObjectOrNull(consumeStartToken: Boolean, inner: RustWriter.() -> Unit) =
+        startOrNull("object", consumeStartToken, inner)
+
+    private fun RustWriter.startOrNull(
+        objectOrArray: String,
+        consumeStartToken: Boolean,
+        inner: RustWriter.() -> Unit
+    ) {
+        rustBlockTemplate("match tokens.peek()", *codegenScope) {
             rustBlockTemplate(
                 """
-                    Some(#{Token}::ValueNull { .. }) => Ok(None),
-                    Some(#{Token}::Start${StringUtils.capitalize(objectOrArray)} { .. }) =>
+                    Some(Err(_)) => Err(tokens.next().unwrap().err().unwrap()),
+                    Some(Ok(#{Token}::ValueNull { .. })) => {
+                        let _ = tokens.next();
+                        Ok(None)
+                    }
+                    Some(Ok(#{Token}::Start${StringUtils.capitalize(objectOrArray)} { .. })) =>
                 """,
                 *codegenScope
             ) {
+                if (consumeStartToken) {
+                    rust("let _ = tokens.next();")
+                }
                 inner()
             }
             rustBlockTemplate("_ =>") {
