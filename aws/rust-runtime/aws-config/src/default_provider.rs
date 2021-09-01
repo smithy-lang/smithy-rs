@@ -34,6 +34,11 @@ pub mod region {
         pub async fn region(&self) -> Option<Region> {
             self.0.region().await
         }
+
+        /// Builder for [`DefaultRegionChain`]
+        pub fn builder() -> Builder {
+            Builder::default()
+        }
     }
 
     /// Builder for [DefaultRegionChain]
