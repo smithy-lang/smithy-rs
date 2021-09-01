@@ -3,5 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-#[allow(dead_code)]
+#![allow(dead_code)]
+
+mod no_credentials;
 mod s3_errors;

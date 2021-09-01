@@ -45,9 +45,21 @@ pub mod default_provider;
 /// Providers that load configuration from environment variables
 pub mod environment;
 
-/// Meta-Providers that combine multiple providers into a single provider
+/// Meta-providers that augment existing providers with new behavior
 #[cfg(feature = "meta")]
 pub mod meta;
+
+#[cfg(feature = "profile")]
+pub mod profile;
+
+#[cfg(feature = "sts")]
+mod sts;
+
+#[cfg(test)]
+mod test_case;
+
+#[cfg(feature = "web-identity-token")]
+pub mod web_identity_token;
 
 /// Create an environment loader for AWS Configuration
 ///
@@ -76,9 +88,10 @@ pub async fn load_from_env() -> aws_types::config::Config {
 pub use loader::ConfigLoader;
 
 mod loader {
-    use crate::default_provider::region;
+    use crate::default_provider::{credentials, region};
     use crate::meta::region::ProvideRegion;
     use aws_types::config::Config;
+    use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
 
     /// Load a cross-service [`Config`](aws_types::config::Config) from the environment
     ///
@@ -89,12 +102,13 @@ mod loader {
     #[derive(Default, Debug)]
     pub struct ConfigLoader {
         region: Option<Box<dyn ProvideRegion>>,
+        credentials_provider: Option<SharedCredentialsProvider>,
     }
 
     impl ConfigLoader {
-        /// Override the region used to construct the [`Config`](aws_types::config::Config).
+        /// Override the region used to build [`Config`](aws_types::config::Config).
         ///
-        /// ## Example
+        /// # Example
         /// ```rust
         /// # async fn create_config() {
         /// use aws_types::region::Region;
@@ -105,6 +119,25 @@ mod loader {
         /// ```
         pub fn region(mut self, region: impl ProvideRegion + 'static) -> Self {
             self.region = Some(Box::new(region));
+            self
+        }
+
+        /// Override the credentials provider used to build [`Config`](aws_types::config::Config).
+        /// # Example
+        /// Override the credentials provider but load the default value for region:
+        /// ```rust
+        /// # use aws_types::Credentials;
+        ///  async fn create_config() {
+        /// let config = aws_config::from_env()
+        ///     .credentials_provider(Credentials::from_keys("accesskey", "secretkey", None))
+        ///     .load().await;
+        /// # }
+        /// ```
+        pub fn credentials_provider(
+            mut self,
+            credentials_provider: impl ProvideCredentials + 'static,
+        ) -> Self {
+            self.credentials_provider = Some(SharedCredentialsProvider::new(credentials_provider));
             self
         }
 
@@ -123,7 +156,49 @@ mod loader {
             } else {
                 region::default_provider().region().await
             };
-            Config::builder().region(region).build()
+            let credentials_provider = if let Some(provider) = self.credentials_provider {
+                provider
+            } else {
+                let mut builder = credentials::DefaultCredentialsChain::builder();
+                builder.set_region(region.clone());
+                SharedCredentialsProvider::new(builder.build())
+            };
+            Config::builder()
+                .region(region)
+                .credentials_provider(credentials_provider)
+                .build()
         }
+    }
+}
+
+mod connector {
+
+    // create a default connector given the currently enabled cargo features.
+    // rustls  | native tls | result
+    // -----------------------------
+    // yes     | yes        | rustls
+    // yes     | no         | rustls
+    // no      | yes        | native_tls
+    // no      | no         | no default
+
+    use smithy_client::erase::DynConnector;
+
+    pub fn must_have_connector() -> DynConnector {
+        default_connector().expect("A connector was not available. Either set a custom connector or enable the `rustls` and `native-tls` crate features.")
+    }
+
+    #[cfg(feature = "rustls")]
+    fn default_connector() -> Option<DynConnector> {
+        Some(DynConnector::new(smithy_client::conns::https()))
+    }
+
+    #[cfg(all(not(feature = "rustls"), feature = "native-tls"))]
+    fn default_connector() -> Option<DynConnector> {
+        Some(DynConnector::new(smithy_client::conns::native_tls()))
+    }
+
+    #[cfg(not(any(feature = "rustls", feature = "native-tls")))]
+    fn default_connector() -> Option<DynConnector> {
+        None
     }
 }

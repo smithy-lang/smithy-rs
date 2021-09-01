@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_auth::Credentials;
 use aws_http::user_agent::AwsUserAgent;
 use aws_hyper::Client;
 use aws_sdk_qldbsession as qldbsession;
+use aws_types::Credentials;
 use http::Uri;
 use qldbsession::model::StartSessionRequest;
 use qldbsession::operation::SendCommand;

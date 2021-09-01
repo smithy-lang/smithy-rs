@@ -6,7 +6,5 @@
 /// Region Providers
 pub mod region;
 
-// coming soon:
-// pub mod credentials:
-// - CredentialProviderChain
-// - LazyCachingProvider
+/// Credential Providers
+pub mod credentials;
