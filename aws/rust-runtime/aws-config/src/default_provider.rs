@@ -18,7 +18,7 @@ pub mod region {
 
     /// Default Region Provider chain
     ///
-    /// This provider will load check the following sources in order:
+    /// This provider will check the following sources in order:
     /// 1. [Environment variables](EnvironmentVariableRegionProvider)
     /// 2. [Profile file](crate::profile::region::ProfileFileRegionProvider)
     pub fn default_provider() -> impl ProvideRegion {
