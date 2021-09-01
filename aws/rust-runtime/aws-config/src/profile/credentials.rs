@@ -104,9 +104,11 @@ impl ProvideCredentials for ProfileFileCredentialsProvider {
 ///         future::ProvideCredentials::new(self.load_credentials())
 ///     }
 /// }
+/// # if cfg!(any(feature = "rustls", feature = "native-tls")) {
 /// let provider = ProfileFileCredentialsProvider::builder()
 ///     .with_custom_provider("Custom", MyCustomProvider)
 ///     .build();
+/// }
 /// ```
 ///
 /// ### Assume role credentials from a source profile
@@ -283,7 +285,7 @@ impl Error for ProfileFileError {
 /// Builder for [`ProfileFileCredentialsProvider`]
 #[derive(Default)]
 pub struct Builder {
-    provider_config: ProviderConfig,
+    provider_config: Option<ProviderConfig>,
     profile_override: Option<String>,
     custom_providers: HashMap<Cow<'static, str>, Arc<dyn ProvideCredentials>>,
 }
@@ -302,7 +304,7 @@ impl Builder {
     /// # }
     /// ```
     pub fn configure(mut self, provider_config: &ProviderConfig) -> Self {
-        self.provider_config = provider_config.clone();
+        self.provider_config = Some(provider_config.clone());
         self
     }
 
@@ -326,9 +328,12 @@ impl Builder {
     ///         future::ProvideCredentials::new(self.load_credentials())
     ///     }
     /// }
+    ///
+    /// # if cfg!(any(feature = "rustls", feature = "native-tls")) {
     /// let provider = ProfileFileCredentialsProvider::builder()
     ///     .with_custom_provider("Custom", MyCustomProvider)
     ///     .build();
+    /// # }
     /// ```
     pub fn with_custom_provider(
         mut self,
@@ -350,7 +355,7 @@ impl Builder {
     pub fn build(self) -> ProfileFileCredentialsProvider {
         let build_span = tracing::info_span!("build_profile_provider");
         let _enter = build_span.enter();
-        let conf = self.provider_config;
+        let conf = self.provider_config.unwrap_or_default();
         let mut named_providers = self.custom_providers.clone();
         named_providers
             .entry("Environment".into())

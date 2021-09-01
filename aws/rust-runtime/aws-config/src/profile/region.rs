@@ -34,14 +34,14 @@ pub struct ProfileFileRegionProvider {
 /// Builder for [ProfileFileRegionProvider]
 #[derive(Default)]
 pub struct Builder {
-    config: ProviderConfig,
+    config: Option<ProviderConfig>,
     profile_override: Option<String>,
 }
 
 impl Builder {
     /// Override the configuration for this provider
     pub fn configure(mut self, config: &ProviderConfig) -> Self {
-        self.config = config.clone();
+        self.config = Some(config.clone());
         self
     }
 
@@ -53,9 +53,10 @@ impl Builder {
 
     /// Build a [ProfileFileRegionProvider] from this builder
     pub fn build(self) -> ProfileFileRegionProvider {
+        let conf = self.config.unwrap_or_default();
         ProfileFileRegionProvider {
-            env: self.config.env(),
-            fs: self.config.fs(),
+            env: conf.env(),
+            fs: conf.fs(),
             profile_override: self.profile_override,
         }
     }
@@ -104,6 +105,7 @@ impl ProvideRegion for ProfileFileRegionProvider {
 mod test {
     use crate::profile::ProfileFileRegionProvider;
     use crate::provider_config::ProviderConfig;
+    use crate::test_case::no_traffic_connector;
     use aws_sdk_sts::Region;
     use aws_types::os_shim_internal::{Env, Fs};
     use futures_util::FutureExt;
@@ -112,7 +114,10 @@ mod test {
     fn provider_config(dir_name: &str) -> ProviderConfig {
         let fs = Fs::from_test_dir(format!("test-data/profile-provider/{}/fs", dir_name), "/");
         let env = Env::from_slice(&[("HOME", "/home")]);
-        ProviderConfig::without_region().with_fs(fs).with_env(env)
+        ProviderConfig::empty()
+            .with_fs(fs)
+            .with_env(env)
+            .with_connector(no_traffic_connector())
     }
 
     #[traced_test]

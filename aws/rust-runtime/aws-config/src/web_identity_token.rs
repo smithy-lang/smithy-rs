@@ -50,7 +50,6 @@
 use aws_sdk_sts::Region;
 use aws_types::os_shim_internal::{Env, Fs};
 
-use crate::connector::must_have_connector;
 use crate::provider_config::ProviderConfig;
 use crate::sts;
 use aws_types::credentials::{self, future, CredentialsError, ProvideCredentials};
@@ -158,7 +157,7 @@ impl WebIdentityTokenCredentialsProvider {
 #[derive(Default)]
 pub struct Builder {
     source: Option<Source>,
-    config: ProviderConfig,
+    config: Option<ProviderConfig>,
 }
 
 impl Builder {
@@ -175,7 +174,7 @@ impl Builder {
     /// # }
     /// ```
     pub fn configure(mut self, provider_config: &ProviderConfig) -> Self {
-        self.config = provider_config.clone();
+        self.config = Some(provider_config.clone());
         self
     }
 
@@ -195,12 +194,11 @@ impl Builder {
     /// If no connector has been enabled via crate features and no connector has been provided via the
     /// builder, this function will panic.
     pub fn build(self) -> WebIdentityTokenCredentialsProvider {
-        let connector = self
-            .config
+        let conf = self.config.unwrap_or_default();
+        let connector = conf
             .connector()
             .cloned()
-            .unwrap_or_else(must_have_connector);
-        let conf = self.config;
+            .expect("A connector was not available. Either set a custom connector or enable the `rustls` and `native-tls` crate features.");
         let client = aws_hyper::Client::new(connector);
         let source = self.source.unwrap_or_else(|| Source::Env(conf.env()));
         WebIdentityTokenCredentialsProvider {
@@ -256,15 +254,18 @@ mod test {
     use aws_types::os_shim_internal::{Env, Fs};
 
     use crate::provider_config::ProviderConfig;
+    use crate::test_case::no_traffic_connector;
     use aws_types::credentials::CredentialsError;
     use std::collections::HashMap;
 
     #[tokio::test]
     async fn unloaded_provider() {
         // empty environment
-        let conf = ProviderConfig::without_region()
+        let conf = ProviderConfig::empty()
             .with_env(Env::from_slice(&[]))
+            .with_connector(no_traffic_connector())
             .with_region(Some(Region::from_static("us-east-1")));
+
         let provider = Builder::default().configure(&conf).build();
         let err = provider
             .credentials()
@@ -282,9 +283,10 @@ mod test {
         let region = Some(Region::new("us-east-1"));
         let provider = Builder::default()
             .configure(
-                &ProviderConfig::without_region()
+                &ProviderConfig::empty()
                     .with_region(region)
-                    .with_env(env),
+                    .with_env(env)
+                    .with_connector(no_traffic_connector()),
             )
             .build();
         let err = provider
@@ -312,7 +314,8 @@ mod test {
         let fs = Fs::from_map(HashMap::new());
         let provider = Builder::default()
             .configure(
-                &ProviderConfig::without_region()
+                &ProviderConfig::empty()
+                    .with_connector(no_traffic_connector())
                     .with_region(Some(Region::new("us-east-1")))
                     .with_env(env)
                     .with_fs(fs),

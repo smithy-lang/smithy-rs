@@ -13,6 +13,7 @@ use aws_types::credentials::{self, ProvideCredentials};
 use aws_types::os_shim_internal::{Env, Fs};
 use serde::Deserialize;
 use smithy_async::rt::sleep::{AsyncSleep, Sleep};
+
 use smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
 use smithy_client::erase::DynConnector;
 use std::future::Future;
@@ -59,6 +60,11 @@ pub struct TestEnvironment {
     network_traffic: NetworkTraffic,
     metadata: Metadata,
     base_dir: PathBuf,
+}
+
+/// Connector which expects no traffic
+pub fn no_traffic_connector() -> DynConnector {
+    DynConnector::new(ReplayingConnection::new(vec![]))
 }
 
 #[derive(Debug)]
@@ -116,7 +122,7 @@ impl TestEnvironment {
         ));
         (
             connector.clone(),
-            ProviderConfig::without_region()
+            ProviderConfig::empty()
                 .with_fs(self.fs.clone())
                 .with_env(self.env.clone())
                 .with_connector(DynConnector::new(connector.clone()))
@@ -158,7 +164,7 @@ impl TestEnvironment {
         P: ProvideCredentials,
     {
         let connector = ReplayingConnection::new(self.network_traffic.events().clone());
-        let conf = ProviderConfig::without_region()
+        let conf = ProviderConfig::empty()
             .with_fs(self.fs.clone())
             .with_env(self.env.clone())
             .with_connector(DynConnector::new(connector.clone()))

@@ -5,6 +5,8 @@
 
 //! Configuration Options for Credential Providers
 
+use crate::connector::default_connector;
+use crate::sleep::default_sleep;
 use aws_hyper::DynConnector;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
@@ -19,7 +21,7 @@ use std::sync::Arc;
 /// To use a region from the default region provider chain use [`ProviderConfig::with_default_region`].
 /// Otherwise, use [`ProviderConfig::without_region`]. Note that some credentials providers require a region
 /// to be explicitly set.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct ProviderConfig {
     env: Env,
     fs: Fs,
@@ -28,10 +30,27 @@ pub struct ProviderConfig {
     region: Option<Region>,
 }
 
+impl Default for ProviderConfig {
+    fn default() -> Self {
+        Self {
+            env: Env::default(),
+            fs: Fs::default(),
+            connector: default_connector(),
+            sleep: default_sleep(),
+            region: None,
+        }
+    }
+}
+
 impl ProviderConfig {
-    /// Create a default provider config with the region unset
+    /// Create a default provider config with the region unset.
     ///
     /// Using this option means that you may need to set a region manually.
+    ///
+    /// This constructor will use a default value for the HTTPS connector and Sleep implementation
+    /// when they are enabled as crate features which is usually the correct option. To construct
+    /// a `ProviderConfig` without these fields set, use [`ProviderConfig::empty`].
+    ///
     ///
     /// # Example
     /// ```rust
@@ -39,14 +58,22 @@ impl ProviderConfig {
     /// use aws_sdk_sts::Region;
     /// use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
     /// let conf = ProviderConfig::without_region().with_region(Some(Region::new("us-east-1")));
+    ///
+    /// # if cfg!(any(feature = "rustls", feature = "native-tls")) {
     /// let credential_provider = WebIdentityTokenCredentialsProvider::builder().configure(&conf).build();
+    /// # }
     /// ```
     pub fn without_region() -> Self {
+        Self::default()
+    }
+
+    /// Constructs a ProviderConfig with no fields set
+    pub fn empty() -> Self {
         ProviderConfig {
             env: Env::default(),
             fs: Fs::default(),
-            connector: crate::connector::default_connector(),
-            sleep: crate::sleep::default_sleep(),
+            connector: None,
+            sleep: None,
             region: None,
         }
     }

@@ -156,7 +156,7 @@ pub mod credentials {
         credential_cache: crate::meta::credentials::lazy_caching::Builder,
         region_override: Option<Box<dyn ProvideRegion>>,
         region_chain: crate::default_provider::region::Builder,
-        conf: ProviderConfig,
+        conf: Option<ProviderConfig>,
     }
 
     impl Builder {
@@ -212,7 +212,7 @@ pub mod credentials {
         /// Override the configuration used for this provider
         pub fn configure(mut self, config: ProviderConfig) -> Self {
             self.region_chain = self.region_chain.configure(&config);
-            self.conf = config;
+            self.conf = Some(config);
             self
         }
 
@@ -228,7 +228,7 @@ pub mod credentials {
                 .unwrap_or_else(move || Box::new(region_chain.build()))
                 .region()
                 .await;
-            let conf = self.conf.with_region(region);
+            let conf = self.conf.unwrap_or_default().with_region(region);
 
             let profile_provider = self.profile_file_builder.configure(&conf).build();
             let env_provider = EnvironmentVariableCredentialsProvider::new_with_env(conf.env());

@@ -110,7 +110,7 @@ impl ProviderChain {
                 web_identity_token_file,
                 session_name,
             } => {
-                let conf = ProviderConfig::without_region()
+                let conf = ProviderConfig::empty()
                     .with_connector(connector.clone())
                     .with_fs(fs)
                     .with_region(region);
@@ -172,21 +172,16 @@ mod test {
     use crate::profile::credentials::exec::named::NamedProviderFactory;
     use crate::profile::credentials::exec::ProviderChain;
     use crate::profile::credentials::repr::{BaseProvider, ProfileChain};
+    use crate::test_case::no_traffic_connector;
     use aws_sdk_sts::Region;
-    use smithy_client::dvr;
-    use smithy_client::erase::DynConnector;
     use std::collections::HashMap;
-
-    fn stub_connector() -> DynConnector {
-        DynConnector::new(dvr::ReplayingConnection::new(vec![]))
-    }
 
     #[test]
     fn error_on_unknown_provider() {
         let factory = NamedProviderFactory::new(HashMap::new());
         let chain = ProviderChain::from_repr(
             Default::default(),
-            &stub_connector(),
+            &no_traffic_connector(),
             Some(Region::new("us-east-1")),
             ProfileChain {
                 base: BaseProvider::NamedSource("floozle"),
