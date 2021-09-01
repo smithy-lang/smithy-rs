@@ -161,6 +161,7 @@ impl ProvideCredentials for CustomCreds {
 - Add support for shared configuration between multiple services (#673)
 - Update AWS SDK models (#677)
 - :bug: Fix sigv4 signing when request ALPN negotiates to HTTP/2. (#674)
+- :bug: Fix integer size on S3 `Size` (#679, aws-sdk-rust#209)
 
 **Internal Changes**
 - Add NowOrLater future to smithy-async (#672)
