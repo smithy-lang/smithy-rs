@@ -61,6 +61,8 @@ mod test_case;
 #[cfg(feature = "web-identity-token")]
 pub mod web_identity_token;
 
+pub mod provider_config;
+
 /// Create an environment loader for AWS Configuration
 ///
 /// ## Example
@@ -161,7 +163,7 @@ mod loader {
             } else {
                 let mut builder = credentials::DefaultCredentialsChain::builder();
                 builder.set_region(region.clone());
-                SharedCredentialsProvider::new(builder.build())
+                SharedCredentialsProvider::new(builder.build().await)
             };
             Config::builder()
                 .region(region)
@@ -188,17 +190,32 @@ mod connector {
     }
 
     #[cfg(feature = "rustls")]
-    fn default_connector() -> Option<DynConnector> {
+    pub fn default_connector() -> Option<DynConnector> {
         Some(DynConnector::new(smithy_client::conns::https()))
     }
 
     #[cfg(all(not(feature = "rustls"), feature = "native-tls"))]
-    fn default_connector() -> Option<DynConnector> {
+    pub fn default_connector() -> Option<DynConnector> {
         Some(DynConnector::new(smithy_client::conns::native_tls()))
     }
 
     #[cfg(not(any(feature = "rustls", feature = "native-tls")))]
-    fn default_connector() -> Option<DynConnector> {
+    pub fn default_connector() -> Option<DynConnector> {
+        None
+    }
+}
+
+mod sleep {
+    use smithy_async::rt::sleep::{AsyncSleep, TokioSleep};
+    use std::sync::Arc;
+
+    #[cfg(feature = "rt-tokio")]
+    pub fn default_sleep() -> Option<Arc<dyn AsyncSleep>> {
+        Some(Arc::new(TokioSleep::new()))
+    }
+
+    #[cfg(not(feature = "rt-tokio"))]
+    pub fn default_sleep() -> Option<Arc<dyn AsyncSleep>> {
         None
     }
 }

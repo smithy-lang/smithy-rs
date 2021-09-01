@@ -37,6 +37,7 @@ use crate::meta::region::ProvideRegion;
 use crate::profile::credentials::exec::named::NamedProviderFactory;
 use crate::profile::credentials::exec::{ClientConfiguration, ProviderChain};
 use crate::profile::parser::ProfileParseError;
+use crate::provider_config::ProviderConfig;
 use smithy_client::erase::DynConnector;
 
 mod exec;
@@ -128,6 +129,7 @@ pub struct ProfileFileCredentialsProvider {
     env: Env,
     region: Option<Region>,
     connector: DynConnector,
+    profile_override: Option<String>,
 }
 
 impl ProfileFileCredentialsProvider {
@@ -148,6 +150,7 @@ impl ProfileFileCredentialsProvider {
             &self.region,
             &self.connector,
             &self.factory,
+            self.profile_override.as_deref(),
         )
         .await;
         let inner_provider = profile.map_err(|err| match err {
@@ -277,62 +280,29 @@ impl Error for ProfileFileError {
     }
 }
 
-/// Builder for [`ProfileFileCredentialsProvider`](ProfileFileCredentialsProvider)
+/// Builder for [`ProfileFileCredentialsProvider`]
 #[derive(Default)]
 pub struct Builder {
-    fs: Fs,
-    env: Env,
-    region: Option<Region>,
-    connector: Option<DynConnector>,
+    provider_config: ProviderConfig,
+    profile_override: Option<String>,
     custom_providers: HashMap<Cow<'static, str>, Arc<dyn ProvideCredentials>>,
 }
 
 impl Builder {
-    #[doc(hidden)]
-    pub fn fs(mut self, fs: Fs) -> Self {
-        self.fs = fs;
-        self
-    }
-
-    #[doc(hidden)]
-    pub fn set_fs(&mut self, fs: Fs) -> &mut Self {
-        self.fs = fs;
-        self
-    }
-
-    #[doc(hidden)]
-    pub fn env(mut self, env: Env) -> Self {
-        self.env = env;
-        self
-    }
-
-    #[doc(hidden)]
-    pub fn set_env(&mut self, env: Env) -> &mut Self {
-        self.env = env;
-        self
-    }
-
-    /// Sets the HTTPS connector used for requests to AWS
-    pub fn connector(mut self, connector: DynConnector) -> Self {
-        self.connector = Some(connector);
-        self
-    }
-
-    /// Sets the HTTPS connector used for requests to AWS
-    pub fn set_connector(&mut self, connector: Option<DynConnector>) -> &mut Self {
-        self.connector = connector;
-        self
-    }
-
-    /// Sets the region used for requests to AWS
-    pub fn region(mut self, region: Region) -> Self {
-        self.region = Some(region);
-        self
-    }
-
-    /// Sets the region used for requests to AWS
-    pub fn set_region(&mut self, region: Option<Region>) -> &mut Self {
-        self.region = region;
+    /// Override the configuration for the [`ProfileFileCredentialsProvider`]
+    ///
+    /// # Example
+    /// ```rust
+    /// # async fn test() {
+    /// use aws_config::profile::ProfileFileCredentialsProvider;
+    /// use aws_config::provider_config::ProviderConfig;
+    /// let provider = ProfileFileCredentialsProvider::builder()
+    ///     .configure(&ProviderConfig::with_default_region().await)
+    ///     .build();
+    /// # }
+    /// ```
+    pub fn configure(mut self, provider_config: &ProviderConfig) -> Self {
+        self.provider_config = provider_config.clone();
         self
     }
 
@@ -370,35 +340,44 @@ impl Builder {
         self
     }
 
-    /// Builds a [`ProfileFileCredentialsProvider`](ProfileFileCredentialsProvider)
+    /// Override the profile name used by the [`ProfileFileCredentialsProvider`]
+    pub fn profile_name(mut self, profile_name: impl Into<String>) -> Self {
+        self.profile_override = Some(profile_name.into());
+        self
+    }
+
+    /// Builds a [`ProfileFileCredentialsProvider`]
     pub fn build(self) -> ProfileFileCredentialsProvider {
         let build_span = tracing::info_span!("build_profile_provider");
         let _enter = build_span.enter();
-        let env = self.env.clone();
-        let fs = self.fs;
+        let conf = self.provider_config;
         let mut named_providers = self.custom_providers.clone();
         named_providers
             .entry("Environment".into())
             .or_insert_with(|| {
                 Arc::new(crate::environment::credentials::EnvironmentVariableCredentialsProvider::new_with_env(
-                    env.clone(),
+                    conf.env(),
                 ))
             });
         // TODO: ECS, IMDS, and other named providers
         let factory = exec::named::NamedProviderFactory::new(named_providers);
-        let connector = self.connector.clone().unwrap_or_else(must_have_connector);
+        let connector = conf
+            .connector()
+            .cloned()
+            .unwrap_or_else(must_have_connector);
         let core_client = aws_hyper::Client::new(connector.clone());
 
         ProfileFileCredentialsProvider {
             factory,
             client_config: ClientConfiguration {
                 core_client,
-                region: self.region.clone(),
+                region: conf.region(),
             },
-            fs,
-            env,
-            region: self.region.clone(),
+            fs: conf.fs(),
+            env: conf.env(),
+            region: conf.region(),
             connector,
+            profile_override: self.profile_override,
         }
     }
 }
@@ -409,12 +388,13 @@ async fn build_provider_chain(
     region: &dyn ProvideRegion,
     connector: &DynConnector,
     factory: &NamedProviderFactory,
+    profile_override: Option<&str>,
 ) -> Result<ProviderChain, ProfileFileError> {
     let profile_set = super::parser::load(&fs, &env).await.map_err(|err| {
         tracing::warn!(err = %err, "failed to parse profile");
         ProfileFileError::CouldNotParseProfile(err)
     })?;
-    let repr = repr::resolve_chain(&profile_set)?;
+    let repr = repr::resolve_chain(&profile_set, profile_override)?;
     tracing::info!(chain = ?repr, "constructed abstract provider from config file");
     exec::ProviderChain::from_repr(fs.clone(), connector, region.region().await, repr, &factory)
 }
@@ -425,7 +405,6 @@ mod test {
 
     use crate::profile::credentials::Builder;
     use crate::test_case::TestEnvironment;
-    use aws_types::region::Region;
 
     macro_rules! make_test {
         ($name: ident) => {
@@ -437,14 +416,7 @@ mod test {
                     stringify!($name)
                 ))
                 .unwrap()
-                .execute(|fs, env, conn| {
-                    Builder::default()
-                        .env(env)
-                        .fs(fs)
-                        .region(Region::from_static("us-east-1"))
-                        .connector(conn)
-                        .build()
-                })
+                .execute(|conf| async move { Builder::default().configure(&conf).build() })
                 .await
             }
         };
@@ -454,19 +426,5 @@ mod test {
     make_test!(empty_config);
     make_test!(retry_on_error);
     make_test!(invalid_config);
-
-    #[tokio::test]
-    async fn region_override() {
-        TestEnvironment::from_dir("./test-data/profile-provider/region_override")
-            .unwrap()
-            .execute(|fs, env, conn| {
-                Builder::default()
-                    .env(env)
-                    .fs(fs)
-                    .region(Region::from_static("us-east-2"))
-                    .connector(conn)
-                    .build()
-            })
-            .await
-    }
+    make_test!(region_override);
 }

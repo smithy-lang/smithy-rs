@@ -31,7 +31,7 @@ const DEFAULT_BUFFER_TIME: Duration = Duration::from_secs(10);
 #[derive(Debug)]
 pub struct LazyCachingCredentialsProvider {
     time: Box<dyn TimeSource>,
-    sleeper: Box<dyn AsyncSleep>,
+    sleeper: Arc<dyn AsyncSleep>,
     cache: Cache,
     loader: Arc<dyn ProvideCredentials>,
     load_timeout: Duration,
@@ -41,7 +41,7 @@ pub struct LazyCachingCredentialsProvider {
 impl LazyCachingCredentialsProvider {
     fn new(
         time: impl TimeSource,
-        sleeper: Box<dyn AsyncSleep>,
+        sleeper: Arc<dyn AsyncSleep>,
         loader: Arc<dyn ProvideCredentials>,
         load_timeout: Duration,
         default_credential_expiration: Duration,
@@ -121,6 +121,7 @@ mod builder {
         DEFAULT_LOAD_TIMEOUT,
     };
     use crate::meta::credentials::lazy_caching::time::SystemTimeSource;
+    use crate::provider_config::ProviderConfig;
 
     /// Builder for constructing a [`LazyCachingCredentialsProvider`].
     ///
@@ -140,11 +141,18 @@ mod builder {
     /// ```
     #[derive(Default)]
     pub struct Builder {
-        sleep: Option<Box<dyn AsyncSleep>>,
+        sleep: Option<Arc<dyn AsyncSleep>>,
         load: Option<Arc<dyn ProvideCredentials>>,
         load_timeout: Option<Duration>,
         buffer_time: Option<Duration>,
         default_credential_expiration: Option<Duration>,
+    }
+
+    impl Builder {
+        pub(crate) fn configure(mut self, config: &ProviderConfig) -> Self {
+            self.sleep = config.sleep();
+            self
+        }
     }
 
     impl Builder {
@@ -165,7 +173,7 @@ mod builder {
         /// If using Tokio as the async runtime, this should be set to an instance of
         /// [`TokioSleep`](smithy_async::rt::sleep::TokioSleep).
         pub fn sleep(mut self, sleep: impl AsyncSleep + 'static) -> Self {
-            self.sleep = Some(Box::new(sleep));
+            self.sleep = Some(Arc::new(sleep));
             self
         }
 
@@ -270,7 +278,7 @@ mod tests {
         let load_list = Arc::new(Mutex::new(load_list));
         LazyCachingCredentialsProvider::new(
             time,
-            Box::new(TokioSleep::new()),
+            Arc::new(TokioSleep::new()),
             Arc::new(provide_credentials_fn(move || {
                 let list = load_list.clone();
                 async move {
@@ -311,7 +319,7 @@ mod tests {
         }));
         let provider = LazyCachingCredentialsProvider::new(
             time,
-            Box::new(TokioSleep::new()),
+            Arc::new(TokioSleep::new()),
             loader,
             DEFAULT_LOAD_TIMEOUT,
             DEFAULT_CREDENTIAL_EXPIRATION,
@@ -422,7 +430,7 @@ mod tests {
         let time = TestTime::new(epoch_secs(100));
         let provider = LazyCachingCredentialsProvider::new(
             time,
-            Box::new(TokioSleep::new()),
+            Arc::new(TokioSleep::new()),
             Arc::new(provide_credentials_fn(|| async {
                 tokio::time::sleep(Duration::from_millis(10)).await;
                 Ok(credentials(1000))

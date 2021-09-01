@@ -33,12 +33,25 @@
 //!   role_arn = arn:aws:iam::123456789012:role/s3-reader
 //!   web_identity_token_file = /token.jwt
 //!   ```
-
+//!
+//! # Example
+//! Web Identity Token providers are part of the [default chain](crate::default_provider::credentials),
+//! however, you can construct one explicitly if you don't want to use the default provider chain:
+//!
+/// ```rust
+/// # async fn test() {
+/// use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
+/// use aws_config::provider_config::ProviderConfig;
+/// let provider = WebIdentityTokenCredentialsProvider::builder()
+///     .configure(&ProviderConfig::with_default_region().await)
+///     .build();
+/// # }
+/// ```
 use aws_sdk_sts::Region;
 use aws_types::os_shim_internal::{Env, Fs};
-use smithy_client::erase::DynConnector;
 
 use crate::connector::must_have_connector;
+use crate::provider_config::ProviderConfig;
 use crate::sts;
 use aws_types::credentials::{self, future, CredentialsError, ProvideCredentials};
 use std::borrow::Cow;
@@ -140,70 +153,34 @@ impl WebIdentityTokenCredentialsProvider {
 #[derive(Default)]
 pub struct Builder {
     source: Option<Source>,
-    fs: Fs,
-    connector: Option<DynConnector>,
-    region: Option<Region>,
+    config: ProviderConfig,
 }
 
 impl Builder {
-    #[doc(hidden)]
-    /// Set the Fs used for this provider
-    pub fn fs(mut self, fs: Fs) -> Self {
-        self.fs = fs;
-        self
-    }
-
-    #[doc(hidden)]
-    /// Set the Fs used for this provider
-    pub fn set_fs(&mut self, fs: Fs) -> &mut Self {
-        self.fs = fs;
-        self
-    }
-
-    #[doc(hidden)]
-    /// Set the process environment used for this provider
-    pub fn env(mut self, env: Env) -> Self {
-        self.source = Some(Source::Env(env));
-        self
-    }
-
-    #[doc(hidden)]
-    /// Set the process environment used for this provider
-    pub fn set_env(&mut self, env: Env) -> &mut Self {
-        self.source = Some(Source::Env(env));
+    /// Configure generic options of the [WebIdentityTokenCredentialsProvider]
+    ///
+    /// # Example
+    /// ```rust
+    /// # async fn test() {
+    /// use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
+    /// use aws_config::provider_config::ProviderConfig;
+    /// let provider = WebIdentityTokenCredentialsProvider::builder()
+    ///     .configure(&ProviderConfig::with_default_region().await)
+    ///     .build();
+    /// # }
+    /// ```
+    pub fn configure(mut self, provider_config: &ProviderConfig) -> Self {
+        self.config = provider_config.clone();
         self
     }
 
     /// Configure this builder to use  [`StaticConfiguration`](StaticConfiguration)
     ///
-    /// WebIdentityToken providers load credentials from the file system. They may either determine
-    /// the path from environment variables (default), or via a statically configured path.
+    /// WebIdentityToken providers load credentials from the file system. The file system path used
+    /// may either determine be loaded from environment variables (default), or via a statically
+    /// configured path.
     pub fn static_configuration(mut self, config: StaticConfiguration) -> Self {
         self.source = Some(Source::Static(config));
-        self
-    }
-
-    /// Sets the HTTPS connector used for this provider
-    pub fn connector(mut self, connector: DynConnector) -> Self {
-        self.connector = Some(connector);
-        self
-    }
-
-    /// Sets the HTTPS connector used for this provider
-    pub fn set_connector(&mut self, connector: Option<DynConnector>) -> &mut Self {
-        self.connector = connector;
-        self
-    }
-
-    /// Sets the region used for this provider
-    pub fn region(mut self, region: Option<Region>) -> Self {
-        self.region = region;
-        self
-    }
-
-    /// Sets the region used for this provider
-    pub fn set_region(&mut self, region: Option<Region>) -> &mut Self {
-        self.region = region;
         self
     }
 
@@ -213,14 +190,19 @@ impl Builder {
     /// If no connector has been enabled via crate features and no connector has been provided via the
     /// builder, this function will panic.
     pub fn build(self) -> WebIdentityTokenCredentialsProvider {
-        let connector = self.connector.unwrap_or_else(must_have_connector);
+        let connector = self
+            .config
+            .connector()
+            .cloned()
+            .unwrap_or_else(must_have_connector);
+        let conf = self.config;
         let client = aws_hyper::Client::new(connector);
-        let source = self.source.unwrap_or_else(|| Source::Env(Env::default()));
+        let source = self.source.unwrap_or_else(|| Source::Env(conf.env()));
         WebIdentityTokenCredentialsProvider {
             source,
-            fs: self.fs,
+            fs: conf.fs(),
             client,
-            region: self.region,
+            region: conf.region(),
         }
     }
 }
@@ -268,17 +250,17 @@ mod test {
     use aws_sdk_sts::Region;
     use aws_types::os_shim_internal::{Env, Fs};
 
+    use crate::provider_config::ProviderConfig;
     use aws_types::credentials::CredentialsError;
     use std::collections::HashMap;
 
     #[tokio::test]
     async fn unloaded_provider() {
         // empty environment
-        let env = Env::from_slice(&[]);
-        let provider = Builder::default()
-            .region(Some(Region::new("us-east-1")))
-            .env(env)
-            .build();
+        let conf = ProviderConfig::without_region()
+            .with_env(Env::from_slice(&[]))
+            .with_region(Some(Region::from_static("us-east-1")));
+        let provider = Builder::default().configure(&conf).build();
         let err = provider
             .credentials()
             .await
@@ -292,9 +274,13 @@ mod test {
     #[tokio::test]
     async fn missing_env_var() {
         let env = Env::from_slice(&[(ENV_VAR_TOKEN_FILE, "/token.jwt")]);
+        let region = Some(Region::new("us-east-1"));
         let provider = Builder::default()
-            .region(Some(Region::new("us-east-1")))
-            .env(env)
+            .configure(
+                &ProviderConfig::without_region()
+                    .with_region(region)
+                    .with_env(env),
+            )
             .build();
         let err = provider
             .credentials()
@@ -320,9 +306,12 @@ mod test {
         ]);
         let fs = Fs::from_map(HashMap::new());
         let provider = Builder::default()
-            .region(Some(Region::new("us-east-1")))
-            .fs(fs)
-            .env(env)
+            .configure(
+                &ProviderConfig::without_region()
+                    .with_region(Some(Region::new("us-east-1")))
+                    .with_env(env)
+                    .with_fs(fs),
+            )
             .build();
         let err = provider.credentials().await.expect_err("no JWT token");
         match err {

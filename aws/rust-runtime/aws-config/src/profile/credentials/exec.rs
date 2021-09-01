@@ -12,6 +12,7 @@ use aws_types::region::Region;
 use super::repr::{self, BaseProvider};
 
 use crate::profile::credentials::ProfileFileError;
+use crate::provider_config::ProviderConfig;
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
 use aws_types::credentials::{self, CredentialsError, ProvideCredentials};
@@ -109,6 +110,10 @@ impl ProviderChain {
                 web_identity_token_file,
                 session_name,
             } => {
+                let conf = ProviderConfig::without_region()
+                    .with_connector(connector.clone())
+                    .with_fs(fs)
+                    .with_region(region);
                 let provider = WebIdentityTokenCredentialsProvider::builder()
                     .static_configuration(StaticConfiguration {
                         web_identity_token_file: web_identity_token_file.into(),
@@ -117,9 +122,7 @@ impl ProviderChain {
                             || sts::util::default_session_name("web-identity-token-profile"),
                         ),
                     })
-                    .fs(fs)
-                    .connector(connector.clone())
-                    .region(region)
+                    .configure(&conf)
                     .build();
                 Arc::new(provider)
             }
