@@ -227,12 +227,10 @@ pub mod credentials {
         /// This function will panic if no connector has been set and neither `rustls` and `native-tls`
         /// features have both been disabled.
         pub async fn build(self) -> DefaultCredentialsChain {
-            let region_chain = self.region_chain;
-            let region = self
-                .region_override
-                .unwrap_or_else(move || Box::new(region_chain.build()))
-                .region()
-                .await;
+            let region = match self.region_override {
+                Some(provider) => provider.region().await,
+                None => self.region_chain.build().region().await,
+            };
             let conf = self.conf.unwrap_or_default().with_region(region);
 
             let profile_provider = self.profile_file_builder.configure(&conf).build();
