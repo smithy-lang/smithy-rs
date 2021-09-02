@@ -7,7 +7,7 @@
       "action": {
         "Request": {
           "request": {
-            "uri": "https://sts.us-east-1.amazonaws.com/",
+            "uri": "https://sts.eu-west-1.amazonaws.com/",
             "headers": {
               "content-type": [
                 "application/x-www-form-urlencoded"
@@ -22,7 +22,7 @@
                 "aws-sdk-rust/0.1.0 os/macos lang/rust/1.55.0-nightly"
               ],
               "host": [
-                "sts.us-east-1.amazonaws.com"
+                "sts.eu-west-1.amazonaws.com"
               ]
             },
             "method": "POST"

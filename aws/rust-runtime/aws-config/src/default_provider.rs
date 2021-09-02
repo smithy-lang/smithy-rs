@@ -9,13 +9,76 @@
 pub mod region {
 
     use crate::environment::region::EnvironmentVariableRegionProvider;
-    use crate::meta::region::ProvideRegion;
+    use crate::meta::region::{ProvideRegion, RegionProviderChain};
+    use crate::profile;
+
+    use crate::provider_config::ProviderConfig;
+
+    use aws_types::region::Region;
 
     /// Default Region Provider chain
     ///
-    /// This provider will load region from environment variables.
+    /// This provider will check the following sources in order:
+    /// 1. [Environment variables](EnvironmentVariableRegionProvider)
+    /// 2. [Profile file](crate::profile::region::ProfileFileRegionProvider)
     pub fn default_provider() -> impl ProvideRegion {
-        EnvironmentVariableRegionProvider::new()
+        Builder::default().build()
+    }
+
+    /// Default region provider chain
+    #[derive(Debug)]
+    pub struct DefaultRegionChain(RegionProviderChain);
+
+    impl DefaultRegionChain {
+        /// Load a region from this chain
+        pub async fn region(&self) -> Option<Region> {
+            self.0.region().await
+        }
+
+        /// Builder for [`DefaultRegionChain`]
+        pub fn builder() -> Builder {
+            Builder::default()
+        }
+    }
+
+    /// Builder for [DefaultRegionChain]
+    #[derive(Default)]
+    pub struct Builder {
+        env_provider: EnvironmentVariableRegionProvider,
+        profile_file: profile::region::Builder,
+    }
+
+    impl Builder {
+        #[doc(hidden)]
+        /// Configure the default chain
+        ///
+        /// Exposed for overriding the environment when unit-testing providers
+        pub fn configure(mut self, configuration: &ProviderConfig) -> Self {
+            self.env_provider =
+                EnvironmentVariableRegionProvider::new_with_env(configuration.env());
+            self.profile_file = self.profile_file.configure(configuration);
+            self
+        }
+
+        /// Override the profile name used by this provider
+        pub fn profile_name(mut self, name: &str) -> Self {
+            self.profile_file = self.profile_file.profile_name(name);
+            self
+        }
+
+        /// Build a [DefaultRegionChain]
+        pub fn build(self) -> DefaultRegionChain {
+            DefaultRegionChain(
+                RegionProviderChain::first_try(self.env_provider)
+                    .or_else(self.profile_file.build()),
+            )
+        }
+    }
+
+    impl ProvideRegion for DefaultRegionChain {
+        fn region(&self) -> crate::meta::region::future::ProvideRegion {
+            ProvideRegion::region(&self.0)
+        }
     }
 }
 
@@ -23,11 +86,11 @@ pub mod region {
 pub mod credentials {
     use crate::environment::credentials::EnvironmentVariableCredentialsProvider;
     use crate::meta::credentials::{CredentialsProviderChain, LazyCachingCredentialsProvider};
+    use crate::meta::region::ProvideRegion;
     use aws_types::credentials::{future, ProvideCredentials};
-    use aws_types::os_shim_internal::{Env, Fs};
-    use aws_types::region::Region;
-    use smithy_async::rt::sleep::AsyncSleep;
-    use smithy_client::erase::DynConnector;
+
+    use crate::provider_config::ProviderConfig;
+
     use std::borrow::Cow;
 
     #[cfg(any(feature = "rustls", feature = "native-tls"))]
@@ -35,11 +98,7 @@ pub mod credentials {
     ///
     /// The region from the default region provider will be used
     pub async fn default_provider() -> impl ProvideCredentials {
-        use crate::meta::region::ProvideRegion;
-        let region = super::region::default_provider().region().await;
-        let mut builder = DefaultCredentialsChain::builder();
-        builder.set_region(region);
-        builder.build()
+        DefaultCredentialsChain::builder().build().await
     }
 
     /// Default AWS Credential Provider Chain
@@ -52,7 +111,7 @@ pub mod credentials {
     ///
     /// More providers are a work in progress.
     ///
-    /// ## Example:
+    /// # Examples
     /// Create a default chain with a custom region:
     /// ```rust
     /// use aws_types::region::Region;
@@ -66,6 +125,14 @@ pub mod credentials {
     /// ```rust
     /// use aws_config::default_provider::credentials::DefaultCredentialsChain;
     /// let credentials_provider = DefaultCredentialsChain::builder().build();
+    /// ```
+    ///
+    /// Create a default chain that uses a different profile:
+    /// ```rust
+    /// use aws_config::default_provider::credentials::DefaultCredentialsChain;
+    /// let credentials_provider = DefaultCredentialsChain::builder()
+    ///     .profile_name("otherprofile")
+    ///     .build();
     /// ```
     #[derive(Debug)]
     pub struct DefaultCredentialsChain(LazyCachingCredentialsProvider);
@@ -92,14 +159,16 @@ pub mod credentials {
         profile_file_builder: crate::profile::credentials::Builder,
         web_identity_builder: crate::web_identity_token::Builder,
         credential_cache: crate::meta::credentials::lazy_caching::Builder,
-        env: Option<Env>,
+        region_override: Option<Box<dyn ProvideRegion>>,
+        region_chain: crate::default_provider::region::Builder,
+        conf: Option<ProviderConfig>,
     }
 
     impl Builder {
         /// Sets the region used when making requests to AWS services
         ///
         /// When unset, the default region resolver chain will be used.
-        pub fn region(mut self, region: Region) -> Self {
+        pub fn region(mut self, region: impl ProvideRegion + 'static) -> Self {
             self.set_region(Some(region));
             self
         }
@@ -107,30 +176,8 @@ pub mod credentials {
         /// Sets the region used when making requests to AWS services
         ///
         /// When unset, the default region resolver chain will be used.
-        pub fn set_region(&mut self, region: Option<Region>) -> &mut Self {
-            self.profile_file_builder.set_region(region.clone());
-            self.web_identity_builder.set_region(region);
-            self
-        }
-
-        /// Override the HTTPS connector used for this provider
-        ///
-        /// If a connector other than Hyper is used or if the Tokio/Hyper features have been disabled
-        /// this method MUST be used to specify a custom connector.
-        pub fn connector(mut self, connector: DynConnector) -> Self {
-            self.profile_file_builder
-                .set_connector(Some(connector.clone()));
-            self.web_identity_builder.set_connector(Some(connector));
-            self
-        }
-
-        /// Override the sleep implementation used for this provider
-        ///
-        /// By default, Tokio will be used to support async sleep during credentials for timeouts
-        /// and reloading credentials. If the tokio default feature has been disabled, a custom
-        /// sleep implementation must be provided.
-        pub fn sleep(mut self, sleep: impl AsyncSleep + 'static) -> Self {
-            self.credential_cache = self.credential_cache.sleep(sleep);
+        pub fn set_region(&mut self, region: Option<impl ProvideRegion + 'static>) -> &mut Self {
+            self.region_override = region.map(|provider| Box::new(provider) as _);
             self
         }
 
@@ -158,24 +205,19 @@ pub mod credentials {
             self
         }
 
-        #[doc(hidden)]
-        /// Override the filesystem used for this provider
+        /// Override the profile name used by this provider
         ///
-        /// This method exists to test credential providers
-        pub fn fs(mut self, fs: Fs) -> Self {
-            self.profile_file_builder.set_fs(fs.clone());
-            self.web_identity_builder.set_fs(fs);
+        /// When unset, the value of the `AWS_PROFILE` environment variable will be used.
+        pub fn profile_name(mut self, name: &str) -> Self {
+            self.profile_file_builder = self.profile_file_builder.profile_name(name);
+            self.region_chain = self.region_chain.profile_name(name);
             self
         }
 
-        #[doc(hidden)]
-        /// Override the environment used for this provider
-        ///
-        /// This method exists to test credential providers
-        pub fn env(mut self, env: Env) -> Self {
-            self.env = Some(env.clone());
-            self.profile_file_builder.set_env(env.clone());
-            self.web_identity_builder.set_env(env);
+        /// Override the configuration used for this provider
+        pub fn configure(mut self, config: ProviderConfig) -> Self {
+            self.region_chain = self.region_chain.configure(&config);
+            self.conf = Some(config);
             self
         }
 
@@ -184,15 +226,21 @@ pub mod credentials {
         /// ## Panics
         /// This function will panic if no connector has been set and neither `rustls` and `native-tls`
         /// features have both been disabled.
-        pub fn build(self) -> DefaultCredentialsChain {
-            let profile_provider = self.profile_file_builder.build();
-            let env_provider =
-                EnvironmentVariableCredentialsProvider::new_with_env(self.env.unwrap_or_default());
-            let web_identity_token_provider = self.web_identity_builder.build();
+        pub async fn build(self) -> DefaultCredentialsChain {
+            let region = match self.region_override {
+                Some(provider) => provider.region().await,
+                None => self.region_chain.build().region().await,
+            };
+            let conf = self.conf.unwrap_or_default().with_region(region);
+
+            let profile_provider = self.profile_file_builder.configure(&conf).build();
+            let env_provider = EnvironmentVariableCredentialsProvider::new_with_env(conf.env());
+            let web_identity_token_provider = self.web_identity_builder.configure(&conf).build();
+
             let provider_chain = CredentialsProviderChain::first_try("Environment", env_provider)
                 .or_else("Profile", profile_provider)
                 .or_else("WebIdentityToken", web_identity_token_provider);
-            let cached_provider = self.credential_cache.load(provider_chain);
+            let cached_provider = self.credential_cache.configure(&conf).load(provider_chain);
             DefaultCredentialsChain(cached_provider.build())
         }
     }
@@ -210,21 +258,20 @@ pub mod credentials {
                         stringify!($name)
                     ))
                     .unwrap()
-                    .execute(|fs, env, conn| {
+                    .execute(|conf| async {
                         crate::default_provider::credentials::Builder::default()
-                            .env(env)
-                            .fs(fs)
-                            .region(Region::from_static("us-east-1"))
-                            .connector(conn)
+                            .configure(conf)
                             .build()
+                            .await
                     })
                     .await
                 }
             };
         }
 
-        use aws_sdk_sts::Region;
-
+        use crate::default_provider::credentials::DefaultCredentialsChain;
+        use crate::test_case::TestEnvironment;
+        use aws_types::credentials::ProvideCredentials;
         use tracing_test::traced_test;
 
         make_test!(prefer_environment);
@@ -235,6 +282,25 @@ pub mod credentials {
         make_test!(web_identity_token_source_profile);
         make_test!(web_identity_token_profile);
         make_test!(profile_overrides_web_identity);
+
+        #[tokio::test]
+        async fn profile_name_override() {
+            let (_, conf) =
+                TestEnvironment::from_dir("./test-data/default-provider-chain/profile_static_keys")
+                    .unwrap()
+                    .provider_config()
+                    .await;
+            let provider = DefaultCredentialsChain::builder()
+                .profile_name("secondary")
+                .configure(conf)
+                .build()
+                .await;
+            let creds = provider
+                .provide_credentials()
+                .await
+                .expect("creds should load");
+            assert_eq!(creds.access_key_id(), "correct_key_secondary");
+        }
 
         /// Helper that uses `execute_and_update` instead of execute
         ///
@@ -247,13 +313,8 @@ pub mod credentials {
                 "./test-data/default-provider-chain/web_identity_token_source_profile",
             ))
             .unwrap()
-            .execute_and_update(|fs, env, conn| {
-                super::Builder::default()
-                    .env(env)
-                    .fs(fs)
-                    .region(Region::from_static("us-east-1"))
-                    .connector(conn)
-                    .build()
+            .execute_and_update(|conf| async {
+                super::Builder::default().configure(conf).build().await
             })
             .await
         }
