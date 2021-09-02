@@ -101,11 +101,15 @@ pub struct RoleArn<'a> {
 }
 
 /// Resolve a ProfileChain from a ProfileSet or return an error
-pub fn resolve_chain(profile_set: &ProfileSet) -> Result<ProfileChain, ProfileFileError> {
+pub fn resolve_chain<'a>(
+    profile_set: &'a ProfileSet,
+    profile_override: Option<&str>,
+) -> Result<ProfileChain<'a>, ProfileFileError> {
     if profile_set.is_empty() {
         return Err(ProfileFileError::NoProfilesDefined);
     }
-    let mut source_profile_name = profile_set.selected_profile();
+    let mut source_profile_name =
+        profile_override.unwrap_or_else(|| profile_set.selected_profile());
     let mut visited_profiles = vec![];
     let mut chain = vec![];
     let base = loop {
@@ -323,7 +327,7 @@ mod tests {
 
     fn check(test_case: TestCase) {
         let source = ProfileSet::new(test_case.input.profile, test_case.input.selected_profile);
-        let actual = resolve_chain(&source);
+        let actual = resolve_chain(&source, None);
         let expected = test_case.output;
         match (expected, actual) {
             (TestOutput::Error(s), Err(e)) => assert!(

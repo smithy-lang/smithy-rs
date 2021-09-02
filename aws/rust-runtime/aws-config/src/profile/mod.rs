@@ -12,4 +12,7 @@ mod parser;
 pub use parser::{load, Profile, ProfileSet, Property};
 
 pub mod credentials;
+pub mod region;
+
 pub use credentials::ProfileFileCredentialsProvider;
+pub use region::ProfileFileRegionProvider;
