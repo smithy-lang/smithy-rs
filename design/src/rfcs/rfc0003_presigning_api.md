@@ -1,14 +1,14 @@
-RFC: API for Pre-signed URLs
+RFC: API for Presigned URLs
 ============================
 
 > Status: RFC
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
-Several AWS services allow for pre-signed requests in URL form, which is described well by
+Several AWS services allow for presigned requests in URL form, which is described well by
 [S3's documentation on authenticating requests using query parameters](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html).
 
-This doc establishes the customer-facing API for creating these pre-signed URLs and how they will
+This doc establishes the customer-facing API for creating these presigned URLs and how they will
 be implemented in a generic fashion in the SDK codegen.
 
 Terminology
@@ -22,10 +22,10 @@ terms will be used throughout this doc:
 - **Fluent Client**: A code-generated `Client<C, M, R>` that has methods for each service operation on it.
   A fluent builder is generated alongside it to make construction easier.
 
-Pre-signed URL config
----------------------
+Presigned URL config
+--------------------
 
-Today, pre-signed URLs take an expiration time that's not part of the service API.
+Today, presigned URLs take an expiration time that's not part of the service API.
 The SDK will make this configurable as a separate struct so that there's no chance of name collisions, and so
 that additional fields can be added in the future. Fields added later will require defaulting for
 backwards compatibility.
@@ -65,11 +65,11 @@ impl PresigningConfig {
 `PresigningConfig` is intended to be shared across AWS services, and will be passed by reference where it
 is taken as an argument.
 
-Fluent Pre-signed URL API
--------------------------
+Fluent Presigned URL API
+------------------------
 
-The generated fluent builders for operations that support pre-signing will have a `presigned()` method
-in addition to `send()` that will return a pre-signed URL rather than sending the request. For S3's GetObject,
+The generated fluent builders for operations that support presigning will have a `presigned()` method
+in addition to `send()` that will return a presigned URL rather than sending the request. For S3's GetObject,
 the usage of this will look as follows:
 
 ```rust
@@ -84,25 +84,25 @@ let presigned_url: String = client.get_object()
 ```
 
 This API requires a client, and for use-cases where no actual service calls need to be made,
-customers should be able to create pre-signed URLs without the overhead of an HTTP client.
+customers should be able to create presigned URLs without the overhead of an HTTP client.
 Once the [HTTP Versions RFC](./rfc0002_http_versions.md) is implemented, the underlying HTTP client
 won't be created until the first service call, so there will be no HTTP client overhead to
 this approach.
 
 In a step away from the general pattern of keeping fluent client capabilities in line with Smithy client capabilities,
-creating pre-signed URLs directly from the Smithy client will not be supported. This is for two reasons:
-- Pre-signed URLs are not currently a Smithy concept.
-- The Smithy client is not code generated, so adding a method to do pre-signing would apply to all operations,
-  but not all operations can be pre-signed.
+creating presigned URLs directly from the Smithy client will not be supported. This is for two reasons:
+- Presigned URLs are not currently a Smithy concept.
+- The Smithy client is not code generated, so adding a method to do presigning would apply to all operations,
+  but not all operations can be presigned.
 
-**Note:** Pre-signing *needs* to be `async` because the underlying credentials provider used to sign the
+**Note:** Presigning *needs* to be `async` because the underlying credentials provider used to sign the
 request *may* need to make service calls to acquire the credentials.
 
-Input Pre-signed URL API
+Input Presigned URL API
 ------------------------
 
-Even though generating a pre-signed URL through the fluent client doesn't necessitate an HTTP client,
-it will be clearer that this is the case by allowing the creation of pre-signed URLs directly from an input.
+Even though generating a presigned URL through the fluent client doesn't necessitate an HTTP client,
+it will be clearer that this is the case by allowing the creation of presigned URLs directly from an input.
 This would look as follows:
 
 ```rust
@@ -121,7 +121,7 @@ but it will be more apparent that the overhead of a client isn't present.
 Behind the scenes
 -----------------
 
-From an SDK's perspective, the following are required to make a pre-signed URL:
+From an SDK's perspective, the following are required to make a presigned URL:
 - Valid request input
 - Endpoint
 - Credentials to sign with
@@ -142,8 +142,8 @@ Today, request dispatch looks as follows:
 5. The SigV4 signing middleware signs the request by adding HTTP headers to it.
 6. The dispatcher makes the actual HTTP request and returns the response all the way back up the Tower.
 
-Pre-signing will take advantage of a lot of these same steps, but will cut out the `Operation` and
-replace the dispatcher with a pre-signed URL generator:
+Presigning will take advantage of a lot of these same steps, but will cut out the `Operation` and
+replace the dispatcher with a presigned URL generator:
 1. The customer creates a new fluent builder by calling `client.operation_name()`, fills in inputs, and then calls `presigned()`.
 2. `presigned()`:
    1. Builds the final input struct, and then calls a new `make_request()` method with the stored config.
@@ -157,11 +157,11 @@ the input API is identical to implementing it for the fluent client.
 
 All the code for the new `make_request()` is already in the existing `make_operation()` and will just need to be split out.
 
-### Modeling Pre-signing
+### Modeling Presigning
 
-AWS models don't currently have any information about which operations can be pre-signed.
-To work around this, the Rust SDK will create a synthetic trait to model pre-signing with, and
-apply this trait to known pre-signed operations via customization. The code generator will
+AWS models don't currently have any information about which operations can be presigned.
+To work around this, the Rust SDK will create a synthetic trait to model presigning with, and
+apply this trait to known presigned operations via customization. The code generator will
 look for this synthetic trait when creating the fluent builders and inputs to know if a
 `presigned()` method should be added.
 
@@ -184,9 +184,9 @@ Changes Checklist
 - [ ] Add new `presigned()` method to input code generator
 - [ ] Add new `presigned()` method to fluent client generator
 - [ ] Create `PresignedOperationSyntheticTrait`
-- [ ] Customize models for known pre-signed operations
+- [ ] Customize models for known presigned operations
 - [ ] Add integration test to S3
-- [ ] Add examples for using pre-signing for:
+- [ ] Add examples for using presigning for:
   - [ ] S3 GetObject and PutObject
   - [ ] CloudFront download URLs
   - [ ] Polly SynthesizeSpeech
