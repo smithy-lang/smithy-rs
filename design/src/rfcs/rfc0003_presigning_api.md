@@ -30,31 +30,42 @@ The SDK will make this configurable as a separate struct so that there's no chan
 that additional fields can be added in the future. Fields added later will require defaulting for
 backwards compatibility.
 
-Since there's only one configuration field today, an `expires` function will be added to conveniently
-construct `PresigningConfig` without a builder. At the same time, a builder will be present for future-proofing:
+Customers should also be able to set a start time on the presigned URL's expiration so that they can
+generate URLs that become active in the future. An optional `start_time` option will be available and
+default to `SystemTime::now()`.
+
+Construction `PresigningConfig` can be done with a builder, but a `PresigningConfig::expires_in`
+convenience function will be provided to bypass the builder for the most frequent use-case.
 
 ```rust
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct PresigningConfig {
-    expires: Duration,
+    start_time: SystemTime,
+    expires_in: Duration,
 }
 
 #[non_exhaustive]
 #[derive(Debug)]
 pub struct Builder {
-  expires: Option<Duration>,
+    start_time: Option<SystemTime>,
+    expires_in: Option<Duration>,
 }
 
 impl Builder {
-  pub fn expires(self, expires: Duration) -> Self { ... }
-  pub fn set_expires(self, expires: Option<Duration>) -> Self { ... }
+    pub fn start_time(self, start_time: SystemTime) -> Self { ... }
+    pub fn set_start_time(self, start_time: Option<SystemTime>) -> Self { ... }
 
-  pub fn build(self) -> PresigningConfig { ... }
+    pub fn expires_in(self, expires_in: Duration) -> Self { ... }
+    pub fn set_expires_in(self, expires_in: Option<Duration>) -> Self { ... }
+
+    // Validates `expires_in` is no greater than one week
+    pub fn build(self) -> PresigningConfig { ... }
 }
 
 impl PresigningConfig {
-    pub fn expires(expires: Duration) -> PresigningConfig {
+    pub fn expires_in(expires_in: Duration) -> PresigningConfig {
+        assert!(Duration::from_secs(604800) >= expires, "presigned requests have a max expiry time of one week");
         Self::builder().expires(expires).build()
     }
 
@@ -62,8 +73,11 @@ impl PresigningConfig {
 }
 ```
 
-`PresigningConfig` is intended to be shared across AWS services, and will be passed by reference where it
-is taken as an argument.
+Construction of `PresigningConfig` will validate that `expires_in` is no greater than one week, as this
+is the longest supported expiration time for SigV4. This validation will result in a panic.
+
+It's not inconceivable that `PresigningConfig` will need additional service-specific parameters as customizations,
+so it will be code generated with each service rather than living a shared location.
 
 Fluent Presigned URL API
 ------------------------
@@ -75,11 +89,11 @@ the usage of this will look as follows:
 ```rust
 let config = aws_config::load_config_from_environment().await;
 let client = s3::Client::new(&config);
-let presigning_config = PresigningConfig::expires(Duration::from_secs(86400));
-let presigned_url: String = client.get_object()
+let presigning_config = PresigningConfig::expires_in(Duration::from_secs(86400));
+let presigned_url: http::Request<()> = client.get_object()
     .bucket("example-bucket")
     .key("example-object")
-    .presigned(&presigning_config)
+    .presigned(presigning_config)
     .await?;
 ```
 
@@ -91,9 +105,13 @@ this approach.
 
 In a step away from the general pattern of keeping fluent client capabilities in line with Smithy client capabilities,
 creating presigned URLs directly from the Smithy client will not be supported. This is for two reasons:
-- Presigned URLs are not currently a Smithy concept.
 - The Smithy client is not code generated, so adding a method to do presigning would apply to all operations,
   but not all operations can be presigned.
+- Presigned URLs are not currently a Smithy concept ([although this may change soon](https://github.com/awslabs/smithy/pull/897)).
+
+The result of calling `presigned()` is an `http::Request<()>` so that the request method and additional
+signing headers are also made available. This is necessary since there are some presignable POST operations
+that require the signature to be in the headers rather than the query.
 
 **Note:** Presigning *needs* to be `async` because the underlying credentials provider used to sign the
 request *may* need to make service calls to acquire the credentials.
@@ -107,11 +125,11 @@ This would look as follows:
 
 ```rust
 let config = aws_config::load_config_from_environment().await;
-let presigning_config = PresigningConfig::expires(Duration::from_secs(86400));
-let presigned_url: String = GetObjectInput::builder()
+let presigning_config = PresigningConfig::expires_in(Duration::from_secs(86400));
+let presigned_url: http::Request<()> = GetObjectInput::builder()
     .bucket("example-bucket")
     .key("example-bucket")
-    .presigned(&config, &presigning_config)
+    .presigned(&config, presigning_config)
     .await?;
 ```
 
@@ -165,15 +183,12 @@ apply this trait to known presigned operations via customization. The code gener
 look for this synthetic trait when creating the fluent builders and inputs to know if a
 `presigned()` method should be added.
 
-Unresolved Questions
---------------------
+### Avoiding name collision
 
-- Where should `PresigningConfig` live?
-- What should we do if an operation input has a member named `presigned` to avoid name collision with
-  the generated method?
-  - Option 1: Make `presigned` a reserved word [similar to `send`](https://github.com/awslabs/smithy-rs/blob/3d61226b5d446f4cc20bf4969f0e56d106cf478b/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustReservedWords.kt#L28) so that colliding members get renamed to `presigned_value`
-  - Option 2: Rename the `presigned()` method to `presigned_url()` when there is a collision
-  - In either option, there's still a chance of a secondary collision
+If a presignable operation input has a member named `presigned`, then there will be a name collision with
+the function to generate a presigned URL. To mitigate this, `RustReservedWords` will be updated
+to rename the `presigned` member to `presigned_value`
+[similar to how `send` is renamed](https://github.com/awslabs/smithy-rs/blob/3d61226b5d446f4cc20bf4969f0e56d106cf478b/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustReservedWords.kt#L28).
 
 Changes Checklist
 -----------------
