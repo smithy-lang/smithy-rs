@@ -72,6 +72,7 @@ class JsonParserGenerator(
         "json_token_iter" to smithyJson.member("deserialize::json_token_iter"),
         "Peekable" to RuntimeType.std.member("iter::Peekable"),
         "skip_value" to smithyJson.member("deserialize::token::skip_value"),
+        "skip_to_end" to smithyJson.member("deserialize::token::skip_to_end"),
         "Token" to smithyJson.member("deserialize::Token"),
         "or_empty" to orEmptyJson()
     )
@@ -121,6 +122,7 @@ class JsonParserGenerator(
                     """
                     let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
                     let tokens = &mut tokens_owned;
+                    #{expect_start_object}(tokens.next())?;
                     """,
                     *codegenScope
                 )
@@ -146,6 +148,7 @@ class JsonParserGenerator(
                     """
                     let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
                     let tokens = &mut tokens_owned;
+                    #{expect_start_object}(tokens.next())?;
                     """,
                     *codegenScope
                 )
@@ -202,13 +205,7 @@ class JsonParserGenerator(
     }
 
     private fun RustWriter.deserializeStructInner(members: Collection<MemberShape>) {
-        if (members.isEmpty()) {
-            rustTemplate("#{skip_value}(tokens)?;", *codegenScope)
-            return
-        } else {
-            rustTemplate("#{expect_start_object}(tokens.next())?;", *codegenScope)
-        }
-        objectKeyLoop {
+        objectKeyLoop(hasMembers = members.isNotEmpty()) {
             rustBlock("match key.to_unescaped()?.as_ref()") {
                 for (member in members) {
                     rustBlock("${member.wireName().dq()} =>") {
@@ -333,9 +330,9 @@ class JsonParserGenerator(
                 "Shape" to symbolProvider.toSymbol(shape),
                 *codegenScope,
             ) {
-                startObjectOrNull(consumeStartToken = true) {
+                startObjectOrNull {
                     rust("let mut map = #T::new();", RustType.HashMap.RuntimeType)
-                    objectKeyLoop {
+                    objectKeyLoop(hasMembers = true) {
                         withBlock("let key =", "?;") {
                             deserializeStringInner(keyTarget, "key")
                         }
@@ -369,7 +366,7 @@ class JsonParserGenerator(
                 "Shape" to symbol,
                 *codegenScope,
             ) {
-                startObjectOrNull(consumeStartToken = false) {
+                startObjectOrNull {
                     Attribute.AllowUnusedMut.render(this)
                     rustTemplate("let mut builder = #{Shape}::builder();", *codegenScope, "Shape" to symbol)
                     deserializeStructInner(shape.members())
@@ -409,7 +406,7 @@ class JsonParserGenerator(
                         """,
                         *codegenScope
                     ) {
-                        objectKeyLoop {
+                        objectKeyLoop(hasMembers = shape.members().isNotEmpty()) {
                             rustTemplate(
                                 """
                                 if variant.is_some() {
@@ -455,50 +452,41 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.objectKeyLoop(inner: RustWriter.() -> Unit) {
-        rustBlock("loop") {
-            rustBlock("match tokens.next().transpose()?") {
-                rustBlockTemplate(
-                    """
+    private fun RustWriter.objectKeyLoop(hasMembers: Boolean, inner: RustWriter.() -> Unit) {
+        if (!hasMembers) {
+            rustTemplate("#{skip_to_end}(tokens)?;", *codegenScope)
+        } else {
+            rustBlock("loop") {
+                rustBlock("match tokens.next().transpose()?") {
+                    rustBlockTemplate(
+                        """
                         Some(#{Token}::EndObject { .. }) => break,
                         Some(#{Token}::ObjectKey { key, .. }) =>
                         """,
-                    *codegenScope
-                ) {
-                    inner()
+                        *codegenScope
+                    ) {
+                        inner()
+                    }
+                    rustTemplate(
+                        "_ => return Err(#{Error}::custom(\"expected object key or end object\"))",
+                        *codegenScope
+                    )
                 }
-                rustTemplate(
-                    "_ => return Err(#{Error}::custom(\"expected object key or end object\"))",
-                    *codegenScope
-                )
             }
         }
     }
 
-    private fun RustWriter.startArrayOrNull(inner: RustWriter.() -> Unit) = startOrNull("array", true, inner)
-    private fun RustWriter.startObjectOrNull(consumeStartToken: Boolean, inner: RustWriter.() -> Unit) =
-        startOrNull("object", consumeStartToken, inner)
-
-    private fun RustWriter.startOrNull(
-        objectOrArray: String,
-        consumeStartToken: Boolean,
-        inner: RustWriter.() -> Unit
-    ) {
-        rustBlockTemplate("match tokens.peek()", *codegenScope) {
+    private fun RustWriter.startArrayOrNull(inner: RustWriter.() -> Unit) = startOrNull("array", inner)
+    private fun RustWriter.startObjectOrNull(inner: RustWriter.() -> Unit) = startOrNull("object", inner)
+    private fun RustWriter.startOrNull(objectOrArray: String, inner: RustWriter.() -> Unit) {
+        rustBlockTemplate("match tokens.next().transpose()?", *codegenScope) {
             rustBlockTemplate(
                 """
-                    Some(Err(_)) => Err(tokens.next().unwrap().err().unwrap()),
-                    Some(Ok(#{Token}::ValueNull { .. })) => {
-                        let _ = tokens.next();
-                        Ok(None)
-                    }
-                    Some(Ok(#{Token}::Start${StringUtils.capitalize(objectOrArray)} { .. })) =>
+                    Some(#{Token}::ValueNull { .. }) => Ok(None),
+                    Some(#{Token}::Start${StringUtils.capitalize(objectOrArray)} { .. }) =>
                 """,
                 *codegenScope
             ) {
-                if (consumeStartToken) {
-                    rust("let _ = tokens.next();")
-                }
                 inner()
             }
             rustBlockTemplate("_ =>") {
