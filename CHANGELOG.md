@@ -18,7 +18,7 @@ Current Credential Provider Support:
     - [x] Assume role from source profile
     - [x] Static credentials source profile
     - [x] WebTokenIdentity provider
-  - [ ] Region
+  - [x] Region
 - [ ] IMDS
 - [ ] ECS
 
@@ -155,13 +155,14 @@ impl ProvideCredentials for CustomCreds {
 **New this week**
 
 - (When complete) Add Event Stream support (#653, #xyz)
-- (When complete) Add profile file provider for region (#594, #xyz)
+- Add profile file provider for region (#594, #682)
 - Improve documentation on collection-aware builders (#664)
 - Add support for Transcribe `StartStreamTranscription` and S3 `SelectObjectContent` operations (#667)
 - Add support for shared configuration between multiple services (#673)
 - Update AWS SDK models (#677)
 - :bug: Fix sigv4 signing when request ALPN negotiates to HTTP/2. (#674)
 - :bug: Fix integer size on S3 `Size` (#679, aws-sdk-rust#209)
+- :bug: Fix acronym case disagreement between FluentClientGenerator and HttpProtocolGenerator type aliasing (#668)
 
 **Internal Changes**
 - Add NowOrLater future to smithy-async (#672)

@@ -7,11 +7,12 @@ exclude = ["test-data/*"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
-default-provider = ["profile", "imds", "meta", "sts"]
-profile = ["sts", "web-identity-token"]
+default-provider = ["profile", "imds", "meta", "sts", "environment"]
+profile = ["sts", "web-identity-token", "meta", "environment"]
 # note: IMDS currently unsupported
 imds = []
 meta = ["tokio/sync"]
+environment = ["meta"]
 sts = ["aws-sdk-sts", "aws-hyper"]
 web-identity-token = ["sts"]
 sso = []
