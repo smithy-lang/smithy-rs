@@ -12,6 +12,7 @@ use aws_types::region::Region;
 use super::repr::{self, BaseProvider};
 
 use crate::profile::credentials::ProfileFileError;
+use crate::provider_config::ProviderConfig;
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
 use aws_types::credentials::{self, CredentialsError, ProvideCredentials};
@@ -109,6 +110,10 @@ impl ProviderChain {
                 web_identity_token_file,
                 session_name,
             } => {
+                let conf = ProviderConfig::empty()
+                    .with_connector(connector.clone())
+                    .with_fs(fs)
+                    .with_region(region);
                 let provider = WebIdentityTokenCredentialsProvider::builder()
                     .static_configuration(StaticConfiguration {
                         web_identity_token_file: web_identity_token_file.into(),
@@ -117,9 +122,7 @@ impl ProviderChain {
                             || sts::util::default_session_name("web-identity-token-profile"),
                         ),
                     })
-                    .fs(fs)
-                    .connector(connector.clone())
-                    .region(region)
+                    .configure(&conf)
                     .build();
                 Arc::new(provider)
             }
@@ -169,21 +172,16 @@ mod test {
     use crate::profile::credentials::exec::named::NamedProviderFactory;
     use crate::profile::credentials::exec::ProviderChain;
     use crate::profile::credentials::repr::{BaseProvider, ProfileChain};
+    use crate::test_case::no_traffic_connector;
     use aws_sdk_sts::Region;
-    use smithy_client::dvr;
-    use smithy_client::erase::DynConnector;
     use std::collections::HashMap;
-
-    fn stub_connector() -> DynConnector {
-        DynConnector::new(dvr::ReplayingConnection::new(vec![]))
-    }
 
     #[test]
     fn error_on_unknown_provider() {
         let factory = NamedProviderFactory::new(HashMap::new());
         let chain = ProviderChain::from_repr(
             Default::default(),
-            &stub_connector(),
+            &no_traffic_connector(),
             Some(Region::new("us-east-1")),
             ProfileChain {
                 base: BaseProvider::NamedSource("floozle"),

@@ -18,7 +18,7 @@ Current Credential Provider Support:
     - [x] Assume role from source profile
     - [x] Static credentials source profile
     - [x] WebTokenIdentity provider
-  - [ ] Region
+  - [x] Region
 - [ ] IMDS
 - [ ] ECS
 
@@ -155,7 +155,7 @@ impl ProvideCredentials for CustomCreds {
 **New this week**
 
 - (When complete) Add Event Stream support (#653, #xyz)
-- (When complete) Add profile file provider for region (#594, #xyz)
+- Add profile file provider for region (#594, #682)
 - Improve documentation on collection-aware builders (#664)
 - Add support for Transcribe `StartStreamTranscription` and S3 `SelectObjectContent` operations (#667)
 - Add support for shared configuration between multiple services (#673)
