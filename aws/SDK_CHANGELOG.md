@@ -1,6 +1,182 @@
 vNext (Month Day, Year)
 =======================
 
+v0.0.17-alpha (September 2nd, 2021)
+===================================
+
+This release adds support for three commonly requested features:
+- More powerful credential chain
+- Support for constructing multiple clients from the same configuration
+- Support for Transcribe streaming and S3 Select
+
+In addition, this overhauls client configuration which lead to a number of breaking changes. Detailed changes are inline.
+
+Current Credential Provider Support:
+- [x] Environment variables
+- [x] Web Identity Token Credentials
+- [ ] Profile file support (partial)
+  - [ ] Credentials
+    - [ ] SSO
+    - [ ] ECS Credential source
+    - [ ] IMDS credential source
+    - [x] Assume role from source profile
+    - [x] Static credentials source profile
+    - [x] WebTokenIdentity provider
+  - [x] Region
+- [ ] IMDS
+- [ ] ECS
+
+Upgrade Guide
+-------------
+
+### If you use `<sdk>::Client::from_env`
+
+`from_env` loaded region & credentials from environment variables _only_. Default sources have been removed from the generated
+SDK clients and moved to the `aws-config` package. Note that the `aws-config` package default chain adds support for
+profile file and web identity token profiles.
+
+1. Add a dependency on `aws-config`:
+     ```toml
+     [dependencies]
+     aws-config = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha" }
+     ```
+2. Update your client creation code:
+   ```rust
+   // `shared_config` can be used to construct multiple different service clients!
+   let shared_config = aws_config::load_from_env().await;
+   // before: <service>::Client::from_env();
+   let client = <service>::Client::new(&shared_config)
+   ```
+
+### If you used `<client>::Config::builder()`
+
+`Config::build()` has been modified to _not_ fallback to a default provider. Instead, use `aws-config` to load and modify
+the default chain. Note that when you switch to `aws-config`, support for profile files and web identity tokens will be added.
+
+1. Add a dependency on `aws-config`:
+     ```toml
+     [dependencies]
+     aws-config = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha" }
+     ```
+
+2. Update your client creation code:
+
+   ```rust
+   fn before() {
+     let region = aws_types::region::ChainProvider::first_try(<1 provider>).or_default_provider();
+     let config = <service>::Config::builder().region(region).build();
+     let client = <service>::Client::from_conf(&config);
+   }
+
+   async fn after() {
+     use aws_config::meta::region::RegionProviderChain;
+     let region_provider = RegionProviderChain::first_try(<1 provider>).or_default_provider();
+     // `shared_config` can be used to construct multiple different service clients!
+     let shared_config = aws_config::from_env().region(region_provider).load().await;
+     let client = <service>::Client::new(&shared_config)
+   }
+   ```
+
+### If you used `aws-auth-providers`
+All credential providers that were in `aws-auth-providers` have been moved to `aws-config`. Unless you have a specific use case
+for a specific credential provider, you should use the default provider chain:
+
+```rust
+ let shared_config = aws_config::load_from_env().await;
+ let client = <service>::Client::new(&shared_config);
+```
+
+### If you maintain your own credential provider
+
+`AsyncProvideCredentials` has been renamed to `ProvideCredentials`. The trait has been moved from `aws-auth` to `aws-types`.
+The original `ProvideCredentials` trait has been removed. The return type has been changed to by a custom future.
+
+For synchronous use cases:
+```rust
+use aws_types::credentials::{ProvideCredentials, future};
+
+#[derive(Debug)]
+struct CustomCreds;
+impl ProvideCredentials for CustomCreds {
+  fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
+    where
+            Self: 'a,
+  {
+    // if your credentials are synchronous, use `::ready`
+    // if your credentials are loaded asynchronously, use `::new`
+    future::ProvideCredentials::ready(todo!()) // your credentials go here
+  }
+}
+```
+
+For asynchronous use cases:
+```rust
+use aws_types::credentials::{ProvideCredentials, future, Result};
+
+#[derive(Debug)]
+struct CustomAsyncCreds;
+impl CustomAsyncCreds {
+  async fn load_credentials(&self) -> Result {
+    Ok(Credentials::from_keys("my creds...", "secret", None))
+  }
+}
+
+impl ProvideCredentials for CustomCreds {
+  fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
+    where
+            Self: 'a,
+  {
+    future::ProvideCredentials::new(self.load_credentials())
+  }
+}
+```
+
+Changes
+-------
+
+**Breaking Changes**
+
+- Credential providers from `aws-auth-providers` have been moved to `aws-config` (smithy-rs#678)
+- `AsyncProvideCredentials` has been renamed to `ProvideCredentials`. The original non-async provide credentials has been
+  removed. See the migration guide above.
+- `<sevicename>::from_env()` has been removed (#675). A drop-in replacement is available:
+  1. Add a dependency on `aws-config`:
+     ```toml
+     [dependencies]
+     aws-config = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha" }
+     ```
+  2. Update your client creation code:
+     ```rust
+     let client = <service>>::Client::new(&aws_config::load_from_env().await)
+     ```
+
+- `ProvideRegion` has been moved to `aws_config::meta::region::ProvideRegion`. (smithy-rs#675)
+- `aws_types::region::ChainProvider` has been moved to `aws_config::meta::region::RegionProviderChain` (smithy-rs#675).
+- `ProvideRegion` is now asynchronous. Code that called `provider.region()` must be changed to `provider.region().await`.
+- `<awsservice>::Config::builder()` will **not** load a default region. To preserve previous behavior:
+  1. Add a dependency on `aws-config`:
+     ```toml
+     [dependencies]
+     aws-config = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha" }
+     ```
+  2. ```rust
+     let shared_config = aws_config::load_from_env().await;
+     let config = <service>::config::Builder::from(&shared_config).<other builder modifications>.build();
+     ```
+
+**New this week**
+
+- :tada: Add profile file provider for region (smithy-rs#594, smithy-rs#682)
+- :tada: Add support for shared configuration between multiple services (smithy-rs#673)
+- :tada: Add support for Transcribe `StartStreamTranscription` and S3 `SelectObjectContent` operations (smithy-rs#667)
+- :tada: Add support for new MemoryDB service (smithy-rs#677)
+- Improve documentation on collection-aware builders (smithy-rs#664)
+- Update AWS SDK models (smithy-rs#677)
+- :bug: Fix sigv4 signing when request ALPN negotiates to HTTP/2. (smithy-rs#674)
+- :bug: Fix integer size on S3 `Size` (smithy-rs#679, #209)
+- :bug: Fix MediaLive response parsing issue (smithy-rs#683, #212)
+
+
 v0.0.16-alpha (August 19th, 2021)
 =================================
 
