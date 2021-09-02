@@ -1,0 +1,18 @@
+[package]
+name = "transcribestreaming"
+version = "0.1.0"
+authors = ["John DiSanti <jdisanti@amazon.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aws-config = { path = "../../build/aws-sdk/aws-config" }
+aws-sdk-transcribestreaming = { package = "aws-sdk-transcribestreaming", path = "../../build/aws-sdk/transcribestreaming" }
+aws-types = { path = "../../build/aws-sdk/aws-types" }
+
+async-stream = "0.3"
+bytes = "1"
+hound = "3.4"
+tokio = { version = "1", features = ["full"] }
+tracing-subscriber = "0.2.18"

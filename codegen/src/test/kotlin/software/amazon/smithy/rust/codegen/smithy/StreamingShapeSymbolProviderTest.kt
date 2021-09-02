@@ -34,7 +34,7 @@ internal class StreamingShapeSymbolProviderTest {
     fun `generates a byte stream on streaming output`() {
         // we could test exactly the streaming shape symbol provider, but we actually care about is the full stack
         // "doing the right thing"
-        val modelWithOperationTraits = OperationNormalizer(model).transformModel()
+        val modelWithOperationTraits = OperationNormalizer.transform(model)
         val symbolProvider = testSymbolProvider(modelWithOperationTraits)
         symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test#GenerateSpeechOutput\$data")).name shouldBe ("byte_stream::ByteStream")
         symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test#GenerateSpeechInput\$data")).name shouldBe ("byte_stream::ByteStream")
@@ -42,7 +42,7 @@ internal class StreamingShapeSymbolProviderTest {
 
     @Test
     fun `streaming members have a default`() {
-        val modelWithOperationTraits = OperationNormalizer(model).transformModel()
+        val modelWithOperationTraits = OperationNormalizer.transform(model)
         val symbolProvider = testSymbolProvider(modelWithOperationTraits)
 
         val outputSymbol = symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test#GenerateSpeechOutput\$data"))

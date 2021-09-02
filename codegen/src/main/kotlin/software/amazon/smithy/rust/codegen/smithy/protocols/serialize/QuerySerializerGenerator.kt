@@ -101,7 +101,9 @@ abstract class QuerySerializerGenerator(protocolConfig: ProtocolConfig) : Struct
     }
 
     override fun payloadSerializer(member: MemberShape): RuntimeType {
-        TODO("The $protocolName protocol doesn't support http payload traits")
+        // TODO(EventStream): Query payload serialization is required for RPC initial message as well as for message
+        // frames that have a struct/union type.
+        TODO("$protocolName doesn't support payload serialization yet")
     }
 
     override fun operationSerializer(operationShape: OperationShape): RuntimeType? {

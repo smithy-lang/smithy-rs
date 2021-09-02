@@ -146,7 +146,7 @@ class HttpProtocolTestGenerator(
         val Tokio = CargoDependency(
             "tokio",
             CratesIo("1"),
-            features = listOf("macros", "test-util", "rt"),
+            features = setOf("macros", "test-util", "rt"),
             scope = DependencyScope.Dev
         )
         testModuleWriter.addDependency(Tokio)
@@ -193,7 +193,7 @@ class HttpProtocolTestGenerator(
                     """
                     let mut http_request = http_request;
                     let ep = #T::endpoint::Endpoint::mutable(#T::Uri::from_static(${withScheme.dq()}));
-                    ep.set_endpoint(http_request.uri_mut(), parts.lock().unwrap().get());
+                    ep.set_endpoint(http_request.uri_mut(), parts.acquire().get());
                 """,
                     CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType(), CargoDependency.Http.asType()
                 )

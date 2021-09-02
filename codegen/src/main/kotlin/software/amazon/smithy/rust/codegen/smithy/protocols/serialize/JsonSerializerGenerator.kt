@@ -138,18 +138,22 @@ class JsonSerializerGenerator(
 
     override fun payloadSerializer(member: MemberShape): RuntimeType {
         val fnName = symbolProvider.serializeFunctionName(member)
-        val target = model.expectShape(member.target, StructureShape::class.java)
+        val target = model.expectShape(member.target)
         return RuntimeType.forInlineFun(fnName, "operation_ser") { writer ->
             writer.rustBlockTemplate(
-                "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
+                "pub fn $fnName(input: &#{target}) -> std::result::Result<std::vec::Vec<u8>, #{Error}>",
                 *codegenScope,
                 "target" to symbolProvider.toSymbol(target)
             ) {
                 rust("let mut out = String::new();")
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
-                serializeStructure(StructContext("object", "input", target))
+                when (target) {
+                    is StructureShape -> serializeStructure(StructContext("object", "input", target))
+                    is UnionShape -> serializeUnion(Context("object", ValueExpression.Reference("input"), target))
+                    else -> throw IllegalStateException("json payloadSerializer only supports structs and unions")
+                }
                 rust("object.finish();")
-                rustTemplate("Ok(#{SdkBody}::from(out))", *codegenScope)
+                rustTemplate("Ok(out.into_bytes())", *codegenScope)
             }
         }
     }

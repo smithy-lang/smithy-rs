@@ -19,7 +19,7 @@ pub struct SdkSuccess<O> {
 
 /// Failed SDK Result
 #[derive(Debug)]
-pub enum SdkError<E> {
+pub enum SdkError<E, R = operation::Response> {
     /// The request failed during construction. It was not dispatched over the network.
     ConstructionFailure(BoxError),
 
@@ -29,22 +29,19 @@ pub enum SdkError<E> {
 
     /// A response was received but it was not parseable according the the protocol (for example
     /// the server hung up while the body was being read)
-    ResponseError {
-        raw: operation::Response,
-        err: BoxError,
-    },
+    ResponseError { err: BoxError, raw: R },
 
     /// An error response was received from the service
-    ServiceError { err: E, raw: operation::Response },
+    ServiceError { err: E, raw: R },
 }
 
-impl<E> Display for SdkError<E>
+impl<E, R> Display for SdkError<E, R>
 where
     E: Error,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            SdkError::ConstructionFailure(err) => Display::fmt(&err, f),
+            SdkError::ConstructionFailure(err) => write!(f, "failed to construct request: {}", err),
             SdkError::DispatchFailure(err) => Display::fmt(&err, f),
             SdkError::ResponseError { err, .. } => Display::fmt(&err, f),
             SdkError::ServiceError { err, .. } => Display::fmt(&err, f),
@@ -52,9 +49,10 @@ where
     }
 }
 
-impl<E> Error for SdkError<E>
+impl<E, R> Error for SdkError<E, R>
 where
     E: Error + 'static,
+    R: Debug,
 {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {

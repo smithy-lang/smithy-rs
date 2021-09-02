@@ -40,6 +40,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.EventStreamMarshallerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
 import software.amazon.smithy.rust.codegen.util.dq
@@ -47,6 +48,8 @@ import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.isEventStream
+import software.amazon.smithy.rust.codegen.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -63,9 +66,23 @@ interface Protocol {
     fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator
 
     /**
-     fn parse_generic(response: &Response<Bytes>) -> smithy_types::error::Error
+     * Generates a function signature like the following:
+     * ```rust
+     * fn parse_http_generic_error(response: &Response<Bytes>) -> smithy_types::error::Error
+     * ```
      **/
-    fun parseGenericError(operationShape: OperationShape): RuntimeType
+    fun parseHttpGenericError(operationShape: OperationShape): RuntimeType
+
+    /**
+     * Generates a function signature like the following:
+     * ```rust
+     * fn parse_event_stream_generic_error(payload: &Bytes) -> smithy_types::error::Error
+     * ```
+     *
+     * Event Stream generic errors are almost identical to HTTP generic errors, except that
+     * there are no response headers or statuses available to further inform the error parsing.
+     **/
+    fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType
 }
 
 class HttpBoundProtocolGenerator(
@@ -81,10 +98,12 @@ class HttpBoundProtocolGenerator(
         "ParseStrict" to RuntimeType.parseStrict(runtimeConfig),
         "ParseResponse" to RuntimeType.parseResponse(runtimeConfig),
         "http" to RuntimeType.http,
+        "hyper" to CargoDependency.HyperWithStream.asType(),
         "operation" to RuntimeType.operationModule(runtimeConfig),
         "Bytes" to RuntimeType.Bytes,
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-        "BuildError" to runtimeConfig.operationBuildError()
+        "BuildError" to runtimeConfig.operationBuildError(),
+        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType()
     )
 
     override fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata {
@@ -103,8 +122,49 @@ class HttpBoundProtocolGenerator(
             BodyMetadata(takesOwnership = false)
         } else {
             val member = inputShape.expectMember(payloadMemberName)
-            serializeViaPayload(member, serializerGenerator)
+            if (operationShape.isInputEventStream(model)) {
+                serializeViaEventStream(operationShape, member, serializerGenerator)
+            } else {
+                serializeViaPayload(member, serializerGenerator)
+            }
         }
+    }
+
+    private fun RustWriter.serializeViaEventStream(
+        operationShape: OperationShape,
+        memberShape: MemberShape,
+        serializerGenerator: StructuredDataSerializerGenerator
+    ): BodyMetadata {
+        val memberName = symbolProvider.toMemberName(memberShape)
+        val unionShape = model.expectShape(memberShape.target, UnionShape::class.java)
+
+        val marshallerConstructorFn = EventStreamMarshallerGenerator(
+            model,
+            runtimeConfig,
+            symbolProvider,
+            unionShape,
+            serializerGenerator,
+            httpBindingResolver.requestContentType(operationShape),
+        ).render()
+
+        // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the
+        // parameters that are not `@eventHeader` or `@eventPayload`.
+        rustTemplate(
+            """
+            {
+                let marshaller = #{marshallerConstructorFn}();
+                let signer = _config.new_event_stream_signer(properties.clone());
+                let adapter: #{SmithyHttp}::event_stream::MessageStreamAdapter<_, #{OperationError}> =
+                    self.$memberName.into_body_stream(marshaller, signer);
+                let body: #{SdkBody} = #{hyper}::Body::wrap_stream(adapter).into();
+                body
+            }
+            """,
+            *codegenScope,
+            "marshallerConstructorFn" to marshallerConstructorFn,
+            "OperationError" to operationShape.errorSymbol(symbolProvider)
+        )
+        return BodyMetadata(takesOwnership = true)
     }
 
     private fun RustWriter.serializeViaPayload(
@@ -175,6 +235,10 @@ class HttpBoundProtocolGenerator(
                 BodyMetadata(takesOwnership = true)
             }
             is StructureShape, is UnionShape -> {
+                check(
+                    !((targetShape as? UnionShape)?.isEventStream() ?: false)
+                ) { "Event Streams should be handled further up" }
+
                 // JSON serialize the structure or union targeted
                 rust(
                     """#T(&$payloadName).map_err(|err|#T::SerializationError(err.into()))?""",
@@ -282,10 +346,9 @@ class HttpBoundProtocolGenerator(
                 "O" to outputSymbol,
                 "E" to errorSymbol
             ) {
-
                 rust(
-                    "let generic = #T(&response).map_err(#T::unhandled)?;",
-                    protocol.parseGenericError(operationShape),
+                    "let generic = #T(response).map_err(#T::unhandled)?;",
+                    protocol.parseHttpGenericError(operationShape),
                     errorSymbol
                 )
                 if (operationShape.errors.isNotEmpty()) {
@@ -430,7 +493,7 @@ class HttpBoundProtocolGenerator(
         bindings: List<HttpBindingDescriptor>,
         errorSymbol: RuntimeType,
     ) {
-        val httpBindingGenerator = ResponseBindingGenerator(protocolConfig, operationShape)
+        val httpBindingGenerator = ResponseBindingGenerator(protocol, protocolConfig, operationShape)
         val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
         rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
@@ -464,7 +527,7 @@ class HttpBoundProtocolGenerator(
         }
 
         val err = if (StructureGenerator.fallibleBuilder(outputShape, symbolProvider)) {
-            ".map_err(|s|${format(errorSymbol)}::unhandled(s))?"
+            ".map_err(${format(errorSymbol)}::unhandled)?"
         } else ""
         rust("output.build()$err")
     }
@@ -509,6 +572,7 @@ class HttpBoundProtocolGenerator(
                     rust("#T($body).map_err(#T::unhandled)", structuredDataParser.payloadParser(member), errorSymbol)
                 }
                 val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
+                    operationShape,
                     binding,
                     errorSymbol,
                     docHandler = docShapeHandler,

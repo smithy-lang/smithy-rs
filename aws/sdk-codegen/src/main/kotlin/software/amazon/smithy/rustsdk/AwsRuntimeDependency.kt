@@ -32,5 +32,5 @@ object AwsRuntimeType {
     val S3Errors by lazy { RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("s3_errors")) }
 }
 
-fun RuntimeConfig.awsRuntimeDependency(name: String, features: List<String> = listOf()): CargoDependency =
+fun RuntimeConfig.awsRuntimeDependency(name: String, features: Set<String> = setOf()): CargoDependency =
     CargoDependency(name, awsRoot().crateLocation(), features = features)

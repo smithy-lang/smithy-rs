@@ -34,7 +34,7 @@ val runtimeModules = listOf(
 )
 val awsModules = listOf(
     "aws-auth",
-    "aws-auth-providers",
+    "aws-config",
     "aws-endpoint",
     "aws-http",
     "aws-hyper",
@@ -117,12 +117,13 @@ data class AwsService(
 }
 
 val awsServices: List<AwsService> by lazy { discoverServices() }
+val eventStreamAllowList: Set<String> by lazy { eventStreamAllowList() }
 
 fun loadServiceMembership(): Membership {
     val membershipOverride = getProperty("aws.services")?.let { parseMembership(it) }
     println(membershipOverride)
     val fullSdk = parseMembership(getProperty("aws.services.fullsdk") ?: throw kotlin.Exception("never list missing"))
-    val tier1 = parseMembership(getProperty("aws.services.tier1") ?: throw kotlin.Exception("tier1 list missing"))
+    val tier1 = parseMembership(getProperty("aws.services.smoketest") ?: throw kotlin.Exception("smoketest list missing"))
     return membershipOverride ?: if ((getProperty("aws.fullsdk") ?: "") == "true") {
         fullSdk
     } else {
@@ -188,6 +189,11 @@ fun discoverServices(): List<AwsService> {
     }
 }
 
+fun eventStreamAllowList(): Set<String> {
+    val list = getProperty("aws.services.eventstream.allowlist") ?: ""
+    return list.split(",").map { it.trim() }.toSet()
+}
+
 fun generateSmithyBuild(tests: List<AwsService>): String {
     val projections = tests.joinToString(",\n") {
         val files = it.files().map { extraFile ->
@@ -196,27 +202,29 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                 ""
             )
         }
+        val eventStreamAllowListMembers = eventStreamAllowList.joinToString(", ") { "\"$it\"" }
         """
             "${it.module}": {
                 "imports": [${files.joinToString()}],
 
                 "plugins": {
                     "rust-codegen": {
-                      "runtimeConfig": {
-                        "relativePath": "../"
-                      },
-                      "codegen": {
-                        "includeFluentClient": false,
-                        "renameErrors": false
-                      },
-                      "service": "${it.service}",
-                      "module": "aws-sdk-${it.module}",
-                      "moduleVersion": "${getProperty("aws.sdk.version")}",
-                      "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
-                      "license": "Apache-2.0"
-                      ${it.extraConfig ?: ""}
-                 }
-               }
+                        "runtimeConfig": {
+                            "relativePath": "../"
+                        },
+                        "codegen": {
+                            "includeFluentClient": false,
+                            "renameErrors": false,
+                            "eventStreamAllowList": [$eventStreamAllowListMembers]
+                        },
+                        "service": "${it.service}",
+                        "module": "aws-sdk-${it.module}",
+                        "moduleVersion": "${getProperty("aws.sdk.version")}",
+                        "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
+                        "license": "Apache-2.0"
+                        ${it.extraConfig ?: ""}
+                    }
+                }
             }
         """.trimIndent()
     }
@@ -231,12 +239,14 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
 
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
+    inputs.property("servicelist", awsServices.sortedBy { it.module }.toString())
+    inputs.property("eventStreamAllowList", eventStreamAllowList)
+    inputs.dir(projectDir.resolve("aws-models"))
+    outputs.file(projectDir.resolve("smithy-build.json"))
+
     doFirst {
         projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices))
     }
-    inputs.property("servicelist", awsServices.sortedBy { it.module }.toString())
-    inputs.dir(projectDir.resolve("aws-models"))
-    outputs.file(projectDir.resolve("smithy-build.json"))
 }
 
 task("relocateServices") {

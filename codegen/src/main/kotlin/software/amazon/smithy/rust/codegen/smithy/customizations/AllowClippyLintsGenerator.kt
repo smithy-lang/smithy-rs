@@ -27,7 +27,10 @@ val ClippyAllowLints = listOf(
     "should_implement_trait",
 
     // protocol tests use silly names like `baz`, don't flag that
-    "blacklisted_name"
+    "blacklisted_name",
+
+    // Forcing use of `vec![]` can make codegen harder in some cases
+    "vec_init_then_push",
 )
 
 class AllowClippyLints : LibRsCustomization() {

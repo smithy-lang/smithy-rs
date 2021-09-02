@@ -16,6 +16,8 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
+import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
+import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -65,7 +67,7 @@ class ResponseBindingGeneratorTest {
                 additional: String,
             }
         """.asSmithyModel()
-    private val model = OperationNormalizer(baseModel).transformModel()
+    private val model = OperationNormalizer.transform(baseModel)
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
     private val symbolProvider = testSymbolProvider(model)
     private val testProtocolConfig: ProtocolConfig = testProtocolConfig(model)
@@ -73,12 +75,14 @@ class ResponseBindingGeneratorTest {
     private fun RustWriter.renderOperation() {
         operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
         rustBlock("impl PutObjectOutput") {
-            val bindings = HttpTraitHttpBindingResolver(model, "dont-care", "dont-care")
+            val bindings = HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("dont-care"))
                 .responseBindings(operationShape)
                 .filter { it.location == HttpLocation.HEADER }
             bindings.forEach { binding ->
                 val runtimeType = ResponseBindingGenerator(
-                    testProtocolConfig, operationShape
+                    RestJson(testProtocolConfig),
+                    testProtocolConfig,
+                    operationShape
                 ).generateDeserializeHeaderFn(binding)
                 // little hack to force these functions to be generated
                 rust("// use #T;", runtimeType)

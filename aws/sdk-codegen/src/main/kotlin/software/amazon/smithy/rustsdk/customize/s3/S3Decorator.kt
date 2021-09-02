@@ -6,8 +6,12 @@
 package software.amazon.smithy.rustsdk.customize.s3
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
+import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -54,18 +58,30 @@ class S3Decorator : RustCodegenDecorator {
             it + S3PubUse()
         }
     }
+
+    // TODO: Uncomment once https://github.com/awslabs/smithy/pull/900 is merged and
+    // the latest Smithy is pulled in.
+    // override fun transformModel(service: ServiceShape, model: Model): Model =
+    //     S3CorrectSizeIntegerType().transform(model)
 }
 
 class S3(protocolConfig: ProtocolConfig) : RestXml(protocolConfig) {
     private val runtimeConfig = protocolConfig.runtimeConfig
-    override fun parseGenericError(operationShape: OperationShape): RuntimeType {
-        return RuntimeType.forInlineFun("parse_generic_error", "xml_deser") {
+    private val errorScope = arrayOf(
+        "Bytes" to RuntimeType.Bytes,
+        "Error" to RuntimeType.GenericError(runtimeConfig),
+        "HeaderMap" to RuntimeType.http.member("HeaderMap"),
+        "Response" to RuntimeType.http.member("Response"),
+        "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError"),
+        "base_errors" to restXmlErrors,
+        "s3_errors" to AwsRuntimeType.S3Errors,
+    )
+
+    override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType {
+        return RuntimeType.forInlineFun("parse_http_generic_error", "xml_deser") {
             it.rustBlockTemplate(
-                "pub fn parse_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
-                "Response" to RuntimeType.http.member("Response"),
-                "Bytes" to RuntimeType.Bytes,
-                "Error" to RuntimeType.GenericError(runtimeConfig),
-                "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
+                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
+                *errorScope
             ) {
                 rustTemplate(
                     """
@@ -77,12 +93,10 @@ class S3(protocolConfig: ProtocolConfig) : RestXml(protocolConfig) {
                         Ok(err.build())
                     } else {
                         let base_err = #{base_errors}::parse_generic_error(response.body().as_ref())?;
-                        Ok(#{s3_errors}::parse_extended_error(base_err, &response))
+                        Ok(#{s3_errors}::parse_extended_error(base_err, response.headers()))
                     }
                     """,
-                    "base_errors" to restXmlErrors,
-                    "s3_errors" to AwsRuntimeType.S3Errors,
-                    "Error" to RuntimeType.GenericError(runtimeConfig)
+                    *errorScope
                 )
             }
         }
@@ -93,5 +107,20 @@ class S3PubUse : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable = when (section) {
         is LibRsSection.Body -> writable { rust("pub use #T::ErrorExt;", AwsRuntimeType.S3Errors) }
         else -> emptySection
+    }
+}
+
+/** `com.amazonaws.s3#Size` is modeled as `integer`, which is too small for file sizes */
+class S3CorrectSizeIntegerType {
+    companion object {
+        val SIZE_SHAPE_ID = ShapeId.from("com.amazonaws.s3#Size")
+    }
+
+    fun transform(model: Model): Model = ModelTransformer.create().mapShapes(model) { shape ->
+        if (shape is IntegerShape && shape.id == SIZE_SHAPE_ID) {
+            LongShape.builder().id(shape.id).source(shape.sourceLocation).traits(shape.allTraits.values).build()
+        } else {
+            shape
+        }
     }
 }

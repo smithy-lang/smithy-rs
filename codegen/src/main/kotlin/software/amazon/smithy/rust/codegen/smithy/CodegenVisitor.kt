@@ -28,7 +28,10 @@ import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.AddErrorMessage
+import software.amazon.smithy.rust.codegen.smithy.transformers.EventStreamNormalizer
+import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
+import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -78,6 +81,9 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private fun baselineTransform(model: Model) =
         model.let(RecursiveShapeBoxer::transform)
             .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
+            .let(OperationNormalizer::transform)
+            .let { RemoveEventStreamOperations.transform(it, settings) }
+            .let(EventStreamNormalizer::transform)
 
     fun execute() {
         logger.info("generating Rust client...")

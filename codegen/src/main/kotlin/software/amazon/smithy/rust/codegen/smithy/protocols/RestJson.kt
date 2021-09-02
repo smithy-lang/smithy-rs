@@ -10,8 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
@@ -20,17 +19,13 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGene
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 
 class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
     override fun buildProtocolGenerator(
         protocolConfig: ProtocolConfig
     ): HttpBoundProtocolGenerator = HttpBoundProtocolGenerator(protocolConfig, RestJson(protocolConfig))
 
-    override fun transformModel(model: Model): Model {
-        return OperationNormalizer(model).transformModel().let(RemoveEventStreamOperations::transform)
-    }
+    override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
@@ -44,9 +39,17 @@ class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
 
 class RestJson(private val protocolConfig: ProtocolConfig) : Protocol {
     private val runtimeConfig = protocolConfig.runtimeConfig
+    private val errorScope = arrayOf(
+        "Bytes" to RuntimeType.Bytes,
+        "Error" to RuntimeType.GenericError(runtimeConfig),
+        "HeaderMap" to RuntimeType.http.member("HeaderMap"),
+        "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::Error"),
+        "Response" to RuntimeType.http.member("Response"),
+        "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
+    )
 
     override val httpBindingResolver: HttpBindingResolver =
-        HttpTraitHttpBindingResolver(protocolConfig.model, "application/json", "application/json")
+        HttpTraitHttpBindingResolver(protocolConfig.model, ProtocolContentTypes.consistent("application/json"))
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
@@ -58,20 +61,28 @@ class RestJson(private val protocolConfig: ProtocolConfig) : Protocol {
         return JsonSerializerGenerator(protocolConfig, httpBindingResolver)
     }
 
-    override fun parseGenericError(operationShape: OperationShape): RuntimeType {
-        return RuntimeType.forInlineFun("parse_generic_error", "json_deser") {
-            it.rustBlockTemplate(
-                "pub fn parse_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}>",
-                "Response" to RuntimeType.http.member("Response"),
-                "Bytes" to RuntimeType.Bytes,
-                "Error" to RuntimeType.GenericError(runtimeConfig),
-                "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::Error")
-            ) {
-                rust(
-                    "#T::parse_generic_error(response)",
-                    RuntimeType.jsonErrors(runtimeConfig)
-                )
-            }
+    override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_http_generic_error", "json_deser") { writer ->
+            writer.rustTemplate(
+                """
+                pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
+                    #{json_errors}::parse_generic_error(response.body(), response.headers())
+                }
+                """,
+                *errorScope
+            )
         }
-    }
+
+    override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_event_stream_generic_error", "json_deser") { writer ->
+            writer.rustTemplate(
+                """
+                pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{JsonError}> {
+                    // Note: HeaderMap::new() doesn't allocate
+                    #{json_errors}::parse_generic_error(payload, &#{HeaderMap}::new())
+                }
+                """,
+                *errorScope
+            )
+        }
 }

@@ -182,9 +182,11 @@ pub fn require_query_params<B>(
 
 pub fn validate_headers<B>(
     request: &Request<B>,
-    expected_headers: &[(&str, &str)],
+    expected_headers: &[(impl AsRef<str>, impl AsRef<str>)],
 ) -> Result<(), ProtocolTestFailure> {
     for (key, expected_value) in expected_headers {
+        let key = key.as_ref();
+        let expected_value = expected_value.as_ref();
         match normalized_header(request, key) {
             None => {
                 return Err(ProtocolTestFailure::MissingHeader {
@@ -266,6 +268,7 @@ impl<T: AsRef<str>> From<T> for MediaType {
     fn from(inp: T) -> Self {
         match inp.as_ref() {
             "application/json" => MediaType::Json,
+            "application/x-amz-json-1.1" => MediaType::Json,
             "application/xml" => MediaType::Xml,
             "application/x-www-form-urlencoded" => MediaType::UrlEncodedForm,
             other => MediaType::Other(other.to_string()),

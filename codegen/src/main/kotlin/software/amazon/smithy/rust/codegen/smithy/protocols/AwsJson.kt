@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.smithy.protocols
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
@@ -24,9 +23,6 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGene
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
-import software.amazon.smithy.rust.codegen.smithy.transformers.StructureModifier
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 
@@ -47,17 +43,7 @@ class AwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFac
         return HttpBoundProtocolGenerator(protocolConfig, AwsJson(protocolConfig, version))
     }
 
-    private val shapeIfHasMembers: StructureModifier = { _, shape: StructureShape? ->
-        when (shape?.members().isNullOrEmpty()) {
-            true -> null
-            else -> shape
-        }
-    }
-
-    override fun transformModel(model: Model): Model {
-        // For AwsJson10, the body matches 1:1 with the input
-        return OperationNormalizer(model).transformModel().let(RemoveEventStreamOperations::transform)
-    }
+    override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport = ProtocolSupport(
         requestSerialization = true,
@@ -96,6 +82,8 @@ class AwsJsonHttpBindingResolver(
 
     override fun requestContentType(operationShape: OperationShape): String =
         "application/x-amz-json-${awsJsonVersion.value}"
+
+    override fun responseContentType(operationShape: OperationShape): String = requestContentType(operationShape)
 }
 
 /**
@@ -137,6 +125,14 @@ class AwsJson(
     awsJsonVersion: AwsJsonVersion
 ) : Protocol {
     private val runtimeConfig = protocolConfig.runtimeConfig
+    private val errorScope = arrayOf(
+        "Bytes" to RuntimeType.Bytes,
+        "Error" to RuntimeType.GenericError(runtimeConfig),
+        "HeaderMap" to RuntimeType.http.member("HeaderMap"),
+        "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::Error"),
+        "Response" to RuntimeType.http.member("Response"),
+        "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
+    )
 
     override val httpBindingResolver: HttpBindingResolver =
         AwsJsonHttpBindingResolver(protocolConfig.model, awsJsonVersion)
@@ -152,20 +148,28 @@ class AwsJson(
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         AwsJsonSerializerGenerator(protocolConfig, httpBindingResolver)
 
-    override fun parseGenericError(operationShape: OperationShape): RuntimeType {
-        return RuntimeType.forInlineFun("parse_generic_error", "json_deser") {
-            it.rustTemplate(
+    override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_http_generic_error", "json_deser") { writer ->
+            writer.rustTemplate(
                 """
-                pub fn parse_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
-                    #{json_errors}::parse_generic_error(response)
+                pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
+                    #{json_errors}::parse_generic_error(response.body(), response.headers())
                 }
                 """,
-                "Response" to RuntimeType.http.member("Response"),
-                "Bytes" to RuntimeType.Bytes,
-                "Error" to RuntimeType.GenericError(runtimeConfig),
-                "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::Error"),
-                "json_errors" to RuntimeType.jsonErrors(runtimeConfig)
+                *errorScope
             )
         }
-    }
+
+    override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_event_stream_generic_error", "json_deser") { writer ->
+            writer.rustTemplate(
+                """
+                pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{JsonError}> {
+                    // Note: HeaderMap::new() doesn't allocate
+                    #{json_errors}::parse_generic_error(payload, &#{HeaderMap}::new())
+                }
+                """,
+                *errorScope
+            )
+        }
 }

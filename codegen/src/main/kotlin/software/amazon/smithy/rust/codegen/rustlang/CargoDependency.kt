@@ -88,6 +88,9 @@ class InlineDependency(
         private fun forRustFile(name: String, vararg additionalDependencies: RustDependency) =
             forRustFile(name, "inlineable", *additionalDependencies)
 
+        fun eventStream(runtimeConfig: RuntimeConfig) =
+            forRustFile("event_stream", CargoDependency.SmithyEventStream(runtimeConfig))
+
         fun jsonErrors(runtimeConfig: RuntimeConfig) =
             forRustFile("json_errors", CargoDependency.Http, CargoDependency.SmithyTypes(runtimeConfig))
 
@@ -118,8 +121,15 @@ data class CargoDependency(
     private val location: DependencyLocation,
     val scope: DependencyScope = DependencyScope.Compile,
     val optional: Boolean = false,
-    private val features: List<String> = listOf()
+    val features: Set<String> = emptySet()
 ) : RustDependency(name) {
+    val key: Triple<String, DependencyLocation, DependencyScope> get() = Triple(name, location, scope)
+
+    fun canMergeWith(other: CargoDependency): Boolean = key == other.key
+
+    fun withFeature(feature: String): CargoDependency {
+        return copy(features = features.toMutableSet().apply { add(feature) })
+    }
 
     override fun version(): String = when (location) {
         is CratesIo -> location.version
@@ -173,12 +183,15 @@ data class CargoDependency(
         val Md5 = CargoDependency("md5", CratesIo("0.7"))
         val FastRand = CargoDependency("fastrand", CratesIo("1"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2"))
+        val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14"))
+        val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
         val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"), optional = true)
         fun SmithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("types")
 
+        fun SmithyClient(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("client")
+        fun SmithyEventStream(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("eventstream")
         fun SmithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http")
         fun SmithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-tower")
-        fun SmithyClient(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("client")
 
         fun ProtocolTestHelpers(runtimeConfig: RuntimeConfig) = CargoDependency(
             "protocol-test-helpers", runtimeConfig.runtimeCrateLocation.crateLocation(), scope = DependencyScope.Dev
