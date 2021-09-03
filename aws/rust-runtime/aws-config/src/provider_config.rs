@@ -7,10 +7,12 @@
 
 use crate::connector::default_connector;
 use crate::default_provider::region::DefaultRegionChain;
-use aws_types::os_shim_internal::{Env, Fs};
+use aws_types::os_shim_internal::{Env, Fs, TimeSource};
 use aws_types::region::Region;
 use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use smithy_client::erase::DynConnector;
+
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 /// Configuration options for Credential Providers
@@ -25,9 +27,21 @@ use std::sync::Arc;
 pub struct ProviderConfig {
     env: Env,
     fs: Fs,
+    time_source: TimeSource,
     connector: Option<DynConnector>,
     sleep: Option<Arc<dyn AsyncSleep>>,
     region: Option<Region>,
+}
+
+impl Debug for ProviderConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProviderConfig")
+            .field("env", &self.env)
+            .field("fs", &self.fs)
+            .field("sleep", &self.sleep)
+            .field("region", &self.region)
+            .finish()
+    }
 }
 
 impl Default for ProviderConfig {
@@ -35,8 +49,30 @@ impl Default for ProviderConfig {
         Self {
             env: Env::default(),
             fs: Fs::default(),
+            time_source: TimeSource::default(),
             connector: default_connector(),
             sleep: default_async_sleep(),
+            region: None,
+        }
+    }
+}
+
+#[cfg(test)]
+impl ProviderConfig {
+    /// ProviderConfig with all configuration removed
+    ///
+    /// Unlike [`ProviderConfig::empty`] where `env` and `fs` will use their non-mocked implementations,
+    /// this method will use an empty mock environment and an empty mock file system.
+    pub fn no_configuration() -> Self {
+        use aws_types::os_shim_internal::ManualTimeSource;
+        use std::collections::HashMap;
+        use std::time::UNIX_EPOCH;
+        Self {
+            env: Env::from_slice(&[]),
+            fs: Fs::from_raw_map(HashMap::new()),
+            time_source: TimeSource::manual(&ManualTimeSource::new(UNIX_EPOCH)),
+            connector: None,
+            sleep: None,
             region: None,
         }
     }
@@ -72,6 +108,7 @@ impl ProviderConfig {
         ProviderConfig {
             env: Env::default(),
             fs: Fs::default(),
+            time_source: TimeSource::default(),
             connector: None,
             sleep: None,
             region: None,
@@ -108,6 +145,11 @@ impl ProviderConfig {
     }
 
     #[allow(dead_code)]
+    pub(crate) fn time_source(&self) -> TimeSource {
+        self.time_source.clone()
+    }
+
+    #[allow(dead_code)]
     pub(crate) fn connector(&self) -> Option<&DynConnector> {
         self.connector.as_ref()
     }
@@ -138,6 +180,8 @@ impl ProviderConfig {
         self.with_region(provider_chain.region().await)
     }
 
+    // these setters are doc(hidden) because they only exist for tests
+
     #[doc(hidden)]
     pub fn with_fs(self, fs: Fs) -> Self {
         ProviderConfig { fs, ..self }
@@ -146,6 +190,14 @@ impl ProviderConfig {
     #[doc(hidden)]
     pub fn with_env(self, env: Env) -> Self {
         ProviderConfig { env, ..self }
+    }
+
+    #[doc(hidden)]
+    pub fn with_time_source(self, time_source: TimeSource) -> Self {
+        ProviderConfig {
+            time_source,
+            ..self
+        }
     }
 
     /// Override the HTTPS connector for this configuration

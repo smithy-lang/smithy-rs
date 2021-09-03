@@ -56,7 +56,7 @@ open class RustCrate(
         while (unloadedDependencies().isNotEmpty()) {
             unloadedDependencies().forEach { dep ->
                 writtenDependencies.add(dep.key())
-                this.withModule(RustModule.default(dep.module, false)) {
+                this.withModule(RustModule.default(dep.module, public = false)) {
                     dep.renderer(it)
                 }
             }

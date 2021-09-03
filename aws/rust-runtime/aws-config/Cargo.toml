@@ -9,7 +9,6 @@ exclude = ["test-data/*"]
 [features]
 default-provider = ["profile", "imds", "meta", "sts", "environment"]
 profile = ["sts", "web-identity-token", "meta", "environment"]
-# note: IMDS currently unsupported
 imds = []
 meta = ["tokio/sync"]
 environment = ["meta"]
@@ -33,6 +32,16 @@ aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sts", optional = true }
 
 # TODO: remove when middleware stacks are moved inside of clients directly
 aws-hyper = { path = "../../sdk/build/aws-sdk/aws-hyper", optional = true }
+
+# imds
+http = "0.2.4"
+smithy-http = { path = "../../sdk/build/aws-sdk/smithy-http" }
+tower = "0.4.8"
+smithy-types = { path = "../../sdk/build/aws-sdk/smithy-types" }
+aws-http = { path = "../../sdk/build/aws-sdk/aws-http" }
+smithy-http-tower = { path = "../../sdk/build/aws-sdk/smithy-http-tower" }
+bytes = "1.1.0"
+
 
 [dev-dependencies]
 futures-util = "0.3.16"

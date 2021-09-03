@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use lazy_static::lazy_static;
 include!(concat!(env!("OUT_DIR"), "/build_env.rs"));
 
 pub struct BuildMetadata {
@@ -32,22 +31,21 @@ pub enum OsFamily {
 /// let os = get_cfg!(target_os: "linux", "android");
 /// ```
 macro_rules! get_cfg {
-    ($i:ident : $($s:expr),+) => (
-        (|| { $( if cfg!($i=$s) { return $s; } );+ "unknown"})()
+    ($i:ident : $(($s:expr, $t:expr)),+) => (
+        { const fn __getcfg() -> OsFamily { $( if cfg!($i=$s) { return $t; } );+ OsFamily::Other } __getcfg()  }
     )
 }
 
 impl OsFamily {
-    pub fn from_env() -> Self {
+    pub const fn from_env() -> Self {
         // values from https://doc.rust-lang.org/reference/conditional-compilation.html#target_os
-        let os = get_cfg!(target_os:
-            "windows",
-            "macos",
-            "ios",
-            "linux",
-            "android"
-        );
-        Self::from(os)
+        get_cfg!(target_os:
+            ("windows", OsFamily::Windows),
+            ("macos", OsFamily::Macos),
+            ("ios", OsFamily::Ios),
+            ("linux", OsFamily::Linux),
+            ("android", OsFamily::Android)
+        )
     }
 }
 
@@ -56,21 +54,19 @@ impl From<&str> for OsFamily {
         match s {
             "windows" => OsFamily::Windows,
             "macos" => OsFamily::Macos,
-            "linux" => OsFamily::Linux,
             "ios" => OsFamily::Ios,
+            "linux" => OsFamily::Linux,
             "android" => OsFamily::Android,
             _ => OsFamily::Other,
         }
     }
 }
 
-lazy_static! {
-    pub static ref BUILD_METADATA: BuildMetadata = BuildMetadata {
-        rust_version: RUST_VERSION,
-        core_pkg_version: env!("CARGO_PKG_VERSION"),
-        os_family: OsFamily::from_env()
-    };
-}
+pub const BUILD_METADATA: BuildMetadata = BuildMetadata {
+    rust_version: RUST_VERSION,
+    core_pkg_version: env!("CARGO_PKG_VERSION"),
+    os_family: OsFamily::from_env(),
+};
 
 #[cfg(test)]
 mod test {

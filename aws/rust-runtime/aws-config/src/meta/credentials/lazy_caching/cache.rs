@@ -3,31 +3,48 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::credentials::CredentialsError;
-use aws_types::{credentials, Credentials};
 use std::future::Future;
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::sync::{OnceCell, RwLock};
 
-#[derive(Clone, Debug)]
-pub(super) struct Cache {
+#[derive(Debug)]
+pub(crate) struct Cache<T, E> {
     /// Amount of time before the actual credential expiration time
     /// where credentials are considered expired.
     buffer_time: Duration,
-    value: Arc<RwLock<OnceCell<(Credentials, SystemTime)>>>,
+    value: Arc<RwLock<OnceCell<(T, SystemTime)>>>,
+    _phantom: PhantomData<E>,
 }
 
-impl Cache {
-    pub fn new(buffer_time: Duration) -> Cache {
+impl<T, E> Clone for Cache<T, E> {
+    fn clone(&self) -> Self {
+        Self {
+            buffer_time: self.buffer_time.clone(),
+            value: self.value.clone(),
+            _phantom: Default::default(),
+        }
+    }
+}
+
+impl<T, E> Cache<T, E>
+where
+    T: Clone,
+{
+    pub fn new(buffer_time: Duration) -> Self {
         Cache {
             buffer_time,
             value: Arc::new(RwLock::new(OnceCell::new())),
+            _phantom: Default::default(),
         }
     }
 
     #[cfg(test)]
-    async fn get(&self) -> Option<Credentials> {
+    async fn get(&self) -> Option<T>
+    where
+        T: Clone,
+    {
         self.value
             .read()
             .await
@@ -41,10 +58,10 @@ impl Cache {
     /// and the others will await that thread's result rather than multiple refreshes occurring.
     /// The function given to acquire a credentials future, `f`, will not be called
     /// if another thread is chosen to load the credentials.
-    pub async fn get_or_load<F, Fut>(&self, f: F) -> credentials::Result
+    pub async fn get_or_load<F, Fut>(&self, f: F) -> Result<T, E>
     where
         F: FnOnce() -> Fut,
-        Fut: Future<Output = Result<(Credentials, SystemTime), CredentialsError>>,
+        Fut: Future<Output = Result<(T, SystemTime), E>>,
     {
         let lock = self.value.read().await;
         let future = lock.get_or_try_init(f);
@@ -54,7 +71,7 @@ impl Cache {
     }
 
     /// If the credentials are expired, clears the cache. Otherwise, yields the current credentials value.
-    pub async fn yield_or_clear_if_expired(&self, now: SystemTime) -> Option<Credentials> {
+    pub async fn yield_or_clear_if_expired(&self, now: SystemTime) -> Option<T> {
         // Short-circuit if the credential is not expired
         if let Some((credentials, expiry)) = self.value.read().await.get() {
             if !expired(*expiry, self.buffer_time, now) {
