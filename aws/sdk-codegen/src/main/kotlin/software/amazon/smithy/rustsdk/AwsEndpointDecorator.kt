@@ -84,11 +84,11 @@ class EndpointConfigCustomization(private val protocolConfig: ProtocolConfig, pr
             ServiceConfig.BuilderImpl ->
                 rust(
                     """
-            pub fn endpoint_resolver(mut self, endpoint_resolver: impl #T + 'static) -> Self {
-                self.endpoint_resolver = Some(::std::sync::Arc::new(endpoint_resolver));
-                self
-            }
-            """,
+                    pub fn endpoint_resolver(mut self, endpoint_resolver: impl #T + 'static) -> Self {
+                        self.endpoint_resolver = Some(::std::sync::Arc::new(endpoint_resolver));
+                        self
+                    }
+                    """,
                     resolveAwsEndpoint
                 )
             ServiceConfig.BuilderBuild -> {
