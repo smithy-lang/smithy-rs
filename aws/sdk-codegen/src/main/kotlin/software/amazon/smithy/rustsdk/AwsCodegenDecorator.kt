@@ -23,6 +23,7 @@ val DECORATORS = listOf(
     AwsFluentClientDecorator(),
     CrateLicenseDecorator(),
     SharedConfigDecorator(),
+    AwsPresigningDecorator(),
 
     // Service specific decorators
     DisabledAuthDecorator(),
