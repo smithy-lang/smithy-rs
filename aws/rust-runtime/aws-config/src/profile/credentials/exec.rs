@@ -18,7 +18,7 @@ use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentials
 use aws_types::credentials::{self, CredentialsError, ProvideCredentials};
 use aws_types::os_shim_internal::Fs;
 use smithy_client::erase::DynConnector;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 
 #[derive(Debug)]
 pub struct AssumeRoleProvider {
