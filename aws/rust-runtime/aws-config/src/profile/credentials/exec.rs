@@ -66,16 +66,10 @@ impl AssumeRoleProvider {
     }
 }
 
+#[derive(Debug)]
 pub(super) struct ProviderChain {
     base: Arc<dyn ProvideCredentials>,
     chain: Vec<AssumeRoleProvider>,
-}
-
-impl Debug for ProviderChain {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        // TODO: ProvideCredentials should probably mandate debug
-        f.debug_struct("ProviderChain").finish()
-    }
 }
 
 impl ProviderChain {
