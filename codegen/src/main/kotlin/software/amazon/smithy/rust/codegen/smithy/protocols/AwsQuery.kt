@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -66,6 +67,7 @@ class AwsQueryProtocol(private val protocolConfig: ProtocolConfig) : Protocol {
         "Response" to RuntimeType.http.member("Response"),
         "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
     )
+    private val xmlDeserModule = RustModule.default("xml_deser", public = false)
 
     override val httpBindingResolver: HttpBindingResolver = AwsQueryBindingResolver(protocolConfig.model)
 
@@ -78,7 +80,7 @@ class AwsQueryProtocol(private val protocolConfig: ProtocolConfig) : Protocol {
         AwsQuerySerializerGenerator(protocolConfig)
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_generic_error", "xml_deser") { writer ->
+        RuntimeType.forInlineFun("parse_http_generic_error", xmlDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
                 *errorScope
@@ -88,7 +90,7 @@ class AwsQueryProtocol(private val protocolConfig: ProtocolConfig) : Protocol {
         }
 
     override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_event_stream_generic_error", "xml_deser") { writer ->
+        RuntimeType.forInlineFun("parse_event_stream_generic_error", xmlDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{XmlError}>",
                 *errorScope

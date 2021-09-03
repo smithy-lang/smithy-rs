@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -78,7 +79,7 @@ class S3(protocolConfig: ProtocolConfig) : RestXml(protocolConfig) {
     )
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType {
-        return RuntimeType.forInlineFun("parse_http_generic_error", "xml_deser") {
+        return RuntimeType.forInlineFun("parse_http_generic_error", RustModule.default("xml_deser", public = false)) {
             it.rustBlockTemplate(
                 "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
                 *errorScope

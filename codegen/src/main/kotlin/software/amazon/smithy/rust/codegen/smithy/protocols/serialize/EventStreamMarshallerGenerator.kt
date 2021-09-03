@@ -22,6 +22,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EventHeaderTrait
 import software.amazon.smithy.model.traits.EventPayloadTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -47,6 +48,7 @@ class EventStreamMarshallerGenerator(
     private val payloadContentType: String,
 ) {
     private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
+    private val eventStreamSerdeModule = RustModule.default("event_stream_serde", public = false)
     private val codegenScope = arrayOf(
         "MarshallMessage" to RuntimeType("MarshallMessage", smithyEventStream, "smithy_eventstream::frame"),
         "Message" to RuntimeType("Message", smithyEventStream, "smithy_eventstream::frame"),
@@ -59,7 +61,7 @@ class EventStreamMarshallerGenerator(
         val marshallerType = unionShape.eventStreamMarshallerType()
         val unionSymbol = symbolProvider.toSymbol(unionShape)
 
-        return RuntimeType.forInlineFun("${marshallerType.name}::new", "event_stream_serde") { inlineWriter ->
+        return RuntimeType.forInlineFun("${marshallerType.name}::new", eventStreamSerdeModule) { inlineWriter ->
             inlineWriter.renderMarshaller(marshallerType, unionSymbol)
         }
     }

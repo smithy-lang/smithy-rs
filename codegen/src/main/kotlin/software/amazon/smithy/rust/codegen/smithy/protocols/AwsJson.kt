@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -107,7 +108,7 @@ class AwsJsonSerializerGenerator(
         if (serializer == null) {
             val inputShape = operationShape.inputShape(protocolConfig.model)
             val fnName = protocolConfig.symbolProvider.serializeFunctionName(operationShape)
-            serializer = RuntimeType.forInlineFun(fnName, "operation_ser") {
+            serializer = RuntimeType.forInlineFun(fnName, RustModule.default("operation_ser", public = false)) {
                 it.rustBlockTemplate(
                     "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                     *codegenScope, "target" to protocolConfig.symbolProvider.toSymbol(inputShape)
@@ -133,6 +134,7 @@ class AwsJson(
         "Response" to RuntimeType.http.member("Response"),
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
+    private val jsonDeserModule = RustModule.default("json_deser", public = false)
 
     override val httpBindingResolver: HttpBindingResolver =
         AwsJsonHttpBindingResolver(protocolConfig.model, awsJsonVersion)
@@ -149,7 +151,7 @@ class AwsJson(
         AwsJsonSerializerGenerator(protocolConfig, httpBindingResolver)
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_generic_error", "json_deser") { writer ->
+        RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) { writer ->
             writer.rustTemplate(
                 """
                 pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
@@ -161,7 +163,7 @@ class AwsJson(
         }
 
     override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_event_stream_generic_error", "json_deser") { writer ->
+        RuntimeType.forInlineFun("parse_event_stream_generic_error", jsonDeserModule) { writer ->
             writer.rustTemplate(
                 """
                 pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{JsonError}> {
