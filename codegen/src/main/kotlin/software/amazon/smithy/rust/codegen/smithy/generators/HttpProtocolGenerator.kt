@@ -123,6 +123,7 @@ abstract class HttpProtocolGenerator(protocolConfig: ProtocolConfig) {
         // impl OperationInputShape { ... }
         val operationName = symbolProvider.toSymbol(operationShape).name
         inputWriter.implBlock(inputShape, symbolProvider) {
+            writeCustomizations(customizations, OperationSection.InputImpl(operationShape, inputShape))
             generateMakeOperation(this, operationShape, operationName, customizations)
             toHttpRequestImpl(this, operationShape, inputShape)
             rustBlockTemplate(
