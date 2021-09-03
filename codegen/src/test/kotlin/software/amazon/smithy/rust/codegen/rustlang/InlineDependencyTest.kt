@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 
 internal class InlineDependencyTest {
-    fun makeDep(name: String) = InlineDependency(name, "module") {
+    fun makeDep(name: String) = InlineDependency(name, RustModule.default("module", public = false)) {
         it.rustBlock("fn foo()") {}
     }
 
@@ -30,7 +30,7 @@ internal class InlineDependencyTest {
         val dep = InlineDependency.idempotencyToken()
         val testWriter = RustWriter.root()
         testWriter.addDependency(CargoDependency.FastRand)
-        testWriter.withModule(dep.module) {
+        testWriter.withModule(dep.module.name) {
             dep.renderer(this)
         }
         testWriter.compileAndTest(

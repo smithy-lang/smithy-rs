@@ -23,6 +23,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EventHeaderTrait
 import software.amazon.smithy.model.traits.EventPayloadTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -51,6 +52,7 @@ class EventStreamUnmarshallerGenerator(
     private val unionSymbol = symbolProvider.toSymbol(unionShape)
     private val operationErrorSymbol = operationShape.errorSymbol(symbolProvider)
     private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
+    private val eventStreamSerdeModule = RustModule.default("event_stream_serde", public = false)
     private val codegenScope = arrayOf(
         "Blob" to RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "smithy_types"),
         "Error" to RuntimeType("Error", smithyEventStream, "smithy_eventstream::error"),
@@ -66,7 +68,7 @@ class EventStreamUnmarshallerGenerator(
 
     fun render(): RuntimeType {
         val unmarshallerType = unionShape.eventStreamUnmarshallerType()
-        return RuntimeType.forInlineFun("${unmarshallerType.name}::new", "event_stream_serde") { inlineWriter ->
+        return RuntimeType.forInlineFun("${unmarshallerType.name}::new", eventStreamSerdeModule) { inlineWriter ->
             inlineWriter.renderUnmarshaller(unmarshallerType, unionSymbol)
         }
     }

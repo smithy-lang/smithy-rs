@@ -21,6 +21,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -57,6 +58,7 @@ class ResponseBindingGenerator(
     private val headerUtil = CargoDependency.SmithyHttp(runtimeConfig).asType().member("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
     private val instant = RuntimeType.Instant(runtimeConfig).toSymbol().rustType()
+    private val httpSerdeModule = RustModule.default("http_serde", public = false)
 
     /**
      * Generate a function to deserialize [binding] from HTTP headers
@@ -74,7 +76,7 @@ class ResponseBindingGenerator(
         check(binding.location == HttpLocation.HEADER)
         val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
         val fnName = "deser_header_${fnName(operationShape, binding)}"
-        return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
+        return RuntimeType.forInlineFun(fnName, httpSerdeModule) { writer ->
             writer.rustBlock(
                 "pub fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.http,
@@ -94,7 +96,7 @@ class ResponseBindingGenerator(
         val target = model.expectShape(binding.member.target)
         check(target is MapShape)
         val fnName = "deser_prefix_header_${fnName(operationShape, binding)}"
-        val inner = RuntimeType.forInlineFun("${fnName}_inner", "http_serde") {
+        val inner = RuntimeType.forInlineFun("${fnName}_inner", httpSerdeModule) {
             it.rustBlock(
                 "pub fn ${fnName}_inner(headers: #T::header::ValueIter<http::HeaderValue>) -> std::result::Result<Option<#T>, #T::ParseError>",
                 RuntimeType.http,
@@ -104,7 +106,7 @@ class ResponseBindingGenerator(
                 deserializeFromHeader(model.expectShape(target.value.target), binding.member)
             }
         }
-        return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
+        return RuntimeType.forInlineFun(fnName, httpSerdeModule) { writer ->
             writer.rustBlock(
                 "pub fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.http,
@@ -141,7 +143,7 @@ class ResponseBindingGenerator(
         check(binding.location == HttpBinding.Location.PAYLOAD)
         val outputT = symbolProvider.toSymbol(binding.member)
         val fnName = "deser_payload_${fnName(operationShape, binding)}"
-        return RuntimeType.forInlineFun(fnName, "http_serde") { rustWriter ->
+        return RuntimeType.forInlineFun(fnName, httpSerdeModule) { rustWriter ->
             if (binding.member.isStreaming(model)) {
                 rustWriter.rustBlock(
                     "pub fn $fnName(body: &mut #T) -> std::result::Result<#T, #T>",
