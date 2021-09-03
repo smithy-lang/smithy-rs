@@ -90,7 +90,7 @@ the usage of this will look as follows:
 let config = aws_config::load_config_from_environment().await;
 let client = s3::Client::new(&config);
 let presigning_config = PresigningConfig::expires_in(Duration::from_secs(86400));
-let presigned_url: http::Request<()> = client.get_object()
+let presigned: PresignedRequest = client.get_object()
     .bucket("example-bucket")
     .key("example-object")
     .presigned(presigning_config)
@@ -109,9 +109,10 @@ creating presigned URLs directly from the Smithy client will not be supported. T
   but not all operations can be presigned.
 - Presigned URLs are not currently a Smithy concept ([although this may change soon](https://github.com/awslabs/smithy/pull/897)).
 
-The result of calling `presigned()` is an `http::Request<()>` so that the request method and additional
-signing headers are also made available. This is necessary since there are some presignable POST operations
-that require the signature to be in the headers rather than the query.
+The result of calling `presigned()` is a `PresignedRequest`, which is a wrapper with delegating functions
+around `http::Request<()>` so that the request method and additional signing headers are also made available.
+This is necessary since there are some presignable POST operations that require the signature to be in the
+headers rather than the query.
 
 **Note:** Presigning *needs* to be `async` because the underlying credentials provider used to sign the
 request *may* need to make service calls to acquire the credentials.
@@ -126,7 +127,7 @@ This would look as follows:
 ```rust
 let config = aws_config::load_config_from_environment().await;
 let presigning_config = PresigningConfig::expires_in(Duration::from_secs(86400));
-let presigned_url: http::Request<()> = GetObjectInput::builder()
+let presigned: PresignedRequest = GetObjectInput::builder()
     .bucket("example-bucket")
     .key("example-bucket")
     .presigned(&config, presigning_config)
