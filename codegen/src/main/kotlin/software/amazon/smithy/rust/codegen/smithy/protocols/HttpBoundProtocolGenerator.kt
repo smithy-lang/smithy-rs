@@ -473,7 +473,7 @@ class HttpBoundProtocolGenerator(
         )
         val contentType = httpBindingResolver.requestContentType(operationShape)
         httpBindingGenerator.renderUpdateHttpBuilder(implBlockWriter)
-        httpBuilderFun(implBlockWriter) {
+        generateRequestBuilderBase(implBlockWriter) {
             rust("let mut builder = self.update_http_builder(#T::new())?;", RuntimeType.HttpRequestBuilder)
             val additionalHeaders = listOf("content-type" to contentType) + protocol.additionalHeaders(operationShape)
             for (header in additionalHeaders) {
