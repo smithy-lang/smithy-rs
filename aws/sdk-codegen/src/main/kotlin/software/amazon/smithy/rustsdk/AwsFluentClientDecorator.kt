@@ -40,7 +40,9 @@ private class Types(runtimeConfig: RuntimeConfig) {
 
 class AwsFluentClientDecorator : RustCodegenDecorator {
     override val name: String = "FluentClient"
-    override val order: Byte = 0
+
+    // Must run after the AwsPresigningDecorator so that the presignable trait is correctly added to operations
+    override val order: Byte = (AwsPresigningDecorator.ORDER + 1).toByte()
 
     override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
         val types = Types(protocolConfig.runtimeConfig)
@@ -59,6 +61,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
                         "AwsFluentClient_retry" to types.smithyClientRetry,
                     )
                 ),
+                customizations = listOf(AwsPresignedFluentBuilderMethod(protocolConfig.runtimeConfig))
             ).render(writer)
             AwsFluentClientExtensions(types).render(writer)
         }

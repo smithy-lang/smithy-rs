@@ -6,7 +6,7 @@
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::input::GetObjectInput;
 use aws_sdk_s3::presigning::config::PresigningConfig;
-use aws_sdk_s3::{Region, PKG_VERSION};
+use aws_sdk_s3::{Client, Config, Region, PKG_VERSION};
 use std::error::Error;
 use std::time::Duration;
 use structopt::StructOpt;
@@ -52,6 +52,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
     let shared_config = aws_config::from_env().region(region_provider).load().await;
+    let client = Client::new(&shared_config);
 
     println!();
 
@@ -61,17 +62,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
         println!();
     }
 
-    // TODO(PresignedReqPrototype): Also show an example of the fluent client once it's available
+    // Presigned requests can be made with the client directly
+    let presigned_request = client
+        .get_object()
+        .bucket(&bucket)
+        .key(&object)
+        .presigned(PresigningConfig::expires_in(Duration::from_secs(900))?)
+        .await?;
+    println!("From client: {:?}", presigned_request);
+
+    // Or, they can be made directly from an operation input
     let presigned_request = GetObjectInput::builder()
         .bucket(bucket)
         .key(object)
         .build()?
         .presigned(
-            &shared_config,
+            &Config::from(&shared_config),
             PresigningConfig::expires_in(Duration::from_secs(900))?,
         )
         .await?;
+    println!("From operation input: {:?}", presigned_request);
 
-    println!("{:?}", presigned_request);
     Ok(())
 }
