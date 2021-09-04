@@ -84,8 +84,9 @@ pub mod config {
 }
 
 pub mod request {
+    use std::fmt::{Debug, Formatter};
+
     #[non_exhaustive]
-    #[derive(Debug)]
     pub struct PresignedRequest(http::Request<()>);
 
     impl PresignedRequest {
@@ -103,6 +104,16 @@ pub mod request {
 
         pub fn headers(&self) -> &http::HeaderMap<http::HeaderValue> {
             self.0.headers()
+        }
+    }
+
+    impl Debug for PresignedRequest {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("PresignedRequest")
+                .field("method", self.method())
+                .field("uri", self.uri())
+                .field("headers", self.headers())
+                .finish()
         }
     }
 }
