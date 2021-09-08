@@ -62,7 +62,8 @@ service RestJsonExtras {
         PrimitiveIntOp,
         EscapedStringValues,
         NullInNonSparse,
-        CaseInsensitiveErrorOperation
+        CaseInsensitiveErrorOperation,
+        EmptyStructWithContentOnWireOp,
     ]
 }
 
@@ -288,4 +289,23 @@ operation CaseInsensitiveErrorOperation {
 @error("server")
 structure CaseInsensitiveError {
     message: String
+}
+
+structure EmptyStruct {}
+structure EmptyStructWithContentOnWireOpOutput {
+    empty: EmptyStruct,
+}
+
+@http(uri: "/empty-struct-with-content-on-wire-op", method: "GET")
+@httpResponseTests([
+    {
+        id: "EmptyStructWithContentOnWire",
+        protocol: "aws.protocols#restJson1",
+        code: 200,
+        body: "{\"empty\": {\"value\":\"not actually empty\"}}",
+        params: { empty: {} }
+    }
+])
+operation EmptyStructWithContentOnWireOp {
+    output: EmptyStructWithContentOnWireOpOutput,
 }

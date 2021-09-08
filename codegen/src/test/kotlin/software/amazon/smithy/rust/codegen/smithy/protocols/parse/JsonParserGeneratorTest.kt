@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
+import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -71,13 +72,17 @@ class JsonParserGeneratorTest {
             member: Choice
         }
 
+        structure EmptyStruct {
+        }
+
         structure Top {
             @required
             choice: Choice,
             field: String,
             extra: Integer,
             @jsonName("rec")
-            recursive: TopList
+            recursive: TopList,
+            empty: EmptyStruct,
         }
 
         list TopList {
@@ -110,7 +115,7 @@ class JsonParserGeneratorTest {
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = JsonParserGenerator(
             testProtocolConfig(model),
-            HttpTraitHttpBindingResolver(model, "application/json", "application/json")
+            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json"))
         )
         val operationGenerator = parserGenerator.operationParser(model.lookup("test#Op"))
         val documentGenerator = parserGenerator.documentParser(model.lookup("test#Op"))
@@ -132,7 +137,8 @@ class JsonParserGeneratorTest {
                         { "extra": 45,
                           "field": "something",
                           "choice":
-                              { "int": 5 }}}
+                              { "int": 5 },
+                          "empty": { "not_empty": true }}}
                 "#;
 
                 let output = ${writer.format(operationGenerator!!)}(json, output::op_output::Builder::default()).unwrap().build();
@@ -156,6 +162,7 @@ class JsonParserGeneratorTest {
         }
         project.withModule(RustModule.default("model", public = true)) {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
+            model.lookup<StructureShape>("test#EmptyStruct").renderWithModelBuilder(model, symbolProvider, it)
             UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice")).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
             EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
