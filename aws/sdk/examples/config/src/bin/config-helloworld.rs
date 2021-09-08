@@ -1,14 +1,18 @@
-use aws_types::region;
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
 
-use config::model::ResourceType;
-use config::{Client, Config, Error, Region};
+use aws_config::meta::region::RegionProviderChain;
+use aws_sdk_config::model::ResourceType;
+use aws_sdk_config::{Client, Error, Region, PKG_VERSION};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// The default AWS Region.
+    /// The AWS Region.
     #[structopt(short, long)]
-    default_region: Option<String>,
+    region: Option<String>,
 
     /// The resource id.
     #[structopt(long)]
@@ -36,25 +40,30 @@ struct Opt {
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
     let Opt {
-        default_region,
+        region,
         resource_id,
         resource_type,
         verbose,
     } = Opt::from_args();
 
-    let region = region::ChainProvider::first_try(default_region.map(Region::new))
+    let region_provider = RegionProviderChain::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
 
     println!();
 
     if verbose {
-        println!("Config client version: {}", config::PKG_VERSION);
-        println!("Region:               {:?}", region.region().await);
+        println!("Config client version: {}", PKG_VERSION);
+        println!(
+            "Region:                {}",
+            region_provider.region().await.unwrap().as_ref()
+        );
         println!();
     }
 
-    let conf = Config::builder().region(region.region().await).build();
+    let shared_config = aws_config::from_env().region(region_provider).load().await;
+    let client = Client::new(&shared_config);
+
     // parse resource type from user input
     let parsed = ResourceType::from(resource_type.as_str());
     if matches!(parsed, ResourceType::Unknown(_)) {
@@ -64,14 +73,16 @@ async fn main() -> Result<(), Error> {
             ResourceType::values()
         )
     }
-    let client = Client::from_conf(conf);
+
     let rsp = client
         .get_resource_config_history()
         .resource_id(&resource_id)
         .resource_type(parsed)
         .send()
         .await?;
+
     println!("configuration history for {}:", resource_id);
+
     for item in rsp.configuration_items.unwrap_or_default() {
         println!("item: {:?}", item);
     }
