@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
@@ -69,12 +70,18 @@ class TopLevelErrorGenerator(protocolConfig: ProtocolConfig, private val operati
         }
     }
 
-    private fun RustWriter.renderImplFrom(
-        operationShape: OperationShape,
-    ) {
+    private fun RustWriter.renderImplFrom(operationShape: OperationShape) {
         val operationError = operationShape.errorSymbol(symbolProvider)
-        rustBlock("impl From<#T<#T>> for Error", sdkError, operationError) {
-            rustBlock("fn from(err: #T<#T>) -> Self", sdkError, operationError) {
+        rustBlock(
+            "impl<R> From<#T<#T, R>> for Error where R: Send + Sync + std::fmt::Debug + 'static",
+            sdkError,
+            operationError
+        ) {
+            rustBlockTemplate(
+                "fn from(err: #{SdkError}<#{OpError}, R>) -> Self",
+                "SdkError" to sdkError,
+                "OpError" to operationError
+            ) {
                 rustBlock("match err") {
                     val operationErrors = operationShape.errors.map { model.expectShape(it) }
                     rustBlock("#T::ServiceError { err, ..} => match err.kind", sdkError) {

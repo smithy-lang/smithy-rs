@@ -72,6 +72,7 @@ class JsonParserGenerator(
         "json_token_iter" to smithyJson.member("deserialize::json_token_iter"),
         "Peekable" to RuntimeType.std.member("iter::Peekable"),
         "skip_value" to smithyJson.member("deserialize::token::skip_value"),
+        "skip_to_end" to smithyJson.member("deserialize::token::skip_to_end"),
         "Token" to smithyJson.member("deserialize::Token"),
         "or_empty" to orEmptyJson()
     )
@@ -204,10 +205,7 @@ class JsonParserGenerator(
     }
 
     private fun RustWriter.deserializeStructInner(members: Collection<MemberShape>) {
-        if (members.isEmpty()) {
-            return
-        }
-        objectKeyLoop {
+        objectKeyLoop(hasMembers = members.isNotEmpty()) {
             rustBlock("match key.to_unescaped()?.as_ref()") {
                 for (member in members) {
                     rustBlock("${member.wireName().dq()} =>") {
@@ -334,7 +332,7 @@ class JsonParserGenerator(
             ) {
                 startObjectOrNull {
                     rust("let mut map = #T::new();", RustType.HashMap.RuntimeType)
-                    objectKeyLoop {
+                    objectKeyLoop(hasMembers = true) {
                         withBlock("let key =", "?;") {
                             deserializeStringInner(keyTarget, "key")
                         }
@@ -408,7 +406,7 @@ class JsonParserGenerator(
                         """,
                         *codegenScope
                     ) {
-                        objectKeyLoop {
+                        objectKeyLoop(hasMembers = shape.members().isNotEmpty()) {
                             rustTemplate(
                                 """
                                 if variant.is_some() {
@@ -454,22 +452,26 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.objectKeyLoop(inner: RustWriter.() -> Unit) {
-        rustBlock("loop") {
-            rustBlock("match tokens.next().transpose()?") {
-                rustBlockTemplate(
-                    """
+    private fun RustWriter.objectKeyLoop(hasMembers: Boolean, inner: RustWriter.() -> Unit) {
+        if (!hasMembers) {
+            rustTemplate("#{skip_to_end}(tokens)?;", *codegenScope)
+        } else {
+            rustBlock("loop") {
+                rustBlock("match tokens.next().transpose()?") {
+                    rustBlockTemplate(
+                        """
                         Some(#{Token}::EndObject { .. }) => break,
                         Some(#{Token}::ObjectKey { key, .. }) =>
                         """,
-                    *codegenScope
-                ) {
-                    inner()
+                        *codegenScope
+                    ) {
+                        inner()
+                    }
+                    rustTemplate(
+                        "_ => return Err(#{Error}::custom(\"expected object key or end object\"))",
+                        *codegenScope
+                    )
                 }
-                rustTemplate(
-                    "_ => return Err(#{Error}::custom(\"expected object key or end object\"))",
-                    *codegenScope
-                )
             }
         }
     }

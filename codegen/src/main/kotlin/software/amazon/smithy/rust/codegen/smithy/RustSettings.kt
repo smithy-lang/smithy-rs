@@ -42,7 +42,9 @@ data class CodegenConfig(
     val renameExceptions: Boolean = true,
     val includeFluentClient: Boolean = true,
     val addMessageToErrors: Boolean = true,
-    val formatTimeoutSeconds: Int = 20
+    val formatTimeoutSeconds: Int = 20,
+    // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
+    val eventStreamAllowList: Set<String> = emptySet(),
 ) {
     companion object {
         fun fromNode(node: Optional<ObjectNode>): CodegenConfig {
@@ -52,7 +54,9 @@ data class CodegenConfig(
                     node.get().getBooleanMemberOrDefault("includeFluentClient", true),
                     node.get().getBooleanMemberOrDefault("addMessageToErrors", true),
                     node.get().getNumberMemberOrDefault("formatTimeoutSeconds", 20).toInt(),
-
+                    node.get().getArrayMember("eventStreamAllowList")
+                        .map { array -> array.toList().mapNotNull { node -> node.asStringNode().orNull()?.value } }
+                        .orNull()?.toSet() ?: emptySet()
                 )
             } else {
                 CodegenConfig()

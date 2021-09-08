@@ -81,6 +81,30 @@ interface HttpBindingResolver {
      * Determines the request content type for given [operationShape].
      */
     fun requestContentType(operationShape: OperationShape): String
+
+    /**
+     * Determines the response content type for given [operationShape].
+     */
+    fun responseContentType(operationShape: OperationShape): String
+}
+
+/**
+ * Content types a protocol uses.
+ */
+data class ProtocolContentTypes(
+    /** Default request content type when the shape isn't, for example, a Blob */
+    val requestDefault: String,
+    /** Default response content type when the shape isn't, for example, a Blob */
+    val responseDefault: String,
+    /** Request content type override for when the shape is a Document */
+    val requestDocument: String? = null,
+    /** Response content type override for when the shape is a Document */
+    val responseDocument: String? = null,
+) {
+    companion object {
+        /** Create an instance of [ProtocolContentTypes] where all content types are the same */
+        fun consistent(type: String) = ProtocolContentTypes(type, type)
+    }
 }
 
 /**
@@ -88,8 +112,7 @@ interface HttpBindingResolver {
  */
 class HttpTraitHttpBindingResolver(
     model: Model,
-    private val defaultRequestContentType: String,
-    private val documentRequestContentType: String?,
+    private val contentTypes: ProtocolContentTypes,
 ) : HttpBindingResolver {
     private val httpIndex: HttpBindingIndex = HttpBindingIndex.of(model)
 
@@ -112,8 +135,12 @@ class HttpTraitHttpBindingResolver(
         httpIndex.determineTimestampFormat(memberShape, location, defaultTimestampFormat)
 
     override fun requestContentType(operationShape: OperationShape): String =
-        httpIndex.determineRequestContentType(operationShape, documentRequestContentType)
-            .orElse(defaultRequestContentType)
+        httpIndex.determineRequestContentType(operationShape, contentTypes.requestDocument)
+            .orElse(contentTypes.requestDefault)
+
+    override fun responseContentType(operationShape: OperationShape): String =
+        httpIndex.determineResponseContentType(operationShape, contentTypes.responseDocument)
+            .orElse(contentTypes.responseDefault)
 
     // Sort the members after extracting them from the map to have a consistent order
     private fun mappedBindings(bindings: Map<String, HttpBinding>): List<HttpBindingDescriptor> =
@@ -128,6 +155,7 @@ open class StaticHttpBindingResolver(
     private val model: Model,
     private val httpTrait: HttpTrait,
     private val requestContentType: String,
+    private val responseContentType: String,
 ) : HttpBindingResolver {
     private fun bindings(shape: ToShapeId?) =
         shape?.let { model.expectShape(it.toShapeId()) }?.members()
@@ -147,4 +175,6 @@ open class StaticHttpBindingResolver(
         bindings(errorShape)
 
     override fun requestContentType(operationShape: OperationShape): String = requestContentType
+
+    override fun responseContentType(operationShape: OperationShape): String = responseContentType
 }

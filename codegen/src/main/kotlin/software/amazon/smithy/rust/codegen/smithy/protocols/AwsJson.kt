@@ -82,6 +82,8 @@ class AwsJsonHttpBindingResolver(
 
     override fun requestContentType(operationShape: OperationShape): String =
         "application/x-amz-json-${awsJsonVersion.value}"
+
+    override fun responseContentType(operationShape: OperationShape): String = requestContentType(operationShape)
 }
 
 /**
@@ -123,6 +125,14 @@ class AwsJson(
     awsJsonVersion: AwsJsonVersion
 ) : Protocol {
     private val runtimeConfig = protocolConfig.runtimeConfig
+    private val errorScope = arrayOf(
+        "Bytes" to RuntimeType.Bytes,
+        "Error" to RuntimeType.GenericError(runtimeConfig),
+        "HeaderMap" to RuntimeType.http.member("HeaderMap"),
+        "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::Error"),
+        "Response" to RuntimeType.http.member("Response"),
+        "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
+    )
 
     override val httpBindingResolver: HttpBindingResolver =
         AwsJsonHttpBindingResolver(protocolConfig.model, awsJsonVersion)
@@ -138,20 +148,28 @@ class AwsJson(
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         AwsJsonSerializerGenerator(protocolConfig, httpBindingResolver)
 
-    override fun parseGenericError(operationShape: OperationShape): RuntimeType {
-        return RuntimeType.forInlineFun("parse_generic_error", "json_deser") {
-            it.rustTemplate(
+    override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_http_generic_error", "json_deser") { writer ->
+            writer.rustTemplate(
                 """
-                pub fn parse_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
-                    #{json_errors}::parse_generic_error(response)
+                pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
+                    #{json_errors}::parse_generic_error(response.body(), response.headers())
                 }
                 """,
-                "Response" to RuntimeType.http.member("Response"),
-                "Bytes" to RuntimeType.Bytes,
-                "Error" to RuntimeType.GenericError(runtimeConfig),
-                "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::Error"),
-                "json_errors" to RuntimeType.jsonErrors(runtimeConfig)
+                *errorScope
             )
         }
-    }
+
+    override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
+        RuntimeType.forInlineFun("parse_event_stream_generic_error", "json_deser") { writer ->
+            writer.rustTemplate(
+                """
+                pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{JsonError}> {
+                    // Note: HeaderMap::new() doesn't allocate
+                    #{json_errors}::parse_generic_error(payload, &#{HeaderMap}::new())
+                }
+                """,
+                *errorScope
+            )
+        }
 }

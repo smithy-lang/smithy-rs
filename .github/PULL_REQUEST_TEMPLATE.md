@@ -11,6 +11,7 @@
 <!--- see how your change affects other areas of the code, etc. -->
 
 ## Checklist
-- [ ] I have updated the CHANGELOG
+- [ ] I have updated `CHANGELOG.md`
+- [ ] I have updated `aws/SDK_CHANGELOG.md` if applicable
 
 By submitting this pull request, I confirm that you can use, modify, copy, and redistribute this contribution, under the terms of your choice.
