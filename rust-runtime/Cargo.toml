@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "smithy-async",
     "smithy-http",
     "smithy-client",
     "smithy-eventstream",

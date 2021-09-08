@@ -50,10 +50,10 @@ class CombinedErrorGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val operation: OperationShape
 ) {
-
     private val operationIndex = OperationIndex.of(model)
     private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val genericError = RuntimeType.GenericError(symbolProvider.config().runtimeConfig)
+
     fun render(writer: RustWriter) {
         val errors = operationIndex.getErrors(operation)
         val symbol = operation.errorSymbol(symbolProvider)
@@ -69,7 +69,7 @@ class CombinedErrorGenerator(
                 """
                 pub kind: ${symbol.name}Kind,
                 pub (crate) meta: #T
-            """,
+                """,
                 RuntimeType.GenericError(runtimeConfig)
             )
         }
@@ -83,7 +83,7 @@ class CombinedErrorGenerator(
                 """
                 /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
                 Unhandled(Box<dyn #T + Send + Sync + 'static>),
-            """,
+                """,
                 RuntimeType.StdError
             )
         }
@@ -123,42 +123,42 @@ class CombinedErrorGenerator(
         writer.rustBlock("impl ${symbol.name}") {
             writer.rustTemplate(
                 """
-            pub fn new(kind: ${symbol.name}Kind, meta: #{generic_error}) -> Self {
-                Self { kind, meta }
-            }
-
-            pub fn unhandled(err: impl Into<Box<dyn #{std_error} + Send + Sync + 'static>>) -> Self {
-                Self {
-                    kind: ${symbol.name}Kind::Unhandled(err.into()),
-                    meta: Default::default()
+                pub fn new(kind: ${symbol.name}Kind, meta: #{generic_error}) -> Self {
+                    Self { kind, meta }
                 }
-            }
 
-            pub fn generic(err: #{generic_error}) -> Self {
-                Self {
-                    meta: err.clone(),
-                    kind: ${symbol.name}Kind::Unhandled(err.into()),
+                pub fn unhandled(err: impl Into<Box<dyn #{std_error} + Send + Sync + 'static>>) -> Self {
+                    Self {
+                        kind: ${symbol.name}Kind::Unhandled(err.into()),
+                        meta: Default::default()
+                    }
                 }
-            }
 
-            // Consider if this should actually be `Option<Cow<&str>>`. This would enable us to use display as implemented
-            // by std::Error to generate a message in that case.
-            pub fn message(&self) -> Option<&str> {
-                self.meta.message()
-            }
+                pub fn generic(err: #{generic_error}) -> Self {
+                    Self {
+                        meta: err.clone(),
+                        kind: ${symbol.name}Kind::Unhandled(err.into()),
+                    }
+                }
 
-            pub fn meta(&self) -> &#{generic_error} {
-                &self.meta
-            }
+                // Consider if this should actually be `Option<Cow<&str>>`. This would enable us to use display
+                // as implemented by std::Error to generate a message in that case.
+                pub fn message(&self) -> Option<&str> {
+                    self.meta.message()
+                }
 
-            pub fn request_id(&self) -> Option<&str> {
-                self.meta.request_id()
-            }
+                pub fn meta(&self) -> &#{generic_error} {
+                    &self.meta
+                }
 
-            pub fn code(&self) -> Option<&str> {
-                self.meta.code()
-            }
-        """,
+                pub fn request_id(&self) -> Option<&str> {
+                    self.meta.request_id()
+                }
+
+                pub fn code(&self) -> Option<&str> {
+                    self.meta.code()
+                }
+                """,
                 "generic_error" to genericError, "std_error" to RuntimeType.StdError
             )
             errors.forEach { error ->

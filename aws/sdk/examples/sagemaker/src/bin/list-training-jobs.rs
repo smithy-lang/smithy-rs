@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::region::ChainProvider;
+use aws_config::meta::region::RegionProviderChain;
 
-use sagemaker::{Client, Config, Region};
+use sagemaker::{Client, Region};
 
 use structopt::StructOpt;
 
@@ -36,18 +36,21 @@ async fn main() -> Result<(), sagemaker::Error> {
         verbose,
     } = Opt::from_args();
 
-    let region = ChainProvider::first_try(default_region.map(Region::new))
+    let region_provider = RegionProviderChain::first_try(default_region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
+    let shared_config = aws_config::from_env().region(region_provider).load().await;
+    let client = Client::new(&shared_config);
 
     if verbose {
         println!("SageMaker client version: {}", sagemaker::PKG_VERSION);
-        println!("Region:                   {:?}", region.region().await);
+        println!(
+            "Region:                   {:?}",
+            shared_config.region().unwrap()
+        );
         println!();
     }
 
-    let conf = Config::builder().region(region.region().await).build();
-    let client = Client::from_conf(conf);
     let job_details = client.list_training_jobs().send().await?;
 
     println!("Job Name\tCreation DateTime\tDuration\tStatus");
