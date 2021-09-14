@@ -1,6 +1,9 @@
 vNext (Month Day, Year)
 =======================
 
+**New This Week**
+- :bug: Fixes issue where `Content-Length` header could be duplicated leading to signing failure (aws-sdk-rust#220, smithy-rs#697)
+
 v0.22 (September 2nd, 2021)
 ===========================
 
