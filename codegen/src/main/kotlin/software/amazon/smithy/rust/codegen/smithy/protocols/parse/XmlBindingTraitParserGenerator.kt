@@ -434,7 +434,13 @@ class XmlBindingTraitParserGenerator(
                 }
                 withBlock("Ok(builder.build()", ")") {
                     if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
-                        rustTemplate(""".map_err(|_|{XmlError}::custom("missing field"))?""", *codegenScope)
+                        // NOTE:(rcoh) This branch is unreachable given the current nullability rules.
+                        // Only synthetic inputs can have fallible builders, but synthetic inputs can never be parsed
+                        // (because they're inputs, only outputs will be parsed!)
+
+                        // I'm leaving this branch here so that the binding trait parser generator would work for a server
+                        // side implementation in the future.
+                        rustTemplate(""".map_err(|_|#{XmlError}::custom("missing field"))?""", *codegenScope)
                     }
                 }
             }
