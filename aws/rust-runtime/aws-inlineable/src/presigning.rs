@@ -117,3 +117,49 @@ pub mod request {
         }
     }
 }
+
+pub mod service {
+    use crate::presigning::request::PresignedRequest;
+    use smithy_http::operation;
+    use std::future::{ready, Ready};
+    use std::marker::PhantomData;
+    use std::task::{Context, Poll};
+
+    #[non_exhaustive]
+    pub struct PresignedRequestService<E> {
+        _phantom: PhantomData<E>,
+    }
+
+    // Required because of the derive Clone on MapRequestService.
+    // Manually implemented to avoid requiring errors to implement Clone.
+    impl<E> Clone for PresignedRequestService<E> {
+        fn clone(&self) -> Self {
+            Self {
+                _phantom: Default::default(),
+            }
+        }
+    }
+
+    impl<E> PresignedRequestService<E> {
+        pub fn new() -> Self {
+            Self {
+                _phantom: Default::default(),
+            }
+        }
+    }
+
+    impl<E> tower::Service<operation::Request> for PresignedRequestService<E> {
+        type Response = PresignedRequest;
+        type Error = E;
+        type Future = Ready<Result<PresignedRequest, E>>;
+
+        fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn call(&mut self, req: operation::Request) -> Self::Future {
+            let (req, _) = req.into_parts();
+            ready(Ok(PresignedRequest::new(req.map(|_| ()))))
+        }
+    }
+}

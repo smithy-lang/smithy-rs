@@ -9,7 +9,9 @@ are to allow this crate to be compilable and testable in isolation, no client co
 """
 
 [dependencies]
-smithy-xml = { path = "../../../rust-runtime/smithy-xml" }
-smithy-types = { path = "../../../rust-runtime/smithy-types" }
-http = "0.2.4"
 aws-types = { path = "../../rust-runtime/aws-types" }
+http = "0.2.4"
+smithy-http = { path = "../../../rust-runtime/smithy-http" }
+smithy-types = { path = "../../../rust-runtime/smithy-types" }
+smithy-xml = { path = "../../../rust-runtime/smithy-xml" }
+tower = { version = "0.4", features = [] }

@@ -55,9 +55,9 @@ class FluentClientDecorator : RustCodegenDecorator {
             FluentClientGenerator(protocolConfig, includeSmithyGenericClientDocs = true).render(writer)
         }
         val smithyClient = CargoDependency.SmithyClient(protocolConfig.runtimeConfig)
-        rustCrate.addFeature(Feature("client", true, listOf(smithyClient.name)))
-        rustCrate.addFeature(Feature("rustls", default = true, listOf("smithy-client/rustls")))
-        rustCrate.addFeature(Feature("native-tls", default = false, listOf("smithy-client/native-tls")))
+        rustCrate.mergeFeature(Feature("client", true, listOf(smithyClient.name)))
+        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("smithy-client/rustls")))
+        rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("smithy-client/native-tls")))
     }
 
     override fun libRsCustomizations(

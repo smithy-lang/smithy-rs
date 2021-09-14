@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -18,6 +19,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
@@ -43,11 +45,15 @@ class AwsPresigningDecorator : RustCodegenDecorator {
     override val name: String = "AwsPresigning"
     override val order: Byte = ORDER
 
+    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
+        rustCrate.mergeFeature(Feature("client", default = true, listOf("tower")))
+    }
+
     override fun operationCustomizations(
         protocolConfig: ProtocolConfig,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
-    ): List<OperationCustomization> = listOf(
+    ): List<OperationCustomization> = baseCustomizations + listOf(
         AwsInputPresignedMethod(protocolConfig.runtimeConfig, protocolConfig.symbolProvider, operation)
     )
 
@@ -69,15 +75,23 @@ class AwsInputPresignedMethod(
     private val operationShape: OperationShape
 ) : OperationCustomization() {
     private val codegenScope = arrayOf(
+        "aws_hyper" to runtimeConfig.awsRuntimeDependency("aws-hyper").copy(optional = true).asType(),
         "Error" to AwsRuntimeType.Presigning.member("config::Error"),
         "PresignedRequest" to AwsRuntimeType.Presigning.member("request::PresignedRequest"),
+        "PresignedRequestService" to AwsRuntimeType.Presigning.member("service::PresignedRequestService"),
         "PresigningConfig" to AwsRuntimeType.Presigning.member("config::PresigningConfig"),
-        "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::SdkError")
+        "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::SdkError"),
+        "sig_auth" to runtimeConfig.sigAuth().asType(),
+        "tower" to CargoDependency.Tower.asType(),
     )
 
     override fun section(section: OperationSection): Writable = writable {
         if (section is OperationSection.InputImpl && section.operationShape.hasTrait(PresignableTrait::class.java)) {
             writeInputPresignedMethod()
+        } else {
+            // TODO(PresignedReqPrototype): Is there a better way to do this?
+            // HACK: Add tower to optional dependencies so that the client feature can reference it
+            rustTemplate("// ignore-me: #{tower}", *codegenScope)
         }
     }
 
@@ -86,6 +100,7 @@ class AwsInputPresignedMethod(
         rustBlockTemplate(
             """
             // TODO(PresignedReqPrototype): Doc comments
+            ##[cfg(feature = "client")]
             pub async fn presigned(
                 self,
                 config: &crate::config::Config,
@@ -97,10 +112,25 @@ class AwsInputPresignedMethod(
         ) {
             rustTemplate(
                 """
-                let (_request, _) = self.make_operation(config)
+                let (mut request, _) = self.make_operation(config)
                     .map_err(|err| #{SdkError}::ConstructionFailure(err.into()))?
                     .into_request_response();
-                unimplemented!("TODO(PresignedReqPrototype): middleware chain to construct presigned request")
+
+                // Change signature type to query params
+                {
+                    let mut props = request.properties_mut();
+                    let mut config = props.get_mut::<#{sig_auth}::signer::OperationSigningConfig>()
+                        .expect("signing config added by make_operation()");
+                    config.signature_type = #{sig_auth}::signer::HttpSignatureType::HttpRequestQueryParams;
+                }
+
+                let middleware = #{aws_hyper}::AwsMiddleware::default();
+                let mut svc = #{tower}::builder::ServiceBuilder::new()
+                    .layer(&middleware)
+                    .service(#{PresignedRequestService}::new());
+
+                use #{tower}::{Service, ServiceExt};
+                Ok(svc.ready().await?.call(request).await?)
                 """,
                 *codegenScope
             )
