@@ -23,8 +23,11 @@ import kotlin.streams.toList
 object OperationNormalizer {
     // Functions to construct synthetic shape IDs—Don't rely on these in external code.
     // Rename safety: Operations cannot be renamed
-    private fun OperationShape.syntheticInputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Input")
-    private fun OperationShape.syntheticOutputId() = ShapeId.fromParts(this.id.namespace, "${this.id.name}Output")
+    // In order to ensure that the fully qualified smithy id of a synthetic shape can never conflict with an existing shape,
+    // the `synthetic` namespace is appened.
+    private fun OperationShape.syntheticInputId() = ShapeId.fromParts(this.id.namespace + ".synthetic", "${this.id.name}Input")
+    private fun OperationShape.syntheticOutputId() = ShapeId.fromParts(this.id.namespace + ".synthetic", "${this.id.name}Output")
+
     /**
      * Add synthetic input & output shapes to every Operation in model. The generated shapes will be marked with
      * [SyntheticInputTrait] and [SyntheticOutputTrait] respectively. Shapes will be added _even_ if the operation does
@@ -37,6 +40,10 @@ object OperationNormalizer {
             // Generate or modify the input and output of the given `Operation` to be a unique shape
             syntheticInputShapes(model, operation) + syntheticOutputShapes(model, operation)
         }
+        val shapeConflict = newShapes.firstOrNull() { shape -> model.getShape(shape.id).isPresent }
+        check(
+            shapeConflict == null
+        ) { "shape $shapeConflict conflicted with an existing shape in the model (${model.getShape(shapeConflict!!.id)}. This is a bug." }
         val modelWithOperationInputs = model.toBuilder().addShapes(newShapes).build()
         return transformer.mapShapes(modelWithOperationInputs) {
             // Update all operations to point to their new input/output shapes

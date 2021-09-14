@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -44,14 +45,18 @@ fun RustSymbolProvider.serializeFunctionName(shape: Shape): String = shapeFuncti
  */
 fun RustSymbolProvider.deserializeFunctionName(shape: Shape): String = shapeFunctionName("deser", shape)
 
+fun ShapeId.toRustIdentifier(): String {
+    return this.namespace.replace(".", "_").toSnakeCase() + this.name.toSnakeCase()
+}
+
 private fun RustSymbolProvider.shapeFunctionName(prefix: String, shape: Shape): String {
-    val symbolNameSnakeCase = toSymbol(shape).name.toSnakeCase()
+    val symbolNameSnakeCase = toSymbol(shape).fullName.replace("::", "_").toSnakeCase()
     return prefix + "_" + when (shape) {
-        is ListShape -> "list_${shape.id.name.toSnakeCase()}"
-        is MapShape -> "map_${shape.id.name.toSnakeCase()}"
-        is MemberShape -> "member_${shape.container.name.toSnakeCase()}_${shape.memberName.toSnakeCase()}"
+        is ListShape -> "list_${shape.id.toRustIdentifier()}"
+        is MapShape -> "map_${shape.id.toRustIdentifier()}"
+        is MemberShape -> "member_${shape.container.toRustIdentifier()}_${shape.memberName.toSnakeCase()}"
         is OperationShape -> "operation_$symbolNameSnakeCase"
-        is SetShape -> "set_${shape.id.name.toSnakeCase()}"
+        is SetShape -> "set_${shape.id.toRustIdentifier()}"
         is StructureShape -> "structure_$symbolNameSnakeCase"
         is UnionShape -> "union_$symbolNameSnakeCase"
         else -> TODO("SerializerFunctionNamer.name: $shape")
