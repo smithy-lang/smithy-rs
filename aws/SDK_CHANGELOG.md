@@ -1,5 +1,6 @@
 vNext (Month Day, Year)
 =======================
+- :tada: Add support for `OpenSearch` service & bring in other model updates (#todo)
 
 v0.0.17-alpha (September 2nd, 2021)
 ===================================
