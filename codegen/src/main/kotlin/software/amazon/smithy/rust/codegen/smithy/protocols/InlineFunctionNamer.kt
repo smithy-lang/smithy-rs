@@ -46,7 +46,7 @@ fun RustSymbolProvider.serializeFunctionName(shape: Shape): String = shapeFuncti
 fun RustSymbolProvider.deserializeFunctionName(shape: Shape): String = shapeFunctionName("deser", shape)
 
 fun ShapeId.toRustIdentifier(): String {
-    return this.namespace.replace(".", "_").toSnakeCase() + this.name.toSnakeCase()
+    return "${namespace.replace(".", "_").toSnakeCase()}_${name.toSnakeCase()}"
 }
 
 private fun RustSymbolProvider.shapeFunctionName(prefix: String, shape: Shape): String {
