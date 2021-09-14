@@ -477,8 +477,13 @@ class HttpBoundProtocolGenerator(
             for (header in additionalHeaders) {
                 rustTemplate(
                     """
-                    builder = #{header_util}::set_header_if_absent(builder, ${header.first.dq()}, ${header.second.dq()});
+                    builder = #{header_util}::set_header_if_absent(
+                                builder,
+                                #{http}::header::HeaderName::from_static(${header.first.dq()}),
+                                ${header.second.dq()}
+                    );
                     """,
+                    "http" to RuntimeType.http,
                     "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header")
 
                 )

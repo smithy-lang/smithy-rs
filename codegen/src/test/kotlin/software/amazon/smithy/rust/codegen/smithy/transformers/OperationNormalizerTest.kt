@@ -86,4 +86,32 @@ internal class OperationNormalizerTest {
         testSymbolProvider(modified).toSymbol(outputShape).name shouldBe "MyOpOutput"
         outputShape.memberNames shouldBe listOf("v")
     }
+
+    @Test
+    fun `synthetics should not collide with other operations`() {
+        val model = """
+            namespace test
+
+            structure DeleteApplicationRequest {}
+            structure DeleteApplicationResponse {}
+
+            operation DeleteApplication {
+                input: DeleteApplicationRequest,
+                output: DeleteApplicationResponse,
+            }
+
+            structure DeleteApplicationOutputRequest {}
+            structure DeleteApplicationOutputResponse {}
+
+            operation DeleteApplicationOutput {
+                input: DeleteApplicationOutputRequest,
+                output: DeleteApplicationOutputResponse,
+            }
+        """.asSmithyModel()
+
+        (model.expectShape(ShapeId.from("test#DeleteApplicationOutput")) is OperationShape) shouldBe true
+
+        val modified = OperationNormalizer.transform(model)
+        (modified.expectShape(ShapeId.from("test#DeleteApplicationOutput")) is OperationShape) shouldBe true
+    }
 }

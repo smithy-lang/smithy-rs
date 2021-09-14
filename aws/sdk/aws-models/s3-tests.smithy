@@ -156,7 +156,7 @@ apply CreateMultipartUpload @httpRequestTests([
 
 apply PutObject @httpRequestTests([
     {
-        id: "DontSendMultipleContentTypeHeaders",
+        id: "DontSendDuplicateContentType",
         documentation: "This test validates that if a content-type is specified, that only one content-type header is sent",
         method: "PUT",
         protocol: "aws.protocols#restXml",
@@ -166,6 +166,20 @@ apply PutObject @httpRequestTests([
             Bucket: "test-bucket",
             Key: "test-key",
             ContentType: "text/html"
+        }
+    },
+    {
+        id: "DontSendDuplicateContentLength",
+        documentation: "This test validates that if a content-length is specified, that only one content-length header is sent",
+        method: "PUT",
+        protocol: "aws.protocols#restXml",
+        uri: "/test-bucket/test-key",
+        headers: { "content-length": "2" },
+        params: {
+            Bucket: "test-bucket",
+            Key: "test-key",
+            ContentLength: 2,
+            Body: "ab"
         }
     }
 ])
