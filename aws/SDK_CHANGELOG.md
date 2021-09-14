@@ -1,5 +1,7 @@
-vNext (Month Day, Year)
+v0.0.18-alpha (September 14th, 2021)
 =======================
+- :tada: Add support for `OpenSearch` service & bring in other model updates (#todo)
+- Cleanup docs in `aws-config`
 
 **New This Week**
 - :bug: Fixes issue where `Content-Length` header could be duplicated leading to signing failure (aws-sdk-rust#220, smithy-rs#697)
