@@ -35,7 +35,19 @@ open class RustCrate(
         inner.useFileWriter("src/lib.rs", "crate", moduleWriter)
     }
 
-    fun addFeature(feature: Feature) = this.features.add(feature)
+    fun mergeFeature(feature: Feature) {
+        when (val existing = features.firstOrNull { it.name == feature.name }) {
+            null -> features.add(feature)
+            else -> {
+                features.remove(existing)
+                features.add(
+                    existing.copy(
+                        deps = (existing.deps + feature.deps).toSortedSet().toList()
+                    )
+                )
+            }
+        }
+    }
 
     fun finalize(settings: RustSettings, libRsCustomizations: List<LibRsCustomization>) {
         injectInlineDependencies()

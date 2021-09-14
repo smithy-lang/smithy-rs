@@ -27,12 +27,11 @@ pub enum SigningAlgorithm {
 pub enum HttpSignatureType {
     /// A signature for a full http request should be computed, with header updates applied to the signing result.
     HttpRequestHeaders,
-    /* Currently Unsupported
+
     /// A signature for a full http request should be computed, with query param updates applied to the signing result.
     ///
-    /// This is typically used for presigned URLs & is currently unsupported.
+    /// This is typically used for presigned URLs.
     HttpRequestQueryParams,
-     */
 }
 
 /// Signing Configuration for an Operation
