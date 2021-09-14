@@ -1,6 +1,7 @@
-vNext (Month Day, Year)
+v0.0.18-alpha (September 14th, 2021)
 =======================
 - :tada: Add support for `OpenSearch` service & bring in other model updates (#todo)
+- Cleanup docs in `aws-config`
 
 v0.0.17-alpha (September 2nd, 2021)
 ===================================

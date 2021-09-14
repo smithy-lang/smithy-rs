@@ -1,4 +1,4 @@
-vNext (Month Day, Year)
+v0.23 (September 14th, 2021)
 =======================
 
 v0.22 (September 2nd, 2021)
