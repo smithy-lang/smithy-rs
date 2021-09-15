@@ -17,6 +17,7 @@ val smithyVersion: String by project
 
 dependencies {
     implementation(project(":codegen"))
+    implementation(project(":codegen-server"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")

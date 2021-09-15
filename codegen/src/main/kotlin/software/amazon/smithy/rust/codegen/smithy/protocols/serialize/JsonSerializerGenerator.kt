@@ -45,11 +45,11 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
-class JsonSerializerGenerator(
+open class JsonSerializerGenerator(
     protocolConfig: ProtocolConfig,
     private val httpBindingResolver: HttpBindingResolver,
 ) : StructuredDataSerializerGenerator {
-    private data class Context<T : Shape>(
+    data class Context<T : Shape>(
         /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
         val writerExpression: String,
         /** Expression representing the value to write to the JsonValueWriter */
@@ -57,7 +57,7 @@ class JsonSerializerGenerator(
         val shape: T,
     )
 
-    private data class MemberContext(
+    data class MemberContext(
         /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
         val writerExpression: String,
         /** Expression representing the value to write to the JsonValueWriter */
@@ -114,7 +114,7 @@ class JsonSerializerGenerator(
     }
 
     // Specialized since it holds a JsonObjectWriter expression rather than a JsonValueWriter
-    private data class StructContext(
+    data class StructContext(
         /** Name of the JsonObjectWriter */
         val objectName: String,
         /** Name of the variable that holds the struct */
@@ -122,13 +122,13 @@ class JsonSerializerGenerator(
         val shape: StructureShape,
     )
 
-    private val model = protocolConfig.model
-    private val symbolProvider = protocolConfig.symbolProvider
-    private val runtimeConfig = protocolConfig.runtimeConfig
-    private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
+    val model = protocolConfig.model
+    val symbolProvider = protocolConfig.symbolProvider
+    val runtimeConfig = protocolConfig.runtimeConfig
+    val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val serializerError = smithyTypes.member("Error")
-    private val codegenScope = arrayOf(
+    val codegenScope = arrayOf(
         "String" to RuntimeType.String,
         "Error" to serializerError,
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
@@ -200,7 +200,7 @@ class JsonSerializerGenerator(
         }
     }
 
-    private fun RustWriter.serializeStructure(
+    fun RustWriter.serializeStructure(
         context: StructContext,
         includedMembers: List<MemberShape>? = null,
     ) {
@@ -226,7 +226,7 @@ class JsonSerializerGenerator(
         rust("#T(&mut ${context.objectName}, ${context.localName});", structureSerializer)
     }
 
-    private fun RustWriter.serializeMember(context: MemberContext) {
+    fun RustWriter.serializeMember(context: MemberContext) {
         val targetShape = model.expectShape(context.shape.target)
         if (symbolProvider.toSymbol(context.shape).isOptional()) {
             safeName().also { local ->
@@ -249,7 +249,7 @@ class JsonSerializerGenerator(
         }
     }
 
-    private fun RustWriter.serializeMemberValue(context: MemberContext, target: Shape) {
+    fun RustWriter.serializeMemberValue(context: MemberContext, target: Shape) {
         val writer = context.writerExpression
         val value = context.valueExpression
         when (target) {
@@ -297,7 +297,7 @@ class JsonSerializerGenerator(
         }
     }
 
-    private fun RustWriter.jsonArrayWriter(context: MemberContext, inner: RustWriter.(String) -> Unit) {
+    fun RustWriter.jsonArrayWriter(context: MemberContext, inner: RustWriter.(String) -> Unit) {
         safeName("array").also { arrayName ->
             rust("let mut $arrayName = ${context.writerExpression}.start_array();")
             inner(arrayName)
@@ -305,7 +305,7 @@ class JsonSerializerGenerator(
         }
     }
 
-    private fun RustWriter.jsonObjectWriter(context: MemberContext, inner: RustWriter.(String) -> Unit) {
+    fun RustWriter.jsonObjectWriter(context: MemberContext, inner: RustWriter.(String) -> Unit) {
         safeName("object").also { objectName ->
             rust("let mut $objectName = ${context.writerExpression}.start_object();")
             inner(objectName)
@@ -313,14 +313,14 @@ class JsonSerializerGenerator(
         }
     }
 
-    private fun RustWriter.serializeCollection(context: Context<CollectionShape>) {
+    fun RustWriter.serializeCollection(context: Context<CollectionShape>) {
         val itemName = safeName("item")
         rustBlock("for $itemName in ${context.valueExpression.asRef()}") {
             serializeMember(MemberContext.collectionMember(context, itemName))
         }
     }
 
-    private fun RustWriter.serializeMap(context: Context<MapShape>) {
+    fun RustWriter.serializeMap(context: Context<MapShape>) {
         val keyName = safeName("key")
         val valueName = safeName("value")
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
@@ -333,7 +333,7 @@ class JsonSerializerGenerator(
         }
     }
 
-    private fun RustWriter.serializeUnion(context: Context<UnionShape>) {
+    fun RustWriter.serializeUnion(context: Context<UnionShape>) {
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val unionSymbol = symbolProvider.toSymbol(context.shape)
         val unionSerializer = RuntimeType.forInlineFun(fnName, jsonSerModule) { writer ->

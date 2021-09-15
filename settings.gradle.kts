@@ -18,6 +18,7 @@ enableFeaturePreview("GRADLE_METADATA")
 
 include(":codegen")
 include(":codegen-test")
+include(":codegen-server")
 include(":rust-runtime")
 include(":aws:sdk-codegen")
 include(":aws:sdk-codegen-test")
