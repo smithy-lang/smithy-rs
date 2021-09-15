@@ -50,15 +50,15 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.utils.StringUtils
 
-class JsonParserGenerator(
+open class JsonParserGenerator(
     protocolConfig: ProtocolConfig,
     private val httpBindingResolver: HttpBindingResolver,
 ) : StructuredDataParserGenerator {
-    private val model = protocolConfig.model
-    private val symbolProvider = protocolConfig.symbolProvider
+    val model = protocolConfig.model
+    val symbolProvider = protocolConfig.symbolProvider
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
-    private val codegenScope = arrayOf(
+    val codegenScope = arrayOf(
         "Error" to smithyJson.member("deserialize::Error"),
         "ErrorReason" to smithyJson.member("deserialize::ErrorReason"),
         "expect_blob_or_null" to smithyJson.member("deserialize::token::expect_blob_or_null"),
@@ -195,7 +195,7 @@ class JsonParserGenerator(
         )
     }
 
-    private fun RustWriter.expectEndOfTokenStream() {
+    fun RustWriter.expectEndOfTokenStream() {
         rustBlock("if tokens.next().is_some()") {
             rustTemplate(
                 "return Err(#{Error}::custom(\"found more JSON tokens after completing parsing\"));",
@@ -204,7 +204,7 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.deserializeStructInner(members: Collection<MemberShape>) {
+    fun RustWriter.deserializeStructInner(members: Collection<MemberShape>) {
         objectKeyLoop(hasMembers = members.isNotEmpty()) {
             rustBlock("match key.to_unescaped()?.as_ref()") {
                 for (member in members) {
