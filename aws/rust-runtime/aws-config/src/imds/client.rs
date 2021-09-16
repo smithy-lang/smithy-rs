@@ -15,11 +15,11 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent, UserAgentStage};
-use aws_hyper::{DynConnector, SdkSuccess};
 use aws_types::os_shim_internal::{Env, Fs};
 use bytes::Bytes;
 use http::uri::InvalidUri;
 use http::{Response, Uri};
+use smithy_client::{erase::DynConnector, SdkSuccess};
 use smithy_client::{retry, SdkError};
 use smithy_http::body::SdkBody;
 use smithy_http::endpoint::Endpoint;

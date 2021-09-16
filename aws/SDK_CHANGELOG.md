@@ -1,3 +1,8 @@
+vNext (Month Day, Year)
+=======================
+**New This Week**
+- Add IMDS client to `aws-config`
+
 v0.0.18-alpha (September 14th, 2021)
 =======================
 - :tada: Add support for `OpenSearch` service & bring in other model updates (#todo)

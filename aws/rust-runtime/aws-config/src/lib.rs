@@ -40,6 +40,7 @@
 //! # }
 //! ```
 
+#[allow(dead_code)]
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Providers that implement the default AWS provider chain

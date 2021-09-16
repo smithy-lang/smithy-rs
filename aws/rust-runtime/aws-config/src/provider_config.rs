@@ -6,7 +6,6 @@
 //! Configuration Options for Credential Providers
 
 use crate::connector::default_connector;
-use crate::default_provider::region::DefaultRegionChain;
 use aws_types::os_shim_internal::{Env, Fs, TimeSource};
 use aws_types::region::Region;
 use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
@@ -176,6 +175,7 @@ impl ProviderConfig {
     ///
     /// Note: the `env` and `fs` already set on this provider will be used when loading the default region.
     pub async fn load_default_region(self) -> Self {
+        use crate::default_provider::region::DefaultRegionChain;
         let provider_chain = DefaultRegionChain::builder().configure(&self).build();
         self.with_region(provider_chain.region().await)
     }

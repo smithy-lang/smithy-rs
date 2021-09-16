@@ -1,3 +1,10 @@
+vNext (Month Day, Year)
+=======================
+**New This Week**
+- Add IMDS client to `aws-config`
+
+
+
 v0.23 (September 14th, 2021)
 =======================
 
