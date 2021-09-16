@@ -31,7 +31,7 @@ pub struct AwsUserAgent {
 impl AwsUserAgent {
     /// Load a User Agent configuration from the environment
     ///
-    /// This utilizes [`BUILD_METADATA`](static@aws_types::build_metadata::BUILD_METADATA) from `aws_types`
+    /// This utilizes [`BUILD_METADATA`](const@aws_types::build_metadata::BUILD_METADATA) from `aws_types`
     /// to capture the Rust version & target platform. `ApiMetadata` provides
     /// the version & name of the specific service.
     pub const fn new_from_environment(api_metadata: ApiMetadata) -> Self {
