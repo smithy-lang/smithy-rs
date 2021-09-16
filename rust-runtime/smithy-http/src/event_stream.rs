@@ -417,7 +417,7 @@ mod tests {
 
     #[tokio::test]
     async fn receiver_is_send() {
-        assert_send::<Receiver::<(), ()>>();
+        assert_send::<Receiver<(), ()>>();
     }
 
     #[derive(Debug)]
