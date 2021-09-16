@@ -2,6 +2,7 @@ vNext (Month Day, Year)
 =======================
 **New This Week**
 - Add IMDS client to `aws-config`
+- Update event stream `Receiver`s to be `Send` (aws-sdk-rust#224)
 
 v0.0.18-alpha (September 14th, 2021)
 =======================
