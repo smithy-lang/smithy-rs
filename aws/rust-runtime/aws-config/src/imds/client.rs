@@ -261,8 +261,6 @@ impl ParseStrictResponse for ImdsGetResponseHandler {
 /// IMDS can be accessed in two ways:
 /// 1. Via the IpV4 endpoint: `http://169.254.169.254`
 /// 2. Via the Ipv6 endpoint: `http://[fd00:ec2::254]`
-///
-/// See [`EndpointMode::endpoint`]
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum EndpointMode {
