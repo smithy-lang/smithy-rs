@@ -139,10 +139,6 @@ impl Client {
     ///   .expect("failure communicating with IMDS");
     /// # }
     /// ```
-    ///
-    /// Use IpV6:
-    /// ```rust
-    ///
     pub async fn get(&self, path: &str) -> Result<String, SdkError<ImdsError>> {
         let operation = self
             .make_operation(path)
