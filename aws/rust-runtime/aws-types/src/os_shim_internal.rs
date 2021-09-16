@@ -32,7 +32,7 @@ use std::time::{Duration, SystemTime};
 /// use std::collections::HashMap;
 /// let fs = aws_types::os_shim_internal::Fs::from_map({
 ///     let mut map = HashMap::new();
-///     map.insert("/home/.aws/config".to_string(), "[default]\nregion = us-east-1".into());
+///     map.insert("/home/.aws/config".to_string(), "[default]\nregion = us-east-1");
 ///     map
 /// });
 /// ```
