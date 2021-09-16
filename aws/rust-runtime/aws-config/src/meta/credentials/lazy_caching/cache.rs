@@ -21,7 +21,7 @@ pub(crate) struct Cache<T, E> {
 impl<T, E> Clone for Cache<T, E> {
     fn clone(&self) -> Self {
         Self {
-            buffer_time: self.buffer_time.clone(),
+            buffer_time: self.buffer_time,
             value: self.value.clone(),
             _phantom: Default::default(),
         }

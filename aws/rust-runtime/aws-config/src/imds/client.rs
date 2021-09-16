@@ -288,6 +288,8 @@ impl Display for InvalidEndpointMode {
     }
 }
 
+impl Error for InvalidEndpointMode {}
+
 impl FromStr for EndpointMode {
     type Err = InvalidEndpointMode;
 
@@ -340,6 +342,16 @@ impl Display for BuildError {
             BuildError::InvalidEndpointMode(e) => write!(f, "{}", e),
             BuildError::InvalidProfile(e) => write!(f, "{}", e),
             BuildError::InvalidEndpointUri(e) => write!(f, "{}", e),
+        }
+    }
+}
+
+impl Error for BuildError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            BuildError::InvalidEndpointMode(e) => Some(e),
+            BuildError::InvalidProfile(e) => Some(e),
+            BuildError::InvalidEndpointUri(e) => Some(e),
         }
     }
 }
@@ -471,19 +483,19 @@ impl EndpointSource {
                 let profile = profile::load(fs, env)
                     .await
                     .map_err(BuildError::InvalidProfile)?;
-                let uri_override = if let Some(uri) = env.get(env::ENDPOINT).ok() {
+                let uri_override = if let Ok(uri) = env.get(env::ENDPOINT) {
                     Some(Cow::Owned(uri))
                 } else {
                     profile.get(profile_keys::ENDPOINT).map(Cow::Borrowed)
                 };
                 if let Some(uri) = uri_override {
-                    return Ok(Uri::try_from(uri.as_ref()).map_err(BuildError::InvalidEndpointUri)?);
+                    return Uri::try_from(uri.as_ref()).map_err(BuildError::InvalidEndpointUri);
                 }
 
                 // if not, load a endpoint mode from the environment
                 let mode = if let Some(mode) = mode_override {
                     mode
-                } else if let Some(mode) = env.get(env::ENDPOINT_MODE).ok() {
+                } else if let Ok(mode) = env.get(env::ENDPOINT_MODE) {
                     mode.parse::<EndpointMode>()
                         .map_err(BuildError::InvalidEndpointMode)?
                 } else if let Some(mode) = profile.get(profile_keys::ENDPOINT_MODE) {

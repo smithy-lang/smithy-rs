@@ -132,7 +132,7 @@ impl TokenMiddleware {
             .client
             .call(operation)
             .await
-            .map_err(|err| ImdsError::FailedToLoadToken(err))?;
+            .map_err(ImdsError::FailedToLoadToken)?;
         let expiry = response.expiry - TOKEN_REFRESH_BUFFER;
         Ok((response, expiry))
     }
