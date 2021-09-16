@@ -413,6 +413,13 @@ mod tests {
         );
     }
 
+    fn assert_send<T: Send>() {}
+
+    #[tokio::test]
+    async fn receiver_is_send() {
+        assert_send::<Receiver::<(), ()>>();
+    }
+
     #[derive(Debug)]
     struct TestServiceError;
     impl std::fmt::Display for TestServiceError {
