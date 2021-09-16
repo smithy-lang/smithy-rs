@@ -288,6 +288,8 @@ impl Display for InvalidEndpointMode {
     }
 }
 
+impl Error for InvalidEndpointMode {}
+
 impl FromStr for EndpointMode {
     type Err = InvalidEndpointMode;
 
@@ -340,6 +342,17 @@ impl Display for BuildError {
             BuildError::InvalidEndpointMode(e) => write!(f, "{}", e),
             BuildError::InvalidProfile(e) => write!(f, "{}", e),
             BuildError::InvalidEndpointUri(e) => write!(f, "{}", e),
+        }
+    }
+}
+
+
+impl Error for BuildError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            BuildError::InvalidEndpointMode(e) => Some(e),
+            BuildError::InvalidProfile(e) => Some(e),
+            BuildError::InvalidEndpointUri(e) => Some(e),
         }
     }
 }
