@@ -1,3 +1,8 @@
+vNext (Month, Day, Year)
+=======================
+
+- Update `Recevier`s to be `Send` (aws-sdk-rust#224)
+
 v0.23 (September 14th, 2021)
 =======================
 

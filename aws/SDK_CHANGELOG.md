@@ -1,3 +1,8 @@
+vNext (Month Day, Year)
+=======================
+
+- Update `Recevier`s to be `Send` (aws-sdk-rust#224)
+
 v0.0.18-alpha (September 14th, 2021)
 =======================
 - :tada: Add support for `OpenSearch` service & bring in other model updates (#todo)
