@@ -726,6 +726,59 @@ mod test {
         assert_eq!(resp2, "test-imds-output2");
     }
 
+    /// Tokens are refreshed up to 120 seconds early to avoid using an expired token.
+    #[tokio::test]
+    async fn token_refresh_buffer() {
+        let connection = TestConnection::new(vec![
+            (
+                token_request("http://[fd00:ec2::254]", 600),
+                token_response(600, TOKEN_A),
+            ),
+            // t = 0
+            (
+                imds_request("http://[fd00:ec2::254]/latest/metadata", TOKEN_A),
+                imds_response(r#"test-imds-output1"#),
+            ),
+            // t = 400 (no refresh)
+            (
+                imds_request("http://[fd00:ec2::254]/latest/metadata", TOKEN_A),
+                imds_response(r#"test-imds-output2"#),
+            ),
+            // t = 550 (within buffer)
+            (
+                token_request("http://[fd00:ec2::254]", 600),
+                token_response(600, TOKEN_B),
+            ),
+            (
+                imds_request("http://[fd00:ec2::254]/latest/metadata", TOKEN_B),
+                imds_response(r#"test-imds-output3"#),
+            ),
+        ]);
+        let mut time_source = ManualTimeSource::new(UNIX_EPOCH);
+        let client = super::Client::builder()
+            .configure(
+                &ProviderConfig::no_configuration()
+                    .with_connector(DynConnector::new(connection.clone()))
+                    .with_time_source(TimeSource::manual(&time_source)),
+            )
+            .endpoint_mode(EndpointMode::IpV6)
+            .token_ttl(Duration::from_secs(600))
+            .build()
+            .await
+            .expect("valid client");
+
+        let resp1 = client.get("/latest/metadata").await.expect("success");
+        // now the cached credential has expired
+        time_source.advance(Duration::from_secs(400));
+        let resp2 = client.get("/latest/metadata").await.expect("success");
+        time_source.advance(Duration::from_secs(150));
+        let resp3 = client.get("/latest/metadata").await.expect("success");
+        connection.assert_requests_match(&[]);
+        assert_eq!(resp1, "test-imds-output1");
+        assert_eq!(resp2, "test-imds-output2");
+        assert_eq!(resp3, "test-imds-output3");
+    }
+
     /// 500 error during the GET should be retried
     #[tokio::test]
     #[traced_test]
