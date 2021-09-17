@@ -18,6 +18,7 @@ pub mod event_stream;
 #[cfg(feature = "sign-http")]
 pub mod http_request;
 
+// TODO(PresignedReqPrototype): This should be non_exhaustive with a builder
 /// Parameters to use when signing.
 pub struct SigningParams<'a, S> {
     /// Access Key ID to use.

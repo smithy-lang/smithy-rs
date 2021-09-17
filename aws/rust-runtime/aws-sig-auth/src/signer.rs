@@ -4,12 +4,11 @@
  */
 
 use aws_sigv4::http_request::{
-    calculate_signing_headers, PayloadChecksumKind, SigningSettings, UriEncoding,
+    sign, PayloadChecksumKind, SignableRequest, SignatureLocation, SigningSettings, UriEncoding,
 };
 use aws_types::region::SigningRegion;
 use aws_types::Credentials;
 use aws_types::SigningService;
-use http::header::HeaderName;
 use smithy_http::body::SdkBody;
 use std::error::Error;
 use std::fmt;
@@ -145,6 +144,10 @@ impl SigV4Signer {
         } else {
             PayloadChecksumKind::NoHeader
         };
+        settings.signature_location = match operation_config.signature_type {
+            HttpSignatureType::HttpRequestHeaders => SignatureLocation::Headers,
+            HttpSignatureType::HttpRequestQueryParams => SignatureLocation::QueryParams,
+        };
         let sigv4_config = aws_sigv4::http_request::SigningParams {
             access_key: credentials.access_key_id(),
             secret_key: credentials.secret_access_key(),
@@ -155,28 +158,33 @@ impl SigV4Signer {
             settings,
         };
 
-        // A body that is already in memory can be signed directly. A  body that is not in memory
-        // (any sort of streaming body) will be signed via UNSIGNED-PAYLOAD.
-        let signable_body = request_config
-            .payload_override
-            // the payload_override is a cheap clone because it contains either a
-            // reference or a short checksum (we're not cloning the entire body)
-            .cloned()
-            .unwrap_or_else(|| {
-                request
-                    .body()
-                    .bytes()
-                    .map(SignableBody::Bytes)
-                    .unwrap_or(SignableBody::UnsignedPayload)
-            });
+        let (memo, signature) = {
+            // A body that is already in memory can be signed directly. A  body that is not in memory
+            // (any sort of streaming body) will be signed via UNSIGNED-PAYLOAD.
+            let signable_body = request_config
+                .payload_override
+                // the payload_override is a cheap clone because it contains either a
+                // reference or a short checksum (we're not cloning the entire body)
+                .cloned()
+                .unwrap_or_else(|| {
+                    request
+                        .body()
+                        .bytes()
+                        .map(SignableBody::Bytes)
+                        .unwrap_or(SignableBody::UnsignedPayload)
+                });
+            let signable_request = SignableRequest::new(
+                request.method(),
+                request.uri(),
+                request.headers(),
+                signable_body,
+            );
 
-        let (signing_headers, signature) =
-            calculate_signing_headers(request, signable_body, &sigv4_config)?.into_parts();
-        for (key, value) in signing_headers {
-            request
-                .headers_mut()
-                .append(HeaderName::from_static(key), value);
+            sign(signable_request, &sigv4_config)?
         }
+        .into_parts();
+
+        memo.apply_to_request(request);
 
         Ok(Signature::new(signature))
     }
