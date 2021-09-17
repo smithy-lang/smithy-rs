@@ -44,8 +44,8 @@ class EventStreamSymbolProviderTest {
         val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, DefaultConfig), model)
 
         // Look up the synthetic input/output rather than the original input/output
-        val inputStream = model.expectShape(ShapeId.from("test#TestOperationInput\$inputStream")) as MemberShape
-        val outputStream = model.expectShape(ShapeId.from("test#TestOperationOutput\$outputStream")) as MemberShape
+        val inputStream = model.expectShape(ShapeId.from("test.synthetic#TestOperationInput\$inputStream")) as MemberShape
+        val outputStream = model.expectShape(ShapeId.from("test.synthetic#TestOperationOutput\$outputStream")) as MemberShape
 
         val inputType = provider.toSymbol(inputStream).rustType()
         val outputType = provider.toSymbol(outputStream).rustType()
@@ -80,8 +80,8 @@ class EventStreamSymbolProviderTest {
         val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, DefaultConfig), model)
 
         // Look up the synthetic input/output rather than the original input/output
-        val inputStream = model.expectShape(ShapeId.from("test#TestOperationInput\$inputStream")) as MemberShape
-        val outputStream = model.expectShape(ShapeId.from("test#TestOperationOutput\$outputStream")) as MemberShape
+        val inputStream = model.expectShape(ShapeId.from("test.synthetic#TestOperationInput\$inputStream")) as MemberShape
+        val outputStream = model.expectShape(ShapeId.from("test.synthetic#TestOperationOutput\$outputStream")) as MemberShape
 
         val inputType = provider.toSymbol(inputStream).rustType()
         val outputType = provider.toSymbol(outputStream).rustType()

@@ -95,7 +95,6 @@ pub fn merge_in(base: &mut ProfileSet, raw_profile_set: RawProfileSet, kind: Fil
         // When normalizing profiles, profiles should be merged. However, `[profile default]` and
         // `[default]` are considered two separate profiles. Furthermore, `[profile default]` fully
         // replaces any contents of `[default]`!
-        // for each profile in the raw set of profiles, normalize, then merge it into the base set
         if ignore_unprefixed_default
             && profile_name.name == DEFAULT
             && !profile_name.has_profile_prefix

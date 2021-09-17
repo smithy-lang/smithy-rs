@@ -1,9 +1,22 @@
-vNext (Month Day, Year)
------------------------
+vNext (Month, Day, Year)
+=======================
+
+- Update `Receiver`s to be `Send` (aws-sdk-rust#224)
+
+v0.23 (September 14th, 2021)
+=======================
+
+**New This Week**
+- :bug: Fixes issue where `Content-Length` header could be duplicated leading to signing failure (aws-sdk-rust#220, smithy-rs#697)
+- :bug: Fixes naming collision during generation of model shapes that collide with `<operationname>Input` and `<operationname>Output` (#699)
+
+v0.22 (September 2nd, 2021)
+===========================
+
 This release adds support for three commonly requested features:
 - More powerful credential chain
 - Support for constructing multiple clients from the same configuration
-- Support for transcribe streaming and S3 Select
+- Support for Transcribe streaming and S3 Select
 
 In addition, this overhauls client configuration which lead to a number of breaking changes. Detailed changes are inline.
 
@@ -22,8 +35,11 @@ Current Credential Provider Support:
 - [ ] IMDS
 - [ ] ECS
 
-## Upgrade Guide
+Upgrade Guide
+-------------
+
 ### If you use `<sdk>::Client::from_env`
+
 `from_env` loaded region & credentials from environment variables _only_. Default sources have been removed from the generated
 SDK clients and moved to the `aws-config` package. Note that the `aws-config` package default chain adds support for
 profile file and web identity token profiles.
@@ -42,6 +58,7 @@ profile file and web identity token profiles.
    ```
 
 ### If you used `<client>::Config::builder()`
+
 `Config::build()` has been modified to _not_ fallback to a default provider. Instead, use `aws-config` to load and modify
 the default chain. Note that when you switch to `aws-config`, support for profile files and web identity tokens will be added.
 
@@ -79,6 +96,7 @@ for a specific credential provider, you should use the default provider chain:
 ```
 
 ### If you maintain your own credential provider
+
 `AsyncProvideCredentials` has been renamed to `ProvideCredentials`. The trait has been moved from `aws-auth` to `aws-types`.
 The original `ProvideCredentials` trait has been removed. The return type has been changed to by a custom future.
 
@@ -122,7 +140,11 @@ impl ProvideCredentials for CustomCreds {
 }
 ```
 
+Changes
+-------
+
 **Breaking Changes**
+
 - Credential providers from `aws-auth-providers` have been moved to `aws-config` (#678)
 - `AsyncProvideCredentials` has been renamed to `ProvideCredentials`. The original non-async provide credentials has been
   removed. See the migration guide above.
@@ -154,22 +176,25 @@ impl ProvideCredentials for CustomCreds {
 
 **New this week**
 
-- (When complete) Add Event Stream support (#653, #xyz)
-- Add profile file provider for region (#594, #682)
+- :tada: Add profile file provider for region (#594, #682)
+- :tada: Add support for shared configuration between multiple services (#673)
+- :tada: Add support for Transcribe `StartStreamTranscription` and S3 `SelectObjectContent` operations (#667)
+- :tada: Add support for new MemoryDB service (#677)
 - Improve documentation on collection-aware builders (#664)
-- Add support for Transcribe `StartStreamTranscription` and S3 `SelectObjectContent` operations (#667)
-- Add support for shared configuration between multiple services (#673)
 - Update AWS SDK models (#677)
 - :bug: Fix sigv4 signing when request ALPN negotiates to HTTP/2. (#674)
 - :bug: Fix integer size on S3 `Size` (#679, aws-sdk-rust#209)
+- :bug: Fix JSON parsing issue for modeled empty structs (#683, aws-sdk-rust#212)
 - :bug: Fix acronym case disagreement between FluentClientGenerator and HttpProtocolGenerator type aliasing (#668)
 
 **Internal Changes**
+
+- Add Event Stream support for restJson1 and restXml (#653, #667)
 - Add NowOrLater future to smithy-async (#672)
 
 
 v0.21 (August 19th, 2021)
--------------------------
+=========================
 
 **New This Week**
 
@@ -191,7 +216,7 @@ v0.21 (August 19th, 2021)
 - Add support for the smithy auth trait. This enables authorizations that explicitly disable authorization to work when no credentials have been provided. (#652)
 
 v0.20 (August 10th, 2021)
---------------------------
+=========================
 
 **Breaking changes**
 
@@ -224,7 +249,7 @@ v0.20 (August 10th, 2021)
 - Bring in the latest AWS models (#630)
 
 v0.19 (August 3rd, 2021)
-------------------------
+========================
 
 IoT Data Plane is now available! If you discover it isn't functioning as expected, please let us know!
 
@@ -251,12 +276,12 @@ Thank you for your contributions! :heart:
 - @trevorrobertsjr (#622)
 
 v0.18.1 (July 27th 2021)
-------------------------
+========================
 
 - Remove timestreamwrite and timestreamquery from the generated services (#613)
 
 v0.18 (July 27th 2021)
-----------------------
+======================
 
 **Breaking changes**
 
@@ -275,7 +300,7 @@ v0.18 (July 27th 2021)
 - :bug: Bugfix: Constrain RFC-3339 timestamp formatting to microsecond precision (#596)
 
 v0.17 (July 15th 2021)
-----------------------
+======================
 
 **New this Week**
 
@@ -291,7 +316,7 @@ Thank you for your contributions! :heart:
 - @eagletmt (#566)
 
 v0.16 (July 6th 2021)
----------------------
+=====================
 
 **New this Week**
 
@@ -319,7 +344,7 @@ Thank you for your contributions! :heart:
 - landonxjames (#579)
 
 v0.15 (June 29th 2021)
-----------------------
+======================
 
 This week, we've added EKS, ECR and Cloudwatch. The JSON deserialization implementation has been replaced, please be on
 the lookout for potential issues.
@@ -350,7 +375,7 @@ Thank you for your contributions! :heart:
 - @eagletmt (#531)
 
 v0.14 (June 22nd 2021)
-----------------------
+======================
 
 This week, we've added CloudWatch Logs support and fixed several bugs in the generated S3 clients. There are a few
 breaking changes this week.
@@ -387,7 +412,7 @@ Thank you for your contributions! :heart:
 - @zekisherif (#515)
 
 v0.13 (June 15th 2021)
-----------------------
+======================
 
 Smithy-rs now has codegen support for all AWS services! This week, we've added CloudFormation, SageMaker, EC2, and SES.
 More details below.
@@ -421,7 +446,7 @@ Contributors:
 Thanks!!
 
 v0.12 (June 8th 2021)
----------------------
+=====================
 
 Starting this week, smithy-rs now has codegen support for all AWS services except EC2. This week we’ve added MediaLive,
 MediaPackage, SNS, Batch, STS, RDS, RDSData, Route53, and IAM. More details below.
@@ -458,7 +483,7 @@ Contributors:
 Thanks!!
 
 v0.11 (June 1st, 2021)
-----------------------
+======================
 
 **New this week:**
 
