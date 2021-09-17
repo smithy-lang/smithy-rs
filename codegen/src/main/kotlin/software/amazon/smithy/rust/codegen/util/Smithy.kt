@@ -47,32 +47,37 @@ fun MemberShape.isStreaming(model: Model) = this.getMemberTrait(model, Streaming
 fun UnionShape.isEventStream(): Boolean {
     return hasTrait(StreamingTrait::class.java)
 }
+
 fun MemberShape.isEventStream(model: Model): Boolean {
     return (model.expectShape(target) as? UnionShape)?.isEventStream() ?: false
 }
+
 fun MemberShape.isInputEventStream(model: Model): Boolean {
     return isEventStream(model) && model.expectShape(container).hasTrait<SyntheticInputTrait>()
 }
+
 fun MemberShape.isOutputEventStream(model: Model): Boolean {
     return isEventStream(model) && model.expectShape(container).hasTrait<SyntheticInputTrait>()
 }
+
 private fun Shape.hasEventStreamMember(model: Model): Boolean {
     return members().any { it.isEventStream(model) }
 }
+
 fun OperationShape.isInputEventStream(model: Model): Boolean {
     return input.map { id -> model.expectShape(id).hasEventStreamMember(model) }.orElse(false)
 }
+
 fun OperationShape.isOutputEventStream(model: Model): Boolean {
     return output.map { id -> model.expectShape(id).hasEventStreamMember(model) }.orElse(false)
 }
+
 fun OperationShape.isEventStream(model: Model): Boolean {
     return isInputEventStream(model) || isOutputEventStream(model)
 }
+
 fun ServiceShape.hasEventStreamOperations(model: Model): Boolean = operations.any { id ->
-    // Don't assume all of the looked up operation ids are operation shapes. Our
-    // synthetic input/output structure shapes can have the same name as an operation,
-    // as is the case with `kinesisanalytics`.
-    model.getShape(id).orNull()?.let { it is OperationShape && it.isEventStream(model) } ?: false
+    model.expectShape(id, OperationShape::class.java).isEventStream(model)
 }
 
 /*

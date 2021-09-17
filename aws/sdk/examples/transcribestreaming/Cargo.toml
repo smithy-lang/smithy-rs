@@ -8,7 +8,6 @@ edition = "2018"
 
 [dependencies]
 aws-config = { path = "../../build/aws-sdk/aws-config" }
-aws-auth-providers = { path = "../../build/aws-sdk/aws-auth-providers" }
 aws-sdk-transcribestreaming = { package = "aws-sdk-transcribestreaming", path = "../../build/aws-sdk/transcribestreaming" }
 aws-types = { path = "../../build/aws-sdk/aws-types" }
 

@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_auth_providers::DefaultProviderChain;
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::model::{
     CompressionType, CsvInput, CsvOutput, ExpressionType, FileHeaderInfo, InputSerialization,
@@ -57,6 +56,7 @@ async fn main() -> Result<(), Error> {
         .or_default_provider()
         .or_else(Region::new("us-east-2"));
     let shared_config = aws_config::from_env().region(region_provider).load().await;
+    let client = Client::new(&shared_config);
 
     println!();
 
@@ -65,16 +65,6 @@ async fn main() -> Result<(), Error> {
         println!("Region:            {}", shared_config.region().unwrap());
         println!();
     }
-
-    let credential_provider = DefaultProviderChain::builder()
-        .region(shared_config.region().unwrap().clone())
-        .build();
-
-    let config = aws_sdk_s3::config::Builder::from(&shared_config)
-        .credentials_provider(credential_provider)
-        .build();
-
-    let client = Client::from_conf(config);
 
     let mut output = client
         .select_object_content()
