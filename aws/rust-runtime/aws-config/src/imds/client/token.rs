@@ -5,7 +5,7 @@
 
 //! IMDS Token Middleware
 //! Requests to IMDS are two part:
-//! 1. A PUT request to the to the token API is made
+//! 1. A PUT request to the token API is made
 //! 2. A GET request is made to the requested API. The Token is added as a header.
 //!
 //! This module implements a middleware that will:

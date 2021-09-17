@@ -168,7 +168,7 @@ impl Client {
     }
 }
 
-/// An error retrieving metdata from IMDS
+/// An error retrieving metadata from IMDS
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ImdsError {
@@ -356,7 +356,7 @@ impl Error for BuildError {
 }
 
 impl Builder {
-    /// Override the number of retries for fetching tokens & metdata
+    /// Override the number of retries for fetching tokens & metadata
     ///
     /// By default, 3 retries will be made.
     pub fn retries(mut self, retries: u32) -> Self {
@@ -369,7 +369,7 @@ impl Builder {
     /// # Examples
     /// ```rust
     /// # use aws_config::imds::Client;
-    ///  async fn test() {
+    /// # async fn test() {
     /// use aws_config::provider_config::ProviderConfig;
     /// let provider = Client::builder()
     ///     .configure(&ProviderConfig::with_default_region().await)
