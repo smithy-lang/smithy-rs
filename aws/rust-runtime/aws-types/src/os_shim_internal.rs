@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::env::VarError;
 use std::ffi::OsString;
 use std::fmt::Debug;
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
@@ -240,32 +241,57 @@ impl Default for TimeSource {
     }
 }
 
+/// Time Source that can be manually moved for tests
+///
+/// # Examples
+///
+/// ```rust
+/// # struct Client {
+/// #  // stub
+/// # }
+/// #
+/// # impl Client {
+/// #     fn with_timesource(ts: TimeSource) -> Self {
+/// #         Client { }
+/// #     }
+/// # }
+/// use aws_types::os_shim_internal::{ManualTimeSource, TimeSource};
+/// use std::time::{UNIX_EPOCH, Duration};
+/// let mut time = ManualTimeSource::new(UNIX_EPOCH);
+/// let client = Client::with_timesource(TimeSource::manual(&time));
+/// time.advance(Duration::from_secs(100));
+/// ```
+/// ```
 #[derive(Clone, Debug)]
 pub struct ManualTimeSource {
     queries: Arc<Mutex<Vec<SystemTime>>>,
-    values: Arc<Mutex<Vec<SystemTime>>>,
+    now: Arc<Mutex<SystemTime>>,
 }
 
 impl ManualTimeSource {
     pub fn new(start_time: SystemTime) -> Self {
         Self {
             queries: Default::default(),
-            values: Arc::new(Mutex::new(vec![start_time])),
+            now: Arc::new(Mutex::new(start_time)),
         }
     }
 
     pub fn set_time(&mut self, time: SystemTime) {
-        self.values.lock().unwrap().push(time);
+        let mut now = self.now.lock().unwrap();
+        *now = time;
     }
 
     pub fn advance(&mut self, delta: Duration) {
-        let mut values = self.values.lock().unwrap();
-        let now = *values.last().expect("non-empty");
-        values.push(now + delta)
+        let mut now = self.now.lock().unwrap();
+        *now = *now + delta;
+    }
+
+    pub fn queries(&self) -> impl Deref<Target = Vec<SystemTime>> + '_ {
+        self.queries.lock().unwrap()
     }
 
     pub fn now(&self) -> SystemTime {
-        let ts = *self.values.lock().unwrap().last().expect("non-empty");
+        let ts = *self.now.lock().unwrap();
         self.queries.lock().unwrap().push(ts);
         ts
     }

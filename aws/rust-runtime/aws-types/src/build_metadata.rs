@@ -21,16 +21,16 @@ pub enum OsFamily {
     Other,
 }
 
-/// Load the value for a cfg flag given a set of possible values
+/// Check the current OS against a list of options
 ///
 /// You can't directly inspect the value of a `cfg` param. Instead, you need to check if the param
-/// is set to a specific value.
+/// is set to a specific value. This macro simplifies checking the current OS family.
 ///
 /// Usage:
 /// ```rust
-/// let os = get_cfg!(target_os: "linux", "android");
+/// let os = get_os_family!(target_os: ("linux", OsFamily::Windows), ("android", OsFamily::Android));
 /// ```
-macro_rules! get_cfg {
+macro_rules! get_os_family {
     ($i:ident : $(($s:expr, $t:expr)),+) => (
         { const fn __getcfg() -> OsFamily { $( if cfg!($i=$s) { return $t; } );+ OsFamily::Other } __getcfg()  }
     )
@@ -39,7 +39,7 @@ macro_rules! get_cfg {
 impl OsFamily {
     pub const fn from_env() -> Self {
         // values from https://doc.rust-lang.org/reference/conditional-compilation.html#target_os
-        get_cfg!(target_os:
+        get_os_family!(target_os:
             ("windows", OsFamily::Windows),
             ("macos", OsFamily::Macos),
             ("ios", OsFamily::Ios),

@@ -41,7 +41,7 @@ use smithy_client::retry;
 /// Tokens are cached to remove the need to reload the token between subsequent requests. To ensure
 /// that a request never fails with a 401 (expired token), a buffer window exists during which the token
 /// may not be expired, but will still be refreshed.
-pub const TOKEN_REFRESH_BUFFER: Duration = Duration::from_secs(120);
+const TOKEN_REFRESH_BUFFER: Duration = Duration::from_secs(120);
 
 const X_AWS_EC2_METADATA_TOKEN_TTL_SECONDS: &str = "x-aws-ec2-metadata-token-ttl-seconds";
 const X_AWS_EC2_METADATA_TOKEN: &str = "x-aws-ec2-metadata-token";
@@ -59,7 +59,7 @@ struct Token {
 ///
 /// It will attach the token to the incoming request on the `x-aws-ec2-metadata-token` header.
 #[derive(Clone)]
-pub struct TokenMiddleware {
+pub(super) struct TokenMiddleware {
     client: Arc<smithy_client::Client<DynConnector, MapRequestLayer<UserAgentStage>>>,
     token_parser: GetTokenResponseHandler,
     token: Cache<Token, ImdsError>,

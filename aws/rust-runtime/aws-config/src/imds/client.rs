@@ -189,6 +189,7 @@ pub enum ImdsError {
     Utf8Error,
 
     /// An error response was returned from IMDS
+    #[non_exhaustive]
     ErrorResponse {
         /// The returned status code
         code: u16,
