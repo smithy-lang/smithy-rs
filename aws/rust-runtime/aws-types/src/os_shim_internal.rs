@@ -283,7 +283,7 @@ impl ManualTimeSource {
 
     pub fn advance(&mut self, delta: Duration) {
         let mut now = self.now.lock().unwrap();
-        *now = *now + delta;
+        *now += delta;
     }
 
     pub fn queries(&self) -> impl Deref<Target = Vec<SystemTime>> + '_ {
