@@ -5,8 +5,6 @@
 
 //! Lazy, caching, credentials provider implementation
 
-mod cache;
-
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -17,7 +15,7 @@ use tracing::{trace_span, Instrument};
 use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
 use aws_types::os_shim_internal::TimeSource;
 
-pub(crate) use cache::Cache;
+use crate::cache::ExpiringCache;
 
 const DEFAULT_LOAD_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_CREDENTIAL_EXPIRATION: Duration = Duration::from_secs(15 * 60);
@@ -33,7 +31,7 @@ const DEFAULT_BUFFER_TIME: Duration = Duration::from_secs(10);
 pub struct LazyCachingCredentialsProvider {
     time: TimeSource,
     sleeper: Arc<dyn AsyncSleep>,
-    cache: Cache<Credentials, CredentialsError>,
+    cache: ExpiringCache<Credentials, CredentialsError>,
     loader: Arc<dyn ProvideCredentials>,
     load_timeout: Duration,
     default_credential_expiration: Duration,
@@ -51,7 +49,7 @@ impl LazyCachingCredentialsProvider {
         LazyCachingCredentialsProvider {
             time,
             sleeper,
-            cache: Cache::new(buffer_time),
+            cache: ExpiringCache::new(buffer_time),
             loader,
             load_timeout,
             default_credential_expiration,

@@ -32,8 +32,8 @@ use smithy_http::operation::{Metadata, Request};
 use smithy_http::response::ParseStrictResponse;
 use smithy_http_tower::map_request::MapRequestLayer;
 
+use crate::cache::ExpiringCache;
 use crate::imds::client::{ImdsError, ImdsErrorPolicy, TokenError};
-use crate::meta::credentials::lazy_caching::Cache;
 use smithy_client::retry;
 
 /// Token Refresh Buffer
@@ -62,7 +62,7 @@ struct Token {
 pub(super) struct TokenMiddleware {
     client: Arc<smithy_client::Client<DynConnector, MapRequestLayer<UserAgentStage>>>,
     token_parser: GetTokenResponseHandler,
-    token: Cache<Token, ImdsError>,
+    token: ExpiringCache<Token, ImdsError>,
     time_source: TimeSource,
     endpoint: Endpoint,
     token_ttl: Duration,
@@ -83,7 +83,7 @@ impl TokenMiddleware {
             token_parser: GetTokenResponseHandler {
                 time: time_source.clone(),
             },
-            token: Cache::new(TOKEN_REFRESH_BUFFER),
+            token: ExpiringCache::new(TOKEN_REFRESH_BUFFER),
             time_source,
             endpoint,
             token_ttl,

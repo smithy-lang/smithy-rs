@@ -69,6 +69,7 @@ pub mod web_identity_token;
 
 pub mod provider_config;
 
+mod cache;
 #[cfg(feature = "imds")]
 pub mod imds;
 

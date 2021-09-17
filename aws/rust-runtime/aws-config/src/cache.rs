@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+//! Expiry-aware cache
+//!
+//! [`ExpiringCache`] implements two important features:
+//! 1. Respect expiry of contents
+//! 2. Deduplicate load requests to prevent thundering herds when no value is present.
+
 use std::future::Future;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -10,7 +16,7 @@ use std::time::{Duration, SystemTime};
 use tokio::sync::{OnceCell, RwLock};
 
 #[derive(Debug)]
-pub(crate) struct Cache<T, E> {
+pub(crate) struct ExpiringCache<T, E> {
     /// Amount of time before the actual credential expiration time
     /// where credentials are considered expired.
     buffer_time: Duration,
@@ -18,7 +24,7 @@ pub(crate) struct Cache<T, E> {
     _phantom: PhantomData<E>,
 }
 
-impl<T, E> Clone for Cache<T, E> {
+impl<T, E> Clone for ExpiringCache<T, E> {
     fn clone(&self) -> Self {
         Self {
             buffer_time: self.buffer_time,
@@ -28,12 +34,12 @@ impl<T, E> Clone for Cache<T, E> {
     }
 }
 
-impl<T, E> Cache<T, E>
+impl<T, E> ExpiringCache<T, E>
 where
     T: Clone,
 {
     pub fn new(buffer_time: Duration) -> Self {
-        Cache {
+        ExpiringCache {
             buffer_time,
             value: Arc::new(RwLock::new(OnceCell::new())),
             _phantom: Default::default(),
@@ -100,7 +106,7 @@ fn expired(expiration: SystemTime, buffer_time: Duration, now: SystemTime) -> bo
 
 #[cfg(test)]
 mod tests {
-    use super::{expired, Cache};
+    use super::{expired, ExpiringCache};
     use aws_types::credentials::CredentialsError;
     use aws_types::Credentials;
     use std::time::{Duration, SystemTime};
@@ -127,7 +133,7 @@ mod tests {
     #[traced_test]
     #[tokio::test]
     async fn cache_clears_if_expired_only() {
-        let cache = Cache::new(Duration::from_secs(10));
+        let cache = ExpiringCache::new(Duration::from_secs(10));
         assert!(cache
             .yield_or_clear_if_expired(epoch_secs(100))
             .await
