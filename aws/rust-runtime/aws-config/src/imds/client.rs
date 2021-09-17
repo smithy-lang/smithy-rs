@@ -294,8 +294,8 @@ impl FromStr for EndpointMode {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
-            "IPv4" => Ok(EndpointMode::IpV4),
-            "IPv6" => Ok(EndpointMode::IpV6),
+            _ if value.eq_ignore_ascii_case("ipv4") => Ok(EndpointMode::IpV4),
+            _ if value.eq_ignore_ascii_case("ipv6") => Ok(EndpointMode::IpV6),
             other => Err(InvalidEndpointMode(other.to_owned())),
         }
     }

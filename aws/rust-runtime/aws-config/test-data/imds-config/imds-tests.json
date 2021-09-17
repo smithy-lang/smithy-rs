@@ -77,6 +77,17 @@
       }
     },
     {
+      "docs": "case insensitive endpoint",
+      "env": {
+        "AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE": "ipV6"
+      },
+      "fs": {
+      },
+      "result": {
+        "Ok": "http://[fd00:ec2::254]/latest/api/token"
+      }
+    },
+    {
       "docs": "ipv6 endpoint from config",
       "env": {
         "AWS_CONFIG_FILE": "config"
