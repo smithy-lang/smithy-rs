@@ -368,7 +368,7 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// # use aws_config::imds::Client;
+    /// use aws_config::imds::Client;
     /// # async fn test() {
     /// use aws_config::provider_config::ProviderConfig;
     /// let provider = Client::builder()
