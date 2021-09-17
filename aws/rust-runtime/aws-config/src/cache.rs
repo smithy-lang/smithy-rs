@@ -17,8 +17,8 @@ use tokio::sync::{OnceCell, RwLock};
 
 #[derive(Debug)]
 pub(crate) struct ExpiringCache<T, E> {
-    /// Amount of time before the actual credential expiration time
-    /// where credentials are considered expired.
+    /// Amount of time before the actual expiration time
+    /// when the value is considered expired.
     buffer_time: Duration,
     value: Arc<RwLock<OnceCell<(T, SystemTime)>>>,
     _phantom: PhantomData<E>,
@@ -59,11 +59,11 @@ where
             .map(|(creds, _expiry)| creds)
     }
 
-    /// Attempts to refresh the cached credentials with the given async future.
+    /// Attempts to refresh the cached value with the given future.
     /// If multiple threads attempt to refresh at the same time, one of them will win,
     /// and the others will await that thread's result rather than multiple refreshes occurring.
-    /// The function given to acquire a credentials future, `f`, will not be called
-    /// if another thread is chosen to load the credentials.
+    /// The function given to acquire a value future, `f`, will not be called
+    /// if another thread is chosen to load the value.
     pub async fn get_or_load<F, Fut>(&self, f: F) -> Result<T, E>
     where
         F: FnOnce() -> Fut,
@@ -71,27 +71,25 @@ where
     {
         let lock = self.value.read().await;
         let future = lock.get_or_try_init(f);
-        future
-            .await
-            .map(|(credentials, _expiry)| credentials.clone())
+        future.await.map(|(value, _expiry)| value.clone())
     }
 
-    /// If the credentials are expired, clears the cache. Otherwise, yields the current credentials value.
+    /// If the value is expired, clears the cache. Otherwise, yields the current value.
     pub async fn yield_or_clear_if_expired(&self, now: SystemTime) -> Option<T> {
-        // Short-circuit if the credential is not expired
-        if let Some((credentials, expiry)) = self.value.read().await.get() {
+        // Short-circuit if the value is not expired
+        if let Some((value, expiry)) = self.value.read().await.get() {
             if !expired(*expiry, self.buffer_time, now) {
-                return Some(credentials.clone());
+                return Some(value.clone());
             }
         }
 
         // Acquire a write lock to clear the cache, but then once the lock is acquired,
-        // check again that the credential is not already cleared. If it has been cleared,
+        // check again that the value is not already cleared. If it has been cleared,
         // then another thread is refreshing the cache by the time the write lock was acquired.
         let mut lock = self.value.write().await;
-        if let Some((_credentials, expiration)) = lock.get() {
-            // Also check that we're clearing the expired credentials and not credentials
-            // that have been refreshed by another thread.
+        if let Some((_value, expiration)) = lock.get() {
+            // Also check that we're clearing the expired value and not a value
+            // that has been refreshed by another thread.
             if expired(*expiration, self.buffer_time, now) {
                 *lock = OnceCell::new();
             }
