@@ -1,7 +1,10 @@
-vNext (Month, Day, Year)
+vNext (Month Day, Year)
 =======================
-
-- Update `Receiver`s to be `Send` (aws-sdk-rust#224)
+**New This Week**
+- Add IMDS client to `aws-config` (#701)
+- Add `TimeSource` to `aws_types::os_shim_internal` (#701)
+- User agent construction is now `const fn` (#701)
+- Update event stream `Receiver`s to be `Send` (#702, #aws-sdk-rust#224)
 
 v0.23 (September 14th, 2021)
 =======================

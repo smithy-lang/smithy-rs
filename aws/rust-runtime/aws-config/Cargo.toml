@@ -9,12 +9,13 @@ exclude = ["test-data/*"]
 [features]
 default-provider = ["profile", "imds", "meta", "sts", "environment"]
 profile = ["sts", "web-identity-token", "meta", "environment"]
-# note: IMDS currently unsupported
-imds = []
 meta = ["tokio/sync"]
+imds = ["profile", "smithy-http", "smithy-types", "smithy-http-tower", "tower", "aws-http", "meta"]
 environment = ["meta"]
 sts = ["aws-sdk-sts", "aws-hyper"]
-web-identity-token = ["sts"]
+web-identity-token = ["sts", "profile"]
+
+# SSO is not supported
 sso = []
 
 rustls = ["smithy-client/rustls"]
@@ -33,6 +34,16 @@ aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sts", optional = true }
 
 # TODO: remove when middleware stacks are moved inside of clients directly
 aws-hyper = { path = "../../sdk/build/aws-sdk/aws-hyper", optional = true }
+
+# imds
+smithy-http = { path = "../../sdk/build/aws-sdk/smithy-http", optional = true }
+smithy-types = { path = "../../sdk/build/aws-sdk/smithy-types", optional = true }
+smithy-http-tower = { path = "../../sdk/build/aws-sdk/smithy-http-tower", optional = true }
+tower = { version = "0.4.8", optional = true }
+aws-http = { path = "../../sdk/build/aws-sdk/aws-http", optional = true }
+bytes = "1.1.0"
+http = "0.2.4"
+
 
 [dev-dependencies]
 futures-util = "0.3.16"
