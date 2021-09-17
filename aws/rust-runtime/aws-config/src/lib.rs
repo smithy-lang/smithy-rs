@@ -59,7 +59,7 @@ pub mod meta;
 pub mod profile;
 
 #[cfg(feature = "sts")]
-mod sts;
+pub mod sts;
 
 #[cfg(test)]
 mod test_case;
