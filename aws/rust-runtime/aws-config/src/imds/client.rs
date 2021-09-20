@@ -107,7 +107,7 @@ const DEFAULT_RETRIES: u32 = 3;
 ///
 /// 7. The default value of `http://169.254.169.254` will be used.
 ///
-///
+#[derive(Debug)]
 pub struct Client {
     endpoint: Endpoint,
     inner: smithy_client::Client<DynConnector, ImdsMiddleware>,
@@ -224,7 +224,7 @@ impl Error for ImdsError {
 /// IMDS Middleware
 ///
 /// The IMDS middleware includes a token-loader & a UserAgent stage
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct ImdsMiddleware {
     token_loader: TokenMiddleware,
 }

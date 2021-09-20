@@ -12,5 +12,7 @@
 //!
 pub mod client;
 
+pub mod credentials;
+
 #[doc(inline)]
 pub use client::Client;
