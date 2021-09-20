@@ -120,12 +120,15 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                     .let(EventStreamNormalizer::transform)
 
     fun execute() {
-        logger.info("generating Rust server...")
+        logger.info("Generating Rust server...")
         val service = settings.getService(model)
         val serviceShapes = Walker(model).walkShapes(service)
-        logger.info("${serviceShapes}")
         serviceShapes.forEach { it.accept(this) }
         codegenDecorator.extras(protocolConfig, rustCrate)
+        val module = RustMetadata(public = true)
+        rustCrate.withModule(RustModule("error", module)) { writer ->
+            renderSerdeError(writer)
+        }
         rustCrate.finalize(settings, codegenDecorator.libRsCustomizations(protocolConfig, listOf()))
         try {
             "cargo fmt".runCommand(
@@ -142,15 +145,15 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     override fun getDefault(shape: Shape?) {}
 
     override fun operationShape(shape: OperationShape?) {
-        logger.fine("generating an operation...")
-        val module = RustMetadata(public = true)
-        rustCrate.withModule(RustModule("json_serde", module)) { writer ->
-            renderSerdeError(writer)
-            shape?.let {
-                httpDeserializerGenerator.render(writer, it)
-                httpSerializerGenerator.render(writer, it)
-                serializerGenerator.render(writer, it)
-                deserializerGenerator.render(writer, it)
+        logger.fine("Generating operation #{shape}")
+        if (shape != null) {
+            rustCrate.useShapeWriter(shape) { writer ->
+                shape.let {
+                    httpDeserializerGenerator.render(writer, it)
+                    httpSerializerGenerator.render(writer, it)
+                    serializerGenerator.render(writer, it)
+                    deserializerGenerator.render(writer, it)
+                }
             }
         }
     }
@@ -167,20 +170,6 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                     builderGenerator.renderConvenienceMethod(this)
                 }
             }
-        }
-    }
-
-    override fun stringShape(shape: StringShape) {
-        shape.getTrait<EnumTrait>()?.also { enum ->
-            rustCrate.useShapeWriter(shape) { writer ->
-                EnumGenerator(model, symbolProvider, writer, shape, enum).render()
-            }
-        }
-    }
-
-    override fun unionShape(shape: UnionShape) {
-        rustCrate.useShapeWriter(shape) {
-            UnionGenerator(model, symbolProvider, it, shape).render()
         }
     }
 
@@ -206,6 +195,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                     DeserializeLabel(std::string::String),
                     BuildInput(smithy_http::operation::BuildError),
                     BuildResponse(http::Error),
+                    SmithyType(smithy_types::Error),
                 }
                 
                 impl Error {
@@ -232,6 +222,12 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                         Self::BuildInput(err)
                     }
                 }
+
+                impl From<smithy_types::Error> for Error {
+                    fn from(err: smithy_types::Error) -> Self {
+                        Self::SmithyType(err)
+                    }
+                }
                                 
                 impl std::fmt::Display for Error {
                     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -242,6 +238,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                             Self::DeserializeLabel(ref msg) => write!(f, "label parse error: {}", msg),
                             Self::BuildInput(ref err) => write!(f, "json payload error: {}", err),
                             Self::BuildResponse(ref err) => write!(f, "http response error: {}", err),
+                            Self::SmithyType(ref err) => write!(f, "type error: {}", err),
                         }
                     }
                 }

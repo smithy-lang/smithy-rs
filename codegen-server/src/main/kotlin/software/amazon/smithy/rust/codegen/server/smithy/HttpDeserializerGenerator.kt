@@ -61,7 +61,9 @@ class HttpRequestDeserializerGenerator(
 ) {
     private val logger = Logger.getLogger(javaClass.name)
     private val deserFnName = "deser_${operationShape.id.name.toSnakeCase()}_request"
-    private val serde = RuntimeType("json_serde", null, "crate")
+    private val serde = RuntimeType("json_deser", null, "crate")
+    private val error = RuntimeType("error", null, "crate")
+    private val operation = RuntimeType("operation", null, "crate")
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val model = protocolConfig.model
     private val index = HttpBindingIndex.of(model)
@@ -86,7 +88,7 @@ class HttpRequestDeserializerGenerator(
         "Static" to CargoDependency("lazy_static", CratesIo("1.4")).asType(),
         "Regex" to CargoDependency("regex", CratesIo("1.0")).asType(),
         "PercentEncoding" to CargoDependency("percent-encoding", CratesIo("2.1.0")).asType(),
-        "JsonSerdeError" to serde.member("Error"),
+        "JsonSerdeError" to error.member("Error"),
     )
 
     fun render(writer: RustWriter) {
@@ -107,7 +109,7 @@ class HttpRequestDeserializerGenerator(
             *codegenScope,
             "I" to inputSymbol,
         ) {
-            val deserializerSymbol = serde.member(symbolProvider.deserializeFunctionName(inputShape))
+            val deserializerSymbol = operation.member(symbolProvider.deserializeFunctionName(inputShape))
             rust(
                 "let mut input = #T::default();",
                 inputShape.builderSymbol(symbolProvider)
@@ -214,7 +216,7 @@ class HttpRequestDeserializerGenerator(
     private fun generateDeserializeLabelStringFn(binding: HttpBindingDescriptor): RuntimeType {
         val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateDeserializeLabelFnName(binding)
-        return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
+        return RuntimeType.forInlineFun(fnName, "operation") { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(value: &str) -> #{Result}<#{O}, #{JsonSerdeError}>",
                 *codegenScope,
@@ -242,7 +244,7 @@ class HttpRequestDeserializerGenerator(
             defaultTimestampFormat,
         )
         val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-        return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
+        return RuntimeType.forInlineFun(fnName, "operation") { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(value: &str) -> #{Result}<#{O}, #{JsonSerdeError}>",
                 *codegenScope,
@@ -267,7 +269,7 @@ class HttpRequestDeserializerGenerator(
     private fun generateDeserializeLabelPrimitiveFn(binding: HttpBindingDescriptor): RuntimeType {
         val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateDeserializeLabelFnName(binding)
-        return RuntimeType.forInlineFun(fnName, "http_serde") { writer ->
+        return RuntimeType.forInlineFun(fnName, "operation") { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(value: &str) -> #{Result}<#{O}, #{JsonSerdeError}>",
                 *codegenScope,
@@ -327,7 +329,7 @@ class HttpRequestDeserializerGenerator(
             rust("""let op = expected.make_operation(&config).expect("failed to build operation");""")
             rust("let (request, parts) = op.into_request_response().0.into_parts();")
             rustTemplate("let request = request.map(|body| #{Bytes}::from(body.bytes().unwrap().to_vec()));", *codegenScope)
-            rust("""let actual = #T(&request).expect("failed to parse request");""", serde.member(deserFnName))
+            rust("""let actual = #T(&request).expect("failed to parse request");""", operation.member(deserFnName))
             rust("assert_eq!(expected, actual);")
         }
     }
