@@ -42,7 +42,8 @@ class HttpSerializerGenerator(
 ) {
     private val logger = Logger.getLogger(javaClass.name)
     private val ser = RuntimeType("json_ser", null, "crate")
-    private val serde = RuntimeType("json_serde", null, "crate")
+    private val error = RuntimeType("error", null, "crate")
+    private val operation = RuntimeType("operation", null, "crate")
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val model = protocolConfig.model
     private val symbolProvider = protocolConfig.symbolProvider
@@ -57,7 +58,7 @@ class HttpSerializerGenerator(
                     "Convert" to RuntimeType.std.member("convert"),
                     "Response" to RuntimeType.Http("Response"),
                     "build_error" to runtimeConfig.operationBuildError(),
-                    "JsonSerdeError" to serde.member("Error"),
+                    "JsonSerdeError" to error.member("Error"),
                     "JsonObjectWriter" to smithyJson.member("serialize::JsonObjectWriter"),
                     "parse_http_response" to smithyHttp.member("response::ParseHttpResponse"),
                     "sdk_body" to RuntimeType.sdkBody(runtimeConfig = runtimeConfig),
@@ -85,7 +86,7 @@ class HttpSerializerGenerator(
                 *codegenScope,
                 "O" to outputSymbol,
         ) {
-            val serializerSymbol = serde.member(symbolProvider.serializeFunctionName(outputShape))
+            val serializerSymbol = operation.member(symbolProvider.serializeFunctionName(outputShape))
             rust(
                     "let payload = #T(output)?;",
                     serializerSymbol,
@@ -264,7 +265,7 @@ class HttpSerializerGenerator(
             }
             rust(
                     """let response = #T(&expected).expect("failed to serialize response");""",
-                    serde.member(fnName)
+                    ser.member(fnName)
             )
             rust("assert_eq!(response.status(), ${testCase.code});")
 

@@ -4,16 +4,14 @@
  */
 
 extra["displayName"] = "Smithy :: Rust :: Codegen :: Server :: Test"
+
 extra["moduleName"] = "software.amazon.smithy.rust.kotlin.codegen.server.test"
 
 tasks["jar"].enabled = false
 
-plugins {
-    id("software.amazon.smithy").version("0.5.3")
-}
+plugins { id("software.amazon.smithy").version("0.5.3") }
 
 val smithyVersion: String by project
-
 
 dependencies {
     implementation(project(":codegen-server"))
@@ -24,17 +22,22 @@ dependencies {
 
 data class CodegenTest(val service: String, val module: String, val extraConfig: String? = null)
 
-val CodegenTests = listOf(
-    CodegenTest("example.weather#Weather", "weather"),
-    CodegenTest("com.amazonaws.ebs#Ebs", "ebs")
-)
+val CodegenTests =
+        listOf(
+                CodegenTest("example.weather#Weather", "weather"),
+                CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
+        )
 
 fun generateSmithyBuild(tests: List<CodegenTest>): String {
-    val projections = tests.joinToString(",\n") {
-        """
+    val projections =
+            tests.joinToString(",\n") {
+                """
             "${it.module}": {
                 "plugins": {
                     "rust-server-codegen": {
+                      "codegen": {
+                        "includeFluentClient": false
+                      },
                       "runtimeConfig": {
                         "relativePath": "${rootProject.projectDir.absolutePath}/rust-runtime"
                       },
@@ -47,7 +50,7 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
                }
             }
         """.trimIndent()
-    }
+            }
     return """
     {
         "version": "1.0",
@@ -58,9 +61,7 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
 
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
-    doFirst {
-        projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(CodegenTests))
-    }
+    doFirst { projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(CodegenTests)) }
 }
 
 fun generateCargoWorkspace(tests: List<CodegenTest>): String {
@@ -71,16 +72,18 @@ fun generateCargoWorkspace(tests: List<CodegenTest>): String {
     ]
     """.trimIndent()
 }
+
 task("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
-        buildDir.resolve("smithyprojections/codegen-server-test/Cargo.toml").writeText(generateCargoWorkspace(CodegenTests))
+        buildDir.resolve("smithyprojections/codegen-server-test/Cargo.toml")
+                .writeText(generateCargoWorkspace(CodegenTests))
     }
 }
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
-tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
+tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 tasks.register<Exec>("cargoCheck") {
     workingDir("build/smithyprojections/codegen-server-test/")
@@ -115,6 +118,4 @@ tasks.register<Exec>("cargoClippy") {
 
 tasks["test"].finalizedBy("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs")
 
-tasks["clean"].doFirst {
-    delete("smithy-build.json")
-}
+tasks["clean"].doFirst { delete("smithy-build.json") }
