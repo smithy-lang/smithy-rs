@@ -8,18 +8,17 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
-import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
-import software.amazon.smithy.rust.codegen.smithy.protocols.deserializeFunctionName
-import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 
-class RestJsonDeserializerGenerator(
+class JsonSerializerGenerator(
         protocolConfig: ProtocolConfig,
         private val httpBindingResolver: HttpBindingResolver,
-) : JsonParserGenerator(protocolConfig, httpBindingResolver) {
+) : JsonSerializerGenerator(protocolConfig, httpBindingResolver) {
     private val renderedStructures = mutableSetOf<StructureShape>()
 
     fun render(writer: RustWriter, operationShape: OperationShape) {
@@ -50,28 +49,21 @@ class RestJsonDeserializerGenerator(
     private fun renderStructure(
             writer: RustWriter,
             structureShape: StructureShape,
-            includedMembers: List<MemberShape>,
+            includedMembers: List<MemberShape>? = null,
     ) {
         if (!renderedStructures.add(structureShape)) return
-        val fnName = symbolProvider.deserializeFunctionName(structureShape)
-        val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
+        val fnName = symbolProvider.serializeFunctionName(structureShape)
         writer.write("")
         writer.rustBlockTemplate(
-                "pub fn $fnName(input: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
+                "pub fn $fnName(value: &#{target}) -> Result<String, #{Error}>",
                 *codegenScope,
-                "Builder" to structureShape.builderSymbol(symbolProvider),
+                "target" to symbolProvider.toSymbol(structureShape)
         ) {
-            rustTemplate(
-                    """
-                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
-                    let tokens = &mut tokens_owned;
-                    #{expect_start_object}(tokens.next())?;
-                """.trimIndent(),
-                    *codegenScope
-            )
-            deserializeStructInner(includedMembers)
-            expectEndOfTokenStream()
-            rust("Ok(builder)")
+            rust("let mut out = String::new();")
+            rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
+            serializeStructure(StructContext("object", "value", structureShape), includedMembers)
+            rust("object.finish();")
+            rust("Ok(out)")
         }
     }
 }

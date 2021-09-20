@@ -24,8 +24,9 @@ data class CodegenTest(val service: String, val module: String, val extraConfig:
 
 val CodegenTests =
         listOf(
-                CodegenTest("example.weather#Weather", "weather"),
-                CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
+                // CodegenTest("example.weather#Weather", "weather"),
+                // CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
+                CodegenTest("com.amazonaws.s3veyronnamespacecontroller#S3VeyronNamespaceController", "veyron")
         )
 
 fun generateSmithyBuild(tests: List<CodegenTest>): String {
