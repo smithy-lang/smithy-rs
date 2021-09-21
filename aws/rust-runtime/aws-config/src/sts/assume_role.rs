@@ -113,6 +113,9 @@ impl AssumeRoleProviderBuilder {
     }
 
     /// Set the backing connection to use when talking to STS.
+    ///
+    /// If the `rustls` or `nativetls` features are enabled, this field is optional and a default
+    /// backing connection will be provided.
     pub fn connection(mut self, conn: impl smithy_client::bounds::SmithyConnector) -> Self {
         self.connection = Some(smithy_client::erase::DynConnector::new(conn));
         self
@@ -125,11 +128,10 @@ impl AssumeRoleProviderBuilder {
             .region(self.region.clone())
             .build();
 
-        let client = if let Some(conn) = self.connection {
-            aws_hyper::Client::new(conn)
-        } else {
-            aws_hyper::Client::https()
-        };
+        let conn = self.connection.unwrap_or_else(|| {
+            crate::connector::expect_connector(crate::connector::default_connector())
+        });
+        let client = aws_hyper::Client::new(conn);
 
         let session_name = self
             .session_name
