@@ -162,10 +162,12 @@ pub fn sign<'a>(
     }
 }
 
+type CalculatedParams = Vec<(&'static str, Cow<'static, str>)>;
+
 fn calculate_signing_params<'a>(
     request: &'a SignableRequest<'a>,
     params: &'a SigningParams<'a>,
-) -> Result<(Vec<(&'static str, Cow<'static, str>)>, String), Error> {
+) -> Result<(CalculatedParams, String), Error> {
     let creq = CanonicalRequest::from(request, params)?;
     tracing::trace!(canonical_request = %creq);
 
@@ -185,16 +187,17 @@ fn calculate_signing_params<'a>(
     let signature = calculate_signature(signing_key, &sts.to_string().as_bytes());
 
     let values = creq.values.into_query_params().expect("signing with query");
-    let mut signing_params = Vec::new();
-    signing_params.push(("X-Amz-Algorithm", Cow::Borrowed(values.algorithm)));
-    signing_params.push(("X-Amz-Credential", Cow::Owned(values.credential)));
-    signing_params.push(("X-Amz-Date", Cow::Owned(values.date_time)));
-    signing_params.push(("X-Amz-Expires", Cow::Owned(values.expires)));
-    signing_params.push((
-        "X-Amz-SignedHeaders",
-        Cow::Owned(values.signed_headers.as_str().into()),
-    ));
-    signing_params.push(("X-Amz-Signature", Cow::Owned(signature.clone())));
+    let mut signing_params = vec![
+        ("X-Amz-Algorithm", Cow::Borrowed(values.algorithm)),
+        ("X-Amz-Credential", Cow::Owned(values.credential)),
+        ("X-Amz-Date", Cow::Owned(values.date_time)),
+        ("X-Amz-Expires", Cow::Owned(values.expires)),
+        (
+            "X-Amz-SignedHeaders",
+            Cow::Owned(values.signed_headers.as_str().into()),
+        ),
+        ("X-Amz-Signature", Cow::Owned(signature.clone())),
+    ];
     if let Some(security_token) = params.security_token {
         signing_params.push((X_AMZ_SECURITY_TOKEN, Cow::Owned(security_token.to_string())));
     }
