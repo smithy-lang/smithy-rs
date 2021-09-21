@@ -14,6 +14,7 @@ use crate::sign::{calculate_signature, generate_signing_key, sha256_hex_string};
 use crate::SigningOutput;
 use http::header::HeaderValue;
 use http::{HeaderMap, Method, Uri};
+use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::error::Error as StdError;
 use std::str;
@@ -93,13 +94,13 @@ pub enum SignableBody<'a> {
 
 pub struct SigningMemo {
     headers: Option<HeaderMap<HeaderValue>>,
-    params: Option<Vec<(&'static str, String)>>,
+    params: Option<Vec<(&'static str, Cow<'static, str>)>>,
 }
 
 impl SigningMemo {
     fn new(
         headers: Option<HeaderMap<HeaderValue>>,
-        params: Option<Vec<(&'static str, String)>>,
+        params: Option<Vec<(&'static str, Cow<'static, str>)>>,
     ) -> Self {
         Self { headers, params }
     }
@@ -111,10 +112,10 @@ impl SigningMemo {
         self.headers.take()
     }
 
-    pub fn params(&self) -> Option<&Vec<(&'static str, String)>> {
+    pub fn params(&self) -> Option<&Vec<(&'static str, Cow<'static, str>)>> {
         self.params.as_ref()
     }
-    pub fn take_params(&mut self) -> Option<Vec<(&'static str, String)>> {
+    pub fn take_params(&mut self) -> Option<Vec<(&'static str, Cow<'static, str>)>> {
         self.params.take()
     }
 
@@ -130,7 +131,7 @@ impl SigningMemo {
             for (name, value) in params {
                 query.insert(name, &value);
             }
-            *request.uri_mut() = query.build();
+            *request.uri_mut() = query.build_uri();
         }
     }
 }
@@ -150,11 +151,57 @@ pub fn sign<'a>(
                 signature,
             ))
         }
+        // TODO(PresignedReqPrototype): Figure out how to write unit tests for this
         SignatureLocation::QueryParams => {
-            // TODO(PresignedReqPrototype): Implement query param signing
-            unimplemented!()
+            let (params, signature) = calculate_signing_params(&request, params)?;
+            Ok(SigningOutput::new(
+                SigningMemo::new(None, Some(params)),
+                signature,
+            ))
         }
     }
+}
+
+type CalculatedParams = Vec<(&'static str, Cow<'static, str>)>;
+
+fn calculate_signing_params<'a>(
+    request: &'a SignableRequest<'a>,
+    params: &'a SigningParams<'a>,
+) -> Result<(CalculatedParams, String), Error> {
+    let creq = CanonicalRequest::from(request, params)?;
+    tracing::trace!(canonical_request = %creq);
+
+    let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
+    let sts = StringToSign::new(
+        params.date_time,
+        &params.region,
+        &params.service_name,
+        encoded_creq,
+    );
+    let signing_key = generate_signing_key(
+        &params.secret_key,
+        params.date_time.date(),
+        &params.region,
+        &params.service_name,
+    );
+    let signature = calculate_signature(signing_key, &sts.to_string().as_bytes());
+
+    let values = creq.values.into_query_params().expect("signing with query");
+    let mut signing_params = vec![
+        ("X-Amz-Algorithm", Cow::Borrowed(values.algorithm)),
+        ("X-Amz-Credential", Cow::Owned(values.credential)),
+        ("X-Amz-Date", Cow::Owned(values.date_time)),
+        ("X-Amz-Expires", Cow::Owned(values.expires)),
+        (
+            "X-Amz-SignedHeaders",
+            Cow::Owned(values.signed_headers.as_str().into()),
+        ),
+        ("X-Amz-Signature", Cow::Owned(signature.clone())),
+    ];
+    if let Some(security_token) = params.security_token {
+        signing_params.push((X_AMZ_SECURITY_TOKEN, Cow::Owned(security_token.to_string())));
+    }
+    Ok((signing_params, signature))
 }
 
 /// Calculates the signature headers that need to get added to the given `request`.
@@ -168,37 +215,39 @@ fn calculate_signing_headers<'a>(
     params: &'a SigningParams<'a>,
 ) -> Result<SigningOutput<HeaderMap<HeaderValue>>, Error> {
     // Step 1: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-canonical-request.html.
-    let SigningParams {
-        access_key,
-        secret_key,
-        security_token,
-        region,
-        service_name,
-        date_time,
-        settings,
-    } = params;
-    let creq = CanonicalRequest::from(request, settings, *date_time, *security_token)?;
+    let creq = CanonicalRequest::from(request, params)?;
     tracing::trace!(canonical_request = %creq);
 
     // Step 2: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-string-to-sign.html.
     let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
-    let sts = StringToSign::new(*date_time, region, service_name, encoded_creq);
+    let sts = StringToSign::new(
+        params.date_time,
+        params.region,
+        params.service_name,
+        encoded_creq,
+    );
 
     // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
-    let signing_key = generate_signing_key(secret_key, date_time.date(), region, service_name);
+    let signing_key = generate_signing_key(
+        params.secret_key,
+        params.date_time.date(),
+        params.region,
+        params.service_name,
+    );
     let signature = calculate_signature(signing_key, &sts.to_string().as_bytes());
 
     // Step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
+    let values = creq.values.as_headers().expect("signing with headers");
     let mut headers = HeaderMap::new();
-    add_header(&mut headers, X_AMZ_DATE, &creq.date_time);
+    add_header(&mut headers, X_AMZ_DATE, &values.date_time);
     headers.insert(
         "authorization",
-        build_authorization_header(access_key, &creq, sts, &signature),
+        build_authorization_header(params.access_key, &creq, sts, &signature),
     );
-    if settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
-        add_header(&mut headers, X_AMZ_CONTENT_SHA_256, &creq.content_sha256);
+    if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
+        add_header(&mut headers, X_AMZ_CONTENT_SHA_256, &values.content_sha256);
     }
-    if let Some(security_token) = creq.security_token {
+    if let Some(security_token) = values.security_token {
         add_header(&mut headers, X_AMZ_SECURITY_TOKEN, security_token);
     }
     Ok(SigningOutput::new(headers, signature))
@@ -221,7 +270,7 @@ fn build_authorization_header(
         HMAC_256,
         access_key,
         sts.scope.to_string(),
-        creq.signed_headers,
+        creq.values.signed_headers().as_str(),
         signature
     ))
     .unwrap();
@@ -231,16 +280,11 @@ fn build_authorization_header(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_authorization_header, sign};
+    use super::sign;
     use crate::date_fmt::parse_date_time;
-    use crate::http_request::canonical_request::{CanonicalRequest, StringToSign};
     use crate::http_request::sign::SignableRequest;
-    use crate::http_request::test::{
-        make_headers_comparable, test_authz, test_request, test_signed_request,
-    };
-    use crate::http_request::SigningSettings;
-    use crate::sign::{calculate_signature, generate_signing_key, sha256_hex_string};
-    use crate::SigningParams;
+    use crate::http_request::test::{make_headers_comparable, test_request, test_signed_request};
+    use crate::http_request::{SigningParams, SigningSettings};
     use pretty_assertions::assert_eq;
 
     macro_rules! assert_req_eq {
@@ -277,23 +321,5 @@ mod tests {
 
         let mut expected = test_signed_request("get-vanilla-query-order-key-case");
         assert_req_eq!(expected, signed);
-    }
-
-    #[test]
-    fn test_build_authorization_header() {
-        let req = test_request("get-vanilla-query-order-key-case");
-        let req = SignableRequest::from_http(&req);
-        let date = parse_date_time("20150830T123600Z").unwrap();
-        let creq = CanonicalRequest::from(&req, &SigningSettings::default(), date, None).unwrap();
-
-        let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
-        let sts = StringToSign::new(date, "us-east-1", "service", encoded_creq);
-
-        let secret = "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY";
-        let signing_key = generate_signing_key(secret, date.date(), "us-east-1", "service");
-        let signature = calculate_signature(signing_key, &sts.to_string().as_bytes());
-        let expected_header = test_authz("get-vanilla-query-order-key-case");
-        let header = build_authorization_header("AKIDEXAMPLE", &creq, sts, &signature);
-        assert_eq!(expected_header, header);
     }
 }

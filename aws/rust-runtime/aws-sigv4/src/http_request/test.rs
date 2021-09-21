@@ -30,10 +30,6 @@ pub(crate) fn test_canonical_request(name: &str) -> String {
     read(&path(name, "creq")).trim().to_string()
 }
 
-pub(crate) fn test_authz(name: &str) -> String {
-    read(&path(name, "authz"))
-}
-
 pub(crate) fn test_sts(name: &str) -> String {
     read(&path(name, "sts"))
 }

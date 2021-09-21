@@ -6,6 +6,7 @@
 use crate::http_request::url_escape::percent_encode;
 use http::Uri;
 
+/// Utility for updating the query string in a [`Uri`].
 pub(super) struct QueryWriter {
     base_uri: Uri,
     new_path_and_query: String,
@@ -13,6 +14,7 @@ pub(super) struct QueryWriter {
 }
 
 impl QueryWriter {
+    /// Creates a new `QueryWriter` based off the given `uri`.
     pub fn new(uri: &Uri) -> Self {
         let new_path_and_query = uri
             .path_and_query()
@@ -32,6 +34,15 @@ impl QueryWriter {
         }
     }
 
+    /// Clears all query parameters.
+    pub fn clear_params(&mut self) {
+        if let Some(index) = self.new_path_and_query.find('?') {
+            self.new_path_and_query.truncate(index);
+            self.prefix = Some('?');
+        }
+    }
+
+    /// Inserts a new query parameter.
     pub fn insert(&mut self, k: &str, v: &str) {
         if let Some(prefix) = self.prefix {
             self.new_path_and_query.push(prefix);
@@ -43,7 +54,13 @@ impl QueryWriter {
         self.new_path_and_query.push_str(&percent_encode(v));
     }
 
-    pub fn build(self) -> Uri {
+    /// Returns just the built query string.
+    pub fn build_query(self) -> String {
+        self.build_uri().query().unwrap_or_default().to_string()
+    }
+
+    /// Returns a full [`Uri`] with the query string updated.
+    pub fn build_uri(self) -> Uri {
         let mut parts = self.base_uri.into_parts();
         parts.path_and_query = Some(
             self.new_path_and_query
@@ -66,7 +83,7 @@ mod test {
         query_writer.insert("key", "val%ue");
         query_writer.insert("another", "value");
         assert_eq!(
-            query_writer.build(),
+            query_writer.build_uri(),
             Uri::from_static("http://www.example.com?key=val%25ue&another=value")
         );
     }
@@ -78,7 +95,7 @@ mod test {
         query_writer.insert("key", "val%ue");
         query_writer.insert("another", "value");
         assert_eq!(
-            query_writer.build(),
+            query_writer.build_uri(),
             Uri::from_static("http://www.example.com/path?key=val%25ue&another=value")
         );
     }
@@ -90,10 +107,28 @@ mod test {
         query_writer.insert("key", "val%ue");
         query_writer.insert("another", "value");
         assert_eq!(
-            query_writer.build(),
+            query_writer.build_uri(),
             Uri::from_static(
                 "http://www.example.com/path?original=here&key=val%25ue&another=value"
             )
         );
+    }
+
+    #[test]
+    fn build_query() {
+        let uri = Uri::from_static("http://www.example.com");
+        let mut query_writer = QueryWriter::new(&uri);
+        query_writer.insert("key", "val%ue");
+        query_writer.insert("ano%ther", "value");
+        assert_eq!("key=val%25ue&ano%25ther=value", query_writer.build_query());
+    }
+
+    #[test]
+    fn clear_params() {
+        let uri = Uri::from_static("http://www.example.com/path?original=here&foo=1");
+        let mut query_writer = QueryWriter::new(&uri);
+        query_writer.clear_params();
+        query_writer.insert("new", "value");
+        assert_eq!("new=value", query_writer.build_query());
     }
 }
