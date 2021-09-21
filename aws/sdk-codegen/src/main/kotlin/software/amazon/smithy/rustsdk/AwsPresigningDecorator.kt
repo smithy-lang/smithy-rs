@@ -104,7 +104,7 @@ class AwsInputPresignedMethod(
             pub async fn presigned(
                 self,
                 config: &crate::config::Config,
-                _presigning_config: #{PresigningConfig}
+                presigning_config: #{PresigningConfig}
             ) -> Result<#{PresignedRequest}, #{SdkError}<#{OpError}>>
             """,
             *codegenScope,
@@ -122,6 +122,7 @@ class AwsInputPresignedMethod(
                     let mut config = props.get_mut::<#{sig_auth}::signer::OperationSigningConfig>()
                         .expect("signing config added by make_operation()");
                     config.signature_type = #{sig_auth}::signer::HttpSignatureType::HttpRequestQueryParams;
+                    config.expires_in = Some(presigning_config.expires());
                 }
 
                 let middleware = #{aws_hyper}::AwsMiddleware::default();

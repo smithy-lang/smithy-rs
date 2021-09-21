@@ -12,7 +12,7 @@ use aws_types::SigningService;
 use smithy_http::body::SdkBody;
 use std::error::Error;
 use std::fmt;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use crate::middleware::Signature;
 pub use aws_sigv4::http_request::SignableBody;
@@ -44,6 +44,7 @@ pub struct OperationSigningConfig {
     pub signature_type: HttpSignatureType,
     pub signing_options: SigningOptions,
     pub signing_requirements: SigningRequirements,
+    pub expires_in: Option<Duration>,
 }
 
 impl OperationSigningConfig {
@@ -59,6 +60,7 @@ impl OperationSigningConfig {
                 content_sha256_header: false,
             },
             signing_requirements: SigningRequirements::Required,
+            expires_in: None,
         }
     }
 }
@@ -148,6 +150,7 @@ impl SigV4Signer {
             HttpSignatureType::HttpRequestHeaders => SignatureLocation::Headers,
             HttpSignatureType::HttpRequestQueryParams => SignatureLocation::QueryParams,
         };
+        settings.expires_in = operation_config.expires_in;
         let sigv4_config = aws_sigv4::http_request::SigningParams {
             access_key: credentials.access_key_id(),
             secret_key: credentials.secret_access_key(),
@@ -160,19 +163,24 @@ impl SigV4Signer {
 
         let (memo, signature) = {
             // A body that is already in memory can be signed directly. A  body that is not in memory
-            // (any sort of streaming body) will be signed via UNSIGNED-PAYLOAD.
-            let signable_body = request_config
-                .payload_override
-                // the payload_override is a cheap clone because it contains either a
-                // reference or a short checksum (we're not cloning the entire body)
-                .cloned()
-                .unwrap_or_else(|| {
-                    request
-                        .body()
-                        .bytes()
-                        .map(SignableBody::Bytes)
-                        .unwrap_or(SignableBody::UnsignedPayload)
-                });
+            // (any sort of streaming body or presigned request) will be signed via UNSIGNED-PAYLOAD.
+            let signable_body =
+                if operation_config.signature_type == HttpSignatureType::HttpRequestQueryParams {
+                    SignableBody::UnsignedPayload
+                } else {
+                    request_config
+                        .payload_override
+                        // the payload_override is a cheap clone because it contains either a
+                        // reference or a short checksum (we're not cloning the entire body)
+                        .cloned()
+                        .unwrap_or_else(|| {
+                            request
+                                .body()
+                                .bytes()
+                                .map(SignableBody::Bytes)
+                                .unwrap_or(SignableBody::UnsignedPayload)
+                        })
+                };
             let signable_request = SignableRequest::new(
                 request.method(),
                 request.uri(),

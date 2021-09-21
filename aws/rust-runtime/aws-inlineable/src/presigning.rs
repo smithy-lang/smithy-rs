@@ -24,6 +24,14 @@ pub mod config {
         pub fn builder() -> Builder {
             Builder::default()
         }
+
+        pub fn expires(&self) -> Duration {
+            self.expires_in
+        }
+
+        pub fn start_time(&self) -> SystemTime {
+            self.start_time
+        }
     }
 
     #[non_exhaustive]

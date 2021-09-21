@@ -3,13 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use super::{Error, PayloadChecksumKind, SignableBody, SigningSettings, UriEncoding};
+use super::query_writer::QueryWriter;
+use super::{
+    Error, PayloadChecksumKind, SignableBody, SignatureLocation, SigningParams, UriEncoding,
+};
 use crate::date_fmt::{format_date, format_date_time, parse_date, parse_date_time};
 use crate::http_request::sign::SignableRequest;
-use crate::http_request::url_escape::percent_encode;
 use crate::sign::sha256_hex_string;
 use chrono::{Date, DateTime, Utc};
-use http::header::{HeaderName, HOST, USER_AGENT};
+use http::header::{HeaderName, CONTENT_LENGTH, CONTENT_TYPE, HOST, USER_AGENT};
 use http::{HeaderMap, HeaderValue, Method, Uri};
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -25,71 +27,145 @@ pub(crate) const X_AMZ_CONTENT_SHA_256: &str = "x-amz-content-sha256";
 const UNSIGNED_PAYLOAD: &str = "UNSIGNED-PAYLOAD";
 
 #[derive(Debug, PartialEq)]
-pub struct CanonicalRequest<'a> {
+pub(super) struct HeaderValues<'a> {
+    pub content_sha256: Cow<'a, str>,
+    pub date_time: String,
+    pub security_token: Option<&'a str>,
+    pub signed_headers: SignedHeaders,
+}
+
+#[derive(Debug, PartialEq)]
+pub(super) struct QueryParamValues<'a> {
+    pub algorithm: &'static str,
+    pub content_sha256: Cow<'a, str>,
+    pub credential: String,
+    pub date_time: String,
+    pub expires: String,
+    pub security_token: Option<&'a str>,
+    pub signed_headers: SignedHeaders,
+}
+
+#[derive(Debug, PartialEq)]
+pub(super) enum SignatureValues<'a> {
+    Headers(HeaderValues<'a>),
+    QueryParams(QueryParamValues<'a>),
+}
+
+impl<'a> SignatureValues<'a> {
+    pub(super) fn signed_headers(&self) -> &SignedHeaders {
+        match self {
+            SignatureValues::Headers(values) => &values.signed_headers,
+            SignatureValues::QueryParams(values) => &values.signed_headers,
+        }
+    }
+
+    fn content_sha256(&self) -> &str {
+        match self {
+            SignatureValues::Headers(values) => &values.content_sha256,
+            SignatureValues::QueryParams(values) => &values.content_sha256,
+        }
+    }
+
+    pub(super) fn as_headers(&self) -> Option<&HeaderValues<'_>> {
+        match self {
+            SignatureValues::Headers(values) => Some(&values),
+            _ => None,
+        }
+    }
+
+    pub(super) fn into_query_params(self) -> Result<QueryParamValues<'a>, Self> {
+        match self {
+            SignatureValues::QueryParams(values) => Ok(values),
+            _ => Err(self),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub(super) struct CanonicalRequest<'a> {
     pub method: &'a Method,
     pub path: String,
     pub params: Option<String>,
     pub headers: HeaderMap,
-    pub signed_headers: SignedHeaders,
-    pub date_time: String,
-    pub security_token: Option<&'a str>,
-    pub content_sha256: Cow<'a, str>,
+    pub values: SignatureValues<'a>,
 }
 
 impl<'a> CanonicalRequest<'a> {
-    /// Construct a CanonicalRequest from an HttpRequest and a signable body
+    /// Construct a CanonicalRequest from a [`SignableRequest`] and [`SigningParams`].
     ///
-    /// This function returns 2 things:
-    /// 1. The canonical request to use for signing
-    /// 2. `AddedHeaders`, a struct recording the additional headers that were added. These will
-    ///    behavior returned to the top level caller. If the caller wants to create a
-    ///    presigned URL, they can apply these parameters to the query string.
+    /// The returned canonical request includes information required for signing as well
+    /// as query parameters or header values that go along with the signature in a request.
     ///
     /// ## Behavior
+    ///
     /// There are several settings which alter signing behavior:
     /// - If a `security_token` is provided as part of the credentials it will be included in the signed headers
-    /// - If `settings.uri_encoding` specifies double encoding, `%` in the URL will be rencoded as
-    /// `%25`
-    /// - If settings.payload_checksum_kind is XAmzSha256, add a x-amz-content-sha256 with the body
-    /// checksum. This is the same checksum used as the "payload_hash" in the canonical request
+    /// - If `settings.uri_encoding` specifies double encoding, `%` in the URL will be rencoded as `%25`
+    /// - If `settings.payload_checksum_kind` is XAmzSha256, add a x-amz-content-sha256 with the body
+    ///   checksum. This is the same checksum used as the "payload_hash" in the canonical request
+    /// - `settings.signature_location` determines where the signature will be placed in a request,
+    ///   and also alters the kinds of signing values that go along with it in the request.
     pub fn from<'b>(
         req: &'b SignableRequest<'b>,
-        settings: &SigningSettings,
-        date: DateTime<Utc>,
-        security_token: Option<&'b str>,
+        params: &'b SigningParams<'b>,
     ) -> Result<CanonicalRequest<'b>, Error> {
         // Path encoding: if specified, re-encode % as %25
         // Set method and path into CanonicalRequest
         let path = req.uri().path();
-        let path = match settings.uri_encoding {
+        let path = match params.settings.uri_encoding {
             // The string is already URI encoded, we don't need to encode everything again, just `%`
             UriEncoding::Double => path.replace('%', "%25"),
             UriEncoding::Single => path.to_string(),
         };
         let payload_hash = Self::payload_hash(req.body());
 
-        let date_time = format_date_time(&date);
+        let date_time = format_date_time(&params.date_time);
         let (signed_headers, canonical_headers) =
-            Self::headers(req, settings, &payload_hash, &date_time, security_token)?;
+            Self::headers(req, params, &payload_hash, &date_time)?;
+        let signed_headers = SignedHeaders::new(signed_headers);
+        let values = match params.settings.signature_location {
+            SignatureLocation::Headers => SignatureValues::Headers(HeaderValues {
+                content_sha256: payload_hash,
+                date_time,
+                security_token: params.security_token,
+                signed_headers,
+            }),
+            SignatureLocation::QueryParams => SignatureValues::QueryParams(QueryParamValues {
+                algorithm: "AWS4-HMAC-SHA256",
+                content_sha256: payload_hash,
+                credential: format!(
+                    "{}/{}/{}/{}/aws4_request",
+                    params.access_key,
+                    format_date(&params.date_time.date()),
+                    params.region,
+                    params.service_name,
+                ),
+                date_time,
+                expires: params
+                    .settings
+                    .expires_in
+                    .expect("presigning requires expires_in")
+                    .as_secs()
+                    .to_string(),
+                security_token: params.security_token,
+                signed_headers,
+            }),
+        };
         let creq = CanonicalRequest {
             method: req.method(),
             path,
-            params: Self::params(req.uri()),
+            params: Self::params(req.uri(), &values),
             headers: canonical_headers,
-            signed_headers: SignedHeaders::new(signed_headers),
-            date_time,
-            security_token,
-            content_sha256: payload_hash,
+            values,
         };
         Ok(creq)
     }
 
     fn headers(
         req: &SignableRequest,
-        settings: &SigningSettings,
+        params: &SigningParams<'_>,
         payload_hash: &str,
         date_time: &str,
-        security_token: Option<&str>,
     ) -> Result<(Vec<CanonicalHeaderName>, HeaderMap), Error> {
         // Header computation:
         // The canonical request will include headers not present in the input. We need to clone
@@ -100,25 +176,39 @@ impl<'a> CanonicalRequest<'a> {
         // - x-amz-content-sha256 (if requested by signing settings)
         let mut canonical_headers = req.headers().clone();
         Self::insert_host_header(&mut canonical_headers, req.uri());
-        Self::insert_date_header(&mut canonical_headers, &date_time);
 
-        if let Some(security_token) = security_token {
-            let mut sec_header = HeaderValue::from_str(security_token)?;
-            sec_header.set_sensitive(true);
-            canonical_headers.insert(X_AMZ_SECURITY_TOKEN, sec_header);
-        }
+        if params.settings.signature_location == SignatureLocation::Headers {
+            Self::insert_date_header(&mut canonical_headers, &date_time);
 
-        if settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
-            let header = HeaderValue::from_str(&payload_hash)?;
-            canonical_headers.insert(X_AMZ_CONTENT_SHA_256, header);
+            if let Some(security_token) = params.security_token {
+                let mut sec_header = HeaderValue::from_str(security_token)?;
+                sec_header.set_sensitive(true);
+                canonical_headers.insert(X_AMZ_SECURITY_TOKEN, sec_header);
+            }
+
+            if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
+                let header = HeaderValue::from_str(&payload_hash)?;
+                canonical_headers.insert(X_AMZ_CONTENT_SHA_256, header);
+            }
         }
 
         let mut signed_headers = Vec::with_capacity(canonical_headers.len());
         for (name, _) in &canonical_headers {
             // The user agent header should not be signed because it may be altered by proxies
-            if name != USER_AGENT {
-                signed_headers.push(CanonicalHeaderName(name.clone()));
+            if name == USER_AGENT {
+                continue;
             }
+            // TODO(PresignedReqPrototype): Unit test exclusion of headers
+            if params.settings.signature_location == SignatureLocation::QueryParams {
+                if name == CONTENT_LENGTH || name == CONTENT_TYPE {
+                    continue;
+                }
+                // The X-Amz-User-Agent header should not be signed if this is for a presigned URL
+                if name == HeaderName::from_static("x-amz-user-agent") {
+                    continue;
+                }
+            }
+            signed_headers.push(CanonicalHeaderName(name.clone()));
         }
         Ok((signed_headers, canonical_headers))
     }
@@ -138,27 +228,41 @@ impl<'a> CanonicalRequest<'a> {
         }
     }
 
-    fn params(uri: &Uri) -> Option<String> {
-        if let Some(query) = uri.query() {
-            let mut first = true;
-            let mut out = String::new();
-            let mut params: Vec<(Cow<str>, Cow<str>)> =
-                form_urlencoded::parse(query.as_bytes()).collect();
-            // Sort by param name, and then by param value
-            params.sort();
-            for (key, value) in params {
-                if !first {
-                    out.push('&');
-                }
-                first = false;
+    fn params(uri: &Uri, values: &SignatureValues<'_>) -> Option<String> {
+        let mut params: Vec<(Cow<'_, str>, Cow<'_, str>)> =
+            form_urlencoded::parse(uri.query().unwrap_or_default().as_bytes()).collect();
+        fn add_param<'a>(params: &mut Vec<(Cow<'a, str>, Cow<'a, str>)>, k: &'a str, v: &'a str) {
+            params.push((Cow::Borrowed(k), Cow::Borrowed(v)));
+        }
 
-                out.push_str(&percent_encode(&key));
-                out.push('=');
-                out.push_str(&percent_encode(&value));
+        if let SignatureValues::QueryParams(values) = values {
+            add_param(&mut params, "X-Amz-Date", &values.date_time);
+            add_param(&mut params, "X-Amz-Expires", &values.expires);
+            add_param(&mut params, "X-Amz-Algorithm", values.algorithm);
+            add_param(&mut params, "X-Amz-Credential", &values.credential);
+            add_param(
+                &mut params,
+                "X-Amz-SignedHeaders",
+                values.signed_headers.as_str(),
+            );
+            if let Some(security_token) = values.security_token {
+                add_param(&mut params, X_AMZ_SECURITY_TOKEN, security_token);
             }
-            Some(out)
-        } else {
+        }
+        // Sort by param name, and then by param value
+        params.sort();
+
+        let mut query = QueryWriter::new(uri);
+        query.clear_params();
+        for (key, value) in params {
+            query.insert(&key, &value);
+        }
+
+        let query = query.build_query();
+        if query.is_empty() {
             None
+        } else {
+            Some(query)
         }
     }
 
@@ -197,7 +301,7 @@ impl<'a> fmt::Display for CanonicalRequest<'a> {
         writeln!(f, "{}", self.path)?;
         writeln!(f, "{}", self.params.as_deref().unwrap_or(""))?;
         // write out _all_ the headers
-        for header in &self.signed_headers.inner {
+        for header in &self.values.signed_headers().headers {
             // a missing header is a bug, so we should panic.
             let value = &self.headers[&header.0];
             write!(f, "{}:", header.0.as_str())?;
@@ -205,35 +309,46 @@ impl<'a> fmt::Display for CanonicalRequest<'a> {
         }
         writeln!(f)?;
         // write out the signed headers
-        write!(f, "{}", self.signed_headers.to_string())?;
+        write!(f, "{}", self.values.signed_headers().as_str())?;
         writeln!(f)?;
-        write!(f, "{}", self.content_sha256)?;
+        write!(f, "{}", self.values.content_sha256())?;
         Ok(())
     }
 }
 
 #[derive(Debug, PartialEq, Default)]
 pub struct SignedHeaders {
-    inner: Vec<CanonicalHeaderName>,
+    headers: Vec<CanonicalHeaderName>,
+    formatted: String,
 }
 
 impl SignedHeaders {
-    fn new(mut inner: Vec<CanonicalHeaderName>) -> Self {
-        inner.sort();
-        SignedHeaders { inner }
+    fn new(mut headers: Vec<CanonicalHeaderName>) -> Self {
+        headers.sort();
+        let formatted = Self::fmt(&headers);
+        SignedHeaders { headers, formatted }
+    }
+
+    fn fmt(headers: &[CanonicalHeaderName]) -> String {
+        let mut value = String::new();
+        let mut iter = headers.iter().peekable();
+        while let Some(next) = iter.next() {
+            value += next.0.as_str();
+            if iter.peek().is_some() {
+                value.push(';');
+            }
+        }
+        value
+    }
+
+    pub(super) fn as_str(&self) -> &str {
+        &self.formatted
     }
 }
 
 impl fmt::Display for SignedHeaders {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut iter = self.inner.iter().peekable();
-        while let Some(next) = iter.next() {
-            match iter.peek().is_some() {
-                true => write!(f, "{};", next.0.as_str())?,
-                false => write!(f, "{}", next.0.as_str())?,
-            };
-        }
-        Ok(())
+        write!(f, "{}", self.formatted)
     }
 }
 
@@ -358,6 +473,7 @@ mod tests {
     use crate::date_fmt::parse_date_time;
     use crate::http_request::canonical_request::{CanonicalRequest, Scope, StringToSign};
     use crate::http_request::test::{test_canonical_request, test_request, test_sts};
+    use crate::http_request::SigningParams;
     use crate::http_request::{
         PayloadChecksumKind, SignableBody, SignableRequest, SigningSettings,
     };
@@ -365,29 +481,41 @@ mod tests {
     use pretty_assertions::assert_eq;
     use std::convert::TryFrom;
 
+    fn signing_params(settings: SigningSettings) -> SigningParams<'static> {
+        SigningParams {
+            access_key: "test-access-key",
+            secret_key: "test-secret-key",
+            security_token: None,
+            region: "test-region",
+            service_name: "testservicename",
+            date_time: parse_date_time("20210511T154045Z").unwrap(),
+            settings,
+        }
+    }
+
     #[test]
     fn test_set_xamz_sha_256() {
         let req = test_request("get-vanilla-query-order-key-case");
         let req = SignableRequest::from_http(&req);
-        let date = parse_date_time("20150830T123600Z").unwrap();
-        let mut signing_settings = SigningSettings {
+        let settings = SigningSettings {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
             ..Default::default()
         };
-        let creq = CanonicalRequest::from(&req, &signing_settings, date, None).unwrap();
+        let mut signing_params = signing_params(settings);
+        let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(
-            &creq.content_sha256,
+            creq.values.content_sha256(),
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         );
         // assert that the sha256 header was added
         assert_eq!(
-            creq.signed_headers.to_string(),
+            creq.values.signed_headers().as_str(),
             "host;x-amz-content-sha256;x-amz-date"
         );
 
-        signing_settings.payload_checksum_kind = PayloadChecksumKind::NoHeader;
-        let creq = CanonicalRequest::from(&req, &signing_settings, date, None).unwrap();
-        assert_eq!(creq.signed_headers.to_string(), "host;x-amz-date");
+        signing_params.settings.payload_checksum_kind = PayloadChecksumKind::NoHeader;
+        let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
+        assert_eq!(creq.values.signed_headers().as_str(), "host;x-amz-date");
     }
 
     #[test]
@@ -399,13 +527,13 @@ mod tests {
             req.headers(),
             SignableBody::UnsignedPayload,
         );
-        let date = parse_date_time("20150830T123600Z").unwrap();
-        let signing_settings = SigningSettings {
+        let settings = SigningSettings {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
             ..Default::default()
         };
-        let creq = CanonicalRequest::from(&req, &signing_settings, date, None).unwrap();
-        assert_eq!(&creq.content_sha256, "UNSIGNED-PAYLOAD");
+        let signing_params = signing_params(settings);
+        let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
+        assert_eq!(creq.values.content_sha256(), "UNSIGNED-PAYLOAD");
         assert!(creq.to_string().ends_with("UNSIGNED-PAYLOAD"));
     }
 
@@ -419,13 +547,13 @@ mod tests {
             req.headers(),
             SignableBody::Precomputed(String::from(payload_hash)),
         );
-        let date = parse_date_time("20150830T123600Z").unwrap();
-        let signing_settings = SigningSettings {
+        let settings = SigningSettings {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
             ..Default::default()
         };
-        let creq = CanonicalRequest::from(&req, &signing_settings, date, None).unwrap();
-        assert_eq!(&creq.content_sha256, payload_hash);
+        let signing_params = signing_params(settings);
+        let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
+        assert_eq!(creq.values.content_sha256(), payload_hash);
         assert!(creq.to_string().ends_with(payload_hash));
     }
 
@@ -470,8 +598,8 @@ mod tests {
     fn test_double_url_encode() {
         let req = test_request("double-url-encode");
         let req = SignableRequest::from_http(&req);
-        let date = parse_date_time("20210511T154045Z").unwrap();
-        let creq = CanonicalRequest::from(&req, &SigningSettings::default(), date, None).unwrap();
+        let signing_params = signing_params(SigningSettings::default());
+        let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
         let expected = test_canonical_request("double-url-encode");
         let actual = format!("{}", creq);
@@ -483,8 +611,8 @@ mod tests {
         let req = http::Request::builder()
             .uri("https://s3.us-east-1.amazonaws.com/my-bucket?list-type=2&prefix=~objprefix&single&k=&unreserved=-_.~").body("").unwrap();
         let req = SignableRequest::from_http(&req);
-        let date = parse_date_time("20210511T154045Z").unwrap();
-        let creq = CanonicalRequest::from(&req, &SigningSettings::default(), date, None).unwrap();
+        let signing_params = signing_params(SigningSettings::default());
+        let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(
             Some("k=&list-type=2&prefix=~objprefix&single=&unreserved=-_.~"),
             creq.params.as_deref(),

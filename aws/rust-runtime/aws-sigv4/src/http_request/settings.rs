@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use std::time::Duration;
+
 pub type SigningParams<'a> = crate::SigningParams<'a, SigningSettings>;
 
 #[derive(Debug, PartialEq)]
@@ -18,6 +20,9 @@ pub struct SigningSettings {
 
     /// Where to put the signature
     pub signature_location: SignatureLocation,
+
+    /// For presigned requests, how long the presigned request is valid for
+    pub expires_in: Option<Duration>,
 }
 
 #[non_exhaustive]
@@ -50,12 +55,13 @@ impl Default for SigningSettings {
             uri_encoding: UriEncoding::Double,
             payload_checksum_kind: PayloadChecksumKind::NoHeader,
             signature_location: SignatureLocation::Headers,
+            expires_in: None,
         }
     }
 }
 
 #[non_exhaustive]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SignatureLocation {
     /// Place the signature in the request headers
     Headers,
