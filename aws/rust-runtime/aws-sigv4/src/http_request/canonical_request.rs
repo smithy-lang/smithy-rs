@@ -28,21 +28,21 @@ const UNSIGNED_PAYLOAD: &str = "UNSIGNED-PAYLOAD";
 
 #[derive(Debug, PartialEq)]
 pub(super) struct HeaderValues<'a> {
-    pub content_sha256: Cow<'a, str>,
-    pub date_time: String,
-    pub security_token: Option<&'a str>,
-    pub signed_headers: SignedHeaders,
+    pub(super) content_sha256: Cow<'a, str>,
+    pub(super) date_time: String,
+    pub(super) security_token: Option<&'a str>,
+    pub(super) signed_headers: SignedHeaders,
 }
 
 #[derive(Debug, PartialEq)]
 pub(super) struct QueryParamValues<'a> {
-    pub algorithm: &'static str,
-    pub content_sha256: Cow<'a, str>,
-    pub credential: String,
-    pub date_time: String,
-    pub expires: String,
-    pub security_token: Option<&'a str>,
-    pub signed_headers: SignedHeaders,
+    pub(super) algorithm: &'static str,
+    pub(super) content_sha256: Cow<'a, str>,
+    pub(super) credential: String,
+    pub(super) date_time: String,
+    pub(super) expires: String,
+    pub(super) security_token: Option<&'a str>,
+    pub(super) signed_headers: SignedHeaders,
 }
 
 #[derive(Debug, PartialEq)]
@@ -83,11 +83,11 @@ impl<'a> SignatureValues<'a> {
 
 #[derive(Debug, PartialEq)]
 pub(super) struct CanonicalRequest<'a> {
-    pub method: &'a Method,
-    pub path: String,
-    pub params: Option<String>,
-    pub headers: HeaderMap,
-    pub values: SignatureValues<'a>,
+    pub(super) method: &'a Method,
+    pub(super) path: String,
+    pub(super) params: Option<String>,
+    pub(super) headers: HeaderMap,
+    pub(super) values: SignatureValues<'a>,
 }
 
 impl<'a> CanonicalRequest<'a> {
@@ -105,7 +105,7 @@ impl<'a> CanonicalRequest<'a> {
     ///   checksum. This is the same checksum used as the "payload_hash" in the canonical request
     /// - `settings.signature_location` determines where the signature will be placed in a request,
     ///   and also alters the kinds of signing values that go along with it in the request.
-    pub fn from<'b>(
+    pub(super) fn from<'b>(
         req: &'b SignableRequest<'b>,
         params: &'b SigningParams<'b>,
     ) -> Result<CanonicalRequest<'b>, Error> {
@@ -162,7 +162,7 @@ impl<'a> CanonicalRequest<'a> {
     }
 
     fn headers(
-        req: &SignableRequest,
+        req: &SignableRequest<'_>,
         params: &SigningParams<'_>,
         payload_hash: &str,
         date_time: &str,
@@ -316,7 +316,7 @@ impl<'a> fmt::Display for CanonicalRequest<'a> {
 }
 
 #[derive(Debug, PartialEq, Default)]
-pub struct SignedHeaders {
+pub(super) struct SignedHeaders {
     headers: Vec<CanonicalHeaderName>,
     formatted: String,
 }
@@ -352,7 +352,7 @@ impl fmt::Display for SignedHeaders {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct CanonicalHeaderName(HeaderName);
+struct CanonicalHeaderName(HeaderName);
 
 impl PartialOrd for CanonicalHeaderName {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -367,10 +367,10 @@ impl Ord for CanonicalHeaderName {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct Scope<'a> {
-    pub date: Date<Utc>,
-    pub region: &'a str,
-    pub service: &'a str,
+pub(super) struct Scope<'a> {
+    pub(super) date: Date<Utc>,
+    pub(super) region: &'a str,
+    pub(super) service: &'a str,
 }
 
 impl<'a> fmt::Display for Scope<'a> {
@@ -404,12 +404,12 @@ impl<'a> TryFrom<&'a str> for Scope<'a> {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct StringToSign<'a> {
-    pub scope: Scope<'a>,
-    pub date: DateTime<Utc>,
-    pub region: &'a str,
-    pub service: &'a str,
-    pub hashed_creq: &'a str,
+pub(super) struct StringToSign<'a> {
+    pub(super) scope: Scope<'a>,
+    pub(super) date: DateTime<Utc>,
+    pub(super) region: &'a str,
+    pub(super) service: &'a str,
+    pub(super) hashed_creq: &'a str,
 }
 
 impl<'a> TryFrom<&'a str> for StringToSign<'a> {
@@ -417,7 +417,7 @@ impl<'a> TryFrom<&'a str> for StringToSign<'a> {
     fn try_from(s: &'a str) -> Result<Self, Self::Error> {
         let lines = s.lines().collect::<Vec<&str>>();
         let date = parse_date_time(&lines[1])?;
-        let scope: Scope = TryFrom::try_from(lines[2])?;
+        let scope: Scope<'_> = TryFrom::try_from(lines[2])?;
         let hashed_creq = &lines[3];
 
         let sts = StringToSign {

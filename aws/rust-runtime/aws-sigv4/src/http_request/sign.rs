@@ -19,8 +19,10 @@ use std::convert::TryFrom;
 use std::error::Error as StdError;
 use std::str;
 
+/// Signing error type
 pub type Error = Box<dyn StdError + Send + Sync + 'static>;
 
+/// Represents all of the information necessary to sign an HTTP request.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct SignableRequest<'a> {
@@ -31,6 +33,8 @@ pub struct SignableRequest<'a> {
 }
 
 impl<'a> SignableRequest<'a> {
+    /// Creates a new `SignableRequest`. If you have an [`http::Request`], then
+    /// consider using [`SignableRequest::from_http`] instead of `new`.
     pub fn new(
         method: &'a Method,
         uri: &'a Uri,
@@ -45,6 +49,7 @@ impl<'a> SignableRequest<'a> {
         }
     }
 
+    /// Creates a new `SignableRequest` from an [`http::Request`].
     pub fn from_http<'b, B>(request: &'b http::Request<B>) -> SignableRequest<'b>
     where
         B: 'b,
@@ -58,28 +63,34 @@ impl<'a> SignableRequest<'a> {
         )
     }
 
+    /// Returns the signable URI
     pub fn uri(&self) -> &Uri {
         self.uri
     }
 
+    /// Returns the signable HTTP method
     pub fn method(&self) -> &Method {
         self.method
     }
 
+    /// Returns the request headers
     pub fn headers(&self) -> &HeaderMap<HeaderValue> {
         self.headers
     }
 
+    /// Returns the signable body
     pub fn body(&self) -> &SignableBody<'_> {
         &self.body
     }
 }
 
+/// A signable HTTP request body
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum SignableBody<'a> {
     /// A body composed of a slice of bytes
     Bytes(&'a [u8]),
+
     /// An unsigned payload
     ///
     /// UnsignedPayload is used for streaming requests where the contents of the body cannot be
@@ -92,6 +103,7 @@ pub enum SignableBody<'a> {
     Precomputed(String),
 }
 
+#[derive(Debug)]
 pub struct SigningInstructions {
     headers: Option<HeaderMap<HeaderValue>>,
     params: Option<Vec<(&'static str, Cow<'static, str>)>>,
@@ -259,8 +271,8 @@ fn add_header(map: &mut HeaderMap<HeaderValue>, key: &'static str, value: &str) 
 // Authorization: algorithm Credential=access key ID/credential scope, SignedHeaders=SignedHeaders, Signature=signature
 fn build_authorization_header(
     access_key: &str,
-    creq: &CanonicalRequest,
-    sts: StringToSign,
+    creq: &CanonicalRequest<'_>,
+    sts: StringToSign<'_>,
     signature: &str,
 ) -> HeaderValue {
     let mut value = HeaderValue::try_from(format!(

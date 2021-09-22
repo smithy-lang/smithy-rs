@@ -5,8 +5,10 @@
 
 use std::time::Duration;
 
+/// HTTP signing parameters
 pub type SigningParams<'a> = crate::SigningParams<'a, SigningSettings>;
 
+/// HTTP-specific signing settings
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub struct SigningSettings {
@@ -25,6 +27,7 @@ pub struct SigningSettings {
     pub expires_in: Option<Duration>,
 }
 
+/// HTTP payload checksum type
 #[non_exhaustive]
 #[derive(Debug, Eq, PartialEq)]
 pub enum PayloadChecksumKind {
@@ -39,6 +42,7 @@ pub enum PayloadChecksumKind {
     NoHeader,
 }
 
+/// URI encoding to use while signing
 #[non_exhaustive]
 #[derive(Debug, Eq, PartialEq)]
 pub enum UriEncoding {
@@ -60,6 +64,7 @@ impl Default for SigningSettings {
     }
 }
 
+/// Where to place signing values in the HTTP request
 #[non_exhaustive]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SignatureLocation {

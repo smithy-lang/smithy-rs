@@ -15,7 +15,7 @@ pub(super) struct QueryWriter {
 
 impl QueryWriter {
     /// Creates a new `QueryWriter` based off the given `uri`.
-    pub fn new(uri: &Uri) -> Self {
+    pub(super) fn new(uri: &Uri) -> Self {
         let new_path_and_query = uri
             .path_and_query()
             .map(|pq| pq.to_string())
@@ -35,7 +35,7 @@ impl QueryWriter {
     }
 
     /// Clears all query parameters.
-    pub fn clear_params(&mut self) {
+    pub(super) fn clear_params(&mut self) {
         if let Some(index) = self.new_path_and_query.find('?') {
             self.new_path_and_query.truncate(index);
             self.prefix = Some('?');
@@ -43,7 +43,7 @@ impl QueryWriter {
     }
 
     /// Inserts a new query parameter.
-    pub fn insert(&mut self, k: &str, v: &str) {
+    pub(super) fn insert(&mut self, k: &str, v: &str) {
         if let Some(prefix) = self.prefix {
             self.new_path_and_query.push(prefix);
         }
@@ -55,12 +55,12 @@ impl QueryWriter {
     }
 
     /// Returns just the built query string.
-    pub fn build_query(self) -> String {
+    pub(super) fn build_query(self) -> String {
         self.build_uri().query().unwrap_or_default().to_string()
     }
 
     /// Returns a full [`Uri`] with the query string updated.
-    pub fn build_uri(self) -> Uri {
+    pub(super) fn build_uri(self) -> Uri {
         let mut parts = self.base_uri.into_parts();
         parts.path_and_query = Some(
             self.new_path_and_query

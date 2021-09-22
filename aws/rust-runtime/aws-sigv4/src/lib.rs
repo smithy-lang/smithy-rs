@@ -6,13 +6,13 @@
 //! Provides functions for calculating Sigv4 signing keys, signatures, and
 //! optional utilities for signing HTTP requests and Event Stream messages.
 
-// TODO(PresignedReqPrototype): Address lints commented below
-// #![warn(
-//     missing_debug_implementations,
-//     rust_2018_idioms,
-//     rustdoc::all,
-//     unreachable_pub
-// )]
+#![warn(
+    missing_docs,
+    missing_crate_level_docs,
+    missing_debug_implementations,
+    rust_2018_idioms,
+    unreachable_pub
+)]
 
 use chrono::{DateTime, Utc};
 
@@ -49,17 +49,20 @@ pub struct SigningParams<'a, S> {
 }
 
 impl<'a, S: Default> SigningParams<'a, S> {
-    pub fn builder() -> Builder<'a, S> {
+    /// Returns a builder that can create new `SigningParams`.
+    pub fn builder() -> signing_params::Builder<'a, S> {
         Default::default()
     }
 }
 
-mod builder {
+/// Builder and error for creating [`SigningParams`]
+pub mod signing_params {
     use super::SigningParams;
     use chrono::{DateTime, Utc};
     use std::error::Error;
     use std::fmt;
 
+    /// [`SigningParams`] builder error
     #[derive(Debug)]
     pub struct BuildError {
         reason: &'static str,
@@ -78,7 +81,8 @@ mod builder {
 
     impl Error for BuildError {}
 
-    #[derive(Default)]
+    /// Builder that can create new [`SigningParams`]
+    #[derive(Debug, Default)]
     pub struct Builder<'a, S> {
         access_key: Option<&'a str>,
         secret_key: Option<&'a str>,
@@ -90,62 +94,78 @@ mod builder {
     }
 
     impl<'a, S> Builder<'a, S> {
+        /// Sets the access key (required).
         pub fn access_key(mut self, access_key: &'a str) -> Self {
             self.access_key = Some(access_key);
             self
         }
+        /// Sets the access key (required)
         pub fn set_access_key(&mut self, access_key: Option<&'a str>) {
             self.access_key = access_key;
         }
 
+        /// Sets the secret key (required)
         pub fn secret_key(mut self, secret_key: &'a str) -> Self {
             self.secret_key = Some(secret_key);
             self
         }
+        /// Sets the secret key (required)
         pub fn set_secret_key(&mut self, secret_key: Option<&'a str>) {
             self.secret_key = secret_key;
         }
 
+        /// Sets the security token (optional)
         pub fn security_token(mut self, security_token: &'a str) -> Self {
             self.security_token = Some(security_token);
             self
         }
+        /// Sets the security token (optional)
         pub fn set_security_token(&mut self, security_token: Option<&'a str>) {
             self.security_token = security_token;
         }
 
+        /// Sets the region (required)
         pub fn region(mut self, region: &'a str) -> Self {
             self.region = Some(region);
             self
         }
+        /// Sets the region (required)
         pub fn set_region(&mut self, region: Option<&'a str>) {
             self.region = region;
         }
 
+        /// Sets the service name (required)
         pub fn service_name(mut self, service_name: &'a str) -> Self {
             self.service_name = Some(service_name);
             self
         }
+        /// Sets the service name (required)
         pub fn set_service_name(&mut self, service_name: Option<&'a str>) {
             self.service_name = service_name;
         }
 
+        /// Sets the date time to be used in the signature (required)
         pub fn date_time(mut self, date_time: DateTime<Utc>) -> Self {
             self.date_time = Some(date_time);
             self
         }
+        /// Sets the date time to be used in the signature (required)
         pub fn set_date_time(&mut self, date_time: Option<DateTime<Utc>>) {
             self.date_time = date_time;
         }
 
+        /// Sets additional signing settings (required)
         pub fn settings(mut self, settings: S) -> Self {
             self.settings = Some(settings);
             self
         }
+        /// Sets additional signing settings (required)
         pub fn set_settings(&mut self, settings: Option<S>) {
             self.settings = settings;
         }
 
+        /// Builds an instance of [`SigningParams`]. Will yield a [`BuildError`] if
+        /// a required argument was not given.
         pub fn build(self) -> Result<SigningParams<'a, S>, BuildError> {
             Ok(SigningParams {
                 access_key: self
@@ -171,27 +191,35 @@ mod builder {
         }
     }
 }
-pub use builder::{BuildError, Builder};
 
 /// Container for the signed output and the signature.
+///
+/// This is returned by signing functions, and the signed output will be
+/// different based on what is being signed (for example, an event stream
+/// message, or an HTTP request).
+#[derive(Debug)]
 pub struct SigningOutput<T> {
     output: T,
     signature: String,
 }
 
 impl<T> SigningOutput<T> {
+    /// Creates a new [`SigningOutput`]
     pub fn new(output: T, signature: String) -> Self {
         Self { output, signature }
     }
 
+    /// Returns the signed output
     pub fn output(&self) -> &T {
         &self.output
     }
 
+    /// Returns the signature as a lowercase hex string
     pub fn signature(&self) -> &str {
         &self.signature
     }
 
+    /// Decomposes the `SigningOutput` into a tuple of the signed output and the signature
     pub fn into_parts(self) -> (T, String) {
         (self.output, self.signature)
     }
