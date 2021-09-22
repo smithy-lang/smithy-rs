@@ -38,7 +38,7 @@ pub struct ImdsCredentialsProvider {
     provider_config: ProviderConfig,
 }
 
-/// Builder for [`ImdsCredentialProvider`]
+/// Builder for [`ImdsCredentialsProvider`]
 #[derive(Default, Debug)]
 pub struct Builder {
     provider_config: Option<ProviderConfig>,
@@ -80,7 +80,7 @@ impl Builder {
         self
     }
 
-    /// Create an [`ImdsCredentialProvider`] from this builder.
+    /// Create an [`ImdsCredentialsProvider`] from this builder.
     pub fn build(self) -> ImdsCredentialsProvider {
         let provider_config = self.provider_config.unwrap_or_default();
         let client = if let Some(client) = self.imds_override {
@@ -111,7 +111,7 @@ impl ProvideCredentials for ImdsCredentialsProvider {
 }
 
 impl ImdsCredentialsProvider {
-    /// Builder for [`ImdsCredentialProvider`]
+    /// Builder for [`ImdsCredentialsProvider`]
     pub fn builder() -> Builder {
         Builder::default()
     }
