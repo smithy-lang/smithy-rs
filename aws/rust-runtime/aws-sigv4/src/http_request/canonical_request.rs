@@ -198,7 +198,6 @@ impl<'a> CanonicalRequest<'a> {
             if name == USER_AGENT {
                 continue;
             }
-            // TODO(PresignedReqPrototype): Unit test exclusion of headers
             if params.settings.signature_location == SignatureLocation::QueryParams {
                 if name == CONTENT_LENGTH || name == CONTENT_TYPE {
                     continue;
@@ -473,13 +472,14 @@ mod tests {
     use crate::date_fmt::parse_date_time;
     use crate::http_request::canonical_request::{CanonicalRequest, Scope, StringToSign};
     use crate::http_request::test::{test_canonical_request, test_request, test_sts};
-    use crate::http_request::SigningParams;
     use crate::http_request::{
         PayloadChecksumKind, SignableBody, SignableRequest, SigningSettings,
     };
+    use crate::http_request::{SignatureLocation, SigningParams};
     use crate::sign::sha256_hex_string;
     use pretty_assertions::assert_eq;
     use std::convert::TryFrom;
+    use std::time::Duration;
 
     fn signing_params(settings: SigningSettings) -> SigningParams<'static> {
         SigningParams {
@@ -617,5 +617,29 @@ mod tests {
             Some("k=&list-type=2&prefix=~objprefix&single=&unreserved=-_.~"),
             creq.params.as_deref(),
         );
+    }
+
+    // It should exclude user-agent, content-type, content-length, and x-amz-user-agent headers from presigning
+    #[test]
+    fn presigning_header_exclusion() {
+        let request = http::Request::builder()
+            .uri("https://some-endpoint.some-region.amazonaws.com")
+            .header("content-type", "application/xml")
+            .header("content-length", "0")
+            .header("user-agent", "test-user-agent")
+            .header("x-amz-user-agent", "test-user-agent")
+            .body("")
+            .unwrap();
+        let request = SignableRequest::from_http(&request);
+
+        let mut settings = SigningSettings::default();
+        settings.signature_location = SignatureLocation::QueryParams;
+        settings.expires_in = Some(Duration::from_secs(30));
+
+        let signing_params = signing_params(settings);
+        let canonical = CanonicalRequest::from(&request, &signing_params).unwrap();
+
+        let values = canonical.values.into_query_params().unwrap();
+        assert_eq!("host", values.signed_headers.as_str());
     }
 }

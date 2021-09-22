@@ -42,6 +42,10 @@ pub(crate) fn test_signed_request(name: &str) -> Request<Bytes> {
     test_parsed_request(name, "sreq")
 }
 
+pub(crate) fn test_signed_request_query_params(name: &str) -> Request<Bytes> {
+    test_parsed_request(name, "qpsreq")
+}
+
 fn test_parsed_request(name: &str, ext: &str) -> Request<Bytes> {
     let path = path(name, ext);
     match parse_request(read(&path).as_bytes()) {

@@ -4,6 +4,7 @@
  */
 
 use aws_sigv4::http_request::{sign, PayloadChecksumKind, SigningSettings, UriEncoding};
+use aws_sigv4::SigningParams;
 use aws_types::region::SigningRegion;
 use aws_types::Credentials;
 use aws_types::SigningService;
@@ -144,14 +145,16 @@ impl SigV4Signer {
         } else {
             PayloadChecksumKind::NoHeader
         };
-        let sigv4_config = aws_sigv4::http_request::SigningParams {
-            access_key: credentials.access_key_id(),
-            secret_key: credentials.secret_access_key(),
-            security_token: credentials.session_token(),
-            region: request_config.region.as_ref(),
-            service_name: request_config.service.as_ref(),
-            date_time: request_config.request_ts.into(),
-            settings,
+        let sigv4_config = {
+            let mut builder = SigningParams::builder()
+                .access_key(credentials.access_key_id())
+                .secret_key(credentials.secret_access_key())
+                .region(request_config.region.as_ref())
+                .service_name(request_config.service.as_ref())
+                .date_time(request_config.request_ts.into())
+                .settings(settings);
+            builder.set_security_token(credentials.session_token());
+            builder.build().unwrap()
         };
 
         let (signing_instructions, signature) = {

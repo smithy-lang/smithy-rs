@@ -92,12 +92,12 @@ pub enum SignableBody<'a> {
     Precomputed(String),
 }
 
-pub struct SigningMemo {
+pub struct SigningInstructions {
     headers: Option<HeaderMap<HeaderValue>>,
     params: Option<Vec<(&'static str, Cow<'static, str>)>>,
 }
 
-impl SigningMemo {
+impl SigningInstructions {
     fn new(
         headers: Option<HeaderMap<HeaderValue>>,
         params: Option<Vec<(&'static str, Cow<'static, str>)>>,
@@ -119,7 +119,6 @@ impl SigningMemo {
         self.params.take()
     }
 
-    // TODO(PresignedReqPrototype): unit test
     pub fn apply_to_request<B>(mut self, request: &mut http::Request<B>) {
         if let Some(new_headers) = self.take_headers() {
             for (name, value) in new_headers.into_iter() {
@@ -136,26 +135,25 @@ impl SigningMemo {
     }
 }
 
-/// Produces a signature for the given `request` and returns a memo
+/// Produces a signature for the given `request` and returns instructions
 /// that can be used to apply that signature to an HTTP request.
 pub fn sign<'a>(
     request: SignableRequest<'a>,
     params: &'a SigningParams<'a>,
-) -> Result<SigningOutput<SigningMemo>, Error> {
+) -> Result<SigningOutput<SigningInstructions>, Error> {
     match params.settings.signature_location {
         SignatureLocation::Headers => {
             let (signing_headers, signature) =
                 calculate_signing_headers(&request, params)?.into_parts();
             Ok(SigningOutput::new(
-                SigningMemo::new(Some(signing_headers), None),
+                SigningInstructions::new(Some(signing_headers), None),
                 signature,
             ))
         }
-        // TODO(PresignedReqPrototype): Figure out how to write unit tests for this
         SignatureLocation::QueryParams => {
             let (params, signature) = calculate_signing_params(&request, params)?;
             Ok(SigningOutput::new(
-                SigningMemo::new(None, Some(params)),
+                SigningInstructions::new(None, Some(params)),
                 signature,
             ))
         }
@@ -280,12 +278,18 @@ fn build_authorization_header(
 
 #[cfg(test)]
 mod tests {
-    use super::sign;
+    use super::{sign, SigningInstructions};
     use crate::date_fmt::parse_date_time;
     use crate::http_request::sign::SignableRequest;
-    use crate::http_request::test::{make_headers_comparable, test_request, test_signed_request};
-    use crate::http_request::{SigningParams, SigningSettings};
+    use crate::http_request::test::{
+        make_headers_comparable, test_request, test_signed_request,
+        test_signed_request_query_params,
+    };
+    use crate::http_request::{SignatureLocation, SigningParams, SigningSettings};
+    use http::{HeaderMap, HeaderValue};
     use pretty_assertions::assert_eq;
+    use std::borrow::Cow;
+    use std::time::Duration;
 
     macro_rules! assert_req_eq {
         ($a:tt, $b:tt) => {
@@ -296,7 +300,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sign_vanilla() {
+    fn test_sign_vanilla_with_headers() {
         let settings = SigningSettings::default();
         let params = SigningParams {
             access_key: "AKIDEXAMPLE",
@@ -321,5 +325,75 @@ mod tests {
 
         let mut expected = test_signed_request("get-vanilla-query-order-key-case");
         assert_req_eq!(expected, signed);
+    }
+
+    #[test]
+    fn test_sign_vanilla_with_query_params() {
+        let mut settings = SigningSettings::default();
+        settings.signature_location = SignatureLocation::QueryParams;
+        settings.expires_in = Some(Duration::from_secs(35));
+        let params = SigningParams {
+            access_key: "AKIDEXAMPLE",
+            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+            security_token: None,
+            region: "us-east-1",
+            service_name: "service",
+            date_time: parse_date_time("20150830T123600Z").unwrap(),
+            settings,
+        };
+
+        let original = test_request("get-vanilla-query-order-key-case");
+        let signable = SignableRequest::from_http(&original);
+        let out = sign(signable, &params).unwrap();
+        assert_eq!(
+            "f25aea20f8c722ece3b363fc5d60cc91add973f9b64c42ba36fa28d57afe9019",
+            out.signature
+        );
+
+        let mut signed = original;
+        out.output.apply_to_request(&mut signed);
+
+        let mut expected = test_signed_request_query_params("get-vanilla-query-order-key-case");
+        assert_req_eq!(expected, signed);
+    }
+
+    #[test]
+    fn apply_signing_instructions_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert("some-header", HeaderValue::from_static("foo"));
+        headers.insert("some-other-header", HeaderValue::from_static("bar"));
+        let instructions = SigningInstructions::new(Some(headers), None);
+
+        let mut request = http::Request::builder()
+            .uri("https://some-endpoint.some-region.amazonaws.com")
+            .body("")
+            .unwrap();
+
+        instructions.apply_to_request(&mut request);
+
+        let get_header = |n: &str| request.headers().get(n).unwrap().to_str().unwrap();
+        assert_eq!("foo", get_header("some-header"));
+        assert_eq!("bar", get_header("some-other-header"));
+    }
+
+    #[test]
+    fn apply_signing_instructions_query_params() {
+        let params = vec![
+            ("some-param", Cow::Borrowed("f&o?o")),
+            ("some-other-param?", Cow::Borrowed("bar")),
+        ];
+        let instructions = SigningInstructions::new(None, Some(params));
+
+        let mut request = http::Request::builder()
+            .uri("https://some-endpoint.some-region.amazonaws.com/some/path")
+            .body("")
+            .unwrap();
+
+        instructions.apply_to_request(&mut request);
+
+        assert_eq!(
+            "/some/path?some-param=f%26o%3Fo&some-other-param%3F=bar",
+            request.uri().path_and_query().unwrap().to_string()
+        );
     }
 }
