@@ -2,6 +2,7 @@ vNext (Month Day, Year)
 =======================
 **New This Week**
 - Add IMDS client to `aws-config`
+- Add IMDS credential provider to `aws-config` (smithy-rs#709)
 - Update event stream `Receiver`s to be `Send` (aws-sdk-rust#224)
 - Add `sts::AssumeRoleProvider` to `aws-config` (#703, aws-sdk-rust#3)
 

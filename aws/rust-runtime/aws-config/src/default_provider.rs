@@ -162,6 +162,7 @@ pub mod credentials {
     pub struct Builder {
         profile_file_builder: crate::profile::credentials::Builder,
         web_identity_builder: crate::web_identity_token::Builder,
+        imds_builder: crate::imds::credentials::Builder,
         credential_cache: crate::meta::credentials::lazy_caching::Builder,
         region_override: Option<Box<dyn ProvideRegion>>,
         region_chain: crate::default_provider::region::Builder,
@@ -240,10 +241,12 @@ pub mod credentials {
             let profile_provider = self.profile_file_builder.configure(&conf).build();
             let env_provider = EnvironmentVariableCredentialsProvider::new_with_env(conf.env());
             let web_identity_token_provider = self.web_identity_builder.configure(&conf).build();
+            let imds_provider = self.imds_builder.configure(&conf).build();
 
             let provider_chain = CredentialsProviderChain::first_try("Environment", env_provider)
                 .or_else("Profile", profile_provider)
-                .or_else("WebIdentityToken", web_identity_token_provider);
+                .or_else("WebIdentityToken", web_identity_token_provider)
+                .or_else("Ec2InstanceMetadata", imds_provider);
             let cached_provider = self.credential_cache.configure(&conf).load(provider_chain);
             DefaultCredentialsChain(cached_provider.build())
         }
@@ -252,8 +255,36 @@ pub mod credentials {
     #[cfg(test)]
     mod test {
 
+        /// Test generation macro
+        ///
+        /// # Examples
+        /// **Run the test case in `test-data/default-provider-chain/test_name`
+        /// ```rust
+        /// make_test!(test_name);
+        /// ```
+        ///
+        /// **Update (responses are replayed but new requests are recorded) the test case**:
+        /// ```rust
+        /// make_test!(update: test_name)
+        /// ```
+        ///
+        /// **Run the test case against a real HTTPS connection:**
+        /// > Note: Be careful to remove sensitive information before commiting. Always use a temporary
+        /// > AWS account when recording live traffic.
+        /// ```rust
+        /// make_test!(live: test_name)
+        /// ```
         macro_rules! make_test {
             ($name: ident) => {
+                make_test!($name, execute);
+            };
+            (update: $name:ident) => {
+                make_test!($name, execute_and_update);
+            };
+            (live: $name:ident) => {
+                make_test!($name, execute_from_live_traffic);
+            };
+            ($name: ident, $func: ident) => {
                 #[traced_test]
                 #[tokio::test]
                 async fn $name() {
@@ -262,7 +293,7 @@ pub mod credentials {
                         stringify!($name)
                     ))
                     .unwrap()
-                    .execute(|conf| async {
+                    .$func(|conf| async {
                         crate::default_provider::credentials::Builder::default()
                             .configure(conf)
                             .build()
@@ -286,6 +317,14 @@ pub mod credentials {
         make_test!(web_identity_token_source_profile);
         make_test!(web_identity_token_profile);
         make_test!(profile_overrides_web_identity);
+        make_test!(imds_token_fail);
+
+        make_test!(imds_no_iam_role);
+        make_test!(imds_default_chain_error);
+        make_test!(imds_default_chain_success);
+        make_test!(imds_assume_role);
+        make_test!(imds_disabled);
+        make_test!(imds_default_chain_retries);
 
         #[tokio::test]
         async fn profile_name_override() {
@@ -304,23 +343,6 @@ pub mod credentials {
                 .await
                 .expect("creds should load");
             assert_eq!(creds.access_key_id(), "correct_key_secondary");
-        }
-
-        /// Helper that uses `execute_and_update` instead of execute
-        ///
-        /// If you run this, it will add another HTTP traffic log which re-records the request
-        /// data
-        #[tokio::test]
-        #[ignore]
-        async fn update_test() {
-            crate::test_case::TestEnvironment::from_dir(concat!(
-                "./test-data/default-provider-chain/web_identity_token_source_profile",
-            ))
-            .unwrap()
-            .execute_and_update(|conf| async {
-                super::Builder::default().configure(conf).build().await
-            })
-            .await
         }
     }
 }

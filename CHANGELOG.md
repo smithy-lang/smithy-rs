@@ -1,6 +1,7 @@
 vNext (Month Day, Year)
 =======================
 **New This Week**
+- Add IMDS credential provider to `aws-config` (#709)
 - Add IMDS client to `aws-config` (#701)
 - Add `TimeSource` to `aws_types::os_shim_internal` (#701)
 - User agent construction is now `const fn` (#701)
