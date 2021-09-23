@@ -54,7 +54,7 @@ fn test_parsed_request(name: &str, ext: &str) -> Request<Bytes> {
     }
 }
 
-pub(crate) fn make_headers_comparable(request: &mut Request<Bytes>) {
+pub(crate) fn make_headers_comparable<B>(request: &mut Request<B>) {
     for (_name, value) in request.headers_mut() {
         value.set_sensitive(false);
     }

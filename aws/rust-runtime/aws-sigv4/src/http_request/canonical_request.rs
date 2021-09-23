@@ -317,7 +317,12 @@ impl<'a> fmt::Display for CanonicalRequest<'a> {
             // a missing header is a bug, so we should panic.
             let value = &self.headers[&header.0];
             write!(f, "{}:", header.0.as_str())?;
-            writeln!(f, "{}", value.to_str().unwrap())?;
+            writeln!(
+                f,
+                "{}",
+                std::str::from_utf8(value.as_bytes())
+                    .expect("SDK request header values are valid UTF-8")
+            )?;
         }
         writeln!(f)?;
         // write out the signed headers
