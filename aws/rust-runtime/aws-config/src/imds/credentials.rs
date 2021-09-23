@@ -166,7 +166,7 @@ impl ImdsCredentialsProvider {
 
     async fn credentials(&self) -> credentials::Result {
         if self.imds_disabled() {
-            tracing::debug!("IMDS disabled by environment variable");
+            tracing::debug!("IMDS disabled because $AWS_EC2_METADATA_DISABLED was set to `true`");
             return Err(CredentialsError::CredentialsNotLoaded);
         }
         let get_profile = self.get_profile_uncached();
@@ -229,7 +229,7 @@ enum ImdsCredentialsResponse<'a> {
         secret_access_key: Cow<'a, str>,
         session_token: Option<Cow<'a, str>>,
         expiration: SystemTime,
-        tpe: Cow<'a, str>,
+        r#type: Cow<'a, str>,
     },
     Error {
         code: Cow<'a, str>,
@@ -290,51 +290,54 @@ fn parse_imds_credentials(
     let mut session_token = None;
     let mut expiration = None;
     let mut message = None;
-    if let Some(Token::StartObject { .. }) = tokens.next().transpose()? {
-        loop {
-            match tokens.next().transpose()? {
-                Some(Token::EndObject { .. }) => break,
-                Some(Token::ObjectKey { key, .. }) => {
-                    if let Some(Ok(Token::ValueString { value, .. })) = tokens.peek() {
-                        match key.as_escaped_str() {
-                            /*
-                             "Code": "Success",
-                             "Type": "AWS-HMAC",
-                             "AccessKeyId" : "accessKey",
-                             "SecretAccessKey" : "secret",
-                             "Token" : "token",
-                             "Expiration" : "....",
-                             "LastUpdated" : "2009-11-23T0:00:00Z"
-                            */
-                            "Code" => code = Some(value.to_unescaped()?),
-                            "Type" => tpe = Some(value.to_unescaped()?),
-                            "AccessKeyId" => access_key_id = Some(value.to_unescaped()?),
-                            "SecretAccessKey" => secret_access_key = Some(value.to_unescaped()?),
-                            "Token" => session_token = Some(value.to_unescaped()?),
-                            "Expiration" => expiration = Some(value.to_unescaped()?),
+    if !matches!(tokens.next().transpose()?, Some(Token::StartObject { .. })) {
+        return Err(InvalidImdsResponse::JsonError(
+            "expected a JSON document starting with `{`".into(),
+        ));
+    }
+    loop {
+        match tokens.next().transpose()? {
+            Some(Token::EndObject { .. }) => break,
+            Some(Token::ObjectKey { key, .. }) => {
+                if let Some(Ok(Token::ValueString { value, .. })) = tokens.peek() {
+                    match key.as_escaped_str() {
+                        /*
+                         "Code": "Success",
+                         "Type": "AWS-HMAC",
+                         "AccessKeyId" : "accessKey",
+                         "SecretAccessKey" : "secret",
+                         "Token" : "token",
+                         "Expiration" : "....",
+                         "LastUpdated" : "2009-11-23T0:00:00Z"
+                        */
+                        "Code" => code = Some(value.to_unescaped()?),
+                        "Type" => tpe = Some(value.to_unescaped()?),
+                        "AccessKeyId" => access_key_id = Some(value.to_unescaped()?),
+                        "SecretAccessKey" => secret_access_key = Some(value.to_unescaped()?),
+                        "Token" => session_token = Some(value.to_unescaped()?),
+                        "Expiration" => expiration = Some(value.to_unescaped()?),
 
-                            // Error case handling: message will be set
-                            "Message" => message = Some(value.to_unescaped()?),
-                            _ => {}
-                        }
+                        // Error case handling: message will be set
+                        "Message" => message = Some(value.to_unescaped()?),
+                        _ => {}
                     }
-                    skip_value(&mut tokens)?;
                 }
-                other => {
-                    return Err(InvalidImdsResponse::Custom(
-                        format!("expected object key, found: {:?}", other,).into(),
-                    ))
-                }
+                skip_value(&mut tokens)?;
+            }
+            other => {
+                return Err(InvalidImdsResponse::Custom(
+                    format!("expected object key, found: {:?}", other,).into(),
+                ));
             }
         }
-        if tokens.next().is_some() {
-            return Err(InvalidImdsResponse::Custom(
-                "found more JSON tokens after completing parsing".into(),
-            ));
-        }
+    }
+    if tokens.next().is_some() {
+        return Err(InvalidImdsResponse::Custom(
+            "found more JSON tokens after completing parsing".into(),
+        ));
     }
     match code {
-        // IMDS does not appear to reply with an unset code, but documentation indicates it
+        // IMDS does not appear to reply with an `Code` missing, but documentation indicates it
         // may be possible
         None | Some(Cow::Borrowed("Success")) => {
             let tpe = tpe.ok_or(InvalidImdsResponse::MissingField("Type"))?;
@@ -354,7 +357,7 @@ fn parse_imds_credentials(
             Ok(ImdsCredentialsResponse::Success {
                 access_key_id,
                 secret_access_key,
-                tpe,
+                r#type: tpe,
                 session_token,
                 expiration,
             })
@@ -389,11 +392,11 @@ mod test {
         assert_eq!(
             parsed,
             ImdsCredentialsResponse::Success {
-                tpe: "AWS-HMAC".into(),
+                r#type: "AWS-HMAC".into(),
                 access_key_id: "ASIARTEST".into(),
                 secret_access_key: "xjtest".into(),
                 session_token: Some("IQote///test".into()),
-                expiration: UNIX_EPOCH + Duration::from_secs(1631935916)
+                expiration: UNIX_EPOCH + Duration::from_secs(1631935916),
             }
         )
     }
@@ -404,6 +407,15 @@ mod test {
         match error {
             InvalidImdsResponse::JsonError(_) => {} // ok.
             err => panic!("incorrect error: {:?}", err),
+        }
+    }
+
+    #[test]
+    fn imds_not_json_object() {
+        let error = parse_imds_credentials("[1,2,3]").expect_err("no json");
+        match error {
+            InvalidImdsResponse::JsonError(_) => {} // ok.
+            _ => panic!("incorrect error"),
         }
     }
 
@@ -421,11 +433,11 @@ mod test {
         assert_eq!(
             parsed,
             ImdsCredentialsResponse::Success {
-                tpe: "AWS-HMAC".into(),
+                r#type: "AWS-HMAC".into(),
                 access_key_id: "ASIARTEST".into(),
                 secret_access_key: "xjtest".into(),
                 session_token: Some("IQote///test".into()),
-                expiration: UNIX_EPOCH + Duration::from_secs(1631935916)
+                expiration: UNIX_EPOCH + Duration::from_secs(1631935916),
             }
         )
     }
@@ -443,11 +455,11 @@ mod test {
         assert_eq!(
             parsed,
             ImdsCredentialsResponse::Success {
-                tpe: "AWS-HMAC".into(),
+                r#type: "AWS-HMAC".into(),
                 access_key_id: "ASIARTEST".into(),
                 secret_access_key: "xjtest".into(),
                 session_token: None,
-                expiration: UNIX_EPOCH + Duration::from_secs(1631935916)
+                expiration: UNIX_EPOCH + Duration::from_secs(1631935916),
             }
         )
     }
@@ -480,7 +492,7 @@ mod test {
             parsed,
             ImdsCredentialsResponse::Error {
                 code: "AssumeRoleUnauthorizedAccess".into(),
-                message: "EC2 cannot assume the role integration-test.".into()
+                message: "EC2 cannot assume the role integration-test.".into(),
             }
         );
     }

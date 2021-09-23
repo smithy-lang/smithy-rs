@@ -8,7 +8,7 @@ exclude = ["test-data/*"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
 default-provider = ["profile", "imds", "meta", "sts", "environment"]
-profile = ["sts", "web-identity-token", "meta", "environment"]
+profile = ["sts", "web-identity-token", "meta", "environment", "imds"]
 meta = ["tokio/sync"]
 imds = ["profile", "smithy-http", "smithy-types", "smithy-http-tower", "smithy-json", "tower", "aws-http", "meta"]
 environment = ["meta"]
