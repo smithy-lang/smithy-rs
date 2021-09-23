@@ -42,7 +42,8 @@ impl QueryWriter {
         }
     }
 
-    /// Inserts a new query parameter.
+    /// Inserts a new query parameter. The key and value are percent encoded
+    /// by `QueryWriter`. Passing in percent encoded values will result in double encoding.
     pub(super) fn insert(&mut self, k: &str, v: &str) {
         if let Some(prefix) = self.prefix {
             self.new_path_and_query.push(prefix);

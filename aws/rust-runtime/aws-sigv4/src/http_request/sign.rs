@@ -4,10 +4,10 @@
  */
 
 use super::{PayloadChecksumKind, SignatureLocation};
-use crate::http_request::canonical_request::{
-    CanonicalRequest, StringToSign, HMAC_256, X_AMZ_CONTENT_SHA_256, X_AMZ_DATE,
-    X_AMZ_SECURITY_TOKEN,
+use crate::http_request::canonical_request::header::{
+    X_AMZ_CONTENT_SHA_256, X_AMZ_DATE, X_AMZ_SECURITY_TOKEN,
 };
+use crate::http_request::canonical_request::{CanonicalRequest, StringToSign, HMAC_256};
 use crate::http_request::query_writer::QueryWriter;
 use crate::http_request::SigningParams;
 use crate::sign::{calculate_signature, generate_signing_key, sha256_hex_string};
@@ -34,7 +34,7 @@ pub struct SignableRequest<'a> {
 
 impl<'a> SignableRequest<'a> {
     /// Creates a new `SignableRequest`. If you have an [`http::Request`], then
-    /// consider using [`SignableRequest::from_http`] instead of `new`.
+    /// consider using [`SignableRequest::from`] instead of `new`.
     pub fn new(
         method: &'a Method,
         uri: &'a Uri,
@@ -47,20 +47,6 @@ impl<'a> SignableRequest<'a> {
             headers,
             body,
         }
-    }
-
-    /// Creates a new `SignableRequest` from an [`http::Request`].
-    pub fn from_http<'b, B>(request: &'b http::Request<B>) -> SignableRequest<'b>
-    where
-        B: 'b,
-        B: AsRef<[u8]>,
-    {
-        SignableRequest::new(
-            request.method(),
-            request.uri(),
-            request.headers(),
-            SignableBody::Bytes(request.body().as_ref()),
-        )
     }
 
     /// Returns the signable URI
@@ -81,6 +67,21 @@ impl<'a> SignableRequest<'a> {
     /// Returns the signable body
     pub fn body(&self) -> &SignableBody<'_> {
         &self.body
+    }
+}
+
+impl<'a, B> From<&'a http::Request<B>> for SignableRequest<'a>
+where
+    B: 'a,
+    B: AsRef<[u8]>,
+{
+    fn from(request: &'a http::Request<B>) -> SignableRequest<'a> {
+        SignableRequest::new(
+            request.method(),
+            request.uri(),
+            request.headers(),
+            SignableBody::Bytes(request.body().as_ref()),
+        )
     }
 }
 
@@ -325,7 +326,7 @@ mod tests {
         };
 
         let original = test_request("get-vanilla-query-order-key-case");
-        let signable = SignableRequest::from_http(&original);
+        let signable = SignableRequest::from(&original);
         let out = sign(signable, &params).unwrap();
         assert_eq!(
             "b97d918cfa904a5beff61c982a1b6f458b799221646efd99d3219ec94cdf2500",
@@ -355,7 +356,7 @@ mod tests {
         };
 
         let original = test_request("get-vanilla-query-order-key-case");
-        let signable = SignableRequest::from_http(&original);
+        let signable = SignableRequest::from(&original);
         let out = sign(signable, &params).unwrap();
         assert_eq!(
             "f25aea20f8c722ece3b363fc5d60cc91add973f9b64c42ba36fa28d57afe9019",

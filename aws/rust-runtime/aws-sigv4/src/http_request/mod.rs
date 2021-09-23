@@ -31,7 +31,7 @@
 //!     .build()
 //!     .unwrap();
 //! // Convert the HTTP request into a signable request
-//! let signable_request = SignableRequest::from_http(&request);
+//! let signable_request = SignableRequest::from(&request);
 //!
 //! // Sign and then apply the signature to the request
 //! let (signing_instructions, _signature) = sign(signable_request, &signing_params)?.into_parts();
@@ -51,6 +51,6 @@ mod url_escape;
 pub(crate) mod test;
 
 pub use settings::{
-    PayloadChecksumKind, SignatureLocation, SigningParams, SigningSettings, UriEncoding,
+    PayloadChecksumKind, PercentEncodingMode, SignatureLocation, SigningParams, SigningSettings,
 };
 pub use sign::{sign, Error, SignableBody, SignableRequest};

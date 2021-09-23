@@ -12,10 +12,10 @@ pub type SigningParams<'a> = crate::SigningParams<'a, SigningSettings>;
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub struct SigningSettings {
-    /// We assume the URI will be encoded _once_ prior to transmission. Some services
-    /// do not decode the path prior to checking the signature, requiring clients to actually
-    /// _double-encode_ the URI in creating the canonical request in order to pass a signature check.
-    pub uri_encoding: UriEncoding,
+    /// Specifies how to encode the request URL when signing. Some services do not decode
+    /// the path prior to checking the signature, requiring clients to actually _double-encode_
+    /// the URI in creating the canonical request in order to pass a signature check.
+    pub percent_encoding_mode: PercentEncodingMode,
 
     /// Add an additional checksum header
     pub payload_checksum_kind: PayloadChecksumKind,
@@ -42,10 +42,14 @@ pub enum PayloadChecksumKind {
     NoHeader,
 }
 
-/// URI encoding to use while signing
+/// Config value to specify how to encode the request URL when signing.
+///
+/// We assume the URI will be encoded _once_ prior to transmission. Some services
+/// do not decode the path prior to checking the signature, requiring clients to actually
+/// _double-encode_ the URI in creating the canonical request in order to pass a signature check.
 #[non_exhaustive]
 #[derive(Debug, Eq, PartialEq)]
-pub enum UriEncoding {
+pub enum PercentEncodingMode {
     /// Re-encode the resulting URL (eg. %30 becomes `%2530)
     Double,
 
@@ -56,7 +60,7 @@ pub enum UriEncoding {
 impl Default for SigningSettings {
     fn default() -> Self {
         Self {
-            uri_encoding: UriEncoding::Double,
+            percent_encoding_mode: PercentEncodingMode::Double,
             payload_checksum_kind: PayloadChecksumKind::NoHeader,
             signature_location: SignatureLocation::Headers,
             expires_in: None,

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_sigv4::http_request::{sign, PayloadChecksumKind, SigningSettings, UriEncoding};
+use aws_sigv4::http_request::{sign, PayloadChecksumKind, PercentEncodingMode, SigningSettings};
 use aws_sigv4::SigningParams;
 use aws_types::region::SigningRegion;
 use aws_types::Credentials;
@@ -135,10 +135,10 @@ impl SigV4Signer {
         request: &mut http::Request<SdkBody>,
     ) -> Result<Signature, SigningError> {
         let mut settings = SigningSettings::default();
-        settings.uri_encoding = if operation_config.signing_options.double_uri_encode {
-            UriEncoding::Double
+        settings.percent_encoding_mode = if operation_config.signing_options.double_uri_encode {
+            PercentEncodingMode::Double
         } else {
-            UriEncoding::Single
+            PercentEncodingMode::Single
         };
         settings.payload_checksum_kind = if operation_config.signing_options.content_sha256_header {
             PayloadChecksumKind::XAmzSha256
@@ -154,7 +154,7 @@ impl SigV4Signer {
                 .date_time(request_config.request_ts.into())
                 .settings(settings);
             builder.set_security_token(credentials.session_token());
-            builder.build().unwrap()
+            builder.build().expect("all required fields set")
         };
 
         let (signing_instructions, signature) = {
