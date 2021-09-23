@@ -7,6 +7,7 @@ vNext (Month Day, Year)
 - User agent construction is now `const fn` (#701)
 - Update event stream `Receiver`s to be `Send` (#702, #aws-sdk-rust#224)
 - Add `sts::AssumeRoleProvider` to `aws-config` (#703, aws-sdk-rust#3)
+- Add query param signing to the `aws-sigv4` crate (#707)
 
 v0.23 (September 14th, 2021)
 =======================
