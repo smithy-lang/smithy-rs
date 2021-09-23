@@ -30,7 +30,7 @@ mod env {
 
 /// IMDSv2 Credentials Provider
 ///
-/// **Note**: This credentials provider will NOT fallback to the insecure IMDSv1 flow.
+/// **Note**: This credentials provider will NOT fallback to the IMDSv1 flow.
 #[derive(Debug)]
 pub struct ImdsCredentialsProvider {
     client: OnceCell<Result<imds::Client, imds::client::BuildError>>,
