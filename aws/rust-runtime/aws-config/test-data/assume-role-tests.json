@@ -193,7 +193,7 @@
       "selected_profile": "A"
     },
     "output": {
-      "Error": "profile must contain source_profile"
+      "Error": "profile must contain `source_profile`"
     }
   },
   {

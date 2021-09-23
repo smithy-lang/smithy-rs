@@ -364,6 +364,16 @@ impl Builder {
                     conf.env(),
                 ))
             });
+
+        named_providers
+            .entry("Ec2InstanceMetadata".into())
+            .or_insert_with(|| {
+                Arc::new(
+                    crate::imds::credentials::ImdsCredentialsProvider::builder()
+                        .configure(&conf)
+                        .build(),
+                )
+            });
         // TODO: ECS, IMDS, and other named providers
         let factory = exec::named::NamedProviderFactory::new(named_providers);
         let connector = expect_connector(conf.connector().cloned());

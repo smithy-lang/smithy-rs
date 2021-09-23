@@ -35,6 +35,7 @@ use smithy_http_tower::map_request::MapRequestLayer;
 use crate::cache::ExpiringCache;
 use crate::imds::client::{ImdsError, ImdsErrorPolicy, TokenError};
 use smithy_client::retry;
+use std::fmt::{Debug, Formatter};
 
 /// Token Refresh Buffer
 ///
@@ -66,6 +67,12 @@ pub(super) struct TokenMiddleware {
     time_source: TimeSource,
     endpoint: Endpoint,
     token_ttl: Duration,
+}
+
+impl Debug for TokenMiddleware {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ImdsTokenMiddleware")
+    }
 }
 
 impl TokenMiddleware {
