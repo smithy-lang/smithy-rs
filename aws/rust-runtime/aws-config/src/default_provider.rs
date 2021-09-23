@@ -14,7 +14,7 @@ pub mod region {
 
     use crate::environment::region::EnvironmentVariableRegionProvider;
     use crate::meta::region::{ProvideRegion, RegionProviderChain};
-    use crate::profile;
+    use crate::{imds, profile};
 
     use crate::provider_config::ProviderConfig;
 
@@ -50,6 +50,7 @@ pub mod region {
     pub struct Builder {
         env_provider: EnvironmentVariableRegionProvider,
         profile_file: profile::region::Builder,
+        imds: imds::region::Builder,
     }
 
     impl Builder {
@@ -61,6 +62,7 @@ pub mod region {
             self.env_provider =
                 EnvironmentVariableRegionProvider::new_with_env(configuration.env());
             self.profile_file = self.profile_file.configure(configuration);
+            self.imds = self.imds.configure(configuration);
             self
         }
 
@@ -74,7 +76,8 @@ pub mod region {
         pub fn build(self) -> DefaultRegionChain {
             DefaultRegionChain(
                 RegionProviderChain::first_try(self.env_provider)
-                    .or_else(self.profile_file.build()),
+                    .or_else(self.profile_file.build())
+                    .or_else(self.imds.build()),
             )
         }
     }
