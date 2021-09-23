@@ -403,7 +403,7 @@ mod test {
         let error = parse_imds_credentials("404: not found").expect_err("no json");
         match error {
             InvalidImdsResponse::JsonError(_) => {} // ok.
-            _ => panic!("incorrect error"),
+            err => panic!("incorrect error: {:?}", err),
         }
     }
 
