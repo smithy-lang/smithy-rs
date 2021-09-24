@@ -30,6 +30,11 @@ pub struct ImdsRegionProvider {
 const REGION_PATH: &str = "/latest/meta-data/placement/region";
 
 impl ImdsRegionProvider {
+    /// Builder for [`ImdsRegionProvider`]
+    pub fn builder() -> Builder {
+        Builder::default()
+    }
+
     fn imds_disabled(&self) -> bool {
         match self.env.get(super::env::EC2_METADATA_DISABLED) {
             Ok(value) => value.eq_ignore_ascii_case("true"),
@@ -119,5 +124,68 @@ impl Builder {
                 .sleep()
                 .expect("no default sleep implementation provided"),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::imds::client::test::{imds_request, imds_response, token_request, token_response};
+    use crate::imds::region::ImdsRegionProvider;
+    use crate::provider_config::ProviderConfig;
+    use aws_hyper::DynConnector;
+    use aws_sdk_sts::Region;
+    use smithy_async::rt::sleep::TokioSleep;
+    use smithy_client::test_connection::TestConnection;
+    use smithy_http::body::SdkBody;
+    use tracing_test::traced_test;
+
+    #[tokio::test]
+    async fn load_region() {
+        let conn = TestConnection::new(vec![
+            (
+                token_request("http://169.254.169.254", 21600),
+                token_response(21600, "token"),
+            ),
+            (
+                imds_request(
+                    "http://169.254.169.254/latest/meta-data/placement/region",
+                    "token",
+                ),
+                imds_response("eu-west-1"),
+            ),
+        ]);
+        let provider = ImdsRegionProvider::builder()
+            .configure(
+                &ProviderConfig::no_configuration()
+                    .with_connector(DynConnector::new(conn))
+                    .with_sleep(TokioSleep::new()),
+            )
+            .build();
+        assert_eq!(
+            provider.region().await.expect("returns region"),
+            Region::new("eu-west-1")
+        );
+    }
+
+    #[traced_test]
+    #[tokio::test]
+    async fn no_region_imds_disabled() {
+        let conn = TestConnection::new(vec![(
+            token_request("http://169.254.169.254", 21600),
+            http::Response::builder()
+                .status(403)
+                .body(SdkBody::empty())
+                .unwrap(),
+        )]);
+        let provider = ImdsRegionProvider::builder()
+            .configure(
+                &ProviderConfig::no_configuration()
+                    .with_connector(DynConnector::new(conn))
+                    .with_sleep(TokioSleep::new()),
+            )
+            .build();
+        assert_eq!(provider.region().await, None);
+        assert!(logs_contain("failed to load region from IMDS"));
+        assert!(logs_contain("IMDS is disabled"));
     }
 }

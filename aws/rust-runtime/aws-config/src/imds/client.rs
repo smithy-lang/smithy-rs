@@ -639,7 +639,7 @@ impl<T, E> ClassifyResponse<SdkSuccess<T>, SdkError<E>> for ImdsErrorPolicy {
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use std::collections::HashMap;
     use std::error::Error;
     use std::time::{Duration, UNIX_EPOCH};
@@ -659,7 +659,7 @@ mod test {
     const TOKEN_A: &str = "AQAEAFTNrA4eEGx0AQgJ1arIq_Cc-t4tWt3fB0Hd8RKhXlKc5ccvhg==";
     const TOKEN_B: &str = "alternatetoken==";
 
-    fn token_request(base: &str, ttl: u32) -> http::Request<SdkBody> {
+    pub(crate) fn token_request(base: &str, ttl: u32) -> http::Request<SdkBody> {
         http::Request::builder()
             .uri(format!("{}/latest/api/token", base))
             .header("x-aws-ec2-metadata-token-ttl-seconds", ttl)
@@ -668,7 +668,7 @@ mod test {
             .unwrap()
     }
 
-    fn token_response(ttl: u32, token: &'static str) -> http::Response<&'static str> {
+    pub(crate) fn token_response(ttl: u32, token: &'static str) -> http::Response<&'static str> {
         http::Response::builder()
             .status(200)
             .header("X-aws-ec2-metadata-token-ttl-seconds", ttl)
@@ -676,7 +676,7 @@ mod test {
             .unwrap()
     }
 
-    fn imds_request(path: &'static str, token: &str) -> http::Request<SdkBody> {
+    pub(crate) fn imds_request(path: &'static str, token: &str) -> http::Request<SdkBody> {
         http::Request::builder()
             .uri(Uri::from_static(path))
             .method("GET")
@@ -685,7 +685,7 @@ mod test {
             .unwrap()
     }
 
-    fn imds_response(body: &'static str) -> http::Response<&'static str> {
+    pub(crate) fn imds_response(body: &'static str) -> http::Response<&'static str> {
         http::Response::builder().status(200).body(body).unwrap()
     }
 
