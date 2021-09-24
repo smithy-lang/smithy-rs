@@ -25,6 +25,10 @@ struct Opt {
     #[structopt(short, long)]
     object: String,
 
+    /// How long in seconds before the presigned request should expire.
+    #[structopt(short, long)]
+    expires_in: Option<u64>,
+
     /// Whether to display additional information.
     #[structopt(short, long)]
     verbose: bool,
@@ -47,8 +51,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         region,
         bucket,
         object,
+        expires_in,
         verbose,
     } = Opt::from_args();
+    let expires_in = Duration::from_secs(expires_in.unwrap_or(900));
 
     let region_provider = RegionProviderChain::first_try(region.map(Region::new))
         .or_default_provider()
@@ -69,9 +75,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .get_object()
         .bucket(&bucket)
         .key(&object)
-        .presigned(PresigningConfig::expires_in(Duration::from_secs(900))?)
+        .presigned(PresigningConfig::expires_in(expires_in)?)
         .await?;
-    println!("From client: {:?}", presigned_request);
+    println!("From client: {:?}", presigned_request.uri());
 
     // Or, they can be made directly from an operation input
     let presigned_request = GetObjectInput::builder()
@@ -80,10 +86,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build()?
         .presigned(
             &Config::from(&shared_config),
-            PresigningConfig::expires_in(Duration::from_secs(900))?,
+            PresigningConfig::expires_in(expires_in)?,
         )
         .await?;
-    println!("From operation input: {:?}", presigned_request);
+    println!("From operation input: {:?}", presigned_request.uri());
 
     Ok(())
 }
