@@ -132,6 +132,42 @@ mod test {
     use protocol_test_helpers::{assert_ok, validate_body, MediaType};
 
     #[test]
+    fn forgot_finish() {
+        let mut out = String::new();
+
+        fn writer(out: &mut String) {
+            let mut doc_writer = XmlWriter::new(out);
+            doc_writer.start_el("Hello");
+            // all the XML data types have been dropped by this point
+        }
+        writer(&mut out);
+
+        assert_ok(validate_body(
+            out,
+            r#"<Hello></Hello>"#,
+            MediaType::Xml,
+        ));
+    }
+
+    #[test]
+    fn forgot_finish_with_attribute() {
+        let mut out = String::new();
+
+        fn writer(out: &mut String) {
+            let mut doc_writer = XmlWriter::new(out);
+            doc_writer.start_el("Hello").write_attribute("key", "foo");
+            // all the XML data types have been dropped by this point
+        }
+        writer(&mut out);
+
+        assert_ok(validate_body(
+            out,
+            r#"<Hello key="foo"></Hello>"#,
+            MediaType::Xml,
+        ));
+    }
+
+    #[test]
     fn basic_document_encoding() {
         let mut out = String::new();
         let mut doc_writer = XmlWriter::new(&mut out);
