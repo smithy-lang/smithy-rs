@@ -3,10 +3,12 @@ vNext (Month Day, Year)
 **New This Week**
 - Add IMDS client to `aws-config`
 - Add IMDS credential provider to `aws-config` (smithy-rs#709)
+- Add IMDS region provider to `aws-config` (smithy-rs#715, #97)
 - Update event stream `Receiver`s to be `Send` (aws-sdk-rust#224)
-- Add `sts::AssumeRoleProvider` to `aws-config` (#703, aws-sdk-rust#3)
+- Add `sts::AssumeRoleProvider` to `aws-config`. This enables customers to invoke STS directly, instead of using it via `~/.aws/config`. (#703, aws-sdk-rust#3)
 - :bug: Fix panic when signing non-ASCII header values (smithy-rs#708, aws-sdk-rust#226)
 - Add an example that uses Polly, Transcribe, and S3 called [telephone-game](sdk/examples/telephone-game/src/main.rs)
+
 
 v0.0.18-alpha (September 14th, 2021)
 =======================
