@@ -16,6 +16,7 @@ v0.0.19-alpha (September 24th, 2021)
 - Add query param signing to the `aws-sigv4` crate (smithy-rs#707)
 - :bug: Update event stream `Receiver`s to be `Send` (smithy-rs#702, #aws-sdk-rust#224)
 - :bug: Fix panic when signing non-ASCII header values (smithy-rs#708, aws-sdk-rust#226)
+- Add an example that uses Polly, Transcribe, and S3 called [telephone-game](sdk/examples/telephone-game/src/main.rs)
 
 **Contributions**
 
