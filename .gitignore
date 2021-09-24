@@ -46,3 +46,6 @@ gradle-app.setting
 
 # Rust build artifacts
 target/
+
+# File history folder
+/.history
