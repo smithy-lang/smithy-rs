@@ -18,7 +18,8 @@ This example displays a transcription of a WAV audio file.
 
 ` cargo run -- -a AUDIO-FILE [-r REGION] [-v]`
 
-- _AUDIO-FILE_ is the name of the audio file to transcribe. It must be in WAV format.
+- _AUDIO-FILE_ is the name of the audio file to transcribe. It must be in WAV format; the example converts the WAV file content to __pcm__ format for Amazon Transcribe.
+  Note that Amazon Transcribe supports encoding in __pcm__, __ogg-opus__, and __flac__ formats.
 - _REGION_ is the Region in which the client is created.
   If not supplied, uses the value of the __AWS_REGION__ environment variable.
   If the environment variable is not set, defaults to __us-west-2__.

@@ -34,7 +34,8 @@ const CHUNK_SIZE: usize = 8192;
 /// # Arguments
 ///
 /// * `-a AUDIO_FILE` - The name of the audio file.
-///   It must be a WAV file.
+///   It must be a WAV file, which is converted to __pcm__ format for Amazon Transcribe.
+///   Amazon transcribe also supports __ogg-opus__ and __flac__ formats.
 /// * `[-r REGION]` - The Region in which the client is created.
 ///   If not supplied, uses the value of the **AWS_REGION** environment variable.
 ///   If the environment variable is not set, defaults to **us-west-2**.
@@ -112,8 +113,6 @@ async fn main() -> Result<(), Error> {
 }
 
 fn pcm_data(audio_file: &str) -> Vec<u8> {
-    //let audio = include_bytes!("../audio/hello-transcribe-8000.wav");
-    //let reader = hound::WavReader::new(&audio[..]).unwrap();
     let reader = hound::WavReader::open(audio_file).unwrap();
     let samples_result: hound::Result<Vec<i16>> = reader.into_samples::<i16>().collect();
 
