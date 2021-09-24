@@ -88,9 +88,9 @@ impl ProvideCredentials for LazyCachingCredentialsProvider {
                 cache
                     .get_or_load(|| {
                         async move {
-                            let credentials = future
-                                .await
-                                .map_err(|_| CredentialsError::ProviderTimedOut(load_timeout))??;
+                            let credentials = future.await.map_err(|_err| {
+                                CredentialsError::ProviderTimedOut(load_timeout)
+                            })??;
                             // If the credentials don't have an expiration time, then create a default one
                             let expiry = credentials
                                 .expiry()
