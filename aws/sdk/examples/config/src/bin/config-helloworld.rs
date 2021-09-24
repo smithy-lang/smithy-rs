@@ -27,12 +27,14 @@ struct Opt {
     verbose: bool,
 }
 
-/// Lists the configuration history for a resource
+/// Lists the configuration history for a resource.
 ///
 /// NOTE: AWS Config must be enabled to discover resources
 /// # Arguments
 ///
-/// * `[-d DEFAULT-REGION]` - The Region in which the client is created.
+/// * `-resource_id RESOURCE-ID` - The ID of the resource.
+/// * `-resource_type RESOURCE-TYPE` - The type of resource, such as **AWS::EC2::SecurityGroup**.
+/// * `[-r REGION]` - The AWS Region in which the client is created.
 ///   If not supplied, uses the value of the **AWS_REGION** environment variable.
 ///   If the environment variable is not set, defaults to **us-west-2**.
 /// * `[-v]` - Whether to display information.
