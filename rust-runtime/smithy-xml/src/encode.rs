@@ -151,7 +151,8 @@ mod test {
         fn writer(out: &mut String) {
             let mut doc_writer = XmlWriter::new(out);
             doc_writer.start_el("Hello");
-            // all the XML data types have been dropped by this point
+            // We intentionally "forget" to call finish() on the ElWriter:
+            // when the XML structs get dropped, the element must get closed automatically.
         }
         writer(&mut out);
 
@@ -169,7 +170,8 @@ mod test {
         fn writer(out: &mut String) {
             let mut doc_writer = XmlWriter::new(out);
             doc_writer.start_el("Hello").write_attribute("key", "foo");
-            // all the XML data types have been dropped by this point
+            // We intentionally "forget" to call finish() on the ElWriter:
+            // when the XML structs get dropped, the element must get closed automatically.
         }
         writer(&mut out);
 
