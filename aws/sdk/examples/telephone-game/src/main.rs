@@ -10,7 +10,7 @@ use clap::{crate_authors, crate_description, crate_name, crate_version, ArgMatch
 use rodio::{Decoder, OutputStream, Sink};
 use std::time::Duration;
 use tempdir::TempDir;
-use tokio::{io::AsyncWriteExt, runtime::Runtime};
+use tokio::{io::AsyncWriteExt, task::spawn_blocking};
 use tracing::{debug, error, info};
 
 /// While playing the telephone game, the user can pass an arg that defines how many times to pass the message through Polly and Transcribe.
@@ -21,7 +21,8 @@ const TASK_TIMEOUT_IN_SECONDS: i32 = 30;
 /// How often to poll for job/task status
 const TASK_WAIT_INTERVAL_IN_SECONDS: i32 = 2;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // By default, hide any message that isn't an error unless it's from the game
     let rust_log =
         std::env::var("RUST_LOG").unwrap_or_else(|_| "error,telephone_game=debug".to_owned());
@@ -30,8 +31,8 @@ fn main() {
     let app = build_clap_app();
 
     let res = match app.get_matches().subcommand() {
-        ("play", Some(matches)) => play_telephone(matches),
-        ("polly", Some(matches)) => test_polly(matches),
+        ("play", Some(matches)) => play_telephone(matches).await,
+        ("polly", Some(matches)) => test_polly(matches).await,
         _ => unreachable!(),
     };
 
@@ -57,8 +58,8 @@ fn build_clap_app<'a, 'b>() -> clap::App<'a, 'b> {
         clap::App::new("play")
                 .about("Start playing a game of Telephone")
                 .args_from_usage("--phrase=[PHRASE] 'The phrase to play the game with'")
-                .args_from_usage("-i [iterations] 'The number of times to relay the telephone message, defaults to 1 when omitted'")
-                .args_from_usage("-b [s3_bucket_name] 'The name of the S3 bucket that will be used to store intermediate audio and text files created by the game, defaults to telephone-game when omitted'")
+                .args_from_usage("--iterations=[ITERATIONS] 'The number of times to relay the telephone message, defaults to 1 when omitted'")
+                .args_from_usage("--bucket-name=[BUCKET_NAME] 'The name of the S3 bucket that will be used to store intermediate audio and text files created by the game, defaults to telephone-game when omitted'")
         )
         .subcommand(clap::App::new("polly").about("Make Polly say something")
         .args_from_usage("--phrase=[PHRASE] 'The phrase you want Polly to say'")
@@ -66,66 +67,60 @@ fn build_clap_app<'a, 'b>() -> clap::App<'a, 'b> {
 }
 
 /// Make Polly speak what you type
-fn test_polly(matches: &ArgMatches) -> anyhow::Result<()> {
+async fn test_polly(matches: &ArgMatches<'_>) -> anyhow::Result<()> {
     let phrase = matches
         .value_of("phrase")
         .context("You must pass a phrase")?;
 
     info!("Making Polly say '{}'", phrase);
 
-    // Create a runtime so we can do some async Rust
-    let rt = Runtime::new().expect("failed to create an async runtime");
-
     // Create a new AWS Config
-    let config = rt.block_on(aws_config::load_from_env());
+    let config = aws_config::load_from_env().await;
     let polly_client = aws_sdk_polly::Client::new(&config);
 
     // Set up a temp directory to store audio files
     let tmp_dir = TempDir::new("telephone-game").expect("couldn't create temp dir");
     let tmp_file_path = tmp_dir.path().join("polly.mp3");
 
-    // Set up the ability to play audio
-    let (_stream, stream_handle) =
-        OutputStream::try_default().expect("Couldn't get handle to default audio output");
-    let sink = Sink::try_new(&stream_handle).unwrap();
-
     // Start synthesizing speech
-    rt.block_on(
-        polly_client
-            .synthesize_speech()
-            .text(phrase)
-            .voice_id(VoiceId::Joanna)
-            .output_format(OutputFormat::Mp3)
-            .send(),
-    )
-    .context("Failed to synthsize your phrase into speech")
-    .and_then(|res| {
-        info!("Playing Polly's response...");
+    let res = polly_client
+        .synthesize_speech()
+        .text(phrase)
+        .voice_id(VoiceId::Joanna)
+        .output_format(OutputFormat::Mp3)
+        .send()
+        .await
+        .context("Failed to synthesize your phrase into speech")?;
 
-        // take a detour into async to colect the streaming audio from Polly and write it to a file
-        rt.block_on(async {
-            // Collect the ByteStream returned by the synthesize_speech call
-            let byte_stream = res
-                .audio_stream
-                .collect()
-                .await
-                .context("Audio stream ended prematurely")?;
+    info!("Playing Polly's response...");
 
-            // Create a file to store the audio
-            let mut tmp_file = tokio::fs::File::create(&tmp_file_path)
-                .await
-                .context("Failed to create temp file")?;
-            // Write the ByteStream to the file
-            tmp_file
-                .write_all(&byte_stream.into_bytes())
-                .await
-                .context("Failed to write to temp file")?;
-            // Flush the write operation to ensure it finishes before we continue
-            tmp_file
-                .flush()
-                .await
-                .context("Failed to flush after writing file")
-        })?;
+    // Collect the ByteStream returned by the synthesize_speech call
+    let byte_stream = res
+        .audio_stream
+        .collect()
+        .await
+        .context("Audio stream ended prematurely")?;
+
+    // Create a file to store the audio
+    let mut tmp_file = tokio::fs::File::create(&tmp_file_path)
+        .await
+        .context("Failed to create temp file")?;
+    // Write the ByteStream to the file
+    tmp_file
+        .write_all(&byte_stream.into_bytes())
+        .await
+        .context("Failed to write to temp file")?;
+    // Flush the write operation to ensure it finishes before we continue
+    tmp_file
+        .flush()
+        .await
+        .context("Failed to flush after writing file")?;
+
+    spawn_blocking(move || {
+        // Set up the ability to play audio
+        let (_stream, stream_handle) =
+            OutputStream::try_default().expect("Couldn't get handle to default audio output");
+        let sink = Sink::try_new(&stream_handle).unwrap();
 
         // Open the audio file with regular blocking IO File
         // rodio's Decoder requires stdlib Files
@@ -137,16 +132,18 @@ fn test_polly(matches: &ArgMatches) -> anyhow::Result<()> {
         sink.append(source);
         sink.sleep_until_end();
 
-        info!("Did you hear it?");
-
-        Ok(())
+        Ok::<(), anyhow::Error>(())
     })
+    // Yes, two are necessary: one for the functions in the closure, one for spawn_blocking
+    .await??;
+
+    info!("Did you hear it?");
+
+    Ok(())
 }
 
 /// Play a game of Telephone w/ AWS
-fn play_telephone(matches: &ArgMatches) -> anyhow::Result<()> {
-    let rt = Runtime::new().expect("failed to create an async runtime");
-
+async fn play_telephone(matches: &ArgMatches<'_>) -> anyhow::Result<()> {
     // Fetch user any user input that will override default values
     let number_of_iterations = matches
         .value_of("iterations")
@@ -160,56 +157,49 @@ fn play_telephone(matches: &ArgMatches) -> anyhow::Result<()> {
     let mut current_phrase = original_phrase.to_owned();
 
     let bucket_name = matches
-        .value_of("s3_bucket_name")
+        .value_of("bucket-name")
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| "telephone-game".to_owned());
 
     // Create a config and required clients for AWS services
-    let config = rt.block_on(aws_config::load_from_env());
+    let config = aws_config::load_from_env().await;
     let s3_client = aws_sdk_s3::Client::new(&config);
     let polly_client = aws_sdk_polly::Client::new(&config);
     let transcribe_client = aws_sdk_transcribe::Client::new(&config);
 
     // Create a bucket to store audio and transcriptions if none exists
-    let bucket_name = rt
-        .block_on(create_s3_bucket_if_not_exists(&s3_client, &bucket_name))
+    let bucket_name = create_s3_bucket_if_not_exists(&s3_client, &bucket_name)
+        .await
         .context("Failed to complete necessary setup")?;
 
     for i in 0..number_of_iterations {
         debug!(
-            "starting speech synthesis task for phrase '{}'",
-            &current_phrase
+            "starting speech synthesis task for phrase '{}' ({} iterations)",
+            &current_phrase, &number_of_iterations
         );
 
-        rt.block_on(async {
-            // Start a speech synthesis task and set it to output to the previously created S3 bucket
-            let output_uri =
-                synthesize_speech(&polly_client, &current_phrase, &bucket_name).await?;
+        // Start a speech synthesis task and set it to output to the previously created S3 bucket
+        let output_uri = synthesize_speech(&polly_client, &current_phrase, &bucket_name).await?;
 
-            // Job names must be unique so we clear the old job to reuse the name.
-            delete_transcription_job(&transcribe_client, "telephone-game-transcription").await;
+        // Job names must be unique so we clear the old job to reuse the name.
+        delete_transcription_job(&transcribe_client, "telephone-game-transcription").await;
 
-            // Transcribe the speech file generated previously
-            transcribe_speech(
-                &transcribe_client,
-                "telephone-game-transcription",
-                &output_uri,
-                &bucket_name,
-            )
-            .await?;
+        // Transcribe the speech file generated previously
+        transcribe_speech(
+            &transcribe_client,
+            "telephone-game-transcription",
+            &output_uri,
+            &bucket_name,
+        )
+        .await?;
 
-            // Download the transcription from S3 and parse out the full ttranscription text
-            let transcript =
-                get_transcript_from_s3(&s3_client, "telephone-game-transcription", &bucket_name)
-                    .await?;
+        // Download the transcription from S3 and parse out the full transcription text
+        let transcript =
+            get_transcript_from_s3(&s3_client, "telephone-game-transcription", &bucket_name)
+                .await?;
 
-            info!("Transcription #{} == {}", i, &transcript);
-            current_phrase = transcript;
-
-            // Annotating the type here is necessary for using the '?' operator in this async block
-            // https://rust-lang.github.io/async-book/07_workarounds/02_err_in_async_blocks.html
-            Ok::<(), anyhow::Error>(())
-        })?;
+        info!("Transcription #{} == {}", i, &transcript);
+        current_phrase = transcript;
     }
 
     // Log the final output
@@ -282,7 +272,8 @@ async fn synthesize_speech(
             TaskStatus::InProgress | TaskStatus::Scheduled => {
                 debug!("Speech synthesis is ongoing...")
             }
-            _ => unreachable!(),
+            // New TaskStatus variants could get added in the future. It's always a good idea to handle this case with a helpful message
+            unknown => bail!("Failed to handle unknown task status {:?}", unknown),
         }
 
         if speech_synthesis_timeout_in_seconds <= 0 {
@@ -293,8 +284,7 @@ async fn synthesize_speech(
         }
     }
 
-    let output_uri = synthesis_task.output_uri.unwrap();
-    Ok(output_uri)
+    Ok(synthesis_task.output_uri.unwrap())
 }
 
 // Delete a transcription job. If no job exists with a given name, do nothing
@@ -372,7 +362,11 @@ async fn transcribe_speech(
             TranscriptionJobStatus::InProgress | TranscriptionJobStatus::Queued => {
                 debug!("Transcription job is ongoing...")
             }
-            TranscriptionJobStatus::Unknown(_) | _ => unreachable!(),
+            // New TranscriptionJobStatus variants could get added in the future. It's always a good idea to handle this case with a helpful message
+            unknown => bail!(
+                "Failed to handle unknown transcription job status {:?}",
+                unknown
+            ),
         }
 
         if transcription_job_timeout_in_seconds <= 0 {
