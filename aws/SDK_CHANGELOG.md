@@ -1,5 +1,19 @@
 vNext (Month Day, Year)
 =======================
+**New This Week**
+- Add IMDS client to `aws-config`
+- Add IMDS credential provider to `aws-config` (smithy-rs#709)
+- Update event stream `Receiver`s to be `Send` (aws-sdk-rust#224)
+- Add `sts::AssumeRoleProvider` to `aws-config` (#703, aws-sdk-rust#3)
+- :bug: Fix panic when signing non-ASCII header values (smithy-rs#708, aws-sdk-rust#226)
+
+v0.0.18-alpha (September 14th, 2021)
+=======================
+- :tada: Add support for `OpenSearch` service & bring in other model updates (#todo)
+- Cleanup docs in `aws-config`
+
+**New This Week**
+- :bug: Fixes issue where `Content-Length` header could be duplicated leading to signing failure (aws-sdk-rust#220, smithy-rs#697)
 
 v0.0.17-alpha (September 2nd, 2021)
 ===================================

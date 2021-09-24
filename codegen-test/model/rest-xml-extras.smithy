@@ -19,8 +19,21 @@ service RestXmlExtras {
         PrimitiveIntOpXml,
         ChecksumRequired,
         StringHeader,
+        CreateFoo,
     ]
 }
+
+/// This operation triggers a name collision between the synthetic `CreateFooInput` and `CreateFooInput`
+@http(uri: "/reused-input", method: "POST")
+operation CreateFoo {
+    input: CreateFooRequest,
+}
+
+structure CreateFooRequest {
+    input: CreateFooInput
+}
+
+structure CreateFooInput {}
 
 @httpRequestTests([{
     id: "RestXmlSerPrimitiveIntUnset",

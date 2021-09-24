@@ -12,7 +12,9 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -98,11 +100,16 @@ abstract class HttpProtocolGenerator(
                 rustTemplate(
                     """
                     if let Some(content_length) = body.content_length() {
-                        builder = builder.header(#{http}::header::CONTENT_LENGTH, content_length)
+                        builder = #{header_util}::set_header_if_absent(
+                                    builder,
+                                    #{http}::header::CONTENT_LENGTH,
+                                    content_length
+                        );
                     }
                     builder.body(body).expect("should be valid request")
                 """,
-                    "http" to RuntimeType.http
+                    "http" to RuntimeType.http,
+                    "header_util" to CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType().member("header")
                 )
             }
 
@@ -174,7 +181,8 @@ abstract class HttpProtocolGenerator(
         val sdkBody = RuntimeType.sdkBody(runtimeConfig)
 
         val baseReturnType = buildOperationType(implBlockWriter, shape, features)
-        val returnType = "std::result::Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
+        val returnType =
+            "std::result::Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
         // For codegen simplicity, allow `let x = ...; x`

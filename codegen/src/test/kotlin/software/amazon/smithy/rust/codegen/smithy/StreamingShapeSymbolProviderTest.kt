@@ -36,8 +36,8 @@ internal class StreamingShapeSymbolProviderTest {
         // "doing the right thing"
         val modelWithOperationTraits = OperationNormalizer.transform(model)
         val symbolProvider = testSymbolProvider(modelWithOperationTraits)
-        symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test#GenerateSpeechOutput\$data")).name shouldBe ("byte_stream::ByteStream")
-        symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test#GenerateSpeechInput\$data")).name shouldBe ("byte_stream::ByteStream")
+        symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test.synthetic#GenerateSpeechOutput\$data")).name shouldBe ("byte_stream::ByteStream")
+        symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test.synthetic#GenerateSpeechInput\$data")).name shouldBe ("byte_stream::ByteStream")
     }
 
     @Test
@@ -45,8 +45,8 @@ internal class StreamingShapeSymbolProviderTest {
         val modelWithOperationTraits = OperationNormalizer.transform(model)
         val symbolProvider = testSymbolProvider(modelWithOperationTraits)
 
-        val outputSymbol = symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test#GenerateSpeechOutput\$data"))
-        val inputSymbol = symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test#GenerateSpeechInput\$data"))
+        val outputSymbol = symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test.synthetic#GenerateSpeechOutput\$data"))
+        val inputSymbol = symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test.synthetic#GenerateSpeechInput\$data"))
         // Ensure that users don't need to set an input
         outputSymbol.defaultValue() shouldBe Default.RustDefault
         inputSymbol.defaultValue() shouldBe Default.RustDefault
