@@ -13,6 +13,11 @@
 pub mod client;
 
 pub mod credentials;
+pub mod region;
+
+mod env {
+    pub(crate) const EC2_METADATA_DISABLED: &str = "AWS_EC2_METADATA_DISABLED";
+}
 
 #[doc(inline)]
 pub use client::Client;
