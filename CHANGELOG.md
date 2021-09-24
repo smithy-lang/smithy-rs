@@ -1,5 +1,20 @@
 vNext (Month Day, Year)
 =======================
+**New This Week**
+- Add IMDS credential provider to `aws-config` (#709)
+- Add IMDS client to `aws-config` (#701)
+- Add `TimeSource` to `aws_types::os_shim_internal` (#701)
+- User agent construction is now `const fn` (#701)
+- Update event stream `Receiver`s to be `Send` (#702, #aws-sdk-rust#224)
+- Add `sts::AssumeRoleProvider` to `aws-config` (#703, aws-sdk-rust#3)
+- Add query param signing to the `aws-sigv4` crate (#707)
+
+v0.23 (September 14th, 2021)
+=======================
+
+**New This Week**
+- :bug: Fixes issue where `Content-Length` header could be duplicated leading to signing failure (aws-sdk-rust#220, smithy-rs#697)
+- :bug: Fixes naming collision during generation of model shapes that collide with `<operationname>Input` and `<operationname>Output` (#699)
 
 v0.22 (September 2nd, 2021)
 ===========================

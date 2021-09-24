@@ -216,7 +216,7 @@ fn chain_provider(profile: &Profile) -> Option<Result<(RoleArn, NextProfile), Pr
         (None, None) => Err(ProfileFileError::InvalidCredentialSource {
             profile: profile.name().to_string(),
             message:
-                "profile must contain source_profile or credentials_source but neither were defined"
+                "profile must contain `source_profile` or `credential_source` but neither were defined"
                     .into(),
         }),
         (Some(source_profile), None) if source_profile == profile.name() => {
