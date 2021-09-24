@@ -12,7 +12,7 @@ aws-sdk-polly = { package = "aws-sdk-polly", path = "../../build/aws-sdk/polly" 
 aws-sdk-s3 = { package = "aws-sdk-s3", path = "../../build/aws-sdk/s3" }
 aws-sdk-transcribe = { package = "aws-sdk-transcribe", path = "../../build/aws-sdk/transcribe" }
 anyhow = "1.0.44"
-clap = "3.0.0-beta.4"
+clap = "2.33.3"
 dotenv = "0.15.0"
 env_logger = "0.9.0"
 log = "0.4.14"

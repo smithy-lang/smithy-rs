@@ -1,11 +1,7 @@
 use anyhow::Context;
-use aws_sdk_polly::{
-    model::{Engine, OutputFormat, VoiceId},
-};
-use aws_sdk_transcribestreaming::{
-    model::{LanguageCode, Media, MediaFormat},
-};
-use clap::ArgMatches;
+use aws_sdk_polly::model::{Engine, OutputFormat, VoiceId};
+use aws_sdk_transcribe::model::{LanguageCode, Media, MediaFormat};
+use clap::{crate_authors, crate_description, crate_name, crate_version, ArgMatches};
 use log::{debug, error, info};
 use rodio::{Decoder, OutputStream, Sink};
 use std::time::Duration;
@@ -32,29 +28,29 @@ fn main() {
     let app = build_clap_app();
 
     match app.get_matches().subcommand() {
-        Some(("play", matches)) => play_telephone(matches),
-        Some(("parrot", matches)) => test_polly(matches),
+        ("play", Some(matches)) => play_telephone(matches),
+        ("parrot", _) => test_polly(),
         _ => (),
     }
 }
 
-fn build_clap_app<'app>() -> clap::App<'app> {
-    clap::App::new("telephone-game")
-        .version("0.1.0")
-        .author("Zelda H. <zhessler@amazon.com>")
-        .about("Does awesome things")
+fn build_clap_app<'a, 'b>() -> clap::App<'a, 'b> {
+    clap::App::new(crate_name!())
+        .version(crate_version!())
+        .author(crate_authors!())
+        .about(crate_description!())
         .subcommand(
         clap::App::new("play")
                 .about("Start playing a game of Telephone")
-                .arg("--phrase=[PHRASE] 'The phrase to play the game with'")
-                .arg("-i [iterations] 'The number of times to relay the telephone message, defaults to 1 when omitted'")
-                .arg("-b [s3_bucket_name] 'The name of the S3 bucket that will be used to store intermediate audio and text files created by the game, defaults to telephone-game when omitted'")
+                .args_from_usage("--phrase=[PHRASE] 'The phrase to play the game with'")
+                .args_from_usage("-i [iterations] 'The number of times to relay the telephone message, defaults to 1 when omitted'")
+                .args_from_usage("-b [s3_bucket_name] 'The name of the S3 bucket that will be used to store intermediate audio and text files created by the game, defaults to telephone-game when omitted'")
         )
         .subcommand(clap::App::new("parrot").about("hear polly repeat what you say"))
 }
 
 /// Make Polly speak what you type
-fn test_polly(_matches: &ArgMatches) {
+fn test_polly() {
     // Create a runtime so we can do some async Rust
     let rt = Runtime::new().expect("failed to create an async runtime");
     // Create a string to store user input
@@ -148,7 +144,6 @@ fn test_polly(_matches: &ArgMatches) {
     })
 }
 
-
 /**
 # Play a game of Telephone w/ AWS
 
@@ -195,7 +190,7 @@ fn play_telephone(matches: &ArgMatches) {
         let config = aws_config::load_from_env().await;
         let s3_client = aws_sdk_s3::Client::new(&config);
         let polly_client = aws_sdk_polly::Client::new(&config);
-        let transcribe_client = aws_sdk_transcribestreaming::Client::new(&config);
+        let transcribe_client = aws_sdk_transcribe::Client::new(&config);
         let bucket_name = create_s3_bucket_if_not_exists(&s3_client, &bucket_name)
             .await
             .context("Failed to complete necessary setup")?;
@@ -375,19 +370,17 @@ fn play_telephone(matches: &ArgMatches) {
         }
     });
 
-
-
     match result {
         Ok(()) => {
             info!(
-r#"The phrase
+                r#"The phrase
 "{}"
 became
 "{}"
-after {} iterations
-"#, original_phrase, current_phrase, number_of_iterations
-                );
-        },
+after {} iterations"#,
+                original_phrase, current_phrase, number_of_iterations
+            );
+        }
         Err(e) => {
             let error_chain: String = e
                 .chain()
@@ -404,7 +397,7 @@ after {} iterations
 
 /// Check if a bucket exists and create one if it doesn't. Then, return the bucket's name.
 async fn create_s3_bucket_if_not_exists(
-    s3_client: &s3::Client,
+    s3_client: &aws_sdk_s3::Client,
     bucket_name: &str,
 ) -> anyhow::Result<String> {
     let bucket_list = s3_client
