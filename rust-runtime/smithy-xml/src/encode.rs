@@ -59,10 +59,7 @@ impl<'a> XmlWriter<'a> {
 impl<'a> XmlWriter<'a> {
     pub fn start_el<'b, 'c>(&'c mut self, tag: &'b str) -> ElWriter<'c, 'b> {
         write!(self.doc, "<{}", tag).unwrap();
-        ElWriter {
-            doc: Some(self.doc),
-            start: tag,
-        }
+        ElWriter::new(self.doc, tag)
     }
 }
 
@@ -72,23 +69,44 @@ pub struct ElWriter<'a, 'b> {
 }
 
 impl<'a, 'b> ElWriter<'a, 'b> {
+    fn new(doc: &'a mut String, start: &'b str) -> ElWriter<'a, 'b> {
+        ElWriter {
+            start,
+            doc: Some(doc),
+        }
+    }
+
     pub fn write_attribute(&mut self, key: &str, value: &str) -> &mut Self {
-        write!(self.doc.as_mut().unwrap(), " {}=\"{}\"", key, escape(value)).unwrap();
+        write!(self.doc(), " {}=\"{}\"", key, escape(value)).unwrap();
         self
     }
 
     pub fn write_ns(mut self, namespace: &str, prefix: Option<&str>) -> Self {
         match prefix {
             Some(prefix) => {
-                write!(self.doc.as_mut().unwrap(), " xmlns:{}=\"{}\"", prefix, escape(namespace)).unwrap()
+                write!(self.doc(), " xmlns:{}=\"{}\"", prefix, escape(namespace)).unwrap()
             }
-            None => write!(self.doc.as_mut().unwrap(), " xmlns=\"{}\"", escape(namespace)).unwrap(),
+            None => write!(self.doc(), " xmlns=\"{}\"", escape(namespace)).unwrap(),
         }
         self
     }
 
     fn write_end(doc: &mut String) {
         write!(doc, ">").unwrap();
+    }
+
+    fn doc(&mut self) -> &'a mut String {
+        // The self.doc is an Option in order to signal whether the closing '>' has been emitted
+        // already (None) or not (Some). It ensures the following invariants:
+        // - If finish() has been called, then self.doc is None and therefore no more writes
+        //   to the &mut String are possible.
+        // - When drop() is called, if self.doc is Some, then finish() has not (and will not)
+        //   be called, and therefore drop() should close the tag represented by this struct.
+        //
+        // Since this function calls unwrap(), it must not be called from finish() or drop().
+        // As finish() consumes self, calls to this method from any other method will not encounter
+        // a None value in self.doc.
+        self.doc.as_mut().unwrap()
     }
 
     pub fn finish(mut self) -> ScopeWriter<'a, 'b> {
@@ -104,6 +122,9 @@ impl<'a, 'b> ElWriter<'a, 'b> {
 impl Drop for ElWriter<'_, '_> {
     fn drop(&mut self) {
         if let Some(doc) = self.doc.take() {
+            // Calls to write_end() are always preceded by self.doc.take(). The value in self.doc
+            // is set to Some initially, and is never reset to Some after being taken. Since this
+            // transition to None happens only once, we will never double-close the XML element.
             Self::write_end(doc);
         }
     }
@@ -132,10 +153,7 @@ impl ScopeWriter<'_, '_> {
 
     pub fn start_el<'b, 'c>(&'c mut self, tag: &'b str) -> ElWriter<'c, 'b> {
         write!(self.doc, "<{}", tag).unwrap();
-        ElWriter {
-            doc: Some(self.doc),
-            start: tag,
-        }
+        ElWriter::new(self.doc, tag)
     }
 }
 
@@ -156,11 +174,7 @@ mod test {
         }
         writer(&mut out);
 
-        assert_ok(validate_body(
-            out,
-            r#"<Hello></Hello>"#,
-            MediaType::Xml,
-        ));
+        assert_ok(validate_body(out, r#"<Hello></Hello>"#, MediaType::Xml));
     }
 
     #[test]
