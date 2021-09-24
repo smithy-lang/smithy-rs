@@ -6,6 +6,8 @@ vNext (Month Day, Year)
 - Add IMDS region provider to `aws-config` (smithy-rs#715, #97)
 - Update event stream `Receiver`s to be `Send` (aws-sdk-rust#224)
 - Add `sts::AssumeRoleProvider` to `aws-config`. This enables customers to invoke STS directly, instead of using it via `~/.aws/config`. (#703, aws-sdk-rust#3)
+- :bug: Fix panic when signing non-ASCII header values (smithy-rs#708, aws-sdk-rust#226)
+
 
 v0.0.18-alpha (September 14th, 2021)
 =======================
