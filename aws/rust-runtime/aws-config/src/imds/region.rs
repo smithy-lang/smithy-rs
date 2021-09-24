@@ -50,7 +50,12 @@ impl ImdsRegionProvider {
             return None;
         }
         let client = self.client.client().await.ok()?;
-        // TODO: IMDS clients should use a 1 second connect timeout
+        // TODO: IMDS clients should use a 1 second connect timeout, we shouldn't add an external timeout.
+        // There isn't a generalized way to know when you are inside of EC2 and IMDS will work. In
+        // the case where a customer doesn't have a region provider configured, we don't want the
+        // SDK to hang forever trying to load configuration, so we need a timeout to account for
+        // the IMDS provider running when IMDS isn't available. 5 seconds is a compromise since we
+        // need to make multiple e2e requests to IMDS to actually load a region.
         let timeout_fut = Timeout::new(
             client.get(REGION_PATH),
             self.sleep.sleep(Duration::from_secs(5)),
