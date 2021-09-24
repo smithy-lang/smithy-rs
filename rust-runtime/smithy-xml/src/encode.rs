@@ -60,7 +60,7 @@ impl<'a> XmlWriter<'a> {
     pub fn start_el<'b, 'c>(&'c mut self, tag: &'b str) -> ElWriter<'c, 'b> {
         write!(self.doc, "<{}", tag).unwrap();
         ElWriter {
-            doc: self.doc,
+            doc: Some(self.doc),
             start: tag,
         }
     }
@@ -68,30 +68,43 @@ impl<'a> XmlWriter<'a> {
 
 pub struct ElWriter<'a, 'b> {
     start: &'b str,
-    doc: &'a mut String,
+    doc: Option<&'a mut String>,
 }
 
 impl<'a, 'b> ElWriter<'a, 'b> {
     pub fn write_attribute(&mut self, key: &str, value: &str) -> &mut Self {
-        write!(self.doc, " {}=\"{}\"", key, escape(value)).unwrap();
+        write!(self.doc.as_mut().unwrap(), " {}=\"{}\"", key, escape(value)).unwrap();
         self
     }
 
-    pub fn write_ns(self, namespace: &str, prefix: Option<&str>) -> Self {
+    pub fn write_ns(mut self, namespace: &str, prefix: Option<&str>) -> Self {
         match prefix {
             Some(prefix) => {
-                write!(self.doc, " xmlns:{}=\"{}\"", prefix, escape(namespace)).unwrap()
+                write!(self.doc.as_mut().unwrap(), " xmlns:{}=\"{}\"", prefix, escape(namespace)).unwrap()
             }
-            None => write!(self.doc, " xmlns=\"{}\"", escape(namespace)).unwrap(),
+            None => write!(self.doc.as_mut().unwrap(), " xmlns=\"{}\"", escape(namespace)).unwrap(),
         }
         self
     }
 
-    pub fn finish(self) -> ScopeWriter<'a, 'b> {
-        write!(self.doc, ">").unwrap();
+    fn write_end(doc: &mut String) {
+        write!(doc, ">").unwrap();
+    }
+
+    pub fn finish(mut self) -> ScopeWriter<'a, 'b> {
+        let doc = self.doc.take().unwrap();
+        Self::write_end(doc);
         ScopeWriter {
-            doc: self.doc,
+            doc,
             start: self.start,
+        }
+    }
+}
+
+impl Drop for ElWriter<'_, '_> {
+    fn drop(&mut self) {
+        if let Some(doc) = self.doc.take() {
+            Self::write_end(doc);
         }
     }
 }
@@ -120,7 +133,7 @@ impl ScopeWriter<'_, '_> {
     pub fn start_el<'b, 'c>(&'c mut self, tag: &'b str) -> ElWriter<'c, 'b> {
         write!(self.doc, "<{}", tag).unwrap();
         ElWriter {
-            doc: self.doc,
+            doc: Some(self.doc),
             start: tag,
         }
     }
