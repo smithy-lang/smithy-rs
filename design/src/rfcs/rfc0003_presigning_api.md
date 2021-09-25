@@ -54,19 +54,18 @@ pub struct Builder {
 
 impl Builder {
     pub fn start_time(self, start_time: SystemTime) -> Self { ... }
-    pub fn set_start_time(self, start_time: Option<SystemTime>) -> Self { ... }
+    pub fn set_start_time(&mut self, start_time: Option<SystemTime>) { ... }
 
     pub fn expires_in(self, expires_in: Duration) -> Self { ... }
-    pub fn set_expires_in(self, expires_in: Option<Duration>) -> Self { ... }
+    pub fn set_expires_in(&mut self, expires_in: Option<Duration>) { ... }
 
     // Validates `expires_in` is no greater than one week
-    pub fn build(self) -> PresigningConfig { ... }
+    pub fn build(self) -> Result<PresigningConfig, Error> { ... }
 }
 
 impl PresigningConfig {
     pub fn expires_in(expires_in: Duration) -> PresigningConfig {
-        assert!(Duration::from_secs(604800) >= expires, "presigned requests have a max expiry time of one week");
-        Self::builder().expires(expires).build()
+        Self::builder().expires(expires).build().unwrap()
     }
 
     pub fn builder() -> Builder { ... }
@@ -148,8 +147,9 @@ From an SDK's perspective, the following are required to make a presigned URL:
 
 The AWS middleware provides everything except the request, and the request is provided as part
 of the fluent builder API. The generated code needs to be able to run the middleware to fully populate
-a request property bag, but not actually dispatch it. Additionally, the signing headers added by the signing
-implementation will need to be moved into query parameters.
+a request property bag, but not actually dispatch it.  The `expires_in` value from the presigning config
+needs to be piped all the way through to the signer. Additionally, the SigV4 signing needs to adjusted
+to do query param signing, which is slightly different than its header signing.
 
 Today, request dispatch looks as follows:
 1. The customer creates a new fluent builder by calling `client.operation_name()`, fills in inputs, and then calls `send()`.
@@ -165,11 +165,15 @@ Presigning will take advantage of a lot of these same steps, but will cut out th
 replace the dispatcher with a presigned URL generator:
 1. The customer creates a new fluent builder by calling `client.operation_name()`, fills in inputs, and then calls `presigned()`.
 2. `presigned()`:
-   1. Builds the final input struct, and then calls a new `make_request()` method with the stored config.
-   2. Constructs a Tower Service with `AwsMiddleware` layered in, and a `PresignedUrlGeneratorLayer` at the bottom.
-   3. Calls the Tower Service and returns its result
-3. The `AwsMiddleware` will sign the request by adding signature headers to it.
-4. `PresignedUrlGeneratorLayer` would take the requests URI, and append signature headers to it as query parameters. Then return the result as a string.
+   1. Builds the final input struct, calls the `make_operation()` method with the stored config, and then extracts
+      the request from the operation (discarding the rest).
+   2. Mutates the `OperationSigningConfig` in the property bag to:
+      - Change the `signature_type` to `HttpRequestQueryParams` so that the signer runs the correct signing logic.
+      - Set `expires_in` to the value given by the customer in the presigning config.
+   3. Constructs a Tower Service with `AwsMiddleware` layered in, and a `PresignedUrlGeneratorLayer` at the bottom.
+   4. Calls the Tower Service and returns its result
+3. The `AwsMiddleware` will sign the request.
+4. The `PresignedUrlGeneratorLayer` directly returns the request since all of the work is done by the middleware.
 
 It should be noted that the `presigned()` function above is on the generated input struct, so implementing this for
 the input API is identical to implementing it for the fluent client.
@@ -194,13 +198,15 @@ to rename the `presigned` member to `presigned_value`
 Changes Checklist
 -----------------
 
-- [ ] Create `PresigningConfig` and its builder
-- [ ] Refactor input code generator to create `make_request()` function
-- [ ] Implement `PresignedUrlGeneratorLayer`
-- [ ] Add new `presigned()` method to input code generator
-- [ ] Add new `presigned()` method to fluent client generator
+- [ ] Update `aws-sigv4` to support query param signing
 - [ ] Create `PresignedOperationSyntheticTrait`
 - [ ] Customize models for known presigned operations
+- [ ] Create `PresigningConfig` and its builder
+- [ ] Implement `PresignedUrlGeneratorLayer`
+- [ ] Create new AWS codegen decorator to:
+  - [ ] Add new `presigned()` method to input code generator
+  - [ ] Add new `presigned()` method to fluent client generator
+- [ ] Update `RustReservedWords` to reserve `presigned()`
 - [ ] Add integration test to S3
 - [ ] Add examples for using presigning for:
   - [ ] S3 GetObject and PutObject

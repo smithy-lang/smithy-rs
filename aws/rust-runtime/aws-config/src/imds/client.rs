@@ -37,6 +37,7 @@ use crate::imds::client::token::TokenMiddleware;
 use crate::profile::ProfileParseError;
 use crate::provider_config::ProviderConfig;
 use crate::{profile, PKG_VERSION};
+use tokio::sync::OnceCell;
 
 const USER_AGENT: AwsUserAgent =
     AwsUserAgent::new_from_environment(ApiMetadata::new("imds", PKG_VERSION));
@@ -111,6 +112,42 @@ const DEFAULT_RETRIES: u32 = 3;
 pub struct Client {
     endpoint: Endpoint,
     inner: smithy_client::Client<DynConnector, ImdsMiddleware>,
+}
+
+/// Client where build is sync, but usage is async
+///
+/// Building an imds::Client is actually an async operation, however, for credentials and region
+/// providers, we want build to always be a synchronous operation. This allows building to be deferred
+/// and cached until request time.
+#[derive(Debug)]
+pub(super) struct LazyClient {
+    client: OnceCell<Result<Client, BuildError>>,
+    builder: Builder,
+}
+
+impl LazyClient {
+    pub fn from_ready_client(client: Client) -> Self {
+        Self {
+            client: OnceCell::from(Ok(client)),
+            // the builder will never be used in this case
+            builder: Builder::default(),
+        }
+    }
+    pub(super) async fn client(&self) -> Result<&Client, &BuildError> {
+        let builder = &self.builder;
+        self.client
+            // the clone will only happen once when we actually construct it for the first time,
+            // after that, we will use the cache.
+            .get_or_init(|| async {
+                let client = builder.clone().build().await;
+                if let Err(err) = &client {
+                    tracing::warn!(err = % err, "failed to create IMDS client")
+                }
+                client
+            })
+            .await
+            .as_ref()
+    }
 }
 
 impl Client {
@@ -262,7 +299,7 @@ impl ParseStrictResponse for ImdsGetResponseHandler {
 /// IMDS can be accessed in two ways:
 /// 1. Via the IpV4 endpoint: `http://169.254.169.254`
 /// 2. Via the Ipv6 endpoint: `http://[fd00:ec2::254]`
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum EndpointMode {
     /// IpV4 mode: `http://169.254.169.254`
@@ -312,7 +349,7 @@ impl EndpointMode {
 }
 
 /// IMDSv2 Client Builder
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Builder {
     num_retries: Option<u32>,
     endpoint: Option<EndpointSource>,
@@ -417,6 +454,13 @@ impl Builder {
         self
     }*/
 
+    pub(super) fn build_lazy(self) -> LazyClient {
+        LazyClient {
+            client: OnceCell::new(),
+            builder: self,
+        }
+    }
+
     /// Build an IMDSv2 Client
     pub async fn build(self) -> Result<Client, BuildError> {
         let config = self.config.unwrap_or_default();
@@ -460,7 +504,7 @@ mod profile_keys {
 }
 
 /// Endpoint Configuration Abstraction
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum EndpointSource {
     Explicit(Uri),
     Env(Env, Fs),
@@ -560,6 +604,7 @@ impl Error for TokenError {}
 
 #[derive(Clone)]
 struct ImdsErrorPolicy;
+
 impl ImdsErrorPolicy {
     fn classify(response: &operation::Response) -> RetryKind {
         let status = response.http().status();
@@ -594,7 +639,7 @@ impl<T, E> ClassifyResponse<SdkSuccess<T>, SdkError<E>> for ImdsErrorPolicy {
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use std::collections::HashMap;
     use std::error::Error;
     use std::time::{Duration, UNIX_EPOCH};
@@ -614,7 +659,7 @@ mod test {
     const TOKEN_A: &str = "AQAEAFTNrA4eEGx0AQgJ1arIq_Cc-t4tWt3fB0Hd8RKhXlKc5ccvhg==";
     const TOKEN_B: &str = "alternatetoken==";
 
-    fn token_request(base: &str, ttl: u32) -> http::Request<SdkBody> {
+    pub(crate) fn token_request(base: &str, ttl: u32) -> http::Request<SdkBody> {
         http::Request::builder()
             .uri(format!("{}/latest/api/token", base))
             .header("x-aws-ec2-metadata-token-ttl-seconds", ttl)
@@ -623,7 +668,7 @@ mod test {
             .unwrap()
     }
 
-    fn token_response(ttl: u32, token: &'static str) -> http::Response<&'static str> {
+    pub(crate) fn token_response(ttl: u32, token: &'static str) -> http::Response<&'static str> {
         http::Response::builder()
             .status(200)
             .header("X-aws-ec2-metadata-token-ttl-seconds", ttl)
@@ -631,7 +676,7 @@ mod test {
             .unwrap()
     }
 
-    fn imds_request(path: &'static str, token: &str) -> http::Request<SdkBody> {
+    pub(crate) fn imds_request(path: &'static str, token: &str) -> http::Request<SdkBody> {
         http::Request::builder()
             .uri(Uri::from_static(path))
             .method("GET")
@@ -640,7 +685,7 @@ mod test {
             .unwrap()
     }
 
-    fn imds_response(body: &'static str) -> http::Response<&'static str> {
+    pub(crate) fn imds_response(body: &'static str) -> http::Response<&'static str> {
         http::Response::builder().status(200).body(body).unwrap()
     }
 

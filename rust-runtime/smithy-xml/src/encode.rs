@@ -95,7 +95,10 @@ impl<'a, 'b> ElWriter<'a, 'b> {
         write!(doc, ">").unwrap();
     }
 
-    fn doc(&mut self) -> &'a mut String {
+    fn doc<'c>(&'c mut self) -> &'c mut String
+    where
+        'a: 'c,
+    {
         // The self.doc is an Option in order to signal whether the closing '>' has been emitted
         // already (None) or not (Some). It ensures the following invariants:
         // - If finish() has been called, then self.doc is None and therefore no more writes
