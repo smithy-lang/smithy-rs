@@ -6,6 +6,7 @@ v0.24 (September 24th, 2021)
 ============================
 
 **New This Week**
+
 - Add IMDS credential provider to `aws-config` (smithy-rs#709)
 - Add IMDS client to `aws-config` (smithy-rs#701)
 - Add `TimeSource` to `aws_types::os_shim_internal` (smithy-rs#701)
