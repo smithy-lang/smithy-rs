@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.smithy.customize
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.smithy.customizations.AllowClippyLints
+import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.CrateVersionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.EndpointPrefixGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.HttpChecksumRequiredGenerator
@@ -38,6 +38,6 @@ class RequiredCustomizations : RustCodegenDecorator {
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
-        return baseCustomizations + CrateVersionGenerator() + SmithyTypesPubUseGenerator(protocolConfig.runtimeConfig) + AllowClippyLints()
+        return baseCustomizations + CrateVersionGenerator() + SmithyTypesPubUseGenerator(protocolConfig.runtimeConfig) + AllowLintsGenerator()
     }
 }

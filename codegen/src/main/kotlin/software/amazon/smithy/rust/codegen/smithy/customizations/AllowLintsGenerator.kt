@@ -33,11 +33,20 @@ val ClippyAllowLints = listOf(
     "vec_init_then_push",
 )
 
-class AllowClippyLints : LibRsCustomization() {
+val AllowDocsLints = listOf(
+    // Rust >=1.53.0 requires links to be wrapped in `<link>`. This is extremely hard to enforce for
+    // docs that come from the modeled documentation, so we need to disable this lint
+    "bare_urls"
+)
+
+class AllowLintsGenerator : LibRsCustomization() {
     override fun section(section: LibRsSection) = when (section) {
         is LibRsSection.Attributes -> writable {
             ClippyAllowLints.forEach {
                 Attribute.Custom("allow(clippy::$it)", container = true).render(this)
+            }
+            AllowDocsLints.forEach {
+                Attribute.Custom("allow(rustdoc::$it)", container = true).render(this)
             }
             // add a newline at the end
             this.write("")
