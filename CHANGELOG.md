@@ -1,6 +1,6 @@
 vNext (Month Day, Year)
 =======================
-- :bug: Fix an issue where `smithy-xml` may have generated invalid XML (smithy-xml#719)
+- :bug: Fix an issue where `smithy-xml` may have generated invalid XML (smithy-rs#719)
 
 v0.24 (September 24th, 2021)
 ============================
