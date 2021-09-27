@@ -1,13 +1,15 @@
 #![deny(missing_docs)]
 
-//! `aws-config` provides implementations of region, credential (todo), and connector (todo) resolution.
+//! `aws-config` provides implementations of region, credential resolution.
 //!
-//! These implementations can be used either adhoc or via [`from_env`](from_env)/[`ConfigLoader`](ConfigLoader).
+//! These implementations can be used either via the default chain implementation
+//! [`from_env`]/[`ConfigLoader`] or ad-hoc individual credential and region providers.
+//!
 //! [`ConfigLoader`](ConfigLoader) can combine different configuration sources into an AWS shared-config:
 //! [`Config`](aws_types::config::Config). [`Config`](aws_types::config::Config) can be used configure
 //! an AWS service client.
 //!
-//! ## Examples
+//! # Examples
 //! Load default SDK configuration:
 //! ```rust
 //! # mod aws_sdk_dynamodb {
@@ -38,6 +40,9 @@
 //! # }
 //! ```
 
+#[allow(dead_code)]
+const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Providers that implement the default AWS provider chain
 #[cfg(feature = "default-provider")]
 pub mod default_provider;
@@ -54,7 +59,7 @@ pub mod meta;
 pub mod profile;
 
 #[cfg(feature = "sts")]
-mod sts;
+pub mod sts;
 
 #[cfg(test)]
 mod test_case;
@@ -64,9 +69,13 @@ pub mod web_identity_token;
 
 pub mod provider_config;
 
+mod cache;
+#[cfg(feature = "imds")]
+pub mod imds;
+
 /// Create an environment loader for AWS Configuration
 ///
-/// ## Example
+/// # Examples
 /// ```rust
 /// # async fn create_config() {
 /// use aws_types::region::Region;
@@ -112,7 +121,7 @@ mod loader {
     impl ConfigLoader {
         /// Override the region used to build [`Config`](aws_types::config::Config).
         ///
-        /// # Example
+        /// # Examples
         /// ```rust
         /// # async fn create_config() {
         /// use aws_types::region::Region;
@@ -127,7 +136,7 @@ mod loader {
         }
 
         /// Override the credentials provider used to build [`Config`](aws_types::config::Config).
-        /// # Example
+        /// # Examples
         /// Override the credentials provider but load the default value for region:
         /// ```rust
         /// # use aws_types::Credentials;
