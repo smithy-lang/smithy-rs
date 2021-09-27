@@ -1,5 +1,10 @@
 vNext (Month Day, Year)
 =======================
+**Breaking changes**
+- :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
+
+**Tasks to cut release**
+- [ ] Bump MSRV on aws-sdk-rust, then delete this line.
 
 v0.0.19-alpha (September 24th, 2021)
 ====================================
