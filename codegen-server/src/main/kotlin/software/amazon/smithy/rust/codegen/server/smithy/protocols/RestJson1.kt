@@ -90,7 +90,7 @@ class RestJson1HttpSerializerGenerator(
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         writer.write("")
         writer.rustBlockTemplate(
-                "pub fn $fnName(output: &#{O}) -> #{Result}<#{Response}<#{Bytes}>, #{JsonSerdeError}>",
+                "##[allow(dead_code)] pub fn $fnName(output: &#{O}) -> #{Result}<#{Response}<#{Bytes}>, #{JsonSerdeError}>",
                 *codegenScope,
                 "O" to outputSymbol,
         ) {
@@ -139,7 +139,7 @@ class RestJson1HttpSerializerGenerator(
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         writer.write("")
         writer.rustBlockTemplate(
-                "pub fn $fnName(error: &#{E}Kind) -> #{Result}<#{Response}<#{Bytes}>, #{JsonSerdeError}>",
+                "##[allow(dead_code)] pub fn $fnName(error: &#{E}Kind) -> #{Result}<#{Response}<#{Bytes}>, #{JsonSerdeError}>",
                 *codegenScope,
                 "E" to errorSymbol,
         ) {
@@ -330,7 +330,6 @@ class RestJson1HttpRequestDeserializerGenerator(
         private val operationShape: OperationShape,
 ): ServerGenerator(protocolConfig, httpBindingResolver) {
     private val deserFnName = "deser_${operationShape.id.name.toSnakeCase()}_request"
-    private val serde = RuntimeType("json_deser", null, "crate")
     private val httpBindingGenerator =
             ResponseBindingGenerator(
                     RestJson(protocolConfig),
@@ -369,7 +368,7 @@ class RestJson1HttpRequestDeserializerGenerator(
         val inputSymbol = symbolProvider.toSymbol(inputShape)
         writer.write("")
         writer.rustBlockTemplate(
-                "pub fn $deserFnName(request: &#{Request}<#{Bytes}>) -> #{Result}<#{I}, #{JsonSerdeError}>",
+                "##[allow(dead_code)] pub fn $deserFnName(request: &#{Request}<#{Bytes}>) -> #{Result}<#{I}, #{JsonSerdeError}>",
                 *codegenScope,
                 "I" to inputSymbol,
         ) {
@@ -487,7 +486,7 @@ class RestJson1HttpRequestDeserializerGenerator(
         val fnName = generateDeserializeLabelFnName(binding)
         return RuntimeType.forInlineFun(fnName, "operation") { writer ->
             writer.rustBlockTemplate(
-                    "pub fn $fnName(value: &str) -> #{Result}<#{O}, #{JsonSerdeError}>",
+                    "##[allow(dead_code)] pub fn $fnName(value: &str) -> #{Result}<#{O}, #{JsonSerdeError}>",
                     *codegenScope,
                     "O" to output,
             ) {
@@ -516,7 +515,7 @@ class RestJson1HttpRequestDeserializerGenerator(
         val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
         return RuntimeType.forInlineFun(fnName, "operation") { writer ->
             writer.rustBlockTemplate(
-                    "pub fn $fnName(value: &str) -> #{Result}<#{O}, #{JsonSerdeError}>",
+                    "##[allow(dead_code)] pub fn $fnName(value: &str) -> #{Result}<#{O}, #{JsonSerdeError}>",
                     *codegenScope,
                     "O" to output,
             ) {
@@ -541,7 +540,7 @@ class RestJson1HttpRequestDeserializerGenerator(
         val fnName = generateDeserializeLabelFnName(binding)
         return RuntimeType.forInlineFun(fnName, "operation") { writer ->
             writer.rustBlockTemplate(
-                    "pub fn $fnName(value: &str) -> #{Result}<#{O}, #{JsonSerdeError}>",
+                    "##[allow(dead_code)] pub fn $fnName(value: &str) -> #{Result}<#{O}, #{JsonSerdeError}>",
                     *codegenScope,
                     "O" to output,
             ) {
@@ -558,10 +557,9 @@ class RestJson1HttpRequestDeserializerGenerator(
     }
 
     private fun generateDeserializeLabelFnName(binding: HttpBindingDescriptor): String {
-        val opName = operationShape.id.getName(service).toSnakeCase()
         val containerName = binding.member.container.name.toSnakeCase()
         val memberName = binding.memberName.toSnakeCase()
-        return "deser_label_${opName}_${containerName}_${memberName}"
+        return "deser_label_${containerName}_${memberName}"
     }
 
     private fun renderRequestDeserializerTests(writer: RustWriter) {

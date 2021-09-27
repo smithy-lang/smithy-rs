@@ -18,9 +18,11 @@ import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpDeserializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
@@ -31,9 +33,9 @@ import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
@@ -42,6 +44,7 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
+import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.runCommand
@@ -106,7 +109,6 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                         ProtocolContentTypes.consistent("application/json"),
                 )
 
-        logger.info("Detected protocol is ${protocolConfig.protocol.toString()}...")
         when (protocolConfig.protocol.toString()) {
             "aws.protocols#restJson1" -> {
                 serializerGenerator = JsonSerializerGenerator(protocolConfig, httpBindingResolver)
@@ -131,14 +133,15 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
 
     private fun baselineTransform(model: Model) =
             model.let(RecursiveShapeBoxer::transform)
-                    .let(AddErrorMessage::transform)
+                    .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
                     .let(OperationNormalizer::transform)
-                    .let(EventStreamNormalizer::transform)
+                    .let { RemoveEventStreamOperations.transform(it, settings) }
+                    // .let(EventStreamNormalizer::transform)
 
     fun execute() {
         val service = settings.getService(model)
         logger.info(
-                "Generating Rust server for service ${service}, protocol ${protocolConfig.protocol}..."
+                "[rust-server-codegen] Generating Rust server for service ${service}, protocol ${protocolConfig.protocol}..."
         )
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
@@ -152,16 +155,16 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                     timeout = settings.codegenConfig.formatTimeoutSeconds.toLong()
             )
         } catch (err: CommandFailed) {
-            logger.warning("Failed to run cargo fmt: [${service.id}]\n${err.output}")
+            logger.warning("[rust-server-codegen] Failed to run cargo fmt: [${service.id}]\n${err.output}")
         }
 
-        logger.info("Rust server generation complete!")
+        logger.info("[rust-server-codegen] Rust server generation complete!")
     }
 
     override fun getDefault(shape: Shape?) {}
 
     override fun operationShape(shape: OperationShape?) {
-        logger.fine("Generating operation #{shape}")
+        logger.info("[rust-server-codegen] Generating operation ${shape}...")
         if (shape != null) {
             rustCrate.useShapeWriter(shape) { writer ->
                 shape.let {
@@ -175,7 +178,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     }
 
     override fun structureShape(shape: StructureShape) {
-        logger.fine("generating a structure...")
+        logger.info("[rust-server-codegen] Generating a structure ${shape}...")
         rustCrate.useShapeWriter(shape) { writer ->
             StructureGenerator(model, symbolProvider, writer, shape).render()
             if (!shape.hasTrait<SyntheticInputTrait>()) {
