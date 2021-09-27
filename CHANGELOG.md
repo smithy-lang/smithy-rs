@@ -1,14 +1,19 @@
 vNext (Month Day, Year)
 =======================
+
+v0.24 (September 24th, 2021)
+============================
+
 **New This Week**
-- Add IMDS credential provider to `aws-config` (#709)
-- Add IMDS client to `aws-config` (#701)
-- Add `TimeSource` to `aws_types::os_shim_internal` (#701)
-- User agent construction is now `const fn` (#701)
-- Update event stream `Receiver`s to be `Send` (#702, #aws-sdk-rust#224)
-- Add `sts::AssumeRoleProvider` to `aws-config` (#703, aws-sdk-rust#3)
-- Add IMDS region provider to `aws-config` (#715)
-- Add query param signing to the `aws-sigv4` crate (#707)
+
+- Add IMDS credential provider to `aws-config` (smithy-rs#709)
+- Add IMDS client to `aws-config` (smithy-rs#701)
+- Add `TimeSource` to `aws_types::os_shim_internal` (smithy-rs#701)
+- User agent construction is now `const fn` (smithy-rs#701)
+- Add `sts::AssumeRoleProvider` to `aws-config` (smithy-rs#703, aws-sdk-rust#3)
+- Add IMDS region provider to `aws-config` (smithy-rs#715)
+- Add query param signing to the `aws-sigv4` crate (smithy-rs#707)
+- :bug: Update event stream `Receiver`s to be `Send` (smithy-rs#702, #aws-sdk-rust#224)
 
 v0.23 (September 14th, 2021)
 =======================
