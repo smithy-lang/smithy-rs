@@ -64,11 +64,11 @@ pub enum Number {
 macro_rules! to_num_fn {
     ($name:ident, $typ:ident) => {
         /// Converts to a `$typ`. This conversion may be lossy.
-        pub fn $name(&self) -> $typ {
+        pub fn $name(self) -> $typ {
             match self {
-                Number::PosInt(val) => *val as $typ,
-                Number::NegInt(val) => *val as $typ,
-                Number::Float(val) => *val as $typ,
+                Number::PosInt(val) => val as $typ,
+                Number::NegInt(val) => val as $typ,
+                Number::Float(val) => val as $typ,
             }
         }
     };
