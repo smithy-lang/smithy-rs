@@ -1,4 +1,4 @@
-package software.amazon.smithy.rust.codegen.server.smithy
+package software.amazon.smithy.rust.codegen.server.smithy.protocols.serialize
 
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
@@ -12,13 +12,16 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
+import java.util.logging.Logger
 
 class JsonSerializerGenerator(
         protocolConfig: ProtocolConfig,
         private val httpBindingResolver: HttpBindingResolver,
 ) : JsonSerializerGenerator(protocolConfig, httpBindingResolver) {
+    private val logger = Logger.getLogger(javaClass.name)
     private val renderedStructures = mutableSetOf<StructureShape>()
 
     fun render(writer: RustWriter, operationShape: OperationShape) {
@@ -55,7 +58,7 @@ class JsonSerializerGenerator(
         val fnName = symbolProvider.serializeFunctionName(structureShape)
         writer.write("")
         writer.rustBlockTemplate(
-                "pub fn $fnName(value: &#{target}) -> Result<String, #{Error}>",
+                "##[allow(dead_code)] pub fn $fnName(value: &#{target}) -> Result<String, #{Error}>",
                 *codegenScope,
                 "target" to symbolProvider.toSymbol(structureShape)
         ) {

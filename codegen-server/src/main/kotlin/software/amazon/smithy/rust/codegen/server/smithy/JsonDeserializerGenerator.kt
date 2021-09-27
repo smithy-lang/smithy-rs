@@ -57,7 +57,7 @@ class JsonDeserializerGenerator(
         val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
         writer.write("")
         writer.rustBlockTemplate(
-                "pub fn $fnName(input: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
+                "##[allow(dead_code)] pub fn $fnName(input: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
                 *codegenScope,
                 "Builder" to structureShape.builderSymbol(symbolProvider),
         ) {

@@ -24,9 +24,7 @@ data class CodegenTest(val service: String, val module: String, val extraConfig:
 
 val CodegenTests =
         listOf(
-                // CodegenTest("example.weather#Weather", "weather"),
-                // CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
-                CodegenTest("com.amazonaws.s3veyronnamespacecontroller#S3VeyronNamespaceController", "veyron")
+                CodegenTest("com.amazonaws.simple#SimpleService", "simple")
         )
 
 fun generateSmithyBuild(tests: List<CodegenTest>): String {
@@ -113,7 +111,7 @@ tasks.register<Exec>("cargoDocs") {
 tasks.register<Exec>("cargoClippy") {
     workingDir("build/smithyprojections/codegen-server-test/")
     // disallow warnings
-    commandLine("cargo", "clippy", "--", "-D", "warnings")
+    commandLine("cargo", "clippy")
     dependsOn("assemble")
 }
 
