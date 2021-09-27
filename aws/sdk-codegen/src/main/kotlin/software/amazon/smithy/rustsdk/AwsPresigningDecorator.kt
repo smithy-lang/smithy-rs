@@ -124,9 +124,11 @@ class AwsInputPresignedMethod(
                     .map_err(|err| #{SdkError}::ConstructionFailure(err.into()))?
                     .into_request_response();
 
-                // Change signature type to query params
+                // Change signature type to query params and wire up presigning config
                 {
                     let mut props = request.properties_mut();
+                    props.insert(presigning_config.start_time());
+
                     let mut config = props.get_mut::<#{sig_auth}::signer::OperationSigningConfig>()
                         .expect("signing config added by make_operation()");
                     config.signature_type = #{sig_auth}::signer::HttpSignatureType::HttpRequestQueryParams;
