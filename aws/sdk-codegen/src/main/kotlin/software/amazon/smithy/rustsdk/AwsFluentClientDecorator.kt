@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ClientGenerics
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientGenerator
@@ -44,7 +45,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
     // Must run after the AwsPresigningDecorator so that the presignable trait is correctly added to operations
     override val order: Byte = (AwsPresigningDecorator.ORDER + 1).toByte()
 
-    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
+    override fun extras(rustSettings: RustSettings, protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
         val types = Types(protocolConfig.runtimeConfig)
         val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("client")), public = true)
         rustCrate.withModule(RustModule("client", module)) { writer ->
@@ -72,6 +73,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
     }
 
     override fun libRsCustomizations(
+        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {

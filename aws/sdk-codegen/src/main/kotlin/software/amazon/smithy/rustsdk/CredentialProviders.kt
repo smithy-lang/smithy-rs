@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -27,6 +28,7 @@ class CredentialsProviderDecorator : RustCodegenDecorator {
     override val order: Byte = 0
 
     override fun configCustomizations(
+        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
@@ -34,6 +36,7 @@ class CredentialsProviderDecorator : RustCodegenDecorator {
     }
 
     override fun operationCustomizations(
+        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
@@ -42,6 +45,7 @@ class CredentialsProviderDecorator : RustCodegenDecorator {
     }
 
     override fun libRsCustomizations(
+        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {

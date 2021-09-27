@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
@@ -41,7 +42,7 @@ class S3Decorator : RustCodegenDecorator {
     private fun applies(serviceId: ShapeId) =
         serviceId == ShapeId.from("com.amazonaws.s3#AmazonS3")
 
-    override fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap {
+    override fun protocols(rustSettings: RustSettings, serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap {
         return currentProtocols.letIf(applies(serviceId)) {
             it + mapOf(
                 RestXmlTrait.ID to RestXmlFactory { protocolConfig ->
@@ -52,6 +53,7 @@ class S3Decorator : RustCodegenDecorator {
     }
 
     override fun libRsCustomizations(
+        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {

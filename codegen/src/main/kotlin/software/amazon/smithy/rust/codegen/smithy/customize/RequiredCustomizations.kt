@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.smithy.customize
 
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customizations.AllowClippyLints
 import software.amazon.smithy.rust.codegen.smithy.customizations.CrateVersionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.EndpointPrefixGenerator
@@ -24,6 +25,7 @@ class RequiredCustomizations : RustCodegenDecorator {
     override val order: Byte = -1
 
     override fun operationCustomizations(
+        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
@@ -35,6 +37,7 @@ class RequiredCustomizations : RustCodegenDecorator {
     }
 
     override fun libRsCustomizations(
+        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {

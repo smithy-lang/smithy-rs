@@ -59,14 +59,15 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val service = settings.getService(baseModel)
         val (protocol, generator) = ProtocolLoader(
             codegenDecorator.protocols(
+                settings,
                 service.id,
                 ProtocolLoader.DefaultProtocols
             )
         ).protocolFor(context.model, service)
         protocolGenerator = generator
-        model = generator.transformModel(codegenDecorator.transformModel(service, baseModel))
+        model = generator.transformModel(codegenDecorator.transformModel(settings, service, baseModel))
         val baseProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
-        symbolProvider = codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
+        symbolProvider = codegenDecorator.symbolProvider(settings, generator.symbolProvider(model, baseProvider))
 
         protocolConfig =
             ProtocolConfig(model, symbolProvider, settings.runtimeConfig, service, protocol, settings.moduleName)
@@ -90,10 +91,11 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val service = settings.getService(model)
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
-        codegenDecorator.extras(protocolConfig, rustCrate)
+        codegenDecorator.extras(settings, protocolConfig, rustCrate)
         rustCrate.finalize(
             settings,
             codegenDecorator.libRsCustomizations(
+                settings,
                 protocolConfig,
                 listOf()
             )
@@ -140,6 +142,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
 
     override fun serviceShape(shape: ServiceShape) {
         ServiceGenerator(
+            settings,
             rustCrate,
             httpGenerator,
             protocolGenerator.support(),

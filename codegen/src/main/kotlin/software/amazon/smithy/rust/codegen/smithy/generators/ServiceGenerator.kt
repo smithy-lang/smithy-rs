@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.CombinedErrorGenerator
@@ -15,6 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.TopLevelError
 import software.amazon.smithy.rust.codegen.util.inputShape
 
 class ServiceGenerator(
+    private val rustSettings: RustSettings,
     private val rustCrate: RustCrate,
     private val protocolGenerator: HttpProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
@@ -32,7 +34,7 @@ class ServiceGenerator(
                         operationWriter,
                         inputWriter,
                         operation,
-                        decorator.operationCustomizations(config, operation, listOf())
+                        decorator.operationCustomizations(rustSettings, config, operation, listOf())
                     )
                     HttpProtocolTestGenerator(config, protocolSupport, operation, operationWriter).render()
                 }
@@ -47,7 +49,7 @@ class ServiceGenerator(
         rustCrate.withModule(RustModule.Config) { writer ->
             ServiceConfigGenerator.withBaseBehavior(
                 config,
-                extraCustomizations = decorator.configCustomizations(config, listOf())
+                extraCustomizations = decorator.configCustomizations(rustSettings, config, listOf())
             ).render(writer)
         }
 

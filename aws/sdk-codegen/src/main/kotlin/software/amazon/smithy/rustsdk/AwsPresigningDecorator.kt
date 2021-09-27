@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
@@ -31,25 +32,30 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
 
 private val PRESIGNABLE_OPERATIONS = listOf(
-    // TODO(PresignedReqPrototype): Add the other presignable operations
+    // TODO(PresignedRequests): Add the other presignable operations
     ShapeId.from("com.amazonaws.s3#GetObject"),
     ShapeId.from("com.amazonaws.s3#PutObject"),
 )
 
-// TODO(PresignedReqPrototype): Write unit test
 class AwsPresigningDecorator : RustCodegenDecorator {
     companion object {
-        val ORDER: Byte = 0
+        const val ORDER: Byte = 0
     }
 
     override val name: String = "AwsPresigning"
     override val order: Byte = ORDER
 
-    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
-        rustCrate.mergeFeature(Feature("client", default = true, listOf("tower")))
+    override fun extras(rustSettings: RustSettings, protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
+        val hasPresignedOps = protocolConfig.model.shapes().anyMatch { shape ->
+            shape is OperationShape && PRESIGNABLE_OPERATIONS.contains(shape.id)
+        }
+        if (hasPresignedOps) {
+            rustCrate.mergeFeature(Feature("client", default = true, listOf("tower")))
+        }
     }
 
     override fun operationCustomizations(
+        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
@@ -58,7 +64,7 @@ class AwsPresigningDecorator : RustCodegenDecorator {
     )
 
     /** Adds presignable trait to known presignable operations */
-    override fun transformModel(service: ServiceShape, model: Model): Model {
+    override fun transformModel(rustSettings: RustSettings, service: ServiceShape, model: Model): Model {
         return ModelTransformer.create().mapShapes(model) { shape ->
             if (shape is OperationShape && PRESIGNABLE_OPERATIONS.contains(shape.id)) {
                 shape.toBuilder().addTrait(PresignableTrait()).build()
@@ -88,10 +94,6 @@ class AwsInputPresignedMethod(
     override fun section(section: OperationSection): Writable = writable {
         if (section is OperationSection.InputImpl && section.operationShape.hasTrait(PresignableTrait::class.java)) {
             writeInputPresignedMethod()
-        } else {
-            // TODO(PresignedReqPrototype): Is there a better way to do this?
-            // HACK: Add tower to optional dependencies so that the client feature can reference it
-            rustTemplate("// ignore-me: #{tower}", *codegenScope)
         }
     }
 
@@ -99,7 +101,13 @@ class AwsInputPresignedMethod(
         val operationError = operationShape.errorSymbol(symbolProvider)
         rustBlockTemplate(
             """
-            // TODO(PresignedReqPrototype): Doc comments
+            /// Creates a presigned request for this operation. The credentials provider from the `config`
+            /// will be used to generate the request's signature, and the `presignining_config` provides additional
+            /// presigning-specific config values, such as the amount of time the request should be valid for after
+            /// creation.
+            ///
+            /// Presigned requests can be given to other users or applications to access a resource or perform
+            /// an operation without having access to the AWS security credentials.
             ##[cfg(feature = "client")]
             pub async fn presigned(
                 self,

@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.AuthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 
 private fun String.shapeId() = ShapeId.from(this)
@@ -31,7 +32,7 @@ class DisabledAuthDecorator : RustCodegenDecorator {
     private fun applies(service: ServiceShape) =
         optionalAuth.containsKey(service.id)
 
-    override fun transformModel(service: ServiceShape, model: Model): Model {
+    override fun transformModel(rustSettings: RustSettings, service: ServiceShape, model: Model): Model {
         if (!applies(service)) {
             return model
         }

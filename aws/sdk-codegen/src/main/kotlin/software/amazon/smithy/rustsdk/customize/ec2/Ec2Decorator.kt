@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk.customize.ec2
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.letIf
 
@@ -19,7 +20,7 @@ class Ec2Decorator : RustCodegenDecorator {
     private fun applies(serviceShape: ServiceShape) =
         serviceShape.id == ec2
 
-    override fun transformModel(service: ServiceShape, model: Model): Model {
+    override fun transformModel(rustSettings: RustSettings, service: ServiceShape, model: Model): Model {
         // EC2 incorrectly models primitive shapes as unboxed when they actually
         // need to be boxed for the API to work properly
         return model.letIf(
