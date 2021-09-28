@@ -1,5 +1,9 @@
 vNext (Month Day, Year)
 =======================
+**Breaking changes**
+- :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
+
+**New this week**
 - :bug: Fix an issue where `smithy-xml` may have generated invalid XML (smithy-rs#719)
 
 v0.24 (September 24th, 2021)
