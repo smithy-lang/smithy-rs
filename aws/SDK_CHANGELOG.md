@@ -1,13 +1,42 @@
 vNext (Month Day, Year)
 =======================
+**Breaking changes**
+- :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
+
+**Tasks to cut release**
+- [ ] Bump MSRV on aws-sdk-rust, then delete this line.
+
 **New This Week**
-- Add IMDS client to `aws-config`
+
+- :tada: Add presigned request support and examples for S3 GetObject and PutObject (smithy-rs#731)
+
+v0.0.19-alpha (September 24th, 2021)
+====================================
+
+**New This Week**
+
+- :tada: IMDS support in the default credential provider chain (aws-sdk-rust#97)
+- :tada: Add `sts::AssumeRoleProvider` to `aws-config`. This enables customers to invoke STS directly,
+  instead of using it via `~/.aws/config`. (smithy-rs#703, aws-sdk-rust#3)
+- Add IMDS client to `aws-config` (smithy-rs#701)
 - Add IMDS credential provider to `aws-config` (smithy-rs#709)
+- Add IMDS region provider to `aws-config` (smithy-rs#715, aws-sdk-rust#97)
 - Update event stream `Receiver`s to be `Send` (aws-sdk-rust#224)
-- Add `sts::AssumeRoleProvider` to `aws-config` (#703, aws-sdk-rust#3)
+- Add query param signing to the `aws-sigv4` crate (smithy-rs#707)
+- :bug: Update event stream `Receiver`s to be `Send` (smithy-rs#702, #aws-sdk-rust#224)
+- :bug: Fix panic when signing non-ASCII header values (smithy-rs#708, aws-sdk-rust#226)
+- Add an example that uses Polly, Transcribe, and S3 called [telephone-game](sdk/examples/telephone-game/src/main.rs)
+
+**Contributions**
+
+Thank you for your contributions! :heart:
+
+- @jonhoo (smithy-rs#703)
+
 
 v0.0.18-alpha (September 14th, 2021)
 =======================
+
 - :tada: Add support for `OpenSearch` service & bring in other model updates (#todo)
 - Cleanup docs in `aws-config`
 
