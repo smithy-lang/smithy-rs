@@ -70,8 +70,8 @@ class XmlBindingTraitSerializerGenerator(
             // that calls this code
             "Error" to RuntimeType("String", null, "std::string")
         )
-    private val operationSerModule = RustModule.default("operation_ser", public = false)
-    private val xmlSerModule = RustModule.default("xml_ser", public = false)
+    private val operationSerModule = RustModule.private("operation_ser")
+    private val xmlSerModule = RustModule.private("xml_ser")
 
     private val xmlIndex = XmlNameIndex.of(model)
     private val rootNamespace = protocolConfig.serviceShape.getTrait<XmlNamespaceTrait>()

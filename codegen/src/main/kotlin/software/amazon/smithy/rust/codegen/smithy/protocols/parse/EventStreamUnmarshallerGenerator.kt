@@ -52,7 +52,7 @@ class EventStreamUnmarshallerGenerator(
     private val unionSymbol = symbolProvider.toSymbol(unionShape)
     private val operationErrorSymbol = operationShape.errorSymbol(symbolProvider)
     private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
-    private val eventStreamSerdeModule = RustModule.default("event_stream_serde", public = false)
+    private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
         "Blob" to RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "smithy_types"),
         "Error" to RuntimeType("Error", smithyEventStream, "smithy_eventstream::error"),

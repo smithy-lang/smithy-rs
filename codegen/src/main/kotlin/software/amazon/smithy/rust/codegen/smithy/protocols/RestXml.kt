@@ -54,7 +54,7 @@ open class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
         "Response" to RuntimeType.http.member("Response"),
         "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
     )
-    private val xmlDeserModule = RustModule.default("xml_deser", public = false)
+    private val xmlDeserModule = RustModule.private("xml_deser")
 
     protected val restXmlErrors: RuntimeType = when (restXml.isNoErrorWrapping) {
         true -> RuntimeType.unwrappedXmlErrors(runtimeConfig)

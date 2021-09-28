@@ -92,8 +92,8 @@ abstract class QuerySerializerGenerator(protocolConfig: ProtocolConfig) : Struct
         "QueryWriter" to smithyQuery.member("QueryWriter"),
         "QueryValueWriter" to smithyQuery.member("QueryValueWriter"),
     )
-    private val operationSerModule = RustModule.default("operation_ser", public = false)
-    private val querySerModule = RustModule.default("query_ser", public = false)
+    private val operationSerModule = RustModule.private("operation_ser")
+    private val querySerModule = RustModule.private("query_ser")
 
     abstract val protocolName: String
     abstract fun MemberShape.queryKeyName(prioritizedFallback: String? = null): String

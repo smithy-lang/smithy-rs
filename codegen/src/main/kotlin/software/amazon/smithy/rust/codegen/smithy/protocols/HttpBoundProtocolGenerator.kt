@@ -94,7 +94,7 @@ class HttpBoundProtocolGenerator(
     private val model = protocolConfig.model
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
-    private val operationSerModule = RustModule.default("operation_ser", public = false)
+    private val operationSerModule = RustModule.private("operation_ser")
 
     private val codegenScope = arrayOf(
         "ParseStrict" to RuntimeType.parseStrict(runtimeConfig),

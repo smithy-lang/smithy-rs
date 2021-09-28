@@ -58,7 +58,7 @@ class ResponseBindingGenerator(
     private val headerUtil = CargoDependency.SmithyHttp(runtimeConfig).asType().member("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
     private val instant = RuntimeType.Instant(runtimeConfig).toSymbol().rustType()
-    private val httpSerdeModule = RustModule.default("http_serde", public = false)
+    private val httpSerdeModule = RustModule.private("http_serde")
 
     /**
      * Generate a function to deserialize [binding] from HTTP headers

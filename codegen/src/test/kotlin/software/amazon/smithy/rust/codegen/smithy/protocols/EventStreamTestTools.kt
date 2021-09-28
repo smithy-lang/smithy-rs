@@ -319,7 +319,7 @@ object EventStreamTestTools {
 
         val symbolProvider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(symbolProvider)
-        project.withModule(RustModule.default("error", public = true)) {
+        project.withModule(RustModule.public("error")) {
             CombinedErrorGenerator(model, symbolProvider, operationShape).render(it)
             for (shape in model.shapes().filter { shape -> shape.isStructureShape && shape.hasTrait<ErrorTrait>() }) {
                 StructureGenerator(model, symbolProvider, it, shape as StructureShape).render()
@@ -330,11 +330,11 @@ object EventStreamTestTools {
                 }
             }
         }
-        project.withModule(RustModule.default("model", public = true)) {
+        project.withModule(RustModule.public("model")) {
             val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")
             recursivelyGenerateModels(model, symbolProvider, inputOutput, it)
         }
-        project.withModule(RustModule.default("output", public = true)) {
+        project.withModule(RustModule.public("output")) {
             operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
         println("file:///${project.baseDir}/src/error.rs")

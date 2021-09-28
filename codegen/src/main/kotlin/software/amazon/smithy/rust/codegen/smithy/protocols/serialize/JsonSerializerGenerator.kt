@@ -136,8 +136,8 @@ class JsonSerializerGenerator(
         "JsonValueWriter" to smithyJson.member("serialize::JsonValueWriter"),
     )
     private val serializerUtil = SerializerUtil(model)
-    private val operationSerModule = RustModule.default("operation_ser", public = false)
-    private val jsonSerModule = RustModule.default("json_ser", public = false)
+    private val operationSerModule = RustModule.private("operation_ser")
+    private val jsonSerModule = RustModule.private("json_ser")
 
     override fun payloadSerializer(member: MemberShape): RuntimeType {
         val fnName = symbolProvider.serializeFunctionName(member)

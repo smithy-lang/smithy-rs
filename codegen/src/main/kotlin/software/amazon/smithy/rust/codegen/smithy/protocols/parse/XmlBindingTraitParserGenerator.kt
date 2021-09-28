@@ -109,7 +109,7 @@ class XmlBindingTraitParserGenerator(
     private val model = protocolConfig.model
     private val index = HttpBindingIndex.of(model)
     private val xmlIndex = XmlNameIndex.of(model)
-    private val xmlDeserModule = RustModule.default("xml_deser", public = false)
+    private val xmlDeserModule = RustModule.private("xml_deser")
 
     /**
      * Generate a parse function for a given targeted as a payload.

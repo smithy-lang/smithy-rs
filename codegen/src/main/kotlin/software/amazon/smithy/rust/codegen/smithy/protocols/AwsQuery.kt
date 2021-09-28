@@ -67,7 +67,7 @@ class AwsQueryProtocol(private val protocolConfig: ProtocolConfig) : Protocol {
         "Response" to RuntimeType.http.member("Response"),
         "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
     )
-    private val xmlDeserModule = RustModule.default("xml_deser", public = false)
+    private val xmlDeserModule = RustModule.private("xml_deser")
 
     override val httpBindingResolver: HttpBindingResolver = AwsQueryBindingResolver(protocolConfig.model)
 

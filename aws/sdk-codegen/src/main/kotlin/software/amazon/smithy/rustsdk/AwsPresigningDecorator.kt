@@ -28,10 +28,10 @@ import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientCustomi
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
 
 private val PRESIGNABLE_OPERATIONS = listOf(
-    // TODO(PresignedRequests): Add the other presignable operations
     ShapeId.from("com.amazonaws.s3#GetObject"),
     ShapeId.from("com.amazonaws.s3#PutObject"),
 )
@@ -90,7 +90,7 @@ class AwsInputPresignedMethod(
     )
 
     override fun section(section: OperationSection): Writable = writable {
-        if (section is OperationSection.InputImpl && section.operationShape.hasTrait(PresignableTrait::class.java)) {
+        if (section is OperationSection.InputImpl && section.operationShape.hasTrait<PresignableTrait>()) {
             writeInputPresignedMethod()
         }
     }

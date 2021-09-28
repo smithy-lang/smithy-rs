@@ -108,7 +108,7 @@ class AwsJsonSerializerGenerator(
         if (serializer == null) {
             val inputShape = operationShape.inputShape(protocolConfig.model)
             val fnName = protocolConfig.symbolProvider.serializeFunctionName(operationShape)
-            serializer = RuntimeType.forInlineFun(fnName, RustModule.default("operation_ser", public = false)) {
+            serializer = RuntimeType.forInlineFun(fnName, RustModule.private("operation_ser")) {
                 it.rustBlockTemplate(
                     "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                     *codegenScope, "target" to protocolConfig.symbolProvider.toSymbol(inputShape)
@@ -134,7 +134,7 @@ class AwsJson(
         "Response" to RuntimeType.http.member("Response"),
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
-    private val jsonDeserModule = RustModule.default("json_deser", public = false)
+    private val jsonDeserModule = RustModule.private("json_deser")
 
     override val httpBindingResolver: HttpBindingResolver =
         AwsJsonHttpBindingResolver(protocolConfig.model, awsJsonVersion)

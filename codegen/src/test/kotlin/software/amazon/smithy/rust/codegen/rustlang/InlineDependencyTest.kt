@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 
 internal class InlineDependencyTest {
-    fun makeDep(name: String) = InlineDependency(name, RustModule.default("module", public = false)) {
+    fun makeDep(name: String) = InlineDependency(name, RustModule.private("module")) {
         it.rustBlock("fn foo()") {}
     }
 

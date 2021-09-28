@@ -4,7 +4,7 @@
  */
 
 use aws_sdk_s3 as s3;
-use aws_sdk_s3::presigning::config::PresigningConfig;
+use s3::presigning::config::PresigningConfig;
 use std::error::Error;
 use std::time::{Duration, SystemTime};
 

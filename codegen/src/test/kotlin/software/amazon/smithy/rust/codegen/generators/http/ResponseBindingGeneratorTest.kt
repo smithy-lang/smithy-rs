@@ -93,7 +93,7 @@ class ResponseBindingGeneratorTest {
     @Test
     fun deserializeHeadersIntoOutputShape() {
         val testProject = TestWorkspace.testProject(symbolProvider)
-        testProject.withModule(RustModule.default("output", public = true)) {
+        testProject.withModule(RustModule.public("output")) {
             it.renderOperation()
             it.unitTest(
                 """

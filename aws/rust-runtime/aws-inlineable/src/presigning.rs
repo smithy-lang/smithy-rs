@@ -8,6 +8,8 @@ pub mod config {
     use std::fmt;
     use std::time::{Duration, SystemTime};
 
+    const ONE_WEEK: Duration = Duration::from_secs(604800);
+
     /// Presigning config values required for creating a presigned request.
     #[non_exhaustive]
     #[derive(Debug, Clone)]
@@ -20,6 +22,12 @@ pub mod config {
         /// Creates a `PresigningConfig` with the given `expires_in` duration as the total
         /// amount of time the presigned request should be valid for. Other config values are
         /// defaulted.
+        ///
+        /// # Note
+        ///
+        /// Credential expiration time takes priority over the `expires_in` value.
+        /// If the credentials used to sign the request expire before the presigned request is
+        /// set to expire, then the presigned request will become invalid.
         pub fn expires_in(expires_in: Duration) -> Result<PresigningConfig, Error> {
             Self::builder().expires_in(expires_in).build()
         }
@@ -74,10 +82,11 @@ pub mod config {
     }
 
     impl Builder {
-        /// Sets the start time for the presigned request. The request will start to be valid
-        /// at this time, and will cease to be valid after the end time, which can be determined
-        /// by adding the `expires_in` duration to this start time. If not specified, this will
-        /// default to the current time.
+        /// Sets the start time for the presigned request.
+        ///
+        /// The request will start to be valid at this time, and will cease to be valid after
+        /// the end time, which can be determined by adding the `expires_in` duration to this
+        /// start time. If not specified, this will default to the current time.
         ///
         /// Optional.
         pub fn start_time(mut self, start_time: SystemTime) -> Self {
@@ -85,10 +94,11 @@ pub mod config {
             self
         }
 
-        /// Sets the start time for the presigned request. The request will start to be valid
-        /// at this time, and will cease to be valid after the end time, which can be determined
-        /// by adding the `expires_in` duration to this start time. If not specified, this will
-        /// default to the current time.
+        /// Sets the start time for the presigned request.
+        ///
+        /// The request will start to be valid at this time, and will cease to be valid after
+        /// the end time, which can be determined by adding the `expires_in` duration to this
+        /// start time. If not specified, this will default to the current time.
         ///
         /// Optional.
         pub fn set_start_time(&mut self, start_time: Option<SystemTime>) {
@@ -99,6 +109,12 @@ pub mod config {
         /// to the current time).
         ///
         /// Required.
+        ///
+        /// # Note
+        ///
+        /// Credential expiration time takes priority over the `expires_in` value.
+        /// If the credentials used to sign the request expire before the presigned request is
+        /// set to expire, then the presigned request will become invalid.
         pub fn expires_in(mut self, expires_in: Duration) -> Self {
             self.set_expires_in(Some(expires_in));
             self
@@ -108,6 +124,12 @@ pub mod config {
         /// to the current time).
         ///
         /// Required.
+        ///
+        /// # Note
+        ///
+        /// Credential expiration time takes priority over the `expires_in` value.
+        /// If the credentials used to sign the request expire before the presigned request is
+        /// set to expire, then the presigned request will become invalid.
         pub fn set_expires_in(&mut self, expires_in: Option<Duration>) {
             self.expires_in = expires_in;
         }
@@ -116,7 +138,7 @@ pub mod config {
         /// given, or if it's longer than one week.
         pub fn build(self) -> Result<PresigningConfig, Error> {
             let expires_in = self.expires_in.ok_or(Error::ExpiresInRequired)?;
-            if expires_in > Duration::from_secs(604800) {
+            if expires_in > ONE_WEEK {
                 return Err(Error::ExpiresInDurationTooLong);
             }
             Ok(PresigningConfig {
@@ -170,7 +192,8 @@ pub mod request {
 }
 
 /// Tower middleware service for creating presigned requests
-pub mod service {
+#[allow(dead_code)]
+pub(crate) mod service {
     use crate::presigning::request::PresignedRequest;
     use http::header::{CONTENT_LENGTH, CONTENT_TYPE, USER_AGENT};
     use smithy_http::operation;
@@ -181,7 +204,7 @@ pub mod service {
     /// Tower [`Service`](tower::Service) for generated a [`PresignedRequest`] from the AWS middleware.
     #[derive(Default, Debug)]
     #[non_exhaustive]
-    pub struct PresignedRequestService<E> {
+    pub(crate) struct PresignedRequestService<E> {
         _phantom: PhantomData<E>,
     }
 
@@ -197,7 +220,7 @@ pub mod service {
 
     impl<E> PresignedRequestService<E> {
         /// Creates a new `PresignedRequestService`
-        pub fn new() -> Self {
+        pub(crate) fn new() -> Self {
             Self {
                 _phantom: Default::default(),
             }
