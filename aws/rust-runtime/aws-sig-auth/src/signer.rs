@@ -175,7 +175,7 @@ impl SigV4Signer {
 
     /// Sign a request using the SigV4 Protocol
     ///
-    /// Although the direct signing implementation MAY be used directly. End users will not typically
+    /// Although this function may be used, end users will not typically
     /// interact with this code. It is generally used via middleware in the request pipeline. See [`SigV4SigningStage`](crate::middleware::SigV4SigningStage).
     pub fn sign(
         &self,
