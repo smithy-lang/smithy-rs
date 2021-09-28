@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-// TODO(PresignedReqPrototype): Add doc comments
-
+/// Presigning config and builder
 pub mod config {
     use std::fmt;
     use std::time::{Duration, SystemTime};
 
+    /// Presigning config values required for creating a presigned request.
     #[non_exhaustive]
     #[derive(Debug, Clone)]
     pub struct PresigningConfig {
@@ -17,27 +17,38 @@ pub mod config {
     }
 
     impl PresigningConfig {
+        /// Creates a `PresigningConfig` with the given `expires_in` duration as the total
+        /// amount of time the presigned request should be valid for. Other config values are
+        /// defaulted.
         pub fn expires_in(expires_in: Duration) -> Result<PresigningConfig, Error> {
             Self::builder().expires_in(expires_in).build()
         }
 
+        /// Creates a new builder for creating a `PresigningConfig`.
         pub fn builder() -> Builder {
             Builder::default()
         }
 
+        /// Returns the amount of time the presigned request should be valid for.
         pub fn expires(&self) -> Duration {
             self.expires_in
         }
 
+        /// Returns the start time. The presigned request will be valid between this and the end
+        /// time produced by adding the `expires()` value to it.
         pub fn start_time(&self) -> SystemTime {
             self.start_time
         }
     }
 
+    /// `PresigningConfig` build errors.
     #[non_exhaustive]
     #[derive(Debug)]
     pub enum Error {
+        /// Presigned requests cannot be valid for longer than one week.
         ExpiresInDurationTooLong,
+
+        /// The `PresigningConfig` builder requires a value for `expires_in`.
         ExpiresInRequired,
     }
 
@@ -54,6 +65,7 @@ pub mod config {
         }
     }
 
+    /// Builder used to create `PresigningConfig`.
     #[non_exhaustive]
     #[derive(Default, Debug)]
     pub struct Builder {
@@ -62,22 +74,46 @@ pub mod config {
     }
 
     impl Builder {
+        /// Sets the start time for the presigned request. The request will start to be valid
+        /// at this time, and will cease to be valid after the end time, which can be determined
+        /// by adding the `expires_in` duration to this start time. If not specified, this will
+        /// default to the current time.
+        ///
+        /// Optional.
         pub fn start_time(mut self, start_time: SystemTime) -> Self {
             self.set_start_time(Some(start_time));
             self
         }
+
+        /// Sets the start time for the presigned request. The request will start to be valid
+        /// at this time, and will cease to be valid after the end time, which can be determined
+        /// by adding the `expires_in` duration to this start time. If not specified, this will
+        /// default to the current time.
+        ///
+        /// Optional.
         pub fn set_start_time(&mut self, start_time: Option<SystemTime>) {
             self.start_time = start_time;
         }
 
+        /// Sets how long the request should be valid after the `start_time` (which defaults
+        /// to the current time).
+        ///
+        /// Required.
         pub fn expires_in(mut self, expires_in: Duration) -> Self {
             self.set_expires_in(Some(expires_in));
             self
         }
+
+        /// Sets how long the request should be valid after the `start_time` (which defaults
+        /// to the current time).
+        ///
+        /// Required.
         pub fn set_expires_in(&mut self, expires_in: Option<Duration>) {
             self.expires_in = expires_in;
         }
 
+        /// Builds the `PresigningConfig`. This will error if `expires_in` is not
+        /// given, or if it's longer than one week.
         pub fn build(self) -> Result<PresigningConfig, Error> {
             let expires_in = self.expires_in.ok_or(Error::ExpiresInRequired)?;
             if expires_in > Duration::from_secs(604800) {
@@ -91,9 +127,11 @@ pub mod config {
     }
 }
 
+/// Presigned request
 pub mod request {
     use std::fmt::{Debug, Formatter};
 
+    /// Represents a presigned request. This only includes the HTTP request method, URI, and headers.
     #[non_exhaustive]
     pub struct PresignedRequest(http::Request<()>);
 
@@ -102,14 +140,19 @@ pub mod request {
             Self(inner)
         }
 
+        /// Returns the HTTP request method.
         pub fn method(&self) -> &http::Method {
             self.0.method()
         }
 
+        /// Returns the HTTP request URI.
         pub fn uri(&self) -> &http::Uri {
             self.0.uri()
         }
 
+        /// Returns any HTTP headers that need to go along with the request, except for `Host`,
+        /// which should be sent based on the endpoint in the URI by the HTTP client rather than
+        /// added directly.
         pub fn headers(&self) -> &http::HeaderMap<http::HeaderValue> {
             self.0.headers()
         }
@@ -126,6 +169,7 @@ pub mod request {
     }
 }
 
+/// Tower middleware service for creating presigned requests
 pub mod service {
     use crate::presigning::request::PresignedRequest;
     use http::header::{CONTENT_LENGTH, CONTENT_TYPE, USER_AGENT};
@@ -134,6 +178,8 @@ pub mod service {
     use std::marker::PhantomData;
     use std::task::{Context, Poll};
 
+    /// Tower [`Service`](tower::Service) for generated a [`PresignedRequest`] from the AWS middleware.
+    #[derive(Default, Debug)]
     #[non_exhaustive]
     pub struct PresignedRequestService<E> {
         _phantom: PhantomData<E>,
@@ -150,6 +196,7 @@ pub mod service {
     }
 
     impl<E> PresignedRequestService<E> {
+        /// Creates a new `PresignedRequestService`
         pub fn new() -> Self {
             Self {
                 _phantom: Default::default(),
