@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Feature
@@ -25,8 +26,12 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.inputShape
@@ -50,9 +55,9 @@ class FluentClientDecorator : RustCodegenDecorator {
             FluentClientGenerator(protocolConfig, includeSmithyGenericClientDocs = true).render(writer)
         }
         val smithyClient = CargoDependency.SmithyClient(protocolConfig.runtimeConfig)
-        rustCrate.addFeature(Feature("client", true, listOf(smithyClient.name)))
-        rustCrate.addFeature(Feature("rustls", default = true, listOf("smithy-client/rustls")))
-        rustCrate.addFeature(Feature("native-tls", default = false, listOf("smithy-client/native-tls")))
+        rustCrate.mergeFeature(Feature("client", true, listOf(smithyClient.name)))
+        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("smithy-client/rustls")))
+        rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("smithy-client/native-tls")))
     }
 
     override fun libRsCustomizations(
@@ -74,6 +79,16 @@ class FluentClientDecorator : RustCodegenDecorator {
         }
     }
 }
+
+sealed class FluentClientSection(name: String) : Section(name) {
+    /** Write custom code into an operation fluent builder's impl block */
+    data class FluentBuilderImpl(
+        val operationShape: OperationShape,
+        val operationErrorType: RuntimeType
+    ) : FluentClientSection("FluentBuilderImpl")
+}
+
+abstract class FluentClientCustomization : NamedSectionGenerator<FluentClientSection>()
 
 data class ClientGenerics(
     val connectorDefault: String? = null,
@@ -109,7 +124,8 @@ class FluentClientGenerator(
     // Whether to include Client construction details that are relevant to generic Smithy generated clients,
     // but not necessarily relevant to customized clients, such as the ones with the AWS SDK.
     private val includeSmithyGenericClientDocs: Boolean,
-    private val generics: ClientGenerics = ClientGenerics()
+    private val generics: ClientGenerics = ClientGenerics(),
+    private val customizations: List<FluentClientCustomization> = emptyList(),
 ) {
     private val serviceShape = protocolConfig.serviceShape
     private val operations =
@@ -232,6 +248,13 @@ class FluentClientGenerator(
                         "operation_err" to operation.errorSymbol(symbolProvider),
                         "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType().copy(name = "result::SdkError"),
                         "client" to clientDep.asType(),
+                    )
+                    writeCustomizations(
+                        customizations,
+                        FluentClientSection.FluentBuilderImpl(
+                            operation,
+                            operation.errorSymbol(symbolProvider)
+                        )
                     )
                     members.forEach { member ->
                         val memberName = symbolProvider.toMemberName(member)

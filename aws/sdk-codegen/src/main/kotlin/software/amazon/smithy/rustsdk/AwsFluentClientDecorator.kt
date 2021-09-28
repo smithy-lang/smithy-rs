@@ -40,7 +40,9 @@ private class Types(runtimeConfig: RuntimeConfig) {
 
 class AwsFluentClientDecorator : RustCodegenDecorator {
     override val name: String = "FluentClient"
-    override val order: Byte = 0
+
+    // Must run after the AwsPresigningDecorator so that the presignable trait is correctly added to operations
+    override val order: Byte = (AwsPresigningDecorator.ORDER + 1).toByte()
 
     override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
         val types = Types(protocolConfig.runtimeConfig)
@@ -59,13 +61,14 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
                         "AwsFluentClient_retry" to types.smithyClientRetry,
                     )
                 ),
+                customizations = listOf(AwsPresignedFluentBuilderMethod(protocolConfig.runtimeConfig))
             ).render(writer)
             AwsFluentClientExtensions(types).render(writer)
         }
         val awsHyper = "aws-hyper"
-        rustCrate.addFeature(Feature("client", true, listOf(awsHyper, "smithy-client")))
-        rustCrate.addFeature(Feature("rustls", default = true, listOf("$awsHyper/rustls")))
-        rustCrate.addFeature(Feature("native-tls", default = false, listOf("$awsHyper/native-tls")))
+        rustCrate.mergeFeature(Feature("client", default = true, listOf(awsHyper, "smithy-client")))
+        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("$awsHyper/rustls")))
+        rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("$awsHyper/native-tls")))
     }
 
     override fun libRsCustomizations(

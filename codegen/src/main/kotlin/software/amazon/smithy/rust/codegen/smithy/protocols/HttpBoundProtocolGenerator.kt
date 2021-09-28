@@ -18,6 +18,7 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -93,6 +94,7 @@ class HttpBoundProtocolGenerator(
     private val model = protocolConfig.model
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
+    private val operationSerModule = RustModule.private("operation_ser")
 
     private val codegenScope = arrayOf(
         "ParseStrict" to RuntimeType.parseStrict(runtimeConfig),
@@ -177,7 +179,7 @@ class HttpBoundProtocolGenerator(
             true -> ""
             false -> "&"
         }
-        val serializer = RuntimeType.forInlineFun(fnName, "operation_ser") {
+        val serializer = RuntimeType.forInlineFun(fnName, operationSerModule) {
             it.rustBlockTemplate(
                 "pub fn $fnName(payload: $ref #{Member}) -> std::result::Result<#{SdkBody}, #{BuildError}>",
                 "Member" to symbolProvider.toSymbol(member),
@@ -338,7 +340,7 @@ class HttpBoundProtocolGenerator(
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
-        return RuntimeType.forInlineFun(fnName, "operation_deser") {
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
                 "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
@@ -411,7 +413,7 @@ class HttpBoundProtocolGenerator(
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
-        return RuntimeType.forInlineFun(fnName, "operation_deser") {
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
                 "pub fn $fnName(op_response: &mut #{operation}::Response) -> std::result::Result<#{O}, #{E}>",
@@ -437,7 +439,7 @@ class HttpBoundProtocolGenerator(
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
-        return RuntimeType.forInlineFun(fnName, "operation_deser") {
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
                 "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
@@ -471,7 +473,7 @@ class HttpBoundProtocolGenerator(
         )
         val contentType = httpBindingResolver.requestContentType(operationShape)
         httpBindingGenerator.renderUpdateHttpBuilder(implBlockWriter)
-        httpBuilderFun(implBlockWriter) {
+        generateRequestBuilderBase(implBlockWriter) {
             rust("let mut builder = self.update_http_builder(#T::new())?;", RuntimeType.HttpRequestBuilder)
             val additionalHeaders = listOf("content-type" to contentType) + protocol.additionalHeaders(operationShape)
             for (header in additionalHeaders) {
