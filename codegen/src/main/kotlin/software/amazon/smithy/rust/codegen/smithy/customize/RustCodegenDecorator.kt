@@ -11,7 +11,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
@@ -40,32 +39,28 @@ interface RustCodegenDecorator {
     val order: Byte
 
     fun configCustomizations(
-        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> = baseCustomizations
 
     fun operationCustomizations(
-        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> = baseCustomizations
 
     fun libRsCustomizations(
-        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> = baseCustomizations
 
-    fun extras(rustSettings: RustSettings, protocolConfig: ProtocolConfig, rustCrate: RustCrate) {}
+    fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {}
 
-    fun protocols(rustSettings: RustSettings, serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap =
-        currentProtocols
+    fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap = currentProtocols
 
-    fun transformModel(rustSettings: RustSettings, service: ServiceShape, model: Model): Model = model
+    fun transformModel(service: ServiceShape, model: Model): Model = model
 
-    fun symbolProvider(rustSettings: RustSettings, baseProvider: RustSymbolProvider): RustSymbolProvider = baseProvider
+    fun symbolProvider(baseProvider: RustSymbolProvider): RustSymbolProvider = baseProvider
 }
 
 /**
@@ -81,66 +76,55 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
         get() = 0
 
     override fun configCustomizations(
-        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator, customizations ->
-            decorator.configCustomizations(rustSettings, protocolConfig, customizations)
+            decorator.configCustomizations(protocolConfig, customizations)
         }
     }
 
     override fun operationCustomizations(
-        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator, customizations ->
-            decorator.operationCustomizations(rustSettings, protocolConfig, operation, customizations)
+            decorator.operationCustomizations(protocolConfig, operation, customizations)
         }
     }
 
     override fun libRsCustomizations(
-        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator, customizations ->
             decorator.libRsCustomizations(
-                rustSettings,
                 protocolConfig,
                 customizations
             )
         }
     }
 
-    override fun protocols(rustSettings: RustSettings, serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap {
+    override fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap {
         return orderedDecorators.foldRight(currentProtocols) { decorator, protocolMap ->
-            decorator.protocols(rustSettings, serviceId, protocolMap)
+            decorator.protocols(serviceId, protocolMap)
         }
     }
 
-    override fun symbolProvider(rustSettings: RustSettings, baseProvider: RustSymbolProvider): RustSymbolProvider {
+    override fun symbolProvider(baseProvider: RustSymbolProvider): RustSymbolProvider {
         return orderedDecorators.foldRight(baseProvider) { decorator, provider ->
-            decorator.symbolProvider(
-                rustSettings,
-                provider
-            )
+            decorator.symbolProvider(provider)
         }
     }
 
-    override fun extras(rustSettings: RustSettings, protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
-        return orderedDecorators.forEach { it.extras(rustSettings, protocolConfig, rustCrate) }
+    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
+        return orderedDecorators.forEach { it.extras(protocolConfig, rustCrate) }
     }
 
-    override fun transformModel(rustSettings: RustSettings, service: ServiceShape, baseModel: Model): Model {
+    override fun transformModel(service: ServiceShape, baseModel: Model): Model {
         return orderedDecorators.foldRight(baseModel) { decorator, model ->
-            decorator.transformModel(
-                rustSettings,
-                service,
-                model
-            )
+            decorator.transformModel(service, model)
         }
     }
 

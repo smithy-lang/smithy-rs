@@ -10,10 +10,6 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
@@ -28,7 +24,7 @@ class AwsPresigningDecoratorTest {
     private fun testTransform(namespace: String, name: String, presignable: Boolean) {
         val decorator = AwsPresigningDecorator()
         val model = testOperation(namespace, name)
-        val transformed = decorator.transformModel(settings(model), serviceShape(model), model)
+        val transformed = decorator.transformModel(serviceShape(model), model)
         hasPresignableTrait(transformed) shouldBe presignable
     }
 
@@ -40,17 +36,6 @@ class AwsPresigningDecoratorTest {
 
     private fun serviceShape(model: Model): ServiceShape =
         model.shapes().filter { shape -> shape is ServiceShape }.findFirst().orNull()!! as ServiceShape
-
-    private fun settings(model: Model) = RustSettings(
-        service = ShapeId.from("notrelevant#notrelevant"),
-        moduleName = "test-module",
-        moduleVersion = "notrelevant",
-        moduleAuthors = listOf("notrelevant"),
-        runtimeConfig = RuntimeConfig(),
-        codegenConfig = CodegenConfig(eventStreamAllowList = setOf("test-module")),
-        license = null,
-        model = model
-    )
 
     private fun testOperation(namespace: String, name: String): Model =
         """

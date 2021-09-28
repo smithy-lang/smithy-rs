@@ -28,7 +28,6 @@ import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
@@ -46,7 +45,7 @@ class FluentClientDecorator : RustCodegenDecorator {
     private fun applies(protocolConfig: ProtocolConfig): Boolean =
         protocolConfig.symbolProvider.config().codegenConfig.includeFluentClient
 
-    override fun extras(rustSettings: RustSettings, protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
+    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
         if (!applies(protocolConfig)) {
             return
         }
@@ -62,7 +61,6 @@ class FluentClientDecorator : RustCodegenDecorator {
     }
 
     override fun libRsCustomizations(
-        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {

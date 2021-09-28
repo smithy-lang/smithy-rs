@@ -20,7 +20,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
@@ -45,7 +44,7 @@ class AwsPresigningDecorator : RustCodegenDecorator {
     override val name: String = "AwsPresigning"
     override val order: Byte = ORDER
 
-    override fun extras(rustSettings: RustSettings, protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
+    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
         val hasPresignedOps = protocolConfig.model.shapes().anyMatch { shape ->
             shape is OperationShape && PRESIGNABLE_OPERATIONS.contains(shape.id)
         }
@@ -55,7 +54,6 @@ class AwsPresigningDecorator : RustCodegenDecorator {
     }
 
     override fun operationCustomizations(
-        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
@@ -64,7 +62,7 @@ class AwsPresigningDecorator : RustCodegenDecorator {
     )
 
     /** Adds presignable trait to known presignable operations */
-    override fun transformModel(rustSettings: RustSettings, service: ServiceShape, model: Model): Model {
+    override fun transformModel(service: ServiceShape, model: Model): Model {
         return ModelTransformer.create().mapShapes(model) { shape ->
             if (shape is OperationShape && PRESIGNABLE_OPERATIONS.contains(shape.id)) {
                 shape.toBuilder().addTrait(PresignableTrait()).build()

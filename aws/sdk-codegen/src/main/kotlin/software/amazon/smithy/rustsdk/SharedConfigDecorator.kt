@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
@@ -29,14 +28,13 @@ class SharedConfigDecorator : RustCodegenDecorator {
     override val order: Byte = 0
 
     override fun configCustomizations(
-        rustSettings: RustSettings,
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
         return baseCustomizations + NewFromShared(protocolConfig.runtimeConfig)
     }
 
-    override fun extras(rustSettings: RustSettings, protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
+    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
         val codegenScope = arrayOf(
             "Config" to awsTypes(runtimeConfig = protocolConfig.runtimeConfig).asType().member("config::Config")
         )
