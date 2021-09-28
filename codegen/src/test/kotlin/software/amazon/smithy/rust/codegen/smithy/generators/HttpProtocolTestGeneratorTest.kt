@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
@@ -175,11 +174,7 @@ class HttpProtocolTestGeneratorTest {
             object : RustCodegenDecorator {
                 override val name: String = "mock"
                 override val order: Byte = 0
-                override fun protocols(
-                    rustSettings: RustSettings,
-                    serviceId: ShapeId,
-                    currentProtocols: ProtocolMap
-                ): ProtocolMap {
+                override fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap {
                     // Intentionally replace the builtin implementation of RestJson1 with our fake protocol
                     return mapOf(RestJson1Trait.ID to TestProtocolFactory())
                 }
