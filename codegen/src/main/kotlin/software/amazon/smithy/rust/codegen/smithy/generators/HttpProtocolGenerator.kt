@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
-import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -15,22 +14,17 @@ import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.smithy.letIf
-import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 
 /**
@@ -52,18 +46,28 @@ interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
     fun support(): ProtocolSupport
 }
 
+interface HttpProtocolBodyWriter {
+    data class BodyMetadata(val takesOwnership: Boolean)
+
+    fun writeBody(writer: RustWriter, self: String, operationShape: OperationShape): BodyMetadata
+}
+
+interface HttpProtocolTraitImplWriter {
+    fun writeTraitImpls(operationWriter: RustWriter, operationShape: OperationShape)
+}
+
 /**
- * Abstract class providing scaffolding for HTTP based protocols that must build an HTTP request (headers / URL) and
- * a body.
+ * Class providing scaffolding for HTTP based protocols that must build an HTTP request (headers / URL) and a body.
  */
-abstract class HttpProtocolGenerator(protocolConfig: ProtocolConfig) {
+abstract class HttpProtocolGenerator(
+    private val protocolConfig: ProtocolConfig,
+) {
+    abstract val bodyWriter: HttpProtocolBodyWriter
+    abstract val traitWriter: HttpProtocolTraitImplWriter
+
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
-
-    private val sdkId =
-        protocolConfig.serviceShape.getTrait<ServiceTrait>()?.sdkId?.toLowerCase()?.replace(" ", "")
-            ?: protocolConfig.serviceShape.id.getName(protocolConfig.serviceShape)
 
     private val codegenScope = arrayOf(
         "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
@@ -76,12 +80,6 @@ abstract class HttpProtocolGenerator(protocolConfig: ProtocolConfig) {
         "http" to RuntimeType.http,
         "operation" to RuntimeType.operationModule(runtimeConfig),
     )
-
-    data class BodyMetadata(val takesOwnership: Boolean)
-
-    abstract fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata
-
-    abstract fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape)
 
     /** Write code into the impl block for [operationShape] */
     open fun operationImplBlock(implBlockWriter: RustWriter, operationShape: OperationShape) {}
@@ -166,7 +164,7 @@ abstract class HttpProtocolGenerator(protocolConfig: ProtocolConfig) {
 
             writeCustomizations(customizations, OperationSection.OperationImplBlock)
         }
-        traitImplementations(operationWriter, operationShape)
+        traitWriter.writeTraitImpls(operationWriter, operationShape)
     }
 
     protected fun generateRequestBuilderBase(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
@@ -177,18 +175,6 @@ abstract class HttpProtocolGenerator(protocolConfig: ProtocolConfig) {
         ) {
             f(this)
         }
-    }
-
-    private fun buildOperationType(
-        writer: RustWriter,
-        shape: OperationShape,
-        customizations: List<OperationCustomization>,
-    ): String {
-        val operationT = RuntimeType.operation(runtimeConfig)
-        val output = buildOperationTypeOutput(writer, shape)
-        val retry = buildOperationTypeRetry(writer, customizations)
-
-        return with(writer) { "${format(operationT)}<$output, $retry>" }
     }
 
     private fun buildOperationTypeOutput(writer: RustWriter, shape: OperationShape): String =
@@ -203,46 +189,11 @@ abstract class HttpProtocolGenerator(protocolConfig: ProtocolConfig) {
         operationName: String,
         customizations: List<OperationCustomization>
     ) {
-        val baseReturnType = buildOperationType(implBlockWriter, shape, customizations)
-        val returnType = "std::result::Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
-        val outputSymbol = symbolProvider.toSymbol(shape)
-
-        val bodyMetadata = RustWriter.root().body("self", shape)
-        val mut = customizations.any { it.mutSelf() }
-        val consumes = customizations.any { it.consumesSelf() } || bodyMetadata.takesOwnership
-        val self = "self".letIf(mut) { "mut $it" }.letIf(!consumes) { "&$it" }
-
-        implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
-        implBlockWriter.rust("##[allow(clippy::let_and_return)]") // For codegen simplicity, allow `let x = ...; x`
-        implBlockWriter.rustBlockTemplate(
-            "pub fn make_operation($self, _config: &#{config}::Config) -> $returnType",
-            *codegenScope
-        ) {
-            writeCustomizations(customizations, OperationSection.MutateInput("self", "_config"))
-            rust("let properties = smithy_http::property_bag::SharedPropertyBag::new();")
-            rust("let request = self.request_builder_base()?;")
-            withBlock("let body =", ";") {
-                body("self", shape)
-            }
-            rust("let request = Self::assemble(request, body);")
-            rustTemplate(
-                """
-                ##[allow(unused_mut)]
-                let mut request = #{operation}::Request::from_parts(request.map(#{SdkBody}::from), properties);
-                """,
-                *codegenScope
-            )
-            writeCustomizations(customizations, OperationSection.MutateRequest("request", "_config"))
-            rustTemplate(
-                """
-                let op = #{operation}::Operation::new(request, #{OperationType}::new())
-                    .with_metadata(#{operation}::Metadata::new(${operationName.dq()}, ${sdkId.dq()}));
-                """,
-                *codegenScope,
-                "OperationType" to symbolProvider.toSymbol(shape)
-            )
-            writeCustomizations(customizations, OperationSection.FinalizeOperation("op", "_config"))
-            rust("Ok(op)")
-        }
+        MakeOperationGenerator(protocolConfig, bodyWriter).generateMakeOperation(
+            implBlockWriter,
+            shape,
+            operationName,
+            customizations
+        )
     }
 }

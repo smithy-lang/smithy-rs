@@ -30,7 +30,10 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolBodyWriter
+import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolBodyWriter.BodyMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolTraitImplWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
@@ -89,178 +92,25 @@ interface Protocol {
 class HttpBoundProtocolGenerator(
     private val protocolConfig: ProtocolConfig,
     private val protocol: Protocol,
-) : HttpProtocolGenerator(protocolConfig) {
+) : HttpProtocolGenerator(protocolConfig), HttpProtocolTraitImplWriter {
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
     private val operationSerModule = RustModule.private("operation_ser")
 
+    override val bodyWriter: HttpProtocolBodyWriter = HttpBoundProtocolBodyWriter(protocolConfig, protocol)
+    override val traitWriter: HttpProtocolTraitImplWriter get() = this
+
     private val codegenScope = arrayOf(
         "ParseStrict" to RuntimeType.parseStrict(runtimeConfig),
         "ParseResponse" to RuntimeType.parseResponse(runtimeConfig),
         "http" to RuntimeType.http,
-        "hyper" to CargoDependency.HyperWithStream.asType(),
         "operation" to RuntimeType.operationModule(runtimeConfig),
         "Bytes" to RuntimeType.Bytes,
-        "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-        "BuildError" to runtimeConfig.operationBuildError(),
-        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType()
     )
 
-    override fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata {
-        val serializerGenerator = protocol.structuredDataSerializer(operationShape)
-        val inputShape = operationShape.inputShape(model)
-        val payloadMemberName =
-            httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
-        return if (payloadMemberName == null) {
-            serializerGenerator.operationSerializer(operationShape)?.let { serializer ->
-                rust(
-                    "#T(&self).map_err(|err|#T::SerializationError(err.into()))?",
-                    serializer,
-                    runtimeConfig.operationBuildError()
-                )
-            } ?: rustTemplate("#{SdkBody}::from(\"\")", *codegenScope)
-            BodyMetadata(takesOwnership = false)
-        } else {
-            val member = inputShape.expectMember(payloadMemberName)
-            if (operationShape.isInputEventStream(model)) {
-                serializeViaEventStream(operationShape, member, serializerGenerator)
-            } else {
-                serializeViaPayload(member, serializerGenerator)
-            }
-        }
-    }
-
-    private fun RustWriter.serializeViaEventStream(
-        operationShape: OperationShape,
-        memberShape: MemberShape,
-        serializerGenerator: StructuredDataSerializerGenerator
-    ): BodyMetadata {
-        val memberName = symbolProvider.toMemberName(memberShape)
-        val unionShape = model.expectShape(memberShape.target, UnionShape::class.java)
-
-        val marshallerConstructorFn = EventStreamMarshallerGenerator(
-            model,
-            runtimeConfig,
-            symbolProvider,
-            unionShape,
-            serializerGenerator,
-            httpBindingResolver.requestContentType(operationShape),
-        ).render()
-
-        // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the
-        // parameters that are not `@eventHeader` or `@eventPayload`.
-        rustTemplate(
-            """
-            {
-                let marshaller = #{marshallerConstructorFn}();
-                let signer = _config.new_event_stream_signer(properties.clone());
-                let adapter: #{SmithyHttp}::event_stream::MessageStreamAdapter<_, #{OperationError}> =
-                    self.$memberName.into_body_stream(marshaller, signer);
-                let body: #{SdkBody} = #{hyper}::Body::wrap_stream(adapter).into();
-                body
-            }
-            """,
-            *codegenScope,
-            "marshallerConstructorFn" to marshallerConstructorFn,
-            "OperationError" to operationShape.errorSymbol(symbolProvider)
-        )
-        return BodyMetadata(takesOwnership = true)
-    }
-
-    private fun RustWriter.serializeViaPayload(
-        member: MemberShape,
-        serializerGenerator: StructuredDataSerializerGenerator
-    ): BodyMetadata {
-        val fnName = "ser_payload_${member.container.name.toSnakeCase()}"
-        val bodyMetadata: BodyMetadata = RustWriter.root().renderPayload(member, "payload", serializerGenerator)
-        val ref = when (bodyMetadata.takesOwnership) {
-            true -> ""
-            false -> "&"
-        }
-        val serializer = RuntimeType.forInlineFun(fnName, operationSerModule) {
-            it.rustBlockTemplate(
-                "pub fn $fnName(payload: $ref #{Member}) -> std::result::Result<#{SdkBody}, #{BuildError}>",
-                "Member" to symbolProvider.toSymbol(member),
-                *codegenScope
-            ) {
-                // If this targets a member & the member is None, return an empty vec
-                val ref = when (bodyMetadata.takesOwnership) {
-                    false -> ".as_ref()"
-                    true -> ""
-                }
-
-                if (symbolProvider.toSymbol(member).isOptional()) {
-                    rustTemplate(
-                        """
-                        let payload = match payload$ref {
-                            Some(t) => t,
-                            None => return Ok(#{SdkBody}::from(""))
-                        };""",
-                        *codegenScope
-                    )
-                }
-                // When the body is a streaming blob it _literally_ is a SdkBody already
-                // mute this clippy warning to make the codegen a little simpler
-                Attribute.Custom("allow(clippy::useless_conversion)").render(this)
-                withBlock("Ok(#T::from(", "))", RuntimeType.sdkBody(runtimeConfig)) {
-                    renderPayload(member, "payload", serializerGenerator)
-                }
-            }
-        }
-        rust("#T($ref self.${symbolProvider.toMemberName(member)})?", serializer)
-        return bodyMetadata
-    }
-
-    private fun RustWriter.renderPayload(
-        member: MemberShape,
-        payloadName: String,
-        serializer: StructuredDataSerializerGenerator
-    ): BodyMetadata {
-        return when (val targetShape = model.expectShape(member.target)) {
-            // Write the raw string to the payload
-            is StringShape -> {
-                if (targetShape.hasTrait<EnumTrait>()) {
-                    rust("$payloadName.as_str()")
-                } else {
-                    rust("""$payloadName.to_string()""")
-                }
-                BodyMetadata(takesOwnership = false)
-            }
-
-            // This works for streaming & non streaming blobs because they both have `into_inner()` which
-            // can be converted into an SDK body!
-            is BlobShape -> {
-                // Write the raw blob to the payload
-                rust("$payloadName.into_inner()")
-                BodyMetadata(takesOwnership = true)
-            }
-            is StructureShape, is UnionShape -> {
-                check(
-                    !((targetShape as? UnionShape)?.isEventStream() ?: false)
-                ) { "Event Streams should be handled further up" }
-
-                // JSON serialize the structure or union targeted
-                rust(
-                    """#T(&$payloadName).map_err(|err|#T::SerializationError(err.into()))?""",
-                    serializer.payloadSerializer(member), runtimeConfig.operationBuildError()
-                )
-                BodyMetadata(takesOwnership = false)
-            }
-            is DocumentShape -> {
-                rust(
-                    "#T(&$payloadName).map_err(|err|#T::SerializationError(err.into()))?",
-                    serializer.documentSerializer(),
-                    runtimeConfig.operationBuildError()
-                )
-                BodyMetadata(takesOwnership = false)
-            }
-            else -> TODO("Unexpected payload target type")
-        }
-    }
-
-    override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
+    override fun writeTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
         val operationName = symbolProvider.toSymbol(operationShape).name
 
@@ -611,6 +461,182 @@ class HttpBoundProtocolGenerator(
             else -> {
                 TODO("Unexpected binding location: ${binding.location}")
             }
+        }
+    }
+}
+
+class HttpBoundProtocolBodyWriter(
+    protocolConfig: ProtocolConfig,
+    private val protocol: Protocol,
+) : HttpProtocolBodyWriter {
+    private val symbolProvider = protocolConfig.symbolProvider
+    private val model = protocolConfig.model
+    private val runtimeConfig = protocolConfig.runtimeConfig
+    private val httpBindingResolver = protocol.httpBindingResolver
+
+    private val operationSerModule = RustModule.private("operation_ser")
+
+    private val codegenScope = arrayOf(
+        "ParseStrict" to RuntimeType.parseStrict(runtimeConfig),
+        "ParseResponse" to RuntimeType.parseResponse(runtimeConfig),
+        "http" to RuntimeType.http,
+        "hyper" to CargoDependency.HyperWithStream.asType(),
+        "operation" to RuntimeType.operationModule(runtimeConfig),
+        "Bytes" to RuntimeType.Bytes,
+        "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+        "BuildError" to runtimeConfig.operationBuildError(),
+        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType()
+    )
+
+    override fun writeBody(writer: RustWriter, self: String, operationShape: OperationShape): BodyMetadata {
+        val serializerGenerator = protocol.structuredDataSerializer(operationShape)
+        val inputShape = operationShape.inputShape(model)
+        val payloadMemberName =
+            httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
+        return if (payloadMemberName == null) {
+            serializerGenerator.operationSerializer(operationShape)?.let { serializer ->
+                writer.rust(
+                    "#T(&self).map_err(|err|#T::SerializationError(err.into()))?",
+                    serializer,
+                    runtimeConfig.operationBuildError()
+                )
+            } ?: writer.rustTemplate("#{SdkBody}::from(\"\")", *codegenScope)
+            BodyMetadata(takesOwnership = false)
+        } else {
+            val member = inputShape.expectMember(payloadMemberName)
+            if (operationShape.isInputEventStream(model)) {
+                writer.serializeViaEventStream(operationShape, member, serializerGenerator)
+            } else {
+                writer.serializeViaPayload(member, serializerGenerator)
+            }
+        }
+    }
+
+    private fun RustWriter.serializeViaEventStream(
+        operationShape: OperationShape,
+        memberShape: MemberShape,
+        serializerGenerator: StructuredDataSerializerGenerator
+    ): BodyMetadata {
+        val memberName = symbolProvider.toMemberName(memberShape)
+        val unionShape = model.expectShape(memberShape.target, UnionShape::class.java)
+
+        val marshallerConstructorFn = EventStreamMarshallerGenerator(
+            model,
+            runtimeConfig,
+            symbolProvider,
+            unionShape,
+            serializerGenerator,
+            httpBindingResolver.requestContentType(operationShape),
+        ).render()
+
+        // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the
+        // parameters that are not `@eventHeader` or `@eventPayload`.
+        rustTemplate(
+            """
+            {
+                let marshaller = #{marshallerConstructorFn}();
+                let signer = _config.new_event_stream_signer(properties.clone());
+                let adapter: #{SmithyHttp}::event_stream::MessageStreamAdapter<_, #{OperationError}> =
+                    self.$memberName.into_body_stream(marshaller, signer);
+                let body: #{SdkBody} = #{hyper}::Body::wrap_stream(adapter).into();
+                body
+            }
+            """,
+            *codegenScope,
+            "marshallerConstructorFn" to marshallerConstructorFn,
+            "OperationError" to operationShape.errorSymbol(symbolProvider)
+        )
+        return BodyMetadata(takesOwnership = true)
+    }
+
+    private fun RustWriter.serializeViaPayload(
+        member: MemberShape,
+        serializerGenerator: StructuredDataSerializerGenerator
+    ): BodyMetadata {
+        val fnName = "ser_payload_${member.container.name.toSnakeCase()}"
+        val bodyMetadata: BodyMetadata = RustWriter.root().renderPayload(member, "payload", serializerGenerator)
+        val ref = when (bodyMetadata.takesOwnership) {
+            true -> ""
+            false -> "&"
+        }
+        val serializer = RuntimeType.forInlineFun(fnName, operationSerModule) {
+            it.rustBlockTemplate(
+                "pub fn $fnName(payload: $ref #{Member}) -> std::result::Result<#{SdkBody}, #{BuildError}>",
+                "Member" to symbolProvider.toSymbol(member),
+                *codegenScope
+            ) {
+                // If this targets a member & the member is None, return an empty vec
+                val ref = when (bodyMetadata.takesOwnership) {
+                    false -> ".as_ref()"
+                    true -> ""
+                }
+
+                if (symbolProvider.toSymbol(member).isOptional()) {
+                    rustTemplate(
+                        """
+                        let payload = match payload$ref {
+                            Some(t) => t,
+                            None => return Ok(#{SdkBody}::from(""))
+                        };""",
+                        *codegenScope
+                    )
+                }
+                // When the body is a streaming blob it _literally_ is a SdkBody already
+                // mute this clippy warning to make the codegen a little simpler
+                Attribute.Custom("allow(clippy::useless_conversion)").render(this)
+                withBlock("Ok(#T::from(", "))", RuntimeType.sdkBody(runtimeConfig)) {
+                    renderPayload(member, "payload", serializerGenerator)
+                }
+            }
+        }
+        rust("#T($ref self.${symbolProvider.toMemberName(member)})?", serializer)
+        return bodyMetadata
+    }
+
+    private fun RustWriter.renderPayload(
+        member: MemberShape,
+        payloadName: String,
+        serializer: StructuredDataSerializerGenerator
+    ): BodyMetadata {
+        return when (val targetShape = model.expectShape(member.target)) {
+            // Write the raw string to the payload
+            is StringShape -> {
+                if (targetShape.hasTrait<EnumTrait>()) {
+                    rust("$payloadName.as_str()")
+                } else {
+                    rust("""$payloadName.to_string()""")
+                }
+                BodyMetadata(takesOwnership = false)
+            }
+
+            // This works for streaming & non streaming blobs because they both have `into_inner()` which
+            // can be converted into an SDK body!
+            is BlobShape -> {
+                // Write the raw blob to the payload
+                rust("$payloadName.into_inner()")
+                BodyMetadata(takesOwnership = true)
+            }
+            is StructureShape, is UnionShape -> {
+                check(
+                    !((targetShape as? UnionShape)?.isEventStream() ?: false)
+                ) { "Event Streams should be handled further up" }
+
+                // JSON serialize the structure or union targeted
+                rust(
+                    """#T(&$payloadName).map_err(|err|#T::SerializationError(err.into()))?""",
+                    serializer.payloadSerializer(member), runtimeConfig.operationBuildError()
+                )
+                BodyMetadata(takesOwnership = false)
+            }
+            is DocumentShape -> {
+                rust(
+                    "#T(&$payloadName).map_err(|err|#T::SerializationError(err.into()))?",
+                    serializer.documentSerializer(),
+                    runtimeConfig.operationBuildError()
+                )
+                BodyMetadata(takesOwnership = false)
+            }
+            else -> TODO("Unexpected payload target type")
         }
     }
 }

@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolBodyWriter.BodyMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -119,14 +120,24 @@ class HttpProtocolTestGeneratorTest {
     ): Path {
 
         // A stubbed test protocol to do enable testing intentionally broken protocols
-        class TestProtocol(private val protocolConfig: ProtocolConfig) : HttpProtocolGenerator(protocolConfig) {
+        class TestProtocol(private val protocolConfig: ProtocolConfig) :
+            HttpProtocolGenerator(protocolConfig),
+            HttpProtocolBodyWriter,
+            HttpProtocolTraitImplWriter {
             private val symbolProvider = protocolConfig.symbolProvider
-            override fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata {
-                writeWithNoFormatting(body)
+            override val bodyWriter: HttpProtocolBodyWriter get() = this
+            override val traitWriter: HttpProtocolTraitImplWriter get() = this
+
+            override fun writeBody(
+                writer: RustWriter,
+                self: String,
+                operationShape: OperationShape
+            ): BodyMetadata {
+                writer.writeWithNoFormatting(body)
                 return BodyMetadata(takesOwnership = false)
             }
 
-            override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
+            override fun writeTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
                 operationWriter.rustTemplate(
                     """
                     impl #{parse_strict} for ${operationShape.id.name}{
