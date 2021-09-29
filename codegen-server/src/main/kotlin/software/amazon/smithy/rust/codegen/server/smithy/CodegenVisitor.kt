@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1Http
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.serialize.JsonSerializerGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.deserialize.JsonDeserializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings

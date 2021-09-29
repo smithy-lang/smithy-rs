@@ -1,4 +1,4 @@
-package software.amazon.smithy.rust.codegen.server.smithy
+package software.amazon.smithy.rust.codegen.server.smithy.protocols.deserialize
 
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
