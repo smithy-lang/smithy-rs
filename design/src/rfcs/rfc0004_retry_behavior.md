@@ -64,9 +64,8 @@ use aws_types::retry_config::RetryConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), sts::Error> {
-    let retry_config = RetryConfig::builder().max_attempts(5).build();
     let config = aws_config::from_env()
-        .retry_config(retry_config)
+        .max_attempts(5)
         .load().await;
 
     let sts = sts::Client::new(&config);
@@ -88,8 +87,7 @@ use aws_types::retry_config::RetryConfig;
 #[tokio::main]
 async fn main() -> Result<(), sts::Error> {
     let config = aws_config::load_from_env().await;
-    let retry_config = RetryConfig::builder().max_attempts(5).build();
-    let sts_config = sts::config::Config::from(&config).retry_config(retry_config).build();
+    let sts_config = sts::config::Config::from(&config).max_attempts(5).build();
 
     let sts = sts::Client::new(&sts_config);
     let resp = sts.get_caller_identity().send().await?;
@@ -110,8 +108,7 @@ use aws_types::retry_config::RetryConfig;
 #[tokio::main]
 async fn main() -> Result<(), sts::Error> {
     let config = aws_config::load_from_env().await;
-    let retry_config = RetryConfig::builder().max_attempts(0).build();
-    let sts_config = sts::config::Config::from(&config).retry_config(retry_config).build();
+    let sts_config = sts::config::Config::from(&config).max_attempts(0).build();
 
     let sts = sts::Client::new(&sts_config);
     let resp = sts.get_caller_identity().send().await?;
@@ -130,11 +127,11 @@ Changes Checklist
 
 - [ ] Create new Kotlin decorator `RetryDecorator`
   - Based on [RegionDecorator.kt](https://github.com/awslabs/smithy-rs/blob/main/aws/sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/RegionDecorator.kt)
-- [ ] Create `aws_types::retry_config::RetryConfig` struct and corresponding builder with a `max_attempts` setter.
-- [ ] Create `aws_config::meta::retry_config::RetryConfigProviderChain`
-- [ ] Create `aws_config::meta::retry_config::ProvideRetryConfig`
-- [ ] Create `EnvironmentVariableRetryConfigProvider` struct
-- [ ] Add `retry_config` method to `aws_config::ConfigLoader`
+- [ ] Create `aws_types::max_attempts::MaxAttempts` struct and corresponding builder with a `max_attempts` setter.
+- [ ] Create `aws_config::meta::max_attempts::MaxAttemptsProviderChain`
+- [ ] Create `aws_config::meta::max_attempts::ProvideMaxAttempts`
+- [ ] Create `EnvironmentVariableMaxAttemptsProvider` struct
+- [ ] Add `max_attempts` method to `aws_config::ConfigLoader`
 - [ ] Update `AwsFluentClientDecorator` to correctly configure the retry behavior of its inner `aws_hyper::Client` based on the retry config.
 - [ ] Add tests
   - [ ] Test that setting max_attempts to 0 disables retries
