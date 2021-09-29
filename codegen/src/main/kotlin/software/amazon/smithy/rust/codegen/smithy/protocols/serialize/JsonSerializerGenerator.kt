@@ -22,6 +22,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait.Format.EPOCH_SECONDS
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -134,12 +135,14 @@ open class JsonSerializerGenerator(
         "JsonObjectWriter" to smithyJson.member("serialize::JsonObjectWriter"),
         "JsonValueWriter" to smithyJson.member("serialize::JsonValueWriter"),
     )
-    val serializerUtil = SerializerUtil(model)
+    private val serializerUtil = SerializerUtil(model)
+    private val operationSerModule = RustModule.private("operation_ser")
+    private val jsonSerModule = RustModule.private("json_ser")
 
     override fun payloadSerializer(member: MemberShape): RuntimeType {
         val fnName = symbolProvider.serializeFunctionName(member)
         val target = model.expectShape(member.target)
-        return RuntimeType.forInlineFun(fnName, "operation_ser") { writer ->
+        return RuntimeType.forInlineFun(fnName, operationSerModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> std::result::Result<std::vec::Vec<u8>, #{Error}>",
                 *codegenScope,
@@ -167,7 +170,7 @@ open class JsonSerializerGenerator(
 
         val inputShape = operationShape.inputShape(model)
         val fnName = symbolProvider.serializeFunctionName(operationShape)
-        return RuntimeType.forInlineFun(fnName, "operation_ser") {
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
             it.rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(inputShape)
@@ -183,7 +186,7 @@ open class JsonSerializerGenerator(
 
     override fun documentSerializer(): RuntimeType {
         val fnName = "serialize_document"
-        return RuntimeType.forInlineFun(fnName, "operation_ser") {
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
             it.rustTemplate(
                 """
                 pub fn $fnName(input: &#{Document}) -> Result<#{SdkBody}, #{Error}> {
@@ -203,7 +206,7 @@ open class JsonSerializerGenerator(
     ) {
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val structureSymbol = symbolProvider.toSymbol(context.shape)
-        val structureSerializer = RuntimeType.forInlineFun(fnName, "json_ser") { writer ->
+        val structureSerializer = RuntimeType.forInlineFun(fnName, jsonSerModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(object: &mut #{JsonObjectWriter}, input: &#{Input})",
                 "Input" to structureSymbol,
@@ -333,7 +336,7 @@ open class JsonSerializerGenerator(
     fun RustWriter.serializeUnion(context: Context<UnionShape>) {
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val unionSymbol = symbolProvider.toSymbol(context.shape)
-        val unionSerializer = RuntimeType.forInlineFun(fnName, "json_ser") { writer ->
+        val unionSerializer = RuntimeType.forInlineFun(fnName, jsonSerModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(${context.writerExpression}: &mut #{JsonObjectWriter}, input: &#{Input})",
                 "Input" to unionSymbol,

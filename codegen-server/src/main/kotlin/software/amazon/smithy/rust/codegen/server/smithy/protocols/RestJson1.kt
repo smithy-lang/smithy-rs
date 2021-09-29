@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -351,6 +352,7 @@ class RestJson1HttpRequestDeserializerGenerator(
                             CargoDependency("percent-encoding", CratesIo("2.1.0")).asType(),
                     "JsonSerdeError" to error.member("Error"),
             )
+    private val operationDeserModule = RustModule.private("operation")
 
     override fun render(writer: RustWriter, operationShape: OperationShape) {
         renderRequestDeserializer(writer)
@@ -484,7 +486,7 @@ class RestJson1HttpRequestDeserializerGenerator(
     private fun generateDeserializeLabelStringFn(binding: HttpBindingDescriptor): RuntimeType {
         val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateDeserializeLabelFnName(binding)
-        return RuntimeType.forInlineFun(fnName, "operation") { writer ->
+        return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
                     "##[allow(dead_code)] pub fn $fnName(value: &str) -> #{Result}<#{O}, #{JsonSerdeError}>",
                     *codegenScope,
@@ -513,7 +515,7 @@ class RestJson1HttpRequestDeserializerGenerator(
                         defaultTimestampFormat,
                 )
         val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-        return RuntimeType.forInlineFun(fnName, "operation") { writer ->
+        return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
                     "##[allow(dead_code)] pub fn $fnName(value: &str) -> #{Result}<#{O}, #{JsonSerdeError}>",
                     *codegenScope,
@@ -538,7 +540,7 @@ class RestJson1HttpRequestDeserializerGenerator(
     private fun generateDeserializeLabelPrimitiveFn(binding: HttpBindingDescriptor): RuntimeType {
         val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateDeserializeLabelFnName(binding)
-        return RuntimeType.forInlineFun(fnName, "operation") { writer ->
+        return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
                     "##[allow(dead_code)] pub fn $fnName(value: &str) -> #{Result}<#{O}, #{JsonSerdeError}>",
                     *codegenScope,

@@ -1,5 +1,14 @@
 vNext (Month Day, Year)
 =======================
+**Breaking changes**
+- :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
+
+**Tasks to cut release**
+- [ ] Bump MSRV on aws-sdk-rust, then delete this line.
+
+**New This Week**
+
+- :tada: Add presigned request support and examples for S3 GetObject and PutObject (smithy-rs#731)
 
 v0.0.19-alpha (September 24th, 2021)
 ====================================

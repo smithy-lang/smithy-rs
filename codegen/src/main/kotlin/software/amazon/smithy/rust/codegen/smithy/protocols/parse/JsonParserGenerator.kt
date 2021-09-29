@@ -23,6 +23,7 @@ import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -58,6 +59,7 @@ open class JsonParserGenerator(
     val symbolProvider = protocolConfig.symbolProvider
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
+    private val jsonDeserModule = RustModule.private("json_deser")
     val codegenScope = arrayOf(
         "Error" to smithyJson.member("deserialize::Error"),
         "ErrorReason" to smithyJson.member("deserialize::ErrorReason"),
@@ -81,7 +83,7 @@ open class JsonParserGenerator(
         val shape = model.expectShape(member.target)
         check(shape is UnionShape || shape is StructureShape) { "payload parser should only be used on structures & unions" }
         val fnName = symbolProvider.deserializeFunctionName(shape) + "_payload"
-        return RuntimeType.forInlineFun(fnName, "json_deser") {
+        return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
                 "pub fn $fnName(input: &[u8]) -> Result<#{Shape}, #{Error}>",
                 *codegenScope,
@@ -112,7 +114,7 @@ open class JsonParserGenerator(
 
         val outputShape = operationShape.outputShape(model)
         val fnName = symbolProvider.deserializeFunctionName(operationShape)
-        return RuntimeType.forInlineFun(fnName, "json_deser") {
+        return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
                 "pub fn $fnName(input: &[u8], mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
                 "Builder" to outputShape.builderSymbol(symbolProvider),
@@ -138,7 +140,7 @@ open class JsonParserGenerator(
             return null
         }
         val fnName = symbolProvider.deserializeFunctionName(errorShape) + "json_err"
-        return RuntimeType.forInlineFun(fnName, "json_deser") {
+        return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
                 "pub fn $fnName(input: &[u8], mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
                 "Builder" to errorShape.builderSymbol(symbolProvider),
@@ -161,7 +163,7 @@ open class JsonParserGenerator(
 
     override fun documentParser(operationShape: OperationShape): RuntimeType {
         val fnName = "parse_document"
-        return RuntimeType.forInlineFun(fnName, "json_deser") {
+        return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
                 "pub fn $fnName(input: &[u8]) -> Result<#{Document}, #{Error}>",
                 "Document" to RuntimeType.Document(runtimeConfig),
@@ -181,7 +183,7 @@ open class JsonParserGenerator(
         }
     }
 
-    private fun orEmptyJson(): RuntimeType = RuntimeType.forInlineFun("or_empty_doc", "json_deser") {
+    private fun orEmptyJson(): RuntimeType = RuntimeType.forInlineFun("or_empty_doc", jsonDeserModule) {
         it.rust(
             """
             pub fn or_empty_doc(data: &[u8]) -> &[u8] {
@@ -272,7 +274,7 @@ open class JsonParserGenerator(
     private fun RustWriter.deserializeCollection(shape: CollectionShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
-        val parser = RuntimeType.forInlineFun(fnName, "json_deser") {
+        val parser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             // Allow non-snake-case since some SDK models have lists with names prefixed with `__listOf__`,
             // which become `__list_of__`, and the Rust compiler warning doesn't like multiple adjacent underscores.
             it.rustBlockTemplate(
@@ -318,7 +320,7 @@ open class JsonParserGenerator(
         val keyTarget = model.expectShape(shape.key.target) as StringShape
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
-        val parser = RuntimeType.forInlineFun(fnName, "json_deser") {
+        val parser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             // Allow non-snake-case since some SDK models have maps with names prefixed with `__mapOf__`,
             // which become `__map_of__`, and the Rust compiler warning doesn't like multiple adjacent underscores.
             it.rustBlockTemplate(
@@ -357,7 +359,7 @@ open class JsonParserGenerator(
     private fun RustWriter.deserializeStruct(shape: StructureShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
-        val nestedParser = RuntimeType.forInlineFun(fnName, "json_deser") {
+        val nestedParser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
                 """
                 pub fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
@@ -388,7 +390,7 @@ open class JsonParserGenerator(
     private fun RustWriter.deserializeUnion(shape: UnionShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
-        val nestedParser = RuntimeType.forInlineFun(fnName, "json_deser") {
+        val nestedParser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
                 """
                 pub fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
