@@ -5,7 +5,7 @@ RFC: Retry Behavior
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
-It is not currently possible for users of the SDK to configure a client's retry behavior. This RFC establishes a method for users to set the number of retries to attempt when calling a service and would allow users to disable retries entirely.
+It is not currently possible for users of the SDK to configure a client's maximum number of retry attempts. This RFC establishes a method for users to set the number of retries to attempt when calling a service and would allow users to disable retries entirely.
 
 Terminology
 -----------
@@ -13,16 +13,16 @@ Terminology
 - **Shared Config**: An `aws_config::Config` struct that is responsible for storing shared configuration data that is used across all services. This is not generated and lives in the `aws-config` crate.
 - **Service-specific Config**: A code-generated `Config` that has methods for setting service-specific configuration. Each `Config` is defined in the `config` module of its parent service. For example, the S3-specific config struct is `use`able from `aws_sdk_s3::config::Config` and re-exported as `aws_sdk_s3::Config`.
 
-Retry config
+Configuring the maximum number of retries
 ------------
 
-This RFC will demonstrate _(with examples)_ the following ways that Users can set the number of retries:
+This RFC will demonstrate _(with examples)_ the following ways that Users can set the maximum number of retry attempts:
 
-- By calling the retry_config method on a service-specific config
-- By calling the `aws_config::ConfigLoader::retry_config(..)` method
+- By calling the max_attempts method on a service-specific config
+- By calling the `aws_config::Config::max_attempts(..)` method when building a shared config
 - By setting the `AWS_MAX_ATTEMPTS` environment variable
 
-The above list is in order of decreasing precedence e.g. setting retry attempts with the `retry_config` method will override a value set by `AWS_MAX_ATTEMPTS`.
+The above list is in order of decreasing precedence e.g. setting maximum retry attempts with the `max_attempts` method will override a value set by `AWS_MAX_ATTEMPTS`.
 
 _The default number of retries is 3 as specified in the [AWS SDKs and Tools Reference Guide](https://docs.aws.amazon.com/sdkref/latest/guide/setting-global-max_attempts.html)._
 
@@ -59,8 +59,6 @@ Here's an example app that creates a shared config with custom retry behavior an
 
 ```rust
 use aws_sdk_sts as sts;
-use aws_types::config::Config;
-use aws_types::retry_config::RetryConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), sts::Error> {
@@ -81,8 +79,6 @@ Here's an example app that creates a service-specific config with custom retry b
 
 ```rust
 use aws_sdk_sts as sts;
-use aws_types::config::Config;
-use aws_types::retry_config::RetryConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), sts::Error> {
@@ -103,7 +99,6 @@ Here's an example app that creates a service-specific config with custom retry b
 ```rust
 use aws_sdk_sts as sts;
 use aws_types::config::Config;
-use aws_types::retry_config::RetryConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), sts::Error> {
@@ -125,14 +120,14 @@ Behind the scenes
 Changes Checklist
 -----------------
 
-- [ ] Create new Kotlin decorator `RetryDecorator`
+- [ ] Create new Kotlin decorator `MaxAttemptsDecorator`
   - Based on [RegionDecorator.kt](https://github.com/awslabs/smithy-rs/blob/main/aws/sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/RegionDecorator.kt)
-- [ ] Create `aws_types::max_attempts::MaxAttempts` struct and corresponding builder with a `max_attempts` setter.
+- [ ] Create `aws_types::max_attempts::MaxAttempts` struct and corresponding builder with a `max_attempts` setter
 - [ ] Create `aws_config::meta::max_attempts::MaxAttemptsProviderChain`
 - [ ] Create `aws_config::meta::max_attempts::ProvideMaxAttempts`
 - [ ] Create `EnvironmentVariableMaxAttemptsProvider` struct
 - [ ] Add `max_attempts` method to `aws_config::ConfigLoader`
-- [ ] Update `AwsFluentClientDecorator` to correctly configure the retry behavior of its inner `aws_hyper::Client` based on the retry config.
+- [ ] Update `AwsFluentClientDecorator` to correctly configure the max retry attempts of its inner `aws_hyper::Client`
 - [ ] Add tests
   - [ ] Test that setting max_attempts to 0 disables retries
   - [ ] Test that setting max_attempts to `n` limits retries to `n` where `n` is a non-zero integer
