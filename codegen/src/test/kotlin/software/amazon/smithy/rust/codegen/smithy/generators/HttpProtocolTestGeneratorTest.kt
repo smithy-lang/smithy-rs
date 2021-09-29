@@ -128,13 +128,11 @@ class HttpProtocolTestGeneratorTest {
             override val bodyWriter: HttpProtocolBodyWriter get() = this
             override val traitWriter: HttpProtocolTraitImplWriter get() = this
 
-            override fun writeBody(
-                writer: RustWriter,
-                self: String,
-                operationShape: OperationShape
-            ): BodyMetadata {
+            override fun bodyMetadata(operationShape: OperationShape): BodyMetadata =
+                BodyMetadata(takesOwnership = false)
+
+            override fun writeBody(writer: RustWriter, self: String, operationShape: OperationShape) {
                 writer.writeWithNoFormatting(body)
-                return BodyMetadata(takesOwnership = false)
             }
 
             override fun writeTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {

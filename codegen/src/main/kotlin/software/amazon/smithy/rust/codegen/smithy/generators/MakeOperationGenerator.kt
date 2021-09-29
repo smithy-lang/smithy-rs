@@ -49,7 +49,7 @@ class MakeOperationGenerator(
         val returnType = "std::result::Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
         val outputSymbol = symbolProvider.toSymbol(shape)
 
-        val takesOwnership = bodyWriter.writeBody(RustWriter.root(), "self", shape).takesOwnership
+        val takesOwnership = bodyWriter.bodyMetadata(shape).takesOwnership
         val mut = customizations.any { it.mutSelf() }
         val consumes = customizations.any { it.consumesSelf() } || takesOwnership
         val self = "self".letIf(mut) { "mut $it" }.letIf(!consumes) { "&$it" }

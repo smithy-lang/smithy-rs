@@ -49,7 +49,9 @@ interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
 interface HttpProtocolBodyWriter {
     data class BodyMetadata(val takesOwnership: Boolean)
 
-    fun writeBody(writer: RustWriter, self: String, operationShape: OperationShape): BodyMetadata
+    fun bodyMetadata(operationShape: OperationShape): BodyMetadata
+
+    fun writeBody(writer: RustWriter, self: String, operationShape: OperationShape)
 }
 
 interface HttpProtocolTraitImplWriter {
