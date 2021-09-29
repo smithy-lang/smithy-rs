@@ -60,7 +60,7 @@ open class JsonParserGenerator(
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val jsonDeserModule = RustModule.private("json_deser")
-    private val codegenScope = arrayOf(
+    val codegenScope = arrayOf(
         "Error" to smithyJson.member("deserialize::Error"),
         "ErrorReason" to smithyJson.member("deserialize::ErrorReason"),
         "expect_blob_or_null" to smithyJson.member("deserialize::token::expect_blob_or_null"),
