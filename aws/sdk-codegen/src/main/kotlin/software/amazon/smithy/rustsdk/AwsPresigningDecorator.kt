@@ -6,9 +6,15 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.HttpBinding
+import software.amazon.smithy.model.knowledge.HttpBindingIndex
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.traits.HttpQueryTrait
+import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Feature
@@ -20,21 +26,41 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientSection
+import software.amazon.smithy.rust.codegen.smithy.generators.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyWriter
+import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
+import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
+import java.util.stream.Collectors
 
-private val PRESIGNABLE_OPERATIONS = listOf(
-    ShapeId.from("com.amazonaws.s3#GetObject"),
-    ShapeId.from("com.amazonaws.s3#PutObject"),
+private enum class PayloadSigningType {
+    EMPTY,
+    UNSIGNED_PAYLOAD,
+}
+
+private data class PresignableOperation(
+    val payloadSigningType: PayloadSigningType,
+    val modelTransform: PresignModelTransform? = null
 )
+
+private val PRESIGNABLE_OPERATIONS by lazy {
+    mapOf(
+        ShapeId.from("com.amazonaws.s3#GetObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
+        ShapeId.from("com.amazonaws.s3#PutObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
+        ShapeId.from("com.amazonaws.polly#SynthesizeSpeech") to PresignableOperation(
+            PayloadSigningType.EMPTY,
+            AwsPollySynthesizeSpeechPresignTransform()
+        ),
+    )
+}
 
 class AwsPresigningDecorator : RustCodegenDecorator {
     companion object {
@@ -46,7 +72,7 @@ class AwsPresigningDecorator : RustCodegenDecorator {
 
     override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
         val hasPresignedOps = protocolConfig.model.shapes().anyMatch { shape ->
-            shape is OperationShape && PRESIGNABLE_OPERATIONS.contains(shape.id)
+            shape is OperationShape && PRESIGNABLE_OPERATIONS.containsKey(shape.id)
         }
         if (hasPresignedOps) {
             rustCrate.mergeFeature(Feature("client", default = true, listOf("tower")))
@@ -57,14 +83,12 @@ class AwsPresigningDecorator : RustCodegenDecorator {
         protocolConfig: ProtocolConfig,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
-    ): List<OperationCustomization> = baseCustomizations + listOf(
-        AwsInputPresignedMethod(protocolConfig.runtimeConfig, protocolConfig.symbolProvider, operation)
-    )
+    ): List<OperationCustomization> = baseCustomizations + listOf(AwsInputPresignedMethod(protocolConfig, operation))
 
     /** Adds presignable trait to known presignable operations */
     override fun transformModel(service: ServiceShape, model: Model): Model {
         return ModelTransformer.create().mapShapes(model) { shape ->
-            if (shape is OperationShape && PRESIGNABLE_OPERATIONS.contains(shape.id)) {
+            if (shape is OperationShape && PRESIGNABLE_OPERATIONS.containsKey(shape.id)) {
                 shape.toBuilder().addTrait(PresignableTrait()).build()
             } else {
                 shape
@@ -74,10 +98,12 @@ class AwsPresigningDecorator : RustCodegenDecorator {
 }
 
 class AwsInputPresignedMethod(
-    runtimeConfig: RuntimeConfig,
-    private val symbolProvider: RustSymbolProvider,
+    private val protocolConfig: ProtocolConfig,
     private val operationShape: OperationShape
 ) : OperationCustomization() {
+    private val runtimeConfig = protocolConfig.runtimeConfig
+    private val symbolProvider = protocolConfig.symbolProvider
+
     private val codegenScope = arrayOf(
         "aws_hyper" to runtimeConfig.awsRuntimeDependency("aws-hyper").copy(optional = true).asType(),
         "Error" to AwsRuntimeType.Presigning.member("config::Error"),
@@ -91,16 +117,45 @@ class AwsInputPresignedMethod(
 
     override fun section(section: OperationSection): Writable = writable {
         if (section is OperationSection.InputImpl && section.operationShape.hasTrait<PresignableTrait>()) {
-            writeInputPresignedMethod()
+            writeInputPresignedMethod(section)
         }
     }
 
-    private fun RustWriter.writeInputPresignedMethod() {
+    private fun RustWriter.writeInputPresignedMethod(section: OperationSection) {
         val operationError = operationShape.errorSymbol(symbolProvider)
+        val presignableOp = PRESIGNABLE_OPERATIONS.getValue(operationShape.id)
+
+        var makeOperationFn = "make_operation"
+        if (presignableOp.modelTransform != null) {
+            makeOperationFn = "_make_presigned_operation"
+
+            val transformedModel = presignableOp.modelTransform.transform(protocolConfig.model)
+            val transformedProtocolConfig = protocolConfig.copy(model = transformedModel)
+            val transformedOperationShape = transformedModel.expectShape(operationShape.id, OperationShape::class.java)
+
+            val protocol = ProtocolLoader.Default.protocolFor(
+                transformedModel,
+                transformedProtocolConfig.serviceShape
+            ).second.protocol(transformedProtocolConfig)
+
+            MakeOperationGenerator(
+                transformedProtocolConfig,
+                protocol,
+                HttpBoundProtocolBodyWriter(transformedProtocolConfig, protocol),
+                // Prefixed with underscore to avoid colliding with modeled functions
+                functionName = makeOperationFn,
+                public = false,
+            ).generateMakeOperation(this, transformedOperationShape, section.customizations)
+        }
+
+        val payloadSigningType = when (presignableOp.payloadSigningType) {
+            PayloadSigningType.EMPTY -> "Empty"
+            PayloadSigningType.UNSIGNED_PAYLOAD -> "UnsignedPayload"
+        }
         rustBlockTemplate(
             """
             /// Creates a presigned request for this operation. The credentials provider from the `config`
-            /// will be used to generate the request's signature, and the `presignining_config` provides additional
+            /// will be used to generate the request's signature, and the `presigning_config` provides additional
             /// presigning-specific config values, such as the amount of time the request should be valid for after
             /// creation.
             ///
@@ -118,7 +173,7 @@ class AwsInputPresignedMethod(
         ) {
             rustTemplate(
                 """
-                let (mut request, _) = self.make_operation(config)
+                let (mut request, _) = self.$makeOperationFn(config)
                     .map_err(|err| #{SdkError}::ConstructionFailure(err.into()))?
                     .into_request_response();
 
@@ -129,7 +184,9 @@ class AwsInputPresignedMethod(
 
                     let mut config = props.get_mut::<#{sig_auth}::signer::OperationSigningConfig>()
                         .expect("signing config added by make_operation()");
-                    config.signature_type = #{sig_auth}::signer::HttpSignatureType::HttpRequestQueryParams;
+                    config.signature_type = #{sig_auth}::signer::HttpSignatureType::HttpRequestQueryParams(
+                        #{sig_auth}::signer::HttpBodySigningType::$payloadSigningType
+                    );
                     config.expires_in = Some(presigning_config.expires());
                 }
 
@@ -178,5 +235,51 @@ class AwsPresignedFluentBuilderMethod(
                 )
             }
         }
+    }
+}
+
+interface PresignModelTransform {
+    fun transform(model: Model): Model
+}
+
+class AwsPollySynthesizeSpeechPresignTransform : PresignModelTransform {
+    private val synthesizeSpeechOpId = ShapeId.from("com.amazonaws.polly#SynthesizeSpeech")
+    private val presignableOperations = listOf(synthesizeSpeechOpId)
+    private val httpMethodOverrides = mapOf(synthesizeSpeechOpId to "GET")
+
+    override fun transform(model: Model): Model {
+        val index = HttpBindingIndex(model)
+
+        // Find all known presignable operations
+        val operationsToUpdate: MutableSet<Shape> = model.shapes()
+            .filter { shape -> shape is OperationShape && presignableOperations.contains(shape.id) }
+            .collect(Collectors.toSet())
+
+        // Find document members of those presignable operations
+        val membersToUpdate = operationsToUpdate.map { shape ->
+            val operation = shape as OperationShape
+            val payloadBindings = index.getRequestBindings(operation, HttpBinding.Location.DOCUMENT)
+            payloadBindings.map { binding -> binding.member }
+        }.flatten()
+
+        // Transform found shapes for presigning
+        val shapesToUpdate = operationsToUpdate + membersToUpdate
+        return ModelTransformer.create().mapShapes(model) { shape -> mapShape(shapesToUpdate, shape) }
+    }
+
+    private fun mapShape(shapesToUpdate: Set<Shape>, shape: Shape): Shape {
+        if (shapesToUpdate.contains(shape)) {
+            if (shape is OperationShape && httpMethodOverrides.containsKey(shape.id)) {
+                val newMethod = httpMethodOverrides.getValue(shape.id)
+                val originalHttpTrait = shape.expectTrait<HttpTrait>()
+                return shape.toBuilder()
+                    .removeTrait(HttpTrait.ID)
+                    .addTrait(originalHttpTrait.toBuilder().method(newMethod).build())
+                    .build()
+            } else if (shape is MemberShape) {
+                return shape.toBuilder().addTrait(HttpQueryTrait(shape.memberName)).build()
+            }
+        }
+        return shape
     }
 }

@@ -36,7 +36,7 @@ class ApiGatewayDecorator : RustCodegenDecorator {
 class ApiGatewayAddAcceptHeader : OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
         is OperationSection.FinalizeOperation -> emptySection
-        OperationSection.OperationImplBlock -> emptySection
+        is OperationSection.OperationImplBlock -> emptySection
         is OperationSection.MutateRequest -> writable {
             rust(
                 """${section.request}

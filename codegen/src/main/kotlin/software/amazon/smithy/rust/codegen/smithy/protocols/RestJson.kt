@@ -22,9 +22,10 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerial
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 
 class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
-    override fun buildProtocolGenerator(
-        protocolConfig: ProtocolConfig
-    ): HttpBoundProtocolGenerator = HttpBoundProtocolGenerator(protocolConfig, RestJson(protocolConfig))
+    override fun protocol(protocolConfig: ProtocolConfig): Protocol = RestJson(protocolConfig)
+
+    override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): HttpBoundProtocolGenerator =
+        HttpBoundProtocolGenerator(protocolConfig, RestJson(protocolConfig))
 
     override fun transformModel(model: Model): Model = model
 

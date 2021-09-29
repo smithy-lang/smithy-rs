@@ -10,16 +10,24 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
 sealed class OperationSection(name: String) : Section(name) {
+    abstract val customizations: List<OperationCustomization>
+
     /** Write custom code into the `impl` block of this operation */
-    object OperationImplBlock : OperationSection("OperationImplBlock")
+    data class OperationImplBlock(override val customizations: List<OperationCustomization>) :
+        OperationSection("OperationImplBlock")
 
     /** Write additional functions inside the Input's impl block */
     data class InputImpl(
+        override val customizations: List<OperationCustomization>,
         val operationShape: OperationShape,
         val inputShape: StructureShape
     ) : OperationSection("InputImpl")
 
-    data class MutateInput(val input: String, val config: String) : OperationSection("MutateInput")
+    data class MutateInput(
+        override val customizations: List<OperationCustomization>,
+        val input: String,
+        val config: String
+    ) : OperationSection("MutateInput")
 
     /** Write custom code into the block that builds an operation
      *
@@ -27,9 +35,17 @@ sealed class OperationSection(name: String) : Section(name) {
      * [config]: Name of the variable holding the service config.
      *
      * */
-    data class MutateRequest(val request: String, val config: String) : OperationSection("Feature")
+    data class MutateRequest(
+        override val customizations: List<OperationCustomization>,
+        val request: String,
+        val config: String
+    ) : OperationSection("Feature")
 
-    data class FinalizeOperation(val operation: String, val config: String) : OperationSection("Finalize")
+    data class FinalizeOperation(
+        override val customizations: List<OperationCustomization>,
+        val operation: String,
+        val config: String
+    ) : OperationSection("Finalize")
 }
 
 abstract class OperationCustomization : NamedSectionGenerator<OperationSection>() {

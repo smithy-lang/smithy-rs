@@ -26,11 +26,10 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
 
 class RestXmlFactory(private val generator: (ProtocolConfig) -> Protocol = { RestXml(it) }) :
     ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
-    override fun buildProtocolGenerator(
-        protocolConfig: ProtocolConfig
-    ): HttpBoundProtocolGenerator {
-        return HttpBoundProtocolGenerator(protocolConfig, generator(protocolConfig))
-    }
+    override fun protocol(protocolConfig: ProtocolConfig): Protocol = generator(protocolConfig)
+
+    override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): HttpBoundProtocolGenerator =
+        HttpBoundProtocolGenerator(protocolConfig, protocol(protocolConfig))
 
     override fun transformModel(model: Model): Model = model
 

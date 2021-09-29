@@ -40,8 +40,10 @@ sealed class AwsJsonVersion {
 }
 
 class AwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
+    override fun protocol(protocolConfig: ProtocolConfig): Protocol = AwsJson(protocolConfig, version)
+
     override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): HttpBoundProtocolGenerator {
-        return HttpBoundProtocolGenerator(protocolConfig, AwsJson(protocolConfig, version))
+        return HttpBoundProtocolGenerator(protocolConfig, protocol(protocolConfig))
     }
 
     override fun transformModel(model: Model): Model = model

@@ -34,11 +34,11 @@ import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolBodyWri
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolBodyWriter.BodyMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolTraitImplWriter
+import software.amazon.smithy.rust.codegen.smithy.generators.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.smithy.generators.http.RequestBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
@@ -99,7 +99,8 @@ class HttpBoundProtocolGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val operationSerModule = RustModule.private("operation_ser")
 
-    override val bodyWriter: HttpProtocolBodyWriter = HttpBoundProtocolBodyWriter(protocolConfig, protocol)
+    override val makeOperationGenerator: MakeOperationGenerator =
+        MakeOperationGenerator(protocolConfig, protocol, HttpBoundProtocolBodyWriter(protocolConfig, protocol))
     override val traitWriter: HttpProtocolTraitImplWriter get() = this
 
     private val codegenScope = arrayOf(
@@ -306,41 +307,6 @@ class HttpBoundProtocolGenerator(
                     )
                 }
             }
-        }
-    }
-
-    override fun toHttpRequestImpl(
-        implBlockWriter: RustWriter,
-        operationShape: OperationShape,
-        inputShape: StructureShape
-    ) {
-        val httpBindingGenerator = RequestBindingGenerator(
-            protocolConfig,
-            protocol.defaultTimestampFormat,
-            httpBindingResolver,
-            operationShape,
-            inputShape,
-        )
-        val contentType = httpBindingResolver.requestContentType(operationShape)
-        httpBindingGenerator.renderUpdateHttpBuilder(implBlockWriter)
-        generateRequestBuilderBase(implBlockWriter) {
-            rust("let mut builder = self.update_http_builder(#T::new())?;", RuntimeType.HttpRequestBuilder)
-            val additionalHeaders = listOf("content-type" to contentType) + protocol.additionalHeaders(operationShape)
-            for (header in additionalHeaders) {
-                rustTemplate(
-                    """
-                    builder = #{header_util}::set_header_if_absent(
-                                builder,
-                                #{http}::header::HeaderName::from_static(${header.first.dq()}),
-                                ${header.second.dq()}
-                    );
-                    """,
-                    "http" to RuntimeType.http,
-                    "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header")
-
-                )
-            }
-            rust("Ok(builder)")
         }
     }
 

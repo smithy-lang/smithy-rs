@@ -12,7 +12,6 @@ import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -22,11 +21,14 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolBodyWriter.BodyMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
+import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.nio.file.Path
@@ -120,12 +122,23 @@ class HttpProtocolTestGeneratorTest {
     ): Path {
 
         // A stubbed test protocol to do enable testing intentionally broken protocols
-        class TestProtocol(private val protocolConfig: ProtocolConfig) :
+        class TestProtocolGenerator(private val protocolConfig: ProtocolConfig, protocol: Protocol) :
             HttpProtocolGenerator(protocolConfig),
             HttpProtocolBodyWriter,
             HttpProtocolTraitImplWriter {
             private val symbolProvider = protocolConfig.symbolProvider
-            override val bodyWriter: HttpProtocolBodyWriter get() = this
+
+            override val makeOperationGenerator: MakeOperationGenerator =
+                object : MakeOperationGenerator(protocolConfig, protocol, this) {
+
+                    override fun generateRequestBuilderBaseFn(writer: RustWriter, operationShape: OperationShape) {
+                        writer.inRequestBuilderBaseFn(operationShape.inputShape(protocolConfig.model)) {
+                            withBlock("Ok(#T::new()", ")", RuntimeType.HttpRequestBuilder) {
+                                writeWithNoFormatting(httpRequestBuilder)
+                            }
+                        }
+                    }
+                }
             override val traitWriter: HttpProtocolTraitImplWriter get() = this
 
             override fun bodyMetadata(operationShape: OperationShape): BodyMetadata =
@@ -151,23 +164,15 @@ class HttpProtocolTestGeneratorTest {
                     "bytes" to RuntimeType.Bytes
                 )
             }
-
-            override fun toHttpRequestImpl(
-                implBlockWriter: RustWriter,
-                operationShape: OperationShape,
-                inputShape: StructureShape
-            ) {
-                generateRequestBuilderBase(implBlockWriter) {
-                    withBlock("Ok(#T::new()", ")", RuntimeType.HttpRequestBuilder) {
-                        writeWithNoFormatting(httpRequestBuilder)
-                    }
-                }
-            }
         }
 
         class TestProtocolFactory : ProtocolGeneratorFactory<HttpProtocolGenerator> {
+            override fun protocol(protocolConfig: ProtocolConfig): Protocol {
+                return RestJson(protocolConfig)
+            }
+
             override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): HttpProtocolGenerator {
-                return TestProtocol(protocolConfig)
+                return TestProtocolGenerator(protocolConfig, protocol(protocolConfig))
             }
 
             override fun transformModel(model: Model): Model = model

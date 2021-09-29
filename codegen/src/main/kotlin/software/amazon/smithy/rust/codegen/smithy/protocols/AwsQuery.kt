@@ -28,8 +28,10 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.Structured
 import software.amazon.smithy.rust.codegen.util.getTrait
 
 class AwsQueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
+    override fun protocol(protocolConfig: ProtocolConfig): Protocol = AwsQueryProtocol(protocolConfig)
+
     override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): HttpBoundProtocolGenerator =
-        HttpBoundProtocolGenerator(protocolConfig, AwsQueryProtocol(protocolConfig))
+        HttpBoundProtocolGenerator(protocolConfig, protocol(protocolConfig))
 
     override fun transformModel(model: Model): Model = model
 

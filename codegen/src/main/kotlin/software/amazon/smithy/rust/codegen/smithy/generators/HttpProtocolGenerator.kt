@@ -9,7 +9,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -25,6 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.inputShape
 
 /**
@@ -40,6 +40,7 @@ data class ProtocolConfig(
 )
 
 interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
+    fun protocol(protocolConfig: ProtocolConfig): Protocol
     fun buildProtocolGenerator(protocolConfig: ProtocolConfig): T
     fun transformModel(model: Model): Model
     fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider = base
@@ -61,10 +62,8 @@ interface HttpProtocolTraitImplWriter {
 /**
  * Class providing scaffolding for HTTP based protocols that must build an HTTP request (headers / URL) and a body.
  */
-abstract class HttpProtocolGenerator(
-    private val protocolConfig: ProtocolConfig,
-) {
-    abstract val bodyWriter: HttpProtocolBodyWriter
+abstract class HttpProtocolGenerator(protocolConfig: ProtocolConfig) {
+    abstract val makeOperationGenerator: MakeOperationGenerator
     abstract val traitWriter: HttpProtocolTraitImplWriter
 
     private val runtimeConfig = protocolConfig.runtimeConfig
@@ -85,17 +84,6 @@ abstract class HttpProtocolGenerator(
 
     /** Write code into the impl block for [operationShape] */
     open fun operationImplBlock(implBlockWriter: RustWriter, operationShape: OperationShape) {}
-
-    /**
-     * Add necessary methods to the impl block for the input shape.
-     *
-     * Your implementation MUST call [generateRequestBuilderBase] to create the public method.
-     */
-    abstract fun toHttpRequestImpl(
-        implBlockWriter: RustWriter,
-        operationShape: OperationShape,
-        inputShape: StructureShape
-    )
 
     fun renderOperation(
         operationWriter: RustWriter,
@@ -123,9 +111,8 @@ abstract class HttpProtocolGenerator(
         // impl OperationInputShape { ... }
         val operationName = symbolProvider.toSymbol(operationShape).name
         inputWriter.implBlock(inputShape, symbolProvider) {
-            writeCustomizations(customizations, OperationSection.InputImpl(operationShape, inputShape))
-            generateMakeOperation(this, operationShape, operationName, customizations)
-            toHttpRequestImpl(this, operationShape, inputShape)
+            writeCustomizations(customizations, OperationSection.InputImpl(customizations, operationShape, inputShape))
+            makeOperationGenerator.generateMakeOperation(this, operationShape, customizations)
             rustBlockTemplate(
                 "fn assemble(mut builder: #{RequestBuilder}, body: #{SdkBody}) -> #{Request}<#{SdkBody}>",
                 *codegenScope
@@ -164,19 +151,9 @@ abstract class HttpProtocolGenerator(
                 rust("Self { _private: () }")
             }
 
-            writeCustomizations(customizations, OperationSection.OperationImplBlock)
+            writeCustomizations(customizations, OperationSection.OperationImplBlock(customizations))
         }
         traitWriter.writeTraitImpls(operationWriter, operationShape)
-    }
-
-    protected fun generateRequestBuilderBase(implBlockWriter: RustWriter, f: RustWriter.() -> Unit) {
-        Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
-        implBlockWriter.rustBlockTemplate(
-            "fn request_builder_base(&self) -> std::result::Result<#{HttpRequestBuilder}, #{OpBuildError}>",
-            *codegenScope,
-        ) {
-            f(this)
-        }
     }
 
     private fun buildOperationTypeOutput(writer: RustWriter, shape: OperationShape): String =
@@ -184,18 +161,4 @@ abstract class HttpProtocolGenerator(
 
     private fun buildOperationTypeRetry(writer: RustWriter, customizations: List<OperationCustomization>): String =
         customizations.mapNotNull { it.retryType() }.firstOrNull()?.let { writer.format(it) } ?: "()"
-
-    private fun generateMakeOperation(
-        implBlockWriter: RustWriter,
-        shape: OperationShape,
-        operationName: String,
-        customizations: List<OperationCustomization>
-    ) {
-        MakeOperationGenerator(protocolConfig, bodyWriter).generateMakeOperation(
-            implBlockWriter,
-            shape,
-            operationName,
-            customizations
-        )
-    }
 }

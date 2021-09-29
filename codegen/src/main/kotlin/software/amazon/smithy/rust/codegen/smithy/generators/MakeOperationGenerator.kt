@@ -7,7 +7,11 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -17,34 +21,45 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.smithy.generators.http.RequestBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.letIf
+import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.inputShape
 
 /** Generates the `make_operation` function on input structs */
-class MakeOperationGenerator(
-    protocolConfig: ProtocolConfig,
+open class MakeOperationGenerator(
+    protected val protocolConfig: ProtocolConfig,
+    private val protocol: Protocol,
     private val bodyWriter: HttpProtocolBodyWriter,
+    private val functionName: String = "make_operation",
+    private val public: Boolean = true
 ) {
-    private val runtimeConfig = protocolConfig.runtimeConfig
-    private val symbolProvider = protocolConfig.symbolProvider
+    protected val runtimeConfig = protocolConfig.runtimeConfig
+    protected val symbolProvider = protocolConfig.symbolProvider
+    protected val httpBindingResolver = protocol.httpBindingResolver
 
     private val sdkId =
         protocolConfig.serviceShape.getTrait<ServiceTrait>()?.sdkId?.toLowerCase()?.replace(" ", "")
             ?: protocolConfig.serviceShape.id.getName(protocolConfig.serviceShape)
 
     private val codegenScope = arrayOf(
-        "SdkBody" to RuntimeType.sdkBody(protocolConfig.runtimeConfig),
         "config" to RuntimeType.Config,
+        "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header"),
+        "http" to RuntimeType.http,
+        "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
+        "OpBuildError" to protocolConfig.runtimeConfig.operationBuildError(),
         "operation" to RuntimeType.operationModule(runtimeConfig),
+        "SdkBody" to RuntimeType.sdkBody(protocolConfig.runtimeConfig),
     )
 
     fun generateMakeOperation(
         implBlockWriter: RustWriter,
         shape: OperationShape,
-        operationName: String,
-        customizations: List<OperationCustomization>
+        customizations: List<OperationCustomization>,
     ) {
+        val operationName = symbolProvider.toSymbol(shape).name
         val baseReturnType = buildOperationType(implBlockWriter, shape, customizations)
         val returnType = "std::result::Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
         val outputSymbol = symbolProvider.toSymbol(shape)
@@ -53,16 +68,18 @@ class MakeOperationGenerator(
         val mut = customizations.any { it.mutSelf() }
         val consumes = customizations.any { it.consumesSelf() } || takesOwnership
         val self = "self".letIf(mut) { "mut $it" }.letIf(!consumes) { "&$it" }
+        val fnType = if (public) "pub fn" else "fn"
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
         implBlockWriter.rust("##[allow(clippy::let_and_return)]") // For codegen simplicity, allow `let x = ...; x`
         implBlockWriter.rustBlockTemplate(
-            "pub fn make_operation($self, _config: &#{config}::Config) -> $returnType",
+            "$fnType $functionName($self, _config: &#{config}::Config) -> $returnType",
             *codegenScope
         ) {
-            writeCustomizations(customizations, OperationSection.MutateInput("self", "_config"))
+            generateRequestBuilderBaseFn(this, shape)
+            writeCustomizations(customizations, OperationSection.MutateInput(customizations, "self", "_config"))
             rust("let properties = smithy_http::property_bag::SharedPropertyBag::new();")
-            rust("let request = self.request_builder_base()?;")
+            rust("let request = request_builder_base(&self)?;")
             withBlock("let body =", ";") {
                 bodyWriter.writeBody(this, "self", shape)
             }
@@ -74,7 +91,7 @@ class MakeOperationGenerator(
                 """,
                 *codegenScope
             )
-            writeCustomizations(customizations, OperationSection.MutateRequest("request", "_config"))
+            writeCustomizations(customizations, OperationSection.MutateRequest(customizations, "request", "_config"))
             rustTemplate(
                 """
                 let op = #{operation}::Operation::new(request, #{OperationType}::new())
@@ -83,7 +100,7 @@ class MakeOperationGenerator(
                 *codegenScope,
                 "OperationType" to symbolProvider.toSymbol(shape)
             )
-            writeCustomizations(customizations, OperationSection.FinalizeOperation("op", "_config"))
+            writeCustomizations(customizations, OperationSection.FinalizeOperation(customizations, "op", "_config"))
             rust("Ok(op)")
         }
     }
@@ -104,4 +121,45 @@ class MakeOperationGenerator(
 
     private fun buildOperationTypeRetry(writer: RustWriter, customizations: List<OperationCustomization>): String =
         customizations.mapNotNull { it.retryType() }.firstOrNull()?.let { writer.format(it) } ?: "()"
+
+    protected fun RustWriter.inRequestBuilderBaseFn(inputShape: StructureShape, f: RustWriter.() -> Unit) {
+        Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
+        rustBlockTemplate(
+            "fn request_builder_base(input: &#{Input}) -> std::result::Result<#{HttpRequestBuilder}, #{OpBuildError}>",
+            *codegenScope,
+            "Input" to symbolProvider.toSymbol(inputShape)
+        ) {
+            f(this)
+        }
+    }
+
+    open fun generateRequestBuilderBaseFn(writer: RustWriter, operationShape: OperationShape) {
+        val inputShape = operationShape.inputShape(protocolConfig.model)
+        val httpBindingGenerator = RequestBindingGenerator(
+            protocolConfig,
+            protocol.defaultTimestampFormat,
+            httpBindingResolver,
+            operationShape,
+            inputShape,
+        )
+        val contentType = httpBindingResolver.requestContentType(operationShape)
+        httpBindingGenerator.renderUpdateHttpBuilder(writer)
+        writer.inRequestBuilderBaseFn(inputShape) {
+            writer.rust("let mut builder = update_http_builder(input, #T::new())?;", RuntimeType.HttpRequestBuilder)
+            val additionalHeaders = listOf("content-type" to contentType) + protocol.additionalHeaders(operationShape)
+            for (header in additionalHeaders) {
+                writer.rustTemplate(
+                    """
+                    builder = #{header_util}::set_header_if_absent(
+                        builder,
+                        #{http}::header::HeaderName::from_static(${header.first.dq()}),
+                        ${header.second.dq()}
+                    );
+                    """,
+                    *codegenScope
+                )
+            }
+            rust("Ok(builder)")
+        }
+    }
 }

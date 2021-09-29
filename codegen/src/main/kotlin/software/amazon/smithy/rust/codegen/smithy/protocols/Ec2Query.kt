@@ -25,8 +25,10 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.Ec2QuerySe
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 
 class Ec2QueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
+    override fun protocol(protocolConfig: ProtocolConfig): Protocol = Ec2QueryProtocol(protocolConfig)
+
     override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): HttpBoundProtocolGenerator =
-        HttpBoundProtocolGenerator(protocolConfig, Ec2QueryProtocol(protocolConfig))
+        HttpBoundProtocolGenerator(protocolConfig, protocol(protocolConfig))
 
     override fun transformModel(model: Model): Model = model
 
