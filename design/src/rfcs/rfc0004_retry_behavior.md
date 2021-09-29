@@ -5,24 +5,33 @@ RFC: Retry Behavior
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
-It is not currently possible for users of the SDK to configure a client's maximum number of retry attempts. This RFC establishes a method for users to set the number of retries to attempt when calling a service and would allow users to disable retries entirely.
+It is not currently possible for users of the SDK to configure a client's maximum number of retry attempts. This RFC establishes a method for users to set the number of retries to attempt when calling a service and would allow users to disable retries entirely. This RFC would introduce breaking changes to the `retry` module of the `smithy-client` crate.
 
 Terminology
 -----------
 
+- **Smithy Client**: A `smithy_client::Client<C, M, R>` struct that is responsible for gluing together
+  the connector, middleware, and retry policy. This is not generated and lives in the `smithy-client` crate.
+- **Fluent Client**: A code-generated `Client<C, M, R>` that has methods for each service operation on it.
+  A fluent builder is generated alongside it to make construction easier.
+- **AWS Client**: A specialized Fluent Client that defaults to using a `DynConnector`, `AwsMiddleware`,
+  and `Standard` retry policy.
 - **Shared Config**: An `aws_config::Config` struct that is responsible for storing shared configuration data that is used across all services. This is not generated and lives in the `aws-config` crate.
 - **Service-specific Config**: A code-generated `Config` that has methods for setting service-specific configuration. Each `Config` is defined in the `config` module of its parent service. For example, the S3-specific config struct is `use`able from `aws_sdk_s3::config::Config` and re-exported as `aws_sdk_s3::Config`.
+- **Standard retry behavior**: The standard set of retry rules across AWS SDKs. This mode includes a standard set of errors that are retried, and support for retry quotas. The default maximum number of attempts with this mode is three, unless `max_attempts` is explicitly configured.
+- **Adaptive retry behavior**: Adaptive retry mode dynamically limits the rate of AWS requests to maximize success rate. This may be at the expense of request latency. Adaptive retry mode is not recommended when predictable latency is important.
+  - _Note: supporting the "adaptive" retry behavior is considered outside the scope of this RFC_
 
 Configuring the maximum number of retries
 ------------
 
 This RFC will demonstrate _(with examples)_ the following ways that Users can set the maximum number of retry attempts:
 
-- By calling the max_attempts method on a service-specific config
-- By calling the `aws_config::Config::max_attempts(..)` method when building a shared config
+- By calling the `Config::retry_config(..)` or `Config::disable_retries()` methods when building a service-specific config
+- By calling the `Config::retry_config(..)` or `Config::disable_retries()` methods when building a shared config
 - By setting the `AWS_MAX_ATTEMPTS` environment variable
 
-The above list is in order of decreasing precedence e.g. setting maximum retry attempts with the `max_attempts` method will override a value set by `AWS_MAX_ATTEMPTS`.
+The above list is in order of decreasing precedence e.g. setting maximum retry attempts with the `max_attempts` builder method will override a value set by `AWS_MAX_ATTEMPTS`.
 
 _The default number of retries is 3 as specified in the [AWS SDKs and Tools Reference Guide](https://docs.aws.amazon.com/sdkref/latest/guide/setting-global-max_attempts.html)._
 
@@ -59,12 +68,12 @@ Here's an example app that creates a shared config with custom retry behavior an
 
 ```rust
 use aws_sdk_sts as sts;
+use aws_types::retry_config::StandardRetryConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), sts::Error> {
-    let config = aws_config::from_env()
-        .max_attempts(5)
-        .load().await;
+    let retry_config = StandardRetryConfig::builder().max_attempts(5).build();
+    let config = aws_config::from_env().retry_config(retry_config).load().await;
 
     let sts = sts::Client::new(&config);
     let resp = sts.get_caller_identity().send().await?;
@@ -79,11 +88,13 @@ Here's an example app that creates a service-specific config with custom retry b
 
 ```rust
 use aws_sdk_sts as sts;
+use aws_types::retry_config::StandardRetryConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), sts::Error> {
     let config = aws_config::load_from_env().await;
-    let sts_config = sts::config::Config::from(&config).max_attempts(5).build();
+    let retry_config = StandardRetryConfig::builder().max_attempts(5).build();
+    let sts_config = sts::config::Config::from(&config).retry_config(retry_config).build();
 
     let sts = sts::Client::new(&sts_config);
     let resp = sts.get_caller_identity().send().await?;
@@ -94,7 +105,7 @@ async fn main() -> Result<(), sts::Error> {
 
 ### Disabling retries
 
-Here's an example app that creates a service-specific config with custom retry behavior disabling retries and then logs your AWS user's identity
+Here's an example app that creates a shared config that disables retries and then logs your AWS user's identity
 
 ```rust
 use aws_sdk_sts as sts;
@@ -102,8 +113,26 @@ use aws_types::config::Config;
 
 #[tokio::main]
 async fn main() -> Result<(), sts::Error> {
+    let config = aws_config::from_env().disable_retries().load().await;
+    let sts_config = sts::config::Config::from(&config).build();
+
+    let sts = sts::Client::new(&sts_config);
+    let resp = sts.get_caller_identity().send().await?;
+    println!("your user id: {}", resp.user_id.unwrap_or_default());
+    Ok(())
+}
+```
+
+Retries can also be disabled by explicitly passing the `RetryConfig::NoRetries` enum variant to the `retry_config` builder method:
+
+```rust
+use aws_sdk_sts as sts;
+use aws_types::retry_config::RetryConfig;
+
+#[tokio::main]
+async fn main() -> Result<(), sts::Error> {
     let config = aws_config::load_from_env().await;
-    let sts_config = sts::config::Config::from(&config).max_attempts(0).build();
+    let sts_config = sts::config::Config::from(&config).retry_config(RetryConfig::NoRetries).build();
 
     let sts = sts::Client::new(&sts_config);
     let resp = sts.get_caller_identity().send().await?;
@@ -115,19 +144,51 @@ async fn main() -> Result<(), sts::Error> {
 Behind the scenes
 -----------------
 
-// TODO
+Currently, when users want to send a request, the following occurs:
 
-Changes Checklist
+1. The user creates either a shared config or a service-specific config
+1. The user creates a fluent client for the service they want to interact with and passes the config they created. Internally, this creates an AWS client with a default retry policy
+1. The user calls an operation builder method on the client which constructs a request
+1. The user sends the request by awaiting the `send()` method
+1. The smithy client creates a new `Service` and attaches a copy of its retry policy
+1. The `Service` is `call`ed, sending out the request and retrying it according to the retry policy
+
+After this change, the process will work like this:
+
+1. The user creates either a shared config or a service-specific config
+    - If `AWS_MAX_ATTEMPTS` is set to zero, this is invalid. However, this will not error until a request is made
+    - If `AWS_MAX_ATTEMPTS` is 1, retries will be disabled
+    - If `AWS_MAX_ATTEMPTS` is greater than 1, retries will be attempted at most as many times as is specified
+    - If the user creates the config with the `.disable_retries` builder method, retries will be disabled
+    - If the user creates the config with the `retry_config` builder method, retry behavior will be set according to the `RetryConfig` they passed
+1. The user creates a fluent client for the service they want to interact with and passes the config they created
+    - Provider precedence will determine what retry behavior is actually set, working like how `Region` is set
+1. The user calls an operation builder method on the client which constructs a request
+1. The user sends the request by awaiting the `send()` method
+1. The smithy client creates a new `Service` and attaches a copy of its retry policy
+1. The `Service` is `call`ed, sending out the request and retrying it according to the retry policy
+
+These changes will be made in such a way that they enable us to add the "adaptive" retry behavior at a later date without introducing a breaking change.
+
+Changes checklist
 -----------------
 
-- [ ] Create new Kotlin decorator `MaxAttemptsDecorator`
+- [ ] Create new Kotlin decorator `RetryConfigDecorator`
   - Based on [RegionDecorator.kt](https://github.com/awslabs/smithy-rs/blob/main/aws/sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/RegionDecorator.kt)
-- [ ] Create `aws_types::max_attempts::MaxAttempts` struct and corresponding builder with a `max_attempts` setter
-- [ ] Create `aws_config::meta::max_attempts::MaxAttemptsProviderChain`
-- [ ] Create `aws_config::meta::max_attempts::ProvideMaxAttempts`
+- [ ] **Breaking changes:**
+  - [ ] Rename `smithy_client::retry::Config` to `StandardRetryConfig`
+  - [ ] Rename `smithy_client::retry::Config::with_max_retries` method to `with_max_attempts` in order to follow AWS convention
+- [ ] Create non-exhaustive `aws_types::retry_config::RetryConfig` enum wrapping structs that represent specific retry behaviors
+  - [ ] A `NoRetry` variant that disables retries. Doesn't wrap a struct since it doesn't need to contain any data
+  - [ ] A `Standard` variant that enables the standard retry behavior. Wraps a `StandardRetryConfig` struct.
+- [ ] Create `aws_config::meta::retry_config::RetryConfigProviderChain`
+- [ ] Create `aws_config::meta::retry_config::ProvideRetryConfig`
 - [ ] Create `EnvironmentVariableMaxAttemptsProvider` struct
-- [ ] Add `max_attempts` method to `aws_config::ConfigLoader`
-- [ ] Update `AwsFluentClientDecorator` to correctly configure the max retry attempts of its inner `aws_hyper::Client`
+- [ ] Add `retry_config` method to `aws_config::ConfigLoader`
+- [ ] Update `AwsFluentClientDecorator` to correctly configure the max retry attempts of its inner `aws_hyper::Client` based on the passed-in `Config`
 - [ ] Add tests
-  - [ ] Test that setting max_attempts to 0 disables retries
-  - [ ] Test that setting max_attempts to `n` limits retries to `n` where `n` is a non-zero integer
+  - [ ] Test that setting retry_config to 1 disables retries
+  - [ ] Test that setting retry_config to `n` limits retries to `n` where `n` is a non-zero integer
+  - [ ] Test that correct precedence is respected when overriding retry behavior in a service-specific config
+  - [ ] Test that correct precedence is respected when overriding retry behavior in a shared config
+  - [ ] Test that setting invalid `max_attempts=0` with a `StandardRetryConfig` does not error and is ignored in favor of the default
