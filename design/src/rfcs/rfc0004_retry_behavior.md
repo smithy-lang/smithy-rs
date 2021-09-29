@@ -16,7 +16,7 @@ Terminology
   A fluent builder is generated alongside it to make construction easier.
 - **AWS Client**: A specialized Fluent Client that defaults to using a `DynConnector`, `AwsMiddleware`,
   and `Standard` retry policy.
-- **Shared Config**: An `aws_config::Config` struct that is responsible for storing shared configuration data that is used across all services. This is not generated and lives in the `aws-config` crate.
+- **Shared Config**: An `aws_types::Config` struct that is responsible for storing shared configuration data that is used across all services. This is not generated and lives in the `aws-types` crate.
 - **Service-specific Config**: A code-generated `Config` that has methods for setting service-specific configuration. Each `Config` is defined in the `config` module of its parent service. For example, the S3-specific config struct is `use`able from `aws_sdk_s3::config::Config` and re-exported as `aws_sdk_s3::Config`.
 - **Standard retry behavior**: The standard set of retry rules across AWS SDKs. This mode includes a standard set of errors that are retried, and support for retry quotas. The default maximum number of attempts with this mode is three, unless `max_attempts` is explicitly configured.
 - **Adaptive retry behavior**: Adaptive retry mode dynamically limits the rate of AWS requests to maximize success rate. This may be at the expense of request latency. Adaptive retry mode is not recommended when predictable latency is important.
@@ -156,7 +156,7 @@ Currently, when users want to send a request, the following occurs:
 After this change, the process will work like this:
 
 1. The user creates either a shared config or a service-specific config
-    - If `AWS_MAX_ATTEMPTS` is set to zero, this is invalid. However, this will not error until a request is made
+    - If `AWS_MAX_ATTEMPTS` is set to zero, this is invalid and we will log it with `tracing::warn`. However, this will not error until a request is made
     - If `AWS_MAX_ATTEMPTS` is 1, retries will be disabled
     - If `AWS_MAX_ATTEMPTS` is greater than 1, retries will be attempted at most as many times as is specified
     - If the user creates the config with the `.disable_retries` builder method, retries will be disabled
