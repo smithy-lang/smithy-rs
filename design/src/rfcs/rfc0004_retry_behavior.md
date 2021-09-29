@@ -14,16 +14,19 @@ Terminology
 - **Service-specific Config**: A code-generated `Config` that has methods for setting service-specific configuration. Each `Config` is defined in the `config` module of its parent service. For example, the S3-specific config struct is `use`able from `aws_sdk_s3::config::Config` and re-exported as `aws_sdk_s3::Config`.
 
 Retry config
---------------------
+------------
 
-Users can set the number of retries in several ways:
-- By setting the `AWS_MAX_ATTEMPTS` environment variable
-- By calling the `aws_config::ConfigLoader::retry_config(..)` method
+This RFC will demonstrate _(with examples)_ the following ways that Users can set the number of retries:
+
 - By calling the retry_config method on a service-specific config
+- By calling the `aws_config::ConfigLoader::retry_config(..)` method
+- By setting the `AWS_MAX_ATTEMPTS` environment variable
 
-The above list is in order of increasing precedence e.g. setting retry attempts with the `retry_config` method will override a value set by `AWS_MAX_ATTEMPTS`.
+The above list is in order of decreasing precedence e.g. setting retry attempts with the `retry_config` method will override a value set by `AWS_MAX_ATTEMPTS`.
 
-## Setting an environment variable
+_The default number of retries is 3 as specified in the [AWS SDKs and Tools Reference Guide](https://docs.aws.amazon.com/sdkref/latest/guide/setting-global-max_attempts.html)._
+
+### Setting an environment variable
 
 Here's an example app that logs your AWS user's identity
 
@@ -50,7 +53,7 @@ export AWS_MAX_ATTEMPTS=5
 cargo run
 ```
 
-## Calling a method on an AWS shared config
+### Calling a method on an AWS shared config
 
 Here's an example app that creates a shared config with custom retry behavior and then logs your AWS user's identity
 
@@ -59,18 +62,12 @@ use aws_sdk_sts as sts;
 use aws_types::config::Config;
 use aws_types::retry_config::RetryConfig;
 
-async fn create_config() -> aws_types::config::Config {
+#[tokio::main]
+async fn main() -> Result<(), sts::Error> {
     let retry_config = RetryConfig::builder().max_attempts(5).build();
     let config = aws_config::from_env()
         .retry_config(retry_config)
         .load().await;
-
-    config
-}
-
-#[tokio::main]
-async fn main() -> Result<(), sts::Error> {
-    let config = create_config().await;
 
     let sts = sts::Client::new(&config);
     let resp = sts.get_caller_identity().send().await?;
@@ -79,7 +76,7 @@ async fn main() -> Result<(), sts::Error> {
 }
 ```
 
-## Calling a method on service-specific config
+### Calling a method on service-specific config
 
 Here's an example app that creates a service-specific config with custom retry behavior and then logs your AWS user's identity
 
@@ -101,7 +98,7 @@ async fn main() -> Result<(), sts::Error> {
 }
 ```
 
-## Disabling retries
+### Disabling retries
 
 Here's an example app that creates a service-specific config with custom retry behavior disabling retries and then logs your AWS user's identity
 
@@ -136,12 +133,9 @@ Changes Checklist
 - [ ] Create `aws_types::retry_config::RetryConfig` struct and corresponding builder with a `max_attempts` setter.
 - [ ] Create `aws_config::meta::retry_config::RetryConfigProviderChain`
 - [ ] Create `aws_config::meta::retry_config::ProvideRetryConfig`
-- [ ] Create `EnvironmentVariableRegionProvider` struct
+- [ ] Create `EnvironmentVariableRetryConfigProvider` struct
 - [ ] Add `retry_config` method to `aws_config::ConfigLoader`
 - [ ] Update `AwsFluentClientDecorator` to correctly configure the retry behavior of its inner `aws_hyper::Client` based on the retry config.
 - [ ] Add tests
   - [ ] Test that setting max_attempts to 0 disables retries
   - [ ] Test that setting max_attempts to `n` limits retries to `n` where `n` is a non-zero integer
-
-
-
