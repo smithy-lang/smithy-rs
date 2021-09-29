@@ -9,6 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -47,6 +48,7 @@ class RestJson(private val protocolConfig: ProtocolConfig) : Protocol {
         "Response" to RuntimeType.http.member("Response"),
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
+    private val jsonDeserModule = RustModule.private("json_deser")
 
     override val httpBindingResolver: HttpBindingResolver =
         HttpTraitHttpBindingResolver(protocolConfig.model, ProtocolContentTypes.consistent("application/json"))
@@ -62,7 +64,7 @@ class RestJson(private val protocolConfig: ProtocolConfig) : Protocol {
     }
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_generic_error", "json_deser") { writer ->
+        RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) { writer ->
             writer.rustTemplate(
                 """
                 pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
@@ -74,7 +76,7 @@ class RestJson(private val protocolConfig: ProtocolConfig) : Protocol {
         }
 
     override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_event_stream_generic_error", "json_deser") { writer ->
+        RuntimeType.forInlineFun("parse_event_stream_generic_error", jsonDeserModule) { writer ->
             writer.rustTemplate(
                 """
                 pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{JsonError}> {

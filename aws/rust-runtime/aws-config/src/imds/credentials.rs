@@ -9,9 +9,10 @@
 //! This credential provider will NOT fallback to IMDSv1. Ensure that IMDSv2 is enabled on your instances.
 
 use crate::imds;
-use crate::imds::client::ImdsError;
+use crate::imds::client::{ImdsError, LazyClient};
 use crate::provider_config::ProviderConfig;
 use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
+use aws_types::os_shim_internal::Env;
 use aws_types::{credentials, Credentials};
 use smithy_client::SdkError;
 use smithy_json::deserialize::token::skip_value;
@@ -24,18 +25,14 @@ use std::fmt::{Display, Formatter};
 use std::time::SystemTime;
 use tokio::sync::OnceCell;
 
-mod env {
-    pub(super) const EC2_METADATA_DISABLED: &str = "AWS_EC2_METADATA_DISABLED";
-}
-
 /// IMDSv2 Credentials Provider
 ///
 /// **Note**: This credentials provider will NOT fallback to the IMDSv1 flow.
 #[derive(Debug)]
 pub struct ImdsCredentialsProvider {
-    client: OnceCell<Result<imds::Client, imds::client::BuildError>>,
+    client: LazyClient,
+    env: Env,
     profile: OnceCell<String>,
-    provider_config: ProviderConfig,
 }
 
 /// Builder for [`ImdsCredentialsProvider`]
@@ -83,16 +80,20 @@ impl Builder {
     /// Create an [`ImdsCredentialsProvider`] from this builder.
     pub fn build(self) -> ImdsCredentialsProvider {
         let provider_config = self.provider_config.unwrap_or_default();
-        let client = if let Some(client) = self.imds_override {
-            OnceCell::from(Ok(client))
-        } else {
-            OnceCell::new()
-        };
+        let env = provider_config.env();
+        let client = self
+            .imds_override
+            .map(LazyClient::from_ready_client)
+            .unwrap_or_else(|| {
+                imds::Client::builder()
+                    .configure(&provider_config)
+                    .build_lazy()
+            });
         let profile = OnceCell::new_with(self.profile_override);
         ImdsCredentialsProvider {
             client,
+            env,
             profile,
-            provider_config,
         }
     }
 }
@@ -117,7 +118,7 @@ impl ImdsCredentialsProvider {
     }
 
     fn imds_disabled(&self) -> bool {
-        match self.provider_config.env().get(env::EC2_METADATA_DISABLED) {
+        match self.env.get(super::env::EC2_METADATA_DISABLED) {
             Ok(value) => value.eq_ignore_ascii_case("true"),
             _ => false,
         }
@@ -125,19 +126,9 @@ impl ImdsCredentialsProvider {
 
     /// Load an inner IMDS client from the OnceCell
     async fn client(&self) -> Result<&imds::Client, CredentialsError> {
-        let provider_config = &self.provider_config;
-        self.client
-            .get_or_init(|| async {
-                imds::Client::builder()
-                    .configure(provider_config)
-                    .build()
-                    .await
-            })
-            .await
-            .as_ref()
-            .map_err(|build_error| {
-                CredentialsError::InvalidConfiguration(format!("{}", build_error).into())
-            })
+        self.client.client().await.map_err(|build_error| {
+            CredentialsError::InvalidConfiguration(format!("{}", build_error).into())
+        })
     }
 
     /// Retrieve the instance profile directly. This method should only be used as an argument to
