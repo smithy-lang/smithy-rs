@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators.protocol
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -18,23 +17,13 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
-import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.inputShape
-
-interface ProtocolGeneratorFactory<out T : ProtocolGenerator> {
-    fun protocol(codegenContext: CodegenContext): Protocol
-    fun buildProtocolGenerator(codegenContext: CodegenContext): T
-    fun transformModel(model: Model): Model
-    fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider = base
-    fun support(): ProtocolSupport
-}
 
 interface HttpProtocolBodyWriter {
     data class BodyMetadata(val takesOwnership: Boolean)

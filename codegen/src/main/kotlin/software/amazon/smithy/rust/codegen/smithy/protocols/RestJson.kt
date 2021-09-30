@@ -14,7 +14,6 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator

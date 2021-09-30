@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.HttpProtocolBodyWriter.BodyMetadata
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel

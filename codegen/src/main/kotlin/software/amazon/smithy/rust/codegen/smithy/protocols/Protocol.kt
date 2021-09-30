@@ -5,9 +5,25 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
+import software.amazon.smithy.aws.traits.protocols.AwsQueryTrait
+import software.amazon.smithy.aws.traits.protocols.Ec2QueryTrait
+import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
+import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
+import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.model.traits.Trait
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 
@@ -48,4 +64,41 @@ interface Protocol {
      * there are no response headers or statuses available to further inform the error parsing.
      */
     fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType
+}
+
+typealias ProtocolMap = Map<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator>>
+
+interface ProtocolGeneratorFactory<out T : ProtocolGenerator> {
+    fun protocol(codegenContext: CodegenContext): Protocol
+    fun buildProtocolGenerator(codegenContext: CodegenContext): T
+    fun transformModel(model: Model): Model
+    fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider = base
+    fun support(): ProtocolSupport
+}
+
+class ProtocolLoader(private val supportedProtocols: ProtocolMap) {
+    fun protocolFor(
+        model: Model,
+        serviceShape: ServiceShape
+    ): Pair<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator>> {
+        val protocols: MutableMap<ShapeId, Trait> = ServiceIndex.of(model).getProtocols(serviceShape)
+        val matchingProtocols =
+            protocols.keys.mapNotNull { protocolId -> supportedProtocols[protocolId]?.let { protocolId to it } }
+        if (matchingProtocols.isEmpty()) {
+            throw CodegenException("No matching protocol — service offers: ${protocols.keys}. We offer: ${supportedProtocols.keys}")
+        }
+        return matchingProtocols.first()
+    }
+
+    companion object {
+        val DefaultProtocols = mapOf(
+            AwsJson1_0Trait.ID to AwsJsonFactory(AwsJsonVersion.Json10),
+            AwsJson1_1Trait.ID to AwsJsonFactory(AwsJsonVersion.Json11),
+            AwsQueryTrait.ID to AwsQueryFactory(),
+            Ec2QueryTrait.ID to Ec2QueryFactory(),
+            RestJson1Trait.ID to RestJsonFactory(),
+            RestXmlTrait.ID to RestXmlFactory(),
+        )
+        val Default = ProtocolLoader(DefaultProtocols)
+    }
 }
