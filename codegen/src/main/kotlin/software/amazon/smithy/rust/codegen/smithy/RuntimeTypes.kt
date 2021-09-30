@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.rustlang.DependencyLocation
 import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.rustlang.Local
 import software.amazon.smithy.rust.codegen.rustlang.RustDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -203,10 +204,10 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun forInlineDependency(inlineDependency: InlineDependency) =
             RuntimeType(inlineDependency.name, inlineDependency, namespace = "crate")
 
-        fun forInlineFun(name: String, module: String, func: (RustWriter) -> Unit) = RuntimeType(
+        fun forInlineFun(name: String, module: RustModule, func: (RustWriter) -> Unit) = RuntimeType(
             name = name,
             dependency = InlineDependency(name, module, listOf(), func),
-            namespace = "crate::$module"
+            namespace = "crate::${module.name}"
         )
 
         fun byteStream(runtimeConfig: RuntimeConfig) =
