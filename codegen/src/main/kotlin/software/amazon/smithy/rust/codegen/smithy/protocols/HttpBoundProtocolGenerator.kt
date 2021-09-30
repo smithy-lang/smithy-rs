@@ -58,18 +58,23 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class HttpBoundProtocolGenerator(
+    codegenContext: CodegenContext,
+    protocol: Protocol,
+) : ProtocolGenerator(
+    codegenContext,
+    MakeOperationGenerator(codegenContext, protocol, HttpBoundProtocolBodyGenerator(codegenContext, protocol)),
+    HttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
+)
+
+private class HttpBoundProtocolTraitImplGenerator(
     private val codegenContext: CodegenContext,
     private val protocol: Protocol,
-) : ProtocolGenerator(codegenContext), ProtocolTraitImplGenerator {
+) : ProtocolTraitImplGenerator {
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
     private val operationSerModule = RustModule.private("operation_ser")
-
-    override val makeOperationGenerator: MakeOperationGenerator =
-        MakeOperationGenerator(codegenContext, protocol, HttpBoundProtocolBodyGenerator(codegenContext, protocol))
-    override val traitWriter: ProtocolTraitImplGenerator get() = this
 
     private val codegenScope = arrayOf(
         "ParseStrict" to RuntimeType.parseStrict(runtimeConfig),
@@ -188,10 +193,9 @@ class HttpBoundProtocolGenerator(
                         operationShape.errors.forEach { error ->
                             val errorShape = model.expectShape(error, StructureShape::class.java)
                             val variantName = symbolProvider.toSymbol(model.expectShape(error)).name
+                            val errorCode = httpBindingResolver.errorCode(errorShape).dq()
                             withBlock(
-                                "${
-                                httpBindingResolver.errorCode(errorShape).dq()
-                                } => #1T { meta: generic, kind: #1TKind::$variantName({",
+                                "$errorCode => #1T { meta: generic, kind: #1TKind::$variantName({",
                                 "})},",
                                 errorSymbol
                             ) {

@@ -40,10 +40,11 @@ interface ProtocolTraitImplGenerator {
 /**
  * Class providing scaffolding for HTTP based protocols that must build an HTTP request (headers / URL) and a body.
  */
-abstract class ProtocolGenerator(codegenContext: CodegenContext) {
-    abstract val makeOperationGenerator: MakeOperationGenerator
-    abstract val traitWriter: ProtocolTraitImplGenerator
-
+open class ProtocolGenerator(
+    codegenContext: CodegenContext,
+    private val makeOperationGenerator: MakeOperationGenerator,
+    private val traitGenerator: ProtocolTraitImplGenerator,
+) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
@@ -59,9 +60,6 @@ abstract class ProtocolGenerator(codegenContext: CodegenContext) {
         "http" to RuntimeType.http,
         "operation" to RuntimeType.operationModule(runtimeConfig),
     )
-
-    /** Write code into the impl block for [operationShape] */
-    open fun operationImplBlock(implBlockWriter: RustWriter, operationShape: OperationShape) {}
 
     fun renderOperation(
         operationWriter: RustWriter,
@@ -123,15 +121,13 @@ abstract class ProtocolGenerator(codegenContext: CodegenContext) {
         operationWriter.implBlock(operationShape, symbolProvider) {
             builderGenerator.renderConvenienceMethod(this)
 
-            operationImplBlock(this, operationShape)
-
             rustBlock("pub fn new() -> Self") {
                 rust("Self { _private: () }")
             }
 
             writeCustomizations(customizations, OperationSection.OperationImplBlock(customizations))
         }
-        traitWriter.generateTraitImpls(operationWriter, operationShape)
+        traitGenerator.generateTraitImpls(operationWriter, operationShape)
     }
 
     private fun buildOperationTypeOutput(writer: RustWriter, shape: OperationShape): String =

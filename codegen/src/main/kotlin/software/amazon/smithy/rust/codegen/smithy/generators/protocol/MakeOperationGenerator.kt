@@ -34,7 +34,7 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 open class MakeOperationGenerator(
     protected val codegenContext: CodegenContext,
     private val protocol: Protocol,
-    private val bodyWriter: ProtocolBodyGenerator,
+    private val bodyGenerator: ProtocolBodyGenerator,
     private val functionName: String = "make_operation",
     private val public: Boolean = true
 ) {
@@ -66,7 +66,7 @@ open class MakeOperationGenerator(
         val returnType = "std::result::Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
         val outputSymbol = symbolProvider.toSymbol(shape)
 
-        val takesOwnership = bodyWriter.bodyMetadata(shape).takesOwnership
+        val takesOwnership = bodyGenerator.bodyMetadata(shape).takesOwnership
         val mut = customizations.any { it.mutSelf() }
         val consumes = customizations.any { it.consumesSelf() } || takesOwnership
         val self = "self".letIf(mut) { "mut $it" }.letIf(!consumes) { "&$it" }
@@ -83,7 +83,7 @@ open class MakeOperationGenerator(
             rust("let properties = smithy_http::property_bag::SharedPropertyBag::new();")
             rust("let request = request_builder_base(&self)?;")
             withBlock("let body =", ";") {
-                bodyWriter.generateBody(this, "self", shape)
+                bodyGenerator.generateBody(this, "self", shape)
             }
             rust("let request = Self::assemble(request, body);")
             rustTemplate(
