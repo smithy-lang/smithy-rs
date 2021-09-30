@@ -11,7 +11,6 @@ import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.HttpQueryTrait
 import software.amazon.smithy.model.traits.HttpTrait
@@ -39,25 +38,38 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
-import java.util.stream.Collectors
 
 private enum class PayloadSigningType {
     EMPTY,
     UNSIGNED_PAYLOAD,
 }
 
-private data class PresignableOperation(
+private class PresignableOperation(
     val payloadSigningType: PayloadSigningType,
-    val modelTransform: PresignModelTransform? = null
-)
+    private val modelTransforms: List<PresignModelTransform> = emptyList()
+) {
+    fun hasModelTransforms(): Boolean = modelTransforms.isNotEmpty()
 
+    fun transformModel(model: Model): Model =
+        modelTransforms.fold(model) { intermediate, transform -> transform.transform(intermediate) }
+}
+
+private val SYNTHESIZE_SPEECH_OP = ShapeId.from("com.amazonaws.polly#SynthesizeSpeech")
 private val PRESIGNABLE_OPERATIONS by lazy {
     mapOf(
+        // S3
         ShapeId.from("com.amazonaws.s3#GetObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
         ShapeId.from("com.amazonaws.s3#PutObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
-        ShapeId.from("com.amazonaws.polly#SynthesizeSpeech") to PresignableOperation(
+
+        // Polly
+        SYNTHESIZE_SPEECH_OP to PresignableOperation(
             PayloadSigningType.EMPTY,
-            AwsPollySynthesizeSpeechPresignTransform()
+            // Polly's SynthesizeSpeech operation has the HTTP method overriden to GET,
+            // and the document members changed to query param members.
+            modelTransforms = listOf(
+                OverrideHttpMethodTransform(mapOf(SYNTHESIZE_SPEECH_OP to "GET")),
+                MoveDocumentMembersToQueryParamsTransform(listOf(SYNTHESIZE_SPEECH_OP)),
+            )
         ),
     )
 }
@@ -126,10 +138,10 @@ class AwsInputPresignedMethod(
         val presignableOp = PRESIGNABLE_OPERATIONS.getValue(operationShape.id)
 
         var makeOperationFn = "make_operation"
-        if (presignableOp.modelTransform != null) {
+        if (presignableOp.hasModelTransforms()) {
             makeOperationFn = "_make_presigned_operation"
 
-            val transformedModel = presignableOp.modelTransform.transform(codegenContext.model)
+            val transformedModel = presignableOp.transformModel(codegenContext.model)
             val transformedProtocolConfig = codegenContext.copy(model = transformedModel)
             val transformedOperationShape = transformedModel.expectShape(operationShape.id, OperationShape::class.java)
 
@@ -242,44 +254,57 @@ interface PresignModelTransform {
     fun transform(model: Model): Model
 }
 
-class AwsPollySynthesizeSpeechPresignTransform : PresignModelTransform {
-    private val synthesizeSpeechOpId = ShapeId.from("com.amazonaws.polly#SynthesizeSpeech")
-    private val presignableOperations = listOf(synthesizeSpeechOpId)
-    private val httpMethodOverrides = mapOf(synthesizeSpeechOpId to "GET")
+/**
+ * Model transform that overrides HTTP request methods for the given map of operations.
+ *
+ * Note: this doesn't work for non-REST protocols. The protocol generators will need to be refactored
+ * to respect HTTP traits or synthetic equivalents if this is needed for AwsQuery, Ec2Query, or AwsJson.
+ */
+class OverrideHttpMethodTransform(
+    private val httpMethodOverrides: Map<ShapeId, String>,
+) : PresignModelTransform {
+    override fun transform(model: Model): Model {
+        return ModelTransformer.create().mapShapes(model) { shape ->
+            if (shape is OperationShape && httpMethodOverrides.containsKey(shape.id)) {
+                val newMethod = httpMethodOverrides.getValue(shape.id)
+                val originalHttpTrait = shape.expectTrait<HttpTrait>()
+                shape.toBuilder()
+                    .removeTrait(HttpTrait.ID)
+                    .addTrait(originalHttpTrait.toBuilder().method(newMethod).build())
+                    .build()
+            } else {
+                shape
+            }
+        }
+    }
+}
 
+/**
+ * Model transform that moves document members into query parameters for the given list of operations.
+ *
+ * Note: this doesn't work for non-REST protocols. The protocol generators will need to be refactored
+ * to respect HTTP traits or synthetic equivalents if this is needed for AwsQuery, Ec2Query, or AwsJson.
+ */
+class MoveDocumentMembersToQueryParamsTransform(
+    private val presignableOperations: List<ShapeId>,
+) : PresignModelTransform {
     override fun transform(model: Model): Model {
         val index = HttpBindingIndex(model)
+        val operations = presignableOperations.map { id -> model.expectShape(id, OperationShape::class.java) }
 
-        // Find all known presignable operations
-        val operationsToUpdate: MutableSet<Shape> = model.shapes()
-            .filter { shape -> shape is OperationShape && presignableOperations.contains(shape.id) }
-            .collect(Collectors.toSet())
-
-        // Find document members of those presignable operations
-        val membersToUpdate = operationsToUpdate.map { shape ->
-            val operation = shape as OperationShape
+        // Find document members of the presignable operations
+        val membersToUpdate = operations.map { operation ->
             val payloadBindings = index.getRequestBindings(operation, HttpBinding.Location.DOCUMENT)
             payloadBindings.map { binding -> binding.member }
         }.flatten()
 
         // Transform found shapes for presigning
-        val shapesToUpdate = operationsToUpdate + membersToUpdate
-        return ModelTransformer.create().mapShapes(model) { shape -> mapShape(shapesToUpdate, shape) }
-    }
-
-    private fun mapShape(shapesToUpdate: Set<Shape>, shape: Shape): Shape {
-        if (shapesToUpdate.contains(shape)) {
-            if (shape is OperationShape && httpMethodOverrides.containsKey(shape.id)) {
-                val newMethod = httpMethodOverrides.getValue(shape.id)
-                val originalHttpTrait = shape.expectTrait<HttpTrait>()
-                return shape.toBuilder()
-                    .removeTrait(HttpTrait.ID)
-                    .addTrait(originalHttpTrait.toBuilder().method(newMethod).build())
-                    .build()
-            } else if (shape is MemberShape) {
-                return shape.toBuilder().addTrait(HttpQueryTrait(shape.memberName)).build()
+        return ModelTransformer.create().mapShapes(model) { shape ->
+            if (shape is MemberShape && membersToUpdate.contains(shape)) {
+                shape.toBuilder().addTrait(HttpQueryTrait(shape.memberName)).build()
+            } else {
+                shape
             }
         }
-        return shape
     }
 }
