@@ -30,6 +30,7 @@ mod hyper_impls;
 /// Re-export HyperAdapter
 #[cfg(feature = "hyper")]
 pub mod hyper_ext {
+    pub use crate::hyper_impls::Builder;
     pub use crate::hyper_impls::HyperAdapter as Adapter;
 }
 
@@ -39,34 +40,29 @@ pub mod hyper_ext {
 #[doc(hidden)]
 pub mod static_tests;
 
+pub mod timeout;
+
 /// Type aliases for standard connection types.
 #[cfg(feature = "hyper")]
 #[allow(missing_docs)]
 pub mod conns {
-    use smithy_http::body::SdkBody;
 
     #[cfg(feature = "rustls")]
-    pub type Https = crate::hyper_impls::HyperAdapter<
-        hyper_rustls::HttpsConnector<hyper::client::HttpConnector>,
-    >;
+    pub type Https = hyper_rustls::HttpsConnector<hyper::client::HttpConnector>;
 
     #[cfg(feature = "rustls")]
     pub fn https() -> Https {
-        let https = hyper_rustls::HttpsConnector::with_native_roots();
-        let client = hyper::Client::builder().build::<_, SdkBody>(https);
-        crate::hyper_impls::HyperAdapter::from(client)
+        // todo: cache this with lazy_static
+        hyper_rustls::HttpsConnector::with_native_roots()
     }
 
     #[cfg(feature = "native-tls")]
     pub fn native_tls() -> NativeTls {
-        let https = hyper_tls::HttpsConnector::new();
-        let client = hyper::Client::builder().build::<_, SdkBody>(https);
-        crate::hyper_impls::HyperAdapter::from(client)
+        hyper_tls::HttpsConnector::new()
     }
 
     #[cfg(feature = "native-tls")]
-    pub type NativeTls =
-        crate::hyper_impls::HyperAdapter<hyper_tls::HttpsConnector<hyper::client::HttpConnector>>;
+    pub type NativeTls = hyper_tls::HttpsConnector<hyper::client::HttpConnector>;
 
     #[cfg(feature = "rustls")]
     pub type Rustls = crate::hyper_impls::HyperAdapter<
@@ -83,9 +79,10 @@ use smithy_http_tower::dispatch::DispatchLayer;
 use smithy_http_tower::parse_response::ParseResponseLayer;
 use smithy_types::retry::ProvideErrorKind;
 use std::error::Error;
+
 use tower::{Layer, Service, ServiceBuilder, ServiceExt};
 
-type BoxError = Box<dyn Error + Send + Sync>;
+type BoxError = Box<dyn Error + Send + Sync + 'static>;
 
 /// Smithy service client.
 ///

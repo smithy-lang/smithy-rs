@@ -53,6 +53,7 @@ fn sanity_retry() {
         .check();
 }
 
+/*
 // Statically check that a hyper client can actually be used to build a Client.
 #[allow(dead_code)]
 #[cfg(all(test, feature = "hyper"))]
@@ -65,7 +66,7 @@ where
         .hyper(hc)
         .build()
         .check();
-}
+}*/
 
 // Statically check that a type-erased middleware client is actually a valid Client.
 #[allow(dead_code)]

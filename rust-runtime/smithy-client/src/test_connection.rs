@@ -7,14 +7,20 @@
 // TODO
 #![allow(missing_docs)]
 
+use crate::test_connection::stream::EmptyStream;
 use http::header::{HeaderName, CONTENT_TYPE};
-use http::Request;
+use http::{Request, Uri};
+use hyper::client::HttpConnector;
 use protocol_test_helpers::{assert_ok, validate_body, MediaType};
+use smithy_async::future::never::Never;
 use smithy_http::body::SdkBody;
-use std::future::Ready;
+use std::future::{Future, Ready};
+use std::marker::PhantomData;
 use std::ops::Deref;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
+use tokio::net::TcpStream;
 use tokio::sync::oneshot;
 use tower::BoxError;
 
@@ -37,6 +43,121 @@ pub struct CaptureRequestReceiver {
 impl CaptureRequestReceiver {
     pub fn expect_request(mut self) -> http::Request<SdkBody> {
         self.receiver.try_recv().expect("no request was received")
+    }
+}
+
+#[non_exhaustive]
+#[derive(Debug)]
+pub struct NeverService<R> {
+    _resp: PhantomData<R>,
+}
+
+impl<R> Clone for NeverService<R> {
+    fn clone(&self) -> Self {
+        Self {
+            _resp: Default::default(),
+        }
+    }
+}
+
+impl<R> NeverService<R> {
+    pub fn new() -> Self {
+        NeverService {
+            _resp: Default::default(),
+        }
+    }
+}
+
+pub mod stream {
+    use hyper::client::connect::{Connected, Connection};
+    use std::io::Error;
+    use std::pin::Pin;
+    use std::sync::atomic::AtomicBool;
+    use std::task::{Context, Poll};
+    use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+
+    #[non_exhaustive]
+    pub struct EmptyStream;
+
+    impl EmptyStream {
+        pub fn new() -> Self {
+            Self
+        }
+    }
+
+    impl AsyncRead for EmptyStream {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _buf: &mut ReadBuf<'_>,
+        ) -> Poll<std::io::Result<()>> {
+            Poll::Pending
+        }
+    }
+
+    impl AsyncWrite for EmptyStream {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _buf: &[u8],
+        ) -> Poll<Result<usize, Error>> {
+            Poll::Pending
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+            Poll::Pending
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+            Poll::Pending
+        }
+    }
+
+    impl Connection for EmptyStream {
+        fn connected(&self) -> Connected {
+            Connected::new()
+        }
+    }
+}
+
+pub type NeverConnected = NeverService<TcpStream>;
+
+#[derive(Clone)]
+pub struct NeverReplies;
+impl NeverReplies {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl tower::Service<Uri> for NeverReplies {
+    type Response = stream::EmptyStream;
+    type Error = BoxError;
+    type Future = std::future::Ready<Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, _req: Uri) -> Self::Future {
+        std::future::ready(Ok(EmptyStream::new()))
+    }
+}
+
+impl<Req, Resp> tower::Service<Req> for NeverService<Resp> {
+    type Response = Resp;
+    type Error = BoxError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, _req: Req) -> Self::Future {
+        Box::pin(async move {
+            Never::new().await;
+            unreachable!()
+        })
     }
 }
 
@@ -248,7 +369,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::test_connection::{capture_request, TestConnection};
+    use crate::test_connection::{capture_request, NeverService, TestConnection};
     use crate::{BoxError, Client};
     use hyper::service::Service;
     use smithy_http::body::SdkBody;
@@ -278,5 +399,10 @@ mod tests {
     fn oneshot_client() {
         let (tx, _rx) = capture_request(None);
         is_valid_smithy_connector(tx);
+    }
+
+    #[test]
+    fn never_test() {
+        is_valid_smithy_connector(NeverService::new())
     }
 }
