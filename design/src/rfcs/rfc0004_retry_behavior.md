@@ -175,15 +175,18 @@ Changes checklist
 
 - [ ] Create new Kotlin decorator `RetryConfigDecorator`
   - Based on [RegionDecorator.kt](https://github.com/awslabs/smithy-rs/blob/main/aws/sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/RegionDecorator.kt)
+  - This decorator will live in the `codegen` project because it has relevance outside of the SDK
 - [ ] **Breaking changes:**
   - [ ] Rename `smithy_client::retry::Config` to `StandardRetryConfig`
   - [ ] Rename `smithy_client::retry::Config::with_max_retries` method to `with_max_attempts` in order to follow AWS convention
+  - [ ] Passing 0 to `with_max_attempts` will panic with a helpful, descriptive error message
 - [ ] Create non-exhaustive `aws_types::retry_config::RetryConfig` enum wrapping structs that represent specific retry behaviors
   - [ ] A `NoRetry` variant that disables retries. Doesn't wrap a struct since it doesn't need to contain any data
   - [ ] A `Standard` variant that enables the standard retry behavior. Wraps a `StandardRetryConfig` struct.
 - [ ] Create `aws_config::meta::retry_config::RetryConfigProviderChain`
 - [ ] Create `aws_config::meta::retry_config::ProvideRetryConfig`
 - [ ] Create `EnvironmentVariableMaxAttemptsProvider` struct
+  - Setting AWS_MAX_ATTEMPTS=0 and trying to load from env will panic with a helpful, descriptive error message
 - [ ] Add `retry_config` method to `aws_config::ConfigLoader`
 - [ ] Update `AwsFluentClientDecorator` to correctly configure the max retry attempts of its inner `aws_hyper::Client` based on the passed-in `Config`
 - [ ] Add tests
@@ -191,4 +194,5 @@ Changes checklist
   - [ ] Test that setting retry_config to `n` limits retries to `n` where `n` is a non-zero integer
   - [ ] Test that correct precedence is respected when overriding retry behavior in a service-specific config
   - [ ] Test that correct precedence is respected when overriding retry behavior in a shared config
-  - [ ] Test that setting invalid `max_attempts=0` with a `StandardRetryConfig` does not error and is ignored in favor of the default
+  - [ ] Test that creating a config from env if AWS_MAX_ATTEMPTS=0 will panic with a helpful, descriptive error message
+  - [ ] Test that setting invalid `max_attempts=0` with a `StandardRetryConfig` will panic with a helpful, descriptive error message
