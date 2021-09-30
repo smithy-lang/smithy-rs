@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -122,17 +123,17 @@ class ProtocolTestGeneratorTest {
     ): Path {
 
         // A stubbed test protocol to do enable testing intentionally broken protocols
-        class TestProtocolGenerator(private val protocolConfig: ProtocolConfig, protocol: Protocol) :
-            ProtocolGenerator(protocolConfig),
+        class TestProtocolGenerator(private val codegenContext: CodegenContext, protocol: Protocol) :
+            ProtocolGenerator(codegenContext),
             HttpProtocolBodyWriter,
             HttpProtocolTraitImplWriter {
-            private val symbolProvider = protocolConfig.symbolProvider
+            private val symbolProvider = codegenContext.symbolProvider
 
             override val makeOperationGenerator: MakeOperationGenerator =
-                object : MakeOperationGenerator(protocolConfig, protocol, this) {
+                object : MakeOperationGenerator(codegenContext, protocol, this) {
 
                     override fun generateRequestBuilderBaseFn(writer: RustWriter, operationShape: OperationShape) {
-                        writer.inRequestBuilderBaseFn(operationShape.inputShape(protocolConfig.model)) {
+                        writer.inRequestBuilderBaseFn(operationShape.inputShape(codegenContext.model)) {
                             withBlock("Ok(#T::new()", ")", RuntimeType.HttpRequestBuilder) {
                                 writeWithNoFormatting(httpRequestBuilder)
                             }
@@ -157,8 +158,8 @@ class ProtocolTestGeneratorTest {
                             ${operationWriter.escape(correctResponse)}
                         }
                     }""",
-                    "parse_strict" to RuntimeType.parseStrict(protocolConfig.runtimeConfig),
-                    "output" to symbolProvider.toSymbol(operationShape.outputShape(protocolConfig.model)),
+                    "parse_strict" to RuntimeType.parseStrict(codegenContext.runtimeConfig),
+                    "output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
                     "error" to operationShape.errorSymbol(symbolProvider),
                     "response" to RuntimeType.Http("Response"),
                     "bytes" to RuntimeType.Bytes
@@ -167,12 +168,12 @@ class ProtocolTestGeneratorTest {
         }
 
         class TestProtocolFactory : ProtocolGeneratorFactory<ProtocolGenerator> {
-            override fun protocol(protocolConfig: ProtocolConfig): Protocol {
-                return RestJson(protocolConfig)
+            override fun protocol(codegenContext: CodegenContext): Protocol {
+                return RestJson(codegenContext)
             }
 
-            override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): ProtocolGenerator {
-                return TestProtocolGenerator(protocolConfig, protocol(protocolConfig))
+            override fun buildProtocolGenerator(codegenContext: CodegenContext): ProtocolGenerator {
+                return TestProtocolGenerator(codegenContext, protocol(codegenContext))
             }
 
             override fun transformModel(model: Model): Model = model

@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
@@ -38,7 +39,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.HttpProtoc
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.HttpProtocolBodyWriter.BodyMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.HttpProtocolTraitImplWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isOptional
@@ -58,17 +58,17 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class HttpBoundProtocolGenerator(
-    private val protocolConfig: ProtocolConfig,
+    private val codegenContext: CodegenContext,
     private val protocol: Protocol,
-) : ProtocolGenerator(protocolConfig), HttpProtocolTraitImplWriter {
-    private val symbolProvider = protocolConfig.symbolProvider
-    private val model = protocolConfig.model
-    private val runtimeConfig = protocolConfig.runtimeConfig
+) : ProtocolGenerator(codegenContext), HttpProtocolTraitImplWriter {
+    private val symbolProvider = codegenContext.symbolProvider
+    private val model = codegenContext.model
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
     private val operationSerModule = RustModule.private("operation_ser")
 
     override val makeOperationGenerator: MakeOperationGenerator =
-        MakeOperationGenerator(protocolConfig, protocol, HttpBoundProtocolBodyWriter(protocolConfig, protocol))
+        MakeOperationGenerator(codegenContext, protocol, HttpBoundProtocolBodyWriter(codegenContext, protocol))
     override val traitWriter: HttpProtocolTraitImplWriter get() = this
 
     private val codegenScope = arrayOf(
@@ -284,7 +284,7 @@ class HttpBoundProtocolGenerator(
         bindings: List<HttpBindingDescriptor>,
         errorSymbol: RuntimeType,
     ) {
-        val httpBindingGenerator = ResponseBindingGenerator(protocol, protocolConfig, operationShape)
+        val httpBindingGenerator = ResponseBindingGenerator(protocol, codegenContext, operationShape)
         val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
         rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
@@ -400,12 +400,12 @@ class HttpBoundProtocolGenerator(
 }
 
 class HttpBoundProtocolBodyWriter(
-    protocolConfig: ProtocolConfig,
+    codegenContext: CodegenContext,
     private val protocol: Protocol,
 ) : HttpProtocolBodyWriter {
-    private val symbolProvider = protocolConfig.symbolProvider
-    private val model = protocolConfig.model
-    private val runtimeConfig = protocolConfig.runtimeConfig
+    private val symbolProvider = codegenContext.symbolProvider
+    private val model = codegenContext.model
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
 
     private val operationSerModule = RustModule.private("operation_ser")

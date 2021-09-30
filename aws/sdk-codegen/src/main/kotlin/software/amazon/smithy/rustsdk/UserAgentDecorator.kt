@@ -12,13 +12,13 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 
@@ -30,20 +30,20 @@ class UserAgentDecorator : RustCodegenDecorator {
     override val order: Byte = 10
 
     override fun libRsCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         // We are generating an AWS SDK, the service needs to have the AWS service trait
-        val serviceTrait = protocolConfig.serviceShape.expectTrait<ServiceTrait>()
-        return baseCustomizations + ApiVersion(protocolConfig.runtimeConfig, serviceTrait)
+        val serviceTrait = codegenContext.serviceShape.expectTrait<ServiceTrait>()
+        return baseCustomizations + ApiVersion(codegenContext.runtimeConfig, serviceTrait)
     }
 
     override fun operationCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations + UserAgentFeature(protocolConfig.runtimeConfig)
+        return baseCustomizations + UserAgentFeature(codegenContext.runtimeConfig)
     }
 }
 

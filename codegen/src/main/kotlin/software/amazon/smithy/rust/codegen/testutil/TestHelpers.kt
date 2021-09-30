@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.smithy.RustCodegenPlugin
@@ -19,7 +20,6 @@ import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.util.dq
 import java.io.File
@@ -39,7 +39,7 @@ fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSy
         TestSymbolVisitorConfig
     )
 
-fun testProtocolConfig(model: Model, serviceShape: ServiceShape? = null): ProtocolConfig = ProtocolConfig(
+fun testProtocolConfig(model: Model, serviceShape: ServiceShape? = null): CodegenContext = CodegenContext(
     model,
     testSymbolProvider(model),
     TestRuntimeConfig,

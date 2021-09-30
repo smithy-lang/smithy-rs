@@ -28,12 +28,12 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
@@ -84,15 +84,15 @@ class RequestBindingGenerator(
     )
 
     constructor(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         defaultTimestampFormat: TimestampFormatTrait.Format,
         httpBindingResolver: HttpBindingResolver,
         shape: OperationShape,
         inputShape: StructureShape,
     ) : this(
-        protocolConfig.model,
-        protocolConfig.symbolProvider,
-        protocolConfig.runtimeConfig,
+        codegenContext.model,
+        codegenContext.symbolProvider,
+        codegenContext.runtimeConfig,
         defaultTimestampFormat,
         shape,
         inputShape,

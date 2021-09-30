@@ -37,10 +37,10 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isBoxed
 import software.amazon.smithy.rust.codegen.smithy.isOptional
@@ -63,7 +63,7 @@ data class OperationWrapperContext(
 )
 
 class XmlBindingTraitParserGenerator(
-    protocolConfig: ProtocolConfig,
+    codegenContext: CodegenContext,
     private val xmlErrors: RuntimeType,
     private val writeOperationWrapper: RustWriter.(OperationWrapperContext, OperationInnerWriteable) -> Unit,
 ) : StructuredDataParserGenerator {
@@ -89,12 +89,12 @@ class XmlBindingTraitParserGenerator(
      */
     data class Ctx(val tag: String, val accum: String?)
 
-    private val symbolProvider = protocolConfig.symbolProvider
-    private val smithyXml = CargoDependency.smithyXml(protocolConfig.runtimeConfig).asType()
+    private val symbolProvider = codegenContext.symbolProvider
+    private val smithyXml = CargoDependency.smithyXml(codegenContext.runtimeConfig).asType()
     private val xmlError = smithyXml.member("decode::XmlError")
 
     private val scopedDecoder = smithyXml.member("decode::ScopedDecoder")
-    private val runtimeConfig = protocolConfig.runtimeConfig
+    private val runtimeConfig = codegenContext.runtimeConfig
 
     // The symbols we want all the time
     private val codegenScope = arrayOf(
@@ -106,7 +106,7 @@ class XmlBindingTraitParserGenerator(
         "ScopedDecoder" to scopedDecoder,
         "smithy_types" to CargoDependency.SmithyTypes(runtimeConfig).asType()
     )
-    private val model = protocolConfig.model
+    private val model = codegenContext.model
     private val index = HttpBindingIndex.of(model)
     private val xmlIndex = XmlNameIndex.of(model)
     private val xmlDeserModule = RustModule.private("xml_deser")

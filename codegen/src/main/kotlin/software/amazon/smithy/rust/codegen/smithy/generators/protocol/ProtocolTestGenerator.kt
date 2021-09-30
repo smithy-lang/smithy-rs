@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
@@ -56,19 +57,19 @@ data class ProtocolSupport(
  * Generate protocol tests for an operation
  */
 class ProtocolTestGenerator(
-    private val protocolConfig: ProtocolConfig,
+    private val codegenContext: CodegenContext,
     private val protocolSupport: ProtocolSupport,
     private val operationShape: OperationShape,
     private val writer: RustWriter
 ) {
     private val logger = Logger.getLogger(javaClass.name)
 
-    private val inputShape = operationShape.inputShape(protocolConfig.model)
-    private val outputShape = operationShape.outputShape(protocolConfig.model)
-    private val operationSymbol = protocolConfig.symbolProvider.toSymbol(operationShape)
-    private val operationIndex = OperationIndex.of(protocolConfig.model)
+    private val inputShape = operationShape.inputShape(codegenContext.model)
+    private val outputShape = operationShape.outputShape(codegenContext.model)
+    private val operationSymbol = codegenContext.symbolProvider.toSymbol(operationShape)
+    private val operationIndex = OperationIndex.of(codegenContext.model)
 
-    private val instantiator = with(protocolConfig) {
+    private val instantiator = with(codegenContext) {
         Instantiator(symbolProvider, model, runtimeConfig)
     }
 
@@ -124,7 +125,7 @@ class ProtocolTestGenerator(
     private fun List<TestCase>.filterMatching(): List<TestCase> {
         return if (RunOnly.isNullOrEmpty()) {
             this.filter { testCase ->
-                testCase.testCase.protocol == protocolConfig.protocol &&
+                testCase.testCase.protocol == codegenContext.protocol &&
                     !DisableTests.contains(testCase.testCase.id)
             }
         } else {
@@ -175,7 +176,7 @@ class ProtocolTestGenerator(
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
         }
-        val customToken = if (inputShape.findMemberWithTrait<IdempotencyTokenTrait>(protocolConfig.model) != null) {
+        val customToken = if (inputShape.findMemberWithTrait<IdempotencyTokenTrait>(codegenContext.model) != null) {
             """.make_token("00000000-0000-4000-8000-000000000000")"""
         } else ""
         rust(
@@ -196,7 +197,7 @@ class ProtocolTestGenerator(
                     let ep = #T::endpoint::Endpoint::mutable(#T::Uri::from_static(${withScheme.dq()}));
                     ep.set_endpoint(http_request.uri_mut(), parts.acquire().get());
                 """,
-                    CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType(), CargoDependency.Http.asType()
+                    CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(), CargoDependency.Http.asType()
                 )
             }
             rust(
@@ -240,7 +241,7 @@ class ProtocolTestGenerator(
     }
 
     private fun expectFail(testCase: HttpMessageTestCase): Boolean = ExpectFail.find {
-        it.id == testCase.id && it.action == testCase.action() && it.service == protocolConfig.serviceShape.id.toString()
+        it.id == testCase.id && it.action == testCase.action() && it.service == codegenContext.serviceShape.id.toString()
     } != null
 
     private fun RustWriter.renderHttpResponseTestCase(
@@ -269,11 +270,11 @@ class ProtocolTestGenerator(
                 .body(#T::from(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"}))
                 .unwrap();
             """,
-            RuntimeType.sdkBody(runtimeConfig = protocolConfig.runtimeConfig)
+            RuntimeType.sdkBody(runtimeConfig = codegenContext.runtimeConfig)
         )
         write(
             "let mut op_response = #T::new(http_response);",
-            RuntimeType.operationModule(protocolConfig.runtimeConfig).member("Response")
+            RuntimeType.operationModule(codegenContext.runtimeConfig).member("Response")
         )
         rustTemplate(
             """
@@ -288,12 +289,12 @@ class ProtocolTestGenerator(
         """,
             "op" to operationSymbol,
             "bytes" to RuntimeType.Bytes,
-            "parse_http_response" to CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType()
+            "parse_http_response" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType()
                 .member("response::ParseHttpResponse"),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
-            val errorSymbol = operationShape.errorSymbol(protocolConfig.symbolProvider)
-            val errorVariant = protocolConfig.symbolProvider.toSymbol(expectedShape).name
+            val errorSymbol = operationShape.errorSymbol(codegenContext.symbolProvider)
+            val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")
             rustBlock("if let #TKind::$errorVariant(actual_error) = parsed.kind", errorSymbol) {
                 rust("assert_eq!(expected_output, actual_error);")
@@ -304,8 +305,8 @@ class ProtocolTestGenerator(
         } else {
             rust("let parsed = parsed.unwrap();")
             outputShape.members().forEach { member ->
-                val memberName = protocolConfig.symbolProvider.toMemberName(member)
-                if (member.isStreaming(protocolConfig.model)) {
+                val memberName = codegenContext.symbolProvider.toMemberName(member)
+                if (member.isStreaming(codegenContext.model)) {
                     rust(
                         """assert_eq!(
                                         parsed.$memberName.collect().await.unwrap().into_bytes(),
@@ -313,10 +314,10 @@ class ProtocolTestGenerator(
                                     );"""
                     )
                 } else {
-                    when (protocolConfig.model.expectShape(member.target)) {
+                    when (codegenContext.model.expectShape(member.target)) {
                         is DoubleShape, is FloatShape -> {
                             addUseImports(
-                                RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "FloatEquals").toSymbol()
+                                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "FloatEquals").toSymbol()
                             )
                             rust(
                                 """
@@ -353,8 +354,8 @@ class ProtocolTestGenerator(
                     "#T(&body, ${
                     rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
-                    RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_body"),
-                    RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "MediaType")
+                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_body"),
+                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "MediaType")
                 )
             }
         }
@@ -375,7 +376,7 @@ class ProtocolTestGenerator(
         assertOk(rustWriter) {
             write(
                 "#T(&http_request, $variableName)",
-                RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "validate_headers")
+                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_headers")
             )
         }
     }
@@ -410,7 +411,7 @@ class ProtocolTestGenerator(
         assertOk(rustWriter) {
             write(
                 "#T(&http_request, $variableName)",
-                RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, checkFunction)
+                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, checkFunction)
             )
         }
     }
@@ -420,7 +421,7 @@ class ProtocolTestGenerator(
      * for pretty prettying protocol test helper results
      */
     private fun assertOk(rustWriter: RustWriter, inner: RustWriter.() -> Unit) {
-        rustWriter.write("#T(", RuntimeType.ProtocolTestHelper(protocolConfig.runtimeConfig, "assert_ok"))
+        rustWriter.write("#T(", RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "assert_ok"))
         inner(rustWriter)
         rustWriter.write(");")
     }

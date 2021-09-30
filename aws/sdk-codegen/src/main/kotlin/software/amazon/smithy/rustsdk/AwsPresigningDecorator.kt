@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -33,7 +34,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientCustomi
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientSection
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyWriter
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.util.expectTrait
@@ -70,8 +70,8 @@ class AwsPresigningDecorator : RustCodegenDecorator {
     override val name: String = "AwsPresigning"
     override val order: Byte = ORDER
 
-    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
-        val hasPresignedOps = protocolConfig.model.shapes().anyMatch { shape ->
+    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+        val hasPresignedOps = codegenContext.model.shapes().anyMatch { shape ->
             shape is OperationShape && PRESIGNABLE_OPERATIONS.containsKey(shape.id)
         }
         if (hasPresignedOps) {
@@ -80,10 +80,10 @@ class AwsPresigningDecorator : RustCodegenDecorator {
     }
 
     override fun operationCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
-    ): List<OperationCustomization> = baseCustomizations + listOf(AwsInputPresignedMethod(protocolConfig, operation))
+    ): List<OperationCustomization> = baseCustomizations + listOf(AwsInputPresignedMethod(codegenContext, operation))
 
     /** Adds presignable trait to known presignable operations */
     override fun transformModel(service: ServiceShape, model: Model): Model {
@@ -98,11 +98,11 @@ class AwsPresigningDecorator : RustCodegenDecorator {
 }
 
 class AwsInputPresignedMethod(
-    private val protocolConfig: ProtocolConfig,
+    private val codegenContext: CodegenContext,
     private val operationShape: OperationShape
 ) : OperationCustomization() {
-    private val runtimeConfig = protocolConfig.runtimeConfig
-    private val symbolProvider = protocolConfig.symbolProvider
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val symbolProvider = codegenContext.symbolProvider
 
     private val codegenScope = arrayOf(
         "aws_hyper" to runtimeConfig.awsRuntimeDependency("aws-hyper").copy(optional = true).asType(),
@@ -129,8 +129,8 @@ class AwsInputPresignedMethod(
         if (presignableOp.modelTransform != null) {
             makeOperationFn = "_make_presigned_operation"
 
-            val transformedModel = presignableOp.modelTransform.transform(protocolConfig.model)
-            val transformedProtocolConfig = protocolConfig.copy(model = transformedModel)
+            val transformedModel = presignableOp.modelTransform.transform(codegenContext.model)
+            val transformedProtocolConfig = codegenContext.copy(model = transformedModel)
             val transformedOperationShape = transformedModel.expectShape(operationShape.id, OperationShape::class.java)
 
             val protocol = ProtocolLoader.Default.protocolFor(

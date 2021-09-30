@@ -11,8 +11,8 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
@@ -26,7 +26,7 @@ class EventStreamMarshallerGeneratorTest {
     fun test(testCase: EventStreamTestModels.TestCase) {
         val test = EventStreamTestTools.generateTestProject(testCase.model)
 
-        val protocolConfig = ProtocolConfig(
+        val codegenContext = CodegenContext(
             test.model,
             test.symbolProvider,
             TestRuntimeConfig,
@@ -34,7 +34,7 @@ class EventStreamMarshallerGeneratorTest {
             ShapeId.from(testCase.protocolShapeId),
             "test"
         )
-        val protocol = testCase.protocolBuilder(protocolConfig)
+        val protocol = testCase.protocolBuilder(codegenContext)
         val generator = EventStreamMarshallerGenerator(
             test.model,
             TestRuntimeConfig,

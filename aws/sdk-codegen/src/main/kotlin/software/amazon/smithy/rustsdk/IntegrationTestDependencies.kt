@@ -9,11 +9,11 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import java.nio.file.Files
 import java.nio.file.Paths
 
@@ -22,7 +22,7 @@ class IntegrationTestDecorator : RustCodegenDecorator {
     override val order: Byte = 0
 
     override fun libRsCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         val integrationTestPath = Paths.get("aws/sdk/integration-tests")
@@ -30,11 +30,11 @@ class IntegrationTestDecorator : RustCodegenDecorator {
             "IntegrationTestDecorator expects to be run from the smithy-rs package root"
         }
 
-        val testPackagePath = integrationTestPath.resolve(protocolConfig.moduleName.substring("aws-sdk-".length))
+        val testPackagePath = integrationTestPath.resolve(codegenContext.moduleName.substring("aws-sdk-".length))
         return if (Files.exists(testPackagePath) && Files.exists(testPackagePath.resolve("Cargo.toml"))) {
             val hasTests = Files.exists(testPackagePath.resolve("tests"))
             val hasBenches = Files.exists(testPackagePath.resolve("benches"))
-            baseCustomizations + IntegrationTestDependencies(protocolConfig.runtimeConfig, hasTests, hasBenches)
+            baseCustomizations + IntegrationTestDependencies(codegenContext.runtimeConfig, hasTests, hasBenches)
         } else {
             baseCustomizations
         }

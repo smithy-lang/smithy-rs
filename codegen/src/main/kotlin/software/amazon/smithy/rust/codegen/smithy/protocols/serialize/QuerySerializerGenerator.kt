@@ -31,9 +31,9 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -44,7 +44,7 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
-abstract class QuerySerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSerializerGenerator {
+abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : StructuredDataSerializerGenerator {
     protected data class Context<T : Shape>(
         /** Expression that yields a QueryValueWriter */
         val writerExpression: String,
@@ -77,10 +77,10 @@ abstract class QuerySerializerGenerator(protocolConfig: ProtocolConfig) : Struct
         }
     }
 
-    protected val model = protocolConfig.model
-    protected val symbolProvider = protocolConfig.symbolProvider
-    protected val runtimeConfig = protocolConfig.runtimeConfig
-    private val serviceShape = protocolConfig.serviceShape
+    protected val model = codegenContext.model
+    protected val symbolProvider = codegenContext.symbolProvider
+    protected val runtimeConfig = codegenContext.runtimeConfig
+    private val serviceShape = codegenContext.serviceShape
     private val serializerError = RuntimeType.Infallible
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
     private val smithyQuery = CargoDependency.smithyQuery(runtimeConfig).asType()

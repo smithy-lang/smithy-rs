@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -31,7 +32,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.orNull
@@ -46,31 +46,31 @@ class AwsEndpointDecorator : RustCodegenDecorator {
     }
 
     override fun configCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + EndpointConfigCustomization(protocolConfig, endpoints)
+        return baseCustomizations + EndpointConfigCustomization(codegenContext, endpoints)
     }
 
     override fun operationCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations + EndpointResolverFeature(protocolConfig.runtimeConfig, operation)
+        return baseCustomizations + EndpointResolverFeature(codegenContext.runtimeConfig, operation)
     }
 
     override fun libRsCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
-        return baseCustomizations + PubUseEndpoint(protocolConfig.runtimeConfig)
+        return baseCustomizations + PubUseEndpoint(codegenContext.runtimeConfig)
     }
 }
 
-class EndpointConfigCustomization(private val protocolConfig: ProtocolConfig, private val endpointData: ObjectNode) :
+class EndpointConfigCustomization(private val codegenContext: CodegenContext, private val endpointData: ObjectNode) :
     ConfigCustomization() {
-    private val runtimeConfig = protocolConfig.runtimeConfig
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val resolveAwsEndpoint = runtimeConfig.awsEndpointDependency().asType().copy(name = "ResolveAwsEndpoint")
     override fun section(section: ServiceConfig): Writable = writable {
         when (section) {
@@ -92,7 +92,7 @@ class EndpointConfigCustomization(private val protocolConfig: ProtocolConfig, pr
                     resolveAwsEndpoint
                 )
             ServiceConfig.BuilderBuild -> {
-                val resolverGenerator = EndpointResolverGenerator(protocolConfig, endpointData)
+                val resolverGenerator = EndpointResolverGenerator(codegenContext, endpointData)
                 rust(
                     """endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||
                                 ::std::sync::Arc::new(
@@ -140,9 +140,9 @@ class PubUseEndpoint(private val runtimeConfig: RuntimeConfig) : LibRsCustomizat
     }
 }
 
-class EndpointResolverGenerator(protocolConfig: ProtocolConfig, private val endpointData: ObjectNode) {
-    private val runtimeConfig = protocolConfig.runtimeConfig
-    private val endpointPrefix = protocolConfig.serviceShape.expectTrait<ServiceTrait>().endpointPrefix
+class EndpointResolverGenerator(codegenContext: CodegenContext, private val endpointData: ObjectNode) {
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val endpointPrefix = codegenContext.serviceShape.expectTrait<ServiceTrait>().endpointPrefix
     private val awsEndpoint = runtimeConfig.awsEndpointDependency().asType()
     private val codegenScope =
         arrayOf(

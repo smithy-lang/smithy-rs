@@ -20,11 +20,11 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.smithy.protocols.RestXml
@@ -52,10 +52,10 @@ class S3Decorator : RustCodegenDecorator {
     }
 
     override fun libRsCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
-        return baseCustomizations.letIf(applies(protocolConfig.serviceShape.id)) {
+        return baseCustomizations.letIf(applies(codegenContext.serviceShape.id)) {
             it + S3PubUse()
         }
     }
@@ -66,8 +66,8 @@ class S3Decorator : RustCodegenDecorator {
     //     S3CorrectSizeIntegerType().transform(model)
 }
 
-class S3(protocolConfig: ProtocolConfig) : RestXml(protocolConfig) {
-    private val runtimeConfig = protocolConfig.runtimeConfig
+class S3(codegenContext: CodegenContext) : RestXml(codegenContext) {
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "Error" to RuntimeType.GenericError(runtimeConfig),

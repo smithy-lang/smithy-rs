@@ -7,8 +7,6 @@ package software.amazon.smithy.rust.codegen.smithy.generators.protocol
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -18,7 +16,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -30,21 +28,9 @@ import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.inputShape
 
-/**
- * Configuration needed to generate the client for a given Service<->Protocol pair
- */
-data class ProtocolConfig(
-    val model: Model,
-    val symbolProvider: RustSymbolProvider,
-    val runtimeConfig: RuntimeConfig,
-    val serviceShape: ServiceShape,
-    val protocol: ShapeId,
-    val moduleName: String
-)
-
 interface ProtocolGeneratorFactory<out T : ProtocolGenerator> {
-    fun protocol(protocolConfig: ProtocolConfig): Protocol
-    fun buildProtocolGenerator(protocolConfig: ProtocolConfig): T
+    fun protocol(codegenContext: CodegenContext): Protocol
+    fun buildProtocolGenerator(codegenContext: CodegenContext): T
     fun transformModel(model: Model): Model
     fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider = base
     fun support(): ProtocolSupport
@@ -65,22 +51,22 @@ interface HttpProtocolTraitImplWriter {
 /**
  * Class providing scaffolding for HTTP based protocols that must build an HTTP request (headers / URL) and a body.
  */
-abstract class ProtocolGenerator(protocolConfig: ProtocolConfig) {
+abstract class ProtocolGenerator(codegenContext: CodegenContext) {
     abstract val makeOperationGenerator: MakeOperationGenerator
     abstract val traitWriter: HttpProtocolTraitImplWriter
 
-    private val runtimeConfig = protocolConfig.runtimeConfig
-    private val symbolProvider = protocolConfig.symbolProvider
-    private val model = protocolConfig.model
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val symbolProvider = codegenContext.symbolProvider
+    private val model = codegenContext.model
 
     private val codegenScope = arrayOf(
         "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
-        "OpBuildError" to protocolConfig.runtimeConfig.operationBuildError(),
+        "OpBuildError" to codegenContext.runtimeConfig.operationBuildError(),
         "Request" to RuntimeType.Http("request::Request"),
         "RequestBuilder" to RuntimeType.HttpRequestBuilder,
-        "SdkBody" to RuntimeType.sdkBody(protocolConfig.runtimeConfig),
+        "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
         "config" to RuntimeType.Config,
-        "header_util" to CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType().member("header"),
+        "header_util" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType().member("header"),
         "http" to RuntimeType.http,
         "operation" to RuntimeType.operationModule(runtimeConfig),
     )

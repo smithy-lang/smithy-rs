@@ -14,9 +14,9 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.util.hasTrait
 
 /**
@@ -96,9 +96,9 @@ typealias ConfigCustomization = NamedSectionGenerator<ServiceConfig>
 class ServiceConfigGenerator(private val customizations: List<ConfigCustomization> = listOf()) {
 
     companion object {
-        fun withBaseBehavior(protocolConfig: ProtocolConfig, extraCustomizations: List<ConfigCustomization>): ServiceConfigGenerator {
+        fun withBaseBehavior(codegenContext: CodegenContext, extraCustomizations: List<ConfigCustomization>): ServiceConfigGenerator {
             val baseFeatures = mutableListOf<ConfigCustomization>()
-            if (protocolConfig.serviceShape.needsIdempotencyToken(protocolConfig.model)) {
+            if (codegenContext.serviceShape.needsIdempotencyToken(codegenContext.model)) {
                 baseFeatures.add(IdempotencyTokenProviderCustomization())
             }
             return ServiceConfigGenerator(baseFeatures + extraCustomizations)

@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
@@ -24,7 +25,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ClientGenerics
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 
 private class Types(runtimeConfig: RuntimeConfig) {
     private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig).copy(optional = true)
@@ -44,12 +44,12 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
     // Must run after the AwsPresigningDecorator so that the presignable trait is correctly added to operations
     override val order: Byte = (AwsPresigningDecorator.ORDER + 1).toByte()
 
-    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
-        val types = Types(protocolConfig.runtimeConfig)
+    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+        val types = Types(codegenContext.runtimeConfig)
         val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("client")), public = true)
         rustCrate.withModule(RustModule("client", module)) { writer ->
             FluentClientGenerator(
-                protocolConfig,
+                codegenContext,
                 includeSmithyGenericClientDocs = false,
                 generics = ClientGenerics(
                     connectorDefault = "#{AwsFluentClient_DynConnector}",
@@ -61,7 +61,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
                         "AwsFluentClient_retry" to types.smithyClientRetry,
                     )
                 ),
-                customizations = listOf(AwsPresignedFluentBuilderMethod(protocolConfig.runtimeConfig))
+                customizations = listOf(AwsPresignedFluentBuilderMethod(codegenContext.runtimeConfig))
             ).render(writer)
             AwsFluentClientExtensions(types).render(writer)
         }
@@ -72,7 +72,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
     }
 
     override fun libRsCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         return baseCustomizations + object : LibRsCustomization() {

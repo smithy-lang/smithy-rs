@@ -12,8 +12,8 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
@@ -70,7 +70,7 @@ class ResponseBindingGeneratorTest {
     private val model = OperationNormalizer.transform(baseModel)
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
     private val symbolProvider = testSymbolProvider(model)
-    private val testProtocolConfig: ProtocolConfig = testProtocolConfig(model)
+    private val testCodegenContext: CodegenContext = testProtocolConfig(model)
 
     private fun RustWriter.renderOperation() {
         operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
@@ -80,8 +80,8 @@ class ResponseBindingGeneratorTest {
                 .filter { it.location == HttpLocation.HEADER }
             bindings.forEach { binding ->
                 val runtimeType = ResponseBindingGenerator(
-                    RestJson(testProtocolConfig),
-                    testProtocolConfig,
+                    RestJson(testCodegenContext),
+                    testCodegenContext,
                     operationShape
                 ).generateDeserializeHeaderFn(binding)
                 // little hack to force these functions to be generated

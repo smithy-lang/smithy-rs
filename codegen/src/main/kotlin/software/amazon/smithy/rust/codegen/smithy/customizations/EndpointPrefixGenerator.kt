@@ -12,25 +12,25 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.EndpointTraitBindings
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationBuildError
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 
-class EndpointPrefixGenerator(private val protocolConfig: ProtocolConfig, private val shape: OperationShape) :
+class EndpointPrefixGenerator(private val codegenContext: CodegenContext, private val shape: OperationShape) :
     OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
         is OperationSection.MutateRequest -> writable {
             shape.getTrait(EndpointTrait::class.java).map { epTrait ->
                 val endpointTraitBindings = EndpointTraitBindings(
-                    protocolConfig.model,
-                    protocolConfig.symbolProvider,
-                    protocolConfig.runtimeConfig,
+                    codegenContext.model,
+                    codegenContext.symbolProvider,
+                    codegenContext.runtimeConfig,
                     shape,
                     epTrait
                 )
-                val buildError = OperationBuildError(protocolConfig.runtimeConfig)
+                val buildError = OperationBuildError(codegenContext.runtimeConfig)
                 withBlock("let endpoint_prefix = ", ";") {
                     endpointTraitBindings.render(this, "self")
                 }
