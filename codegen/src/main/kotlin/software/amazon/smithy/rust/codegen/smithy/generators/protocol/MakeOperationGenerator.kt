@@ -34,7 +34,7 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 open class MakeOperationGenerator(
     protected val codegenContext: CodegenContext,
     private val protocol: Protocol,
-    private val bodyWriter: HttpProtocolBodyWriter,
+    private val bodyWriter: ProtocolBodyGenerator,
     private val functionName: String = "make_operation",
     private val public: Boolean = true
 ) {
@@ -83,7 +83,7 @@ open class MakeOperationGenerator(
             rust("let properties = smithy_http::property_bag::SharedPropertyBag::new();")
             rust("let request = request_builder_base(&self)?;")
             withBlock("let body =", ";") {
-                bodyWriter.writeBody(this, "self", shape)
+                bodyWriter.generateBody(this, "self", shape)
             }
             rust("let request = Self::assemble(request, body);")
             rustTemplate(

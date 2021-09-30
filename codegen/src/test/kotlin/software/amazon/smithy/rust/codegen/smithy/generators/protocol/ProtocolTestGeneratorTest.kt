@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.HttpProtocolBodyWriter.BodyMetadata
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolBodyGenerator.BodyMetadata
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
@@ -126,8 +126,8 @@ class ProtocolTestGeneratorTest {
         // A stubbed test protocol to do enable testing intentionally broken protocols
         class TestProtocolGenerator(private val codegenContext: CodegenContext, protocol: Protocol) :
             ProtocolGenerator(codegenContext),
-            HttpProtocolBodyWriter,
-            HttpProtocolTraitImplWriter {
+            ProtocolBodyGenerator,
+            ProtocolTraitImplGenerator {
             private val symbolProvider = codegenContext.symbolProvider
 
             override val makeOperationGenerator: MakeOperationGenerator =
@@ -141,16 +141,16 @@ class ProtocolTestGeneratorTest {
                         }
                     }
                 }
-            override val traitWriter: HttpProtocolTraitImplWriter get() = this
+            override val traitWriter: ProtocolTraitImplGenerator get() = this
 
             override fun bodyMetadata(operationShape: OperationShape): BodyMetadata =
                 BodyMetadata(takesOwnership = false)
 
-            override fun writeBody(writer: RustWriter, self: String, operationShape: OperationShape) {
+            override fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape) {
                 writer.writeWithNoFormatting(body)
             }
 
-            override fun writeTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
+            override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
                 operationWriter.rustTemplate(
                     """
                     impl #{parse_strict} for ${operationShape.id.name}{

@@ -34,7 +34,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientCustomi
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientSection
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyWriter
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -141,7 +141,7 @@ class AwsInputPresignedMethod(
             MakeOperationGenerator(
                 transformedProtocolConfig,
                 protocol,
-                HttpBoundProtocolBodyWriter(transformedProtocolConfig, protocol),
+                HttpBoundProtocolBodyGenerator(transformedProtocolConfig, protocol),
                 // Prefixed with underscore to avoid colliding with modeled functions
                 functionName = makeOperationFn,
                 public = false,

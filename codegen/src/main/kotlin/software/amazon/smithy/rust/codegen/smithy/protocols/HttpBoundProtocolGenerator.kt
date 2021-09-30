@@ -35,11 +35,11 @@ import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.HttpProtocolBodyWriter
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.HttpProtocolBodyWriter.BodyMetadata
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.HttpProtocolTraitImplWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolBodyGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolBodyGenerator.BodyMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
@@ -60,7 +60,7 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 class HttpBoundProtocolGenerator(
     private val codegenContext: CodegenContext,
     private val protocol: Protocol,
-) : ProtocolGenerator(codegenContext), HttpProtocolTraitImplWriter {
+) : ProtocolGenerator(codegenContext), ProtocolTraitImplGenerator {
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -68,8 +68,8 @@ class HttpBoundProtocolGenerator(
     private val operationSerModule = RustModule.private("operation_ser")
 
     override val makeOperationGenerator: MakeOperationGenerator =
-        MakeOperationGenerator(codegenContext, protocol, HttpBoundProtocolBodyWriter(codegenContext, protocol))
-    override val traitWriter: HttpProtocolTraitImplWriter get() = this
+        MakeOperationGenerator(codegenContext, protocol, HttpBoundProtocolBodyGenerator(codegenContext, protocol))
+    override val traitWriter: ProtocolTraitImplGenerator get() = this
 
     private val codegenScope = arrayOf(
         "ParseStrict" to RuntimeType.parseStrict(runtimeConfig),
@@ -79,7 +79,7 @@ class HttpBoundProtocolGenerator(
         "Bytes" to RuntimeType.Bytes,
     )
 
-    override fun writeTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
+    override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
         val operationName = symbolProvider.toSymbol(operationShape).name
 
@@ -399,10 +399,10 @@ class HttpBoundProtocolGenerator(
     }
 }
 
-class HttpBoundProtocolBodyWriter(
+class HttpBoundProtocolBodyGenerator(
     codegenContext: CodegenContext,
     private val protocol: Protocol,
-) : HttpProtocolBodyWriter {
+) : ProtocolBodyGenerator {
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -442,7 +442,7 @@ class HttpBoundProtocolBodyWriter(
         }
     }
 
-    override fun writeBody(writer: RustWriter, self: String, operationShape: OperationShape) {
+    override fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape) {
         val bodyMetadata = bodyMetadata(operationShape)
         val serializerGenerator = protocol.structuredDataSerializer(operationShape)
         val inputShape = operationShape.inputShape(model)

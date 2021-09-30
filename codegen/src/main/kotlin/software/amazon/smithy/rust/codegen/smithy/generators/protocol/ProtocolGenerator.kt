@@ -25,16 +25,16 @@ import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.util.inputShape
 
-interface HttpProtocolBodyWriter {
+interface ProtocolBodyGenerator {
     data class BodyMetadata(val takesOwnership: Boolean)
 
     fun bodyMetadata(operationShape: OperationShape): BodyMetadata
 
-    fun writeBody(writer: RustWriter, self: String, operationShape: OperationShape)
+    fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape)
 }
 
-interface HttpProtocolTraitImplWriter {
-    fun writeTraitImpls(operationWriter: RustWriter, operationShape: OperationShape)
+interface ProtocolTraitImplGenerator {
+    fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape)
 }
 
 /**
@@ -42,7 +42,7 @@ interface HttpProtocolTraitImplWriter {
  */
 abstract class ProtocolGenerator(codegenContext: CodegenContext) {
     abstract val makeOperationGenerator: MakeOperationGenerator
-    abstract val traitWriter: HttpProtocolTraitImplWriter
+    abstract val traitWriter: ProtocolTraitImplGenerator
 
     private val runtimeConfig = codegenContext.runtimeConfig
     private val symbolProvider = codegenContext.symbolProvider
@@ -131,7 +131,7 @@ abstract class ProtocolGenerator(codegenContext: CodegenContext) {
 
             writeCustomizations(customizations, OperationSection.OperationImplBlock(customizations))
         }
-        traitWriter.writeTraitImpls(operationWriter, operationShape)
+        traitWriter.generateTraitImpls(operationWriter, operationShape)
     }
 
     private fun buildOperationTypeOutput(writer: RustWriter, shape: OperationShape): String =
