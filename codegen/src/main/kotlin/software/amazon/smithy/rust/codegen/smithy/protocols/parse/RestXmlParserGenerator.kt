@@ -2,7 +2,7 @@ package software.amazon.smithy.rust.codegen.smithy.protocols.parse
 
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 
 class RestXmlParserGenerator(
     protocolConfig: ProtocolConfig,

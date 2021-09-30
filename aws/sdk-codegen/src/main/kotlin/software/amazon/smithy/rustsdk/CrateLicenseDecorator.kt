@@ -8,7 +8,7 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 
 class CrateLicenseDecorator : RustCodegenDecorator {
     override val name: String = "CrateLicense"

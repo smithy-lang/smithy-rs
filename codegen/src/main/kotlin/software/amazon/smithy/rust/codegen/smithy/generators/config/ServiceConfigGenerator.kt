@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.util.hasTrait
 
 /**

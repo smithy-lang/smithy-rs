@@ -18,9 +18,9 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.AwsQueryParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.AwsQuerySerializerGenerator

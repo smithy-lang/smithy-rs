@@ -15,7 +15,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
@@ -30,17 +29,17 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolBodyWriter
-import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolBodyWriter.BodyMetadata
-import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolTraitImplWriter
-import software.amazon.smithy.rust.codegen.smithy.generators.MakeOperationGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.HttpProtocolBodyWriter
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.HttpProtocolBodyWriter.BodyMetadata
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.HttpProtocolTraitImplWriter
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
@@ -58,41 +57,10 @@ import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-interface Protocol {
-    val httpBindingResolver: HttpBindingResolver
-
-    val defaultTimestampFormat: TimestampFormatTrait.Format
-
-    fun additionalHeaders(operationShape: OperationShape): List<Pair<String, String>> = emptyList()
-
-    fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator
-
-    fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator
-
-    /**
-     * Generates a function signature like the following:
-     * ```rust
-     * fn parse_http_generic_error(response: &Response<Bytes>) -> smithy_types::error::Error
-     * ```
-     **/
-    fun parseHttpGenericError(operationShape: OperationShape): RuntimeType
-
-    /**
-     * Generates a function signature like the following:
-     * ```rust
-     * fn parse_event_stream_generic_error(payload: &Bytes) -> smithy_types::error::Error
-     * ```
-     *
-     * Event Stream generic errors are almost identical to HTTP generic errors, except that
-     * there are no response headers or statuses available to further inform the error parsing.
-     **/
-    fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType
-}
-
 class HttpBoundProtocolGenerator(
     private val protocolConfig: ProtocolConfig,
     private val protocol: Protocol,
-) : HttpProtocolGenerator(protocolConfig), HttpProtocolTraitImplWriter {
+) : ProtocolGenerator(protocolConfig), HttpProtocolTraitImplWriter {
     private val symbolProvider = protocolConfig.symbolProvider
     private val model = protocolConfig.model
     private val runtimeConfig = protocolConfig.runtimeConfig

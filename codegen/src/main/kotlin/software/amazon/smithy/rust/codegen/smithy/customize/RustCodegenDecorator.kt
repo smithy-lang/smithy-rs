@@ -14,8 +14,8 @@ import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 import java.util.ServiceLoader
 import java.util.logging.Logger

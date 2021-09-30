@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.generators
+package software.amazon.smithy.rust.codegen.smithy.generators.protocol
 
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.OperationShape
@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomizati
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.http.RequestBindingGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.dq

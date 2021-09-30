@@ -12,8 +12,8 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes

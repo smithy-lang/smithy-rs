@@ -17,16 +17,16 @@ import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.Trait
-import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGeneratorFactory
 
-typealias ProtocolMap = Map<ShapeId, ProtocolGeneratorFactory<HttpProtocolGenerator>>
+typealias ProtocolMap = Map<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator>>
 
 class ProtocolLoader(private val supportedProtocols: ProtocolMap) {
     fun protocolFor(
         model: Model,
         serviceShape: ServiceShape
-    ): Pair<ShapeId, ProtocolGeneratorFactory<HttpProtocolGenerator>> {
+    ): Pair<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator>> {
         val protocols: MutableMap<ShapeId, Trait> = ServiceIndex.of(model).getProtocols(serviceShape)
         val matchingProtocols =
             protocols.keys.mapNotNull { protocolId -> supportedProtocols[protocolId]?.let { protocolId to it } }

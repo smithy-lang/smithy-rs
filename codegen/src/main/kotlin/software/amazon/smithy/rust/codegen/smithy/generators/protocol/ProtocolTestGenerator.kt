@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.generators
+package software.amazon.smithy.rust.codegen.smithy.generators.protocol
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.knowledge.OperationIndex
@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
@@ -54,7 +55,7 @@ data class ProtocolSupport(
 /**
  * Generate protocol tests for an operation
  */
-class HttpProtocolTestGenerator(
+class ProtocolTestGenerator(
     private val protocolConfig: ProtocolConfig,
     private val protocolSupport: ProtocolSupport,
     private val operationShape: OperationShape,

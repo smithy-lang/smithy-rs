@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.generators
+package software.amazon.smithy.rust.codegen.smithy.generators.protocol
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
@@ -24,6 +24,9 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.inputShape
 
@@ -39,7 +42,7 @@ data class ProtocolConfig(
     val moduleName: String
 )
 
-interface ProtocolGeneratorFactory<out T : HttpProtocolGenerator> {
+interface ProtocolGeneratorFactory<out T : ProtocolGenerator> {
     fun protocol(protocolConfig: ProtocolConfig): Protocol
     fun buildProtocolGenerator(protocolConfig: ProtocolConfig): T
     fun transformModel(model: Model): Model
@@ -62,7 +65,7 @@ interface HttpProtocolTraitImplWriter {
 /**
  * Class providing scaffolding for HTTP based protocols that must build an HTTP request (headers / URL) and a body.
  */
-abstract class HttpProtocolGenerator(protocolConfig: ProtocolConfig) {
+abstract class ProtocolGenerator(protocolConfig: ProtocolConfig) {
     abstract val makeOperationGenerator: MakeOperationGenerator
     abstract val traitWriter: HttpProtocolTraitImplWriter
 

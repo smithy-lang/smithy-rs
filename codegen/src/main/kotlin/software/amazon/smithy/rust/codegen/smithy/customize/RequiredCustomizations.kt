@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.smithy.customizations.HttpChecksumReq
 import software.amazon.smithy.rust.codegen.smithy.customizations.IdempotencyTokenGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.SmithyTypesPubUseGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 
 /** A set of customizations that are included in all protocols.
  *

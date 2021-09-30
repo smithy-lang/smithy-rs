@@ -2,7 +2,7 @@ package software.amazon.smithy.rust.codegen.smithy.protocols.parse
 
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 
 /**
  * The EC2 query protocol's responses are identical to REST XML's, except that they are wrapped

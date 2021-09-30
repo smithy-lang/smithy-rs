@@ -8,7 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
 import software.amazon.smithy.aws.traits.protocols.Ec2QueryNameTrait
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.traits.XmlNameTrait
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.utils.StringUtils
 

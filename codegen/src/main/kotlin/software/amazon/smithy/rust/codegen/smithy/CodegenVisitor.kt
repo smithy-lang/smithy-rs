@@ -18,13 +18,13 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.AddErrorMessage
@@ -49,8 +49,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private val fileManifest = context.fileManifest
     private val model: Model
     private val protocolConfig: ProtocolConfig
-    private val protocolGenerator: ProtocolGeneratorFactory<HttpProtocolGenerator>
-    private val httpGenerator: HttpProtocolGenerator
+    private val protocolGenerator: ProtocolGeneratorFactory<ProtocolGenerator>
+    private val httpGenerator: ProtocolGenerator
 
     init {
         val symbolVisitorConfig =

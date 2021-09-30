@@ -31,9 +31,9 @@ import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientSection
-import software.amazon.smithy.rust.codegen.smithy.generators.MakeOperationGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyWriter
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.util.expectTrait

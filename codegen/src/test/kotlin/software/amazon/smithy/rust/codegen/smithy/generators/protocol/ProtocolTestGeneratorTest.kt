@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.generators
+package software.amazon.smithy.rust.codegen.smithy.generators.protocol
 
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
@@ -19,8 +19,8 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolBodyWriter.BodyMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.HttpProtocolBodyWriter.BodyMetadata
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
@@ -33,7 +33,7 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.nio.file.Path
 
-class HttpProtocolTestGeneratorTest {
+class ProtocolTestGeneratorTest {
     private val model = """
         namespace com.example
 
@@ -123,7 +123,7 @@ class HttpProtocolTestGeneratorTest {
 
         // A stubbed test protocol to do enable testing intentionally broken protocols
         class TestProtocolGenerator(private val protocolConfig: ProtocolConfig, protocol: Protocol) :
-            HttpProtocolGenerator(protocolConfig),
+            ProtocolGenerator(protocolConfig),
             HttpProtocolBodyWriter,
             HttpProtocolTraitImplWriter {
             private val symbolProvider = protocolConfig.symbolProvider
@@ -166,12 +166,12 @@ class HttpProtocolTestGeneratorTest {
             }
         }
 
-        class TestProtocolFactory : ProtocolGeneratorFactory<HttpProtocolGenerator> {
+        class TestProtocolFactory : ProtocolGeneratorFactory<ProtocolGenerator> {
             override fun protocol(protocolConfig: ProtocolConfig): Protocol {
                 return RestJson(protocolConfig)
             }
 
-            override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): HttpProtocolGenerator {
+            override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): ProtocolGenerator {
                 return TestProtocolGenerator(protocolConfig, protocol(protocolConfig))
             }
 

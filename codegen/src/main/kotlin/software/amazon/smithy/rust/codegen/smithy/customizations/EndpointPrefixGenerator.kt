@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomizati
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.EndpointTraitBindings
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationBuildError
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 
 class EndpointPrefixGenerator(private val protocolConfig: ProtocolConfig, private val shape: OperationShape) :
     OperationCustomization() {

@@ -24,7 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ClientGenerics
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolConfig
 
 private class Types(runtimeConfig: RuntimeConfig) {
     private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig).copy(optional = true)
