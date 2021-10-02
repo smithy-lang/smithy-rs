@@ -15,7 +15,7 @@ use aws_sdk_transcribestreaming::{Blob, Client, Config, Credentials, Region, Sdk
 use bytes::BufMut;
 use futures_core::Stream;
 use smithy_client::dvr::{Event, ReplayingConnection};
-use smithy_eventstream::frame::{HeaderValue, Message};
+use smithy_eventstream::frame::{DecodedFrame, HeaderValue, Message, MessageFrameDecoder};
 use smithy_http::event_stream::BoxError;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error as StdError;
@@ -52,7 +52,7 @@ async fn test_success() {
 
     // Validate the requests
     replayer
-        .validate(&["content-type", "content-length"], validate_body)
+        .validate(&["content-type", "content-length"], validate_success_body)
         .await
         .unwrap();
 
@@ -93,7 +93,7 @@ async fn test_error() {
 
     // Validate the requests
     replayer
-        .validate(&["content-type", "content-length"], validate_body)
+        .validate(&["content-type", "content-length"], validate_error_body)
         .await
         .unwrap();
 }
@@ -127,19 +127,66 @@ async fn start_request(
     (replayer, output)
 }
 
-fn validate_body(expected_body: &[u8], actual_body: &[u8]) -> Result<(), Box<dyn StdError>> {
-    let expected_wrapper = Message::read_from(expected_body).unwrap();
-    let expected_msg = Message::read_from(expected_wrapper.payload().as_ref()).unwrap();
+fn decode_frames(mut body: &[u8]) -> Vec<(Message, Option<Message>)> {
+    let mut result = Vec::new();
+    let mut decoder = MessageFrameDecoder::new();
+    while let DecodedFrame::Complete(msg) = decoder.decode_frame(&mut body).unwrap() {
+        let inner_msg = if msg.payload().is_empty() {
+            None
+        } else {
+            Some(Message::read_from(msg.payload().as_ref()).unwrap())
+        };
+        result.push((msg, inner_msg));
+    }
+    result
+}
 
-    let actual_wrapper = Message::read_from(actual_body).unwrap();
-    let actual_msg = Message::read_from(actual_wrapper.payload().as_ref()).unwrap();
+fn validate_success_body(
+    expected_body: &[u8],
+    actual_body: &[u8],
+) -> Result<(), Box<dyn StdError>> {
+    validate_body(expected_body, actual_body, true)
+}
 
-    assert_eq!(
-        header_names(&expected_wrapper),
-        header_names(&actual_wrapper)
-    );
-    assert_eq!(header_map(&expected_msg), header_map(&actual_msg));
-    assert_eq!(expected_msg.payload(), actual_msg.payload());
+// For the error test, the second request frame may not be sent by the client depending on when
+// the error response is parsed and bubbled up to the user.
+fn validate_error_body(expected_body: &[u8], actual_body: &[u8]) -> Result<(), Box<dyn StdError>> {
+    validate_body(expected_body, actual_body, false)
+}
+
+fn validate_body(
+    expected_body: &[u8],
+    actual_body: &[u8],
+    full_stream: bool,
+) -> Result<(), Box<dyn StdError>> {
+    let expected_frames = decode_frames(expected_body);
+    let actual_frames = decode_frames(actual_body);
+
+    if full_stream {
+        assert_eq!(
+            expected_frames.len(),
+            actual_frames.len(),
+            "Frame count didn't match.\n\
+        Expected: {:?}\n\
+        Actual:   {:?}",
+            expected_frames,
+            actual_frames
+        );
+    }
+
+    for ((expected_wrapper, expected_message), (actual_wrapper, actual_message)) in
+        expected_frames.into_iter().zip(actual_frames.into_iter())
+    {
+        assert_eq!(
+            header_names(&expected_wrapper),
+            header_names(&actual_wrapper)
+        );
+        if let Some(expected_message) = expected_message {
+            let actual_message = actual_message.unwrap();
+            assert_eq!(header_map(&expected_message), header_map(&actual_message));
+            assert_eq!(expected_message.payload(), actual_message.payload());
+        }
+    }
     Ok(())
 }
 
