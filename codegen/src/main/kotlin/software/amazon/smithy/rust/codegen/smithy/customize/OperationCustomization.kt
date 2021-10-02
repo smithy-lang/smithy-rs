@@ -5,11 +5,19 @@
 
 package software.amazon.smithy.rust.codegen.smithy.customize
 
+import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
 sealed class OperationSection(name: String) : Section(name) {
     /** Write custom code into the `impl` block of this operation */
     object OperationImplBlock : OperationSection("OperationImplBlock")
+
+    /** Write additional functions inside the Input's impl block */
+    data class InputImpl(
+        val operationShape: OperationShape,
+        val inputShape: StructureShape
+    ) : OperationSection("InputImpl")
 
     data class MutateInput(val input: String, val config: String) : OperationSection("MutateInput")
 

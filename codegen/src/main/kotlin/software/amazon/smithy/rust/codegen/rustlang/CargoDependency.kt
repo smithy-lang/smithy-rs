@@ -54,7 +54,7 @@ sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
  */
 class InlineDependency(
     name: String,
-    val module: String,
+    val module: RustModule,
     val extraDependencies: List<RustDependency> = listOf(),
     val renderer: (RustWriter) -> Unit
 ) : RustDependency(name) {
@@ -67,15 +67,22 @@ class InlineDependency(
         return extraDependencies
     }
 
-    fun key() = "$module::$name"
+    fun key() = "${module.name}::$name"
 
     companion object {
         fun forRustFile(
             name: String,
             baseDir: String,
             vararg additionalDependencies: RustDependency
+        ): InlineDependency = forRustFile(name, baseDir, public = false, *additionalDependencies)
+
+        fun forRustFile(
+            name: String,
+            baseDir: String,
+            public: Boolean,
+            vararg additionalDependencies: RustDependency
         ): InlineDependency {
-            val module = name
+            val module = RustModule.default(name, public)
             val filename = "$name.rs"
             // The inline crate is loaded as a dependency on the runtime classpath
             val rustFile = this::class.java.getResource("/$baseDir/src/$filename")

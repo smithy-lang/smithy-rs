@@ -4,10 +4,10 @@
  */
 
 use crate::middleware::Signature;
-use aws_auth::Credentials;
 use aws_sigv4::event_stream::{sign_empty_message, sign_message};
 use aws_sigv4::SigningParams;
 use aws_types::region::SigningRegion;
+use aws_types::Credentials;
 use aws_types::SigningService;
 use smithy_eventstream::frame::{Message, SignMessage, SignMessageError};
 use smithy_http::property_bag::{PropertyBag, SharedPropertyBag};
@@ -38,15 +38,15 @@ impl SigV4Signer {
             .get::<SystemTime>()
             .copied()
             .unwrap_or_else(SystemTime::now);
-        SigningParams {
-            access_key: credentials.access_key_id(),
-            secret_key: credentials.secret_access_key(),
-            security_token: credentials.session_token(),
-            region: region.as_ref(),
-            service_name: signing_service.as_ref(),
-            date_time: time.into(),
-            settings: (),
-        }
+        let mut builder = SigningParams::builder()
+            .access_key(credentials.access_key_id())
+            .secret_key(credentials.secret_access_key())
+            .region(region.as_ref())
+            .service_name(signing_service.as_ref())
+            .date_time(time.into())
+            .settings(());
+        builder.set_security_token(credentials.session_token());
+        builder.build().unwrap()
     }
 }
 
@@ -91,9 +91,9 @@ impl SignMessage for SigV4Signer {
 mod tests {
     use crate::event_stream::SigV4Signer;
     use crate::middleware::Signature;
-    use aws_auth::Credentials;
     use aws_types::region::Region;
     use aws_types::region::SigningRegion;
+    use aws_types::Credentials;
     use aws_types::SigningService;
     use smithy_eventstream::frame::{HeaderValue, Message, SignMessage};
     use smithy_http::property_bag::PropertyBag;

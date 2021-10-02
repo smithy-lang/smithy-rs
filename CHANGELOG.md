@@ -1,6 +1,170 @@
 vNext (Month Day, Year)
------------------------
+=======================
+**Breaking changes**
+- :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
+
+**New this week**
+- :bug: Fix an issue where `smithy-xml` may have generated invalid XML (smithy-rs#719)
+
+v0.24 (September 24th, 2021)
+============================
+
+**New This Week**
+
+- Add IMDS credential provider to `aws-config` (smithy-rs#709)
+- Add IMDS client to `aws-config` (smithy-rs#701)
+- Add `TimeSource` to `aws_types::os_shim_internal` (smithy-rs#701)
+- User agent construction is now `const fn` (smithy-rs#701)
+- Add `sts::AssumeRoleProvider` to `aws-config` (smithy-rs#703, aws-sdk-rust#3)
+- Add IMDS region provider to `aws-config` (smithy-rs#715)
+- Add query param signing to the `aws-sigv4` crate (smithy-rs#707)
+- :bug: Update event stream `Receiver`s to be `Send` (smithy-rs#702, #aws-sdk-rust#224)
+
+v0.23 (September 14th, 2021)
+=======================
+
+**New This Week**
+- :bug: Fixes issue where `Content-Length` header could be duplicated leading to signing failure (aws-sdk-rust#220, smithy-rs#697)
+- :bug: Fixes naming collision during generation of model shapes that collide with `<operationname>Input` and `<operationname>Output` (#699)
+
+v0.22 (September 2nd, 2021)
+===========================
+
+This release adds support for three commonly requested features:
+- More powerful credential chain
+- Support for constructing multiple clients from the same configuration
+- Support for Transcribe streaming and S3 Select
+
+In addition, this overhauls client configuration which lead to a number of breaking changes. Detailed changes are inline.
+
+Current Credential Provider Support:
+- [x] Environment variables
+- [x] Web Identity Token Credentials
+- [ ] Profile file support (partial)
+  - [ ] Credentials
+    - [ ] SSO
+    - [ ] ECS Credential source
+    - [ ] IMDS credential source
+    - [x] Assume role from source profile
+    - [x] Static credentials source profile
+    - [x] WebTokenIdentity provider
+  - [x] Region
+- [ ] IMDS
+- [ ] ECS
+
+Upgrade Guide
+-------------
+
+### If you use `<sdk>::Client::from_env`
+
+`from_env` loaded region & credentials from environment variables _only_. Default sources have been removed from the generated
+SDK clients and moved to the `aws-config` package. Note that the `aws-config` package default chain adds support for
+profile file and web identity token profiles.
+
+1. Add a dependency on `aws-config`:
+     ```toml
+     [dependencies]
+     aws-config = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha" }
+     ```
+2. Update your client creation code:
+   ```rust
+   // `shared_config` can be used to construct multiple different service clients!
+   let shared_config = aws_config::load_from_env().await;
+   // before: <service>::Client::from_env();
+   let client = <service>::Client::new(&shared_config)
+   ```
+
+### If you used `<client>::Config::builder()`
+
+`Config::build()` has been modified to _not_ fallback to a default provider. Instead, use `aws-config` to load and modify
+the default chain. Note that when you switch to `aws-config`, support for profile files and web identity tokens will be added.
+
+1. Add a dependency on `aws-config`:
+     ```toml
+     [dependencies]
+     aws-config = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha" }
+     ```
+
+2. Update your client creation code:
+
+   ```rust
+   fn before() {
+     let region = aws_types::region::ChainProvider::first_try(<1 provider>).or_default_provider();
+     let config = <service>::Config::builder().region(region).build();
+     let client = <service>::Client::from_conf(&config);
+   }
+
+   async fn after() {
+     use aws_config::meta::region::RegionProviderChain;
+     let region_provider = RegionProviderChain::first_try(<1 provider>).or_default_provider();
+     // `shared_config` can be used to construct multiple different service clients!
+     let shared_config = aws_config::from_env().region(region_provider).load().await;
+     let client = <service>::Client::new(&shared_config)
+   }
+   ```
+
+### If you used `aws-auth-providers`
+All credential providers that were in `aws-auth-providers` have been moved to `aws-config`. Unless you have a specific use case
+for a specific credential provider, you should use the default provider chain:
+
+```rust
+ let shared_config = aws_config::load_from_env().await;
+ let client = <service>::Client::new(&shared_config);
+```
+
+### If you maintain your own credential provider
+
+`AsyncProvideCredentials` has been renamed to `ProvideCredentials`. The trait has been moved from `aws-auth` to `aws-types`.
+The original `ProvideCredentials` trait has been removed. The return type has been changed to by a custom future.
+
+For synchronous use cases:
+```rust
+use aws_types::credentials::{ProvideCredentials, future};
+
+#[derive(Debug)]
+struct CustomCreds;
+impl ProvideCredentials for CustomCreds {
+  fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
+    where
+            Self: 'a,
+  {
+    // if your credentials are synchronous, use `::ready`
+    // if your credentials are loaded asynchronously, use `::new`
+    future::ProvideCredentials::ready(todo!()) // your credentials go here
+  }
+}
+```
+
+For asynchronous use cases:
+```rust
+use aws_types::credentials::{ProvideCredentials, future, Result};
+
+#[derive(Debug)]
+struct CustomAsyncCreds;
+impl CustomAsyncCreds {
+  async fn load_credentials(&self) -> Result {
+    Ok(Credentials::from_keys("my creds...", "secret", None))
+  }
+}
+
+impl ProvideCredentials for CustomCreds {
+  fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
+    where
+            Self: 'a,
+  {
+    future::ProvideCredentials::new(self.load_credentials())
+  }
+}
+```
+
+Changes
+-------
+
 **Breaking Changes**
+
+- Credential providers from `aws-auth-providers` have been moved to `aws-config` (#678)
+- `AsyncProvideCredentials` has been renamed to `ProvideCredentials`. The original non-async provide credentials has been
+  removed. See the migration guide above.
 - `<sevicename>::from_env()` has been removed (#675). A drop-in replacement is available:
   1. Add a dependency on `aws-config`:
      ```toml
@@ -29,18 +193,25 @@ vNext (Month Day, Year)
 
 **New this week**
 
-- (When complete) Add Event Stream support (#653, #xyz)
-- (When complete) Add profile file provider for region (#594, #xyz)
+- :tada: Add profile file provider for region (#594, #682)
+- :tada: Add support for shared configuration between multiple services (#673)
+- :tada: Add support for Transcribe `StartStreamTranscription` and S3 `SelectObjectContent` operations (#667)
+- :tada: Add support for new MemoryDB service (#677)
 - Improve documentation on collection-aware builders (#664)
-- Add support for Transcribe `StartStreamTranscription` and S3 `SelectObjectContent` operations (#667)
-- Add support for shared configuration between multiple services (#673)
+- Update AWS SDK models (#677)
+- :bug: Fix sigv4 signing when request ALPN negotiates to HTTP/2. (#674)
+- :bug: Fix integer size on S3 `Size` (#679, aws-sdk-rust#209)
+- :bug: Fix JSON parsing issue for modeled empty structs (#683, aws-sdk-rust#212)
+- :bug: Fix acronym case disagreement between FluentClientGenerator and HttpProtocolGenerator type aliasing (#668)
 
 **Internal Changes**
+
+- Add Event Stream support for restJson1 and restXml (#653, #667)
 - Add NowOrLater future to smithy-async (#672)
 
 
 v0.21 (August 19th, 2021)
--------------------------
+=========================
 
 **New This Week**
 
@@ -62,7 +233,7 @@ v0.21 (August 19th, 2021)
 - Add support for the smithy auth trait. This enables authorizations that explicitly disable authorization to work when no credentials have been provided. (#652)
 
 v0.20 (August 10th, 2021)
---------------------------
+=========================
 
 **Breaking changes**
 
@@ -90,12 +261,12 @@ v0.20 (August 10th, 2021)
 **New This Week**
 
 - Add AssumeRoleProvider parser implementation. (#632)
-- The closure passed to `async_provide_credentials_fn` can now borrow values (#637)
+- The closure passed to `provide_credentials_fn` can now borrow values (#637)
 - Add `Sender`/`Receiver` implementations for Event Stream (#639)
 - Bring in the latest AWS models (#630)
 
 v0.19 (August 3rd, 2021)
-------------------------
+========================
 
 IoT Data Plane is now available! If you discover it isn't functioning as expected, please let us know!
 
@@ -122,12 +293,12 @@ Thank you for your contributions! :heart:
 - @trevorrobertsjr (#622)
 
 v0.18.1 (July 27th 2021)
-------------------------
+========================
 
 - Remove timestreamwrite and timestreamquery from the generated services (#613)
 
 v0.18 (July 27th 2021)
-----------------------
+======================
 
 **Breaking changes**
 
@@ -146,7 +317,7 @@ v0.18 (July 27th 2021)
 - :bug: Bugfix: Constrain RFC-3339 timestamp formatting to microsecond precision (#596)
 
 v0.17 (July 15th 2021)
-----------------------
+======================
 
 **New this Week**
 
@@ -162,7 +333,7 @@ Thank you for your contributions! :heart:
 - @eagletmt (#566)
 
 v0.16 (July 6th 2021)
----------------------
+=====================
 
 **New this Week**
 
@@ -172,7 +343,7 @@ v0.16 (July 6th 2021)
 - :tada: Add support for EBS (#567)
 - :tada: Add support for Cognito (#573)
 - :tada: Add support for Snowball (#579, @landonxjames)
-- Make it possible to asynchronously provide credentials with `async_provide_credentials_fn` (#572, #577)
+- Make it possible to asynchronously provide credentials with `provide_credentials_fn` (#572, #577)
 - Improve RDS, QLDB, Polly, and KMS examples (#561, #560, #558, #556, #550)
 - Update AWS SDK models (#575)
 - :bug: Bugfix: Fill in message from error response even when it doesn't match the modeled case format (#565)
@@ -190,7 +361,7 @@ Thank you for your contributions! :heart:
 - landonxjames (#579)
 
 v0.15 (June 29th 2021)
-----------------------
+======================
 
 This week, we've added EKS, ECR and Cloudwatch. The JSON deserialization implementation has been replaced, please be on
 the lookout for potential issues.
@@ -221,7 +392,7 @@ Thank you for your contributions! :heart:
 - @eagletmt (#531)
 
 v0.14 (June 22nd 2021)
-----------------------
+======================
 
 This week, we've added CloudWatch Logs support and fixed several bugs in the generated S3 clients. There are a few
 breaking changes this week.
@@ -258,7 +429,7 @@ Thank you for your contributions! :heart:
 - @zekisherif (#515)
 
 v0.13 (June 15th 2021)
-----------------------
+======================
 
 Smithy-rs now has codegen support for all AWS services! This week, we've added CloudFormation, SageMaker, EC2, and SES.
 More details below.
@@ -292,7 +463,7 @@ Contributors:
 Thanks!!
 
 v0.12 (June 8th 2021)
----------------------
+=====================
 
 Starting this week, smithy-rs now has codegen support for all AWS services except EC2. This week we’ve added MediaLive,
 MediaPackage, SNS, Batch, STS, RDS, RDSData, Route53, and IAM. More details below.
@@ -329,7 +500,7 @@ Contributors:
 Thanks!!
 
 v0.11 (June 1st, 2021)
-----------------------
+======================
 
 **New this week:**
 

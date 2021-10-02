@@ -249,7 +249,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Adds tags to an Amazon EMR resource. Tags make it easier to associate clusters in\n         various ways, such as grouping clusters to track your Amazon EMR resource allocation costs.\n         For more information, see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-tags.html\">Tag Clusters</a>. </p>"
+                "smithy.api#documentation": "<p>Adds tags to an Amazon EMR resource, such as a cluster or an Amazon EMR Studio. Tags make it easier to associate resources in\n         various ways, such as grouping clusters to track your Amazon EMR resource allocation costs.\n         For more information, see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-tags.html\">Tag Clusters</a>. </p>"
             }
         },
         "com.amazonaws.emr#AddTagsInput": {
@@ -258,20 +258,20 @@
                 "ResourceId": {
                     "target": "com.amazonaws.emr#ResourceId",
                     "traits": {
-                        "smithy.api#documentation": "<p>The Amazon EMR resource identifier to which tags will be added. This value must be a\n         cluster identifier.</p>",
+                        "smithy.api#documentation": "<p>The Amazon EMR resource identifier to which tags will be added. For example, a\n         cluster identifier or an Amazon EMR Studio ID.</p>",
                         "smithy.api#required": {}
                     }
                 },
                 "Tags": {
                     "target": "com.amazonaws.emr#TagList",
                     "traits": {
-                        "smithy.api#documentation": "<p>A list of tags to associate with a cluster and propagate to EC2 instances. Tags are\n         user-defined key-value pairs that consist of a required key string with a maximum of 128\n         characters, and an optional value string with a maximum of 256 characters.</p>",
+                        "smithy.api#documentation": "<p>A list of tags to associate with a resource. Tags are\n         user-defined key-value pairs that consist of a required key string with a maximum of 128\n         characters, and an optional value string with a maximum of 256 characters.</p>",
                         "smithy.api#required": {}
                     }
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>This input identifies a cluster and a list of tags to attach.</p>"
+                "smithy.api#documentation": "<p>This input identifies an Amazon EMR resource and a list of tags to attach.</p>"
             }
         },
         "com.amazonaws.emr#AddTagsOutput": {
@@ -498,6 +498,20 @@
             },
             "traits": {
                 "smithy.api#documentation": "<p>The status of an automatic scaling policy.\n         </p>"
+            }
+        },
+        "com.amazonaws.emr#AutoTerminationPolicy": {
+            "type": "structure",
+            "members": {
+                "IdleTimeout": {
+                    "target": "com.amazonaws.emr#Long",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Specifies the amount of idle time in seconds after which the cluster automatically terminates. You can specify a minimum of 60 seconds and a maximum of 604800 seconds (seven days).</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>An auto-termination policy for an Amazon EMR cluster. An auto-termination policy defines the amount of idle time in seconds after which a cluster automatically terminates. For alternative cluster termination options, see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-termination.html\">Control cluster termination</a>.</p>"
             }
         },
         "com.amazonaws.emr#BlockPublicAccessConfiguration": {
@@ -871,7 +885,7 @@
                 "VisibleToAllUsers": {
                     "target": "com.amazonaws.emr#Boolean",
                     "traits": {
-                        "smithy.api#documentation": "<p>Indicates whether the cluster is visible to IAM principals in the account associated\n         with the cluster. When <code>true</code>, IAM principals in the\n         account can perform EMR cluster actions on the cluster that their IAM policies allow. When <code>false</code>, only the IAM principal that created the cluster and the account root user can perform EMR actions, regardless of IAM permissions policies attached to other IAM principals.</p>\n         <p>The default value is <code>true</code> if a value is not provided when creating a\n         cluster using the EMR API <a>RunJobFlow</a> command, the CLI\n         <a href=\"https://docs.aws.amazon.com/cli/latest/reference/emr/create-cluster.html\">create-cluster</a> command, or the Management Console. IAM principals that are\n         allowed to perform actions on the cluster can use the <a>SetVisibleToAllUsers</a> action to change the value on a running cluster. For more information, see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/security_iam_emr-with-iam.html#security_set_visible_to_all_users\">Understanding the EMR Cluster VisibleToAllUsers Setting</a> in the <i>Amazon EMRManagement Guide</i>.</p>"
+                        "smithy.api#documentation": "<p>Indicates whether the cluster is visible to IAM principals in the Amazon Web Services account associated\n         with the cluster. When <code>true</code>, IAM principals in the\n         Amazon Web Services account can perform EMR cluster actions on the cluster that their IAM policies allow. When <code>false</code>, only the IAM principal that created the cluster and the Amazon Web Services account root user can perform EMR actions, regardless of IAM permissions policies attached to other IAM principals.</p>\n         <p>The default value is <code>true</code> if a value is not provided when creating a\n         cluster using the EMR API <a>RunJobFlow</a> command, the CLI\n         <a href=\"https://docs.aws.amazon.com/cli/latest/reference/emr/create-cluster.html\">create-cluster</a> command, or the Amazon Web Services Management Console. IAM principals that are\n         allowed to perform actions on the cluster can use the <a>SetVisibleToAllUsers</a> action to change the value on a running cluster. For more information, see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/security_iam_emr-with-iam.html#security_set_visible_to_all_users\">Understanding the EMR Cluster VisibleToAllUsers Setting</a> in the <i>Amazon EMRManagement Guide</i>.</p>"
                     }
                 },
                 "Applications": {
@@ -889,7 +903,7 @@
                 "ServiceRole": {
                     "target": "com.amazonaws.emr#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>The IAM role that will be assumed by the Amazon EMR service to access Amazon Web Services resources on\n         your behalf.</p>"
+                        "smithy.api#documentation": "<p>The IAM role that Amazon EMR assumes in order to access Amazon Web Services resources on\n         your behalf.</p>"
                     }
                 },
                 "NormalizedInstanceHours": {
@@ -1430,7 +1444,7 @@
                 "AuthMode": {
                     "target": "com.amazonaws.emr#AuthMode",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies whether the Studio authenticates users using single sign-on (SSO) or IAM.\n         Amazon EMR Studio currently only supports SSO authentication.</p>",
+                        "smithy.api#documentation": "<p>Specifies whether the Studio authenticates users using IAM or Amazon Web Services SSO.</p>",
                         "smithy.api#required": {}
                     }
                 },
@@ -1451,15 +1465,14 @@
                 "ServiceRole": {
                     "target": "com.amazonaws.emr#XmlString",
                     "traits": {
-                        "smithy.api#documentation": "<p>The IAM role that will be assumed by the Amazon EMR Studio. The service role provides a\n         way for Amazon EMR Studio to interoperate with other Amazon Web Services services.</p>",
+                        "smithy.api#documentation": "<p>The IAM role that the Amazon EMR Studio assumes. The service role provides a\n         way for Amazon EMR Studio to interoperate with other Amazon Web Services services.</p>",
                         "smithy.api#required": {}
                     }
                 },
                 "UserRole": {
                     "target": "com.amazonaws.emr#XmlString",
                     "traits": {
-                        "smithy.api#documentation": "<p>The IAM user role that will be assumed by users and groups logged in to an Amazon EMR Studio. The\n         permissions attached to this IAM role can be scoped down for each user or group using\n         session policies.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#documentation": "<p>The IAM user role that users and groups assume when logged in to an Amazon EMR Studio. Only specify a <code>UserRole</code> when you use Amazon Web Services SSO authentication. The\n         permissions attached to the <code>UserRole</code> can be scoped down for each user or group using\n         session policies.</p>"
                     }
                 },
                 "WorkspaceSecurityGroupId": {
@@ -1481,6 +1494,18 @@
                     "traits": {
                         "smithy.api#documentation": "<p>The Amazon S3 location to back up Amazon EMR Studio Workspaces and notebook files.</p>",
                         "smithy.api#required": {}
+                    }
+                },
+                "IdpAuthUrl": {
+                    "target": "com.amazonaws.emr#XmlString",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The authentication endpoint of your identity provider (IdP). Specify this value when you use IAM authentication and want to let federated users log in to a Studio with the Studio URL and credentials from your IdP. Amazon EMR Studio redirects users to this endpoint to enter credentials.</p>"
+                    }
+                },
+                "IdpRelayStateParameterName": {
+                    "target": "com.amazonaws.emr#XmlStringMaxLen256",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The name that your identity provider (IdP) uses for its <code>RelayState</code> parameter. For example, <code>RelayState</code> or <code>TargetSource</code>. Specify this value when you use IAM authentication and want to let federated users log in to a Studio using the Studio URL. The <code>RelayState</code> parameter differs by IdP.</p>"
                     }
                 },
                 "Tags": {
@@ -1522,7 +1547,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Maps a user or group to the Amazon EMR Studio specified by <code>StudioId</code>, and\n         applies a session policy to refine Studio permissions for that user or group.</p>"
+                "smithy.api#documentation": "<p>Maps a user or group to the Amazon EMR Studio specified by <code>StudioId</code>, and\n         applies a session policy to refine Studio permissions for that user or group. Use <code>CreateStudioSessionMapping</code> to assign users to a Studio when you use Amazon Web Services SSO authentication. For instructions on how to assign users to a Studio when you use IAM authentication, see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-studio-manage-users.html#emr-studio-assign-users-groups\">Assign a user or group to your EMR Studio</a>.</p>"
             }
         },
         "com.amazonaws.emr#CreateStudioSessionMappingInput": {
@@ -2418,6 +2443,9 @@
                     "target": "com.amazonaws.emr#DescribeStudio"
                 },
                 {
+                    "target": "com.amazonaws.emr#GetAutoTerminationPolicy"
+                },
+                {
                     "target": "com.amazonaws.emr#GetBlockPublicAccessConfiguration"
                 },
                 {
@@ -2472,6 +2500,9 @@
                     "target": "com.amazonaws.emr#PutAutoScalingPolicy"
                 },
                 {
+                    "target": "com.amazonaws.emr#PutAutoTerminationPolicy"
+                },
+                {
                     "target": "com.amazonaws.emr#PutBlockPublicAccessConfiguration"
                 },
                 {
@@ -2479,6 +2510,9 @@
                 },
                 {
                     "target": "com.amazonaws.emr#RemoveAutoScalingPolicy"
+                },
+                {
+                    "target": "com.amazonaws.emr#RemoveAutoTerminationPolicy"
                 },
                 {
                     "target": "com.amazonaws.emr#RemoveManagedScalingPolicy"
@@ -2606,6 +2640,41 @@
                 "smithy.api#documentation": "<p>The details of the step failure. The service attempts to detect the root cause for many\n         common failures.</p>"
             }
         },
+        "com.amazonaws.emr#GetAutoTerminationPolicy": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.emr#GetAutoTerminationPolicyInput"
+            },
+            "output": {
+                "target": "com.amazonaws.emr#GetAutoTerminationPolicyOutput"
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Returns the auto-termination policy for an Amazon EMR cluster.</p>"
+            }
+        },
+        "com.amazonaws.emr#GetAutoTerminationPolicyInput": {
+            "type": "structure",
+            "members": {
+                "ClusterId": {
+                    "target": "com.amazonaws.emr#ClusterId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Specifies the ID of the Amazon EMR cluster for which the auto-termination policy will be fetched.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.emr#GetAutoTerminationPolicyOutput": {
+            "type": "structure",
+            "members": {
+                "AutoTerminationPolicy": {
+                    "target": "com.amazonaws.emr#AutoTerminationPolicy",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Specifies the auto-termination policy that is attached to an Amazon EMR cluster. </p>"
+                    }
+                }
+            }
+        },
         "com.amazonaws.emr#GetBlockPublicAccessConfiguration": {
             "type": "operation",
             "input": {
@@ -2623,7 +2692,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Returns the Amazon EMR block public access configuration for your account in the\n         current Region. For more information see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/configure-block-public-access.html\">Configure Block\n            Public Access for Amazon EMR</a> in the <i>Amazon EMR Management\n            Guide</i>.</p>"
+                "smithy.api#documentation": "<p>Returns the Amazon EMR block public access configuration for your Amazon Web Services account in the\n         current Region. For more information see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/configure-block-public-access.html\">Configure Block\n            Public Access for Amazon EMR</a> in the <i>Amazon EMR Management\n            Guide</i>.</p>"
             }
         },
         "com.amazonaws.emr#GetBlockPublicAccessConfigurationInput": {
@@ -4220,7 +4289,7 @@
                 "VisibleToAllUsers": {
                     "target": "com.amazonaws.emr#Boolean",
                     "traits": {
-                        "smithy.api#documentation": "<p>Indicates whether the cluster is visible to IAM principals in the account associated\n         with the cluster. When <code>true</code>, IAM principals in the\n         account can perform EMR cluster actions that their IAM policies allow. When <code>false</code>, only the IAM principal that created the cluster and the account root user can perform EMR actions, regardless of IAM permissions policies attached to other IAM principals.</p>\n         <p>The default value is <code>true</code> if a value is not provided when creating a\n         cluster using the EMR API <a>RunJobFlow</a> command, the CLI\n         <a href=\"https://docs.aws.amazon.com/cli/latest/reference/emr/create-cluster.html\">create-cluster</a> command, or the Management Console. IAM principals that are authorized to perform actions on the cluster can use the <a>SetVisibleToAllUsers</a> action to change the value on a running cluster. For more information, see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/security_iam_emr-with-iam.html#security_set_visible_to_all_users\">Understanding the EMR Cluster VisibleToAllUsers Setting</a> in the <i>Amazon EMRManagement Guide</i>.</p>"
+                        "smithy.api#documentation": "<p>Indicates whether the cluster is visible to IAM principals in the Amazon Web Services account associated\n         with the cluster. When <code>true</code>, IAM principals in the\n         Amazon Web Services account can perform EMR cluster actions that their IAM policies allow. When <code>false</code>, only the IAM principal that created the cluster and the Amazon Web Services account root user can perform EMR actions, regardless of IAM permissions policies attached to other IAM principals.</p>\n         <p>The default value is <code>true</code> if a value is not provided when creating a\n         cluster using the EMR API <a>RunJobFlow</a> command, the CLI\n         <a href=\"https://docs.aws.amazon.com/cli/latest/reference/emr/create-cluster.html\">create-cluster</a> command, or the Amazon Web Services Management Console. IAM principals that are authorized to perform actions on the cluster can use the <a>SetVisibleToAllUsers</a> action to change the value on a running cluster. For more information, see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/security_iam_emr-with-iam.html#security_set_visible_to_all_users\">Understanding the EMR Cluster VisibleToAllUsers Setting</a> in the <i>Amazon EMRManagement Guide</i>.</p>"
                     }
                 },
                 "JobFlowRole": {
@@ -4698,7 +4767,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Provides the status of all clusters visible to this account. Allows you to filter\n         the list of clusters based on certain criteria; for example, filtering by cluster creation\n         date and time or by status. This call returns a maximum of 50 clusters in unsorted order per call, but\n         returns a marker to track the paging of the cluster list across multiple ListClusters\n         calls.</p>",
+                "smithy.api#documentation": "<p>Provides the status of all clusters visible to this Amazon Web Services account. Allows you to filter\n         the list of clusters based on certain criteria; for example, filtering by cluster creation\n         date and time or by status. This call returns a maximum of 50 clusters in unsorted order per call, but\n         returns a marker to track the paging of the cluster list across multiple ListClusters\n         calls.</p>",
                 "smithy.api#paginated": {
                     "inputToken": "Marker",
                     "outputToken": "Marker",
@@ -5094,7 +5163,7 @@
                 "NextToken": {
                     "target": "com.amazonaws.emr#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies the next page of results. If <code>NextToken</code> is not specified, which is usually the case for the first request of ListReleaseLabels, the first page of results are determined by other filtering parameters or by the latest version. The <code>ListReleaseLabels</code> request fails if the identity (account ID) and all filtering parameters are different from the original request, or if the <code>NextToken</code> is expired or tampered with.</p>"
+                        "smithy.api#documentation": "<p>Specifies the next page of results. If <code>NextToken</code> is not specified, which is usually the case for the first request of ListReleaseLabels, the first page of results are determined by other filtering parameters or by the latest version. The <code>ListReleaseLabels</code> request fails if the identity (Amazon Web Services account ID) and all filtering parameters are different from the original request, or if the <code>NextToken</code> is expired or tampered with.</p>"
                     }
                 },
                 "MaxResults": {
@@ -5335,7 +5404,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Returns a list of all Amazon EMR Studios associated with the account. The list\n         includes details such as ID, Studio Access URL, and creation time for each Studio.</p>",
+                "smithy.api#documentation": "<p>Returns a list of all Amazon EMR Studios associated with the Amazon Web Services account. The list\n         includes details such as ID, Studio Access URL, and creation time for each Studio.</p>",
                 "smithy.api#paginated": {
                     "inputToken": "Marker",
                     "outputToken": "Marker",
@@ -6026,6 +6095,40 @@
                 }
             }
         },
+        "com.amazonaws.emr#PutAutoTerminationPolicy": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.emr#PutAutoTerminationPolicyInput"
+            },
+            "output": {
+                "target": "com.amazonaws.emr#PutAutoTerminationPolicyOutput"
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Creates or updates an auto-termination policy for an Amazon EMR cluster. An auto-termination policy defines the amount of idle time in seconds after which a cluster automatically terminates. For alternative cluster termination options, see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-termination.html\">Control cluster termination</a>.</p>"
+            }
+        },
+        "com.amazonaws.emr#PutAutoTerminationPolicyInput": {
+            "type": "structure",
+            "members": {
+                "ClusterId": {
+                    "target": "com.amazonaws.emr#ClusterId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Specifies the ID of the Amazon EMR cluster to which the auto-termination policy will be attached.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "AutoTerminationPolicy": {
+                    "target": "com.amazonaws.emr#AutoTerminationPolicy",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Specifies the auto-termination policy to attach to the cluster.</p>"
+                    }
+                }
+            }
+        },
+        "com.amazonaws.emr#PutAutoTerminationPolicyOutput": {
+            "type": "structure",
+            "members": {}
+        },
         "com.amazonaws.emr#PutBlockPublicAccessConfiguration": {
             "type": "operation",
             "input": {
@@ -6043,7 +6146,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Creates or updates an Amazon EMR block public access configuration for your account\n         in the current Region. For more information see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/configure-block-public-access.html\">Configure Block\n            Public Access for Amazon EMR</a> in the <i>Amazon EMR Management\n            Guide</i>.</p>"
+                "smithy.api#documentation": "<p>Creates or updates an Amazon EMR block public access configuration for your Amazon Web Services account\n         in the current Region. For more information see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/configure-block-public-access.html\">Configure Block\n            Public Access for Amazon EMR</a> in the <i>Amazon EMR Management\n            Guide</i>.</p>"
             }
         },
         "com.amazonaws.emr#PutBlockPublicAccessConfigurationInput": {
@@ -6152,6 +6255,34 @@
             "type": "structure",
             "members": {}
         },
+        "com.amazonaws.emr#RemoveAutoTerminationPolicy": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.emr#RemoveAutoTerminationPolicyInput"
+            },
+            "output": {
+                "target": "com.amazonaws.emr#RemoveAutoTerminationPolicyOutput"
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Removes an auto-termination policy from an Amazon EMR cluster.</p>"
+            }
+        },
+        "com.amazonaws.emr#RemoveAutoTerminationPolicyInput": {
+            "type": "structure",
+            "members": {
+                "ClusterId": {
+                    "target": "com.amazonaws.emr#ClusterId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Specifies the ID of the Amazon EMR cluster from which the auto-termination policy will be removed.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.emr#RemoveAutoTerminationPolicyOutput": {
+            "type": "structure",
+            "members": {}
+        },
         "com.amazonaws.emr#RemoveManagedScalingPolicy": {
             "type": "operation",
             "input": {
@@ -6197,7 +6328,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Removes tags from an Amazon EMR resource. Tags make it easier to associate clusters in\n         various ways, such as grouping clusters to track your Amazon EMR resource allocation costs.\n         For more information, see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-tags.html\">Tag Clusters</a>. </p>\n         <p>The following example removes the stack tag with value Prod from a cluster:</p>"
+                "smithy.api#documentation": "<p>Removes tags from an Amazon EMR resource, such as a cluster or Amazon EMR Studio. Tags make it easier to associate resources in\n         various ways, such as grouping clusters to track your Amazon EMR resource allocation costs.\n         For more information, see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-tags.html\">Tag Clusters</a>. </p>\n         <p>The following example removes the stack tag with value Prod from a cluster:</p>"
             }
         },
         "com.amazonaws.emr#RemoveTagsInput": {
@@ -6206,27 +6337,27 @@
                 "ResourceId": {
                     "target": "com.amazonaws.emr#ResourceId",
                     "traits": {
-                        "smithy.api#documentation": "<p>The Amazon EMR resource identifier from which tags will be removed. This value must be a\n         cluster identifier.</p>",
+                        "smithy.api#documentation": "<p>The Amazon EMR resource identifier from which tags will be removed. For example, a\n         cluster identifier or an Amazon EMR Studio ID.</p>",
                         "smithy.api#required": {}
                     }
                 },
                 "TagKeys": {
                     "target": "com.amazonaws.emr#StringList",
                     "traits": {
-                        "smithy.api#documentation": "<p>A list of tag keys to remove from a resource.</p>",
+                        "smithy.api#documentation": "<p>A list of tag keys to remove from the resource.</p>",
                         "smithy.api#required": {}
                     }
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>This input identifies a cluster and a list of tags to remove.</p>"
+                "smithy.api#documentation": "<p>This input identifies an Amazon EMR resource and a list of tags to remove.</p>"
             }
         },
         "com.amazonaws.emr#RemoveTagsOutput": {
             "type": "structure",
             "members": {},
             "traits": {
-                "smithy.api#documentation": "<p>This output indicates the result of removing tags from a resource.</p>"
+                "smithy.api#documentation": "<p>This output indicates the result of removing tags from the resource.</p>"
             }
         },
         "com.amazonaws.emr#RepoUpgradeOnBoot": {
@@ -6350,7 +6481,7 @@
                 "VisibleToAllUsers": {
                     "target": "com.amazonaws.emr#Boolean",
                     "traits": {
-                        "smithy.api#documentation": "<p>Set this value to <code>true</code> so that IAM principals in the account associated with the cluster can perform EMR actions on the cluster that their IAM policies allow. This value defaults to <code>true</code> for clusters created using the EMR API or the CLI <a href=\"https://docs.aws.amazon.com/cli/latest/reference/emr/create-cluster.html\">create-cluster</a> command.</p> \n         <p>When set to <code>false</code>, only the IAM principal that created the cluster and the account root user can perform EMR actions for the cluster, regardless of the IAM permissions policies attached to other IAM principals. For more information, see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/security_iam_emr-with-iam.html#security_set_visible_to_all_users\">Understanding the EMR Cluster VisibleToAllUsers Setting</a> in the <i>Amazon EMRManagement Guide</i>.</p>"
+                        "smithy.api#documentation": "<p>Set this value to <code>true</code> so that IAM principals in the Amazon Web Services account associated with the cluster can perform EMR actions on the cluster that their IAM policies allow. This value defaults to <code>true</code> for clusters created using the EMR API or the CLI <a href=\"https://docs.aws.amazon.com/cli/latest/reference/emr/create-cluster.html\">create-cluster</a> command.</p> \n         <p>When set to <code>false</code>, only the IAM principal that created the cluster and the Amazon Web Services account root user can perform EMR actions for the cluster, regardless of the IAM permissions policies attached to other IAM principals. For more information, see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/security_iam_emr-with-iam.html#security_set_visible_to_all_users\">Understanding the EMR Cluster VisibleToAllUsers Setting</a> in the <i>Amazon EMRManagement Guide</i>.</p>"
                     }
                 },
                 "JobFlowRole": {
@@ -6362,7 +6493,7 @@
                 "ServiceRole": {
                     "target": "com.amazonaws.emr#XmlString",
                     "traits": {
-                        "smithy.api#documentation": "<p>The IAM role that will be assumed by the Amazon EMR service to access Amazon Web Services resources on\n         your behalf.</p>"
+                        "smithy.api#documentation": "<p>The IAM role that Amazon EMR assumes in order to access Amazon Web Services resources on\n         your behalf.</p>"
                     }
                 },
                 "Tags": {
@@ -6430,6 +6561,9 @@
                     "traits": {
                         "smithy.api#documentation": "<p>The specified placement group configuration for an Amazon EMR cluster.</p>"
                     }
+                },
+                "AutoTerminationPolicy": {
+                    "target": "com.amazonaws.emr#AutoTerminationPolicy"
                 }
             },
             "traits": {
@@ -6770,7 +6904,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Sets the <a>Cluster$VisibleToAllUsers</a> value for an EMR cluster. When <code>true</code>, IAM principals in the\n         account can perform EMR cluster actions that their IAM policies allow. When <code>false</code>, only the IAM principal that created the cluster and the account root user can perform EMR actions on the cluster, regardless of IAM permissions policies attached to other IAM principals.</p>\n         <p>This action works on running clusters. When you create a cluster, use the <a>RunJobFlowInput$VisibleToAllUsers</a> parameter.</p>\n         <p>For more information, see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/security_iam_emr-with-iam.html#security_set_visible_to_all_users\">Understanding the EMR Cluster VisibleToAllUsers Setting</a> in the <i>Amazon EMRManagement Guide</i>.</p>"
+                "smithy.api#documentation": "<p>Sets the <a>Cluster$VisibleToAllUsers</a> value for an EMR cluster. When <code>true</code>, IAM principals in the\n         Amazon Web Services account can perform EMR cluster actions that their IAM policies allow. When <code>false</code>, only the IAM principal that created the cluster and the Amazon Web Services account root user can perform EMR actions on the cluster, regardless of IAM permissions policies attached to other IAM principals.</p>\n         <p>This action works on running clusters. When you create a cluster, use the <a>RunJobFlowInput$VisibleToAllUsers</a> parameter.</p>\n         <p>For more information, see <a href=\"https://docs.aws.amazon.com/emr/latest/ManagementGuide/security_iam_emr-with-iam.html#security_set_visible_to_all_users\">Understanding the EMR Cluster VisibleToAllUsers Setting</a> in the <i>Amazon EMRManagement Guide</i>.</p>"
             }
         },
         "com.amazonaws.emr#SetVisibleToAllUsersInput": {
@@ -6786,7 +6920,7 @@
                 "VisibleToAllUsers": {
                     "target": "com.amazonaws.emr#Boolean",
                     "traits": {
-                        "smithy.api#documentation": "<p>A value of <code>true</code> indicates that an IAM principal in the account can perform\n         EMR actions on the cluster that the IAM policies attached to the principal allow. A\n         value of <code>false</code> indicates that only the IAM principal that created the cluster and the Amazon Web Services root user can perform EMR actions on the cluster.</p>",
+                        "smithy.api#documentation": "<p>A value of <code>true</code> indicates that an IAM principal in the Amazon Web Services account can perform\n         EMR actions on the cluster that the IAM policies attached to the principal allow. A\n         value of <code>false</code> indicates that only the IAM principal that created the cluster and the Amazon Web Services root user can perform EMR actions on the cluster.</p>",
                         "smithy.api#required": {}
                     }
                 }
@@ -7493,7 +7627,7 @@
                 "AuthMode": {
                     "target": "com.amazonaws.emr#AuthMode",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies whether the Amazon EMR Studio authenticates users using single sign-on (SSO) or\n         IAM.</p>"
+                        "smithy.api#documentation": "<p>Specifies whether the Amazon EMR Studio authenticates users using IAM or Amazon Web Services SSO.</p>"
                     }
                 },
                 "VpcId": {
@@ -7517,7 +7651,7 @@
                 "UserRole": {
                     "target": "com.amazonaws.emr#XmlString",
                     "traits": {
-                        "smithy.api#documentation": "<p>The name of the IAM role assumed by users logged in to the Amazon EMR Studio.</p>"
+                        "smithy.api#documentation": "<p>The name of the IAM role assumed by users logged in to the Amazon EMR Studio. A Studio only requires a <code>UserRole</code> when you use IAM authentication.</p>"
                     }
                 },
                 "WorkspaceSecurityGroupId": {
@@ -7548,6 +7682,18 @@
                     "target": "com.amazonaws.emr#XmlString",
                     "traits": {
                         "smithy.api#documentation": "<p>The Amazon S3 location to back up Amazon EMR Studio Workspaces and notebook\n         files.</p>"
+                    }
+                },
+                "IdpAuthUrl": {
+                    "target": "com.amazonaws.emr#XmlString",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Your identity provider's authentication endpoint. Amazon EMR Studio redirects federated users to this endpoint for authentication when logging in to a Studio with the Studio URL.</p>"
+                    }
+                },
+                "IdpRelayStateParameterName": {
+                    "target": "com.amazonaws.emr#XmlStringMaxLen256",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The name of your identity provider's <code>RelayState</code> parameter.</p>"
                     }
                 },
                 "Tags": {
@@ -7592,6 +7738,12 @@
                     "target": "com.amazonaws.emr#XmlStringMaxLen256",
                     "traits": {
                         "smithy.api#documentation": "<p>The unique access URL of the Amazon EMR Studio.</p>"
+                    }
+                },
+                "AuthMode": {
+                    "target": "com.amazonaws.emr#AuthMode",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Specifies whether the Studio authenticates users using IAM or Amazon Web Services SSO.</p>"
                     }
                 },
                 "CreationTime": {

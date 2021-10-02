@@ -568,6 +568,9 @@
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#ValidationException"
                 }
             ],
@@ -624,6 +627,9 @@
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -813,6 +819,9 @@
                     "target": "com.amazonaws.frauddetector#InternalServerException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#ValidationException"
                 }
             ],
@@ -879,6 +888,9 @@
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -1222,6 +1234,9 @@
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#ValidationException"
                 }
             ],
@@ -1364,6 +1379,9 @@
                     "target": "com.amazonaws.frauddetector#InternalServerException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#ValidationException"
                 }
             ],
@@ -1455,6 +1473,9 @@
                     "target": "com.amazonaws.frauddetector#InternalServerException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#ValidationException"
                 }
             ],
@@ -1539,6 +1560,9 @@
                     "target": "com.amazonaws.frauddetector#InternalServerException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#ValidationException"
                 }
             ],
@@ -1579,6 +1603,9 @@
                 },
                 {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -1628,6 +1655,9 @@
                 },
                 {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -1902,6 +1932,9 @@
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#ValidationException"
                 }
             ],
@@ -2112,7 +2145,8 @@
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>The entity details. </p>"
+                "smithy.api#documentation": "<p>The entity details. </p>",
+                "smithy.api#sensitive": {}
             }
         },
         "com.amazonaws.frauddetector#EntityType": {
@@ -2206,7 +2240,8 @@
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>The event type details.</p>"
+                "smithy.api#documentation": "<p>The event type details.</p>",
+                "smithy.api#sensitive": {}
             }
         },
         "com.amazonaws.frauddetector#EventVariableMap": {
@@ -2325,6 +2360,55 @@
                 "target": "com.amazonaws.frauddetector#ExternalModel"
             }
         },
+        "com.amazonaws.frauddetector#ExternalModelOutputs": {
+            "type": "structure",
+            "members": {
+                "externalModel": {
+                    "target": "com.amazonaws.frauddetector#ExternalModelSummary",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The Amazon SageMaker model.</p>"
+                    }
+                },
+                "outputs": {
+                    "target": "com.amazonaws.frauddetector#ExternalModelPredictionMap",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The fraud prediction scores from Amazon SageMaker model.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>The fraud prediction scores from Amazon SageMaker model.</p>"
+            }
+        },
+        "com.amazonaws.frauddetector#ExternalModelPredictionMap": {
+            "type": "map",
+            "key": {
+                "target": "com.amazonaws.frauddetector#string"
+            },
+            "value": {
+                "target": "com.amazonaws.frauddetector#string"
+            }
+        },
+        "com.amazonaws.frauddetector#ExternalModelSummary": {
+            "type": "structure",
+            "members": {
+                "modelEndpoint": {
+                    "target": "com.amazonaws.frauddetector#string",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The endpoint of the Amazon SageMaker model.</p>"
+                    }
+                },
+                "modelSource": {
+                    "target": "com.amazonaws.frauddetector#ModelSource",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The source of the model.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>The Amazon SageMaker model.</p>"
+            }
+        },
         "com.amazonaws.frauddetector#ExternalModelsMaxResults": {
             "type": "integer",
             "traits": {
@@ -2416,6 +2500,9 @@
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -2682,6 +2769,9 @@
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#ValidationException"
                 }
             ],
@@ -2756,6 +2846,9 @@
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ResourceUnavailableException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
@@ -2804,7 +2897,7 @@
                     }
                 },
                 "eventTimestamp": {
-                    "target": "com.amazonaws.frauddetector#string",
+                    "target": "com.amazonaws.frauddetector#utcTimestampISO8601",
                     "traits": {
                         "smithy.api#documentation": "<p>Timestamp that defines when the event under evaluation occurred.</p>",
                         "smithy.api#required": {}
@@ -2837,7 +2930,13 @@
                 "ruleResults": {
                     "target": "com.amazonaws.frauddetector#ListOfRuleResults",
                     "traits": {
-                        "smithy.api#documentation": "<p>The results.</p>"
+                        "smithy.api#documentation": "<p>The results from the rules.</p>"
+                    }
+                },
+                "externalModelOutputs": {
+                    "target": "com.amazonaws.frauddetector#ListOfExternalModelOutputs",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The model scores for Amazon SageMaker models.</p>"
                     }
                 }
             }
@@ -2859,6 +2958,9 @@
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -3001,6 +3103,9 @@
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 }
             ],
             "traits": {
@@ -3035,6 +3140,9 @@
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -3106,6 +3214,9 @@
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -3213,11 +3324,14 @@
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#ValidationException"
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Gets one or more models. Gets all models for the AWS account if no model type and no model id provided. Gets all models for the AWS account and model type, if the model type is specified but model id is not provided. Gets a specific model if (model type, model id) tuple is specified. </p> \n         <p>This is a paginated API. If you\n         provide a null <code>maxResults</code>, this action retrieves a maximum of 10 records\n         per page. If you provide a <code>maxResults</code>, the value must be between 1 and 10.\n         To get the next page results, provide the pagination token from the\n            response as part of your request. A null pagination token\n         fetches the records from the beginning.</p>",
+                "smithy.api#documentation": "<p>Gets one or more models. Gets all models for the Amazon Web Services account if no model type and no model id provided. Gets all models for the Amazon Web Services account and model type, if the model type is specified but model id is not provided. Gets a specific model if (model type, model id) tuple is specified. </p> \n         <p>This is a paginated API. If you\n         provide a null <code>maxResults</code>, this action retrieves a maximum of 10 records\n         per page. If you provide a <code>maxResults</code>, the value must be between 1 and 10.\n         To get the next page results, provide the pagination token from the\n            response as part of your request. A null pagination token\n         fetches the records from the beginning.</p>",
                 "smithy.api#paginated": {
                     "inputToken": "nextToken",
                     "outputToken": "nextToken",
@@ -3628,10 +3742,16 @@
                 ]
             }
         },
-        "com.amazonaws.frauddetector#ListOfLogitMetrics": {
+        "com.amazonaws.frauddetector#ListOfExternalModelOutputs": {
             "type": "list",
             "member": {
-                "target": "com.amazonaws.frauddetector#LogitMetric"
+                "target": "com.amazonaws.frauddetector#ExternalModelOutputs"
+            }
+        },
+        "com.amazonaws.frauddetector#ListOfLogOddsMetrics": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.frauddetector#LogOddsMetric"
             }
         },
         "com.amazonaws.frauddetector#ListOfModelScores": {
@@ -3672,6 +3792,9 @@
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -3727,7 +3850,7 @@
                 }
             }
         },
-        "com.amazonaws.frauddetector#LogitMetric": {
+        "com.amazonaws.frauddetector#LogOddsMetric": {
             "type": "structure",
             "members": {
                 "variableName": {
@@ -3747,13 +3870,13 @@
                 "variableImportance": {
                     "target": "com.amazonaws.frauddetector#float",
                     "traits": {
-                        "smithy.api#documentation": "<p>The relative importance of the variable.</p>",
+                        "smithy.api#documentation": "<p>The relative importance of the variable. For more information, see <a href=\"https://docs.aws.amazon.com/frauddetector/latest/ug/model-variable-importance.html\">Model variable importance</a>.</p>",
                         "smithy.api#required": {}
                     }
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>The logit metric details.</p>"
+                "smithy.api#documentation": "<p>The log odds metric details.</p>"
             }
         },
         "com.amazonaws.frauddetector#MetricDataPoint": {
@@ -4238,6 +4361,9 @@
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
                 },
                 {
@@ -4299,7 +4425,13 @@
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -4350,7 +4482,13 @@
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -4419,6 +4557,9 @@
             "errors": [
                 {
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
@@ -4504,10 +4645,16 @@
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -4546,7 +4693,13 @@
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -4595,6 +4748,9 @@
             "errors": [
                 {
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
@@ -4649,9 +4805,22 @@
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>An exception indicating the specified resource was not found.</p>",
+                "smithy.api#documentation": "<p>An exception indicating the specified resource was not found. This can occur if you submit a request, such as <code>CreateBatchPredictionJob</code>, but the detector name or version does not exist.</p>",
                 "smithy.api#error": "client",
                 "smithy.api#httpError": 404
+            }
+        },
+        "com.amazonaws.frauddetector#ResourceUnavailableException": {
+            "type": "structure",
+            "members": {
+                "message": {
+                    "target": "com.amazonaws.frauddetector#string"
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>\n         An exception indicating that the attached customer-owned (external) model threw an exception when Amazon Fraud Detector invoked the model. \n      </p>",
+                "smithy.api#error": "client",
+                "smithy.api#httpError": 409
             }
         },
         "com.amazonaws.frauddetector#Rule": {
@@ -4846,6 +5015,9 @@
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#ValidationException"
                 }
             ],
@@ -4996,6 +5168,9 @@
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#ValidationException"
                 }
             ],
@@ -5039,6 +5214,9 @@
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
                 },
                 {
@@ -5066,6 +5244,9 @@
             "errors": [
                 {
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
@@ -5179,6 +5360,9 @@
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
                 },
                 {
@@ -5238,10 +5422,16 @@
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -5293,10 +5483,16 @@
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -5386,10 +5582,16 @@
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ResourceNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ThrottlingException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#ValidationException"
@@ -5449,6 +5651,9 @@
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
                 },
                 {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
+                },
+                {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
                 },
                 {
@@ -5499,6 +5704,9 @@
             "errors": [
                 {
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
@@ -5584,6 +5792,9 @@
             "errors": [
                 {
                     "target": "com.amazonaws.frauddetector#AccessDeniedException"
+                },
+                {
+                    "target": "com.amazonaws.frauddetector#ConflictException"
                 },
                 {
                     "target": "com.amazonaws.frauddetector#InternalServerException"
@@ -5779,8 +5990,8 @@
         "com.amazonaws.frauddetector#VariableImportanceMetrics": {
             "type": "structure",
             "members": {
-                "LogitMetrics": {
-                    "target": "com.amazonaws.frauddetector#ListOfLogitMetrics",
+                "logOddsMetrics": {
+                    "target": "com.amazonaws.frauddetector#ListOfLogOddsMetrics",
                     "traits": {
                         "smithy.api#documentation": "<p>List of variable metrics.</p>"
                     }
@@ -5939,7 +6150,7 @@
                 "target": "com.amazonaws.frauddetector#string"
             },
             "value": {
-                "target": "com.amazonaws.frauddetector#ListOfStrings"
+                "target": "com.amazonaws.frauddetector#NonEmptyListOfStrings"
             }
         },
         "com.amazonaws.frauddetector#labelsMaxResults": {
@@ -6085,6 +6296,15 @@
             "traits": {
                 "smithy.api#length": {
                     "min": 11,
+                    "max": 30
+                }
+            }
+        },
+        "com.amazonaws.frauddetector#utcTimestampISO8601": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 10,
                     "max": 30
                 }
             }

@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_auth::Credentials;
 use aws_http::user_agent::AwsUserAgent;
 use aws_hyper::{Client, SdkError};
 use aws_sdk_kms as kms;
 use http::header::AUTHORIZATION;
 use http::Uri;
 use kms::operation::GenerateRandom;
+use kms::Credentials;
 use kms::{Config, Region};
 use smithy_client::test_connection::TestConnection;
 use smithy_http::body::SdkBody;
@@ -29,7 +29,6 @@ async fn generate_random_cn() {
     );
     let conn = TestConnection::new(vec![(
         http::Request::builder()
-            .header("host", "kms.cn-north-1.amazonaws.com.cn")
             .uri(Uri::from_static("https://kms.cn-north-1.amazonaws.com.cn/"))
             .body(SdkBody::from(r#"{"NumberOfBytes":64}"#)).unwrap(),
         http::Response::builder()
@@ -49,9 +48,7 @@ async fn generate_random_cn() {
         .expect("success");
 
     assert_eq!(conn.requests().len(), 1);
-    for validate_request in conn.requests().iter() {
-        validate_request.assert_matches(vec![]);
-    }
+    conn.assert_requests_match(&[]);
 }
 
 #[tokio::test]
@@ -66,7 +63,6 @@ async fn generate_random() {
             .header("content-type", "application/x-amz-json-1.1")
             .header("x-amz-target", "TrentService.GenerateRandom")
             .header("content-length", "20")
-            .header("host", "kms.us-east-1.amazonaws.com")
             .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210305/us-east-1/kms/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-date;x-amz-security-token;x-amz-target;x-amz-user-agent, Signature=2e0dd7259fba92523d553173c452eba8a6ee7990fb5b1f8e2eccdeb75309e9e1")
             .header("x-amz-date", "20210305T134922Z")
             .header("x-amz-security-token", "notarealsessiontoken")
@@ -103,10 +99,7 @@ async fn generate_random() {
             .sum::<u32>(),
         8562
     );
-    assert_eq!(conn.requests().len(), 1);
-    for validate_request in conn.requests().iter() {
-        validate_request.assert_matches(vec![]);
-    }
+    conn.assert_requests_match(&[]);
 }
 
 #[tokio::test]
@@ -153,7 +146,6 @@ async fn generate_random_keystore_not_found() {
             .header("content-type", "application/x-amz-json-1.1")
             .header("x-amz-target", "TrentService.GenerateRandom")
             .header("content-length", "56")
-            .header("host", "kms.us-east-1.amazonaws.com")
             .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210305/us-east-1/kms/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-target, Signature=4ca5cde61676c0ee49fde9ba3c886967e8af16461b6aafdfaee18033eb4ac7a5")
             .header("x-amz-date", "20210305T144724Z")
             .header("x-amz-security-token", "notarealsessiontoken")
@@ -195,8 +187,5 @@ async fn generate_random_keystore_not_found() {
         inner.request_id(),
         Some("bfe81a0a-9a08-4e71-9910-cdb5ab6ea3b6")
     );
-    assert_eq!(conn.requests().len(), 1);
-    for validate_request in conn.requests().iter() {
-        validate_request.assert_matches(vec![AUTHORIZATION]);
-    }
+    conn.assert_requests_match(&[AUTHORIZATION]);
 }

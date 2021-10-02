@@ -3,20 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_auth::Credentials;
+use crate::middleware::Signature;
 use aws_sigv4::http_request::{
-    calculate_signing_headers, PayloadChecksumKind, SigningSettings, UriEncoding,
+    sign, PayloadChecksumKind, PercentEncodingMode, SignableRequest, SignatureLocation,
+    SigningParams, SigningSettings,
 };
 use aws_types::region::SigningRegion;
+use aws_types::Credentials;
 use aws_types::SigningService;
-use http::header::HeaderName;
 use smithy_http::body::SdkBody;
 use std::error::Error;
 use std::fmt;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
-use crate::middleware::Signature;
 pub use aws_sigv4::http_request::SignableBody;
+
+const EXPIRATION_WARNING: &str = "Presigned request will expire before the given \
+    `expires_in` duration because the credentials used to sign it will expire first.";
 
 #[derive(Eq, PartialEq, Clone, Copy)]
 pub enum SigningAlgorithm {
@@ -27,12 +30,11 @@ pub enum SigningAlgorithm {
 pub enum HttpSignatureType {
     /// A signature for a full http request should be computed, with header updates applied to the signing result.
     HttpRequestHeaders,
-    /* Currently Unsupported
+
     /// A signature for a full http request should be computed, with query param updates applied to the signing result.
     ///
-    /// This is typically used for presigned URLs & is currently unsupported.
+    /// This is typically used for presigned URLs.
     HttpRequestQueryParams,
-     */
 }
 
 /// Signing Configuration for an Operation
@@ -46,6 +48,7 @@ pub struct OperationSigningConfig {
     pub signature_type: HttpSignatureType,
     pub signing_options: SigningOptions,
     pub signing_requirements: SigningRequirements,
+    pub expires_in: Option<Duration>,
 }
 
 impl OperationSigningConfig {
@@ -61,6 +64,7 @@ impl OperationSigningConfig {
                 content_sha256_header: false,
             },
             signing_requirements: SigningRequirements::Required,
+            expires_in: None,
         }
     }
 }
@@ -124,9 +128,54 @@ impl SigV4Signer {
         SigV4Signer { _private: () }
     }
 
+    fn settings(operation_config: &OperationSigningConfig) -> SigningSettings {
+        let mut settings = SigningSettings::default();
+        settings.percent_encoding_mode = if operation_config.signing_options.double_uri_encode {
+            PercentEncodingMode::Double
+        } else {
+            PercentEncodingMode::Single
+        };
+        settings.payload_checksum_kind = if operation_config.signing_options.content_sha256_header {
+            PayloadChecksumKind::XAmzSha256
+        } else {
+            PayloadChecksumKind::NoHeader
+        };
+        settings.signature_location = match operation_config.signature_type {
+            HttpSignatureType::HttpRequestHeaders => SignatureLocation::Headers,
+            HttpSignatureType::HttpRequestQueryParams => SignatureLocation::QueryParams,
+        };
+        settings.expires_in = operation_config.expires_in;
+        settings
+    }
+
+    fn signing_params<'a>(
+        settings: SigningSettings,
+        credentials: &'a Credentials,
+        request_config: &'a RequestConfig<'a>,
+    ) -> SigningParams<'a> {
+        if let Some(expires_in) = settings.expires_in {
+            if let Some(creds_expires_time) = credentials.expiry() {
+                let presigned_expires_time = request_config.request_ts + expires_in;
+                if presigned_expires_time > creds_expires_time {
+                    tracing::warn!(EXPIRATION_WARNING);
+                }
+            }
+        }
+
+        let mut builder = SigningParams::builder()
+            .access_key(credentials.access_key_id())
+            .secret_key(credentials.secret_access_key())
+            .region(request_config.region.as_ref())
+            .service_name(request_config.service.as_ref())
+            .date_time(request_config.request_ts.into())
+            .settings(settings);
+        builder.set_security_token(credentials.session_token());
+        builder.build().expect("all required fields set")
+    }
+
     /// Sign a request using the SigV4 Protocol
     ///
-    /// Although the direct signing implementation MAY be used directly. End users will not typically
+    /// Although this function may be used, end users will not typically
     /// interact with this code. It is generally used via middleware in the request pipeline. See [`SigV4SigningStage`](crate::middleware::SigV4SigningStage).
     pub fn sign(
         &self,
@@ -135,50 +184,84 @@ impl SigV4Signer {
         credentials: &Credentials,
         request: &mut http::Request<SdkBody>,
     ) -> Result<Signature, SigningError> {
-        let mut settings = SigningSettings::default();
-        settings.uri_encoding = if operation_config.signing_options.double_uri_encode {
-            UriEncoding::Double
-        } else {
-            UriEncoding::Single
-        };
-        settings.payload_checksum_kind = if operation_config.signing_options.content_sha256_header {
-            PayloadChecksumKind::XAmzSha256
-        } else {
-            PayloadChecksumKind::NoHeader
-        };
-        let sigv4_config = aws_sigv4::http_request::SigningParams {
-            access_key: credentials.access_key_id(),
-            secret_key: credentials.secret_access_key(),
-            security_token: credentials.session_token(),
-            region: request_config.region.as_ref(),
-            service_name: request_config.service.as_ref(),
-            date_time: request_config.request_ts.into(),
-            settings,
-        };
+        let settings = Self::settings(operation_config);
+        let signing_params = Self::signing_params(settings, credentials, request_config);
 
-        // A body that is already in memory can be signed directly. A  body that is not in memory
-        // (any sort of streaming body) will be signed via UNSIGNED-PAYLOAD.
-        let signable_body = request_config
-            .payload_override
-            // the payload_override is a cheap clone because it contains either a
-            // reference or a short checksum (we're not cloning the entire body)
-            .cloned()
-            .unwrap_or_else(|| {
-                request
-                    .body()
-                    .bytes()
-                    .map(SignableBody::Bytes)
-                    .unwrap_or(SignableBody::UnsignedPayload)
-            });
+        let (signing_instructions, signature) = {
+            // A body that is already in memory can be signed directly. A  body that is not in memory
+            // (any sort of streaming body or presigned request) will be signed via UNSIGNED-PAYLOAD.
+            let signable_body =
+                if operation_config.signature_type == HttpSignatureType::HttpRequestQueryParams {
+                    SignableBody::UnsignedPayload
+                } else {
+                    request_config
+                        .payload_override
+                        // the payload_override is a cheap clone because it contains either a
+                        // reference or a short checksum (we're not cloning the entire body)
+                        .cloned()
+                        .unwrap_or_else(|| {
+                            request
+                                .body()
+                                .bytes()
+                                .map(SignableBody::Bytes)
+                                .unwrap_or(SignableBody::UnsignedPayload)
+                        })
+                };
 
-        let (signing_headers, signature) =
-            calculate_signing_headers(request, signable_body, &sigv4_config)?.into_parts();
-        for (key, value) in signing_headers {
-            request
-                .headers_mut()
-                .append(HeaderName::from_static(key), value);
+            let signable_request = SignableRequest::new(
+                request.method(),
+                request.uri(),
+                request.headers(),
+                signable_body,
+            );
+            sign(signable_request, &signing_params)?
         }
+        .into_parts();
+
+        signing_instructions.apply_to_request(request);
 
         Ok(Signature::new(signature))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RequestConfig, SigV4Signer, EXPIRATION_WARNING};
+    use aws_sigv4::http_request::SigningSettings;
+    use aws_types::region::SigningRegion;
+    use aws_types::{Credentials, SigningService};
+    use std::time::{Duration, SystemTime};
+    use tracing_test::traced_test;
+
+    #[test]
+    #[traced_test]
+    fn expiration_warning() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1000);
+        let creds_expire_in = Duration::from_secs(100);
+
+        let mut settings = SigningSettings::default();
+        settings.expires_in = Some(creds_expire_in - Duration::from_secs(10));
+
+        let credentials = Credentials::new(
+            "test-access-key",
+            "test-secret-key",
+            Some("test-session-token".into()),
+            Some(now + creds_expire_in),
+            "test",
+        );
+        let request_config = RequestConfig {
+            request_ts: now,
+            region: &SigningRegion::from_static("test"),
+            service: &SigningService::from_static("test"),
+            payload_override: None,
+        };
+        SigV4Signer::signing_params(settings, &credentials, &request_config);
+        assert!(!logs_contain(EXPIRATION_WARNING));
+
+        let mut settings = SigningSettings::default();
+        settings.expires_in = Some(creds_expire_in + Duration::from_secs(10));
+
+        SigV4Signer::signing_params(settings, &credentials, &request_config);
+        assert!(logs_contain(EXPIRATION_WARNING));
     }
 }

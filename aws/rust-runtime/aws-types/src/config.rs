@@ -9,23 +9,26 @@
 //!
 //! This module contains an shared configuration representation that is agnostic from a specific service.
 
+use crate::credentials::SharedCredentialsProvider;
 use crate::region::Region;
 
 /// AWS Shared Configuration
 pub struct Config {
     region: Option<Region>,
+    credentials_provider: Option<SharedCredentialsProvider>,
 }
 
 /// Builder for AWS Shared Configuration
 #[derive(Default)]
 pub struct Builder {
     region: Option<Region>,
+    credentials_provider: Option<SharedCredentialsProvider>,
 }
 
 impl Builder {
     /// Set the region for the builder
     ///
-    /// # Example
+    /// # Examples
     /// ```rust
     /// use aws_types::config::Config;
     /// use aws_types::region::Region;
@@ -38,7 +41,7 @@ impl Builder {
 
     /// Set the region for the builder
     ///
-    /// # Example
+    /// # Examples
     /// ```rust
     /// fn region_override() -> Option<Region> {
     ///     // ...
@@ -57,10 +60,63 @@ impl Builder {
         self
     }
 
+    /// Set the credentials provider for the builder
+    ///
+    /// # Examples
+    /// ```rust
+    /// use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
+    /// use aws_types::config::Config;
+    /// fn make_provider() -> impl ProvideCredentials {
+    ///   // ...
+    ///   # use aws_types::Credentials;
+    ///   # Credentials::from_keys("test", "test", None)
+    /// }
+    ///
+    /// let config = Config::builder()
+    ///     .credentials_provider(SharedCredentialsProvider::new(make_provider()))
+    ///     .build();
+    /// ```
+    pub fn credentials_provider(mut self, provider: SharedCredentialsProvider) -> Self {
+        self.set_credentials_provider(Some(provider));
+        self
+    }
+
+    /// Set the credentials provider for the builder
+    ///
+    /// # Examples
+    /// ```rust
+    /// use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
+    /// use aws_types::config::Config;
+    /// fn make_provider() -> impl ProvideCredentials {
+    ///   // ...
+    ///   # use aws_types::Credentials;
+    ///   # Credentials::from_keys("test", "test", None)
+    /// }
+    ///
+    /// fn override_provider() -> bool {
+    ///   // ...
+    ///   # true
+    /// }
+    ///
+    /// let mut builder = Config::builder();
+    /// if override_provider() {
+    ///     builder.set_credentials_provider(Some(SharedCredentialsProvider::new(make_provider())));
+    /// }
+    /// let config = builder.build();
+    /// ```
+    pub fn set_credentials_provider(
+        &mut self,
+        provider: Option<SharedCredentialsProvider>,
+    ) -> &mut Self {
+        self.credentials_provider = provider;
+        self
+    }
+
     /// Build a [`Config`](Config) from this builder
     pub fn build(self) -> Config {
         Config {
             region: self.region,
+            credentials_provider: self.credentials_provider,
         }
     }
 }
@@ -69,6 +125,11 @@ impl Config {
     /// Configured region
     pub fn region(&self) -> Option<&Region> {
         self.region.as_ref()
+    }
+
+    /// Configured credentials provider
+    pub fn credentials_provider(&self) -> Option<&SharedCredentialsProvider> {
+        self.credentials_provider.as_ref()
     }
 
     /// Config builder

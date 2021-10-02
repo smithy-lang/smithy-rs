@@ -72,13 +72,17 @@ class JsonParserGeneratorTest {
             member: Choice
         }
 
+        structure EmptyStruct {
+        }
+
         structure Top {
             @required
             choice: Choice,
             field: String,
             extra: Integer,
             @jsonName("rec")
-            recursive: TopList
+            recursive: TopList,
+            empty: EmptyStruct,
         }
 
         list TopList {
@@ -133,7 +137,8 @@ class JsonParserGeneratorTest {
                         { "extra": 45,
                           "field": "something",
                           "choice":
-                              { "int": 5 }}}
+                              { "int": 5 },
+                          "empty": { "not_empty": true }}}
                 "#;
 
                 let output = ${writer.format(operationGenerator!!)}(json, output::op_output::Builder::default()).unwrap().build();
@@ -155,17 +160,18 @@ class JsonParserGeneratorTest {
                 """
             )
         }
-        project.withModule(RustModule.default("model", public = true)) {
+        project.withModule(RustModule.public("model")) {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
+            model.lookup<StructureShape>("test#EmptyStruct").renderWithModelBuilder(model, symbolProvider, it)
             UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice")).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
             EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
         }
 
-        project.withModule(RustModule.default("output", public = true)) {
+        project.withModule(RustModule.public("output")) {
             model.lookup<OperationShape>("test#Op").outputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
-        project.withModule(RustModule.default("error", public = true)) {
+        project.withModule(RustModule.public("error")) {
             model.lookup<StructureShape>("test#Error").renderWithModelBuilder(model, symbolProvider, it)
         }
         println("file:///${project.baseDir}/src/json_deser.rs")
