@@ -147,6 +147,7 @@ pub struct Receiver<T, E> {
     /// initial response, then the message will be stored in `buffered_message` so that it can
     /// be returned with the next call of `recv()`.
     buffered_message: Option<Message>,
+    stream_ended: bool,
     _phantom: PhantomData<E>,
 }
 
@@ -162,6 +163,7 @@ impl<T, E> Receiver<T, E> {
             buffer: SegmentedBuf::new(),
             body,
             buffered_message: None,
+            stream_ended: false,
             _phantom: Default::default(),
         }
     }
@@ -181,16 +183,26 @@ impl<T, E> Receiver<T, E> {
         }
     }
 
+    async fn buffer_next_chunk(&mut self) -> Result<(), SdkError<E, Message>> {
+        if !self.stream_ended {
+            let next_chunk = self
+                .body
+                .data()
+                .await
+                .transpose()
+                .map_err(|err| SdkError::DispatchFailure(err))?;
+            if let Some(chunk) = next_chunk {
+                // The SegmentedBuf will automatically purge when it reads off the end of a chunk boundary
+                self.buffer.push(chunk);
+            } else {
+                self.stream_ended = true;
+            }
+        }
+        Ok(())
+    }
+
     async fn next_message(&mut self) -> Result<Option<Message>, SdkError<E, Message>> {
-        let next_chunk = self
-            .body
-            .data()
-            .await
-            .transpose()
-            .map_err(|err| SdkError::DispatchFailure(err))?;
-        if let Some(chunk) = next_chunk {
-            // The SegmentedBuf will automatically purge when it reads off the end of a chunk boundary
-            self.buffer.push(chunk);
+        while !self.stream_ended {
             if let DecodedFrame::Complete(message) = self
                 .decoder
                 .decode_frame(&mut self.buffer)
@@ -198,6 +210,8 @@ impl<T, E> Receiver<T, E> {
             {
                 return Ok(Some(message));
             }
+
+            self.buffer_next_chunk().await?;
         }
         Ok(None)
     }
@@ -339,6 +353,53 @@ mod tests {
             TestMessage("two".into()),
             receiver.recv().await.unwrap().unwrap()
         );
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn receive_multiple_messages_split_unevenly_across_chunks(b1: usize, b2: usize) {
+            let msg1 = encode_message("one");
+            let msg2 = encode_message("two");
+            let msg3 = encode_message("three");
+            let msg4 = encode_message("four");
+            let combined = {
+                let mut combined = Vec::new();
+                combined.extend_from_slice(&msg1);
+                combined.extend_from_slice(&msg2);
+                combined.extend_from_slice(&msg3);
+                combined.extend_from_slice(&msg4);
+                combined
+            };
+
+            let midpoint = combined.len() / 2;
+            let (start, boundary1, boundary2, end) = (
+                0,
+                b1 % midpoint,
+                midpoint + b2 % midpoint,
+                combined.len()
+            );
+            println!("[{}, {}], [{}, {}], [{}, {}]", start, boundary1, boundary1, boundary2, boundary2, end);
+
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async move {
+                let chunks: Vec<Result<_, IOError>> = vec![
+                    Ok(Bytes::copy_from_slice(&combined[start..boundary1])),
+                    Ok(Bytes::copy_from_slice(&combined[boundary1..boundary2])),
+                    Ok(Bytes::copy_from_slice(&combined[boundary2..end])),
+                ];
+
+                let chunk_stream = futures_util::stream::iter(chunks);
+                let body = SdkBody::from(Body::wrap_stream(chunk_stream));
+                let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
+                for payload in &["one", "two", "three", "four"] {
+                    assert_eq!(
+                        TestMessage((*payload).into()),
+                        receiver.recv().await.unwrap().unwrap()
+                    );
+                }
+                assert_eq!(None, receiver.recv().await.unwrap());
+            });
+        }
     }
 
     #[tokio::test]

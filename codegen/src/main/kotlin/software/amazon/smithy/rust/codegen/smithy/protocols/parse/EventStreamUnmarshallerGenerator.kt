@@ -149,41 +149,55 @@ class EventStreamUnmarshallerGenerator(
 
     private fun RustWriter.renderUnmarshallUnionMember(unionMember: MemberShape, unionStruct: StructureShape) {
         val unionMemberName = unionMember.memberName.toPascalCase()
+        val empty = unionStruct.members().isEmpty()
         val payloadOnly =
             unionStruct.members().none { it.hasTrait<EventPayloadTrait>() || it.hasTrait<EventHeaderTrait>() }
-        if (payloadOnly) {
-            withBlock("let parsed = ", ";") {
-                renderParseProtocolPayload(unionMember)
+        when {
+            // Don't attempt to parse the payload for an empty struct. The payload can be empty, or if the model was
+            // updated since the code was generated, it can have content that would not be understood.
+            empty -> {
+                rustTemplate(
+                    "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(#{UnionStruct}::builder().build())))",
+                    "Output" to unionSymbol,
+                    "UnionStruct" to symbolProvider.toSymbol(unionStruct),
+                    *codegenScope
+                )
             }
-            rustTemplate(
-                "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(parsed)))",
-                "Output" to unionSymbol,
-                *codegenScope
-            )
-        } else {
-            rust("let mut builder = #T::builder();", symbolProvider.toSymbol(unionStruct))
-            val payloadMember = unionStruct.members().firstOrNull { it.hasTrait<EventPayloadTrait>() }
-            if (payloadMember != null) {
-                renderUnmarshallEventPayload(payloadMember)
+            payloadOnly -> {
+                withBlock("let parsed = ", ";") {
+                    renderParseProtocolPayload(unionMember)
+                }
+                rustTemplate(
+                    "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(parsed)))",
+                    "Output" to unionSymbol,
+                    *codegenScope
+                )
             }
-            val headerMembers = unionStruct.members().filter { it.hasTrait<EventHeaderTrait>() }
-            if (headerMembers.isNotEmpty()) {
-                rustBlock("for header in message.headers()") {
-                    rustBlock("match header.name().as_str()") {
-                        for (member in headerMembers) {
-                            rustBlock("${member.memberName.dq()} => ") {
-                                renderUnmarshallEventHeader(member)
+            else -> {
+                rust("let mut builder = #T::builder();", symbolProvider.toSymbol(unionStruct))
+                val payloadMember = unionStruct.members().firstOrNull { it.hasTrait<EventPayloadTrait>() }
+                if (payloadMember != null) {
+                    renderUnmarshallEventPayload(payloadMember)
+                }
+                val headerMembers = unionStruct.members().filter { it.hasTrait<EventHeaderTrait>() }
+                if (headerMembers.isNotEmpty()) {
+                    rustBlock("for header in message.headers()") {
+                        rustBlock("match header.name().as_str()") {
+                            for (member in headerMembers) {
+                                rustBlock("${member.memberName.dq()} => ") {
+                                    renderUnmarshallEventHeader(member)
+                                }
                             }
+                            rust("_ => {}")
                         }
-                        rust("_ => {}")
                     }
                 }
+                rustTemplate(
+                    "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(builder.build())))",
+                    "Output" to unionSymbol,
+                    *codegenScope
+                )
             }
-            rustTemplate(
-                "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(builder.build())))",
-                "Output" to unionSymbol,
-                *codegenScope
-            )
         }
     }
 
@@ -211,10 +225,11 @@ class EventStreamUnmarshallerGenerator(
         expectedContentType(target)?.also { contentType ->
             rustTemplate(
                 """
-                if response_headers.content_type.as_str() != ${contentType.dq()} {
+                let content_type = response_headers.content_type_as_str().unwrap_or("");
+                if content_type != ${contentType.dq()} {
                     return Err(#{Error}::Unmarshalling(format!(
                         "expected :content-type to be '$contentType', but was '{}'",
-                        response_headers.content_type.as_str()
+                        content_type
                     )))
                 }
                 """,
