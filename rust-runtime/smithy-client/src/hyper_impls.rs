@@ -253,8 +253,12 @@ mod timeout_middleware {
     }
 
     pin_project! {
-        #[project = ConnectTimeoutProj]
-        pub enum ConnectTimeoutFuture<F> {
+        /// Timeout future for Tower services
+        ///
+        /// Timeout future to handle timing out, mapping errors, and the possibility of not timing out
+        /// without incurring an additional allocation for each timeout layer.
+        #[project = MaybeTimeoutFutureProj]
+        pub enum MaybeTimeoutFuture<F> {
             Timeout {
                 #[pin]
                 timeout: Timeout<F, Sleep>
@@ -266,7 +270,7 @@ mod timeout_middleware {
         }
     }
 
-    impl<F, T, E> Future for ConnectTimeoutFuture<F>
+    impl<F, T, E> Future for MaybeTimeoutFuture<F>
     where
         F: Future<Output = Result<T, E>>,
         E: Into<BoxError>,
@@ -275,14 +279,14 @@ mod timeout_middleware {
 
         fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
             let timout_fut = match self.project() {
-                ConnectTimeoutProj::NoTimeout { future } => {
+                MaybeTimeoutFutureProj::NoTimeout { future } => {
                     return future.poll(cx).map_err(|err| err.into())
                 }
-                ConnectTimeoutProj::Timeout { timeout } => timeout,
+                MaybeTimeoutFutureProj::Timeout { timeout } => timeout,
             };
             match timout_fut.poll(cx) {
-                Poll::Ready(Ok(no_timeout)) => Poll::Ready(no_timeout.map_err(|err| err.into())),
-                Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+                Poll::Ready(Ok(response)) => Poll::Ready(response.map_err(|err| err.into())),
+                Poll::Ready(Err(timeout)) => Poll::Ready(Err(timeout.into())),
                 Poll::Pending => Poll::Pending,
             }
         }
@@ -295,7 +299,7 @@ mod timeout_middleware {
     {
         type Response = I::Response;
         type Error = BoxError;
-        type Future = ConnectTimeoutFuture<I::Future>;
+        type Future = MaybeTimeoutFuture<I::Future>;
 
         fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
             self.inner.poll_ready(cx).map_err(|err| err.into())
@@ -305,11 +309,11 @@ mod timeout_middleware {
             match &self.timeout {
                 Some((sleep, duration)) => {
                     let sleep = sleep.sleep(*duration);
-                    ConnectTimeoutFuture::Timeout {
+                    MaybeTimeoutFuture::Timeout {
                         timeout: future::timeout::Timeout::new(self.inner.call(req), sleep),
                     }
                 }
-                None => ConnectTimeoutFuture::NoTimeout {
+                None => MaybeTimeoutFuture::NoTimeout {
                     future: self.inner.call(req),
                 },
             }
@@ -323,7 +327,7 @@ mod timeout_middleware {
     {
         type Response = I::Response;
         type Error = BoxError;
-        type Future = ConnectTimeoutFuture<I::Future>;
+        type Future = MaybeTimeoutFuture<I::Future>;
 
         fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
             self.inner.poll_ready(cx).map_err(|err| err.into())
@@ -333,11 +337,11 @@ mod timeout_middleware {
             match &self.timeout {
                 Some((sleep, duration)) => {
                     let sleep = sleep.sleep(*duration);
-                    ConnectTimeoutFuture::Timeout {
+                    MaybeTimeoutFuture::Timeout {
                         timeout: future::timeout::Timeout::new(self.inner.call(req), sleep),
                     }
                 }
-                None => ConnectTimeoutFuture::NoTimeout {
+                None => MaybeTimeoutFuture::NoTimeout {
                     future: self.inner.call(req),
                 },
             }

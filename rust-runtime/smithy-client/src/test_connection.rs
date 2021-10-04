@@ -46,6 +46,9 @@ impl CaptureRequestReceiver {
     }
 }
 
+/// A service that will never return whatever it is you want
+///
+/// Returned futures will return Pending forever
 #[non_exhaustive]
 #[derive(Debug)]
 pub struct NeverService<R> {
@@ -76,6 +79,7 @@ pub mod stream {
     use std::task::{Context, Poll};
     use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
+    /// A stream that will never return or accept any data
     #[non_exhaustive]
     pub struct EmptyStream;
 
@@ -122,6 +126,7 @@ pub mod stream {
 
 pub type NeverConnected = NeverService<TcpStream>;
 
+/// A service that will connect but never send any data
 #[derive(Clone)]
 pub struct NeverReplies;
 impl NeverReplies {

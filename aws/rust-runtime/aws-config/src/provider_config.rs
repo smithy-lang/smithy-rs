@@ -258,13 +258,6 @@ impl ProviderConfig {
         }
     }
 
-    /*
-    pub fn with_make_connector<T>(make_connector: T) -> Self
-    where
-        T: Fn(&HttpSettings) -> DynConnector,
-    {
-    }*/
-
     /// Override the sleep implementation for this configuration
     pub fn with_sleep(self, sleep: impl AsyncSleep + 'static) -> Self {
         ProviderConfig {
