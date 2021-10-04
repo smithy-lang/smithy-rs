@@ -72,6 +72,7 @@ pub mod provider_config;
 mod cache;
 #[cfg(feature = "imds")]
 pub mod imds;
+mod json_credentials;
 
 /// Create an environment loader for AWS Configuration
 ///
