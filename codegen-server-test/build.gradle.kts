@@ -22,10 +22,7 @@ dependencies {
 
 data class CodegenTest(val service: String, val module: String, val extraConfig: String? = null)
 
-val CodegenTests =
-        listOf(
-                CodegenTest("com.amazonaws.simple#SimpleService", "simple")
-        )
+val CodegenTests = listOf(CodegenTest("com.amazonaws.simple#SimpleService", "simple"))
 
 fun generateSmithyBuild(tests: List<CodegenTest>): String {
     val projections =

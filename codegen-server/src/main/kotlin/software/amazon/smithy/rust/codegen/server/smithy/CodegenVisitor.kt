@@ -22,8 +22,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceGener
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpDeserializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.deserialize.JsonDeserializerGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
@@ -42,7 +42,6 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.AddErrorMessage
-import software.amazon.smithy.rust.codegen.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
@@ -133,11 +132,12 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     }
 
     private fun baselineTransform(model: Model) =
-            model.let(RecursiveShapeBoxer::transform)
+            model
+                    .let(RecursiveShapeBoxer::transform)
                     .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
                     .let(OperationNormalizer::transform)
                     .let { RemoveEventStreamOperations.transform(it, settings) }
-                    // .let(EventStreamNormalizer::transform)
+    // .let(EventStreamNormalizer::transform)
 
     fun execute() {
         val service = settings.getService(model)
@@ -156,7 +156,9 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                     timeout = settings.codegenConfig.formatTimeoutSeconds.toLong()
             )
         } catch (err: CommandFailed) {
-            logger.warning("[rust-server-codegen] Failed to run cargo fmt: [${service.id}]\n${err.output}")
+            logger.warning(
+                    "[rust-server-codegen] Failed to run cargo fmt: [${service.id}]\n${err.output}"
+            )
         }
 
         logger.info("[rust-server-codegen] Rust server generation complete!")

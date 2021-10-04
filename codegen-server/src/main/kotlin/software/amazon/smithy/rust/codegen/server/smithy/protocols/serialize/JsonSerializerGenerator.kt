@@ -1,5 +1,11 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.serialize
 
+import java.util.logging.Logger
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -12,10 +18,8 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
-import java.util.logging.Logger
 
 class JsonSerializerGenerator(
         protocolConfig: ProtocolConfig,
@@ -33,6 +37,7 @@ class JsonSerializerGenerator(
     private fun renderInput(writer: RustWriter, operationShape: OperationShape) {
         val httpDocumentMembers =
                 httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
+
         renderStructure(writer, operationShape.inputShape(model), httpDocumentMembers)
     }
 

@@ -11,11 +11,13 @@ plugins {
 }
 
 description = "Generates Rust server-side code from Smithy models"
+
 extra["displayName"] = "Smithy :: Rust :: Codegen :: Server"
+
 extra["moduleName"] = "software.amazon.smithy.rust.codegen.server"
 
-
 group = "software.amazon.smithy.rust.codegen.server.smithy"
+
 version = "0.1.0"
 
 val smithyVersion: String by project
@@ -34,14 +36,11 @@ dependencies {
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
 
-// unlike the client-runtime, software.amazon.smithy.rust.codegen.smithy-kotlin codegen package is not expected to run on Android...we can target 1.8
-tasks.compileKotlin {
-    kotlinOptions.jvmTarget = "1.8"
-}
+// unlike the client-runtime, software.amazon.smithy.rust.codegen.smithy-kotlin codegen package is
+// not expected to run on Android...we can target 1.8
+tasks.compileKotlin { kotlinOptions.jvmTarget = "1.8" }
 
-tasks.compileTestKotlin {
-    kotlinOptions.jvmTarget = "1.8"
-}
+tasks.compileTestKotlin { kotlinOptions.jvmTarget = "1.8" }
 
 // Reusable license copySpec
 val licenseSpec = copySpec {
@@ -53,9 +52,7 @@ val licenseSpec = copySpec {
 tasks.jar {
     metaInf.with(licenseSpec)
     inputs.property("moduleName", project.name)
-    manifest {
-        attributes["Automatic-Module-Name"] = project.name
-    }
+    manifest { attributes["Automatic-Module-Name"] = project.name }
 }
 
 val sourcesJar by tasks.creating(Jar::class) {
@@ -93,7 +90,6 @@ tasks.jacocoTestReport {
 // Always run the jacoco test report after testing.
 tasks["test"].finalizedBy(tasks["jacocoTestReport"])
 
-
 publishing {
     publications {
         create<MavenPublication>("default") {
@@ -101,9 +97,5 @@ publishing {
             artifact(sourcesJar)
         }
     }
-    repositories {
-        maven {
-            url = uri("$buildDir/repository")
-        }
-    }
+    repositories { maven { url = uri("$buildDir/repository") } }
 }

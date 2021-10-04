@@ -1,5 +1,11 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.deserialize
 
+import java.util.logging.Logger
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -20,6 +26,7 @@ class JsonDeserializerGenerator(
         protocolConfig: ProtocolConfig,
         private val httpBindingResolver: HttpBindingResolver,
 ) : JsonParserGenerator(protocolConfig, httpBindingResolver) {
+    private val logger = Logger.getLogger(javaClass.name)
     private val renderedStructures = mutableSetOf<StructureShape>()
 
     fun render(writer: RustWriter, operationShape: OperationShape) {

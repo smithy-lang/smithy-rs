@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import java.util.logging.Logger
@@ -52,7 +57,26 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerGenerator
+
+abstract class ServerGenerator(
+        protocolConfig: ProtocolConfig,
+        private val httpBindingResolver: HttpTraitHttpBindingResolver,
+) {
+    public val logger = Logger.getLogger(javaClass.name)
+    public val error = RuntimeType("error", null, "crate")
+    public val operation = RuntimeType("operation", null, "crate")
+    public val runtimeConfig = protocolConfig.runtimeConfig
+    public val model = protocolConfig.model
+    public val symbolProvider = protocolConfig.symbolProvider
+    public val instantiator =
+            with(protocolConfig) { Instantiator(symbolProvider, model, runtimeConfig) }
+    public val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
+    public val index = HttpBindingIndex.of(model)
+    public val service = protocolConfig.serviceShape
+    public val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
+
+    abstract fun render(writer: RustWriter, operationShape: OperationShape)
+}
 
 class RestJson1HttpSerializerGenerator(
         protocolConfig: ProtocolConfig,
@@ -329,7 +353,7 @@ class RestJson1HttpRequestDeserializerGenerator(
         private val protocolConfig: ProtocolConfig,
         private val httpBindingResolver: HttpTraitHttpBindingResolver,
         private val operationShape: OperationShape,
-): ServerGenerator(protocolConfig, httpBindingResolver) {
+) : ServerGenerator(protocolConfig, httpBindingResolver) {
     private val deserFnName = "deser_${operationShape.id.name.toSnakeCase()}_request"
     private val httpBindingGenerator =
             ResponseBindingGenerator(
