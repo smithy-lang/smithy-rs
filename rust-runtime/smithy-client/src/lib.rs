@@ -50,10 +50,18 @@ pub mod conns {
     #[cfg(feature = "rustls")]
     pub type Https = hyper_rustls::HttpsConnector<hyper::client::HttpConnector>;
 
+    // Creating a `with_native_roots` HTTP client takes 300ms on OS X. Cache this so that we
+    // don't need to repeatedly incur that cost.
+    #[cfg(feature = "rustls")]
+    lazy_static::lazy_static! {
+        static ref HTTPS_NATIVE_ROOTS: Https = {
+            hyper_rustls::HttpsConnector::with_native_roots()
+        };
+    }
+
     #[cfg(feature = "rustls")]
     pub fn https() -> Https {
-        // todo: cache this with lazy_static
-        hyper_rustls::HttpsConnector::with_native_roots()
+        HTTPS_NATIVE_ROOTS.clone()
     }
 
     #[cfg(feature = "native-tls")]

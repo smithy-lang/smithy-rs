@@ -75,6 +75,7 @@ impl Builder {
         C::Future: Unpin + Send + 'static,
         C::Error: Into<BoxError>,
     {
+        // if we are using Hyper, Tokio must already be enabled so we can fallback to Tokio.
         let sleep = self.sleep.unwrap_or_else(|| Arc::new(TokioSleep::new()));
         let connector = match self.timeout.connect() {
             Some(duration) => ConnectTimeout::new(connector, sleep.clone(), duration),
@@ -88,6 +89,7 @@ impl Builder {
         HyperAdapter(http_timeout)
     }
 
+    #[doc(hidden)]
     /// Set the async sleep implementation used for timeouts
     pub fn sleep_impl(self, sleep_impl: impl AsyncSleep + 'static) -> Self {
         Self {
@@ -98,7 +100,7 @@ impl Builder {
 
     /// Configure the timeout for the HyperAdapter
     ///
-    /// When unset, this defaults to [`TokioSleep`], a sleep implementation that uses Tokio.
+    /// When unset, the underlying adaptor will not use any timeouts.
     pub fn timeout(self, timeout_config: &timeout::Config) -> Self {
         Self {
             timeout: timeout_config.clone(),

@@ -12,7 +12,7 @@ rt-tokio = ["smithy-async/rt-tokio"]
 test-util = ["protocol-test-helpers", "serde/derive"]
 default = ["hyper", "rustls", "rt-tokio"]
 native-tls = ["hyper", "hyper-tls", "rt-tokio"]
-rustls = ["hyper", "hyper-rustls", "rt-tokio"]
+rustls = ["hyper", "hyper-rustls", "rt-tokio", "lazy_static"]
 
 [dependencies]
 hyper = { version = "0.14.2", features = ["client", "http2"], optional = true }
@@ -29,6 +29,7 @@ smithy-async = { path = "../smithy-async" }
 fastrand = "1.4.0"
 tokio = { version = "1", features = ["time"] }
 pin-project-lite = "0.2.7"
+lazy_static = { version = "1", optional = true }
 
 pin-project = "1"
 tracing = "0.1"
