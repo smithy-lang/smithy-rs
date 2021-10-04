@@ -45,8 +45,6 @@ impl<M, R> Builder<(), M, R> {
     /// sending the request to some kind of remote server, but in certain settings it's useful to
     /// be able to use a custom connector instead, such as to mock the network for tests.
     ///
-    /// If you want to use a custom hyper connector, use [`Builder::hyper`].
-    ///
     /// If you just want to specify a function from request to response instead, use
     /// [`Builder::map_connector`].
     pub fn connector<C>(self, connector: C) -> Builder<C, M, R> {

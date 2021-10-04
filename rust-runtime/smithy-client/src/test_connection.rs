@@ -8,18 +8,18 @@
 #![allow(missing_docs)]
 
 use http::header::{HeaderName, CONTENT_TYPE};
-use http::{Request, Uri};
+use http::Request;
 
 use protocol_test_helpers::{assert_ok, validate_body, MediaType};
-use smithy_async::future::never::Never;
+
 use smithy_http::body::SdkBody;
-use std::future::{Future, Ready};
-use std::marker::PhantomData;
+use std::future::Ready;
+
 use std::ops::Deref;
-use std::pin::Pin;
+
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
-use tokio::net::TcpStream;
+
 use tokio::sync::oneshot;
 use tower::BoxError;
 
@@ -256,7 +256,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::never::NeverService;
     use crate::test_connection::{capture_request, never::NeverService, TestConnection};
     use crate::{BoxError, Client};
     use hyper::service::Service;

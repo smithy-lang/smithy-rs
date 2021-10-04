@@ -4,14 +4,12 @@ use http::Uri;
 
 use smithy_async::future::never::Never;
 
-use std::future::Future;
 use std::marker::PhantomData;
-
-use std::pin::Pin;
 
 use std::task::{Context, Poll};
 use tokio::net::TcpStream;
 
+use crate::erase::boxclone::BoxFuture;
 use tower::BoxError;
 
 /// A service that will never return whatever it is you want
@@ -28,6 +26,12 @@ impl<R> Clone for NeverService<R> {
         Self {
             _resp: Default::default(),
         }
+    }
+}
+
+impl<R> Default for NeverService<R> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -51,7 +55,7 @@ mod stream {
 
     /// A stream that will never return or accept any data
     #[non_exhaustive]
-    #[derive(Debug)]
+    #[derive(Debug, Default)]
     pub struct EmptyStream;
 
     impl EmptyStream {
@@ -95,7 +99,7 @@ mod stream {
     }
 }
 
-/// A service where the underyling TCP connection never connects
+/// A service where the underyling TCP connection never connectsPin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>
 pub type NeverConnected = NeverService<TcpStream>;
 
 /// A service that will connect but never send any data
@@ -125,7 +129,7 @@ impl tower::Service<Uri> for NeverReplies {
 impl<Req, Resp> tower::Service<Req> for NeverService<Resp> {
     type Response = Resp;
     type Error = BoxError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+    type Future = BoxFuture<Self::Response, Self::Error>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
