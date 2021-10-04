@@ -484,7 +484,7 @@ impl Builder {
     /// Build an IMDSv2 Client
     pub async fn build(self) -> Result<Client, BuildError> {
         let config = self.config.unwrap_or_default();
-        let timeout_config = timeout::Config::default()
+        let timeout_config = timeout::Settings::default()
             .with_connect_timeout(self.connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT))
             .with_read_timeout(self.read_timeout.unwrap_or(DEFAULT_READ_TIMEOUT));
         let connector = expect_connector(config.connector(&HttpSettings { timeout_config }));

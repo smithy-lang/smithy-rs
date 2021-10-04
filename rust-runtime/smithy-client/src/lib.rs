@@ -40,6 +40,7 @@ pub mod hyper_ext {
 #[doc(hidden)]
 pub mod static_tests;
 
+pub mod never;
 pub mod timeout;
 
 /// Type aliases for standard connection types.

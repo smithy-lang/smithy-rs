@@ -60,7 +60,7 @@ impl HyperAdapter<()> {
 #[derive(Default, Debug)]
 /// Builder for [`HyperAdapter`]
 pub struct Builder {
-    timeout: timeout::Config,
+    timeout: timeout::Settings,
     sleep: Option<Arc<dyn AsyncSleep>>,
     client_builder: hyper::client::Builder,
 }
@@ -101,7 +101,7 @@ impl Builder {
     /// Configure the timeout for the HyperAdapter
     ///
     /// When unset, the underlying adaptor will not use any timeouts.
-    pub fn timeout(self, timeout_config: &timeout::Config) -> Self {
+    pub fn timeout(self, timeout_config: &timeout::Settings) -> Self {
         Self {
             timeout: timeout_config.clone(),
             ..self
@@ -351,7 +351,7 @@ mod timeout_middleware {
     #[cfg(test)]
     mod test {
         use crate::hyper_impls::HyperAdapter;
-        use crate::test_connection::{NeverConnected, NeverReplies};
+        use crate::never::{NeverConnected, NeverReplies};
         use crate::timeout;
         use smithy_async::rt::sleep::TokioSleep;
         use smithy_http::body::SdkBody;
@@ -385,14 +385,14 @@ mod timeout_middleware {
         #[tokio::test]
         async fn connect_timeout_works() {
             let inner = NeverConnected::new();
-            let timeout = timeout::Config::new().with_connect_timeout(Duration::from_secs(1));
+            let timeout = timeout::Settings::new().with_connect_timeout(Duration::from_secs(1));
             let mut hyper = HyperAdapter::builder()
                 .timeout(&timeout)
                 .sleep_impl(TokioSleep::new())
                 .build(inner);
             let now = tokio::time::Instant::now();
             tokio::time::pause();
-            let resp = hyper
+            let _resp = hyper
                 .call(
                     http::Request::builder()
                         .uri("http://foo.com")
@@ -407,7 +407,7 @@ mod timeout_middleware {
         #[tokio::test]
         async fn http_timeout_works() {
             let inner = NeverReplies::new();
-            let timeout = timeout::Config::new()
+            let timeout = timeout::Settings::new()
                 .with_connect_timeout(Duration::from_secs(1))
                 .with_read_timeout(Duration::from_secs(2));
             let mut hyper = HyperAdapter::builder()
@@ -416,7 +416,7 @@ mod timeout_middleware {
                 .build(inner);
             let now = tokio::time::Instant::now();
             tokio::time::pause();
-            let resp = hyper
+            let _resp = hyper
                 .call(
                     http::Request::builder()
                         .uri("http://foo.com")

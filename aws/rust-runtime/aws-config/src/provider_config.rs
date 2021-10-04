@@ -11,6 +11,7 @@ use aws_types::region::Region;
 use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use smithy_client::erase::DynConnector;
 
+use smithy_client::timeout;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
@@ -32,16 +33,13 @@ pub struct ProviderConfig {
     region: Option<Region>,
 }
 
+type MakeConnectorFn =
+    dyn Fn(&HttpSettings, Option<Arc<dyn AsyncSleep>>) -> Option<DynConnector> + Send + Sync;
+
 #[derive(Clone)]
 enum Connector {
     Static(Option<DynConnector>),
-    Dynamic(
-        Arc<
-            dyn Fn(&HttpSettings, Option<Arc<dyn AsyncSleep>>) -> Option<DynConnector>
-                + Send
-                + Sync,
-        >,
-    ),
+    Dynamic(Arc<MakeConnectorFn>),
 }
 
 impl Default for Connector {
@@ -112,10 +110,15 @@ impl ProviderConfig {
     }
 }
 
+/// HttpSettings for HTTP connectors
+///
+/// # Stabilility
+/// As HTTP settings stabilize, they will move to `aws-types::config::Config` so that they
+/// can be used to configure HTTP connectors for service clients.
 #[non_exhaustive]
 #[derive(Default)]
 pub(crate) struct HttpSettings {
-    pub(crate) timeout_config: smithy_client::timeout::Config,
+    pub(crate) timeout_config: timeout::Settings,
 }
 
 impl ProviderConfig {
