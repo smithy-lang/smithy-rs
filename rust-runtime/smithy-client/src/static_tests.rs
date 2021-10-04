@@ -53,20 +53,16 @@ fn sanity_retry() {
         .check();
 }
 
-/*
 // Statically check that a hyper client can actually be used to build a Client.
 #[allow(dead_code)]
 #[cfg(all(test, feature = "hyper"))]
-fn sanity_hyper<C>(hc: hyper::Client<C, smithy_http::body::SdkBody>)
-where
-    C: hyper::client::connect::Connect + Clone + Send + Sync + 'static,
-{
+fn sanity_hyper(hc: crate::hyper_impls::HyperAdapter<hyper::client::HttpConnector>) {
     Builder::new()
         .middleware(tower::layer::util::Identity::new())
-        .hyper(hc)
+        .connector(hc)
         .build()
         .check();
-}*/
+}
 
 // Statically check that a type-erased middleware client is actually a valid Client.
 #[allow(dead_code)]
