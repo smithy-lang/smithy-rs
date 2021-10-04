@@ -8,5 +8,6 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
 
 object InlineAwsDependency {
-    fun forRustFile(file: String): InlineDependency = InlineDependency.Companion.forRustFile(file, "aws-inlineable")
+    fun forRustFile(file: String, public: Boolean = false): InlineDependency =
+        InlineDependency.Companion.forRustFile(file, "aws-inlineable", public)
 }
