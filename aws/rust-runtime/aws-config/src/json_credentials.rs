@@ -33,15 +33,15 @@ impl From<smithy_json::deserialize::Error> for InvalidJsonCredentials {
 impl Display for InvalidJsonCredentials {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            InvalidJsonCredentials::Other(msg) => write!(f, "{}", msg),
+            InvalidJsonCredentials::JsonError(json) => {
+                write!(f, "invalid JSON in response: {}", json)
+            }
             InvalidJsonCredentials::MissingField(field) => write!(
                 f,
-                "Expected field `{}` in IMDS response but it was missing",
+                "Expected field `{}` in response but it was missing",
                 field
             ),
-            InvalidJsonCredentials::JsonError(json) => {
-                write!(f, "invalid JSON in IMDS response: {}", json)
-            }
+            InvalidJsonCredentials::Other(msg) => write!(f, "{}", msg),
         }
     }
 }
@@ -85,8 +85,9 @@ pub(crate) enum JsonCredentials<'a> {
 /// Deserialize an IMDS response from a string
 ///
 /// There are two levels of error here: the top level distinguishes between a successfully parsed
-/// response from IMDS vs. something invalid / unexpected. The inner error distinguishes between
-/// a successful request to IMDS that includes credentials vs. an error with a code.
+/// response from the credential provider vs. something invalid / unexpected. The inner error
+/// distinguishes between a successful response that contains credentials vs. an error with a code and
+/// error message.
 pub(crate) fn parse_json_credentials(
     credentials_response: &str,
 ) -> Result<JsonCredentials, InvalidJsonCredentials> {
@@ -247,9 +248,8 @@ mod test {
         )
     }
 
-    /*
     #[test]
-    fn json_credentials_optional_session_token() {
+    fn json_credentials_required_session_token() {
         let resp = r#"{
             "LastUpdated" : "2021-09-17T20:57:08Z",
             "Type" : "AWS-HMAC",
@@ -257,17 +257,12 @@ mod test {
             "SecretAccessKey" : "xjtest",
             "Expiration" : "2021-09-18T03:31:56Z"
         }"#;
-        let parsed = parse_json_credentials(resp).expect("code not required");
+        let parsed = parse_json_credentials(resp).expect_err("token missing");
         assert_eq!(
-            parsed,
-            JsonCredentials::RefreshableCredentials {
-                access_key_id: "ASIARTEST".into(),
-                secret_access_key: "xjtest".into(),
-                session_token: None,
-                expiration: UNIX_EPOCH + Duration::from_secs(1631935916),
-            }
-        )
-    }*/
+            format!("{}", parsed),
+            "Expected field `Token` in response but it was missing"
+        );
+    }
 
     #[test]
     fn json_credentials_missing_akid() {
