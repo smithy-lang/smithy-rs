@@ -111,7 +111,7 @@ type BoxError = Box<dyn Error + Send + Sync + 'static>;
 /// With the `hyper` feature enabled, you can construct a `Client` directly from a
 /// [`hyper::Client`] using [`hyper_ext::Adapter::builder`]. You can also enable the `rustls` or `native-tls`
 /// features to construct a Client against a standard HTTPS endpoint using [`Builder::rustls`] and
-/// [`Builder::native_tls`] respectively.
+/// `Builder::native_tls` respectively.
 #[derive(Debug)]
 pub struct Client<
     Connector = erase::DynConnector,
