@@ -12,6 +12,7 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -83,11 +84,11 @@ class EndpointConfigCustomization(private val protocolConfig: ProtocolConfig, pr
             ServiceConfig.BuilderImpl ->
                 rust(
                     """
-            pub fn endpoint_resolver(mut self, endpoint_resolver: impl #T + 'static) -> Self {
-                self.endpoint_resolver = Some(::std::sync::Arc::new(endpoint_resolver));
-                self
-            }
-            """,
+                    pub fn endpoint_resolver(mut self, endpoint_resolver: impl #T + 'static) -> Self {
+                        self.endpoint_resolver = Some(::std::sync::Arc::new(endpoint_resolver));
+                        self
+                    }
+                    """,
                     resolveAwsEndpoint
                 )
             ServiceConfig.BuilderBuild -> {
@@ -171,7 +172,7 @@ class EndpointResolverGenerator(protocolConfig: ProtocolConfig, private val endp
         val base = partitions.first()
         val rest = partitions.drop(1)
         val fnName = "endpoint_resolver"
-        return RuntimeType.forInlineFun(fnName, "aws_endpoint") {
+        return RuntimeType.forInlineFun(fnName, RustModule.private("aws_endpoint")) {
             it.rustBlockTemplate("pub fn $fnName() -> impl #{ResolveAwsEndpoint}", *codegenScope) {
                 withBlockTemplate("#{PartitionResolver}::new(", ")", *codegenScope) {
                     renderPartition(base)

@@ -116,12 +116,8 @@ impl TestEnvironment {
         })
     }
 
-    pub async fn provider_config(
-        &self,
-    ) -> (RecordingConnection<ReplayingConnection>, ProviderConfig) {
-        let connector = RecordingConnection::new(ReplayingConnection::new(
-            self.network_traffic.events().clone(),
-        ));
+    pub async fn provider_config(&self) -> (ReplayingConnection, ProviderConfig) {
+        let connector = ReplayingConnection::new(self.network_traffic.events().clone());
         (
             connector.clone(),
             ProviderConfig::empty()
@@ -169,11 +165,13 @@ impl TestEnvironment {
         P: ProvideCredentials,
     {
         let (connector, config) = self.provider_config().await;
+        let recording_connector = RecordingConnection::new(connector);
+        let config = config.with_connector(DynConnector::new(recording_connector.clone()));
         let provider = make_provider(config).await;
         let result = provider.provide_credentials().await;
         std::fs::write(
             self.base_dir.join("http-traffic-recorded.json"),
-            serde_json::to_string(&connector.network_traffic()).unwrap(),
+            serde_json::to_string(&recording_connector.network_traffic()).unwrap(),
         )
         .unwrap();
         self.check_results(&result);
@@ -189,13 +187,7 @@ impl TestEnvironment {
         F: Future<Output = P>,
         P: ProvideCredentials,
     {
-        let connector = ReplayingConnection::new(self.network_traffic.events().clone());
-        let conf = ProviderConfig::empty()
-            .with_fs(self.fs.clone())
-            .with_env(self.env.clone())
-            .with_connector(DynConnector::new(connector.clone()))
-            .load_default_region()
-            .await;
+        let (connector, conf) = self.provider_config().await;
         let provider = make_provider(conf).await;
         let result = provider.provide_credentials().await;
         self.log_info();

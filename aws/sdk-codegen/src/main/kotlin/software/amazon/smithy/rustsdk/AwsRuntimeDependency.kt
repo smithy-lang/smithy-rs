@@ -30,6 +30,9 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation = when (runtimeCrateLocation) 
 
 object AwsRuntimeType {
     val S3Errors by lazy { RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("s3_errors")) }
+    val Presigning by lazy {
+        RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", public = true))
+    }
 }
 
 fun RuntimeConfig.awsRuntimeDependency(name: String, features: Set<String> = setOf()): CargoDependency =
