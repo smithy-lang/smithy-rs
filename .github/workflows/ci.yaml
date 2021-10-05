@@ -8,7 +8,7 @@ on:
 name: CI
 
 env:
-  rust_version: 1.52.1
+  rust_version: 1.53.0
   rust_toolchain_components: clippy,rustfmt
   java_version: 11
 

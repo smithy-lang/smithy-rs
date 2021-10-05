@@ -148,7 +148,7 @@ class HttpProtocolTestGeneratorTest {
                 operationShape: OperationShape,
                 inputShape: StructureShape
             ) {
-                httpBuilderFun(implBlockWriter) {
+                generateRequestBuilderBase(implBlockWriter) {
                     withBlock("Ok(#T::new()", ")", RuntimeType.HttpRequestBuilder) {
                         writeWithNoFormatting(httpRequestBuilder)
                     }

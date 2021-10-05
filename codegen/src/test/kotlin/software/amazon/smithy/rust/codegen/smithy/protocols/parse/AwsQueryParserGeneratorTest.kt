@@ -69,11 +69,11 @@ class AwsQueryParserGeneratorTest {
             )
         }
 
-        project.withModule(RustModule.default("model", public = true)) {
+        project.withModule(RustModule.public("model")) {
             model.lookup<StructureShape>("test#SomeOutput").renderWithModelBuilder(model, symbolProvider, it)
         }
 
-        project.withModule(RustModule.default("output", public = true)) {
+        project.withModule(RustModule.public("output")) {
             model.lookup<OperationShape>("test#SomeOperation").outputShape(model)
                 .renderWithModelBuilder(model, symbolProvider, it)
         }
