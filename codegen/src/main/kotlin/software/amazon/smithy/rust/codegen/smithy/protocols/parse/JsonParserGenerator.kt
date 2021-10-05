@@ -51,16 +51,16 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.utils.StringUtils
 
-open class JsonParserGenerator(
+class JsonParserGenerator(
     protocolConfig: ProtocolConfig,
     private val httpBindingResolver: HttpBindingResolver,
 ) : StructuredDataParserGenerator {
-    val model = protocolConfig.model
-    val symbolProvider = protocolConfig.symbolProvider
+    private val model = protocolConfig.model
+    private val symbolProvider = protocolConfig.symbolProvider
     private val runtimeConfig = protocolConfig.runtimeConfig
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val jsonDeserModule = RustModule.private("json_deser")
-    val codegenScope = arrayOf(
+    private val codegenScope = arrayOf(
         "Error" to smithyJson.member("deserialize::Error"),
         "ErrorReason" to smithyJson.member("deserialize::ErrorReason"),
         "expect_blob_or_null" to smithyJson.member("deserialize::token::expect_blob_or_null"),
@@ -197,7 +197,34 @@ open class JsonParserGenerator(
         )
     }
 
-    fun RustWriter.expectEndOfTokenStream() {
+    fun renderStructure(
+            writer: RustWriter,
+            structureShape: StructureShape,
+            includedMembers: List<MemberShape>,
+    ) {
+        val fnName = symbolProvider.deserializeFunctionName(structureShape)
+        val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
+        writer.write("")
+        writer.rustBlockTemplate(
+                "##[allow(dead_code)] pub fn $fnName(input: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
+                *codegenScope,
+                "Builder" to structureShape.builderSymbol(symbolProvider),
+        ) {
+            rustTemplate(
+                    """
+                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
+                    let tokens = &mut tokens_owned;
+                    #{expect_start_object}(tokens.next())?;
+                """.trimIndent(),
+                    *codegenScope
+            )
+            deserializeStructInner(includedMembers)
+            expectEndOfTokenStream()
+            rust("Ok(builder)")
+        }
+    }
+
+    private fun RustWriter.expectEndOfTokenStream() {
         rustBlock("if tokens.next().is_some()") {
             rustTemplate(
                 "return Err(#{Error}::custom(\"found more JSON tokens after completing parsing\"));",
@@ -206,7 +233,7 @@ open class JsonParserGenerator(
         }
     }
 
-    fun RustWriter.deserializeStructInner(members: Collection<MemberShape>) {
+    private fun RustWriter.deserializeStructInner(members: Collection<MemberShape>) {
         objectKeyLoop(hasMembers = members.isNotEmpty()) {
             rustBlock("match key.to_unescaped()?.as_ref()") {
                 for (member in members) {

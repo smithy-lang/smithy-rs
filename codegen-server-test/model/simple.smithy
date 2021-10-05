@@ -18,7 +18,7 @@ service SimpleService {
 }
 
 @documentation("Id of the service that will be registered")
-string ServiceId 
+string ServiceId
 
 @error("client")
 @documentation(

@@ -22,8 +22,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceGener
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpDeserializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.deserialize.JsonDeserializerGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.serialize.JsonSerializerGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
@@ -40,6 +40,7 @@ import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
@@ -47,7 +48,10 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBox
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.util.runCommand
+import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.outputShape
 
 class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
         ShapeVisitor.Default<Unit>() {
@@ -64,9 +68,10 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private val httpGenerator: HttpProtocolGenerator
 
     private val serializerGenerator: JsonSerializerGenerator
-    private val deserializerGenerator: JsonDeserializerGenerator
+    private val deserializerGenerator: JsonParserGenerator
     private val httpSerializerGenerator: ServerGenerator
     private val httpDeserializerGenerator: ServerGenerator
+    private val httpBindingResolver: HttpBindingResolver
 
     init {
         val symbolVisitorConfig =
@@ -103,30 +108,24 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules)
         httpGenerator = protocolGenerator.buildProtocolGenerator(protocolConfig)
 
-        val httpBindingResolver =
+        httpBindingResolver =
                 HttpTraitHttpBindingResolver(
                         protocolConfig.model,
                         ProtocolContentTypes.consistent("application/json"),
                 )
 
+        serializerGenerator = JsonSerializerGenerator(protocolConfig, httpBindingResolver)
+        deserializerGenerator = JsonParserGenerator(protocolConfig, httpBindingResolver)
         when (protocolConfig.protocol.toString()) {
             "aws.protocols#restJson1" -> {
-                serializerGenerator = JsonSerializerGenerator(protocolConfig, httpBindingResolver)
-                deserializerGenerator =
-                        JsonDeserializerGenerator(protocolConfig, httpBindingResolver)
                 httpSerializerGenerator =
                         RestJson1HttpSerializerGenerator(protocolConfig, httpBindingResolver)
                 httpDeserializerGenerator =
                         RestJson1HttpDeserializerGenerator(protocolConfig, httpBindingResolver)
             }
             else -> {
-                serializerGenerator = JsonSerializerGenerator(protocolConfig, httpBindingResolver)
-                deserializerGenerator =
-                        JsonDeserializerGenerator(protocolConfig, httpBindingResolver)
-                httpSerializerGenerator =
-                        RestJson1HttpSerializerGenerator(protocolConfig, httpBindingResolver)
-                httpDeserializerGenerator =
-                        RestJson1HttpDeserializerGenerator(protocolConfig, httpBindingResolver)
+                // TODO: support other protocols
+                throw Exception("Protocol ${protocolConfig.protocol} not support yet")
             }
         }
     }
@@ -169,12 +168,23 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     override fun operationShape(shape: OperationShape?) {
         logger.info("[rust-server-codegen] Generating operation ${shape}...")
         if (shape != null) {
+            val inputHttpDocumentMembers =
+                httpBindingResolver.requestMembers(shape, HttpLocation.DOCUMENT)
+            val outputHttpDocumentMembers = 
+                httpBindingResolver.responseMembers(shape, HttpLocation.DOCUMENT)
             rustCrate.useShapeWriter(shape) { writer ->
                 shape.let {
                     httpDeserializerGenerator.render(writer, it)
                     httpSerializerGenerator.render(writer, it)
-                    serializerGenerator.render(writer, it)
-                    deserializerGenerator.render(writer, it)
+                    serializerGenerator.renderStructure(writer, shape.inputShape(model), inputHttpDocumentMembers)
+                    serializerGenerator.renderStructure(writer, shape.outputShape(model), outputHttpDocumentMembers)
+                    deserializerGenerator.renderStructure(writer, shape.inputShape(model), inputHttpDocumentMembers)
+                    deserializerGenerator.renderStructure(writer, shape.outputShape(model), outputHttpDocumentMembers)
+                    shape.errors.forEach { error ->
+                        val errorShape = model.expectShape(error, StructureShape::class.java)
+                        serializerGenerator.renderStructure(writer, errorShape, errorShape.members().toList())
+                        deserializerGenerator.renderStructure(writer, errorShape, errorShape.members().toList())
+                    }
                 }
             }
         }
