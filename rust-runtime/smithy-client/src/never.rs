@@ -104,7 +104,7 @@ mod stream {
     }
 }
 
-/// A service where the underyling TCP connection never connectsPin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>
+/// A service where the underyling TCP connection never connects
 pub type NeverConnected = NeverService<TcpStream>;
 
 /// A service that will connect but never send any data

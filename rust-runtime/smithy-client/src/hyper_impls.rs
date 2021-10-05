@@ -11,7 +11,7 @@ use hyper::client::connect::Connection;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tower::Service;
 
-use smithy_async::rt::sleep::{AsyncSleep, TokioSleep};
+use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use smithy_http::body::SdkBody;
 pub use smithy_http::result::{SdkError, SdkSuccess};
 
@@ -19,6 +19,8 @@ use crate::hyper_impls::timeout_middleware::{ConnectTimeout, HttpReadTimeout};
 use crate::{timeout, BoxError, Builder as ClientBuilder};
 
 /// Adapter from a [`hyper::Client`] to a connector usable by a [`Client`](crate::Client).
+///
+/// This adapter also enables TCP connect and HTTP read timeouts via [`HyperAdapter::Builder`]
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct HyperAdapter<C>(HttpReadTimeout<hyper::Client<ConnectTimeout<C>, SdkBody>>);
@@ -81,14 +83,26 @@ impl Builder {
         C::Error: Into<BoxError>,
     {
         // if we are using Hyper, Tokio must already be enabled so we can fallback to Tokio.
-        let sleep = self.sleep.unwrap_or_else(|| Arc::new(TokioSleep::new()));
+        let sleep = self.sleep.or_else(default_async_sleep);
         let connector = match self.timeout.connect() {
-            Some(duration) => ConnectTimeout::new(connector, sleep.clone(), duration),
+            Some(duration) => ConnectTimeout::new(
+                connector,
+                sleep
+                    .clone()
+                    .expect("a sleep impl must be provided to use timeouts"),
+                duration,
+            ),
             None => ConnectTimeout::no_timeout(connector),
         };
         let base = self.client_builder.build(connector);
         let http_timeout = match self.timeout.read() {
-            Some(duration) => HttpReadTimeout::new(base, sleep, duration),
+            Some(duration) => HttpReadTimeout::new(
+                base,
+                sleep
+                    .clone()
+                    .expect("a sleep impl must be provided to use timeouts"),
+                duration,
+            ),
             None => HttpReadTimeout::no_timeout(base),
         };
         HyperAdapter(http_timeout)
@@ -155,11 +169,7 @@ where
 impl<M, R> ClientBuilder<(), M, R> {
     /// Connect to the service over HTTPS using Rustls.
     pub fn rustls(self) -> ClientBuilder<HyperAdapter<crate::conns::Https>, M, R> {
-        self.connector(
-            HyperAdapter::builder()
-                .sleep_impl(TokioSleep::new())
-                .build(crate::conns::https()),
-        )
+        self.connector(HyperAdapter::builder().build(crate::conns::https()))
     }
 
     /// Connect to the service over HTTPS using Rustls.
@@ -177,11 +187,7 @@ impl<M, R> ClientBuilder<(), M, R> {
         self,
     ) -> ClientBuilder<HyperAdapter<hyper_tls::HttpsConnector<hyper::client::HttpConnector>>, M, R>
     {
-        self.connector(
-            HyperAdapter::builder()
-                .sleep_impl(Arc::new(TokioSleep::new()))
-                .build(crate::conns::native_tls()),
-        )
+        self.connector(HyperAdapter::builder().build(crate::conns::native_tls()))
     }
 }
 
@@ -283,13 +289,13 @@ mod timeout_middleware {
         type Output = Result<T, BoxError>;
 
         fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-            let timout_fut = match self.project() {
+            let timeout_future = match self.project() {
                 MaybeTimeoutFutureProj::NoTimeout { future } => {
                     return future.poll(cx).map_err(|err| err.into())
                 }
                 MaybeTimeoutFutureProj::Timeout { timeout } => timeout,
             };
-            match timout_fut.poll(cx) {
+            match timeout_future.poll(cx) {
                 Poll::Ready(Ok(response)) => Poll::Ready(response.map_err(|err| err.into())),
                 Poll::Ready(Err(timeout)) => Poll::Ready(Err(timeout.into())),
                 Poll::Pending => Poll::Pending,
