@@ -55,7 +55,7 @@ async fn main() -> Result<(), Error> {
 
     let num_channels = channels.len();
 
-    if num_channels == 0 {
+    if num_channels.is_empty() {
         println!("You have no delivery channels")
     } else {
         for channel in channels {

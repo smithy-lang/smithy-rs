@@ -116,7 +116,7 @@ async fn main() -> Result<(), Error> {
 
     let num_recorders = recorders.len();
 
-    if num_recorders != 0 {
+    if num_recorders.is_emtpy() {
         println!("You already have a configuration recorder in this region");
         println!("Use delete-configuration-recorder to delete it before you call this again.");
 

@@ -55,7 +55,7 @@ async fn main() -> Result<(), Error> {
 
     let num_recorders = recorders.len();
 
-    if num_recorders == 0 {
+    if num_recorders.is_empty() {
         println!("You have no configuration recorders")
     } else {
         for recorder in recorders {
