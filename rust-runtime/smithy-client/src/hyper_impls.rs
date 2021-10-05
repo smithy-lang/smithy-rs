@@ -108,8 +108,10 @@ impl Builder {
         HyperAdapter(http_timeout)
     }
 
-    #[doc(hidden)]
     /// Set the async sleep implementation used for timeouts
+    ///
+    /// Calling this is only necessary for testing or to use an something other than
+    /// [`smithy_async::rt::default_async_sleep`].
     pub fn sleep_impl(self, sleep_impl: impl AsyncSleep + 'static) -> Self {
         Self {
             sleep: Some(Arc::new(sleep_impl)),
@@ -403,7 +405,7 @@ mod timeout_middleware {
                 .build(inner);
             let now = tokio::time::Instant::now();
             tokio::time::pause();
-            let _resp = hyper
+            let resp = hyper
                 .call(
                     http::Request::builder()
                         .uri("http://foo.com")
@@ -412,6 +414,7 @@ mod timeout_middleware {
                 )
                 .await
                 .expect_err("timeout");
+            assert_eq!(format!("{}", resp), "error trying to connect: timed out");
             assert_elapsed!(now, Duration::from_secs(1));
         }
 

@@ -961,7 +961,7 @@ pub(crate) mod test {
         let resp = client
             .get("/latest/metadata")
             .await
-            .expect_err("we're not on EC2, this won't work.");
+            .expect_err("240.0.0.0 will never resolve");
         assert!(now.elapsed().unwrap() > Duration::from_secs(1));
         assert!(now.elapsed().unwrap() < Duration::from_secs(2));
         match resp {
