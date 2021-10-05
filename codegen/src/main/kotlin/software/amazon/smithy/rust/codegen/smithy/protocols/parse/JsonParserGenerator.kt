@@ -198,25 +198,25 @@ class JsonParserGenerator(
     }
 
     fun renderStructure(
-            writer: RustWriter,
-            structureShape: StructureShape,
-            includedMembers: List<MemberShape>,
+        writer: RustWriter,
+        structureShape: StructureShape,
+        includedMembers: List<MemberShape>,
     ) {
         val fnName = symbolProvider.deserializeFunctionName(structureShape)
         val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
         writer.write("")
         writer.rustBlockTemplate(
-                "##[allow(dead_code)] pub fn $fnName(input: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
-                *codegenScope,
-                "Builder" to structureShape.builderSymbol(symbolProvider),
+            "##[allow(dead_code)] pub fn $fnName(input: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
+            *codegenScope,
+            "Builder" to structureShape.builderSymbol(symbolProvider),
         ) {
             rustTemplate(
-                    """
+                """
                     let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
                     let tokens = &mut tokens_owned;
                     #{expect_start_object}(tokens.next())?;
                 """.trimIndent(),
-                    *codegenScope
+                *codegenScope
             )
             deserializeStructInner(includedMembers)
             expectEndOfTokenStream()
