@@ -6,6 +6,7 @@ vNext (Month Day, Year)
 - Update event stream `Receiver`s to be `Send` (aws-sdk-rust#224)
 - Add `sts::AssumeRoleProvider` to `aws-config` (#703, aws-sdk-rust#3)
 - :bug: Fix panic when signing non-ASCII header values (smithy-rs#708, aws-sdk-rust#226)
+- Updated AWS Config code examples to include a readme, added command-line options; added DeleteConfigurationRecorder, DeleteDeliveryChannel, ListConfigurationRecorders, ListDeliveryChannels, ListResources, ShowResourceHistory, and EnableConfig code examples.
 
 v0.0.18-alpha (September 14th, 2021)
 =======================
