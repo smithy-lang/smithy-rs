@@ -38,13 +38,13 @@ type MakeConnectorFn =
 
 #[derive(Clone)]
 enum Connector {
-    Static(Option<DynConnector>),
-    Dynamic(Arc<MakeConnectorFn>),
+    Prebuilt(Option<DynConnector>),
+    MakeConnector(Arc<MakeConnectorFn>),
 }
 
 impl Default for Connector {
     fn default() -> Self {
-        Self::Dynamic(Arc::new(
+        Self::MakeConnector(Arc::new(
             |settings: &HttpSettings, sleep: Option<Arc<dyn AsyncSleep>>| {
                 default_connector(&settings, sleep)
             },
@@ -59,8 +59,8 @@ impl Connector {
         sleep: Option<Arc<dyn AsyncSleep>>,
     ) -> Option<DynConnector> {
         match self {
-            Connector::Static(conn) => conn.clone(),
-            Connector::Dynamic(func) => func(&settings, sleep),
+            Connector::Prebuilt(conn) => conn.clone(),
+            Connector::MakeConnector(func) => func(&settings, sleep),
         }
     }
 }
@@ -103,7 +103,7 @@ impl ProviderConfig {
             env: Env::from_slice(&[]),
             fs: Fs::from_raw_map(HashMap::new()),
             time_source: TimeSource::manual(&ManualTimeSource::new(UNIX_EPOCH)),
-            connector: Connector::Static(None),
+            connector: Connector::Prebuilt(None),
             sleep: None,
             region: None,
         }
@@ -152,7 +152,7 @@ impl ProviderConfig {
             env: Env::default(),
             fs: Fs::default(),
             time_source: TimeSource::default(),
-            connector: Connector::Static(None),
+            connector: Connector::Prebuilt(None),
             sleep: None,
             region: None,
         }
@@ -256,7 +256,7 @@ impl ProviderConfig {
     /// This method is expected to change to support HTTP configuration
     pub fn with_connector(self, connector: DynConnector) -> Self {
         ProviderConfig {
-            connector: Connector::Static(Some(connector)),
+            connector: Connector::Prebuilt(Some(connector)),
             ..self
         }
     }

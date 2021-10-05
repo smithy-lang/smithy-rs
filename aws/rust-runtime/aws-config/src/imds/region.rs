@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 //! IMDS Region Provider
 //!
 //! Load region from IMDS from `/latest/meta-data/placement/region`
