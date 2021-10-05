@@ -20,7 +20,7 @@ use crate::{timeout, BoxError, Builder as ClientBuilder};
 
 /// Adapter from a [`hyper::Client`] to a connector usable by a [`Client`](crate::Client).
 ///
-/// This adapter also enables TCP connect and HTTP read timeouts via [`HyperAdapter::Builder`]
+/// This adapter also enables TCP connect and HTTP read timeouts via [`HyperAdapter::builder`]
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct HyperAdapter<C>(HttpReadTimeout<hyper::Client<ConnectTimeout<C>, SdkBody>>);
@@ -111,7 +111,7 @@ impl Builder {
     /// Set the async sleep implementation used for timeouts
     ///
     /// Calling this is only necessary for testing or to use an something other than
-    /// [`smithy_async::rt::default_async_sleep`].
+    /// [`smithy_async::rt::sleep::default_async_sleep`].
     pub fn sleep_impl(self, sleep_impl: impl AsyncSleep + 'static) -> Self {
         Self {
             sleep: Some(Arc::new(sleep_impl)),
