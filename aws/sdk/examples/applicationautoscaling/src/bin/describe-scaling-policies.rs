@@ -20,6 +20,7 @@ struct Opt {
 }
 
 // Lists the Application Auto Scaling policies.
+// snippet-start:[applicationautoscaling.rust.describe-scaling-policies]
 async fn show_policies(
     client: &aws_sdk_applicationautoscaling::Client,
 ) -> Result<(), aws_sdk_applicationautoscaling::Error> {
@@ -38,6 +39,7 @@ async fn show_policies(
 
     Ok(())
 }
+// snippet-end:[applicationautoscaling.rust.describe-scaling-policies]
 
 /// Lists your Application Auto Scaling policies in the Region.
 /// # Arguments
@@ -71,4 +73,14 @@ async fn main() -> Result<(), Error> {
     show_policies(&client).await.unwrap();
 
     Ok(())
+}
+
+#[actix_rt::test]
+async fn test_describe_scaling_policies() {
+    let shared_config = aws_config::load_from_env().await;
+    let client = Client::new(&shared_config);
+
+    client
+        .describe_scaling_policies()
+        .service_namespace(ServiceNamespace::Ec2);
 }
