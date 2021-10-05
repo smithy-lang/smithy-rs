@@ -6,6 +6,7 @@ vNext (Month Day, Year)
 - Update event stream `Receiver`s to be `Send` (aws-sdk-rust#224)
 - Add `sts::AssumeRoleProvider` to `aws-config` (#703, aws-sdk-rust#3)
 - :bug: Fix panic when signing non-ASCII header values (smithy-rs#708, aws-sdk-rust#226)
+- Updated Transcribe code example to take an audio file as a command-line option and added readme.
 
 v0.0.18-alpha (September 14th, 2021)
 =======================
