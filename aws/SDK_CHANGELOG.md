@@ -1,6 +1,8 @@
 vNext (Month Day, Year)
 =======================
 
+- Updated AutoScaling code examples to use asynchronous config; added readme file; tested on 0.0.17 bits
+
 v0.0.17-alpha (September 2nd, 2021)
 ===================================
 
