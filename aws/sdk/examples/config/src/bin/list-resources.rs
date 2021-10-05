@@ -66,7 +66,7 @@ async fn main() -> Result<(), Error> {
         let resources = resp.resource_identifiers.unwrap_or_default();
         let length = resources.len();
 
-        if !length.is_emtpy() || verbose {
+        if !length.is_empty() || verbose {
             println!();
             println!("Resources of type {}:", value);
         }
