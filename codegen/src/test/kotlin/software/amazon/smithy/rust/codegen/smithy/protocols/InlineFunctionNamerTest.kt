@@ -102,13 +102,13 @@ class InlineFunctionNamerTest {
             symbolProvider.deserializeFunctionName(testModel.lookup(shapeId)) shouldBe "deser_$suffix"
         }
 
-        test("test#Op1", "operation_op1")
-        test("test#SomeList1", "list_some_list1")
-        test("test#SomeMap1", "map_some_map1")
-        test("test#SomeSet1", "set_some_set1")
-        test("test#SomeStruct1", "structure_some_struct1")
-        test("test#SomeUnion1", "union_some_union1")
-        test("test#SomeStruct1\$some_string", "member_some_struct1_some_string")
+        test("test#Op1", "operation_crate_operation_op1")
+        test("test#SomeList1", "list_test_some_list1")
+        test("test#SomeMap1", "map_test_some_map1")
+        test("test#SomeSet1", "set_test_some_set1")
+        test("test#SomeStruct1", "structure_crate_model_some_struct1")
+        test("test#SomeUnion1", "union_crate_model_some_union1")
+        test("test#SomeStruct1\$some_string", "member_test_some_struct1_some_string")
     }
 
     @Test

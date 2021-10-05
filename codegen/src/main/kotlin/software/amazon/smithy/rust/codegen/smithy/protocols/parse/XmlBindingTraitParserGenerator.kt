@@ -25,6 +25,7 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -108,6 +109,7 @@ class XmlBindingTraitParserGenerator(
     private val model = protocolConfig.model
     private val index = HttpBindingIndex.of(model)
     private val xmlIndex = XmlNameIndex.of(model)
+    private val xmlDeserModule = RustModule.private("xml_deser")
 
     /**
      * Generate a parse function for a given targeted as a payload.
@@ -123,7 +125,7 @@ class XmlBindingTraitParserGenerator(
         val shape = model.expectShape(member.target)
         check(shape is UnionShape || shape is StructureShape) { "payload parser should only be used on structures & unions" }
         val fnName = symbolProvider.deserializeFunctionName(member)
-        return RuntimeType.forInlineFun(fnName, "xml_deser") {
+        return RuntimeType.forInlineFun(fnName, xmlDeserModule) {
             it.rustBlock(
                 "pub fn $fnName(inp: &[u8]) -> Result<#1T, #2T>",
                 symbolProvider.toSymbol(shape),
@@ -175,7 +177,7 @@ class XmlBindingTraitParserGenerator(
         if (shapeName == null || !members.isNotEmpty()) {
             return null
         }
-        return RuntimeType.forInlineFun(fnName, "xml_deser") {
+        return RuntimeType.forInlineFun(fnName, xmlDeserModule) {
             Attribute.AllowUnusedMut.render(it)
             it.rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
@@ -208,7 +210,7 @@ class XmlBindingTraitParserGenerator(
 
     override fun errorParser(errorShape: StructureShape): RuntimeType {
         val fnName = symbolProvider.deserializeFunctionName(errorShape) + "_xml_err"
-        return RuntimeType.forInlineFun(fnName, "xml_deser") {
+        return RuntimeType.forInlineFun(fnName, xmlDeserModule) {
             Attribute.AllowUnusedMut.render(it)
             it.rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
@@ -370,7 +372,7 @@ class XmlBindingTraitParserGenerator(
     private fun RustWriter.parseUnion(shape: UnionShape, ctx: Ctx) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
-        val nestedParser = RuntimeType.forInlineFun(fnName, "xml_deser") {
+        val nestedParser = RuntimeType.forInlineFun(fnName, xmlDeserModule) {
             it.rustBlockTemplate(
                 "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Shape}, #{XmlError}>",
                 *codegenScope, "Shape" to symbol
@@ -419,7 +421,7 @@ class XmlBindingTraitParserGenerator(
     private fun RustWriter.parseStructure(shape: StructureShape, ctx: Ctx) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
-        val nestedParser = RuntimeType.forInlineFun(fnName, "xml_deser") {
+        val nestedParser = RuntimeType.forInlineFun(fnName, xmlDeserModule) {
             it.rustBlockTemplate(
                 "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Shape}, #{XmlError}>",
                 *codegenScope, "Shape" to symbol
@@ -434,7 +436,13 @@ class XmlBindingTraitParserGenerator(
                 }
                 withBlock("Ok(builder.build()", ")") {
                     if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
-                        rustTemplate(""".map_err(|_|{XmlError}::custom("missing field"))?""", *codegenScope)
+                        // NOTE:(rcoh) This branch is unreachable given the current nullability rules.
+                        // Only synthetic inputs can have fallible builders, but synthetic inputs can never be parsed
+                        // (because they're inputs, only outputs will be parsed!)
+
+                        // I'm leaving this branch here so that the binding trait parser generator would work for a server
+                        // side implementation in the future.
+                        rustTemplate(""".map_err(|_|#{XmlError}::custom("missing field"))?""", *codegenScope)
                     }
                 }
             }
@@ -445,7 +453,7 @@ class XmlBindingTraitParserGenerator(
     private fun RustWriter.parseList(target: CollectionShape, ctx: Ctx) {
         val fnName = symbolProvider.deserializeFunctionName(target)
         val member = target.member
-        val listParser = RuntimeType.forInlineFun(fnName, "xml_deser") {
+        val listParser = RuntimeType.forInlineFun(fnName, xmlDeserModule) {
             it.rustBlockTemplate(
                 "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{List}, #{XmlError}>",
                 *codegenScope,
@@ -479,7 +487,7 @@ class XmlBindingTraitParserGenerator(
 
     private fun RustWriter.parseMap(target: MapShape, ctx: Ctx) {
         val fnName = symbolProvider.deserializeFunctionName(target)
-        val mapParser = RuntimeType.forInlineFun(fnName, "xml_deser") {
+        val mapParser = RuntimeType.forInlineFun(fnName, xmlDeserModule) {
             it.rustBlockTemplate(
                 "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Map}, #{XmlError}>",
                 *codegenScope,
@@ -516,7 +524,7 @@ class XmlBindingTraitParserGenerator(
 
     private fun mapEntryParser(target: MapShape, ctx: Ctx): RuntimeType {
         val fnName = symbolProvider.deserializeFunctionName(target) + "_entry"
-        return RuntimeType.forInlineFun(fnName, "xml_deser") {
+        return RuntimeType.forInlineFun(fnName, xmlDeserModule) {
             it.rustBlockTemplate(
                 "pub fn $fnName(decoder: &mut #{ScopedDecoder}, out: &mut #{Map}) -> Result<(), #{XmlError}>",
                 *codegenScope,

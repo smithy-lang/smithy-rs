@@ -1,5 +1,31 @@
 vNext (Month Day, Year)
 =======================
+**Breaking changes**
+- :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
+
+**New this week**
+- :bug: Fix an issue where `smithy-xml` may have generated invalid XML (smithy-rs#719)
+
+v0.24 (September 24th, 2021)
+============================
+
+**New This Week**
+
+- Add IMDS credential provider to `aws-config` (smithy-rs#709)
+- Add IMDS client to `aws-config` (smithy-rs#701)
+- Add `TimeSource` to `aws_types::os_shim_internal` (smithy-rs#701)
+- User agent construction is now `const fn` (smithy-rs#701)
+- Add `sts::AssumeRoleProvider` to `aws-config` (smithy-rs#703, aws-sdk-rust#3)
+- Add IMDS region provider to `aws-config` (smithy-rs#715)
+- Add query param signing to the `aws-sigv4` crate (smithy-rs#707)
+- :bug: Update event stream `Receiver`s to be `Send` (smithy-rs#702, #aws-sdk-rust#224)
+
+v0.23 (September 14th, 2021)
+=======================
+
+**New This Week**
+- :bug: Fixes issue where `Content-Length` header could be duplicated leading to signing failure (aws-sdk-rust#220, smithy-rs#697)
+- :bug: Fixes naming collision during generation of model shapes that collide with `<operationname>Input` and `<operationname>Output` (#699)
 
 v0.22 (September 2nd, 2021)
 ===========================

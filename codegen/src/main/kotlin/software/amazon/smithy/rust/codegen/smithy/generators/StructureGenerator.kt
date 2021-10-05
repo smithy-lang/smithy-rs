@@ -60,7 +60,7 @@ class StructureGenerator(
     }
 
     companion object {
-        /** Returns whether or not a structure shape requires a fallible builder to be generated. */
+        /** Returns whether a structure shape requires a fallible builder to be generated. */
         fun fallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
             // All inputs should have fallible builders in case a new required field is added in the future
             structureShape.hasTrait<SyntheticInputTrait>() ||
