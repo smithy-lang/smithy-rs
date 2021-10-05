@@ -22,7 +22,10 @@ data class RustModule(val name: String, val rustMetadata: RustMetadata) {
             return RustModule(name, RustMetadata(public = public))
         }
 
-        val Config = default("config", public = true)
-        val Error = default("error", public = true)
+        fun public(name: String): RustModule = default(name, public = true)
+        fun private(name: String): RustModule = default(name, public = false)
+
+        val Config = public("config")
+        val Error = public("error")
     }
 }

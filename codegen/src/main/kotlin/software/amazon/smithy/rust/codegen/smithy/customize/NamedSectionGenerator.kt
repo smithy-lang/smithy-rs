@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.customize
 
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.writable
 
@@ -40,4 +41,11 @@ abstract class Section(val name: String)
 abstract class NamedSectionGenerator<T : Section> {
     abstract fun section(section: T): Writable
     protected val emptySection = writable { }
+}
+
+/** Convenience for rendering a list of customizations for a given section */
+fun <T : Section> RustWriter.writeCustomizations(customizations: List<NamedSectionGenerator<T>>, section: T) {
+    for (customization in customizations) {
+        customization.section(section)(this)
+    }
 }

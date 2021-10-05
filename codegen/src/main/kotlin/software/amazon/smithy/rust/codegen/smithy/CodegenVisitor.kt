@@ -58,10 +58,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
         val (protocol, generator) = ProtocolLoader(
-            codegenDecorator.protocols(
-                service.id,
-                ProtocolLoader.DefaultProtocols
-            )
+            codegenDecorator.protocols(service.id, ProtocolLoader.DefaultProtocols)
         ).protocolFor(context.model, service)
         protocolGenerator = generator
         model = generator.transformModel(codegenDecorator.transformModel(service, baseModel))
