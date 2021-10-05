@@ -43,6 +43,8 @@ v0.0.18-alpha (September 14th, 2021)
 **New This Week**
 - :bug: Fixes issue where `Content-Length` header could be duplicated leading to signing failure (aws-sdk-rust#220, smithy-rs#697)
 
+- Updated AutoScaling code examples to use asynchronous config; added readme file; tested on 0.0.17 bits
+
 v0.0.17-alpha (September 2nd, 2021)
 ===================================
 
