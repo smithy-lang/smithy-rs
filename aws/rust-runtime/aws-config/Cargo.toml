@@ -10,7 +10,7 @@ exclude = ["test-data/*", "integration-tests/*"]
 default-provider = ["profile", "imds", "meta", "sts", "environment"]
 profile = ["sts", "web-identity-token", "meta", "environment", "imds"]
 meta = ["tokio/sync"]
-imds = ["profile", "smithy-http", "smithy-types", "smithy-http-tower", "smithy-json", "tower", "aws-http", "meta"]
+imds = ["profile", "smithy-http", "smithy-http-tower", "smithy-json", "tower", "aws-http", "meta"]
 environment = ["meta"]
 sts = ["aws-sdk-sts", "aws-hyper"]
 web-identity-token = ["sts", "profile"]
@@ -28,6 +28,7 @@ default = ["default-provider", "rustls", "rt-tokio"]
 aws-types = { path = "../../sdk/build/aws-sdk/aws-types" }
 smithy-async = { path = "../../sdk/build/aws-sdk/smithy-async" }
 smithy-client = { path = "../../sdk/build/aws-sdk/smithy-client" }
+smithy-types = { path = "../../sdk/build/aws-sdk/smithy-types" }
 tracing = { version = "0.1" }
 tokio = { version = "1", features = ["sync"], optional = true }
 aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sts", optional = true }
@@ -37,7 +38,6 @@ aws-hyper = { path = "../../sdk/build/aws-sdk/aws-hyper", optional = true }
 
 # imds
 smithy-http = { path = "../../sdk/build/aws-sdk/smithy-http", optional = true }
-smithy-types = { path = "../../sdk/build/aws-sdk/smithy-types", optional = true }
 smithy-http-tower = { path = "../../sdk/build/aws-sdk/smithy-http-tower", optional = true }
 tower = { version = "0.4.8", optional = true }
 aws-http = { path = "../../sdk/build/aws-sdk/aws-http", optional = true }

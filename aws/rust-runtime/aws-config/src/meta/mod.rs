@@ -5,4 +5,6 @@
 
 pub mod region;
 
+pub mod retry_config;
+
 pub mod credentials;

@@ -101,8 +101,8 @@ pub use loader::ConfigLoader;
 
 #[cfg(feature = "default-provider")]
 mod loader {
-    use crate::default_provider::{credentials, region};
-    use crate::meta::region::ProvideRegion;
+    use crate::default_provider::{credentials, region, retry_config};
+    use crate::meta::{region::ProvideRegion, retry_config::ProvideRetryConfig};
     use aws_types::config::Config;
     use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
 
@@ -115,6 +115,7 @@ mod loader {
     #[derive(Default, Debug)]
     pub struct ConfigLoader {
         region: Option<Box<dyn ProvideRegion>>,
+        retry_config: Option<Box<dyn ProvideRetryConfig>>,
         credentials_provider: Option<SharedCredentialsProvider>,
     }
 
@@ -132,6 +133,22 @@ mod loader {
         /// ```
         pub fn region(mut self, region: impl ProvideRegion + 'static) -> Self {
             self.region = Some(Box::new(region));
+            self
+        }
+
+        /// Override the retry_config used to build [`Config`](aws_types::config::Config).
+        ///
+        /// # Examples
+        /// ```rust
+        /// # use smithy_types::retry::RetryConfig;
+        ///  async fn create_config() {
+        ///     let config = aws_config::from_env()
+        ///         .retry_config(RetryConfig::new().with_max_attempts(2))
+        ///         .load().await;
+        /// # }
+        /// ```
+        pub fn retry_config(mut self, retry_config: impl ProvideRetryConfig + 'static) -> Self {
+            self.retry_config = Some(Box::new(retry_config));
             self
         }
 
@@ -169,6 +186,13 @@ mod loader {
             } else {
                 region::default_provider().region().await
             };
+
+            let retry_config = if let Some(provider) = self.retry_config {
+                provider.retry_config().await
+            } else {
+                retry_config::default_provider().retry_config().await
+            };
+
             let credentials_provider = if let Some(provider) = self.credentials_provider {
                 provider
             } else {
@@ -176,8 +200,10 @@ mod loader {
                 builder.set_region(region.clone());
                 SharedCredentialsProvider::new(builder.build().await)
             };
+
             Config::builder()
                 .region(region)
+                .retry_config(retry_config)
                 .credentials_provider(credentials_provider)
                 .build()
         }

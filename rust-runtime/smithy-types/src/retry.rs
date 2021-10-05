@@ -68,3 +68,105 @@ pub enum RetryKind {
     /// The response associated with this variant should not be retried.
     NotRetryable,
 }
+
+#[non_exhaustive]
+#[derive(Eq, PartialEq, Debug, Clone, Copy)]
+pub enum RetryMode {
+    Standard,
+    Adaptive,
+}
+
+impl RetryMode {
+    pub fn from_str(string: &str) -> Option<RetryMode> {
+        // to_ascii_lowercase is OK here because the only strings we need to check for are ASCII
+        // NOTE: to_ascii_lowercase allocates, is there a non-allocating way to do a case-insensitive comparison?
+        match string.to_ascii_lowercase().trim() {
+            "standard" => Some(RetryMode::Standard),
+            "adaptive" => Some(RetryMode::Adaptive),
+            _ => None,
+        }
+    }
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub struct RetryConfig {
+    mode: RetryMode,
+    max_attempts: u32,
+}
+
+impl RetryConfig {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn with_retry_mode(mut self, retry_mode: RetryMode) -> Self {
+        self.mode = retry_mode;
+        self
+    }
+
+    pub fn with_max_attempts(mut self, max_attempts: u32) -> Self {
+        self.max_attempts = max_attempts;
+        self
+    }
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            mode: RetryMode::Standard,
+            max_attempts: 3,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::retry::RetryMode;
+
+    #[test]
+    fn retry_mode_from_str_parses_valid_strings_regardless_of_casing() {
+        assert_eq!(RetryMode::from_str("standard"), Some(RetryMode::Standard));
+        assert_eq!(RetryMode::from_str("STANDARD"), Some(RetryMode::Standard));
+        assert_eq!(RetryMode::from_str("StAnDaRd"), Some(RetryMode::Standard));
+        assert_eq!(RetryMode::from_str("adaptive"), Some(RetryMode::Adaptive));
+        assert_eq!(RetryMode::from_str("ADAPTIVE"), Some(RetryMode::Adaptive));
+        assert_eq!(RetryMode::from_str("aDaPtIvE"), Some(RetryMode::Adaptive));
+    }
+
+    #[test]
+    fn retry_mode_from_str_ignores_whitespace_before_and_after() {
+        assert_eq!(
+            RetryMode::from_str("  standard "),
+            Some(RetryMode::Standard)
+        );
+        assert_eq!(
+            RetryMode::from_str("   STANDARD  "),
+            Some(RetryMode::Standard)
+        );
+        assert_eq!(
+            RetryMode::from_str("  StAnDaRd   "),
+            Some(RetryMode::Standard)
+        );
+        assert_eq!(
+            RetryMode::from_str("  adaptive  "),
+            Some(RetryMode::Adaptive)
+        );
+        assert_eq!(
+            RetryMode::from_str("   ADAPTIVE "),
+            Some(RetryMode::Adaptive)
+        );
+        assert_eq!(
+            RetryMode::from_str("  aDaPtIvE    "),
+            Some(RetryMode::Adaptive)
+        );
+    }
+
+    #[test]
+    fn retry_mode_from_str_wont_parse_invalid_strings() {
+        assert_eq!(RetryMode::from_str("std"), None);
+        assert_eq!(RetryMode::from_str("aws"), None);
+        assert_eq!(RetryMode::from_str("s t a n d a r d"), None);
+        assert_eq!(RetryMode::from_str("a d a p t i v e"), None);
+    }
+}

@@ -7,11 +7,9 @@
 //!
 //! Unless specific configuration is required, these should be constructed via [`ConfigLoader`](crate::ConfigLoader).
 //!
-//!
 
 /// Default region provider chain
 pub mod region {
-
     use crate::environment::region::EnvironmentVariableRegionProvider;
     use crate::meta::region::{ProvideRegion, RegionProviderChain};
     use crate::{imds, profile};
@@ -89,11 +87,86 @@ pub mod region {
     }
 }
 
+/// Default retry behavior configuration provider chain
+pub mod retry_config {
+    use crate::environment::retry_config::EnvironmentVariableRetryConfigProvider;
+    use crate::meta::retry_config::{ProvideRetryConfig, RetryConfigProviderChain};
+    use crate::profile;
+    use crate::provider_config::ProviderConfig;
+    use smithy_types::retry::RetryConfig;
+
+    /// Default RetryConfig Provider chain
+    ///
+    /// This provider will check the following sources in order:
+    /// 1. [Environment variables](EnvironmentVariableRetryConfigProvider)
+    /// 2. [Profile file](crate::profile::region::ProfileFileRetryConfigProvider)
+    pub fn default_provider() -> impl ProvideRetryConfig {
+        Builder::default().build()
+    }
+
+    /// Default retry_config provider chain
+    #[derive(Debug)]
+    pub struct DefaultRetryConfigChain(RetryConfigProviderChain);
+
+    impl DefaultRetryConfigChain {
+        /// Load a region from this chain
+        pub async fn retry_config(&self) -> Option<RetryConfig> {
+            self.0.retry_config().await
+        }
+
+        /// Builder for [`DefaultRetryConfigChain`]
+        pub fn builder() -> Builder {
+            Builder::default()
+        }
+    }
+
+    /// Builder for [DefaultRetryConfigChain]
+    #[derive(Default)]
+    pub struct Builder {
+        env_provider: EnvironmentVariableRetryConfigProvider,
+        profile_file: profile::retry_config::Builder,
+    }
+
+    impl Builder {
+        #[doc(hidden)]
+        /// Configure the default chain
+        ///
+        /// Exposed for overriding the environment when unit-testing providers
+        pub fn configure(mut self, configuration: &ProviderConfig) -> Self {
+            self.env_provider =
+                EnvironmentVariableRetryConfigProvider::new_with_env(configuration.env());
+            self.profile_file = self.profile_file.configure(configuration);
+            self
+        }
+
+        /// Override the profile name used by this provider
+        pub fn profile_name(mut self, name: &str) -> Self {
+            self.profile_file = self.profile_file.profile_name(name);
+            self
+        }
+
+        /// Build a [DefaultRetryConfigChain]
+        pub fn build(self) -> DefaultRetryConfigChain {
+            DefaultRetryConfigChain(
+                RetryConfigProviderChain::first_try(self.env_provider)
+                    .or_else(self.profile_file.build()),
+            )
+        }
+    }
+
+    impl ProvideRetryConfig for DefaultRetryConfigChain {
+        fn retry_config(&self) -> crate::meta::retry_config::future::ProvideRetryConfig {
+            ProvideRetryConfig::retry_config(&self.0)
+        }
+    }
+}
+
 /// Default credentials provider chain
 pub mod credentials {
     use crate::environment::credentials::EnvironmentVariableCredentialsProvider;
     use crate::meta::credentials::{CredentialsProviderChain, LazyCachingCredentialsProvider};
     use crate::meta::region::ProvideRegion;
+    use crate::meta::retry_config::ProvideRetryConfig;
     use aws_types::credentials::{future, ProvideCredentials};
 
     use crate::provider_config::ProviderConfig;
@@ -165,6 +238,8 @@ pub mod credentials {
     pub struct Builder {
         profile_file_builder: crate::profile::credentials::Builder,
         web_identity_builder: crate::web_identity_token::Builder,
+        retry_config_override: Option<Box<dyn ProvideRetryConfig>>,
+        retry_config_chain: crate::default_provider::retry_config::Builder,
         imds_builder: crate::imds::credentials::Builder,
         credential_cache: crate::meta::credentials::lazy_caching::Builder,
         region_override: Option<Box<dyn ProvideRegion>>,
@@ -186,6 +261,25 @@ pub mod credentials {
         /// When unset, the default region resolver chain will be used.
         pub fn set_region(&mut self, region: Option<impl ProvideRegion + 'static>) -> &mut Self {
             self.region_override = region.map(|provider| Box::new(provider) as _);
+            self
+        }
+
+        /// Sets the region used when making requests to AWS services
+        ///
+        /// When unset, the default region resolver chain will be used.
+        pub fn retry_config(mut self, retry_config: impl ProvideRetryConfig + 'static) -> Self {
+            self.set_retry_config(Some(retry_config));
+            self
+        }
+
+        /// Sets the retry_config used when making requests to AWS services
+        ///
+        /// When unset, the default retry_config resolver chain will be used.
+        pub fn set_retry_config(
+            &mut self,
+            retry_config: Option<impl ProvideRetryConfig + 'static>,
+        ) -> &mut Self {
+            self.retry_config_override = retry_config.map(|provider| Box::new(provider) as _);
             self
         }
 
@@ -239,10 +333,11 @@ pub mod credentials {
                 Some(provider) => provider.region().await,
                 None => self.region_chain.build().region().await,
             };
+
             let conf = self.conf.unwrap_or_default().with_region(region);
 
-            let profile_provider = self.profile_file_builder.configure(&conf).build();
             let env_provider = EnvironmentVariableCredentialsProvider::new_with_env(conf.env());
+            let profile_provider = self.profile_file_builder.configure(&conf).build();
             let web_identity_token_provider = self.web_identity_builder.configure(&conf).build();
             let imds_provider = self.imds_builder.configure(&conf).build();
 
@@ -251,6 +346,7 @@ pub mod credentials {
                 .or_else("WebIdentityToken", web_identity_token_provider)
                 .or_else("Ec2InstanceMetadata", imds_provider);
             let cached_provider = self.credential_cache.configure(&conf).load(provider_chain);
+
             DefaultCredentialsChain(cached_provider.build())
         }
     }
