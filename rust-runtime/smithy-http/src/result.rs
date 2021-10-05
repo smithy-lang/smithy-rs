@@ -4,6 +4,7 @@
  */
 
 use crate::operation;
+use smithy_types::retry::ErrorKind;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -25,7 +26,7 @@ pub enum SdkError<E, R = operation::Response> {
 
     /// The request failed during dispatch. An HTTP response was not received. The request MAY
     /// have been sent.
-    DispatchFailure(BoxError),
+    DispatchFailure(ClientError),
 
     /// A response was received but it was not parseable according the the protocol (for example
     /// the server hung up while the body was being read)
@@ -33,6 +34,87 @@ pub enum SdkError<E, R = operation::Response> {
 
     /// An error response was received from the service
     ServiceError { err: E, raw: R },
+}
+
+#[derive(Debug)]
+pub struct ClientError {
+    err: BoxError,
+    kind: ClientErrorKind,
+}
+
+impl Display for ClientError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.err)
+    }
+}
+
+impl Error for ClientError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(self.err.as_ref())
+    }
+}
+
+impl ClientError {
+    pub fn timeout(err: BoxError) -> Self {
+        Self {
+            err,
+            kind: ClientErrorKind::Timeout,
+        }
+    }
+
+    pub fn user(err: BoxError) -> Self {
+        Self {
+            err,
+            kind: ClientErrorKind::User,
+        }
+    }
+
+    pub fn io(err: BoxError) -> Self {
+        Self {
+            err,
+            kind: ClientErrorKind::Io,
+        }
+    }
+
+    pub fn other(err: BoxError, kind: Option<ErrorKind>) -> Self {
+        Self {
+            err,
+            kind: ClientErrorKind::Other(kind),
+        }
+    }
+
+    pub fn is_io(&self) -> bool {
+        matches!(self.kind, ClientErrorKind::Io)
+    }
+
+    pub fn is_timeout(&self) -> bool {
+        matches!(self.kind, ClientErrorKind::Timeout)
+    }
+
+    pub fn is_user(&self) -> bool {
+        matches!(self.kind, ClientErrorKind::User)
+    }
+
+    pub fn is_other(&self) -> Option<ErrorKind> {
+        match &self.kind {
+            ClientErrorKind::Other(ek) => *ek,
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+enum ClientErrorKind {
+    /// A timeout occurred while processing the request
+    Timeout,
+
+    /// A user-caused error (eg. invalid HTTP request)
+    User,
+
+    /// Socket/IO error
+    Io,
+
+    Other(Option<ErrorKind>),
 }
 
 impl<E, R> Display for SdkError<E, R>
@@ -56,9 +138,10 @@ where
 {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            SdkError::ConstructionFailure(err)
-            | SdkError::DispatchFailure(err)
-            | SdkError::ResponseError { err, .. } => Some(err.as_ref()),
+            SdkError::ConstructionFailure(err) | SdkError::ResponseError { err, .. } => {
+                Some(err.as_ref())
+            }
+            SdkError::DispatchFailure(err) => Some(err),
             SdkError::ServiceError { err, .. } => Some(err),
         }
     }

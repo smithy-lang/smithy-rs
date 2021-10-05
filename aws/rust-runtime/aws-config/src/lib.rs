@@ -79,6 +79,8 @@ mod cache;
 pub mod imds;
 mod json_credentials;
 
+mod http_provider;
+
 /// Create an environment loader for AWS Configuration
 ///
 /// # Examples

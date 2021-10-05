@@ -7,7 +7,7 @@ pub mod dispatch;
 pub mod map_request;
 pub mod parse_response;
 
-use smithy_http::result::SdkError;
+use smithy_http::result::{ClientError, SdkError};
 use tower::BoxError;
 
 /// An Error Occurred During the process of sending an Operation
@@ -34,7 +34,7 @@ pub enum SendOperationError {
     RequestConstructionError(BoxError),
 
     /// The request could not be dispatched
-    RequestDispatchError(BoxError),
+    RequestDispatchError(ClientError),
 }
 
 /// Convert a `SendOperationError` into an `SdkError`

@@ -13,6 +13,7 @@ use http::Request;
 use protocol_test_helpers::{assert_ok, validate_body, MediaType};
 
 use smithy_http::body::SdkBody;
+use smithy_http::result::ClientError;
 use std::future::Ready;
 
 use std::ops::Deref;
@@ -21,7 +22,6 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
 use tokio::sync::oneshot;
-use tower::BoxError;
 
 /// Test Connection to capture a single request
 #[derive(Debug, Clone)]
@@ -50,7 +50,7 @@ pub use crate::never;
 
 impl tower::Service<http::Request<SdkBody>> for CaptureRequestHandler {
     type Response = http::Response<SdkBody>;
-    type Error = BoxError;
+    type Error = ClientError;
     type Future = Ready<Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -220,7 +220,7 @@ where
     SdkBody: From<B>,
 {
     type Response = http::Response<SdkBody>;
-    type Error = BoxError;
+    type Error = ClientError;
     type Future = Ready<Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -236,7 +236,7 @@ where
                 .push(ValidateRequest { expected, actual });
             std::future::ready(Ok(resp.map(SdkBody::from)))
         } else {
-            std::future::ready(Err("No more data".into()))
+            std::future::ready(Err(ClientError::other("No more data".into(), None)))
         }
     }
 }
@@ -256,10 +256,17 @@ where
 
 #[cfg(test)]
 mod tests {
+<<<<<<< HEAD
     use crate::test_connection::{capture_request, never::NeverService, TestConnection};
     use crate::{BoxError, Client};
+=======
+    use crate::bounds::SmithyConnector;
+    use crate::test_connection::{capture_request, TestConnection};
+    use crate::Client;
+>>>>>>> Introduce ClientError to differentiate between different error types coming from HTTP connectors
     use hyper::service::Service;
     use smithy_http::body::SdkBody;
+    use smithy_http::result::ClientError;
 
     fn is_send_sync<T: Send + Sync>(_: T) {}
 
@@ -270,14 +277,19 @@ mod tests {
         is_send_sync(client);
     }
 
-    fn is_valid_smithy_connector<T>(_: T)
+    fn is_a_connector<T>(_: &T)
+    where
+        T: SmithyConnector,
+    {
+    }
+    fn quacks_like_a_connector<T>(_: &T)
     where
         T: Service<http::Request<SdkBody>, Response = http::Response<SdkBody>>
             + Send
             + Sync
             + Clone
             + 'static,
-        T::Error: Into<BoxError> + Send + Sync + 'static,
+        T::Error: Into<ClientError> + Send + Sync + 'static,
         T::Future: Send + 'static,
     {
     }
@@ -285,7 +297,8 @@ mod tests {
     #[test]
     fn oneshot_client() {
         let (tx, _rx) = capture_request(None);
-        is_valid_smithy_connector(tx);
+        quacks_like_a_connector(&tx);
+        is_a_connector(&tx)
     }
 
     #[test]

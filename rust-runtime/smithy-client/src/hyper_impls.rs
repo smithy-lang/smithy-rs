@@ -9,14 +9,17 @@ use http::Uri;
 use hyper::client::connect::Connection;
 
 use tokio::io::{AsyncRead, AsyncWrite};
-use tower::Service;
+use tower::{BoxError, Service};
 
 use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use smithy_http::body::SdkBody;
+use smithy_http::result::ClientError;
 pub use smithy_http::result::{SdkError, SdkSuccess};
+use std::error::Error;
 
-use crate::hyper_impls::timeout_middleware::{ConnectTimeout, HttpReadTimeout};
-use crate::{timeout, BoxError, Builder as ClientBuilder};
+use crate::hyper_impls::timeout_middleware::{ConnectTimeout, HttpReadTimeout, TimeoutError};
+use crate::{timeout, Builder as ClientBuilder};
+use smithy_async::future::timeout::TimedOutError;
 
 /// Adapter from a [`hyper::Client`] to a connector usable by a [`Client`](crate::Client).
 ///
@@ -34,7 +37,7 @@ where
     C::Error: Into<BoxError>,
 {
     type Response = http::Response<SdkBody>;
-    type Error = BoxError;
+    type Error = ClientError;
 
     #[allow(clippy::type_complexity)]
     type Future = std::pin::Pin<
@@ -45,12 +48,12 @@ where
         &mut self,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), Self::Error>> {
-        self.0.poll_ready(cx)
+        self.0.poll_ready(cx).map_err(downcast_error)
     }
 
     fn call(&mut self, req: http::Request<SdkBody>) -> Self::Future {
         let fut = self.0.call(req);
-        Box::pin(async move { Ok(fut.await?.map(SdkBody::from)) })
+        Box::pin(async move { Ok(fut.await.map_err(downcast_error)?.map(SdkBody::from)) })
     }
 }
 
@@ -62,6 +65,44 @@ impl HyperAdapter<()> {
     pub fn builder() -> Builder {
         Builder::default()
     }
+}
+
+fn downcast_error(err: BoxError) -> ClientError {
+    if find_source::<TimedOutError>(err.as_ref()).is_some() {
+        return ClientError::timeout(err);
+    }
+    let err = match err.downcast::<ClientError>() {
+        Ok(hyper_error) => return *hyper_error,
+        Err(box_error) => box_error,
+    };
+    let err = match err.downcast::<hyper::Error>() {
+        Ok(hyper_error) => return to_client_error(hyper_error),
+        Err(box_error) => box_error,
+    };
+    ClientError::other(err, None)
+}
+
+fn to_client_error(err: Box<hyper::Error>) -> ClientError {
+    if err.is_timeout() || find_source::<TimeoutError>(&err).is_some() {
+        ClientError::timeout(err.into())
+    } else if err.is_user() {
+        ClientError::user(err.into())
+    } else if find_source::<std::io::Error>(&err).is_some() {
+        ClientError::io(err.into())
+    } else {
+        ClientError::other(err.into(), None)
+    }
+}
+
+fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option<&'a E> {
+    let mut next = Some(err);
+    while let Some(err) = next {
+        if let Some(matching_err) = err.downcast_ref::<E>() {
+            return Some(matching_err);
+        }
+        next = err.source();
+    }
+    None
 }
 
 #[derive(Default, Debug)]
@@ -205,11 +246,31 @@ mod timeout_middleware {
     use pin_project_lite::pin_project;
 
     use smithy_async::future;
-    use smithy_async::future::timeout::Timeout;
+    use smithy_async::future::timeout::{TimedOutError, Timeout};
     use smithy_async::rt::sleep::AsyncSleep;
     use smithy_async::rt::sleep::Sleep;
+    use std::error::Error;
+    use std::fmt::Formatter;
+    use tower::BoxError;
 
-    use crate::BoxError;
+    #[derive(Debug)]
+    pub(crate) struct TimeoutError {
+        operation: &'static str,
+        duration: Duration,
+        cause: TimedOutError,
+    }
+
+    impl std::fmt::Display for TimeoutError {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            write!(f, "timed out after {:?}", self.duration)
+        }
+    }
+
+    impl Error for TimeoutError {
+        fn source(&self) -> Option<&(dyn Error + 'static)> {
+            Some(&self.cause)
+        }
+    }
 
     /// Timeout wrapper that will timeout on the initial TCP connection
     ///
@@ -274,7 +335,9 @@ mod timeout_middleware {
         pub enum MaybeTimeoutFuture<F> {
             Timeout {
                 #[pin]
-                timeout: Timeout<F, Sleep>
+                timeout: Timeout<F, Sleep>,
+                error_type: &'static str,
+                duration: Duration,
             },
             NoTimeout {
                 #[pin]
@@ -291,15 +354,24 @@ mod timeout_middleware {
         type Output = Result<T, BoxError>;
 
         fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-            let timeout_future = match self.project() {
+            let (timeout_future, timeout_type, dur) = match self.project() {
                 MaybeTimeoutFutureProj::NoTimeout { future } => {
                     return future.poll(cx).map_err(|err| err.into())
                 }
-                MaybeTimeoutFutureProj::Timeout { timeout } => timeout,
+                MaybeTimeoutFutureProj::Timeout {
+                    timeout,
+                    error_type,
+                    duration,
+                } => (timeout, error_type, duration),
             };
             match timeout_future.poll(cx) {
                 Poll::Ready(Ok(response)) => Poll::Ready(response.map_err(|err| err.into())),
-                Poll::Ready(Err(timeout)) => Poll::Ready(Err(timeout.into())),
+                Poll::Ready(Err(_timeout)) => Poll::Ready(Err(TimeoutError {
+                    operation: timeout_type,
+                    duration: *dur,
+                    cause: TimedOutError,
+                }
+                .into())),
                 Poll::Pending => Poll::Pending,
             }
         }
@@ -324,6 +396,8 @@ mod timeout_middleware {
                     let sleep = sleep.sleep(*duration);
                     MaybeTimeoutFuture::Timeout {
                         timeout: future::timeout::Timeout::new(self.inner.call(req), sleep),
+                        error_type: "connect",
+                        duration: *duration,
                     }
                 }
                 None => MaybeTimeoutFuture::NoTimeout {
@@ -335,8 +409,7 @@ mod timeout_middleware {
 
     impl<I, B> tower::Service<http::Request<B>> for HttpReadTimeout<I>
     where
-        I: tower::Service<http::Request<B>>,
-        I::Error: Into<BoxError>,
+        I: tower::Service<http::Request<B>, Error = hyper::Error>,
     {
         type Response = I::Response;
         type Error = BoxError;
@@ -352,6 +425,9 @@ mod timeout_middleware {
                     let sleep = sleep.sleep(*duration);
                     MaybeTimeoutFuture::Timeout {
                         timeout: future::timeout::Timeout::new(self.inner.call(req), sleep),
+
+                        error_type: "HTTP read",
+                        duration: *duration,
                     }
                 }
                 None => MaybeTimeoutFuture::NoTimeout {
@@ -414,7 +490,11 @@ mod timeout_middleware {
                 )
                 .await
                 .expect_err("timeout");
-            assert_eq!(format!("{}", resp), "error trying to connect: timed out");
+            assert!(resp.is_timeout(), "{:?}", resp);
+            assert_eq!(
+                format!("{}", resp),
+                "error trying to connect: timed out after 1s"
+            );
             assert_elapsed!(now, Duration::from_secs(1));
         }
 
@@ -430,7 +510,7 @@ mod timeout_middleware {
                 .build(inner);
             let now = tokio::time::Instant::now();
             tokio::time::pause();
-            let _resp = hyper
+            let resp = hyper
                 .call(
                     http::Request::builder()
                         .uri("http://foo.com")
@@ -439,6 +519,7 @@ mod timeout_middleware {
                 )
                 .await
                 .expect_err("timeout");
+            assert!(resp.is_timeout(), "{:?}", resp);
             assert_elapsed!(now, Duration::from_secs(2));
         }
     }
