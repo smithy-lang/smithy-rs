@@ -22,6 +22,24 @@ struct Opt {
     verbose: bool,
 }
 
+// Deletes a configuration recorder.
+async fn delete_recorder(
+    client: &aws_sdk_config::Client,
+    name: &str,
+) -> Result<(), aws_sdk_config::Error> {
+    client
+        .delete_configuration_recorder()
+        .configuration_recorder_name(name)
+        .send()
+        .await?;
+
+    println!("Done");
+
+    println!();
+
+    Ok(())
+}
+
 /// Deletes an AWS Config configuration recorder.
 ///
 /// # Arguments
@@ -59,15 +77,17 @@ async fn main() -> Result<(), Error> {
     let shared_config = aws_config::from_env().region(region_provider).load().await;
     let client = Client::new(&shared_config);
 
-    client
-        .delete_configuration_recorder()
-        .configuration_recorder_name(name)
-        .send()
-        .await?;
-
-    println!("Done");
-
-    println!();
+    delete_recorder(&client, &name).await.unwrap();
 
     Ok(())
+}
+
+#[actix_rt::test]
+async fn test_delete_recorder() {
+    let shared_config = aws_config::load_from_env().await;
+    let client = Client::new(&shared_config);
+
+    client
+        .delete_configuration_recorder()
+        .configuration_recorder_name("name");
 }

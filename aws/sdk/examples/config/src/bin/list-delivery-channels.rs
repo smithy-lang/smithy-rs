@@ -18,6 +18,27 @@ struct Opt {
     verbose: bool,
 }
 
+// Lists your deliver channels.
+async fn show_channels(client: &aws_sdk_config::Client) -> Result<(), aws_sdk_config::Error> {
+    let resp = client.describe_delivery_channels().send().await?;
+
+    let channels = resp.delivery_channels.unwrap_or_default();
+
+    let num_channels = channels.len();
+
+    if num_channels == 0 {
+        println!("You have no delivery channels")
+    } else {
+        for channel in channels {
+            println!("  Channel: {}", channel.name.as_deref().unwrap_or_default());
+        }
+    }
+
+    println!();
+
+    Ok(())
+}
+
 /// Lists the AWS Config delivery channels in the Region.
 ///
 /// # Arguments
@@ -49,21 +70,15 @@ async fn main() -> Result<(), Error> {
     let shared_config = aws_config::from_env().region(region_provider).load().await;
     let client = Client::new(&shared_config);
 
-    let resp = client.describe_delivery_channels().send().await?;
-
-    let channels = resp.delivery_channels.unwrap_or_default();
-
-    let num_channels = channels.len();
-
-    if num_channels.is_empty() {
-        println!("You have no delivery channels")
-    } else {
-        for channel in channels {
-            println!("  Channel: {}", channel.name.as_deref().unwrap_or_default());
-        }
-    }
-
-    println!();
+    show_channels(&client).await.unwrap();
 
     Ok(())
+}
+
+#[actix_rt::test]
+async fn test_show_channels() {
+    let shared_config = aws_config::load_from_env().await;
+    let client = Client::new(&shared_config);
+
+    client.describe_delivery_channels();
 }
