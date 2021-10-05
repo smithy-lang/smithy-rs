@@ -376,7 +376,7 @@ class RestJson1HttpRequestDeserializerGenerator(
                             CargoDependency("percent-encoding", CratesIo("2.1.0")).asType(),
                     "JsonSerdeError" to error.member("Error"),
             )
-    private val operationDeserModule = RustModule.private("operation")
+    private val operationDeserModule = RustModule.public("operation")
 
     override fun render(writer: RustWriter, operationShape: OperationShape) {
         renderRequestDeserializer(writer)
