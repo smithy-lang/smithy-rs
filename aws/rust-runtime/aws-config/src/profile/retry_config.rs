@@ -5,10 +5,10 @@
 
 //! Load retry configuration properties from an AWS profile
 
-use std::str::FromStr;
 use crate::provider_config::ProviderConfig;
 use aws_types::os_shim_internal::{Env, Fs};
 use smithy_types::retry::{RetryConfig, RetryMode};
+use std::str::FromStr;
 
 /// Load retry configuration properties from a profile file
 ///

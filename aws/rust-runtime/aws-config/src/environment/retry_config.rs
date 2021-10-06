@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use std::str::FromStr;
 use aws_types::os_shim_internal::Env;
 use smithy_types::retry::{RetryConfig, RetryMode};
+use std::str::FromStr;
 
 const ENV_VAR_MAX_ATTEMPTS: &str = "AWS_MAX_ATTEMPTS";
 const ENV_VAR_RETRY_MODE: &str = "AWS_RETRY_MODE";
@@ -74,8 +74,7 @@ impl EnvironmentVariableRetryConfigProvider {
 
 #[cfg(test)]
 mod test {
-    use super::{ENV_VAR_MAX_ATTEMPTS, ENV_VAR_RETRY_MODE};
-    use crate::environment::retry_config::EnvironmentVariableRetryConfigProvider;
+    use super::{EnvironmentVariableRetryConfigProvider, ENV_VAR_MAX_ATTEMPTS, ENV_VAR_RETRY_MODE};
     use aws_types::os_shim_internal::Env;
     use futures_util::FutureExt;
     use smithy_types::retry::{RetryConfig, RetryMode};

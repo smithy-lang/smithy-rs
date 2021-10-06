@@ -493,8 +493,8 @@ impl Builder {
             .unwrap_or_else(|| EndpointSource::Env(config.env(), config.fs()));
         let endpoint = endpoint_source.endpoint(self.mode_override).await?;
         let endpoint = Endpoint::immutable(endpoint);
-        let retry_config =
-            retry::Config::default().with_max_attempts(self.max_attempts.unwrap_or(DEFAULT_ATTEMPTS));
+        let retry_config = retry::Config::default()
+            .with_max_attempts(self.max_attempts.unwrap_or(DEFAULT_ATTEMPTS));
         let token_loader = token::TokenMiddleware::new(
             connector.clone(),
             config.time_source(),
