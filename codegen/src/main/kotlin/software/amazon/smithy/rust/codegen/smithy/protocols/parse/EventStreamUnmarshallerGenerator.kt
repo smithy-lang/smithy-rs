@@ -188,7 +188,10 @@ class EventStreamUnmarshallerGenerator(
                                     renderUnmarshallEventHeader(member)
                                 }
                             }
-                            rust("_ => {}")
+                            rust("// Event stream protocol headers start with ':'")
+                            rustBlock("name => if !name.starts_with(':')") {
+                                rust("tracing::trace!(\"Unrecognized event stream message header: {}\", name);")
+                            }
                         }
                     }
                 }
@@ -225,7 +228,7 @@ class EventStreamUnmarshallerGenerator(
         expectedContentType(target)?.also { contentType ->
             rustTemplate(
                 """
-                let content_type = response_headers.content_type_as_str().unwrap_or("");
+                let content_type = response_headers.content_type().unwrap_or_default();
                 if content_type != ${contentType.dq()} {
                     return Err(#{Error}::Unmarshalling(format!(
                         "expected :content-type to be '$contentType', but was '{}'",

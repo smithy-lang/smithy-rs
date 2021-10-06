@@ -40,7 +40,7 @@ pub struct ResponseHeaders<'a> {
 }
 
 impl<'a> ResponseHeaders<'a> {
-    pub fn content_type_as_str(&self) -> Option<&str> {
+    pub fn content_type(&self) -> Option<&str> {
         self.content_type.map(|ct| ct.as_str())
     }
 }
@@ -116,7 +116,7 @@ mod tests {
             ));
         let parsed = parse_response_headers(&message).unwrap();
         assert_eq!("Foo", parsed.smithy_type.as_str());
-        assert_eq!(Some("application/json"), parsed.content_type_as_str());
+        assert_eq!(Some("application/json"), parsed.content_type());
         assert_eq!("event", parsed.message_type.as_str());
     }
 
@@ -137,7 +137,7 @@ mod tests {
             ));
         let parsed = parse_response_headers(&message).unwrap();
         assert_eq!("BadRequestException", parsed.smithy_type.as_str());
-        assert_eq!(Some("application/json"), parsed.content_type_as_str());
+        assert_eq!(Some("application/json"), parsed.content_type());
         assert_eq!("exception", parsed.message_type.as_str());
     }
 

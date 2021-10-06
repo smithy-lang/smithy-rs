@@ -7,6 +7,7 @@
 
 use crate::body::SdkBody;
 use crate::result::SdkError;
+use bytes::Buf;
 use bytes::Bytes;
 use bytes_utils::SegmentedBuf;
 use futures_core::Stream;
@@ -19,6 +20,7 @@ use smithy_eventstream::frame::{
 use std::error::Error as StdError;
 use std::fmt;
 use std::marker::PhantomData;
+use std::mem;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -135,19 +137,109 @@ where
     }
 }
 
+/// Wrapper around SegmentedBuf that tracks the state of the stream.
+#[derive(Debug)]
+enum RecvBuf {
+    /// Nothing has been buffered yet.
+    Empty,
+    /// Some data has been buffered.
+    /// The SegmentedBuf will automatically purge when it reads off the end of a chunk boundary
+    Partial(SegmentedBuf<Bytes>),
+    /// The end of the stream has been reached, but there may still be some buffered data.
+    EosPartial(SegmentedBuf<Bytes>),
+}
+
+impl RecvBuf {
+    fn has_data(&self) -> bool {
+        match self {
+            RecvBuf::Empty => false,
+            RecvBuf::Partial(segments) | RecvBuf::EosPartial(segments) => segments.remaining(),
+        }
+    }
+
+    fn is_eos(&self) -> bool {
+        matches!(self, RecvBuf::EosPartial(_))
+    }
+
+    fn buffered(&mut self) -> &mut SegmentedBuf<Bytes> {
+        match self {
+            RecvBuf::Empty => panic!("buffer must be populated before reading; this is a bug"),
+            RecvBuf::Partial(segmented) => segmented,
+            RecvBuf::EosPartial(segmented) => segmented,
+        }
+    }
+
+    fn with_partial(self, partial: Bytes) -> Self {
+        match self {
+            RecvBuf::Empty => {
+                let mut segmented = SegmentedBuf::new();
+                segmented.push(partial);
+                RecvBuf::Partial(segmented)
+            }
+            RecvBuf::Partial(mut segmented) => {
+                segmented.push(partial);
+                RecvBuf::Partial(segmented)
+            }
+            RecvBuf::EosPartial(_) => {
+                panic!("cannot buffer more data after the stream has ended; this is a bug")
+            }
+        }
+    }
+
+    fn ended(self) -> Self {
+        match self {
+            RecvBuf::Empty => RecvBuf::EosPartial(SegmentedBuf::new()),
+            RecvBuf::Partial(segmented) => RecvBuf::EosPartial(segmented),
+            RecvBuf::EosPartial(_) => panic!("already end of stream; this is a bug"),
+        }
+    }
+}
+
+/// Raw message from a [`Receiver`] when a [`SdkError::ResponseError`] is returned.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum RawMessage {
+    /// Message was decoded into a valid frame, but failed to unmarshall into a modeled type.
+    Decoded(Message),
+    /// Message failed to be decoded into a valid frame. The raw bytes may not be available in the
+    /// case where decoding consumed the buffer.
+    Invalid(Option<Bytes>),
+}
+
+impl From<&mut SegmentedBuf<Bytes>> for RawMessage {
+    fn from(buf: &mut SegmentedBuf<Bytes>) -> Self {
+        Self::Invalid(Some(buf.copy_to_bytes(buf.remaining())))
+    }
+}
+
+#[derive(Debug)]
+pub enum Error {
+    /// The stream ended before a complete message frame was received.
+    UnexpectedEndOfStream,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnexpectedEndOfStream => write!(f, "unexpected end of stream"),
+        }
+    }
+}
+
+impl StdError for Error {}
+
 /// Receives Smithy-modeled messages out of an Event Stream.
 #[derive(Debug)]
 pub struct Receiver<T, E> {
     unmarshaller: Box<dyn UnmarshallMessage<Output = T, Error = E> + Send>,
     decoder: MessageFrameDecoder,
-    buffer: SegmentedBuf<Bytes>,
+    buffer: RecvBuf,
     body: SdkBody,
     /// Event Stream has optional initial response frames an with `:message-type` of
     /// `initial-response`. If `try_recv_initial()` is called and the next message isn't an
     /// initial response, then the message will be stored in `buffered_message` so that it can
     /// be returned with the next call of `recv()`.
     buffered_message: Option<Message>,
-    stream_ended: bool,
     _phantom: PhantomData<E>,
 }
 
@@ -160,58 +252,69 @@ impl<T, E> Receiver<T, E> {
         Receiver {
             unmarshaller: Box::new(unmarshaller),
             decoder: MessageFrameDecoder::new(),
-            buffer: SegmentedBuf::new(),
+            buffer: RecvBuf::Empty,
             body,
             buffered_message: None,
-            stream_ended: false,
             _phantom: Default::default(),
         }
     }
 
-    fn unmarshall(&self, message: Message) -> Result<Option<T>, SdkError<E, Message>> {
+    fn unmarshall(&self, message: Message) -> Result<Option<T>, SdkError<E, RawMessage>> {
         match self.unmarshaller.unmarshall(&message) {
             Ok(unmarshalled) => match unmarshalled {
                 UnmarshalledMessage::Event(event) => Ok(Some(event)),
-                UnmarshalledMessage::Error(err) => {
-                    Err(SdkError::ServiceError { err, raw: message })
-                }
+                UnmarshalledMessage::Error(err) => Err(SdkError::ServiceError {
+                    err,
+                    raw: RawMessage::Decoded(message),
+                }),
             },
             Err(err) => Err(SdkError::ResponseError {
-                raw: message,
                 err: Box::new(err),
+                raw: RawMessage::Decoded(message),
             }),
         }
     }
 
-    async fn buffer_next_chunk(&mut self) -> Result<(), SdkError<E, Message>> {
-        if !self.stream_ended {
+    async fn buffer_next_chunk(&mut self) -> Result<(), SdkError<E, RawMessage>> {
+        if !self.buffer.is_eos() {
             let next_chunk = self
                 .body
                 .data()
                 .await
                 .transpose()
                 .map_err(|err| SdkError::DispatchFailure(err))?;
+            let buffer = mem::replace(&mut self.buffer, RecvBuf::Empty);
             if let Some(chunk) = next_chunk {
-                // The SegmentedBuf will automatically purge when it reads off the end of a chunk boundary
-                self.buffer.push(chunk);
+                self.buffer = buffer.with_partial(chunk);
             } else {
-                self.stream_ended = true;
+                self.buffer = buffer.ended();
             }
         }
         Ok(())
     }
 
-    async fn next_message(&mut self) -> Result<Option<Message>, SdkError<E, Message>> {
-        while !self.stream_ended {
-            if let DecodedFrame::Complete(message) = self
-                .decoder
-                .decode_frame(&mut self.buffer)
-                .map_err(|err| SdkError::DispatchFailure(Box::new(err)))?
-            {
-                return Ok(Some(message));
+    async fn next_message(&mut self) -> Result<Option<Message>, SdkError<E, RawMessage>> {
+        while !self.buffer.is_eos() {
+            if self.buffer.has_data() {
+                if let DecodedFrame::Complete(message) = self
+                    .decoder
+                    .decode_frame(self.buffer.buffered())
+                    .map_err(|err| SdkError::ResponseError {
+                        err: Box::new(err),
+                        raw: RawMessage::Invalid(None), // the buffer has been consumed
+                    })?
+                {
+                    return Ok(Some(message));
+                }
             }
 
             self.buffer_next_chunk().await?;
+        }
+        if self.buffer.has_data() {
+            return Err(SdkError::ResponseError {
+                err: Error::UnexpectedEndOfStream.into(),
+                raw: self.buffer.buffered().into(),
+            });
         }
         Ok(None)
     }
@@ -219,7 +322,7 @@ impl<T, E> Receiver<T, E> {
     /// Tries to receive the initial response message that has `:event-type` of `initial-response`.
     /// If a different event type is received, then it is buffered and `Ok(None)` is returned.
     #[doc(hidden)]
-    pub async fn try_recv_initial(&mut self) -> Result<Option<Message>, SdkError<E, Message>> {
+    pub async fn try_recv_initial(&mut self) -> Result<Option<Message>, SdkError<E, RawMessage>> {
         if let Some(message) = self.next_message().await? {
             if let Some(event_type) = message
                 .headers()
@@ -246,7 +349,7 @@ impl<T, E> Receiver<T, E> {
     /// it returns an `Ok(None)`. If there is a transport layer error, it will return
     /// `Err(SdkError::DispatchFailure)`. Service-modeled errors will be a part of the returned
     /// messages.
-    pub async fn recv(&mut self) -> Result<Option<T>, SdkError<E, Message>> {
+    pub async fn recv(&mut self) -> Result<Option<T>, SdkError<E, RawMessage>> {
         if let Some(buffered) = self.buffered_message.take() {
             return self.unmarshall(buffered);
         }
@@ -353,6 +456,52 @@ mod tests {
             TestMessage("two".into()),
             receiver.recv().await.unwrap().unwrap()
         );
+        assert_eq!(None, receiver.recv().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn receive_last_chunk_empty() {
+        let chunks: Vec<Result<_, IOError>> = vec![
+            Ok(encode_message("one")),
+            Ok(encode_message("two")),
+            Ok(Bytes::from_static(&[])),
+        ];
+        let chunk_stream = futures_util::stream::iter(chunks);
+        let body = SdkBody::from(Body::wrap_stream(chunk_stream));
+        let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
+        assert_eq!(
+            TestMessage("one".into()),
+            receiver.recv().await.unwrap().unwrap()
+        );
+        assert_eq!(
+            TestMessage("two".into()),
+            receiver.recv().await.unwrap().unwrap()
+        );
+        assert_eq!(None, receiver.recv().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn receive_last_chunk_not_full_message() {
+        let chunks: Vec<Result<_, IOError>> = vec![
+            Ok(encode_message("one")),
+            Ok(encode_message("two")),
+            Ok(encode_message("three").split_to(10)),
+        ];
+        let chunk_stream = futures_util::stream::iter(chunks);
+        let body = SdkBody::from(Body::wrap_stream(chunk_stream));
+        let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
+        assert_eq!(
+            TestMessage("one".into()),
+            receiver.recv().await.unwrap().unwrap()
+        );
+        assert_eq!(
+            TestMessage("two".into()),
+            receiver.recv().await.unwrap().unwrap()
+        );
+        assert!(matches!(
+            receiver.recv().await,
+            Err(SdkError::ResponseError { .. }),
+        ));
     }
 
     proptest::proptest! {
@@ -438,7 +587,7 @@ mod tests {
         );
         assert!(matches!(
             receiver.recv().await,
-            Err(SdkError::DispatchFailure(_))
+            Err(SdkError::ResponseError { .. })
         ));
     }
 

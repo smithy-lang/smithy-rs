@@ -97,7 +97,7 @@ fun <T : CodeWriter> T.conditionalBlock(
  * Convenience wrapper that tells Intellij that the contents of this block are Rust
  */
 fun <T : CodeWriter> T.rust(
-    @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{\n", suffix = "\n}}}") contents: String,
     vararg args: Any
 ) {
     this.write(contents.trim(), *args)
