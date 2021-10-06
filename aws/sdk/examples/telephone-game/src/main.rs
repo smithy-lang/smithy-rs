@@ -1,7 +1,7 @@
 /*
-* Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-* SPDX-License-Identifier: Apache-2.0.
-*/
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
 
 use anyhow::{bail, Context};
 use aws_sdk_polly::model::{Engine, OutputFormat, VoiceId};
