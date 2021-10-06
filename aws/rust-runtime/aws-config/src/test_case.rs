@@ -195,10 +195,13 @@ impl TestEnvironment {
         self.log_info();
         self.check_results(&result);
         // todo: validate bodies
-        match connector.validate(
-            &["CONTENT-TYPE", "x-aws-ec2-metadata-token"],
-            |_expected, _actual| Ok(()),
-        ) {
+        match connector
+            .validate(
+                &["CONTENT-TYPE", "x-aws-ec2-metadata-token"],
+                |_expected, _actual| Ok(()),
+            )
+            .await
+        {
             Ok(()) => {}
             Err(e) => panic!("{}", e),
         }
