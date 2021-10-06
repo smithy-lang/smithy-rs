@@ -10,6 +10,7 @@ vNext (Month Day, Year)
 
 - :tada: Add presigned request support and examples for S3 GetObject and PutObject (smithy-rs#731)
 - Updated Transcribe code example to take an audio file as a command-line option and added readme.
+- Updated Auto Scaling code example to move operation from main to separate function; added readme.
 
 v0.0.19-alpha (September 24th, 2021)
 ====================================

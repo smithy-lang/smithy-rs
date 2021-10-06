@@ -26,6 +26,24 @@ struct Opt {
     verbose: bool,
 }
 
+// Deletes a group.
+async fn delete_group(
+    client: &aws_sdk_autoscaling::Client,
+    name: &str,
+    force: bool,
+) -> Result<(), aws_sdk_autoscaling::Error> {
+    client
+        .delete_auto_scaling_group()
+        .auto_scaling_group_name(name)
+        .set_force_delete(force.then(|| true))
+        .send()
+        .await?;
+
+    println!("Deleted Auto Scaling group");
+
+    Ok(())
+}
+
 /// Updates an Auto Scaling group in the Region to the specified maximum size.
 /// # Arguments
 ///
@@ -49,6 +67,7 @@ async fn main() -> Result<(), Error> {
     let region_provider = RegionProviderChain::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
+    println!();
 
     println!();
 
@@ -66,13 +85,6 @@ async fn main() -> Result<(), Error> {
     let shared_config = aws_config::from_env().region(region_provider).load().await;
     let client = Client::new(&shared_config);
 
-    client
-        .delete_auto_scaling_group()
-        .auto_scaling_group_name(autoscaling_name)
-        .set_force_delete(force.then(|| true))
-        .send()
-        .await?;
-
-    println!("Deleted Auto Scaling group");
-    Ok(())
+    delete_group(&client, &autoscaling_name, force)
+        .await
 }
