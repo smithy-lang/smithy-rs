@@ -128,7 +128,7 @@ async fn start_request(
 }
 
 // Returned tuples are (SignedWrapperMessage, WrappedMessage).
-// Some signed messages don't have payloads, so in those cases, the wrapped message will be None. 
+// Some signed messages don't have payloads, so in those cases, the wrapped message will be None.
 fn decode_frames(mut body: &[u8]) -> Vec<(Message, Option<Message>)> {
     let mut result = Vec::new();
     let mut decoder = MessageFrameDecoder::new();
