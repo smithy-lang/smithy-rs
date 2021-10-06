@@ -25,6 +25,7 @@ import software.amazon.smithy.model.traits.EventPayloadTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -62,6 +63,7 @@ class EventStreamUnmarshallerGenerator(
         "Message" to RuntimeType("Message", smithyEventStream, "smithy_eventstream::frame"),
         "OpError" to operationErrorSymbol,
         "SmithyError" to RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "smithy_types"),
+        "tracing" to CargoDependency.Tracing.asType(),
         "UnmarshalledMessage" to RuntimeType("UnmarshalledMessage", smithyEventStream, "smithy_eventstream::frame"),
         "UnmarshallMessage" to RuntimeType("UnmarshallMessage", smithyEventStream, "smithy_eventstream::frame"),
     )
@@ -190,7 +192,10 @@ class EventStreamUnmarshallerGenerator(
                             }
                             rust("// Event stream protocol headers start with ':'")
                             rustBlock("name => if !name.starts_with(':')") {
-                                rust("tracing::trace!(\"Unrecognized event stream message header: {}\", name);")
+                                rustTemplate(
+                                    "#{tracing}::trace!(\"Unrecognized event stream message header: {}\", name);",
+                                    *codegenScope
+                                )
                             }
                         }
                     }
