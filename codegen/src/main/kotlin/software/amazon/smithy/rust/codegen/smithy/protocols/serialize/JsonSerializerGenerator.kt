@@ -200,6 +200,26 @@ class JsonSerializerGenerator(
         }
     }
 
+    fun renderStructure(
+        writer: RustWriter,
+        structureShape: StructureShape,
+        includedMembers: List<MemberShape>? = null,
+    ) {
+        val fnName = symbolProvider.serializeFunctionName(structureShape)
+        writer.write("")
+        writer.rustBlockTemplate(
+            "##[allow(dead_code)] pub fn $fnName(value: &#{target}) -> Result<String, #{Error}>",
+            *codegenScope,
+            "target" to symbolProvider.toSymbol(structureShape)
+        ) {
+            rust("let mut out = String::new();")
+            rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
+            serializeStructure(StructContext("object", "value", structureShape), includedMembers)
+            rust("object.finish();")
+            rust("Ok(out)")
+        }
+    }
+
     private fun RustWriter.serializeStructure(
         context: StructContext,
         includedMembers: List<MemberShape>? = null,
