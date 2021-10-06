@@ -63,8 +63,10 @@ mod tests {
     use smithy_http::operation;
     use smithy_http::operation::{Operation, Request};
     use smithy_http::response::ParseStrictResponse;
+    use smithy_http::result::ClientError;
     use std::convert::{Infallible, TryInto};
     use tower::{service_fn, Service, ServiceBuilder};
+    use tracing::Instrument;
 
     /// Creates a stubbed service stack and runs it to validate that all the types line up &
     /// everything is properly wired
@@ -96,7 +98,7 @@ mod tests {
             if _request.headers().contains_key("X-Test") {
                 Ok(http::Response::new(SdkBody::from("ok")))
             } else {
-                Err("header not set")
+                Err(ClientError::user("header not set".into()))
             }
         });
 
