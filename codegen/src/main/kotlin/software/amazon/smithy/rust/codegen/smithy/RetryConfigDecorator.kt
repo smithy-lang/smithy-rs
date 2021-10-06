@@ -3,15 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rustsdk
+package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -24,7 +22,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfi
 /* Example Generated Code */
 /*
 pub struct Config {
-    pub(crate) region: Option<aws_types::region::Region>,
+    pub(crate) retry_config: Option<smithy_types::retry::RetryConfig>,
 }
 
 impl std::fmt::Debug for Config {
@@ -42,7 +40,7 @@ impl Config {
 
 #[derive(Default)]
 pub struct Builder {
-    region: Option<aws_types::region::Region>,
+    retry_config: Option<smithy_types::retry::RetryConfig>,
 }
 
 impl Builder {
@@ -50,14 +48,17 @@ impl Builder {
         Self::default()
     }
 
-    pub fn region(mut self, region: impl Into<Option<aws_types::region::Region>>) -> Self {
-        self.region = region.into();
+    pub fn retry_config(
+        mut self,
+        retry_config: impl Into<Option<smithy_types::retry::RetryConfig>>,
+    ) -> Self {
+        self.retry_config = retry_config.into();
         self
     }
 
     pub fn build(self) -> Config {
         Config {
-            region: self.region,
+            retry_config: self.retry_config,
         }
     }
 }
@@ -69,15 +70,15 @@ fn test_1() {
 }
  */
 
-class RegionDecorator : RustCodegenDecorator {
-    override val name: String = "Region"
+class RetryConfigDecorator : RustCodegenDecorator {
+    override val name: String = "RetryConfig"
     override val order: Byte = 0
 
     override fun configCustomizations(
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + RegionProviderConfig(protocolConfig.runtimeConfig)
+        return baseCustomizations + RetryConfigProviderConfig(protocolConfig.runtimeConfig)
     }
 
     override fun operationCustomizations(
@@ -85,53 +86,53 @@ class RegionDecorator : RustCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations + RegionConfigPlugin()
+        return baseCustomizations + RetryConfigConfigPlugin()
     }
 
     override fun libRsCustomizations(
         protocolConfig: ProtocolConfig,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
-        return baseCustomizations + PubUseRegion(protocolConfig.runtimeConfig)
+        return baseCustomizations + PubUseRetryConfig(protocolConfig.runtimeConfig)
     }
 }
 
-class RegionProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
-    private val region = region(runtimeConfig)
-    private val codegenScope = arrayOf("Region" to region.member("Region"))
+class RetryConfigProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
+    private val retryConfig = smithyTypesRetry(runtimeConfig)
+    private val codegenScope = arrayOf("RetryConfig" to retryConfig.member("RetryConfig"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
-            is ServiceConfig.ConfigStruct -> rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
+            is ServiceConfig.ConfigStruct -> rustTemplate("pub(crate) retry_config: Option<#{RetryConfig}>,", *codegenScope)
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
-                rustTemplate("region: Option<#{Region}>,", *codegenScope)
+                rustTemplate("retry_config: Option<#{RetryConfig}>,", *codegenScope)
             ServiceConfig.BuilderImpl ->
                 rustTemplate(
                     """
-            pub fn region(mut self, region: impl Into<Option<#{Region}>>) -> Self {
-                self.region = region.into();
+            pub fn retry_config(mut self, retry_config: impl Into<Option<#{RetryConfig}>>) -> Self {
+                self.retry_config = retry_config.into();
                 self
             }
             """,
                     *codegenScope
                 )
             ServiceConfig.BuilderBuild -> rustTemplate(
-                """region: self.region,""",
+                """retry_config: self.retry_config,""",
                 *codegenScope
             )
         }
     }
 }
 
-class RegionConfigPlugin : OperationCustomization() {
+class RetryConfigConfigPlugin : OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         return when (section) {
             is OperationSection.MutateRequest -> writable {
-                // Allow the region to be late-inserted via another method
+                // Allow the retry config to be late-inserted via another method
                 rust(
                     """
-                if let Some(region) = &${section.config}.region {
-                    ${section.request}.properties_mut().insert(region.clone());
+                if let Some(retry_config) = &${section.config}.retry_config {
+                    ${section.request}.properties_mut().insert(retry_config.clone());
                 }
                 """
                 )
@@ -141,16 +142,15 @@ class RegionConfigPlugin : OperationCustomization() {
     }
 }
 
-class PubUseRegion(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
+class PubUseRetryConfig(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
         return when (section) {
-            is LibRsSection.Body -> writable { rust("pub use #T::Region;", region(runtimeConfig)) }
+            is LibRsSection.Body -> writable { rust("pub use #T::RetryConfig;", smithyTypesRetry(runtimeConfig)) }
             else -> emptySection
         }
     }
 }
 
-fun region(runtimeConfig: RuntimeConfig) =
-    RuntimeType("region", awsTypes(runtimeConfig), "aws_types")
-
-fun awsTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-types")
+// Generate path to the retry module in smithy_types
+fun smithyTypesRetry(runtimeConfig: RuntimeConfig) =
+    RuntimeType("retry", runtimeConfig.runtimeCrate("types"), "smithy_types")

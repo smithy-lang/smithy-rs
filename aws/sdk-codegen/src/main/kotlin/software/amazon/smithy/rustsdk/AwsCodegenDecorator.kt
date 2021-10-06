@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.rust.codegen.smithy.RetryConfigDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayDecorator
 import software.amazon.smithy.rustsdk.customize.auth.DisabledAuthDecorator
@@ -13,17 +14,20 @@ import software.amazon.smithy.rustsdk.customize.s3.S3Decorator
 
 val DECORATORS = listOf(
     // General AWS Decorators
-    CredentialsProviderDecorator(),
-    RegionDecorator(),
     AwsEndpointDecorator(),
-    UserAgentDecorator(),
-    SigV4SigningDecorator(),
-    RetryPolicyDecorator(),
-    IntegrationTestDecorator(),
     AwsFluentClientDecorator(),
-    CrateLicenseDecorator(),
-    SharedConfigDecorator(),
     AwsPresigningDecorator(),
+    CrateLicenseDecorator(),
+    CredentialsProviderDecorator(),
+    IntegrationTestDecorator(),
+    RegionDecorator(),
+    RetryPolicyDecorator(),
+    SharedConfigDecorator(),
+    SigV4SigningDecorator(),
+    UserAgentDecorator(),
+
+    // Smithy specific decorators
+    RetryConfigDecorator(),
 
     // Service specific decorators
     DisabledAuthDecorator(),

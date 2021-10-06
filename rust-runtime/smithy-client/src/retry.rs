@@ -51,7 +51,7 @@ pub struct Config {
     retry_cost: usize,
     no_retry_increment: usize,
     timeout_retry_cost: usize,
-    max_retries: u32,
+    max_attempts: u32,
     max_backoff: Duration,
     base: fn() -> f64,
 }
@@ -71,8 +71,8 @@ impl Config {
     }
 
     /// Override the maximum number of retries
-    pub fn with_max_retries(mut self, max_retries: u32) -> Self {
-        self.max_retries = max_retries;
+    pub fn with_max_attempts(mut self, max_attempts: u32) -> Self {
+        self.max_attempts = max_attempts;
         self
     }
 }
@@ -84,7 +84,7 @@ impl Default for Config {
             retry_cost: RETRY_COST,
             no_retry_increment: 1,
             timeout_retry_cost: 10,
-            max_retries: MAX_RETRIES,
+            max_attempts: MAX_ATTEMPTS,
             max_backoff: Duration::from_secs(20),
             // by default, use a random base for exponential backoff
             base: fastrand::f64,
@@ -92,7 +92,13 @@ impl Default for Config {
     }
 }
 
-const MAX_RETRIES: u32 = 3;
+impl From<smithy_types::retry::RetryConfig> for Config {
+    fn from(conf: smithy_types::retry::RetryConfig) -> Self {
+        Self::default().with_max_attempts(conf.max_attempts())
+    }
+}
+
+const MAX_ATTEMPTS: u32 = 3;
 const INITIAL_RETRY_TOKENS: usize = 500;
 const RETRY_COST: usize = 5;
 
@@ -236,7 +242,7 @@ impl RetryHandler {
                 return None;
             }
             Err(e) => {
-                if self.local.attempts == self.config.max_retries - 1 {
+                if self.local.attempts == self.config.max_attempts {
                     return None;
                 }
                 self.shared.quota_acquire(&e, &self.config)?
@@ -380,7 +386,7 @@ mod test {
     #[test]
     fn backoff_timing() {
         let mut conf = test_config();
-        conf.max_retries = 5;
+        conf.max_attempts = 6;
         let policy = Standard::new(conf).new_request_policy();
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
@@ -414,7 +420,7 @@ mod test {
     #[test]
     fn max_backoff_time() {
         let mut conf = test_config();
-        conf.max_retries = 5;
+        conf.max_attempts = 6;
         conf.max_backoff = Duration::from_secs(3);
         let policy = Standard::new(conf).new_request_policy();
         let (policy, dur) = policy

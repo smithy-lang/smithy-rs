@@ -111,6 +111,14 @@ impl RetryConfig {
         self.max_attempts = max_attempts;
         self
     }
+
+    pub fn mode(&self) -> RetryMode {
+        self.mode
+    }
+
+    pub fn max_attempts(&self) -> u32 {
+        self.max_attempts
+    }
 }
 
 impl Default for RetryConfig {
