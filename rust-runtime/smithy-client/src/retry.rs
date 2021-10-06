@@ -363,9 +363,15 @@ mod test {
         assert_eq!(dur, Duration::from_secs(2));
         assert_eq!(policy.retry_quota(), 490);
 
+        let (policy, dur) = policy
+            .attempt_retry(Err(ErrorKind::ServerError))
+            .expect("should retry");
+        assert_eq!(dur, Duration::from_secs(4));
+        assert_eq!(policy.retry_quota(), 485);
+
         let no_retry = policy.attempt_retry(Err(ErrorKind::ServerError));
         assert!(no_retry.is_none());
-        assert_eq!(policy.retry_quota(), 490);
+        assert_eq!(policy.retry_quota(), 485);
     }
 
     #[test]
@@ -386,7 +392,7 @@ mod test {
     #[test]
     fn backoff_timing() {
         let mut conf = test_config();
-        conf.max_attempts = 6;
+        conf.max_attempts = 4;
         let policy = Standard::new(conf).new_request_policy();
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
@@ -420,7 +426,7 @@ mod test {
     #[test]
     fn max_backoff_time() {
         let mut conf = test_config();
-        conf.max_attempts = 6;
+        conf.max_attempts = 4;
         conf.max_backoff = Duration::from_secs(3);
         let policy = Standard::new(conf).new_request_policy();
         let (policy, dur) = policy
