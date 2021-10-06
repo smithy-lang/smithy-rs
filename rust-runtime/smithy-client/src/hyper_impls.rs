@@ -110,7 +110,7 @@ impl Builder {
 
     /// Set the async sleep implementation used for timeouts
     ///
-    /// Calling this is only necessary for testing or to use an something other than
+    /// Calling this is only necessary for testing or to use something other than
     /// [`smithy_async::rt::sleep::default_async_sleep`].
     pub fn sleep_impl(self, sleep_impl: impl AsyncSleep + 'static) -> Self {
         Self {
