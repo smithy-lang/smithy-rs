@@ -90,7 +90,6 @@ pub mod region {
 /// Default retry behavior configuration provider chain
 pub mod retry_config {
     use crate::environment::retry_config::EnvironmentVariableRetryConfigProvider;
-    use crate::meta::retry_config::{ProvideRetryConfig, RetryConfigProviderChain};
     use crate::profile;
     use crate::provider_config::ProviderConfig;
     use smithy_types::retry::RetryConfig;
@@ -100,24 +99,8 @@ pub mod retry_config {
     /// This provider will check the following sources in order:
     /// 1. [Environment variables](EnvironmentVariableRetryConfigProvider)
     /// 2. [Profile file](crate::profile::region::ProfileFileRetryConfigProvider)
-    pub fn default_provider() -> impl ProvideRetryConfig {
-        Builder::default().build()
-    }
-
-    /// Default retry_config provider chain
-    #[derive(Debug)]
-    pub struct DefaultRetryConfigChain(RetryConfigProviderChain);
-
-    impl DefaultRetryConfigChain {
-        /// Load a region from this chain
-        pub async fn retry_config(&self) -> Option<RetryConfig> {
-            self.0.retry_config().await
-        }
-
-        /// Builder for [`DefaultRetryConfigChain`]
-        pub fn builder() -> Builder {
-            Builder::default()
-        }
+    pub fn default_provider() -> Builder {
+        Builder::default()
     }
 
     /// Builder for [DefaultRetryConfigChain]
@@ -145,18 +128,17 @@ pub mod retry_config {
             self
         }
 
-        /// Build a [DefaultRetryConfigChain]
-        pub fn build(self) -> DefaultRetryConfigChain {
-            DefaultRetryConfigChain(
-                RetryConfigProviderChain::first_try(self.env_provider)
-                    .or_else(self.profile_file.build()),
-            )
-        }
-    }
+        /// Attempt to create a [RetryConfig](smithy_types::retry::RetryConfig) following sources in order:
+        /// 1. [Environment variables](crate::environment::retry_config::EnvironmentVariableRetryConfigProvider)
+        /// 2. [Profile file](crate::profile::retry_config::ProfileFileRetryConfigProvider)
+        /// 3. [RetryConfig::default()](smithy_types::retry::RetryConfig::default)
+        pub async fn retry_config(self) -> RetryConfig {
+            let retry_config_from_env = self.env_provider.retry_config();
+            let retry_config_from_profile = self.profile_file.build().retry_config().await;
 
-    impl ProvideRetryConfig for DefaultRetryConfigChain {
-        fn retry_config(&self) -> crate::meta::retry_config::future::ProvideRetryConfig {
-            ProvideRetryConfig::retry_config(&self.0)
+            retry_config_from_env
+                .or(retry_config_from_profile)
+                .unwrap_or_default()
         }
     }
 }
@@ -166,7 +148,6 @@ pub mod credentials {
     use crate::environment::credentials::EnvironmentVariableCredentialsProvider;
     use crate::meta::credentials::{CredentialsProviderChain, LazyCachingCredentialsProvider};
     use crate::meta::region::ProvideRegion;
-    use crate::meta::retry_config::ProvideRetryConfig;
     use aws_types::credentials::{future, ProvideCredentials};
 
     use crate::provider_config::ProviderConfig;
@@ -238,8 +219,6 @@ pub mod credentials {
     pub struct Builder {
         profile_file_builder: crate::profile::credentials::Builder,
         web_identity_builder: crate::web_identity_token::Builder,
-        retry_config_override: Option<Box<dyn ProvideRetryConfig>>,
-        retry_config_chain: crate::default_provider::retry_config::Builder,
         imds_builder: crate::imds::credentials::Builder,
         credential_cache: crate::meta::credentials::lazy_caching::Builder,
         region_override: Option<Box<dyn ProvideRegion>>,
@@ -261,25 +240,6 @@ pub mod credentials {
         /// When unset, the default region resolver chain will be used.
         pub fn set_region(&mut self, region: Option<impl ProvideRegion + 'static>) -> &mut Self {
             self.region_override = region.map(|provider| Box::new(provider) as _);
-            self
-        }
-
-        /// Sets the region used when making requests to AWS services
-        ///
-        /// When unset, the default region resolver chain will be used.
-        pub fn retry_config(mut self, retry_config: impl ProvideRetryConfig + 'static) -> Self {
-            self.set_retry_config(Some(retry_config));
-            self
-        }
-
-        /// Sets the retry_config used when making requests to AWS services
-        ///
-        /// When unset, the default retry_config resolver chain will be used.
-        pub fn set_retry_config(
-            &mut self,
-            retry_config: Option<impl ProvideRetryConfig + 'static>,
-        ) -> &mut Self {
-            self.retry_config_override = retry_config.map(|provider| Box::new(provider) as _);
             self
         }
 
@@ -353,7 +313,6 @@ pub mod credentials {
 
     #[cfg(test)]
     mod test {
-
         /// Test generation macro
         ///
         /// # Examples

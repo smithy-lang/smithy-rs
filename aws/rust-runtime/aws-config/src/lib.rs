@@ -103,9 +103,10 @@ pub use loader::ConfigLoader;
 #[cfg(feature = "default-provider")]
 mod loader {
     use crate::default_provider::{credentials, region, retry_config};
-    use crate::meta::{region::ProvideRegion, retry_config::ProvideRetryConfig};
+    use crate::meta::region::ProvideRegion;
     use aws_types::config::Config;
     use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
+    use smithy_types::retry::RetryConfig;
 
     /// Load a cross-service [`Config`](aws_types::config::Config) from the environment
     ///
@@ -116,7 +117,7 @@ mod loader {
     #[derive(Default, Debug)]
     pub struct ConfigLoader {
         region: Option<Box<dyn ProvideRegion>>,
-        retry_config: Option<Box<dyn ProvideRetryConfig>>,
+        retry_config: Option<RetryConfig>,
         credentials_provider: Option<SharedCredentialsProvider>,
     }
 
@@ -148,8 +149,8 @@ mod loader {
         ///         .load().await;
         /// # }
         /// ```
-        pub fn retry_config(mut self, retry_config: impl ProvideRetryConfig + 'static) -> Self {
-            self.retry_config = Some(Box::new(retry_config));
+        pub fn retry_config(mut self, retry_config: RetryConfig) -> Self {
+            self.retry_config = Some(retry_config);
             self
         }
 
@@ -188,8 +189,8 @@ mod loader {
                 region::default_provider().region().await
             };
 
-            let retry_config = if let Some(provider) = self.retry_config {
-                provider.retry_config().await
+            let retry_config = if let Some(retry_config) = self.retry_config {
+                retry_config
             } else {
                 retry_config::default_provider().retry_config().await
             };

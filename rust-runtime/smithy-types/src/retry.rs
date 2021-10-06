@@ -78,12 +78,14 @@ pub enum RetryMode {
 
 impl RetryMode {
     pub fn from_str(string: &str) -> Option<RetryMode> {
-        // to_ascii_lowercase is OK here because the only strings we need to check for are ASCII
-        // NOTE: to_ascii_lowercase allocates, is there a non-allocating way to do a case-insensitive comparison?
-        match string.to_ascii_lowercase().trim() {
-            "standard" => Some(RetryMode::Standard),
-            "adaptive" => Some(RetryMode::Adaptive),
-            _ => None,
+        let string = string.trim();
+        // eq_ignore_ascii_case is OK here because the only strings we need to check for are ASCII
+        if string.eq_ignore_ascii_case("standard") {
+            Some(RetryMode::Standard)
+        } else if string.eq_ignore_ascii_case("adaptive") {
+            Some(RetryMode::Adaptive)
+        } else {
+            None
         }
     }
 }

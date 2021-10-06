@@ -5,7 +5,6 @@
 
 //! Load retry configuration properties from an AWS profile
 
-use crate::meta::retry_config::{future, ProvideRetryConfig};
 use crate::provider_config::ProviderConfig;
 use aws_types::os_shim_internal::{Env, Fs};
 use smithy_types::retry::{RetryConfig, RetryMode};
@@ -87,7 +86,10 @@ impl ProfileFileRetryConfigProvider {
         Builder::default()
     }
 
-    async fn retry_config(&self) -> Option<RetryConfig> {
+    /// Attempt to create a new RetryConfig from a profile file.
+    /// Will return None if profile file contains no retry behavior configuration.
+    /// Will panic if provided configuration is invalid.
+    pub async fn retry_config(&self) -> Option<RetryConfig> {
         let profile = super::parser::load(&self.fs, &self.env)
             .await
             .map_err(|err| tracing::warn!(err = %err, "failed to parse profile"))
@@ -98,12 +100,10 @@ impl ProfileFileRetryConfigProvider {
             .unwrap_or_else(|| profile.selected_profile());
         let selected_profile = profile.get_profile(selected_profile)?;
 
-        let retry_mode = selected_profile
-            .get("retry_mode")
-            .and_then(RetryMode::from_str);
         let max_attempts = selected_profile
             .get("max_attempts")
             .and_then(|max_attempts| max_attempts.parse::<u32>().ok());
+        let retry_mode = selected_profile.get("retry_mode");
 
         match (retry_mode, max_attempts) {
             // If neither are set, we can return None and move on
@@ -112,22 +112,25 @@ impl ProfileFileRetryConfigProvider {
             (retry_mode, max_attempts) => {
                 let mut retry_config = RetryConfig::new();
 
-                if let Some(retry_mode) = retry_mode {
-                    retry_config = retry_config.with_retry_mode(retry_mode);
+                if let Some(max_attempts) = max_attempts {
+                    assert_ne!(max_attempts, 0, "It is invalid to set max_attempts to 0. Unset it or set it to an integer greater than or equal to one.");
+
+                    retry_config = retry_config.with_max_attempts(max_attempts);
                 }
 
-                if let Some(max_attempts) = max_attempts {
-                    retry_config = retry_config.with_max_attempts(max_attempts);
+                if let Some(retry_mode) = retry_mode {
+                    match RetryMode::from_str(retry_mode) {
+                        Some(retry_mode) => {
+                            assert_ne!(retry_mode, RetryMode::Adaptive, r#"Setting retry_mode to "adaptive" is not yet supported. Unset it or set it to a supported mode."#);
+
+                            retry_config = retry_config.with_retry_mode(retry_mode);
+                        },
+                        None => panic!("It is invalid to set retry_mode to {}. Unset it or set it to a supported mode.", retry_mode),
+                    }
                 }
 
                 Some(retry_config)
             }
         }
-    }
-}
-
-impl ProvideRetryConfig for ProfileFileRetryConfigProvider {
-    fn retry_config(&self) -> future::ProvideRetryConfig {
-        future::ProvideRetryConfig::new(self.retry_config())
     }
 }
