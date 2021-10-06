@@ -76,17 +76,20 @@ fn downcast_error(err: BoxError) -> ClientError {
         Err(box_error) => box_error,
     };
     let err = match err.downcast::<hyper::Error>() {
-        Ok(hyper_error) => return to_client_error(hyper_error),
+        Ok(hyper_error) => return to_client_error(*hyper_error),
         Err(box_error) => box_error,
     };
     ClientError::other(err, None)
 }
 
-fn to_client_error(err: Box<hyper::Error>) -> ClientError {
+/// Convert a [`hyper::Error`] into a [`ClientError`]
+fn to_client_error(err: hyper::Error) -> ClientError {
     if err.is_timeout() || find_source::<TimeoutError>(&err).is_some() {
         ClientError::timeout(err.into())
     } else if err.is_user() {
         ClientError::user(err.into())
+    } else if err.is_closed() || err.is_canceled() {
+        ClientError::io(err.into())
     } else if find_source::<std::io::Error>(&err).is_some() {
         ClientError::io(err.into())
     } else {
@@ -96,7 +99,7 @@ fn to_client_error(err: Box<hyper::Error>) -> ClientError {
 
 fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option<&'a E> {
     let mut next = Some(err);
-    while let Some(err) = next {
+    while let Some(err) = dbg!(next) {
         if let Some(matching_err) = err.downcast_ref::<E>() {
             return Some(matching_err);
         }
@@ -493,7 +496,7 @@ mod timeout_middleware {
             assert!(resp.is_timeout(), "{:?}", resp);
             assert_eq!(
                 format!("{}", resp),
-                "error trying to connect: timed out after 1s"
+                "timeout: error trying to connect: timed out after 1s"
             );
             assert_elapsed!(now, Duration::from_secs(1));
         }
@@ -521,6 +524,103 @@ mod timeout_middleware {
                 .expect_err("timeout");
             assert!(resp.is_timeout(), "{:?}", resp);
             assert_elapsed!(now, Duration::from_secs(2));
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::hyper_impls::HyperAdapter;
+    use http::Uri;
+    use hyper::client::connect::{Connected, Connection};
+
+    use smithy_http::body::SdkBody;
+    use std::io::{Error, ErrorKind};
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+    use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+
+    use tower::BoxError;
+
+    #[tokio::test]
+    async fn hyper_io_error() {
+        let connector = TestConnection {
+            inner: HangupStream,
+        };
+        let mut adapter = HyperAdapter::builder().build(connector);
+        use tower::Service;
+        let err = adapter
+            .call(
+                http::Request::builder()
+                    .uri("http://amazon.com")
+                    .body(SdkBody::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect_err("socket hangup");
+        assert!(err.is_io(), "{:?}", err);
+    }
+
+    // ---- machinery to make a Hyper connector that responds with an IO Error
+    #[derive(Clone)]
+    struct HangupStream;
+
+    impl Connection for HangupStream {
+        fn connected(&self) -> Connected {
+            Connected::new()
+        }
+    }
+
+    impl AsyncRead for HangupStream {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _buf: &mut ReadBuf<'_>,
+        ) -> Poll<std::io::Result<()>> {
+            Poll::Ready(Err(std::io::Error::new(
+                ErrorKind::ConnectionReset,
+                "connection reset",
+            )))
+        }
+    }
+
+    impl AsyncWrite for HangupStream {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _buf: &[u8],
+        ) -> Poll<Result<usize, Error>> {
+            Poll::Pending
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+            Poll::Pending
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+            Poll::Pending
+        }
+    }
+
+    #[derive(Clone)]
+    struct TestConnection<T> {
+        inner: T,
+    }
+
+    impl<T> tower::Service<Uri> for TestConnection<T>
+    where
+        T: Clone + hyper::client::connect::Connection,
+    {
+        type Response = T;
+        type Error = BoxError;
+        type Future = std::future::Ready<Result<Self::Response, Self::Error>>;
+
+        fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn call(&mut self, _req: Uri) -> Self::Future {
+            std::future::ready(Ok(self.inner.clone()))
         }
     }
 }

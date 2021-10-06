@@ -44,7 +44,7 @@ pub struct ClientError {
 
 impl Display for ClientError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.err)
+        write!(f, "{}: {}", self.kind, self.err)
     }
 }
 
@@ -115,6 +115,18 @@ enum ClientErrorKind {
     Io,
 
     Other(Option<ErrorKind>),
+}
+
+impl Display for ClientErrorKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ClientErrorKind::Timeout => write!(f, "timeout"),
+            ClientErrorKind::User => write!(f, "user error"),
+            ClientErrorKind::Io => write!(f, "io error"),
+            ClientErrorKind::Other(Some(kind)) => write!(f, "{:?}", kind),
+            ClientErrorKind::Other(None) => write!(f, "other"),
+        }
+    }
 }
 
 impl<E, R> Display for SdkError<E, R>

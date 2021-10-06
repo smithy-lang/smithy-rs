@@ -256,14 +256,9 @@ where
 
 #[cfg(test)]
 mod tests {
-<<<<<<< HEAD
-    use crate::test_connection::{capture_request, never::NeverService, TestConnection};
-    use crate::{BoxError, Client};
-=======
     use crate::bounds::SmithyConnector;
-    use crate::test_connection::{capture_request, TestConnection};
+    use crate::test_connection::{capture_request, never::NeverService, TestConnection};
     use crate::Client;
->>>>>>> Introduce ClientError to differentiate between different error types coming from HTTP connectors
     use hyper::service::Service;
     use smithy_http::body::SdkBody;
     use smithy_http::result::ClientError;
@@ -303,6 +298,6 @@ mod tests {
 
     #[test]
     fn never_test() {
-        is_valid_smithy_connector(NeverService::new())
+        is_a_connector(&NeverService::new())
     }
 }
