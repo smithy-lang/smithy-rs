@@ -156,12 +156,30 @@ mod tests {
 
     #[test]
     fn retry_mode_from_str_parses_valid_strings_regardless_of_casing() {
-        assert_eq!(RetryMode::from_str("standard").ok(), Some(RetryMode::Standard));
-        assert_eq!(RetryMode::from_str("STANDARD").ok(), Some(RetryMode::Standard));
-        assert_eq!(RetryMode::from_str("StAnDaRd").ok(), Some(RetryMode::Standard));
-        assert_eq!(RetryMode::from_str("adaptive").ok(), Some(RetryMode::Adaptive));
-        assert_eq!(RetryMode::from_str("ADAPTIVE").ok(), Some(RetryMode::Adaptive));
-        assert_eq!(RetryMode::from_str("aDaPtIvE").ok(), Some(RetryMode::Adaptive));
+        assert_eq!(
+            RetryMode::from_str("standard").ok(),
+            Some(RetryMode::Standard)
+        );
+        assert_eq!(
+            RetryMode::from_str("STANDARD").ok(),
+            Some(RetryMode::Standard)
+        );
+        assert_eq!(
+            RetryMode::from_str("StAnDaRd").ok(),
+            Some(RetryMode::Standard)
+        );
+        assert_eq!(
+            RetryMode::from_str("adaptive").ok(),
+            Some(RetryMode::Adaptive)
+        );
+        assert_eq!(
+            RetryMode::from_str("ADAPTIVE").ok(),
+            Some(RetryMode::Adaptive)
+        );
+        assert_eq!(
+            RetryMode::from_str("aDaPtIvE").ok(),
+            Some(RetryMode::Adaptive)
+        );
     }
 
     #[test]
