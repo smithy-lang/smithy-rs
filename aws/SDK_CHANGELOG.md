@@ -9,6 +9,7 @@ vNext (Month Day, Year)
 **New This Week**
 
 - :tada: Add presigned request support and examples for S3 GetObject and PutObject (smithy-rs#731)
+- Updated EC2 code examples to include unit tests, readme; refactored operations from main into separate functions.
 
 v0.0.19-alpha (September 24th, 2021)
 ====================================
