@@ -5,6 +5,8 @@
 
 //! This module defines types that describe when to retry given a response.
 
+use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 use std::time::Duration;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
@@ -76,16 +78,33 @@ pub enum RetryMode {
     Adaptive,
 }
 
-impl RetryMode {
-    pub fn from_str(string: &str) -> Option<RetryMode> {
+#[derive(Debug)]
+pub struct RetryModeErr(String);
+
+impl Display for RetryModeErr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "error parsing string '{}' as RetryMode, valid options are 'standard' or 'adaptive'",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for RetryModeErr {}
+
+impl FromStr for RetryMode {
+    type Err = RetryModeErr;
+
+    fn from_str(string: &str) -> Result<Self, Self::Err> {
         let string = string.trim();
         // eq_ignore_ascii_case is OK here because the only strings we need to check for are ASCII
         if string.eq_ignore_ascii_case("standard") {
-            Some(RetryMode::Standard)
+            Ok(RetryMode::Standard)
         } else if string.eq_ignore_ascii_case("adaptive") {
-            Some(RetryMode::Adaptive)
+            Ok(RetryMode::Adaptive)
         } else {
-            None
+            Err(RetryModeErr(string.to_owned()))
         }
     }
 }
@@ -133,50 +152,51 @@ impl Default for RetryConfig {
 #[cfg(test)]
 mod tests {
     use crate::retry::RetryMode;
+    use std::str::FromStr;
 
     #[test]
     fn retry_mode_from_str_parses_valid_strings_regardless_of_casing() {
-        assert_eq!(RetryMode::from_str("standard"), Some(RetryMode::Standard));
-        assert_eq!(RetryMode::from_str("STANDARD"), Some(RetryMode::Standard));
-        assert_eq!(RetryMode::from_str("StAnDaRd"), Some(RetryMode::Standard));
-        assert_eq!(RetryMode::from_str("adaptive"), Some(RetryMode::Adaptive));
-        assert_eq!(RetryMode::from_str("ADAPTIVE"), Some(RetryMode::Adaptive));
-        assert_eq!(RetryMode::from_str("aDaPtIvE"), Some(RetryMode::Adaptive));
+        assert_eq!(RetryMode::from_str("standard").ok(), Some(RetryMode::Standard));
+        assert_eq!(RetryMode::from_str("STANDARD").ok(), Some(RetryMode::Standard));
+        assert_eq!(RetryMode::from_str("StAnDaRd").ok(), Some(RetryMode::Standard));
+        assert_eq!(RetryMode::from_str("adaptive").ok(), Some(RetryMode::Adaptive));
+        assert_eq!(RetryMode::from_str("ADAPTIVE").ok(), Some(RetryMode::Adaptive));
+        assert_eq!(RetryMode::from_str("aDaPtIvE").ok(), Some(RetryMode::Adaptive));
     }
 
     #[test]
     fn retry_mode_from_str_ignores_whitespace_before_and_after() {
         assert_eq!(
-            RetryMode::from_str("  standard "),
+            RetryMode::from_str("  standard ").ok(),
             Some(RetryMode::Standard)
         );
         assert_eq!(
-            RetryMode::from_str("   STANDARD  "),
+            RetryMode::from_str("   STANDARD  ").ok(),
             Some(RetryMode::Standard)
         );
         assert_eq!(
-            RetryMode::from_str("  StAnDaRd   "),
+            RetryMode::from_str("  StAnDaRd   ").ok(),
             Some(RetryMode::Standard)
         );
         assert_eq!(
-            RetryMode::from_str("  adaptive  "),
+            RetryMode::from_str("  adaptive  ").ok(),
             Some(RetryMode::Adaptive)
         );
         assert_eq!(
-            RetryMode::from_str("   ADAPTIVE "),
+            RetryMode::from_str("   ADAPTIVE ").ok(),
             Some(RetryMode::Adaptive)
         );
         assert_eq!(
-            RetryMode::from_str("  aDaPtIvE    "),
+            RetryMode::from_str("  aDaPtIvE    ").ok(),
             Some(RetryMode::Adaptive)
         );
     }
 
     #[test]
     fn retry_mode_from_str_wont_parse_invalid_strings() {
-        assert_eq!(RetryMode::from_str("std"), None);
-        assert_eq!(RetryMode::from_str("aws"), None);
-        assert_eq!(RetryMode::from_str("s t a n d a r d"), None);
-        assert_eq!(RetryMode::from_str("a d a p t i v e"), None);
+        assert_eq!(RetryMode::from_str("std").ok(), None);
+        assert_eq!(RetryMode::from_str("aws").ok(), None);
+        assert_eq!(RetryMode::from_str("s t a n d a r d").ok(), None);
+        assert_eq!(RetryMode::from_str("a d a p t i v e").ok(), None);
     }
 }

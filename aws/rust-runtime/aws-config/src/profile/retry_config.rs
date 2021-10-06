@@ -5,6 +5,7 @@
 
 //! Load retry configuration properties from an AWS profile
 
+use std::str::FromStr;
 use crate::provider_config::ProviderConfig;
 use aws_types::os_shim_internal::{Env, Fs};
 use smithy_types::retry::{RetryConfig, RetryMode};
@@ -119,7 +120,7 @@ impl ProfileFileRetryConfigProvider {
                 }
 
                 if let Some(retry_mode) = retry_mode {
-                    match RetryMode::from_str(retry_mode) {
+                    match RetryMode::from_str(retry_mode).ok() {
                         Some(retry_mode) => {
                             assert_ne!(retry_mode, RetryMode::Adaptive, r#"Setting retry_mode to "adaptive" is not yet supported. Unset it or set it to a supported mode."#);
 

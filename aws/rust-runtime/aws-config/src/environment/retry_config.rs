@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use std::str::FromStr;
 use aws_types::os_shim_internal::Env;
 use smithy_types::retry::{RetryConfig, RetryMode};
 
@@ -57,7 +58,7 @@ impl EnvironmentVariableRetryConfigProvider {
         }
 
         if let Some(retry_mode) = retry_mode.as_ref() {
-            match RetryMode::from_str(retry_mode) {
+            match RetryMode::from_str(retry_mode).ok() {
                 Some(retry_mode) => {
                     assert_ne!(retry_mode, RetryMode::Adaptive, r#"Setting AWS_RETRY_MODE to "adaptive" is not yet supported. Unset it or set it to a supported mode."#);
 
