@@ -27,15 +27,6 @@ pub enum SigningAlgorithm {
 }
 
 #[derive(Eq, PartialEq, Clone, Copy)]
-pub enum HttpBodySigningType {
-    /// An empty payload should be hashed for the payload signature
-    Empty,
-
-    /// The bytes `b"UNSIGNED-PAYLOAD"` should be hashed for the payload signature
-    UnsignedPayload,
-}
-
-#[derive(Eq, PartialEq, Clone, Copy)]
 pub enum HttpSignatureType {
     /// A signature for a full http request should be computed, with header updates applied to the signing result.
     HttpRequestHeaders,
@@ -43,7 +34,7 @@ pub enum HttpSignatureType {
     /// A signature for a full http request should be computed, with query param updates applied to the signing result.
     ///
     /// This is typically used for presigned URLs.
-    HttpRequestQueryParams(HttpBodySigningType),
+    HttpRequestQueryParams,
 }
 
 /// Signing Configuration for an Operation
@@ -151,7 +142,7 @@ impl SigV4Signer {
         };
         settings.signature_location = match operation_config.signature_type {
             HttpSignatureType::HttpRequestHeaders => SignatureLocation::Headers,
-            HttpSignatureType::HttpRequestQueryParams(_) => SignatureLocation::QueryParams,
+            HttpSignatureType::HttpRequestQueryParams => SignatureLocation::QueryParams,
         };
         settings.expires_in = operation_config.expires_in;
         settings
@@ -197,28 +188,20 @@ impl SigV4Signer {
         let signing_params = Self::signing_params(settings, credentials, request_config);
 
         let (signing_instructions, signature) = {
-            // A body that is already in memory can be signed directly. A  body that is not in memory
+            // A body that is already in memory can be signed directly. A body that is not in memory
             // (any sort of streaming body or presigned request) will be signed via UNSIGNED-PAYLOAD.
-            let signable_body = match operation_config.signature_type {
-                HttpSignatureType::HttpRequestQueryParams(signing_type) => match signing_type {
-                    HttpBodySigningType::Empty => SignableBody::Bytes(b""),
-                    HttpBodySigningType::UnsignedPayload => SignableBody::UnsignedPayload,
-                },
-                _ => {
-                    request_config
-                        .payload_override
-                        // the payload_override is a cheap clone because it contains either a
-                        // reference or a short checksum (we're not cloning the entire body)
-                        .cloned()
-                        .unwrap_or_else(|| {
-                            request
-                                .body()
-                                .bytes()
-                                .map(SignableBody::Bytes)
-                                .unwrap_or(SignableBody::UnsignedPayload)
-                        })
-                }
-            };
+            let signable_body = request_config
+                .payload_override
+                // the payload_override is a cheap clone because it contains either a
+                // reference or a short checksum (we're not cloning the entire body)
+                .cloned()
+                .unwrap_or_else(|| {
+                    request
+                        .body()
+                        .bytes()
+                        .map(SignableBody::Bytes)
+                        .unwrap_or(SignableBody::UnsignedPayload)
+                });
 
             let signable_request = SignableRequest::new(
                 request.method(),

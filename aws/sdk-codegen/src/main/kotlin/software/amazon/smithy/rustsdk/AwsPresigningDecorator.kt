@@ -20,8 +20,11 @@ import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.rust
+import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
@@ -123,6 +126,7 @@ class AwsInputPresignedMethod(
         "PresignedRequestService" to AwsRuntimeType.Presigning.member("service::PresignedRequestService"),
         "PresigningConfig" to AwsRuntimeType.Presigning.member("config::PresigningConfig"),
         "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::SdkError"),
+        "aws_sigv4" to runtimeConfig.awsRuntimeDependency("aws-sigv4").asType(),
         "sig_auth" to runtimeConfig.sigAuth().asType(),
         "tower" to CargoDependency.Tower.asType(),
     )
@@ -160,10 +164,6 @@ class AwsInputPresignedMethod(
             ).generateMakeOperation(this, transformedOperationShape, section.customizations)
         }
 
-        val payloadSigningType = when (presignableOp.payloadSigningType) {
-            PayloadSigningType.EMPTY -> "Empty"
-            PayloadSigningType.UNSIGNED_PAYLOAD -> "UnsignedPayload"
-        }
         rustBlockTemplate(
             """
             /// Creates a presigned request for this operation. The credentials provider from the `config`
@@ -188,20 +188,39 @@ class AwsInputPresignedMethod(
                 let (mut request, _) = self.$makeOperationFn(config)
                     .map_err(|err| #{SdkError}::ConstructionFailure(err.into()))?
                     .into_request_response();
-
-                // Change signature type to query params and wire up presigning config
-                {
+                """,
+                *codegenScope
+            )
+            rustBlock("") {
+                rust(
+                    """
+                    // Change signature type to query params and wire up presigning config
                     let mut props = request.properties_mut();
                     props.insert(presigning_config.start_time());
-
+                    """
+                )
+                withBlock("props.insert(", ");") {
+                    rustTemplate(
+                        "#{aws_sigv4}::http_request::SignableBody::" +
+                            when (presignableOp.payloadSigningType) {
+                                PayloadSigningType.EMPTY -> "Bytes(b\"\")"
+                                PayloadSigningType.UNSIGNED_PAYLOAD -> "UnsignedPayload"
+                            },
+                        *codegenScope
+                    )
+                }
+                rustTemplate(
+                    """
                     let mut config = props.get_mut::<#{sig_auth}::signer::OperationSigningConfig>()
                         .expect("signing config added by make_operation()");
-                    config.signature_type = #{sig_auth}::signer::HttpSignatureType::HttpRequestQueryParams(
-                        #{sig_auth}::signer::HttpBodySigningType::$payloadSigningType
-                    );
+                    config.signature_type = #{sig_auth}::signer::HttpSignatureType::HttpRequestQueryParams;
                     config.expires_in = Some(presigning_config.expires());
-                }
-
+                    """,
+                    *codegenScope
+                )
+            }
+            rustTemplate(
+                """
                 let middleware = #{aws_hyper}::AwsMiddleware::default();
                 let mut svc = #{tower}::builder::ServiceBuilder::new()
                     .layer(&middleware)
