@@ -9,6 +9,7 @@ vNext (Month Day, Year)
 **New This Week**
 
 - :tada: Add presigned request support and examples for S3 GetObject and PutObject (smithy-rs#731)
+- Updated Transcribe code example to take an audio file as a command-line option and added readme.
 
 v0.0.19-alpha (September 24th, 2021)
 ====================================
@@ -33,7 +34,6 @@ Thank you for your contributions! :heart:
 
 - @jonhoo (smithy-rs#703)
 
-
 v0.0.18-alpha (September 14th, 2021)
 =======================
 
@@ -42,6 +42,8 @@ v0.0.18-alpha (September 14th, 2021)
 
 **New This Week**
 - :bug: Fixes issue where `Content-Length` header could be duplicated leading to signing failure (aws-sdk-rust#220, smithy-rs#697)
+
+- Updated AutoScaling code examples to use asynchronous config; added readme file; tested on 0.0.17 bits
 
 v0.0.17-alpha (September 2nd, 2021)
 ===================================
