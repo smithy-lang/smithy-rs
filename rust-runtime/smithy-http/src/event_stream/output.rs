@@ -376,21 +376,50 @@ mod tests {
         ));
     }
 
+    #[tokio::test]
+    async fn receive_last_chunk_has_multiple_messages() {
+        let chunks: Vec<Result<_, IOError>> = vec![
+            Ok(encode_message("one")),
+            Ok(encode_message("two")),
+            Ok(Bytes::from(
+                [encode_message("three"), encode_message("four")].concat(),
+            )),
+        ];
+        let chunk_stream = futures_util::stream::iter(chunks);
+        let body = SdkBody::from(Body::wrap_stream(chunk_stream));
+        let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
+        assert_eq!(
+            TestMessage("one".into()),
+            receiver.recv().await.unwrap().unwrap()
+        );
+        assert_eq!(
+            TestMessage("two".into()),
+            receiver.recv().await.unwrap().unwrap()
+        );
+        assert_eq!(
+            TestMessage("three".into()),
+            receiver.recv().await.unwrap().unwrap()
+        );
+        assert_eq!(
+            TestMessage("four".into()),
+            receiver.recv().await.unwrap().unwrap()
+        );
+        assert_eq!(None, receiver.recv().await.unwrap());
+    }
+
     proptest::proptest! {
         #[test]
         fn receive_multiple_messages_split_unevenly_across_chunks(b1: usize, b2: usize) {
-            let msg1 = encode_message("one");
-            let msg2 = encode_message("two");
-            let msg3 = encode_message("three");
-            let msg4 = encode_message("four");
-            let combined = {
-                let mut combined = Vec::new();
-                combined.extend_from_slice(&msg1);
-                combined.extend_from_slice(&msg2);
-                combined.extend_from_slice(&msg3);
-                combined.extend_from_slice(&msg4);
-                combined
-            };
+            let combined = Bytes::from([
+                encode_message("one"),
+                encode_message("two"),
+                encode_message("three"),
+                encode_message("four"),
+                encode_message("five"),
+                encode_message("six"),
+                encode_message("seven"),
+                encode_message("eight"),
+            ].concat());
 
             let midpoint = combined.len() / 2;
             let (start, boundary1, boundary2, end) = (
@@ -412,7 +441,7 @@ mod tests {
                 let chunk_stream = futures_util::stream::iter(chunks);
                 let body = SdkBody::from(Body::wrap_stream(chunk_stream));
                 let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
-                for payload in &["one", "two", "three", "four"] {
+                for payload in &["one", "two", "three", "four", "five", "six", "seven", "eight"] {
                     assert_eq!(
                         TestMessage((*payload).into()),
                         receiver.recv().await.unwrap().unwrap()
