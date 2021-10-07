@@ -8,7 +8,9 @@ vNext (Month Day, Year)
 **New this week**
 
 - :bug: Fix an issue where `smithy-xml` may have generated invalid XML (smithy-rs#719)
-- Add `RetryConfig` struct for configuring retry behavior
+- Add `RetryConfig` struct for configuring retry behavior (smithy-rs#725)
+- :bug: Fix error when receiving empty event stream messages (smithy-rs#736)
+- :bug: Fix bug in event stream receiver that could cause the last events in the response stream to be lost (smithy-rs#736)
 
 v0.24 (September 24th, 2021)
 ============================
