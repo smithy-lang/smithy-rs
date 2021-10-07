@@ -1,3 +1,7 @@
+vNext (Month Day, Year)
+=======================
+...
+
 v0.25 (October 7th, 2021)
 =========================
 **Breaking changes**
@@ -13,13 +17,13 @@ v0.25 (October 7th, 2021)
 - :bug: Fix an issue where `smithy-xml` may have generated invalid XML (smithy-rs#719)
 - :bug: Fix error when receiving empty event stream messages (smithy-rs#736)
 - :bug: Fix bug in event stream receiver that could cause the last events in the response stream to be lost (smithy-rs#736)
-- :tada: Add support for 6 new AWS services:
-  - Wisdom
-  - VoiceId
-  - Account
-  - KafkaConnect
-  - OpenSearch
-  - CloudControl
+
+
+**Contributors**
+
+Thank you for your contributions! :heart:
+* @obi1kenobi (smithy-rs#719)
+* @guyilin-amazon (smithy-rs#750)
 
 v0.24 (September 24th, 2021)
 ============================
