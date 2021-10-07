@@ -19,12 +19,12 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.smithy.letIf
@@ -46,32 +46,32 @@ class SigV4SigningDecorator : RustCodegenDecorator {
     override val name: String = "SigV4Signing"
     override val order: Byte = 0
 
-    private fun applies(protocolConfig: ProtocolConfig): Boolean = protocolConfig.serviceShape.hasTrait<SigV4Trait>()
+    private fun applies(codegenContext: CodegenContext): Boolean = codegenContext.serviceShape.hasTrait<SigV4Trait>()
 
     override fun configCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations.letIf(applies(protocolConfig)) { customizations ->
+        return baseCustomizations.letIf(applies(codegenContext)) { customizations ->
             customizations + SigV4SigningConfig(
-                protocolConfig.runtimeConfig,
-                protocolConfig.serviceShape.hasEventStreamOperations(protocolConfig.model),
-                protocolConfig.serviceShape.expectTrait()
+                codegenContext.runtimeConfig,
+                codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model),
+                codegenContext.serviceShape.expectTrait()
             )
         }
     }
 
     override fun operationCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations.letIf(applies(protocolConfig)) {
+        return baseCustomizations.letIf(applies(codegenContext)) {
             it + SigV4SigningFeature(
-                protocolConfig.model,
+                codegenContext.model,
                 operation,
-                protocolConfig.runtimeConfig,
-                protocolConfig.serviceShape,
+                codegenContext.runtimeConfig,
+                codegenContext.serviceShape,
             )
         }
     }
