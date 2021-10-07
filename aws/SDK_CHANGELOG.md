@@ -20,6 +20,8 @@ vNext (Month Day, Year)
 - Add `RetryConfigDecorator` and update `AwsCodegenDecorator` to include it
 - Update `AwsFluentClientDecorator` and `SharedConfigDecorator` to support retry behavior configuration
 - :tada: Add presigned request support and examples for S3 GetObject and PutObject (smithy-rs#731)
+- :bug: Fix error when receiving `Cont` event from S3 SelectObjectContent (smithy-rs#736)
+- :bug: Fix bug in event stream receiver that could cause the last events in the response stream to be lost when using S3 SelectObjectContent (smithy-rs#736)
 - Updated Transcribe code example to take an audio file as a command-line option and added readme.
 
 v0.0.19-alpha (September 24th, 2021)
