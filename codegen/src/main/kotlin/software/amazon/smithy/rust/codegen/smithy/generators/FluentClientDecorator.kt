@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
@@ -42,29 +43,29 @@ class FluentClientDecorator : RustCodegenDecorator {
     override val name: String = "FluentClient"
     override val order: Byte = 0
 
-    private fun applies(protocolConfig: ProtocolConfig): Boolean =
-        protocolConfig.symbolProvider.config().codegenConfig.includeFluentClient
+    private fun applies(codegenContext: CodegenContext): Boolean =
+        codegenContext.symbolProvider.config().codegenConfig.includeFluentClient
 
-    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
-        if (!applies(protocolConfig)) {
+    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+        if (!applies(codegenContext)) {
             return
         }
 
         val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("client")), public = true)
         rustCrate.withModule(RustModule("client", module)) { writer ->
-            FluentClientGenerator(protocolConfig, includeSmithyGenericClientDocs = true).render(writer)
+            FluentClientGenerator(codegenContext, includeSmithyGenericClientDocs = true).render(writer)
         }
-        val smithyClient = CargoDependency.SmithyClient(protocolConfig.runtimeConfig)
+        val smithyClient = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
         rustCrate.mergeFeature(Feature("client", true, listOf(smithyClient.name)))
         rustCrate.mergeFeature(Feature("rustls", default = true, listOf("smithy-client/rustls")))
         rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("smithy-client/native-tls")))
     }
 
     override fun libRsCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
-        if (!applies(protocolConfig)) {
+        if (!applies(codegenContext)) {
             return baseCustomizations
         }
 
@@ -120,21 +121,21 @@ data class ClientGenerics(
 }
 
 class FluentClientGenerator(
-    protocolConfig: ProtocolConfig,
+    codegenContext: CodegenContext,
     // Whether to include Client construction details that are relevant to generic Smithy generated clients,
     // but not necessarily relevant to customized clients, such as the ones with the AWS SDK.
     private val includeSmithyGenericClientDocs: Boolean,
     private val generics: ClientGenerics = ClientGenerics(),
     private val customizations: List<FluentClientCustomization> = emptyList(),
 ) {
-    private val serviceShape = protocolConfig.serviceShape
+    private val serviceShape = codegenContext.serviceShape
     private val operations =
-        TopDownIndex.of(protocolConfig.model).getContainedOperations(serviceShape).sortedBy { it.id }
-    private val symbolProvider = protocolConfig.symbolProvider
-    private val model = protocolConfig.model
-    private val clientDep = CargoDependency.SmithyClient(protocolConfig.runtimeConfig).copy(optional = true)
-    private val runtimeConfig = protocolConfig.runtimeConfig
-    private val moduleName = protocolConfig.moduleName
+        TopDownIndex.of(codegenContext.model).getContainedOperations(serviceShape).sortedBy { it.id }
+    private val symbolProvider = codegenContext.symbolProvider
+    private val model = codegenContext.model
+    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig).copy(optional = true)
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val moduleName = codegenContext.moduleName
     private val moduleUseName = moduleName.replace("-", "_")
     private val humanName = serviceShape.id.name
     private val core = FluentClientCore(model)

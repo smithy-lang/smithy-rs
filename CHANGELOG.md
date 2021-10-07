@@ -4,6 +4,12 @@ vNext (Month Day, Year)
 - :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
 - :warning: `smithy_client::retry::Config` field `max_retries` is renamed to `max_attempts`
 - :warning: `smithy_client::retry::Config::with_max_retries` method is renamed to `with_max_attempts`
+- :warning: Several classes in the codegen module were renamed and/or refactored (smithy-rs#735):
+  - `ProtocolConfig` became `CodegenContext` and moved to `software.amazon.smithy.rust.codegen.smithy`
+  - `HttpProtocolGenerator` became `ProtocolGenerator` and was refactored
+    to rely on composition instead of inheritance
+  - `HttpProtocolTestGenerator` became `ProtocolTestGenerator`
+  - `Protocol` moved into `software.amazon.smithy.rust.codegen.smithy.protocols`
 
 **New this week**
 

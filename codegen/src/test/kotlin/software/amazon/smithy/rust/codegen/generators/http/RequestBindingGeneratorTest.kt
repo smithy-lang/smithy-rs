@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.http.RequestBindingGenerator
@@ -111,23 +112,42 @@ class RequestBindingGeneratorTest {
     private fun renderOperation(writer: RustWriter) {
         inputShape.renderWithModelBuilder(model, symbolProvider, writer)
         val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
+        val bindingGen = RequestBindingGenerator(
+            model,
+            symbolProvider,
+            TestRuntimeConfig,
+            TimestampFormatTrait.Format.EPOCH_SECONDS,
+            operationShape,
+            inputShape,
+            httpTrait
+        )
         writer.rustBlock("impl PutObjectInput") {
-            RequestBindingGenerator(
-                model,
-                symbolProvider,
-                TestRuntimeConfig,
-                TimestampFormatTrait.Format.EPOCH_SECONDS,
-                operationShape,
-                inputShape,
-                httpTrait
-            ).renderUpdateHttpBuilder(this)
+            // RequestBindingGenerator's functions expect to be rendered inside a function,
+            // but the unit test needs to call some of these functions individually. This generates
+            // some wrappers that can be called directly from the tests. The functions will get duplicated,
+            // but that's not a problem.
+
+            rustBlock("pub fn test_uri_query(&self, mut output: &mut String)") {
+                bindingGen.renderUpdateHttpBuilder(this)
+                rust("uri_query(self, output)")
+            }
+
             rustBlock(
-                "pub fn request_builder_base(&self) -> Result<#T, #T>",
+                "pub fn test_uri_base(&self, mut output: &mut String) -> Result<(), #T>",
+                TestRuntimeConfig.operationBuildError()
+            ) {
+                bindingGen.renderUpdateHttpBuilder(this)
+                rust("uri_base(self, output)")
+            }
+
+            rustBlock(
+                "pub fn test_request_builder_base(&self) -> Result<#T, #T>",
                 RuntimeType.HttpRequestBuilder,
                 TestRuntimeConfig.operationBuildError()
             ) {
-                write("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
-                write("self.update_http_builder(builder)")
+                bindingGen.renderUpdateHttpBuilder(this)
+                rust("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
+                rust("update_http_builder(self, builder)")
             }
         }
     }
@@ -152,10 +172,10 @@ class RequestBindingGeneratorTest {
                 .some_value("svq!!%&")
                 .build().expect("build should succeed");
             let mut o = String::new();
-            inp.uri_base(&mut o);
+            inp.test_uri_base(&mut o);
             assert_eq!(o.as_str(), "/somebucket%2Fok/1970-04-28T03%3A58%3A45Z");
             o.clear();
-            inp.uri_query(&mut o);
+            inp.test_uri_query(&mut o);
             assert_eq!(o.as_str(), "?paramName=svq%21%21%25%26&hello=0&hello=1&hello=2&hello=44")
             """
         )
@@ -176,7 +196,7 @@ class RequestBindingGeneratorTest {
                 .enabled(true)
                 .build().expect("build should succeed");
             let mut o = String::new();
-            inp.uri_query(&mut o);
+            inp.test_uri_query(&mut o);
             assert_eq!(o.as_str(), "?primitive=1&enabled=true")
             """,
             clippy = true
@@ -201,7 +221,7 @@ class RequestBindingGeneratorTest {
                 .media_type("base64encodethis")
                 .prefix("k".to_string(), "😹".to_string())
                 .build().unwrap();
-            let http_request = inp.request_builder_base().expect("valid input").body(()).unwrap();
+            let http_request = inp.test_request_builder_base().expect("valid input").body(()).unwrap();
             assert_eq!(http_request.uri(), "/buk/1970-04-28T03%3A58%3A45Z?paramName=qp&hello=0&hello=1");
             assert_eq!(http_request.method(), "PUT");
             let mut date_header = http_request.headers().get_all("X-Dates").iter();
@@ -233,7 +253,7 @@ class RequestBindingGeneratorTest {
             .key(ts.clone())
             .prefix("😹".to_string(), "😹".to_string())
             .build().unwrap();
-        let err = inp.request_builder_base().expect_err("can't make a header out of a cat emoji");
+        let err = inp.test_request_builder_base().expect_err("can't make a header out of a cat emoji");
         assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `😹` cannot be used as a header name: invalid HTTP header name)");
         """
         )
@@ -252,7 +272,7 @@ class RequestBindingGeneratorTest {
             .key(ts.clone())
             .prefix("valid-key".to_string(), "\n can't put a newline in a header value".to_string())
             .build().unwrap();
-        let err = inp.request_builder_base().expect_err("can't make a header with a newline");
+        let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
         assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `\n can\'t put a newline in a header value` cannot be used as a header value: failed to parse header value)");
         """
         )
@@ -270,7 +290,7 @@ class RequestBindingGeneratorTest {
             .key(ts.clone())
             .string_header("\n is not valid")
             .build().unwrap();
-        let err = inp.request_builder_base().expect_err("can't make a header with a newline");
+        let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
         // make sure we obey the sensitive trait
         assert_eq!(format!("{}", err), "Invalid field in input: string_header (Details: `*** Sensitive Data Redacted ***` cannot be used as a header value: failed to parse header value)");
         """
@@ -289,7 +309,7 @@ class RequestBindingGeneratorTest {
             // .bucket_name("buk")
             .key(ts.clone())
             .build().unwrap();
-        let err = inp.request_builder_base().expect_err("can't build request with bucket unset");
+        let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
         assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
         """
         )
@@ -307,7 +327,7 @@ class RequestBindingGeneratorTest {
             // don't set key
             // .key(ts.clone())
             .build().unwrap();
-        let err = inp.request_builder_base().expect_err("can't build request with bucket unset");
+        let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
         assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
         """
         )
@@ -324,7 +344,7 @@ class RequestBindingGeneratorTest {
             .bucket_name("")
             .key(ts.clone())
             .build().unwrap();
-        let err = inp.request_builder_base().expect_err("can't build request with bucket unset");
+        let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
         assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
         """
         )

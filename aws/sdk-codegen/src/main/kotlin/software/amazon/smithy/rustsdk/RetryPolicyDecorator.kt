@@ -9,23 +9,23 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 
 class RetryPolicyDecorator : RustCodegenDecorator {
     override val name: String = "RetryPolicy"
     override val order: Byte = 0
 
     override fun operationCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations + RetryPolicyFeature(protocolConfig.runtimeConfig)
+        return baseCustomizations + RetryPolicyFeature(codegenContext.runtimeConfig)
     }
 }
 

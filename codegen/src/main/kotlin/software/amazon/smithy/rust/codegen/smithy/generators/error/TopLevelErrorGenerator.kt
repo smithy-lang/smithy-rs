@@ -16,9 +16,9 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 
 /**
  * Each service defines it's own "top-level" error combining all possible errors that a service can emit.
@@ -35,15 +35,15 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
  * }
  * ```
  */
-class TopLevelErrorGenerator(protocolConfig: ProtocolConfig, private val operations: List<OperationShape>) {
-    private val symbolProvider = protocolConfig.symbolProvider
-    private val model = protocolConfig.model
+class TopLevelErrorGenerator(codegenContext: CodegenContext, private val operations: List<OperationShape>) {
+    private val symbolProvider = codegenContext.symbolProvider
+    private val model = codegenContext.model
 
-    private val allErrors = operations.flatMap { it.errors }.distinctBy { it.getName(protocolConfig.serviceShape) }
-        .map { protocolConfig.model.expectShape(it, StructureShape::class.java) }
-        .sortedBy { it.id.getName(protocolConfig.serviceShape) }
+    private val allErrors = operations.flatMap { it.errors }.distinctBy { it.getName(codegenContext.serviceShape) }
+        .map { codegenContext.model.expectShape(it, StructureShape::class.java) }
+        .sortedBy { it.id.getName(codegenContext.serviceShape) }
 
-    private val sdkError = CargoDependency.SmithyHttp(protocolConfig.runtimeConfig).asType().member("result::SdkError")
+    private val sdkError = CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType().member("result::SdkError")
     fun render(crate: RustCrate) {
         crate.withModule(RustModule.default("error_meta", false)) { writer ->
             writer.renderDefinition()

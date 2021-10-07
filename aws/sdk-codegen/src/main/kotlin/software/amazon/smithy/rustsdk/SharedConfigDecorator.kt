@@ -5,11 +5,15 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.rust.codegen.rustlang.*
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 
@@ -24,15 +28,15 @@ class SharedConfigDecorator : RustCodegenDecorator {
     override val order: Byte = 0
 
     override fun configCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + NewFromShared(protocolConfig.runtimeConfig)
+        return baseCustomizations + NewFromShared(codegenContext.runtimeConfig)
     }
 
-    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
+    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
         val codegenScope = arrayOf(
-            "Config" to awsTypes(runtimeConfig = protocolConfig.runtimeConfig).asType().member("config::Config")
+            "Config" to awsTypes(runtimeConfig = codegenContext.runtimeConfig).asType().member("config::Config")
         )
         rustCrate.withModule(RustModule.Config) {
             // TODO(sharedconfig): As more items are added to aws_types::Config, use them here to configure the config builder
