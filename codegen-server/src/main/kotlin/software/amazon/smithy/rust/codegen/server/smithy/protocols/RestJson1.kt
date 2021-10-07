@@ -32,9 +32,9 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
@@ -59,29 +59,29 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import java.util.logging.Logger
 
 abstract class ServerGenerator(
-    protocolConfig: ProtocolConfig,
+    codegenContext: CodegenContext,
     private val httpBindingResolver: HttpTraitHttpBindingResolver,
 ) {
     public val logger = Logger.getLogger(javaClass.name)
     public val error = RuntimeType("error", null, "crate")
     public val operation = RuntimeType("operation", null, "crate")
-    public val runtimeConfig = protocolConfig.runtimeConfig
-    public val model = protocolConfig.model
-    public val symbolProvider = protocolConfig.symbolProvider
+    public val runtimeConfig = codegenContext.runtimeConfig
+    public val model = codegenContext.model
+    public val symbolProvider = codegenContext.symbolProvider
     public val instantiator =
-        with(protocolConfig) { Instantiator(symbolProvider, model, runtimeConfig) }
+        with(codegenContext) { Instantiator(symbolProvider, model, runtimeConfig) }
     public val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
     public val index = HttpBindingIndex.of(model)
-    public val service = protocolConfig.serviceShape
+    public val service = codegenContext.serviceShape
     public val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
 
     abstract fun render(writer: RustWriter, operationShape: OperationShape)
 }
 
 class RestJson1HttpSerializerGenerator(
-    protocolConfig: ProtocolConfig,
+    codegenContext: CodegenContext,
     private val httpBindingResolver: HttpTraitHttpBindingResolver,
-) : ServerGenerator(protocolConfig, httpBindingResolver) {
+) : ServerGenerator(codegenContext, httpBindingResolver) {
     private val serde = RuntimeType("json_ser", null, "crate")
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val codegenScope =
@@ -336,12 +336,12 @@ class RestJson1HttpSerializerGenerator(
 }
 
 class RestJson1HttpDeserializerGenerator(
-    private val protocolConfig: ProtocolConfig,
+    private val codegenContext: CodegenContext,
     private val httpBindingResolver: HttpTraitHttpBindingResolver,
-) : ServerGenerator(protocolConfig, httpBindingResolver) {
+) : ServerGenerator(codegenContext, httpBindingResolver) {
     override fun render(writer: RustWriter, operationShape: OperationShape) {
         RestJson1HttpRequestDeserializerGenerator(
-            protocolConfig,
+            codegenContext,
             httpBindingResolver,
             operationShape
         )
@@ -350,15 +350,15 @@ class RestJson1HttpDeserializerGenerator(
 }
 
 class RestJson1HttpRequestDeserializerGenerator(
-    private val protocolConfig: ProtocolConfig,
+    codegenContext: CodegenContext,
     private val httpBindingResolver: HttpTraitHttpBindingResolver,
     private val operationShape: OperationShape,
-) : ServerGenerator(protocolConfig, httpBindingResolver) {
+) : ServerGenerator(codegenContext, httpBindingResolver) {
     private val deserFnName = "deser_${operationShape.id.name.toSnakeCase()}_request"
     private val httpBindingGenerator =
         ResponseBindingGenerator(
-            RestJson(protocolConfig),
-            protocolConfig,
+            RestJson(codegenContext),
+            codegenContext,
             operationShape,
         )
     private val httpTrait = httpBindingResolver.httpTrait(operationShape)
