@@ -18,38 +18,8 @@ struct Opt {
     verbose: bool,
 }
 
-/// Lists your Amazon EC2 Auto Scaling groups in the Region.
-/// # Arguments
-///
-/// * `[-r REGION]` - The Region in which the client is created.
-///    If not supplied, uses the value of the **AWS_REGION** environment variable.
-///    If the environment variable is not set, defaults to **us-west-2**.
-/// * `[-v]` - Whether to display additional information.
-#[tokio::main]
-async fn main() -> Result<(), Error> {
-    tracing_subscriber::fmt::init();
-
-    let Opt { region, verbose } = Opt::from_args();
-
-    let region_provider = RegionProviderChain::first_try(region.map(Region::new))
-        .or_default_provider()
-        .or_else(Region::new("us-west-2"));
-
-    println!();
-
-    if verbose {
-        println!("Auto Scaling client version: {}", PKG_VERSION);
-        println!(
-            "Region:                      {}",
-            region_provider.region().await.unwrap().as_ref()
-        );
-
-        println!();
-    }
-
-    let shared_config = aws_config::from_env().region(region_provider).load().await;
-    let client = Client::new(&shared_config);
-
+// Lists your groups.
+async fn list_groups(client: &Client) -> Result<(), Error> {
     let resp = client.describe_auto_scaling_groups().send().await?;
 
     println!("Groups:");
@@ -71,5 +41,40 @@ async fn main() -> Result<(), Error> {
     }
 
     println!("Found {} group(s)", groups.len());
+
     Ok(())
+}
+
+/// Lists your Amazon EC2 Auto Scaling groups in the Region.
+/// # Arguments
+///
+/// * `[-r REGION]` - The Region in which the client is created.
+///    If not supplied, uses the value of the **AWS_REGION** environment variable.
+///    If the environment variable is not set, defaults to **us-west-2**.
+/// * `[-v]` - Whether to display additional information.
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    tracing_subscriber::fmt::init();
+
+    let Opt { region, verbose } = Opt::from_args();
+
+    let region_provider = RegionProviderChain::first_try(region.map(Region::new))
+        .or_default_provider()
+        .or_else(Region::new("us-west-2"));
+    println!();
+
+    if verbose {
+        println!("Auto Scaling client version: {}", PKG_VERSION);
+        println!(
+            "Region:                      {}",
+            region_provider.region().await.unwrap().as_ref()
+        );
+
+        println!();
+    }
+
+    let shared_config = aws_config::from_env().region(region_provider).load().await;
+    let client = Client::new(&shared_config);
+
+    list_groups(&client).await
 }
