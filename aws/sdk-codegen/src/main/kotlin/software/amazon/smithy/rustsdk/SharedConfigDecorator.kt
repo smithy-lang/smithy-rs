@@ -5,11 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.rustlang.*
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -46,7 +42,7 @@ class SharedConfigDecorator : RustCodegenDecorator {
                     fn from(input: &#{Config}) -> Self {
                         let mut builder = Builder::default();
                         builder = builder.region(input.region().cloned());
-                        builder = builder.retry_config(input.retry_config().cloned());
+                        builder.set_retry_config(input.retry_config().cloned());
                         builder.set_credentials_provider(input.credentials_provider().cloned());
                         builder
                     }

@@ -24,50 +24,48 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfi
 pub struct Config {
     pub(crate) retry_config: Option<smithy_types::retry::RetryConfig>,
 }
-
 impl std::fmt::Debug for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut config = f.debug_struct("Config");
         config.finish()
     }
 }
-
 impl Config {
     pub fn builder() -> Builder {
         Builder::default()
     }
 }
-
 #[derive(Default)]
 pub struct Builder {
     retry_config: Option<smithy_types::retry::RetryConfig>,
 }
-
 impl Builder {
     pub fn new() -> Self {
         Self::default()
     }
-
-    pub fn retry_config(
-        mut self,
-        retry_config: impl Into<Option<smithy_types::retry::RetryConfig>>,
-    ) -> Self {
-        self.retry_config = retry_config.into();
+    pub fn retry_config(mut self, retry_config: smithy_types::retry::RetryConfig) -> Self {
+        self.set_retry_config(Some(retry_config));
         self
     }
-
+    pub fn set_retry_config(
+        &mut self,
+        retry_config: Option<smithy_types::retry::RetryConfig>,
+    ) -> &mut Self {
+        self.retry_config = retry_config;
+        self
+    }
     pub fn build(self) -> Config {
         Config {
             retry_config: self.retry_config,
         }
     }
 }
-
 #[test]
 fn test_1() {
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<Config>();
 }
+
  */
 
 class RetryConfigDecorator : RustCodegenDecorator {
@@ -109,8 +107,13 @@ class RetryConfigProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizat
             ServiceConfig.BuilderImpl ->
                 rustTemplate(
                     """
-            pub fn retry_config(mut self, retry_config: impl Into<Option<#{RetryConfig}>>) -> Self {
-                self.retry_config = retry_config.into();
+            pub fn retry_config(mut self, retry_config: #{RetryConfig}) -> Self {
+                self.set_retry_config(Some(retry_config));
+                self
+            }
+        
+            pub fn set_retry_config(&mut self, retry_config: Option<#{RetryConfig}>) -> &mut Self {
+                self.retry_config = retry_config;
                 self
             }
             """,
