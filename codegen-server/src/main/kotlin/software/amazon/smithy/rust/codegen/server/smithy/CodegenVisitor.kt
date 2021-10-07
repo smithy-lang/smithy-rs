@@ -9,11 +9,15 @@ import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeVisitor
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -30,7 +34,9 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.letIf
@@ -49,6 +55,7 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormaliz
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.util.CommandFailed
+import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -74,6 +81,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private val httpSerializerGenerator: ServerGenerator
     private val httpDeserializerGenerator: ServerGenerator
     private val httpBindingResolver: HttpBindingResolver
+    private val renderedStructures = mutableSetOf<StructureShape>()
 
     init {
         val symbolVisitorConfig =
@@ -164,6 +172,18 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         logger.info("[rust-server-codegen] Rust server generation complete!")
     }
 
+    private fun renderStructure(
+        writer: RustWriter,
+        structureShape: StructureShape,
+        includedMembers: List<MemberShape>,
+    ) {
+        // TODO: review this deduplication mechanism as it doesn't feel very ergonomic
+        if (renderedStructures.add(structureShape)) {
+            serializerGenerator.renderStructure(writer, structureShape, includedMembers)
+            deserializerGenerator.renderStructure(writer, structureShape, includedMembers)
+        }
+    }
+
     override fun getDefault(shape: Shape?) {}
 
     override fun operationShape(shape: OperationShape?) {
@@ -177,14 +197,11 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                 shape.let {
                     httpDeserializerGenerator.render(writer, it)
                     httpSerializerGenerator.render(writer, it)
-                    serializerGenerator.renderStructure(writer, shape.inputShape(model), inputHttpDocumentMembers)
-                    serializerGenerator.renderStructure(writer, shape.outputShape(model), outputHttpDocumentMembers)
-                    deserializerGenerator.renderStructure(writer, shape.inputShape(model), inputHttpDocumentMembers)
-                    deserializerGenerator.renderStructure(writer, shape.outputShape(model), outputHttpDocumentMembers)
+                    renderStructure(writer, shape.inputShape(model), inputHttpDocumentMembers)
+                    renderStructure(writer, shape.outputShape(model), outputHttpDocumentMembers)
                     shape.errors.forEach { error ->
                         val errorShape = model.expectShape(error, StructureShape::class.java)
-                        serializerGenerator.renderStructure(writer, errorShape, errorShape.members().toList())
-                        deserializerGenerator.renderStructure(writer, errorShape, errorShape.members().toList())
+                        renderStructure(writer, errorShape, errorShape.members().toList())
                     }
                 }
             }
@@ -203,6 +220,20 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                     builderGenerator.renderConvenienceMethod(this)
                 }
             }
+        }
+    }
+
+    override fun stringShape(shape: StringShape) {
+        shape.getTrait<EnumTrait>()?.also { enum ->
+            rustCrate.useShapeWriter(shape) { writer ->
+                EnumGenerator(model, symbolProvider, writer, shape, enum).render()
+            }
+        }
+    }
+
+    override fun unionShape(shape: UnionShape) {
+        rustCrate.useShapeWriter(shape) {
+            UnionGenerator(model, symbolProvider, it, shape).render()
         }
     }
 
