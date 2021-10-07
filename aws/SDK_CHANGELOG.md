@@ -13,6 +13,8 @@ vNext (Month Day, Year)
 - :tada: Add presigned request support and example for Polly SynthesizeSpeech (smithy-rs#735, aws-sdk-rust#139)
 - :bug: Fix error when receiving `Cont` event from S3 SelectObjectContent (smithy-rs#736)
 - :bug: Fix bug in event stream receiver that could cause the last events in the response stream to be lost when using S3 SelectObjectContent (smithy-rs#736)
+- Updated Transcribe code example to take an audio file as a command-line option and added readme.
+- Refactored API Gateway code example by moving operation out of main and into a separate function; added readme.
 - Updated Auto Scaling code example to move operation from main to separate function; added readme.
 
 v0.0.19-alpha (September 24th, 2021)
