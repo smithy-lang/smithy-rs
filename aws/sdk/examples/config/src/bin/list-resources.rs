@@ -14,66 +14,61 @@ struct Opt {
     #[structopt(short, long)]
     region: Option<String>,
 
-    /// The resource id.
-    #[structopt(long)]
-    resource_id: String,
-
-    /// The resource type, eg. "AWS::EC2::SecurityGroup"
-    #[structopt(long)]
-    resource_type: String,
-
     /// Whether to display additional information.
     #[structopt(short, long)]
     verbose: bool,
 }
 
-// Retrieves the configuration history for a resource.
-async fn get_history(
+// Lists your resources.
+async fn show_resources(
+    verbose: bool,
     client: &aws_sdk_config::Client,
-    id: &str,
-    res: ResourceType,
 ) -> Result<(), aws_sdk_config::Error> {
-    let rsp = client
-        .get_resource_config_history()
-        .resource_id(id)
-        .resource_type(res)
-        .send()
-        .await?;
+    for value in ResourceType::values() {
+        let parsed = ResourceType::from(*value);
 
-    println!("configuration history for {}:", id);
+        let resp = client
+            .list_discovered_resources()
+            .resource_type(parsed)
+            .send()
+            .await?;
 
-    for item in rsp.configuration_items.unwrap_or_default() {
-        println!("item: {:?}", item);
+        let resources = resp.resource_identifiers.unwrap_or_default();
+
+        if !resources.is_empty() || verbose {
+            println!();
+            println!("Resources of type {}:", value);
+        }
+
+        for resource in resources {
+            println!(
+                "  Resource ID: {}",
+                resource.resource_id.as_deref().unwrap_or_default()
+            );
+        }
     }
+
+    println!();
 
     Ok(())
 }
 
-/// Lists the configuration history for a resource in the Region.
+/// Lists your AWS Config resources, by resource type, in the Region.
 ///
-/// NOTE: AWS Config must be enabled to discover resources
 /// # Arguments
 ///
-/// * `-resource_id RESOURCE-ID` - The ID of the resource.
-/// * `-resource_type RESOURCE-TYPE` - The type of resource, such as **AWS::EC2::SecurityGroup**.
-/// * `[-r REGION]` - The AWS Region in which the client is created.
+/// * `[-r REGION]` - The Region in which the client is created.
 ///   If not supplied, uses the value of the **AWS_REGION** environment variable.
 ///   If the environment variable is not set, defaults to **us-west-2**.
 /// * `[-v]` - Whether to display information.
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
-    let Opt {
-        region,
-        resource_id,
-        resource_type,
-        verbose,
-    } = Opt::from_args();
+    let Opt { region, verbose } = Opt::from_args();
 
     let region_provider = RegionProviderChain::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
-
     println!();
 
     if verbose {
@@ -82,21 +77,16 @@ async fn main() -> Result<(), Error> {
             "Region:                {}",
             region_provider.region().await.unwrap().as_ref()
         );
+
         println!();
     }
 
     let shared_config = aws_config::from_env().region(region_provider).load().await;
     let client = Client::new(&shared_config);
 
-    // parse resource type from user input
-    let parsed = ResourceType::from(resource_type.as_str());
-    if matches!(parsed, ResourceType::Unknown(_)) {
-        panic!(
-            "unknown resource type: `{}`. Valid resource types: {:#?}",
-            &resource_type,
-            ResourceType::values()
-        )
+    if !verbose {
+        println!("You won't see any output if you don't have any resources defined in the region.");
     }
 
-    get_history(&client, &resource_id, parsed).await
+    show_resources(verbose, &client).await
 }

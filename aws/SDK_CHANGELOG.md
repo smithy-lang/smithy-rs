@@ -17,6 +17,7 @@ vNext (Month Day, Year)
 - Updated Transcribe code example to take an audio file as a command-line option and added readme.
 - Refactored API Gateway code example by moving operation out of main and into a separate function; added readme.
 - Updated Auto Scaling code example to move operation from main to separate function; added readme.
+- Updated AWS Config code examples to include a readme; added command-line options; added DeleteConfigurationRecorder, DeleteDeliveryChannel, ListConfigurationRecorders, ListDeliveryChannels, ListResources, ShowResourceHistory, and EnableConfig code examples.
 - :tada: Add support for 6 new AWS services:
     - Wisdom
     - VoiceId

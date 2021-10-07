@@ -4,7 +4,6 @@
  */
 
 use aws_config::meta::region::RegionProviderChain;
-use aws_sdk_config::model::ResourceType;
 use aws_sdk_config::{Client, Error, Region, PKG_VERSION};
 use structopt::StructOpt;
 
@@ -14,49 +13,37 @@ struct Opt {
     #[structopt(short, long)]
     region: Option<String>,
 
-    /// The resource id.
-    #[structopt(long)]
-    resource_id: String,
-
-    /// The resource type, eg. "AWS::EC2::SecurityGroup"
-    #[structopt(long)]
-    resource_type: String,
+    /// The channel to delete.
+    #[structopt(short, long)]
+    channel: String,
 
     /// Whether to display additional information.
     #[structopt(short, long)]
     verbose: bool,
 }
 
-// Retrieves the configuration history for a resource.
-async fn get_history(
+// Deletes a channel.
+async fn delete_channel(
     client: &aws_sdk_config::Client,
-    id: &str,
-    res: ResourceType,
+    channel: &str,
 ) -> Result<(), aws_sdk_config::Error> {
-    let rsp = client
-        .get_resource_config_history()
-        .resource_id(id)
-        .resource_type(res)
+    client
+        .delete_delivery_channel()
+        .delivery_channel_name(channel)
         .send()
         .await?;
 
-    println!("configuration history for {}:", id);
-
-    for item in rsp.configuration_items.unwrap_or_default() {
-        println!("item: {:?}", item);
-    }
+    println!("Done");
 
     Ok(())
 }
 
-/// Lists the configuration history for a resource in the Region.
+/// Deletes an AWS Config delivery channel.
 ///
-/// NOTE: AWS Config must be enabled to discover resources
 /// # Arguments
 ///
-/// * `-resource_id RESOURCE-ID` - The ID of the resource.
-/// * `-resource_type RESOURCE-TYPE` - The type of resource, such as **AWS::EC2::SecurityGroup**.
-/// * `[-r REGION]` - The AWS Region in which the client is created.
+/// * `-c CHANNEL` - The name of the channel to delete.
+/// * `[-r REGION]` - The Region in which the client is created.
 ///   If not supplied, uses the value of the **AWS_REGION** environment variable.
 ///   If the environment variable is not set, defaults to **us-west-2**.
 /// * `[-v]` - Whether to display information.
@@ -64,16 +51,14 @@ async fn get_history(
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
     let Opt {
+        channel,
         region,
-        resource_id,
-        resource_type,
         verbose,
     } = Opt::from_args();
 
     let region_provider = RegionProviderChain::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
-
     println!();
 
     if verbose {
@@ -82,21 +67,13 @@ async fn main() -> Result<(), Error> {
             "Region:                {}",
             region_provider.region().await.unwrap().as_ref()
         );
+        println!("Delivery channel:      {}", channel);
+
         println!();
     }
 
     let shared_config = aws_config::from_env().region(region_provider).load().await;
     let client = Client::new(&shared_config);
 
-    // parse resource type from user input
-    let parsed = ResourceType::from(resource_type.as_str());
-    if matches!(parsed, ResourceType::Unknown(_)) {
-        panic!(
-            "unknown resource type: `{}`. Valid resource types: {:#?}",
-            &resource_type,
-            ResourceType::values()
-        )
-    }
-
-    get_history(&client, &resource_id, parsed).await
+    delete_channel(&client, &channel).await
 }
