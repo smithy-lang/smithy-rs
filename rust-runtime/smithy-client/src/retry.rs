@@ -151,10 +151,20 @@ impl Default for Standard {
     }
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 struct RequestLocalRetryState {
     attempts: u32,
     last_quota_usage: Option<usize>,
+}
+
+impl Default for RequestLocalRetryState {
+    fn default() -> Self {
+        Self {
+            // Starts at one to account for the initial request that failed and warranted a retry
+            attempts: 1,
+            last_quota_usage: None,
+        }
+    }
 }
 
 impl RequestLocalRetryState {
@@ -256,7 +266,9 @@ impl RetryHandler {
          */
         let r: i32 = 2;
         let b = (self.config.base)();
-        let backoff = b * (r.pow(self.local.attempts) as f64);
+        // `self.local.attempts` tracks number of requests made including the initial request
+        // The initial attempt shouldn't count towards backoff calculations so we subtract it
+        let backoff = b * (r.pow(self.local.attempts - 1) as f64);
         let backoff = Duration::from_secs_f64(backoff).min(self.config.max_backoff);
         let next = RetryHandler {
             local: RequestLocalRetryState {
@@ -363,15 +375,9 @@ mod test {
         assert_eq!(dur, Duration::from_secs(2));
         assert_eq!(policy.retry_quota(), 490);
 
-        let (policy, dur) = policy
-            .attempt_retry(Err(ErrorKind::ServerError))
-            .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(4));
-        assert_eq!(policy.retry_quota(), 485);
-
         let no_retry = policy.attempt_retry(Err(ErrorKind::ServerError));
         assert!(no_retry.is_none());
-        assert_eq!(policy.retry_quota(), 485);
+        assert_eq!(policy.retry_quota(), 490);
     }
 
     #[test]
@@ -392,7 +398,7 @@ mod test {
     #[test]
     fn backoff_timing() {
         let mut conf = test_config();
-        conf.max_attempts = 4;
+        conf.max_attempts = 5;
         let policy = Standard::new(conf).new_request_policy();
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
@@ -426,7 +432,7 @@ mod test {
     #[test]
     fn max_backoff_time() {
         let mut conf = test_config();
-        conf.max_attempts = 4;
+        conf.max_attempts = 5;
         conf.max_backoff = Duration::from_secs(3);
         let policy = Standard::new(conf).new_request_policy();
         let (policy, dur) = policy
