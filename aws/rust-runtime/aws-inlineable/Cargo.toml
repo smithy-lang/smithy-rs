@@ -16,5 +16,4 @@ aws-types = { path = "../../rust-runtime/aws-types" }
 http = "0.2.4"
 smithy-http = { path = "../../../rust-runtime/smithy-http" }
 smithy-types = { path = "../../../rust-runtime/smithy-types" }
-smithy-xml = { path = "../../../rust-runtime/smithy-xml" }
 tower = { version = "0.4", no-default-features = true }

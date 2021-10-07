@@ -14,7 +14,6 @@ default = []
 [dependencies]
 http = "0.2.2"
 aws-sigv4 = { path = "../aws-sigv4" }
-aws-auth = { path = "../aws-auth" }
 aws-types = { path = "../aws-types" }
 smithy-http = { path = "../../../rust-runtime/smithy-http" }
 smithy-eventstream = { path = "../../../rust-runtime/smithy-eventstream", optional = true }

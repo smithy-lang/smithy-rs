@@ -15,9 +15,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 "bytes" = "1"
 "http" = "0.2.1"
 "smithy-types" = { path = "../smithy-types" }
-"smithy-http" = { path = "../smithy-http" }
 "smithy-json" = { path = "../smithy-json" }
-"smithy-query" = { path = "../smithy-query" }
 "smithy-xml" = { path = "../smithy-xml" }
 "fastrand" = "1"
 
