@@ -110,7 +110,7 @@ impl FromStr for RetryMode {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RetryConfig {
     mode: RetryMode,
     max_attempts: u32,

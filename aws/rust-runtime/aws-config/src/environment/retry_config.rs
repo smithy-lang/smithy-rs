@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use std::str::FromStr;
+
 use aws_types::os_shim_internal::Env;
 use smithy_types::retry::{RetryConfig, RetryMode};
-use std::str::FromStr;
 
 const ENV_VAR_MAX_ATTEMPTS: &str = "AWS_MAX_ATTEMPTS";
 const ENV_VAR_RETRY_MODE: &str = "AWS_RETRY_MODE";
@@ -74,10 +75,10 @@ impl EnvironmentVariableRetryConfigProvider {
 
 #[cfg(test)]
 mod test {
-    use super::{EnvironmentVariableRetryConfigProvider, ENV_VAR_MAX_ATTEMPTS, ENV_VAR_RETRY_MODE};
     use aws_types::os_shim_internal::Env;
-    use futures_util::FutureExt;
     use smithy_types::retry::{RetryConfig, RetryMode};
+
+    use super::{EnvironmentVariableRetryConfigProvider, ENV_VAR_MAX_ATTEMPTS, ENV_VAR_RETRY_MODE};
 
     fn test_provider(vars: &[(&str, &str)]) -> EnvironmentVariableRetryConfigProvider {
         EnvironmentVariableRetryConfigProvider::new_with_env(Env::from_slice(vars))
@@ -97,6 +98,14 @@ mod test {
     }
 
     #[test]
+    fn max_attempts_is_ignored_when_it_cant_be_parsed_as_an_integer() {
+        assert_eq!(
+            test_provider(&[(ENV_VAR_MAX_ATTEMPTS, "not an integer")]).retry_config(),
+            None
+        );
+    }
+
+    #[test]
     fn retry_mode_is_read_correctly() {
         assert_eq!(
             test_provider(&[(ENV_VAR_RETRY_MODE, "standard")]).retry_config(),
@@ -108,15 +117,27 @@ mod test {
     fn both_fields_can_be_set_at_once() {
         assert_eq!(
             test_provider(&[
-                (ENV_VAR_RETRY_MODE, "adaptive"),
+                (ENV_VAR_RETRY_MODE, "standard"),
                 (ENV_VAR_MAX_ATTEMPTS, "13")
             ])
             .retry_config(),
             Some(
                 RetryConfig::new()
                     .with_max_attempts(13)
-                    .with_retry_mode(RetryMode::Adaptive)
+                    .with_retry_mode(RetryMode::Standard)
             )
         );
+    }
+
+    #[test]
+    #[should_panic = "It is invalid to set AWS_MAX_ATTEMPTS to 0. Unset it or set it to an integer greater than or equal to one."]
+    fn disallow_zero_max_attempts() {
+        let _ = test_provider(&[(ENV_VAR_MAX_ATTEMPTS, "0")]).retry_config();
+    }
+
+    #[test]
+    #[should_panic = "Setting AWS_RETRY_MODE to \"adaptive\" is not yet supported. Unset it or set it to a supported mode."]
+    fn disallow_setting_adaptive_mode() {
+        let _ = test_provider(&[(ENV_VAR_RETRY_MODE, "adaptive")]).retry_config();
     }
 }
