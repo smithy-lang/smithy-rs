@@ -9,6 +9,7 @@ import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
@@ -74,6 +75,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private val httpSerializerGenerator: ServerGenerator
     private val httpDeserializerGenerator: ServerGenerator
     private val httpBindingResolver: HttpBindingResolver
+    private val renderedStructures = mutableSetOf<StructureShape>()
 
     init {
         val symbolVisitorConfig =
@@ -165,6 +167,18 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         logger.info("[rust-server-codegen] Rust server generation complete!")
     }
 
+    private fun renderStructure(
+        writer: RustWriter,
+        structureShape: StructureShape,
+        includedMembers: List<MemberShape>,
+    ) {
+        // TODO: review this deduplication mechanism as it doesn't feel very ergonomic
+        if (renderedStructures.add(structureShape)) {
+            serializerGenerator.renderStructure(writer, structureShape, includedMembers)
+            deserializerGenerator.renderStructure(writer, structureShape, includedMembers)
+        }
+    }
+
     override fun getDefault(shape: Shape?) {}
 
     override fun operationShape(shape: OperationShape?) {
@@ -178,14 +192,11 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                 shape.let {
                     httpDeserializerGenerator.render(writer, it)
                     httpSerializerGenerator.render(writer, it)
-                    serializerGenerator.renderStructure(writer, shape.inputShape(model), inputHttpDocumentMembers)
-                    serializerGenerator.renderStructure(writer, shape.outputShape(model), outputHttpDocumentMembers)
-                    deserializerGenerator.renderStructure(writer, shape.inputShape(model), inputHttpDocumentMembers)
-                    deserializerGenerator.renderStructure(writer, shape.outputShape(model), outputHttpDocumentMembers)
+                    renderStructure(writer, shape.inputShape(model), inputHttpDocumentMembers)
+                    renderStructure(writer, shape.outputShape(model), outputHttpDocumentMembers)
                     shape.errors.forEach { error ->
                         val errorShape = model.expectShape(error, StructureShape::class.java)
-                        serializerGenerator.renderStructure(writer, errorShape, errorShape.members().toList())
-                        deserializerGenerator.renderStructure(writer, errorShape, errorShape.members().toList())
+                        renderStructure(writer, errorShape, errorShape.members().toList())
                     }
                 }
             }
