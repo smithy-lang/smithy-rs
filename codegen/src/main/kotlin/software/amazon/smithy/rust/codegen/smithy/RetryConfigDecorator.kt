@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 
@@ -73,14 +72,14 @@ class RetryConfigDecorator : RustCodegenDecorator {
     override val order: Byte = 0
 
     override fun configCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + RetryConfigProviderConfig(protocolConfig.runtimeConfig)
+        return baseCustomizations + RetryConfigProviderConfig(codegenContext.runtimeConfig)
     }
 
     override fun operationCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
@@ -88,10 +87,10 @@ class RetryConfigDecorator : RustCodegenDecorator {
     }
 
     override fun libRsCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
-        return baseCustomizations + PubUseRetryConfig(protocolConfig.runtimeConfig)
+        return baseCustomizations + PubUseRetryConfig(codegenContext.runtimeConfig)
     }
 }
 
