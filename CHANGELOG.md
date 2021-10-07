@@ -2,9 +2,13 @@ vNext (Month Day, Year)
 =======================
 **Breaking changes**
 - :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
+- :warning: `smithy_client::retry::Config` field `max_retries` is renamed to `max_attempts`
+- :warning: `smithy_client::retry::Config::with_max_retries` method is renamed to `with_max_attempts`
 
 **New this week**
+
 - :bug: Fix an issue where `smithy-xml` may have generated invalid XML (smithy-rs#719)
+- Add `RetryConfig` struct for configuring retry behavior
 
 v0.24 (September 24th, 2021)
 ============================

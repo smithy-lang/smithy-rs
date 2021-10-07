@@ -1,13 +1,24 @@
 vNext (Month Day, Year)
 =======================
 **Breaking changes**
+
 - :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
 
 **Tasks to cut release**
+
 - [ ] Bump MSRV on aws-sdk-rust, then delete this line.
 
 **New This Week**
 
+- :tada: Make retry behavior configurable
+    - With env vars `AWS_MAX_ATTEMPTS` and `AWS_RETRY_MODE`
+    - With `~/.aws/config` settings `max_attempts` and `retry_mode`
+    - By calling the `with_retry_config` method on a `Config` and passing in a `RetryConfig`
+    - For more info, see the AWS Reference pages on configuring these settings:
+        - [Setting global max attempts](https://docs.aws.amazon.com/sdkref/latest/guide/setting-global-max_attempts.html)
+        - [Setting global retry mode](https://docs.aws.amazon.com/sdkref/latest/guide/setting-global-retry_mode.html)
+- Add `RetryConfigDecorator` and update `AwsCodegenDecorator` to include it
+- Update `AwsFluentClientDecorator` and `SharedConfigDecorator` to support retry behavior configuration
 - :tada: Add presigned request support and examples for S3 GetObject and PutObject (smithy-rs#731)
 - Updated Transcribe code example to take an audio file as a command-line option and added readme.
 
