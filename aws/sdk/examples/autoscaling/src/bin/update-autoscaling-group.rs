@@ -27,11 +27,7 @@ struct Opt {
 }
 
 // Updates the size of a group.
-async fn update_group(
-    client: &aws_sdk_autoscaling::Client,
-    name: &str,
-    size: i32,
-) -> Result<(), aws_sdk_autoscaling::Error> {
+async fn update_group(client: &Client, name: &str, size: i32) -> Result<(), Error> {
     client
         .update_auto_scaling_group()
         .auto_scaling_group_name(name)
@@ -83,6 +79,5 @@ async fn main() -> Result<(), Error> {
     let shared_config = aws_config::from_env().region(region_provider).load().await;
     let client = Client::new(&shared_config);
 
-    update_group(&client, &autoscaling_name, max_size)
-        .await
+    update_group(&client, &autoscaling_name, max_size).await
 }

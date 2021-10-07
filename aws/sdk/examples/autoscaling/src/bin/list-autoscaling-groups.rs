@@ -19,9 +19,7 @@ struct Opt {
 }
 
 // Lists your groups.
-async fn list_groups(
-    client: &aws_sdk_autoscaling::Client,
-) -> Result<(), aws_sdk_autoscaling::Error> {
+async fn list_groups(client: &Client) -> Result<(), Error> {
     let resp = client.describe_auto_scaling_groups().send().await?;
 
     println!("Groups:");

@@ -27,11 +27,7 @@ struct Opt {
 }
 
 // Creates a group.
-async fn create_group(
-    client: &aws_sdk_autoscaling::Client,
-    name: &str,
-    id: &str,
-) -> Result<(), aws_sdk_autoscaling::Error> {
+async fn create_group(client: &Client, name: &str, id: &str) -> Result<(), Error> {
     client
         .create_auto_scaling_group()
         .auto_scaling_group_name(name)
@@ -86,6 +82,5 @@ async fn main() -> Result<(), Error> {
     let shared_config = aws_config::from_env().region(region_provider).load().await;
     let client = Client::new(&shared_config);
 
-    create_group(&client, &autoscaling_name, &instance_id)
-        .await
+    create_group(&client, &autoscaling_name, &instance_id).await
 }
