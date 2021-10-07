@@ -26,6 +26,9 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider) : Wra
             "build" -> "build_value"
             "default" -> "default_value"
             "send" -> "send_value"
+            // To avoid conflicts with the `make_operation` and `presigned` functions on generated inputs
+            "make_operation" -> "make_operation_value"
+            "presigned" -> "presigned_value"
             else -> baseName
         }
     }

@@ -193,6 +193,7 @@ data class CargoDependency(
         val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14"))
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
         val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"), optional = true)
+        val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
         fun SmithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("types")
 
         fun SmithyClient(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("client")

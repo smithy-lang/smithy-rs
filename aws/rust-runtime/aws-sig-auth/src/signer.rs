@@ -188,25 +188,20 @@ impl SigV4Signer {
         let signing_params = Self::signing_params(settings, credentials, request_config);
 
         let (signing_instructions, signature) = {
-            // A body that is already in memory can be signed directly. A  body that is not in memory
+            // A body that is already in memory can be signed directly. A body that is not in memory
             // (any sort of streaming body or presigned request) will be signed via UNSIGNED-PAYLOAD.
-            let signable_body =
-                if operation_config.signature_type == HttpSignatureType::HttpRequestQueryParams {
-                    SignableBody::UnsignedPayload
-                } else {
-                    request_config
-                        .payload_override
-                        // the payload_override is a cheap clone because it contains either a
-                        // reference or a short checksum (we're not cloning the entire body)
-                        .cloned()
-                        .unwrap_or_else(|| {
-                            request
-                                .body()
-                                .bytes()
-                                .map(SignableBody::Bytes)
-                                .unwrap_or(SignableBody::UnsignedPayload)
-                        })
-                };
+            let signable_body = request_config
+                .payload_override
+                // the payload_override is a cheap clone because it contains either a
+                // reference or a short checksum (we're not cloning the entire body)
+                .cloned()
+                .unwrap_or_else(|| {
+                    request
+                        .body()
+                        .bytes()
+                        .map(SignableBody::Bytes)
+                        .unwrap_or(SignableBody::UnsignedPayload)
+                });
 
             let signable_request = SignableRequest::new(
                 request.method(),

@@ -31,8 +31,8 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -47,13 +47,13 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class ResponseBindingGenerator(
     private val protocol: Protocol,
-    protocolConfig: ProtocolConfig,
+    codegenContext: CodegenContext,
     private val operationShape: OperationShape
 ) {
-    private val runtimeConfig = protocolConfig.runtimeConfig
-    private val symbolProvider = protocolConfig.symbolProvider
-    private val model = protocolConfig.model
-    private val service = protocolConfig.serviceShape
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val symbolProvider = codegenContext.symbolProvider
+    private val model = codegenContext.model
+    private val service = codegenContext.serviceShape
     private val index = HttpBindingIndex.of(model)
     private val headerUtil = CargoDependency.SmithyHttp(runtimeConfig).asType().member("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS

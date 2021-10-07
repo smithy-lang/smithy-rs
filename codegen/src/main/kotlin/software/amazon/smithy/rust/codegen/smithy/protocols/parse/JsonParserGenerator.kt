@@ -34,9 +34,9 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
@@ -52,12 +52,12 @@ import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.utils.StringUtils
 
 class JsonParserGenerator(
-    protocolConfig: ProtocolConfig,
+    codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
 ) : StructuredDataParserGenerator {
-    private val model = protocolConfig.model
-    private val symbolProvider = protocolConfig.symbolProvider
-    private val runtimeConfig = protocolConfig.runtimeConfig
+    private val model = codegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val jsonDeserModule = RustModule.private("json_deser")
     private val codegenScope = arrayOf(
@@ -195,6 +195,33 @@ class JsonParserGenerator(
             }
         """
         )
+    }
+
+    fun renderStructure(
+        writer: RustWriter,
+        structureShape: StructureShape,
+        includedMembers: List<MemberShape>,
+    ) {
+        val fnName = symbolProvider.deserializeFunctionName(structureShape)
+        val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
+        writer.write("")
+        writer.rustBlockTemplate(
+            "##[allow(dead_code)] pub fn $fnName(input: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
+            *codegenScope,
+            "Builder" to structureShape.builderSymbol(symbolProvider),
+        ) {
+            rustTemplate(
+                """
+                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
+                    let tokens = &mut tokens_owned;
+                    #{expect_start_object}(tokens.next())?;
+                """.trimIndent(),
+                *codegenScope
+            )
+            deserializeStructInner(includedMembers)
+            expectEndOfTokenStream()
+            rust("Ok(builder)")
+        }
     }
 
     private fun RustWriter.expectEndOfTokenStream() {

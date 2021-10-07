@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use autoscaling::{Client, Error, Region, PKG_VERSION};
 use aws_config::meta::region::RegionProviderChain;
+use aws_sdk_autoscaling::{Client, Error, Region, PKG_VERSION};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
-    /// The name of the AutoScaling group.
+    /// The name of the Amazon EC2 Auto Scaling group.
     #[structopt(short, long)]
     autoscaling_name: String,
 
@@ -26,10 +26,10 @@ struct Opt {
     verbose: bool,
 }
 
-/// Updates an AutoScaling group in the Region to the specified maximum size.
+/// Updates an Auto Scaling group in the Region to the specified maximum size.
 /// # Arguments
 ///
-/// * `- AUTOSCALING-NAME` - The name of the AutoScaling group.
+/// * `-a AUTOSCALING-NAME` - The name of the Auto Scaling group.
 /// * - [-f] - Whether to force the deletion.
 /// * `[-r REGION]` - The Region in which the client is created.
 ///    If not supplied, uses the value of the **AWS_REGION** environment variable.
@@ -49,21 +49,21 @@ async fn main() -> Result<(), Error> {
     let region_provider = RegionProviderChain::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
-    let shared_config = aws_config::from_env().region(region_provider).load().await;
 
     println!();
 
     if verbose {
-        println!("AutoScaling version:    {}", PKG_VERSION);
+        println!("Auto Scaling client version: {}", PKG_VERSION);
         println!(
-            "Region:                 {:?}",
-            shared_config.region().unwrap()
+            "Region:                      {}",
+            region_provider.region().await.unwrap().as_ref()
         );
-        println!("AutoScaling group name: {}", &autoscaling_name);
-        println!("Force deletion?:        {}", &force);
+        println!("Auto Scaling group name:     {}", &autoscaling_name);
+        println!("Force deletion?:             {}", &force);
         println!();
     }
 
+    let shared_config = aws_config::from_env().region(region_provider).load().await;
     let client = Client::new(&shared_config);
 
     client
@@ -73,6 +73,6 @@ async fn main() -> Result<(), Error> {
         .send()
         .await?;
 
-    println!("Deleted AutoScaling group");
+    println!("Deleted Auto Scaling group");
     Ok(())
 }
