@@ -1,5 +1,9 @@
 vNext (Month Day, Year)
 =======================
+...
+
+v0.25 (October 7th, 2021)
+=========================
 **Breaking changes**
 - :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
 - :warning: Several classes in the codegen module were renamed and/or refactored (smithy-rs#735):
@@ -13,6 +17,13 @@ vNext (Month Day, Year)
 - :bug: Fix an issue where `smithy-xml` may have generated invalid XML (smithy-rs#719)
 - :bug: Fix error when receiving empty event stream messages (smithy-rs#736)
 - :bug: Fix bug in event stream receiver that could cause the last events in the response stream to be lost (smithy-rs#736)
+
+
+**Contributors**
+
+Thank you for your contributions! :heart:
+* @obi1kenobi (smithy-rs#719)
+* @guyilin-amazon (smithy-rs#750)
 
 v0.24 (September 24th, 2021)
 ============================
