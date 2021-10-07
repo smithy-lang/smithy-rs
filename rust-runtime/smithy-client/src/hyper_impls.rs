@@ -88,9 +88,8 @@ fn to_client_error(err: hyper::Error) -> ClientError {
         ClientError::timeout(err.into())
     } else if err.is_user() {
         ClientError::user(err.into())
-    } else if err.is_closed() || err.is_canceled() {
-        ClientError::io(err.into())
-    } else if find_source::<std::io::Error>(&err).is_some() {
+    } else if err.is_closed() || err.is_canceled() || find_source::<std::io::Error>(&err).is_some()
+    {
         ClientError::io(err.into())
     } else {
         ClientError::other(err.into(), None)

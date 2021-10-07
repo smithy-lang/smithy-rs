@@ -66,7 +66,6 @@ mod tests {
     use smithy_http::result::ClientError;
     use std::convert::{Infallible, TryInto};
     use tower::{service_fn, Service, ServiceBuilder};
-    use tracing::Instrument;
 
     /// Creates a stubbed service stack and runs it to validate that all the types line up &
     /// everything is properly wired
