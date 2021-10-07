@@ -3,6 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#![warn(
+    missing_debug_implementations,
+    missing_docs,
+    rustdoc::all,
+    unreachable_pub
+)]
+
+//! `Result` wrapper types for [success](SdkSuccess) and [failure](SdkError) responses.
+
 use crate::operation;
 use smithy_types::retry::ErrorKind;
 use std::error::Error;
@@ -14,7 +23,10 @@ type BoxError = Box<dyn Error + Send + Sync>;
 /// Successful SDK Result
 #[derive(Debug)]
 pub struct SdkSuccess<O> {
+    /// Raw Response from the service. (eg. Http Response)
     pub raw: operation::Response,
+
+    /// Parse response from the service
     pub parsed: O,
 }
 
@@ -30,12 +42,27 @@ pub enum SdkError<E, R = operation::Response> {
 
     /// A response was received but it was not parseable according the the protocol (for example
     /// the server hung up while the body was being read)
-    ResponseError { err: BoxError, raw: R },
+    ResponseError {
+        /// Error encountered while parsing the response
+        err: BoxError,
+        /// Raw response that was available
+        raw: R,
+    },
 
     /// An error response was received from the service
-    ServiceError { err: E, raw: R },
+    ServiceError {
+        /// Modeled service error
+        err: E,
+        /// Raw response from the service
+        raw: R,
+    },
 }
 
+/// Error during request dispatch
+///
+/// ClientError exists to attach a `ClientErrorKind` to what would otherwise be an opaque `Box<dyn Error>`.
+/// The attached `kind` is used to determine what retry behavior should occur (if any) based on the
+/// client error.
 #[derive(Debug)]
 pub struct ClientError {
     err: BoxError,
@@ -55,6 +82,9 @@ impl Error for ClientError {
 }
 
 impl ClientError {
+    /// Construct a [`ClientError`] from an error caused by a timeout
+    ///
+    /// Timeout errors are typically retried on a new connection.
     pub fn timeout(err: BoxError) -> Self {
         Self {
             err,
@@ -62,6 +92,7 @@ impl ClientError {
         }
     }
 
+    /// Construct a [`ClientError`] from an error caused by the user (eg. invalid HTTP request)
     pub fn user(err: BoxError) -> Self {
         Self {
             err,
@@ -69,6 +100,7 @@ impl ClientError {
         }
     }
 
+    /// Construct a [`ClientError`] from an IO related error (eg. socket hangup)
     pub fn io(err: BoxError) -> Self {
         Self {
             err,
@@ -76,6 +108,9 @@ impl ClientError {
         }
     }
 
+    /// Construct a [`ClientError`] from an different unclassified error.
+    ///
+    /// Optionally, an explicit `Kind` may be passed.
     pub fn other(err: BoxError, kind: Option<ErrorKind>) -> Self {
         Self {
             err,
@@ -83,18 +118,22 @@ impl ClientError {
         }
     }
 
+    /// Returns true if the error is an IO error
     pub fn is_io(&self) -> bool {
         matches!(self.kind, ClientErrorKind::Io)
     }
 
+    /// Returns true if the error is an timeout error
     pub fn is_timeout(&self) -> bool {
         matches!(self.kind, ClientErrorKind::Timeout)
     }
 
+    /// Returns true if the error is a user error
     pub fn is_user(&self) -> bool {
         matches!(self.kind, ClientErrorKind::User)
     }
 
+    /// Returns the optional error kind associated with an unclassified error
     pub fn is_other(&self) -> Option<ErrorKind> {
         match &self.kind {
             ClientErrorKind::Other(ek) => *ek,
@@ -114,6 +153,7 @@ enum ClientErrorKind {
     /// Socket/IO error
     Io,
 
+    /// An unclassified Error with an explicit error kind
     Other(Option<ErrorKind>),
 }
 
