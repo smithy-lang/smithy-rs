@@ -14,23 +14,21 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.RestXmlParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.XmlBindingTraitSerializerGenerator
 import software.amazon.smithy.rust.codegen.util.expectTrait
 
-class RestXmlFactory(private val generator: (ProtocolConfig) -> Protocol = { RestXml(it) }) :
+class RestXmlFactory(private val generator: (CodegenContext) -> Protocol = { RestXml(it) }) :
     ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
-    override fun buildProtocolGenerator(
-        protocolConfig: ProtocolConfig
-    ): HttpBoundProtocolGenerator {
-        return HttpBoundProtocolGenerator(protocolConfig, generator(protocolConfig))
-    }
+    override fun protocol(codegenContext: CodegenContext): Protocol = generator(codegenContext)
+
+    override fun buildProtocolGenerator(codegenContext: CodegenContext): HttpBoundProtocolGenerator =
+        HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
 
     override fun transformModel(model: Model): Model = model
 
@@ -44,9 +42,9 @@ class RestXmlFactory(private val generator: (ProtocolConfig) -> Protocol = { Res
     }
 }
 
-open class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
-    private val restXml = protocolConfig.serviceShape.expectTrait<RestXmlTrait>()
-    private val runtimeConfig = protocolConfig.runtimeConfig
+open class RestXml(private val codegenContext: CodegenContext) : Protocol {
+    private val restXml = codegenContext.serviceShape.expectTrait<RestXmlTrait>()
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "Error" to RuntimeType.GenericError(runtimeConfig),
@@ -62,17 +60,17 @@ open class RestXml(private val protocolConfig: ProtocolConfig) : Protocol {
     }
 
     override val httpBindingResolver: HttpBindingResolver =
-        HttpTraitHttpBindingResolver(protocolConfig.model, ProtocolContentTypes.consistent("application/xml"))
+        HttpTraitHttpBindingResolver(codegenContext.model, ProtocolContentTypes.consistent("application/xml"))
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format =
         TimestampFormatTrait.Format.DATE_TIME
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return RestXmlParserGenerator(protocolConfig, restXmlErrors)
+        return RestXmlParserGenerator(codegenContext, restXmlErrors)
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator {
-        return XmlBindingTraitSerializerGenerator(protocolConfig, httpBindingResolver)
+        return XmlBindingTraitSerializerGenerator(codegenContext, httpBindingResolver)
     }
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =

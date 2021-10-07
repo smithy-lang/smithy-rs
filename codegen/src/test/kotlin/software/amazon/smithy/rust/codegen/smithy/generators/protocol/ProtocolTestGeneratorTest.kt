@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.generators
+package software.amazon.smithy.rust.codegen.smithy.generators.protocol
 
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
@@ -12,25 +12,118 @@ import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolBodyGenerator.BodyMetadata
+import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
+import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.nio.file.Path
 
-class HttpProtocolTestGeneratorTest {
+private class TestProtocolBodyGenerator(private val body: String) : ProtocolBodyGenerator {
+    override fun bodyMetadata(operationShape: OperationShape): BodyMetadata =
+        BodyMetadata(takesOwnership = false)
+
+    override fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape) {
+        writer.writeWithNoFormatting(body)
+    }
+}
+
+private class TestProtocolTraitImplGenerator(
+    private val codegenContext: CodegenContext,
+    private val correctResponse: String
+) : ProtocolTraitImplGenerator {
+    private val symbolProvider = codegenContext.symbolProvider
+
+    override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
+        operationWriter.rustTemplate(
+            """
+                    impl #{parse_strict} for ${operationShape.id.name}{
+                        type Output = Result<#{output}, #{error}>;
+                        fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
+                            ${operationWriter.escape(correctResponse)}
+                        }
+                    }""",
+            "parse_strict" to RuntimeType.parseStrict(codegenContext.runtimeConfig),
+            "output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
+            "error" to operationShape.errorSymbol(symbolProvider),
+            "response" to RuntimeType.Http("Response"),
+            "bytes" to RuntimeType.Bytes
+        )
+    }
+}
+
+private class TestProtocolMakeOperationGenerator(
+    codegenContext: CodegenContext,
+    protocol: Protocol,
+    body: String,
+    private val httpRequestBuilder: String
+) : MakeOperationGenerator(codegenContext, protocol, TestProtocolBodyGenerator(body)) {
+    override fun generateRequestBuilderBaseFn(writer: RustWriter, operationShape: OperationShape) {
+        writer.inRequestBuilderBaseFn(operationShape.inputShape(codegenContext.model)) {
+            withBlock("Ok(#T::new()", ")", RuntimeType.HttpRequestBuilder) {
+                writeWithNoFormatting(httpRequestBuilder)
+            }
+        }
+    }
+}
+
+// A stubbed test protocol to do enable testing intentionally broken protocols
+private class TestProtocolGenerator(
+    codegenContext: CodegenContext,
+    protocol: Protocol,
+    httpRequestBuilder: String,
+    body: String,
+    correctResponse: String
+) : ProtocolGenerator(
+    codegenContext,
+    protocol,
+    TestProtocolMakeOperationGenerator(codegenContext, protocol, body, httpRequestBuilder),
+    TestProtocolTraitImplGenerator(codegenContext, correctResponse)
+)
+
+private class TestProtocolFactory(
+    private val httpRequestBuilder: String,
+    private val body: String,
+    private val correctResponse: String
+) : ProtocolGeneratorFactory<ProtocolGenerator> {
+    override fun protocol(codegenContext: CodegenContext): Protocol {
+        return RestJson(codegenContext)
+    }
+
+    override fun buildProtocolGenerator(codegenContext: CodegenContext): ProtocolGenerator {
+        return TestProtocolGenerator(
+            codegenContext,
+            protocol(codegenContext),
+            httpRequestBuilder,
+            body,
+            correctResponse
+        )
+    }
+
+    override fun transformModel(model: Model): Model = model
+
+    override fun support(): ProtocolSupport {
+        return ProtocolSupport(true, true, true, true)
+    }
+}
+
+class ProtocolTestGeneratorTest {
     private val model = """
         namespace com.example
 
@@ -117,57 +210,6 @@ class HttpProtocolTestGeneratorTest {
         body: String = "${correctBody.dq()}.to_string().into()",
         correctResponse: String = """Ok(crate::output::SayHelloOutput::builder().value("hey there!").build())"""
     ): Path {
-
-        // A stubbed test protocol to do enable testing intentionally broken protocols
-        class TestProtocol(private val protocolConfig: ProtocolConfig) : HttpProtocolGenerator(protocolConfig) {
-            private val symbolProvider = protocolConfig.symbolProvider
-            override fun RustWriter.body(self: String, operationShape: OperationShape): BodyMetadata {
-                writeWithNoFormatting(body)
-                return BodyMetadata(takesOwnership = false)
-            }
-
-            override fun traitImplementations(operationWriter: RustWriter, operationShape: OperationShape) {
-                operationWriter.rustTemplate(
-                    """
-                    impl #{parse_strict} for ${operationShape.id.name}{
-                        type Output = Result<#{output}, #{error}>;
-                        fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
-                            ${operationWriter.escape(correctResponse)}
-                        }
-                    }""",
-                    "parse_strict" to RuntimeType.parseStrict(protocolConfig.runtimeConfig),
-                    "output" to symbolProvider.toSymbol(operationShape.outputShape(protocolConfig.model)),
-                    "error" to operationShape.errorSymbol(symbolProvider),
-                    "response" to RuntimeType.Http("Response"),
-                    "bytes" to RuntimeType.Bytes
-                )
-            }
-
-            override fun toHttpRequestImpl(
-                implBlockWriter: RustWriter,
-                operationShape: OperationShape,
-                inputShape: StructureShape
-            ) {
-                generateRequestBuilderBase(implBlockWriter) {
-                    withBlock("Ok(#T::new()", ")", RuntimeType.HttpRequestBuilder) {
-                        writeWithNoFormatting(httpRequestBuilder)
-                    }
-                }
-            }
-        }
-
-        class TestProtocolFactory : ProtocolGeneratorFactory<HttpProtocolGenerator> {
-            override fun buildProtocolGenerator(protocolConfig: ProtocolConfig): HttpProtocolGenerator {
-                return TestProtocol(protocolConfig)
-            }
-
-            override fun transformModel(model: Model): Model = model
-
-            override fun support(): ProtocolSupport {
-                return ProtocolSupport(true, true, true, true)
-            }
-        }
-
         val (pluginContext, testDir) = generatePluginContext(model)
         val visitor = CodegenVisitor(
             pluginContext,
@@ -176,7 +218,7 @@ class HttpProtocolTestGeneratorTest {
                 override val order: Byte = 0
                 override fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap {
                     // Intentionally replace the builtin implementation of RestJson1 with our fake protocol
-                    return mapOf(RestJson1Trait.ID to TestProtocolFactory())
+                    return mapOf(RestJson1Trait.ID to TestProtocolFactory(httpRequestBuilder, body, correctResponse))
                 }
             }
         )
