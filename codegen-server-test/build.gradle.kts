@@ -22,12 +22,15 @@ dependencies {
 
 data class CodegenTest(val service: String, val module: String, val extraConfig: String? = null)
 
-val CodegenTests = listOf(CodegenTest("com.amazonaws.simple#SimpleService", "simple"))
+val CodegenTests = listOf(
+    CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
+    CodegenTest("com.amazonaws.ebs#Ebs", "ebs")
+)
 
 fun generateSmithyBuild(tests: List<CodegenTest>): String {
     val projections =
-            tests.joinToString(",\n") {
-                """
+        tests.joinToString(",\n") {
+            """
             "${it.module}": {
                 "plugins": {
                     "rust-server-codegen": {
@@ -45,8 +48,8 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
                  }
                }
             }
-        """.trimIndent()
-            }
+            """.trimIndent()
+        }
     return """
     {
         "version": "1.0",
@@ -73,7 +76,7 @@ task("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
         buildDir.resolve("smithyprojections/codegen-server-test/Cargo.toml")
-                .writeText(generateCargoWorkspace(CodegenTests))
+            .writeText(generateCargoWorkspace(CodegenTests))
     }
 }
 
