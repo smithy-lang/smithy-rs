@@ -14,6 +14,7 @@ vNext (Month Day, Year)
 - :bug: Fix error when receiving `Cont` event from S3 SelectObjectContent (smithy-rs#736)
 - :bug: Fix bug in event stream receiver that could cause the last events in the response stream to be lost when using S3 SelectObjectContent (smithy-rs#736)
 - Updated Transcribe code example to take an audio file as a command-line option and added readme.
+- Updated Auto Scaling code example to move operation from main to separate function; added readme.
 - :tada: Add support for 6 new AWS services:
     - Wisdom
     - VoiceId
