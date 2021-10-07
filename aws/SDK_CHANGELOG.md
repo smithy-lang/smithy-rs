@@ -14,6 +14,13 @@ vNext (Month Day, Year)
 - :bug: Fix error when receiving `Cont` event from S3 SelectObjectContent (smithy-rs#736)
 - :bug: Fix bug in event stream receiver that could cause the last events in the response stream to be lost when using S3 SelectObjectContent (smithy-rs#736)
 - Updated Transcribe code example to take an audio file as a command-line option and added readme.
+- :tada: Add support for 6 new AWS services:
+    - Wisdom
+    - VoiceId
+    - Account
+    - KafkaConnect
+    - OpenSearch
+    - CloudControl
 
 v0.0.19-alpha (September 24th, 2021)
 ====================================
