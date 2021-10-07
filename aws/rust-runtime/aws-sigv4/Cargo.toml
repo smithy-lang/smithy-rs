@@ -1,11 +1,12 @@
 [package]
 name = "aws-sigv4"
 version = "0.1.0"
-authors = ["David Barsky <me@davidbarsky.com>", "AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "David Barsky <me@davidbarsky.com>"]
+description = "SIGv4 signer for HTTP requests and Event Stream messages."
 edition = "2018"
 exclude = ["aws-sig-v4-test-suite/*"]
-license = "MIT OR Apache-2.0"
-description = "AWS SigV4 signer"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 sign-http = ["http", "http-body", "percent-encoding", "form_urlencoded"]
