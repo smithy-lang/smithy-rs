@@ -67,18 +67,25 @@ impl HyperAdapter<()> {
     }
 }
 
+/// Downcast errors coming out of hyper into an appropriate `ClientError`
 fn downcast_error(err: BoxError) -> ClientError {
+    // is a `TimedOutError` (from smithy_async::timeout) in the chain? if it is, this is a timeout
     if find_source::<TimedOutError>(err.as_ref()).is_some() {
         return ClientError::timeout(err);
     }
+    // is the top of chain error actually already a client error? return that directly
     let err = match err.downcast::<ClientError>() {
-        Ok(hyper_error) => return *hyper_error,
+        Ok(client_error) => return *client_error,
         Err(box_error) => box_error,
     };
+    // generally, the top of chain will probably be a hyper error. Go through a set of hyper specific
+    // error classifications
     let err = match err.downcast::<hyper::Error>() {
         Ok(hyper_error) => return to_client_error(*hyper_error),
         Err(box_error) => box_error,
     };
+
+    // otherwise, we have no idea!
     ClientError::other(err, None)
 }
 
