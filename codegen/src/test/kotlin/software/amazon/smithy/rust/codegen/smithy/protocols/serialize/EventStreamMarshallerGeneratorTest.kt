@@ -45,7 +45,7 @@ class EventStreamMarshallerGeneratorTest {
         )
 
         test.project.lib { writer ->
-            val protocolTestHelpers = CargoDependency.ProtocolTestHelpers(TestRuntimeConfig)
+            val protocolTestHelpers = CargoDependency.SmithyProtocolTestHelpers(TestRuntimeConfig)
                 .copy(scope = DependencyScope.Compile)
             writer.rustTemplate(
                 """
@@ -70,8 +70,8 @@ class EventStreamMarshallerGeneratorTest {
                     HeaderValue::String(value.into())
                 }
                 """,
-                "validate_body" to RuntimeType("validate_body", protocolTestHelpers, "protocol_test_helpers"),
-                "MediaType" to RuntimeType("MediaType", protocolTestHelpers, "protocol_test_helpers"),
+                "validate_body" to RuntimeType("validate_body", protocolTestHelpers, "smithy_protocol_test_helpers"),
+                "MediaType" to RuntimeType("MediaType", protocolTestHelpers, "smithy_protocol_test_helpers"),
             )
 
             writer.unitTest(

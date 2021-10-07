@@ -152,7 +152,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
 
         fun ProtocolTestHelper(runtimeConfig: RuntimeConfig, func: String): RuntimeType =
             RuntimeType(
-                func, CargoDependency.ProtocolTestHelpers(runtimeConfig), "protocol_test_helpers"
+                func, CargoDependency.SmithyProtocolTestHelpers(runtimeConfig), "smithy_protocol_test_helpers"
             )
 
         val http = CargoDependency.Http.asType()

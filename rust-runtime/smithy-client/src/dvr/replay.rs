@@ -97,7 +97,7 @@ impl ReplayingConnection {
                     ))
                 })
                 .collect::<Vec<_>>();
-            protocol_test_helpers::validate_headers(&actual, expected_headers.as_slice())?;
+            smithy_protocol_test_helpers::validate_headers(&actual, expected_headers.as_slice())?;
         }
         Ok(())
     }

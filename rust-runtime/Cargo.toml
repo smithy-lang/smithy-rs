@@ -1,14 +1,15 @@
 [workspace]
 
 members = [
+    "inlineable",
     "smithy-async",
-    "smithy-http",
     "smithy-client",
     "smithy-eventstream",
+    "smithy-http",
     "smithy-http-tower",
     "smithy-json",
+    "smithy-protocol-test-helpers",
     "smithy-query",
     "smithy-types",
-    "smithy-xml",
-    "inlineable"
+    "smithy-xml"
 ]

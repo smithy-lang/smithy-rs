@@ -9,7 +9,7 @@ license = "Apache-2.0"
 
 [features]
 rt-tokio = ["smithy-async/rt-tokio"]
-test-util = ["protocol-test-helpers", "serde/derive"]
+test-util = ["smithy-protocol-test-helpers", "serde/derive"]
 default = ["hyper", "rustls", "rt-tokio"]
 native-tls = ["hyper", "hyper-tls", "rt-tokio"]
 rustls = ["hyper", "hyper-rustls", "rt-tokio", "lazy_static"]
@@ -34,7 +34,7 @@ lazy_static = { version = "1", optional = true }
 pin-project = "1"
 tracing = "0.1"
 
-protocol-test-helpers = { path = "../protocol-test-helpers", optional = true }
+smithy-protocol-test-helpers = { path = "../smithy-protocol-test-helpers", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
