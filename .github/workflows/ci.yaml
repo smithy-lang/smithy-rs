@@ -62,10 +62,12 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: ${{ env.java_version }}
-    - name: test
+    - name: client tests
       run: ./gradlew :codegen:test
     - name: aws tests
       run: ./gradlew :aws:sdk-codegen:test
+    - name: server tests
+      run: ./gradlew :codegen-server:test
 
   integration-tests:
     name: Codegen integration tests
@@ -98,17 +100,28 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: ${{ env.java_version }}
-    - name: integration-tests
+    - name: client integration-tests
       run: ./gradlew :codegen-test:test
     - uses: actions/upload-artifact@v2
-      name: Upload Codegen Output for inspection
+      name: Upload Client Codegen Output for inspection
         # Always upload the output even if the tests failed
       if: ${{ always() }}
       with:
-        name: codegen-output
+        name: client-codegen-output
         path: |
           codegen-test/build/smithyprojections/codegen-test/*/rust-codegen/
           codegen-test/build/smithyprojections/codegen-test/Cargo.toml
+    - name: server integration-tests
+      run: ./gradlew :codegen-server-test:test
+    - uses: actions/upload-artifact@v2
+      name: Upload Server Codegen Output for inspection
+        # Always upload the output even if the tests failed
+      if: ${{ always() }}
+      with:
+        name: server-codegen-output
+        path: |
+          codegen-server-test/build/smithyprojections/codegen-server-test/*/rust-server-codegen/
+          codegen-server-test/build/smithyprojections/codegen-server-test/Cargo.toml
 
   runtime-tests:
     name: Rust runtime tests

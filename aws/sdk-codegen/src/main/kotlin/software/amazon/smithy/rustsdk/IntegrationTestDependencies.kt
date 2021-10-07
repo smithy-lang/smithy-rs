@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
@@ -30,11 +31,17 @@ class IntegrationTestDecorator : RustCodegenDecorator {
             "IntegrationTestDecorator expects to be run from the smithy-rs package root"
         }
 
-        val testPackagePath = integrationTestPath.resolve(codegenContext.moduleName.substring("aws-sdk-".length))
+        val moduleName = codegenContext.moduleName.substring("aws-sdk-".length)
+        val testPackagePath = integrationTestPath.resolve(moduleName)
         return if (Files.exists(testPackagePath) && Files.exists(testPackagePath.resolve("Cargo.toml"))) {
             val hasTests = Files.exists(testPackagePath.resolve("tests"))
             val hasBenches = Files.exists(testPackagePath.resolve("benches"))
-            baseCustomizations + IntegrationTestDependencies(codegenContext.runtimeConfig, hasTests, hasBenches)
+            baseCustomizations + IntegrationTestDependencies(
+                moduleName,
+                codegenContext.runtimeConfig,
+                hasTests,
+                hasBenches
+            )
         } else {
             baseCustomizations
         }
@@ -42,6 +49,7 @@ class IntegrationTestDecorator : RustCodegenDecorator {
 }
 
 class IntegrationTestDependencies(
+    private val moduleName: String,
     private val runtimeConfig: RuntimeConfig,
     private val hasTests: Boolean,
     private val hasBenches: Boolean,
@@ -58,11 +66,30 @@ class IntegrationTestDependencies(
             if (hasBenches) {
                 addDependency(Criterion)
             }
+            for (serviceSpecific in serviceSpecificCustomizations()) {
+                serviceSpecific.section(section)(this)
+            }
         }
         else -> emptySection
     }
+
+    private fun serviceSpecificCustomizations(): List<LibRsCustomization> = when (moduleName) {
+        "transcribestreaming" -> listOf(TranscribeTestDependencies())
+        else -> emptyList()
+    }
 }
 
-val Criterion = CargoDependency("criterion", CratesIo("0.3"), scope = DependencyScope.Dev)
-val SerdeJson = CargoDependency("serde_json", CratesIo("1"), features = emptySet(), scope = DependencyScope.Dev)
-val Tokio = CargoDependency("tokio", CratesIo("1"), features = setOf("macros", "test-util"), scope = DependencyScope.Dev)
+class TranscribeTestDependencies : LibRsCustomization() {
+    override fun section(section: LibRsSection): Writable = writable {
+        addDependency(AsyncStream)
+        addDependency(FuturesCore)
+        addDependency(Hound)
+    }
+}
+
+private val AsyncStream = CargoDependency("async-stream", CratesIo("0.3"), DependencyScope.Dev)
+private val Criterion = CargoDependency("criterion", CratesIo("0.3"), scope = DependencyScope.Dev)
+private val FuturesCore = CargoDependency("futures-core", CratesIo("0.3"), DependencyScope.Dev)
+private val Hound = CargoDependency("hound", CratesIo("3.4"), DependencyScope.Dev)
+private val SerdeJson = CargoDependency("serde_json", CratesIo("1"), features = emptySet(), scope = DependencyScope.Dev)
+private val Tokio = CargoDependency("tokio", CratesIo("1"), features = setOf("macros", "test-util"), scope = DependencyScope.Dev)

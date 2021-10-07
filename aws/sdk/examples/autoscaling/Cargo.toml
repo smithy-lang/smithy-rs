@@ -8,8 +8,7 @@ edition = "2018"
 
 [dependencies]
 aws-config = { path = "../../build/aws-sdk/aws-config" }
-autoscaling = { package = "aws-sdk-autoscaling", path = "../../build/aws-sdk/autoscaling" }
-aws-types = { path = "../../build/aws-sdk/aws-types" }
+aws-sdk-autoscaling = { path = "../../build/aws-sdk/autoscaling", package = "aws-sdk-autoscaling" }
 tokio = { version = "1", features = ["full"] }
 structopt = { version = "0.3", default-features = false }
-tracing-subscriber = { version = "0.2.16", features = ["fmt"] }
+tracing-subscriber = "0.2.18"
