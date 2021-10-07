@@ -9,8 +9,10 @@ vNext (Month Day, Year)
 **New This Week**
 
 - :tada: Add presigned request support and examples for S3 GetObject and PutObject (smithy-rs#731)
-- Refactored API Gateway code example by moving operation out of main and into a separate function; added readme.
+- :bug: Fix error when receiving `Cont` event from S3 SelectObjectContent (smithy-rs#736)
+- :bug: Fix bug in event stream receiver that could cause the last events in the response stream to be lost when using S3 SelectObjectContent (smithy-rs#736)
 - Updated Transcribe code example to take an audio file as a command-line option and added readme.
+- Refactored API Gateway code example by moving operation out of main and into a separate function; added readme.
 
 v0.0.19-alpha (September 24th, 2021)
 ====================================
