@@ -13,26 +13,28 @@ struct Opt {
     #[structopt(short, long)]
     region: Option<String>,
 
+    /// The ID of the instance to stop.
+    #[structopt(short, long)]
+    instance_id: String,
+
     /// Whether to display additional information.
     #[structopt(short, long)]
     verbose: bool,
 }
 
-// Describes the regions.
-async fn show_regions(client: &aws_sdk_ec2::Client) -> Result<(), aws_sdk_ec2::Error> {
-    let rsp = client.describe_regions().send().await?;
+// Stops an instance.
+async fn stop_instance(client: &aws_sdk_ec2::Client, id: &str) -> Result<(), aws_sdk_ec2::Error> {
+    client.stop_instances().instance_ids(id).send().await?;
 
-    println!("Regions:");
-    for region in rsp.regions.unwrap_or_default() {
-        println!("  {}", region.region_name.unwrap());
-    }
+    println!("Stopped instance.");
 
     Ok(())
 }
 
-/// Describes the AWS Regions that are enabled for your account.
+/// Stops an Amazon EC2 instance.
 /// # Arguments
 ///
+/// * `-i INSTANCE-ID` - The ID of the instances to stop.
 /// * `[-r REGION]` - The Region in which the client is created.
 ///   If not supplied, uses the value of the **AWS_REGION** environment variable.
 ///   If the environment variable is not set, defaults to **us-west-2**.
@@ -40,7 +42,11 @@ async fn show_regions(client: &aws_sdk_ec2::Client) -> Result<(), aws_sdk_ec2::E
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
-    let Opt { region, verbose } = Opt::from_args();
+    let Opt {
+        region,
+        instance_id,
+        verbose,
+    } = Opt::from_args();
 
     let region_provider = RegionProviderChain::first_try(region.map(Region::new))
         .or_default_provider()
@@ -53,11 +59,12 @@ async fn main() -> Result<(), Error> {
             "Region:             {}",
             region_provider.region().await.unwrap().as_ref()
         );
+        println!("Instance ID:        {}", instance_id);
         println!();
     }
 
     let shared_config = aws_config::from_env().region(region_provider).load().await;
     let client = Client::new(&shared_config);
 
-    show_regions(&client).await
+    stop_instance(&client, &instance_id).await
 }
