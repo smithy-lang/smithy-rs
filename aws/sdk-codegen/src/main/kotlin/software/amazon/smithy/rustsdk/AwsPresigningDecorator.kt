@@ -304,6 +304,9 @@ class OverrideHttpMethodTransform(
         return ModelTransformer.create().mapShapes(model) { shape ->
             if (shape is OperationShape && overrides.containsKey(shape.id)) {
                 val newMethod = overrides.getValue(shape.id)
+                check(shape.hasTrait(HttpTrait.ID)) {
+                    "OverrideHttpMethodTransform can only be used with REST protocols"
+                }
                 val originalHttpTrait = shape.expectTrait<HttpTrait>()
                 shape.toBuilder()
                     .removeTrait(HttpTrait.ID)
@@ -328,7 +331,11 @@ class MoveDocumentMembersToQueryParamsTransform(
     override fun transform(model: Model): Model {
         val index = HttpBindingIndex(model)
         val operations = presignableOperations.map { id ->
-            model.expectShape(syntheticShapeId(id), OperationShape::class.java)
+            model.expectShape(syntheticShapeId(id), OperationShape::class.java).also { shape ->
+                check(shape.hasTrait(HttpTrait.ID)) {
+                    "MoveDocumentMembersToQueryParamsTransform can only be used with REST protocols"
+                }
+            }
         }
 
         // Find document members of the presignable operations
