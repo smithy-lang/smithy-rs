@@ -1,5 +1,6 @@
 vNext (Month Day, Year)
 =======================
+
 **Breaking changes**
 - :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
 
@@ -8,11 +9,11 @@ vNext (Month Day, Year)
 
 **New This Week**
 
-- :tada: Add presigned request support and examples for S3 GetObject and PutObject (smithy-rs#731)
+- :tada: Add presigned request support and examples for S3 GetObject and PutObject (smithy-rs#731, aws-sdk-rust#139)
+- :tada: Add presigned request support and example for Polly SynthesizeSpeech (smithy-rs#735, aws-sdk-rust#139)
 - :bug: Fix error when receiving `Cont` event from S3 SelectObjectContent (smithy-rs#736)
 - :bug: Fix bug in event stream receiver that could cause the last events in the response stream to be lost when using S3 SelectObjectContent (smithy-rs#736)
-- Updated Transcribe code example to take an audio file as a command-line option and added readme.
-- Refactored Application Auto Scaling code example by moving operation out of main and into a separate function; added readme.
+- Updated Auto Scaling code example to move operation from main to separate function; added readme.
 
 v0.0.19-alpha (September 24th, 2021)
 ====================================

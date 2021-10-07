@@ -36,8 +36,8 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -52,12 +52,12 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 class XmlBindingTraitSerializerGenerator(
-    protocolConfig: ProtocolConfig,
+    codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver
 ) : StructuredDataSerializerGenerator {
-    private val symbolProvider = protocolConfig.symbolProvider
-    private val runtimeConfig = protocolConfig.runtimeConfig
-    private val model = protocolConfig.model
+    private val symbolProvider = codegenContext.symbolProvider
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val model = codegenContext.model
     private val smithyXml = CargoDependency.smithyXml(runtimeConfig).asType()
     private val codegenScope =
         arrayOf(
@@ -74,7 +74,7 @@ class XmlBindingTraitSerializerGenerator(
     private val xmlSerModule = RustModule.private("xml_ser")
 
     private val xmlIndex = XmlNameIndex.of(model)
-    private val rootNamespace = protocolConfig.serviceShape.getTrait<XmlNamespaceTrait>()
+    private val rootNamespace = codegenContext.serviceShape.getTrait<XmlNamespaceTrait>()
     private val util = SerializerUtil(model)
 
     sealed class Ctx {

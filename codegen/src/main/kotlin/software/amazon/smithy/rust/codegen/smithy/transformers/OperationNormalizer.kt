@@ -14,6 +14,7 @@ import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.orNull
+import software.amazon.smithy.rust.codegen.util.rename
 import java.util.Optional
 import kotlin.streams.toList
 
@@ -88,11 +89,4 @@ object OperationNormalizer {
     }
 
     private fun empty(id: ShapeId) = StructureShape.builder().id(id)
-}
-
-private fun StructureShape.Builder.rename(newId: ShapeId): StructureShape.Builder {
-    val renamedMembers = this.build().members().map {
-        it.toBuilder().id(newId.withMember(it.memberName)).build()
-    }
-    return this.id(newId).members(renamedMembers)
 }
