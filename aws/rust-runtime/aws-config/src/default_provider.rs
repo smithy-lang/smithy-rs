@@ -10,13 +10,12 @@
 
 /// Default region provider chain
 pub mod region {
+    use aws_types::region::Region;
+
     use crate::environment::region::EnvironmentVariableRegionProvider;
     use crate::meta::region::{ProvideRegion, RegionProviderChain};
-    use crate::{imds, profile};
-
     use crate::provider_config::ProviderConfig;
-
-    use aws_types::region::Region;
+    use crate::{imds, profile};
 
     /// Default Region Provider chain
     ///
@@ -89,21 +88,22 @@ pub mod region {
 
 /// Default retry behavior configuration provider chain
 pub mod retry_config {
+    use smithy_types::retry::RetryConfig;
+
     use crate::environment::retry_config::EnvironmentVariableRetryConfigProvider;
     use crate::profile;
     use crate::provider_config::ProviderConfig;
-    use smithy_types::retry::RetryConfig;
 
     /// Default RetryConfig Provider chain
     ///
     /// This provider will check the following sources in order:
     /// 1. [Environment variables](EnvironmentVariableRetryConfigProvider)
-    /// 2. [Profile file](crate::profile::region::ProfileFileRetryConfigProvider)
+    /// 2. [Profile file](crate::profile::retry_config::ProfileFileRetryConfigProvider)
     pub fn default_provider() -> Builder {
         Builder::default()
     }
 
-    /// Builder for [DefaultRetryConfigChain]
+    /// Builder for RetryConfig that checks the environment and aws profile for configuration
     #[derive(Default)]
     pub struct Builder {
         env_provider: EnvironmentVariableRetryConfigProvider,
@@ -145,14 +145,14 @@ pub mod retry_config {
 
 /// Default credentials provider chain
 pub mod credentials {
+    use std::borrow::Cow;
+
+    use aws_types::credentials::{future, ProvideCredentials};
+
     use crate::environment::credentials::EnvironmentVariableCredentialsProvider;
     use crate::meta::credentials::{CredentialsProviderChain, LazyCachingCredentialsProvider};
     use crate::meta::region::ProvideRegion;
-    use aws_types::credentials::{future, ProvideCredentials};
-
     use crate::provider_config::ProviderConfig;
-
-    use std::borrow::Cow;
 
     #[cfg(any(feature = "rustls", feature = "native-tls"))]
     /// Default Credentials Provider chain
@@ -313,6 +313,13 @@ pub mod credentials {
 
     #[cfg(test)]
     mod test {
+        use tracing_test::traced_test;
+
+        use aws_types::credentials::ProvideCredentials;
+
+        use crate::default_provider::credentials::DefaultCredentialsChain;
+        use crate::test_case::TestEnvironment;
+
         /// Test generation macro
         ///
         /// # Examples
@@ -361,11 +368,6 @@ pub mod credentials {
                 }
             };
         }
-
-        use crate::default_provider::credentials::DefaultCredentialsChain;
-        use crate::test_case::TestEnvironment;
-        use aws_types::credentials::ProvideCredentials;
-        use tracing_test::traced_test;
 
         make_test!(prefer_environment);
         make_test!(profile_static_keys);

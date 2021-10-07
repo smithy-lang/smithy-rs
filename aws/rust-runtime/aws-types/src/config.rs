@@ -9,9 +9,10 @@
 //!
 //! This module contains an shared configuration representation that is agnostic from a specific service.
 
+use smithy_types::retry::RetryConfig;
+
 use crate::credentials::SharedCredentialsProvider;
 use crate::region::Region;
-use smithy_types::retry::RetryConfig;
 
 /// AWS Shared Configuration
 pub struct Config {
@@ -71,8 +72,8 @@ impl Builder {
     /// use smithy_types::retry::RetryConfig;
     /// let config = Config::builder().retry_config(RetryConfig::new()).build();
     /// ```
-    pub fn retry_config(mut self, retry_config: impl Into<Option<RetryConfig>>) -> Self {
-        self.set_retry_config(retry_config);
+    pub fn retry_config(mut self, retry_config: RetryConfig) -> Self {
+        self.set_retry_config(Some(retry_config));
         self
     }
 
@@ -80,22 +81,20 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_types::config::Config;
+    /// use aws_types::config::{Config, Builder};
     /// use smithy_types::retry::RetryConfig;
     ///
-    /// fn retry_config_override() -> Option<RetryConfig> {
-    ///     // ...
-    ///     # None
+    /// fn disable_retries(builder: &mut Builder) {
+    ///     let retry_config = RetryConfig::new().with_max_attempts(1);
+    ///     builder.set_retry_config(Some(retry_config));
     /// }
     ///
     /// let mut builder = Config::builder();
-    /// if let Some(retry_config) = retry_config_override() {
-    ///     builder.set_retry_config(retry_config);
-    /// }
+    /// disable_retries(&mut builder);
     /// let config = builder.build();
     /// ```
-    pub fn set_retry_config(&mut self, retry_config: impl Into<Option<RetryConfig>>) -> &mut Self {
-        self.retry_config = retry_config.into();
+    pub fn set_retry_config(&mut self, retry_config: Option<RetryConfig>) -> &mut Self {
+        self.retry_config = retry_config;
         self
     }
 
