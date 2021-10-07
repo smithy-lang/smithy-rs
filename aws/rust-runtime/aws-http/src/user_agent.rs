@@ -26,7 +26,7 @@ pub struct AwsUserAgent {
     os_metadata: OsMetadata,
     language_metadata: LanguageMetadata,
     exec_env_metadata: Option<ExecEnvMetadata>,
-    additional_metadata: Option<AdditionalMetadata>,
+    additional_metadata: Vec<AdditionalMetadata>,
 }
 
 impl AwsUserAgent {
@@ -55,7 +55,7 @@ impl AwsUserAgent {
                 extras: vec![],
             },
             exec_env_metadata: None,
-            additional_metadata: None,
+            additional_metadata: vec![],
         }
     }
 
@@ -82,7 +82,7 @@ impl AwsUserAgent {
                 extras: vec![],
             },
             exec_env_metadata: None,
-            additional_metadata: None,
+            additional_metadata: vec![],
         }
     }
 
@@ -131,18 +131,15 @@ impl AwsUserAgent {
         use std::fmt::Write;
         write!(ua_value, "{} ", &self.sdk_metadata).unwrap();
         write!(ua_value, "{} ", &self.os_metadata).unwrap();
-        write!(ua_value, "{} ", &self.language_metadata).unwrap();
-        if let Some(ref additional_metadata) = self.additional_metadata {
-            write!(ua_value, "{}", additional_metadata).unwrap();
-        }
-        if ua_value.ends_with(' ') {
-            ua_value.truncate(ua_value.len() - 1);
+        write!(ua_value, "{}", &self.language_metadata).unwrap();
+        for metadata in &self.additional_metadata {
+            write!(ua_value, " {}", metadata).unwrap();
         }
         ua_value
     }
 
-    pub fn update_additional_metadata(&mut self, additional_metadata: Option<AdditionalMetadata>) {
-        self.additional_metadata = additional_metadata;
+    pub fn add_metadata(&mut self, additional_metadata: AdditionalMetadata) {
+        self.additional_metadata.push(additional_metadata);
     }
 }
 
@@ -334,18 +331,27 @@ mod test {
         ua.language_metadata.version = "1.50.0";
         ua.os_metadata.os_family = &OsFamily::Macos;
         ua.os_metadata.version = Some("1.15".to_string());
-        let additional_metadata = AdditionalMetadata {
-            key: "additional_metadata_key".to_string(),
-            value: "additional_metadata_value".to_string(),
+        let additional_metadata_0 = AdditionalMetadata {
+            key: "key_0".to_string(),
+            value: "val_0".to_string(),
         };
-        ua.update_additional_metadata(Some(additional_metadata));
+        ua.add_metadata(additional_metadata_0);
         assert_eq!(
             ua.aws_ua_header(),
             "aws-sdk-rust/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0"
         );
         assert_eq!(
             ua.ua_header(),
-            "aws-sdk-rust/0.1 os/macos/1.15 lang/rust/1.50.0 additional_metadata_key/additional_metadata_value"
+            "aws-sdk-rust/0.1 os/macos/1.15 lang/rust/1.50.0 key_0/val_0"
+        );
+        let additional_metadata_1 = AdditionalMetadata {
+            key: "key_1".to_string(),
+            value: "val_1".to_string(),
+        };
+        ua.add_metadata(additional_metadata_1);
+        assert_eq!(
+            ua.ua_header(),
+            "aws-sdk-rust/0.1 os/macos/1.15 lang/rust/1.50.0 key_0/val_0 key_1/val_1"
         );
     }
 
