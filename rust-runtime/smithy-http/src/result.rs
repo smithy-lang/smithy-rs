@@ -63,7 +63,7 @@ pub enum SdkError<E, R = operation::Response> {
 /// Connector exists to attach a `ConnectorErrorKind` to what would otherwise be an opaque `Box<dyn Error>`
 /// that comes off a potentially generic or dynamic connector.
 /// The attached `kind` is used to determine what retry behavior should occur (if any) based on the
-/// client error.
+/// connector error.
 #[derive(Debug)]
 pub struct ConnectorError {
     err: BoxError,
