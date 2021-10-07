@@ -26,7 +26,7 @@ pub struct SdkSuccess<O> {
     /// Raw Response from the service. (eg. Http Response)
     pub raw: operation::Response,
 
-    /// Parse response from the service
+    /// Parsed response from the service
     pub parsed: O,
 }
 
@@ -58,9 +58,9 @@ pub enum SdkError<E, R = operation::Response> {
     },
 }
 
-/// Error from the underyling Connector
+/// Error from the underlying Connector
 ///
-/// Connector exists to attach a `ClientErrorKind` to what would otherwise be an opaque `Box<dyn Error>`
+/// Connector exists to attach a `ConnectorErrorKind` to what would otherwise be an opaque `Box<dyn Error>`
 /// that comes off a potentially generic or dynamic connector.
 /// The attached `kind` is used to determine what retry behavior should occur (if any) based on the
 /// client error.
@@ -83,7 +83,7 @@ impl Error for ConnectorError {
 }
 
 impl ConnectorError {
-    /// Construct a [`ClientError`] from an error caused by a timeout
+    /// Construct a [`ConnectorError`] from an error caused by a timeout
     ///
     /// Timeout errors are typically retried on a new connection.
     pub fn timeout(err: BoxError) -> Self {
@@ -93,7 +93,7 @@ impl ConnectorError {
         }
     }
 
-    /// Construct a [`ClientError`] from an error caused by the user (eg. invalid HTTP request)
+    /// Construct a [`ConnectorError`] from an error caused by the user (eg. invalid HTTP request)
     pub fn user(err: BoxError) -> Self {
         Self {
             err,
@@ -101,7 +101,7 @@ impl ConnectorError {
         }
     }
 
-    /// Construct a [`ClientError`] from an IO related error (eg. socket hangup)
+    /// Construct a [`ConnectorError`] from an IO related error (eg. socket hangup)
     pub fn io(err: BoxError) -> Self {
         Self {
             err,
@@ -109,7 +109,7 @@ impl ConnectorError {
         }
     }
 
-    /// Construct a [`ClientError`] from an different unclassified error.
+    /// Construct a [`ConnectorError`] from an different unclassified error.
     ///
     /// Optionally, an explicit `Kind` may be passed.
     pub fn other(err: BoxError, kind: Option<ErrorKind>) -> Self {

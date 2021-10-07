@@ -73,15 +73,15 @@ fn downcast_error(err: BoxError) -> ConnectorError {
     if find_source::<TimedOutError>(err.as_ref()).is_some() {
         return ConnectorError::timeout(err);
     }
-    // is the top of chain error actually already a client error? return that directly
+    // is the top of chain error actually already a `ConnectorError`? return that directly
     let err = match err.downcast::<ConnectorError>() {
-        Ok(client_error) => return *client_error,
+        Ok(connector_error) => return *connector_error,
         Err(box_error) => box_error,
     };
     // generally, the top of chain will probably be a hyper error. Go through a set of hyper specific
     // error classifications
     let err = match err.downcast::<hyper::Error>() {
-        Ok(hyper_error) => return to_client_error(*hyper_error),
+        Ok(hyper_error) => return to_connector_error(*hyper_error),
         Err(box_error) => box_error,
     };
 
@@ -90,7 +90,7 @@ fn downcast_error(err: BoxError) -> ConnectorError {
 }
 
 /// Convert a [`hyper::Error`] into a [`ConnectorError`]
-fn to_client_error(err: hyper::Error) -> ConnectorError {
+fn to_connector_error(err: hyper::Error) -> ConnectorError {
     if err.is_timeout() || find_source::<TimeoutError>(&err).is_some() {
         ConnectorError::timeout(err.into())
     } else if err.is_user() {
@@ -105,7 +105,7 @@ fn to_client_error(err: hyper::Error) -> ConnectorError {
 
 fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option<&'a E> {
     let mut next = Some(err);
-    while let Some(err) = dbg!(next) {
+    while let Some(err) = next {
         if let Some(matching_err) = err.downcast_ref::<E>() {
             return Some(matching_err);
         }
