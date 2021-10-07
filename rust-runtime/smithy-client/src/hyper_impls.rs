@@ -13,7 +13,7 @@ use tower::{BoxError, Service};
 
 use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use smithy_http::body::SdkBody;
-use smithy_http::result::ClientError;
+use smithy_http::result::ConnectorError;
 pub use smithy_http::result::{SdkError, SdkSuccess};
 use std::error::Error;
 
@@ -37,7 +37,7 @@ where
     C::Error: Into<BoxError>,
 {
     type Response = http::Response<SdkBody>;
-    type Error = ClientError;
+    type Error = ConnectorError;
 
     #[allow(clippy::type_complexity)]
     type Future = std::pin::Pin<
@@ -67,14 +67,14 @@ impl HyperAdapter<()> {
     }
 }
 
-/// Downcast errors coming out of hyper into an appropriate `ClientError`
-fn downcast_error(err: BoxError) -> ClientError {
+/// Downcast errors coming out of hyper into an appropriate `ConnectorError`
+fn downcast_error(err: BoxError) -> ConnectorError {
     // is a `TimedOutError` (from smithy_async::timeout) in the chain? if it is, this is a timeout
     if find_source::<TimedOutError>(err.as_ref()).is_some() {
-        return ClientError::timeout(err);
+        return ConnectorError::timeout(err);
     }
     // is the top of chain error actually already a client error? return that directly
-    let err = match err.downcast::<ClientError>() {
+    let err = match err.downcast::<ConnectorError>() {
         Ok(client_error) => return *client_error,
         Err(box_error) => box_error,
     };
@@ -86,20 +86,20 @@ fn downcast_error(err: BoxError) -> ClientError {
     };
 
     // otherwise, we have no idea!
-    ClientError::other(err, None)
+    ConnectorError::other(err, None)
 }
 
-/// Convert a [`hyper::Error`] into a [`ClientError`]
-fn to_client_error(err: hyper::Error) -> ClientError {
+/// Convert a [`hyper::Error`] into a [`ConnectorError`]
+fn to_client_error(err: hyper::Error) -> ConnectorError {
     if err.is_timeout() || find_source::<TimeoutError>(&err).is_some() {
-        ClientError::timeout(err.into())
+        ConnectorError::timeout(err.into())
     } else if err.is_user() {
-        ClientError::user(err.into())
+        ConnectorError::user(err.into())
     } else if err.is_closed() || err.is_canceled() || find_source::<std::io::Error>(&err).is_some()
     {
-        ClientError::io(err.into())
+        ConnectorError::io(err.into())
     } else {
-        ClientError::other(err.into(), None)
+        ConnectorError::other(err.into(), None)
     }
 }
 

@@ -13,7 +13,7 @@ use boxclone::*;
 
 use crate::{bounds, retry, Client};
 use smithy_http::body::SdkBody;
-use smithy_http::result::ClientError;
+use smithy_http::result::ConnectorError;
 use std::fmt;
 use tower::{Layer, Service, ServiceExt};
 
@@ -137,7 +137,7 @@ where
 #[non_exhaustive]
 #[derive(Clone)]
 pub struct DynConnector(
-    BoxCloneService<http::Request<SdkBody>, http::Response<SdkBody>, ClientError>,
+    BoxCloneService<http::Request<SdkBody>, http::Response<SdkBody>, ConnectorError>,
 );
 
 impl fmt::Debug for DynConnector {
@@ -151,7 +151,7 @@ impl DynConnector {
     pub fn new<E, C>(connector: C) -> Self
     where
         C: bounds::SmithyConnector<Error = E> + Send + 'static,
-        E: Into<ClientError>,
+        E: Into<ConnectorError>,
     {
         Self(BoxCloneService::new(connector.map_err(|e| e.into())))
     }
@@ -159,7 +159,7 @@ impl DynConnector {
 
 impl Service<http::Request<SdkBody>> for DynConnector {
     type Response = http::Response<SdkBody>;
-    type Error = ClientError;
+    type Error = ConnectorError;
     type Future = BoxFuture<Self::Response, Self::Error>;
 
     fn poll_ready(

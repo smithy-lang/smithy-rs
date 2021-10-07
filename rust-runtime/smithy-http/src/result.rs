@@ -38,7 +38,7 @@ pub enum SdkError<E, R = operation::Response> {
 
     /// The request failed during dispatch. An HTTP response was not received. The request MAY
     /// have been sent.
-    DispatchFailure(ClientError),
+    DispatchFailure(ConnectorError),
 
     /// A response was received but it was not parseable according the the protocol (for example
     /// the server hung up while the body was being read)
@@ -58,37 +58,38 @@ pub enum SdkError<E, R = operation::Response> {
     },
 }
 
-/// Error during request dispatch
+/// Error from the underyling Connector
 ///
-/// ClientError exists to attach a `ClientErrorKind` to what would otherwise be an opaque `Box<dyn Error>`.
+/// Connector exists to attach a `ClientErrorKind` to what would otherwise be an opaque `Box<dyn Error>`
+/// that comes off a potentially generic or dynamic connector.
 /// The attached `kind` is used to determine what retry behavior should occur (if any) based on the
 /// client error.
 #[derive(Debug)]
-pub struct ClientError {
+pub struct ConnectorError {
     err: BoxError,
-    kind: ClientErrorKind,
+    kind: ConnectorErrorKind,
 }
 
-impl Display for ClientError {
+impl Display for ConnectorError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}: {}", self.kind, self.err)
     }
 }
 
-impl Error for ClientError {
+impl Error for ConnectorError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(self.err.as_ref())
     }
 }
 
-impl ClientError {
+impl ConnectorError {
     /// Construct a [`ClientError`] from an error caused by a timeout
     ///
     /// Timeout errors are typically retried on a new connection.
     pub fn timeout(err: BoxError) -> Self {
         Self {
             err,
-            kind: ClientErrorKind::Timeout,
+            kind: ConnectorErrorKind::Timeout,
         }
     }
 
@@ -96,7 +97,7 @@ impl ClientError {
     pub fn user(err: BoxError) -> Self {
         Self {
             err,
-            kind: ClientErrorKind::User,
+            kind: ConnectorErrorKind::User,
         }
     }
 
@@ -104,7 +105,7 @@ impl ClientError {
     pub fn io(err: BoxError) -> Self {
         Self {
             err,
-            kind: ClientErrorKind::Io,
+            kind: ConnectorErrorKind::Io,
         }
     }
 
@@ -114,36 +115,36 @@ impl ClientError {
     pub fn other(err: BoxError, kind: Option<ErrorKind>) -> Self {
         Self {
             err,
-            kind: ClientErrorKind::Other(kind),
+            kind: ConnectorErrorKind::Other(kind),
         }
     }
 
     /// Returns true if the error is an IO error
     pub fn is_io(&self) -> bool {
-        matches!(self.kind, ClientErrorKind::Io)
+        matches!(self.kind, ConnectorErrorKind::Io)
     }
 
     /// Returns true if the error is an timeout error
     pub fn is_timeout(&self) -> bool {
-        matches!(self.kind, ClientErrorKind::Timeout)
+        matches!(self.kind, ConnectorErrorKind::Timeout)
     }
 
     /// Returns true if the error is a user error
     pub fn is_user(&self) -> bool {
-        matches!(self.kind, ClientErrorKind::User)
+        matches!(self.kind, ConnectorErrorKind::User)
     }
 
     /// Returns the optional error kind associated with an unclassified error
     pub fn is_other(&self) -> Option<ErrorKind> {
         match &self.kind {
-            ClientErrorKind::Other(ek) => *ek,
+            ConnectorErrorKind::Other(ek) => *ek,
             _ => None,
         }
     }
 }
 
 #[derive(Debug)]
-enum ClientErrorKind {
+enum ConnectorErrorKind {
     /// A timeout occurred while processing the request
     Timeout,
 
@@ -157,14 +158,14 @@ enum ClientErrorKind {
     Other(Option<ErrorKind>),
 }
 
-impl Display for ClientErrorKind {
+impl Display for ConnectorErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            ClientErrorKind::Timeout => write!(f, "timeout"),
-            ClientErrorKind::User => write!(f, "user error"),
-            ClientErrorKind::Io => write!(f, "io error"),
-            ClientErrorKind::Other(Some(kind)) => write!(f, "{:?}", kind),
-            ClientErrorKind::Other(None) => write!(f, "other"),
+            ConnectorErrorKind::Timeout => write!(f, "timeout"),
+            ConnectorErrorKind::User => write!(f, "user error"),
+            ConnectorErrorKind::Io => write!(f, "io error"),
+            ConnectorErrorKind::Other(Some(kind)) => write!(f, "{:?}", kind),
+            ConnectorErrorKind::Other(None) => write!(f, "other"),
         }
     }
 }

@@ -13,7 +13,7 @@ use http::Request;
 use protocol_test_helpers::{assert_ok, validate_body, MediaType};
 
 use smithy_http::body::SdkBody;
-use smithy_http::result::ClientError;
+use smithy_http::result::ConnectorError;
 use std::future::Ready;
 
 use std::ops::Deref;
@@ -50,7 +50,7 @@ pub use crate::never;
 
 impl tower::Service<http::Request<SdkBody>> for CaptureRequestHandler {
     type Response = http::Response<SdkBody>;
-    type Error = ClientError;
+    type Error = ConnectorError;
     type Future = Ready<Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -220,7 +220,7 @@ where
     SdkBody: From<B>,
 {
     type Response = http::Response<SdkBody>;
-    type Error = ClientError;
+    type Error = ConnectorError;
     type Future = Ready<Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -236,7 +236,7 @@ where
                 .push(ValidateRequest { expected, actual });
             std::future::ready(Ok(resp.map(SdkBody::from)))
         } else {
-            std::future::ready(Err(ClientError::other("No more data".into(), None)))
+            std::future::ready(Err(ConnectorError::other("No more data".into(), None)))
         }
     }
 }
@@ -261,7 +261,7 @@ mod tests {
     use crate::Client;
     use hyper::service::Service;
     use smithy_http::body::SdkBody;
-    use smithy_http::result::ClientError;
+    use smithy_http::result::ConnectorError;
 
     fn is_send_sync<T: Send + Sync>(_: T) {}
 
@@ -284,7 +284,7 @@ mod tests {
             + Sync
             + Clone
             + 'static,
-        T::Error: Into<ClientError> + Send + Sync + 'static,
+        T::Error: Into<ConnectorError> + Send + Sync + 'static,
         T::Future: Send + 'static,
     {
     }

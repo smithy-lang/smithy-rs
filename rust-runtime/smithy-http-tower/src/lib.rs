@@ -7,7 +7,7 @@ pub mod dispatch;
 pub mod map_request;
 pub mod parse_response;
 
-use smithy_http::result::{ClientError, SdkError};
+use smithy_http::result::{ConnectorError, SdkError};
 use tower::BoxError;
 
 /// An Error Occurred During the process of sending an Operation
@@ -34,7 +34,7 @@ pub enum SendOperationError {
     RequestConstructionError(BoxError),
 
     /// The request could not be dispatched
-    RequestDispatchError(ClientError),
+    RequestDispatchError(ConnectorError),
 }
 
 /// Convert a `SendOperationError` into an `SdkError`
@@ -63,7 +63,7 @@ mod tests {
     use smithy_http::operation;
     use smithy_http::operation::{Operation, Request};
     use smithy_http::response::ParseStrictResponse;
-    use smithy_http::result::ClientError;
+    use smithy_http::result::ConnectorError;
     use std::convert::{Infallible, TryInto};
     use tower::{service_fn, Service, ServiceBuilder};
 
@@ -97,7 +97,7 @@ mod tests {
             if _request.headers().contains_key("X-Test") {
                 Ok(http::Response::new(SdkBody::from("ok")))
             } else {
-                Err(ClientError::user("header not set".into()))
+                Err(ConnectorError::user("header not set".into()))
             }
         });
 

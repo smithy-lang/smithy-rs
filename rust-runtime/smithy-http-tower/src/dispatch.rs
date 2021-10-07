@@ -6,7 +6,7 @@
 use crate::SendOperationError;
 use smithy_http::body::SdkBody;
 use smithy_http::operation;
-use smithy_http::result::ClientError;
+use smithy_http::result::ConnectorError;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -27,7 +27,7 @@ type BoxedResultFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>> + Send>
 impl<S> Service<operation::Request> for DispatchService<S>
 where
     S: Service<http::Request<SdkBody>, Response = http::Response<SdkBody>> + Clone + Send + 'static,
-    S::Error: Into<ClientError>,
+    S::Error: Into<ConnectorError>,
     S::Future: Send + 'static,
 {
     type Response = operation::Response;
