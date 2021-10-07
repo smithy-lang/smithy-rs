@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.inputShape
 
 interface ProtocolBodyGenerator {
@@ -42,6 +43,7 @@ interface ProtocolTraitImplGenerator {
  */
 open class ProtocolGenerator(
     codegenContext: CodegenContext,
+    private val protocol: Protocol,
     private val makeOperationGenerator: MakeOperationGenerator,
     private val traitGenerator: ProtocolTraitImplGenerator,
 ) {
@@ -87,7 +89,10 @@ open class ProtocolGenerator(
         // impl OperationInputShape { ... }
         val operationName = symbolProvider.toSymbol(operationShape).name
         inputWriter.implBlock(inputShape, symbolProvider) {
-            writeCustomizations(customizations, OperationSection.InputImpl(customizations, operationShape, inputShape))
+            writeCustomizations(
+                customizations,
+                OperationSection.InputImpl(customizations, operationShape, inputShape, protocol)
+            )
             makeOperationGenerator.generateMakeOperation(this, operationShape, customizations)
             rustBlockTemplate(
                 "fn assemble(mut builder: #{RequestBuilder}, body: #{SdkBody}) -> #{Request}<#{SdkBody}>",

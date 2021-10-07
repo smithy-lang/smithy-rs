@@ -30,11 +30,11 @@ class AwsPresigningDecoratorTest {
         val decorator = AwsPresigningDecorator()
         val model = testOperation(namespace, name)
         val transformed = decorator.transformModel(serviceShape(model), model)
-        hasPresignableTrait(transformed) shouldBe presignable
+        hasPresignableTrait(transformed, namespace, name) shouldBe presignable
     }
 
-    private fun hasPresignableTrait(model: Model): Boolean =
-        model.shapes().filter { shape -> shape is OperationShape }
+    private fun hasPresignableTrait(model: Model, namespace: String, name: String): Boolean =
+        model.shapes().filter { shape -> shape is OperationShape && shape.id == ShapeId.fromParts(namespace, name) }
             .findFirst()
             .orNull()!!
             .hasTrait(PresignableTrait.ID)
@@ -76,27 +76,41 @@ class OverrideHttpMethodTransformTest {
             }
 
             structure TestInput { }
+            structure TestOutput { }
 
             @http(uri: "/one", method: "POST")
-            operation One { input: TestInput }
+            operation One { input: TestInput, output: TestOutput }
 
             @http(uri: "/two", method: "GET")
-            operation Two { input: TestInput }
+            operation Two { input: TestInput, output: TestOutput }
 
             @http(uri: "/three", method: "POST")
-            operation Three { input: TestInput }
+            operation Three { input: TestInput, output: TestOutput }
         """.asSmithyModel()
 
-        val transformed = OverrideHttpMethodTransform(
-            mapOf(
-                ShapeId.from("test#One") to "GET",
-                ShapeId.from("test#Two") to "POST",
+        val serviceShape = model.expectShape(ShapeId.from("test#TestService"), ServiceShape::class.java)
+        val presignableOp = PresignableOperation(
+            PayloadSigningType.EMPTY,
+            listOf(
+                OverrideHttpMethodTransform(
+                    mapOf(
+                        ShapeId.from("test#One") to "GET",
+                        ShapeId.from("test#Two") to "POST",
+                    )
+                )
             )
-        ).transform(model)
+        )
+        val transformed = AwsPresigningDecorator(
+            mapOf(
+                ShapeId.from("test#One") to presignableOp,
+                ShapeId.from("test#Two") to presignableOp
+            )
+        ).transformModel(serviceShape, model)
 
-        transformed.expectShape(ShapeId.from("test#One")).expectTrait<HttpTrait>().method shouldBe "GET"
-        transformed.expectShape(ShapeId.from("test#Two")).expectTrait<HttpTrait>().method shouldBe "POST"
-        transformed.expectShape(ShapeId.from("test#Three")).expectTrait<HttpTrait>().method shouldBe "POST"
+        val synthNamespace = "test.synthetic.aws.presigned"
+        transformed.expectShape(ShapeId.from("$synthNamespace#One")).expectTrait<HttpTrait>().method shouldBe "GET"
+        transformed.expectShape(ShapeId.from("$synthNamespace#Two")).expectTrait<HttpTrait>().method shouldBe "POST"
+        transformed.getShape(ShapeId.from("$synthNamespace#Three")).orNull() shouldBe null
     }
 }
 
@@ -113,7 +127,7 @@ class MoveDocumentMembersToQueryParamsTransformTest {
                 operations: ["One", "Two"],
             }
 
-            structure OneInput {
+            structure OneInputOutput {
                 @httpHeader("one")
                 one: String,
                 @httpQuery("two")
@@ -122,7 +136,7 @@ class MoveDocumentMembersToQueryParamsTransformTest {
                 three: String,
                 four: String,
             }
-            structure TwoInput {
+            structure TwoInputOutput {
                 @httpHeader("one")
                 one: String,
                 @httpQuery("two")
@@ -133,18 +147,27 @@ class MoveDocumentMembersToQueryParamsTransformTest {
             }
 
             @http(uri: "/one", method: "POST")
-            operation One { input: OneInput }
+            operation One { input: OneInputOutput, output: OneInputOutput }
 
             @http(uri: "/two", method: "POST")
-            operation Two { input: TwoInput }
+            operation Two { input: TwoInputOutput, output: TwoInputOutput }
         """.asSmithyModel()
 
-        val transformed = MoveDocumentMembersToQueryParamsTransform(
-            listOf(ShapeId.from("test#One"))
-        ).transform(model)
+        val serviceShape = model.expectShape(ShapeId.from("test#TestService"), ServiceShape::class.java)
+        val presignableOp = PresignableOperation(
+            PayloadSigningType.EMPTY,
+            listOf(
+                MoveDocumentMembersToQueryParamsTransform(
+                    listOf(ShapeId.from("test#One"))
+                )
+            )
+        )
+        val transformed = AwsPresigningDecorator(
+            mapOf(ShapeId.from("test#One") to presignableOp)
+        ).transformModel(serviceShape, model)
 
         val index = HttpBindingIndex(transformed)
-        index.getRequestBindings(ShapeId.from("test#One")).map { (key, value) ->
+        index.getRequestBindings(ShapeId.from("test.synthetic.aws.presigned#One")).map { (key, value) ->
             key to value.location
         }.toMap() shouldBe mapOf(
             "one" to HttpBinding.Location.HEADER,
@@ -153,6 +176,7 @@ class MoveDocumentMembersToQueryParamsTransformTest {
             "four" to HttpBinding.Location.QUERY,
         )
 
+        transformed.getShape(ShapeId.from("test.synthetic.aws.presigned#Two")).orNull() shouldBe null
         index.getRequestBindings(ShapeId.from("test#Two")).map { (key, value) ->
             key to value.location
         }.toMap() shouldBe mapOf(

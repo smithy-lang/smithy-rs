@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.customize
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 
 sealed class OperationSection(name: String) : Section(name) {
     abstract val customizations: List<OperationCustomization>
@@ -20,7 +21,8 @@ sealed class OperationSection(name: String) : Section(name) {
     data class InputImpl(
         override val customizations: List<OperationCustomization>,
         val operationShape: OperationShape,
-        val inputShape: StructureShape
+        val inputShape: StructureShape,
+        val protocol: Protocol,
     ) : OperationSection("InputImpl")
 
     data class MutateInput(

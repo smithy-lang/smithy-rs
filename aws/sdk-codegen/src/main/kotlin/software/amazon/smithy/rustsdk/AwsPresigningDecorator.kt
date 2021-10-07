@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpQueryTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.transform.ModelTransformer
@@ -37,28 +38,29 @@ import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientSection
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
+import software.amazon.smithy.rust.codegen.util.cloneOperation
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
+import kotlin.streams.toList
 
-private enum class PayloadSigningType {
+internal enum class PayloadSigningType {
     EMPTY,
     UNSIGNED_PAYLOAD,
 }
 
-private class PresignableOperation(
+private fun syntheticShapeId(shape: ToShapeId): ShapeId =
+    shape.toShapeId().let { id -> ShapeId.fromParts(id.namespace + ".synthetic.aws.presigned", id.name) }
+
+internal class PresignableOperation(
     val payloadSigningType: PayloadSigningType,
-    private val modelTransforms: List<PresignModelTransform> = emptyList()
+    val modelTransforms: List<PresignModelTransform> = emptyList()
 ) {
     fun hasModelTransforms(): Boolean = modelTransforms.isNotEmpty()
-
-    fun transformModel(model: Model): Model =
-        modelTransforms.fold(model) { intermediate, transform -> transform.transform(intermediate) }
 }
 
 private val SYNTHESIZE_SPEECH_OP = ShapeId.from("com.amazonaws.polly#SynthesizeSpeech")
-private val PRESIGNABLE_OPERATIONS by lazy {
+internal val PRESIGNABLE_OPERATIONS by lazy {
     mapOf(
         // S3
         ShapeId.from("com.amazonaws.s3#GetObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
@@ -67,7 +69,7 @@ private val PRESIGNABLE_OPERATIONS by lazy {
         // Polly
         SYNTHESIZE_SPEECH_OP to PresignableOperation(
             PayloadSigningType.EMPTY,
-            // Polly's SynthesizeSpeech operation has the HTTP method overriden to GET,
+            // Polly's SynthesizeSpeech operation has the HTTP method overridden to GET,
             // and the document members changed to query param members.
             modelTransforms = listOf(
                 OverrideHttpMethodTransform(mapOf(SYNTHESIZE_SPEECH_OP to "GET")),
@@ -77,7 +79,9 @@ private val PRESIGNABLE_OPERATIONS by lazy {
     )
 }
 
-class AwsPresigningDecorator : RustCodegenDecorator {
+class AwsPresigningDecorator internal constructor(
+    private val presignableOperations: Map<ShapeId, PresignableOperation> = PRESIGNABLE_OPERATIONS
+) : RustCodegenDecorator {
     companion object {
         const val ORDER: Byte = 0
     }
@@ -87,7 +91,7 @@ class AwsPresigningDecorator : RustCodegenDecorator {
 
     override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
         val hasPresignedOps = codegenContext.model.shapes().anyMatch { shape ->
-            shape is OperationShape && PRESIGNABLE_OPERATIONS.containsKey(shape.id)
+            shape is OperationShape && presignableOperations.containsKey(shape.id)
         }
         if (hasPresignedOps) {
             rustCrate.mergeFeature(Feature("client", default = true, listOf("tower")))
@@ -100,15 +104,33 @@ class AwsPresigningDecorator : RustCodegenDecorator {
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> = baseCustomizations + listOf(AwsInputPresignedMethod(codegenContext, operation))
 
-    /** Adds presignable trait to known presignable operations */
+    /**
+     * Adds presignable trait to known presignable operations and creates synthetic presignable shapes for codegen
+     */
     override fun transformModel(service: ServiceShape, model: Model): Model {
-        return ModelTransformer.create().mapShapes(model) { shape ->
-            if (shape is OperationShape && PRESIGNABLE_OPERATIONS.containsKey(shape.id)) {
-                shape.toBuilder().addTrait(PresignableTrait()).build()
+        val modelWithSynthetics = addSyntheticOperations(model)
+        val presignableTransforms = mutableListOf<PresignModelTransform>()
+        val intermediate = ModelTransformer.create().mapShapes(modelWithSynthetics) { shape ->
+            if (shape is OperationShape && presignableOperations.containsKey(shape.id)) {
+                presignableTransforms.addAll(presignableOperations.getValue(shape.id).modelTransforms)
+                shape.toBuilder().addTrait(PresignableTrait(syntheticShapeId(shape))).build()
             } else {
                 shape
             }
         }
+        // Apply operation-specific model transformations
+        return presignableTransforms.fold(intermediate) { m, t -> t.transform(m) }
+    }
+
+    private fun addSyntheticOperations(model: Model): Model {
+        val presignableOps = model.shapes()
+            .filter { shape -> shape is OperationShape && presignableOperations.containsKey(shape.id) }
+            .toList()
+        return model.toBuilder().also { builder ->
+            for (op in presignableOps) {
+                builder.cloneOperation(model, op, ::syntheticShapeId)
+            }
+        }.build()
     }
 }
 
@@ -137,7 +159,7 @@ class AwsInputPresignedMethod(
         }
     }
 
-    private fun RustWriter.writeInputPresignedMethod(section: OperationSection) {
+    private fun RustWriter.writeInputPresignedMethod(section: OperationSection.InputImpl) {
         val operationError = operationShape.errorSymbol(symbolProvider)
         val presignableOp = PRESIGNABLE_OPERATIONS.getValue(operationShape.id)
 
@@ -145,23 +167,17 @@ class AwsInputPresignedMethod(
         if (presignableOp.hasModelTransforms()) {
             makeOperationFn = "_make_presigned_operation"
 
-            val transformedModel = presignableOp.transformModel(codegenContext.model)
-            val transformedProtocolConfig = codegenContext.copy(model = transformedModel)
-            val transformedOperationShape = transformedModel.expectShape(operationShape.id, OperationShape::class.java)
-
-            val protocol = ProtocolLoader.Default.protocolFor(
-                transformedModel,
-                transformedProtocolConfig.serviceShape
-            ).second.protocol(transformedProtocolConfig)
-
+            val syntheticOp =
+                codegenContext.model.expectShape(syntheticShapeId(operationShape.id), OperationShape::class.java)
+            val protocol = section.protocol
             MakeOperationGenerator(
-                transformedProtocolConfig,
+                codegenContext,
                 protocol,
-                HttpBoundProtocolBodyGenerator(transformedProtocolConfig, protocol),
+                HttpBoundProtocolBodyGenerator(codegenContext, protocol),
                 // Prefixed with underscore to avoid colliding with modeled functions
                 functionName = makeOperationFn,
                 public = false,
-            ).generateMakeOperation(this, transformedOperationShape, section.customizations)
+            ).generateMakeOperation(this, syntheticOp, section.customizations)
         }
 
         rustBlockTemplate(
@@ -280,12 +296,14 @@ interface PresignModelTransform {
  * to respect HTTP traits or synthetic equivalents if this is needed for AwsQuery, Ec2Query, or AwsJson.
  */
 class OverrideHttpMethodTransform(
-    private val httpMethodOverrides: Map<ShapeId, String>,
+    httpMethodOverrides: Map<ShapeId, String>,
 ) : PresignModelTransform {
+    private val overrides = httpMethodOverrides.mapKeys { entry -> syntheticShapeId(entry.key) }
+
     override fun transform(model: Model): Model {
         return ModelTransformer.create().mapShapes(model) { shape ->
-            if (shape is OperationShape && httpMethodOverrides.containsKey(shape.id)) {
-                val newMethod = httpMethodOverrides.getValue(shape.id)
+            if (shape is OperationShape && overrides.containsKey(shape.id)) {
+                val newMethod = overrides.getValue(shape.id)
                 val originalHttpTrait = shape.expectTrait<HttpTrait>()
                 shape.toBuilder()
                     .removeTrait(HttpTrait.ID)
@@ -309,7 +327,9 @@ class MoveDocumentMembersToQueryParamsTransform(
 ) : PresignModelTransform {
     override fun transform(model: Model): Model {
         val index = HttpBindingIndex(model)
-        val operations = presignableOperations.map { id -> model.expectShape(id, OperationShape::class.java) }
+        val operations = presignableOperations.map { id ->
+            model.expectShape(syntheticShapeId(id), OperationShape::class.java)
+        }
 
         // Find document members of the presignable operations
         val membersToUpdate = operations.map { operation ->

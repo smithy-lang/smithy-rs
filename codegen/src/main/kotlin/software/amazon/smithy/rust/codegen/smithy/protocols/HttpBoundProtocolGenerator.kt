@@ -62,6 +62,7 @@ class HttpBoundProtocolGenerator(
     protocol: Protocol,
 ) : ProtocolGenerator(
     codegenContext,
+    protocol,
     MakeOperationGenerator(codegenContext, protocol, HttpBoundProtocolBodyGenerator(codegenContext, protocol)),
     HttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
 )

@@ -92,6 +92,7 @@ private class TestProtocolGenerator(
     correctResponse: String
 ) : ProtocolGenerator(
     codegenContext,
+    protocol,
     TestProtocolMakeOperationGenerator(codegenContext, protocol, body, httpRequestBuilder),
     TestProtocolTraitImplGenerator(codegenContext, correctResponse)
 )
