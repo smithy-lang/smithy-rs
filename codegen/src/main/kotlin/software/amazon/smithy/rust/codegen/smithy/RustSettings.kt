@@ -24,6 +24,7 @@ private const val MODULE_NAME = "module"
 private const val MODULE_DESCRIPTION = "moduleDescription"
 private const val MODULE_VERSION = "moduleVersion"
 private const val MODULE_AUTHORS = "moduleAuthors"
+private const val MODULE_REPOSITORY = "moduleRepository"
 private const val RUNTIME_CONFIG = "runtimeConfig"
 private const val CODEGEN_SETTINGS = "codegen"
 private const val LICENSE = "license"
@@ -73,6 +74,7 @@ class RustSettings(
     val moduleName: String,
     val moduleVersion: String,
     val moduleAuthors: List<String>,
+    val moduleRepository: String?,
     val runtimeConfig: RuntimeConfig,
     val codegenConfig: CodegenConfig,
     val license: String?,
@@ -114,6 +116,7 @@ class RustSettings(
                     MODULE_DESCRIPTION,
                     MODULE_AUTHORS,
                     MODULE_VERSION,
+                    MODULE_REPOSITORY,
                     RUNTIME_CONFIG,
                     CODEGEN_SETTINGS,
                     LICENSE
@@ -129,12 +132,14 @@ class RustSettings(
             val runtimeConfig = config.getObjectMember(RUNTIME_CONFIG)
             val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
             val moduleAuthors = config.expectArrayMember(MODULE_AUTHORS).map { it.expectStringNode().value }
+            val moduleRepository = config.getStringMember(MODULE_REPOSITORY).orNull()?.value
             val license = config.getStringMember(LICENSE).orNull()?.value
             return RustSettings(
                 service = service,
                 moduleName = moduleName,
                 moduleVersion = version,
                 moduleAuthors = moduleAuthors,
+                moduleRepository = moduleRepository,
                 runtimeConfig = RuntimeConfig.fromNode(runtimeConfig),
                 codegenConfig = CodegenConfig.fromNode(codegenSettings),
                 license = license,

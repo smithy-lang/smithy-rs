@@ -221,6 +221,7 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                         "module": "aws-sdk-${it.module}",
                         "moduleVersion": "${getProperty("aws.sdk.version")}",
                         "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
+                        "moduleRepository": "https://github.com/awslabs/aws-sdk-rust",
                         "license": "Apache-2.0"
                         ${it.extraConfig ?: ""}
                     }
