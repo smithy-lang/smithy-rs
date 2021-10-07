@@ -68,6 +68,7 @@ async fn test_success() {
                     stats.bytes_scanned, stats.bytes_processed, stats.bytes_returned
                 ))
             }
+            SelectObjectContentEventStream::End(_) => {}
             otherwise => panic!("unexpected message: {:?}", otherwise),
         }
     }
