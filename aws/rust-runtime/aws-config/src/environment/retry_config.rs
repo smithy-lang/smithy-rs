@@ -72,11 +72,6 @@ impl EnvironmentVariableRetryConfigProvider {
 
         if let Some(retry_mode) = retry_mode {
             match RetryMode::from_str(&retry_mode) {
-                Ok(retry_mode) if retry_mode == RetryMode::Adaptive => {
-                    return Err(RetryConfigErr::AdaptiveModeIsNotSupported {
-                        set_by: "environment variable".into(),
-                    });
-                }
                 Ok(retry_mode) => retry_config = retry_config.with_retry_mode(retry_mode),
                 Err(retry_mode_err) => {
                     return Err(RetryConfigErr::InvalidRetryMode {
@@ -118,13 +113,13 @@ mod test {
     }
 
     #[test]
-    fn max_attempts_is_ignored_when_it_cant_be_parsed_as_an_integer() {
-        assert_eq!(
+    fn max_attempts_errors_when_it_cant_be_parsed_as_an_integer() {
+        assert!(matches!(
             test_provider(&[(ENV_VAR_MAX_ATTEMPTS, "not an integer")])
                 .retry_config()
-                .unwrap(),
-            None
-        );
+                .unwrap_err(),
+            RetryConfigErr::FailedToParseMaxAttempts { .. }
+        ));
     }
 
     #[test]
@@ -162,17 +157,6 @@ mod test {
         assert!(matches!(
             err,
             RetryConfigErr::MaxAttemptsMustNotBeZero { .. }
-        ));
-    }
-
-    #[test]
-    fn disallow_setting_adaptive_mode() {
-        let err = test_provider(&[(ENV_VAR_RETRY_MODE, "adaptive")])
-            .retry_config()
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            RetryConfigErr::AdaptiveModeIsNotSupported { .. }
         ));
     }
 }

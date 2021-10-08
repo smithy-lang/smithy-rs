@@ -107,12 +107,12 @@ pub mod retry_config {
     ///
     /// ```rust
     /// # use std::error::Error;
-    /// #
-    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn Error>> {
     /// use aws_config::default_provider::retry_config;
     /// // Creating a RetryConfig from the default_provider already happens when loading a config from_env
     /// // This is only for illustration purposes
-    /// let retry_config = retry_config::default_provider().retry_config();
+    /// let retry_config = retry_config::default_provider().retry_config().await;
     /// let config = aws_config::from_env().retry_config(retry_config).load().await;
     /// // instantiate a service client:
     /// // <my_aws_service>::Client::new(&config);
