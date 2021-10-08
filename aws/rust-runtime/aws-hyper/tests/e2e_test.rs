@@ -201,7 +201,7 @@ async fn retry_test() {
     assert_time_passed(initial, Duration::from_secs(1));
     assert_eq!(conn.requests().len(), 5);
     let initial = tokio::time::Instant::now();
-    let _err = client
+    let err = client
         .call(test_operation())
         .await
         .expect_err("all responses failed");
