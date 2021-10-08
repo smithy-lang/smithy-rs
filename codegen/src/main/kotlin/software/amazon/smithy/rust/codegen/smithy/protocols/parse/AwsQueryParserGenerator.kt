@@ -6,8 +6,8 @@
 package software.amazon.smithy.rust.codegen.smithy.protocols.parse
 
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 
 /**
  * The AWS query protocol's responses are identical to REST XML's, except that they are wrapped
@@ -25,14 +25,14 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
  * of the response parsing, but it overrides [operationParser] to add the protocol differences.
  */
 class AwsQueryParserGenerator(
-    protocolConfig: ProtocolConfig,
+    codegenContext: CodegenContext,
     xmlErrors: RuntimeType,
     private val xmlBindingTraitParserGenerator: XmlBindingTraitParserGenerator =
         XmlBindingTraitParserGenerator(
-            protocolConfig,
+            codegenContext,
             xmlErrors
         ) { context, inner ->
-            val operationName = protocolConfig.symbolProvider.toSymbol(context.shape).name
+            val operationName = codegenContext.symbolProvider.toSymbol(context.shape).name
             val responseWrapperName = operationName + "Response"
             val resultWrapperName = operationName + "Result"
             rustTemplate(

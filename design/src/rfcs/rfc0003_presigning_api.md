@@ -1,7 +1,7 @@
 RFC: API for Presigned URLs
 ============================
 
-> Status: RFC
+> Status: Implemented
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
@@ -198,17 +198,17 @@ to rename the `presigned` member to `presigned_value`
 Changes Checklist
 -----------------
 
-- [ ] Update `aws-sigv4` to support query param signing
-- [ ] Create `PresignedOperationSyntheticTrait`
-- [ ] Customize models for known presigned operations
-- [ ] Create `PresigningConfig` and its builder
-- [ ] Implement `PresignedUrlGeneratorLayer`
-- [ ] Create new AWS codegen decorator to:
-  - [ ] Add new `presigned()` method to input code generator
-  - [ ] Add new `presigned()` method to fluent client generator
-- [ ] Update `RustReservedWords` to reserve `presigned()`
-- [ ] Add integration test to S3
-- [ ] Add examples for using presigning for:
-  - [ ] S3 GetObject and PutObject
-  - [ ] CloudFront download URLs
-  - [ ] Polly SynthesizeSpeech
+- [x] Update `aws-sigv4` to support query param signing
+- [x] Create `PresignedOperationSyntheticTrait`
+- [x] Customize models for known presigned operations
+- [x] Create `PresigningConfig` and its builder
+- [x] Implement `PresignedUrlGeneratorLayer`
+- [x] Create new AWS codegen decorator to:
+  - [x] Add new `presigned()` method to input code generator
+  - [x] Add new `presigned()` method to fluent client generator
+- [x] Update `RustReservedWords` to reserve `presigned()`
+- [x] Add integration test to S3
+- [x] Add integration test to Polly
+- [x] Add examples for using presigning for:
+  - [x] S3 GetObject and PutObject
+  - [x] Polly SynthesizeSpeech
