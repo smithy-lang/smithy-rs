@@ -1,5 +1,10 @@
 #!/usr/bin/env sh
 
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0.
+#
+
 ##############################################################################
 ##
 ##  Gradle start up script for UN*X
