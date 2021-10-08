@@ -3,6 +3,8 @@ vNext (Month Day, Year)
 
 **Breaking changes**
 - :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
+- `SmithyConnector` and `DynConnector` now return `ConnectorError` instead of `Box<dyn Error>`. If you have written a custom connector, it will need to be updated to return the new error type. (#744)
+- The `DispatchError` variant of `SdkError` now contains `ConnectorError` instead of `Box<dyn Error>` (#744).
 
 **Tasks to cut release**
 - [ ] Bump MSRV on aws-sdk-rust, then delete this line.
