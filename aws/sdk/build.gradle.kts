@@ -2,6 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
+
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.aws.traits.ServiceTrait
@@ -237,7 +238,6 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
     """
 }
 
-
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
     inputs.property("servicelist", awsServices.sortedBy { it.module }.toString())
@@ -297,7 +297,10 @@ tasks.register<Copy>("relocateAwsRuntime") {
     }
     exclude("**/target")
     exclude("**/Cargo.lock")
-    filter { line -> rewritePathDependency(line) }
+    filter { line ->
+        line.let(::rewritePathDependency)
+            .let(::rewriteAwsSdkCrateVersion)
+    }
     into(sdkOutputDir)
 }
 
@@ -306,12 +309,29 @@ tasks.register<Copy>("relocateAwsRuntime") {
  * those paths need to be replaced in the final build. We should probably fix this with some symlinking.
  */
 fun rewritePathDependency(line: String): String {
-
     // some runtime crates are actually dependent on the generated bindings:
     return line.replace("../sdk/build/aws-sdk/", "")
         // others use relative dependencies::
         .replace("../../rust-runtime/", "")
 }
+
+fun rewriteCrateVersion(line: String, version: String): String = line.replace(
+    """^\s*version\s+=\s+"0.1.0-smithy-rs-head"$""".toRegex(),
+    "version = \"$version\""
+)
+
+/**
+ * AWS runtime crate versions are all `0.1.0-smithy-rs-head`. When copying over to the AWS SDK,
+ * these should be changed to the AWS SDK version.
+ */
+fun rewriteAwsSdkCrateVersion(line: String): String = rewriteCrateVersion(line, getProperty("aws.sdk.version")!!)
+
+/**
+ * Smithy runtime crate versions in smithy-rs are all `0.1.0-smithy-rs-head`. When copying over to the AWS SDK,
+ * these should be changed to the smithy-rs version.
+ */
+fun rewriteSmithyRsCrateVersion(line: String): String =
+    rewriteCrateVersion(line, getProperty("smithy.rs.runtime.crate.version")!!)
 
 tasks.register<Copy>("relocateRuntime") {
     from("$rootDir/rust-runtime") {
@@ -321,6 +341,7 @@ tasks.register<Copy>("relocateRuntime") {
         exclude("**/target")
         exclude("**/Cargo.lock")
     }
+    filter { line -> line.let(::rewriteSmithyRsCrateVersion) }
     into(sdkOutputDir)
 }
 
