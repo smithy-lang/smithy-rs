@@ -18,3 +18,4 @@
   - [RFC-0003: API for Pre-signed URLs](./rfcs/rfc0003_presigning_api.md)
   - [RFC-0004: Retry Behavior](./rfcs/rfc0004_retry_behavior.md)
   - [RFC-0005: Smithy Rust service framework](./rfcs/rfc0005_service_generation.md)
+  - [RFC-0006: Publishing to Crates.io](./rfcs/rfc0006_crates_io_publishing.md)
