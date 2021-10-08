@@ -15,11 +15,11 @@ vNext (Month Day, Year)
     - With env vars `AWS_MAX_ATTEMPTS` and `AWS_RETRY_MODE`
     - With `~/.aws/config` settings `max_attempts` and `retry_mode`
     - By calling the `with_retry_config` method on a `Config` and passing in a `RetryConfig`
+    - Only the `Standard` retry mode is currently implemented. `Adaptive` retry mode will be implemented at a later
+      date.
     - For more info, see the AWS Reference pages on configuring these settings:
         - [Setting global max attempts](https://docs.aws.amazon.com/sdkref/latest/guide/setting-global-max_attempts.html)
         - [Setting global retry mode](https://docs.aws.amazon.com/sdkref/latest/guide/setting-global-retry_mode.html)
-- Add `RetryConfigDecorator` and update `AwsCodegenDecorator` to include it
-- Update `AwsFluentClientDecorator` and `SharedConfigDecorator` to support retry behavior configuration
 - :tada: Add presigned request support and examples for S3 GetObject and PutObject (smithy-rs#731, aws-sdk-rust#139)
 - :tada: Add presigned request support and example for Polly SynthesizeSpeech (smithy-rs#735, aws-sdk-rust#139)
 - :bug: Fix error when receiving `Cont` event from S3 SelectObjectContent (smithy-rs#736)

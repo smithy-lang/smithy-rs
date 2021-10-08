@@ -70,7 +70,9 @@ impl Builder {
     /// ```rust
     /// use aws_types::config::Config;
     /// use smithy_types::retry::RetryConfig;
-    /// let config = Config::builder().retry_config(RetryConfig::new()).build();
+    ///
+    /// let retry_config = RetryConfig::new().with_max_attempts(5);
+    /// let config = Config::builder().retry_config(retry_mode).build();
     /// ```
     pub fn retry_config(mut self, retry_config: RetryConfig) -> Self {
         self.set_retry_config(Some(retry_config));
@@ -166,7 +168,7 @@ impl Config {
         self.region.as_ref()
     }
 
-    /// Configured region
+    /// Configured retry config
     pub fn retry_config(&self) -> Option<&RetryConfig> {
         self.retry_config.as_ref()
     }

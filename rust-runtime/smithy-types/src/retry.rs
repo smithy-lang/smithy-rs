@@ -5,7 +5,9 @@
 
 //! This module defines types that describe when to retry given a response.
 
+use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
+use std::num::ParseIntError;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -78,33 +80,36 @@ pub enum RetryMode {
     Adaptive,
 }
 
-#[derive(Debug)]
-pub struct RetryModeErr(String);
+const VALID_RETRY_MODES: &[RetryMode] = &[RetryMode::Standard];
 
-impl Display for RetryModeErr {
+#[derive(Debug)]
+pub struct RetryModeParseErr(String);
+
+impl Display for RetryModeParseErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "error parsing string '{}' as RetryMode, valid options are 'standard' or 'adaptive'",
-            self.0
+            "error parsing string '{}' as RetryMode, valid options are: {:#?}",
+            self.0, VALID_RETRY_MODES
         )
     }
 }
 
-impl std::error::Error for RetryModeErr {}
+impl std::error::Error for RetryModeParseErr {}
 
 impl FromStr for RetryMode {
-    type Err = RetryModeErr;
+    type Err = RetryModeParseErr;
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         let string = string.trim();
         // eq_ignore_ascii_case is OK here because the only strings we need to check for are ASCII
         if string.eq_ignore_ascii_case("standard") {
             Ok(RetryMode::Standard)
-        } else if string.eq_ignore_ascii_case("adaptive") {
-            Ok(RetryMode::Adaptive)
+        // TODO we can uncomment this once this issue is addressed: https://github.com/awslabs/aws-sdk-rust/issues/247
+        // } else if string.eq_ignore_ascii_case("adaptive") {
+        //     Ok(RetryMode::Adaptive)
         } else {
-            Err(RetryModeErr(string.to_owned()))
+            Err(RetryModeParseErr(string.to_owned()))
         }
     }
 }
@@ -119,6 +124,10 @@ pub struct RetryConfig {
 impl RetryConfig {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn disabled() -> Self {
+        Self::default().with_max_attempts(1)
     }
 
     pub fn with_retry_mode(mut self, retry_mode: RetryMode) -> Self {
@@ -152,14 +161,18 @@ impl Default for RetryConfig {
 #[derive(Debug)]
 pub enum RetryConfigErr {
     InvalidRetryMode {
-        source: RetryModeErr,
-        set_by: String,
+        source: RetryModeParseErr,
+        set_by: Cow<'static, str>,
     },
     MaxAttemptsMustNotBeZero {
-        set_by: String,
+        set_by: Cow<'static, str>,
+    },
+    FailedToParseMaxAttempts {
+        source: ParseIntError,
+        set_by: Cow<'static, str>,
     },
     AdaptiveModeIsNotSupported {
-        set_by: String,
+        set_by: Cow<'static, str>,
     },
 }
 
@@ -173,8 +186,15 @@ impl Display for RetryConfigErr {
             MaxAttemptsMustNotBeZero { set_by } => {
                 write!(f, "invalid configuration set by {}: It is invalid to set max attempts to 0. Unset it or set it to an integer greater than or equal to one.", set_by)
             }
+            FailedToParseMaxAttempts { set_by, source } => {
+                write!(
+                    f,
+                    "failed to parse max attempts set by {}: {}",
+                    set_by, source
+                )
+            }
             AdaptiveModeIsNotSupported { set_by } => {
-                write!(f, "invalid configuration set by {}: Setting retry mode to 'adaptive' is not yet supported. Unset it or set it to a supported mode.", set_by)
+                write!(f, "invalid configuration set by {}: Setting retry mode to 'adaptive' is not yet supported. Unset it or set it to 'standard' mode.", set_by)
             }
         }
     }
@@ -182,8 +202,10 @@ impl Display for RetryConfigErr {
 
 impl std::error::Error for RetryConfigErr {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use RetryConfigErr::*;
         match self {
-            RetryConfigErr::InvalidRetryMode { source, .. } => Some(source),
+            InvalidRetryMode { source, .. } => Some(source),
+            FailedToParseMaxAttempts { source, .. } => Some(source),
             _ => None,
         }
     }

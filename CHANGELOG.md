@@ -3,6 +3,9 @@ vNext (Month Day, Year)
 **Breaking changes**
 - :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
 - :warning: `smithy_client::retry::Config` field `max_retries` is renamed to `max_attempts`
+  - This also brings a change to the semantics of the field. In the old version, setting `max_retries` to 3 would mean
+    that up to 4 requests could occur (1 initial request and 3 retries). In the new version, setting `max_attempts` to 3
+    would mean that up to 3 requests could occur (1 initial request and 2 retries).
 - :warning: `smithy_client::retry::Config::with_max_retries` method is renamed to `with_max_attempts`
 - :warning: Several classes in the codegen module were renamed and/or refactored (smithy-rs#735):
   - `ProtocolConfig` became `CodegenContext` and moved to `software.amazon.smithy.rust.codegen.smithy`

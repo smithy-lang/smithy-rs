@@ -37,11 +37,19 @@ impl EnvironmentVariableRetryConfigProvider {
 
     /// Attempt to create a new `RetryConfig` from environment variables
     pub fn retry_config(&self) -> Result<Option<RetryConfig>, RetryConfigErr> {
-        let max_attempts = self
-            .env
-            .get(ENV_VAR_MAX_ATTEMPTS)
-            .ok()
-            .and_then(|max_attempts| max_attempts.parse::<u32>().ok());
+        let max_attempts = match self.env.get(ENV_VAR_MAX_ATTEMPTS).ok() {
+            Some(max_attempts) => match max_attempts.parse::<u32>() {
+                Ok(max_attempts) => Some(max_attempts),
+                Err(source) => {
+                    return Err(RetryConfigErr::FailedToParseMaxAttempts {
+                        set_by: "environment variable".into(),
+                        source,
+                    });
+                }
+            },
+            None => None,
+        };
+
         let retry_mode = self.env.get(ENV_VAR_RETRY_MODE).ok();
 
         // If neither env vars are set, we're done with this provider
@@ -55,7 +63,7 @@ impl EnvironmentVariableRetryConfigProvider {
         if let Some(max_attempts) = max_attempts {
             if max_attempts == 0 {
                 return Err(RetryConfigErr::MaxAttemptsMustNotBeZero {
-                    set_by: "environment variable".to_owned(),
+                    set_by: "environment variable".into(),
                 });
             };
 
@@ -66,13 +74,13 @@ impl EnvironmentVariableRetryConfigProvider {
             match RetryMode::from_str(&retry_mode) {
                 Ok(retry_mode) if retry_mode == RetryMode::Adaptive => {
                     return Err(RetryConfigErr::AdaptiveModeIsNotSupported {
-                        set_by: "environment variable".to_owned(),
+                        set_by: "environment variable".into(),
                     });
                 }
                 Ok(retry_mode) => retry_config = retry_config.with_retry_mode(retry_mode),
                 Err(retry_mode_err) => {
                     return Err(RetryConfigErr::InvalidRetryMode {
-                        set_by: "environment variable".to_owned(),
+                        set_by: "environment variable".into(),
                         source: retry_mode_err,
                     });
                 }

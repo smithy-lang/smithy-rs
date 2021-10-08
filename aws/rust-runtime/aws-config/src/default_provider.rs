@@ -96,9 +96,29 @@ pub mod retry_config {
 
     /// Default RetryConfig Provider chain
     ///
+    /// Unlike other "providers" `RetryConfig` has no related `RetryConfigProvider` trait. Instead,
+    /// a builder struct is returned which has a similar API.
+    ///
     /// This provider will check the following sources in order:
     /// 1. [Environment variables](EnvironmentVariableRetryConfigProvider)
     /// 2. [Profile file](crate::profile::retry_config::ProfileFileRetryConfigProvider)
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use std::error::Error;
+    /// #
+    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// use aws_config::default_provider::retry_config;
+    /// // Creating a RetryConfig from the default_provider already happens when loading a config from_env
+    /// // This is only for illustration purposes
+    /// let retry_config = retry_config::default_provider().retry_config();
+    /// let config = aws_config::from_env().retry_config(retry_config).load().await;
+    /// // instantiate a service client:
+    /// // <my_aws_service>::Client::new(&config);
+    /// #     Ok(())
+    /// # }
+    /// ```
     pub fn default_provider() -> Builder {
         Builder::default()
     }
@@ -132,11 +152,23 @@ pub mod retry_config {
         /// 1. [Environment variables](crate::environment::retry_config::EnvironmentVariableRetryConfigProvider)
         /// 2. [Profile file](crate::profile::retry_config::ProfileFileRetryConfigProvider)
         /// 3. [RetryConfig::default()](smithy_types::retry::RetryConfig::default)
+        ///
+        /// # Panics
+        ///
+        /// - Panics if the `AWS_MAX_ATTEMPTS` env var or `max_attempts` profile var is set to 0
+        /// - Panics if the `AWS_RETRY_MODE` env var or `retry_mode` profile var is set to "adaptive" (it's not yet supported)
         pub async fn retry_config(self) -> RetryConfig {
             // Both of these can return errors due to invalid config settings and we want to surface those as early as possible
             // hence, we'll panic if any config values are invalid (missing values are OK though)
-            let retry_config_from_env = self.env_provider.retry_config().unwrap();
-            let retry_config_from_profile = self.profile_file.build().retry_config().await.unwrap();
+            // We match this instead of unwrapping so we can print the error with the `Display` impl instead of the `Debug` impl that unwrap uses
+            let retry_config_from_env = match self.env_provider.retry_config() {
+                Ok(retry_config) => retry_config,
+                Err(err) => panic!("{}", err),
+            };
+            let retry_config_from_profile = match self.profile_file.build().retry_config().await {
+                Ok(retry_config) => retry_config,
+                Err(err) => panic!("{}", err),
+            };
 
             retry_config_from_env
                 .or(retry_config_from_profile)
@@ -315,11 +347,17 @@ pub mod credentials {
 
     #[cfg(test)]
     mod test {
+        use std::collections::HashMap;
+
         use tracing_test::traced_test;
 
         use aws_types::credentials::ProvideCredentials;
+        use aws_types::os_shim_internal::{Env, Fs};
+        use smithy_types::retry::{RetryConfig, RetryMode};
 
         use crate::default_provider::credentials::DefaultCredentialsChain;
+        use crate::default_provider::retry_config;
+        use crate::provider_config::ProviderConfig;
         use crate::test_case::TestEnvironment;
 
         /// Test generation macro
@@ -405,6 +443,130 @@ pub mod credentials {
                 .await
                 .expect("creds should load");
             assert_eq!(creds.access_key_id(), "correct_key_secondary");
+        }
+
+        fn fs_from_tuples(tuples: &[(&str, &str)]) -> Fs {
+            let mut fs = HashMap::new();
+            tuples.iter().for_each(|(k, v)| {
+                let k = (*k).to_owned();
+                let v = v.as_bytes().to_vec();
+                fs.insert(k, v);
+            });
+            Fs::from_map(fs)
+        }
+
+        #[tokio::test]
+        async fn test_returns_default_retry_config_from_empty_profile() {
+            let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
+            let fs = fs_from_tuples(&[("config", "[default]\n")]);
+
+            let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
+
+            let actual_retry_config = retry_config::default_provider()
+                .configure(&provider_config)
+                .retry_config()
+                .await;
+
+            let expected_retry_config = RetryConfig::new();
+
+            assert_eq!(actual_retry_config, expected_retry_config)
+        }
+
+        #[tokio::test]
+        async fn test_no_retry_config_in_empty_profile() {
+            let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
+            let fs = fs_from_tuples(&[("config", "[default]\n")]);
+
+            let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
+
+            let actual_retry_config = retry_config::default_provider()
+                .configure(&provider_config)
+                .retry_config()
+                .await;
+
+            let expected_retry_config = RetryConfig::new();
+
+            assert_eq!(actual_retry_config, expected_retry_config)
+        }
+
+        #[tokio::test]
+        async fn test_creation_of_retry_config_from_profile() {
+            let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
+            // TODO standard is the default mode; this test would be better if it was setting it to adaptive mode
+            // adaptive mode is currently unsupported so that would panic
+            let fs = fs_from_tuples(&[(
+                "config",
+                // If the lines with the vars have preceding spaces, they don't get read
+                r#"[default]
+max_attempts = 1
+retry_mode = standard
+            "#,
+            )]);
+
+            let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
+
+            let actual_retry_config = retry_config::default_provider()
+                .configure(&provider_config)
+                .retry_config()
+                .await;
+
+            let expected_retry_config = RetryConfig::new()
+                .with_max_attempts(1)
+                .with_retry_mode(RetryMode::Standard);
+
+            assert_eq!(actual_retry_config, expected_retry_config)
+        }
+
+        #[tokio::test]
+        async fn test_env_retry_config_takes_precedence_over_profile_retry_config() {
+            let env = Env::from_slice(&[
+                ("AWS_CONFIG_FILE", "config"),
+                ("AWS_MAX_ATTEMPTS", "42"),
+                ("AWS_RETRY_MODE", "standard"),
+            ]);
+            // TODO standard is the default mode; this test would be better if it was setting it to adaptive mode
+            // adaptive mode is currently unsupported so that would panic
+            let fs = fs_from_tuples(&[(
+                "config",
+                // If the lines with the vars have preceding spaces, they don't get read
+                r#"[default]
+max_attempts = 88
+retry_mode = standard
+            "#,
+            )]);
+
+            let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
+
+            let actual_retry_config = retry_config::default_provider()
+                .configure(&provider_config)
+                .retry_config()
+                .await;
+
+            let expected_retry_config = RetryConfig::new()
+                .with_max_attempts(42)
+                .with_retry_mode(RetryMode::Standard);
+
+            assert_eq!(actual_retry_config, expected_retry_config)
+        }
+
+        #[tokio::test]
+        #[should_panic = "failed to parse max attempts set by aws profile: invalid digit found in string"]
+        async fn test_invalid_profile_retry_config_panics() {
+            let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
+            let fs = fs_from_tuples(&[(
+                "config",
+                // If the lines with the vars have preceding spaces, they don't get read
+                r#"[default]
+max_attempts = potato
+            "#,
+            )]);
+
+            let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
+
+            let _ = retry_config::default_provider()
+                .configure(&provider_config)
+                .retry_config()
+                .await;
         }
     }
 }

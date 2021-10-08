@@ -25,8 +25,7 @@ use crate::provider_config::ProviderConfig;
 /// max_attempts = 2
 /// ```
 ///
-/// **Loads `standard` as the `retry_mode` _if and only if_ the `AWS_PROFILE` environment variable is set
-/// to `other`.
+/// **Loads `standard` as the `retry_mode` _if and only if_ the `other` profile is selected.
 ///
 /// ```ini
 /// [profile other]
@@ -113,9 +112,18 @@ impl ProfileFileRetryConfigProvider {
             }
         };
 
-        let max_attempts = selected_profile
-            .get("max_attempts")
-            .and_then(|max_attempts| max_attempts.parse::<u32>().ok());
+        let max_attempts = match selected_profile.get("max_attempts") {
+            Some(max_attempts) => match max_attempts.parse::<u32>() {
+                Ok(max_attempts) => Some(max_attempts),
+                Err(source) => {
+                    return Err(RetryConfigErr::FailedToParseMaxAttempts {
+                        set_by: "aws profile".into(),
+                        source,
+                    });
+                }
+            },
+            None => None,
+        };
         let retry_mode = selected_profile.get("retry_mode");
 
         // If neither profile vars are set, we're done with this provider
@@ -129,7 +137,7 @@ impl ProfileFileRetryConfigProvider {
         if let Some(max_attempts) = max_attempts {
             if max_attempts == 0 {
                 return Err(RetryConfigErr::MaxAttemptsMustNotBeZero {
-                    set_by: "aws profile".to_owned(),
+                    set_by: "aws profile".into(),
                 });
             };
 
@@ -140,14 +148,14 @@ impl ProfileFileRetryConfigProvider {
             match RetryMode::from_str(retry_mode) {
                 Ok(retry_mode) if retry_mode == RetryMode::Adaptive => {
                     return Err(RetryConfigErr::AdaptiveModeIsNotSupported {
-                        set_by: "aws profile".to_owned(),
+                        set_by: "aws profile".into(),
                     });
                 }
                 Ok(retry_mode) => retry_config = retry_config.with_retry_mode(retry_mode),
-                Err(retry_mode_err) => {
+                Err(source) => {
                     return Err(RetryConfigErr::InvalidRetryMode {
-                        set_by: "aws profile".to_owned(),
-                        source: retry_mode_err,
+                        set_by: "aws profile".into(),
+                        source,
                     });
                 }
             };

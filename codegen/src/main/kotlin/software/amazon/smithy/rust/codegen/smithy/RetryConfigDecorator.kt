@@ -5,13 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.smithy
 
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
@@ -78,14 +75,6 @@ class RetryConfigDecorator : RustCodegenDecorator {
         return baseCustomizations + RetryConfigProviderConfig(codegenContext.runtimeConfig)
     }
 
-    override fun operationCustomizations(
-        codegenContext: CodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
-    ): List<OperationCustomization> {
-        return baseCustomizations + RetryConfigConfigPlugin()
-    }
-
     override fun libRsCustomizations(
         codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
@@ -122,24 +111,6 @@ class RetryConfigProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizat
                 """retry_config: self.retry_config,""",
                 *codegenScope
             )
-        }
-    }
-}
-
-class RetryConfigConfigPlugin : OperationCustomization() {
-    override fun section(section: OperationSection): Writable {
-        return when (section) {
-            is OperationSection.MutateRequest -> writable {
-                // Allow the retry config to be late-inserted via another method
-                rust(
-                    """
-                if let Some(retry_config) = &${section.config}.retry_config {
-                    ${section.request}.properties_mut().insert(retry_config.clone());
-                }
-                """
-                )
-            }
-            else -> emptySection
         }
     }
 }
