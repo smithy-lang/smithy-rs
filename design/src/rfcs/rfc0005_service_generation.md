@@ -19,14 +19,14 @@ input and output structures, and errors defined in the service model.
 ### Performance
 
 This new framework is built with performance in mind. It refrains from
-allocating memory when not needed and try to use a majority of
+allocating memory when not needed and tries to use a majority of
 [borrowed](https://doc.rust-lang.org/std/borrow/trait.Borrow.html) types,
 handling their memory lifetimes so that a request body can be stored in memory
 only once and not
 [cloned](https://doc.rust-lang.org/std/clone/trait.Clone.html) if possible.
 
 The code is implemented on solid and widely used foundations. It uses
-[Hyper](https://hyper.rs/) to handle the HTTP protocol, the
+[Hyper](https://hyper.rs/) to handle the HTTP requests, the
 [Tokio](https://tokio.rs/) ecosystem for asynchronous (non-blocking) operations
 and [Tower](https://docs.rs/tower/) to implement middleware such as timeouts,
 rate limiting, retries, and more. CPU intensive operations are scheduled on a
@@ -39,7 +39,7 @@ a relatively thin layer on top of Hyper and adds very little overhead, so its
 [performance is comparable](https://github.com/programatik29/rust-web-benchmarks/blob/master/results/hello-world.md)
 to Hyper.
 
-The framework should be able to let customers use the built-in HTTP server or
+The framework should allow customers to use the built-in HTTP server or
 select other transport implementations that can be more performant or better
 suited than HTTP for their use case.
 
@@ -54,7 +54,7 @@ framework itself.
 ### Observability
 
 Being able to report and trace the status of the service is vital for the
-success of any product. The framework is integrated with tracing and allow
+success of any product. The framework is integrated with tracing and allows
 non-blocking I/O through the asynchronous
 [tracing appender](https://tracing.rs/tracing_appender/index.html#non-blocking-writer).
 
