@@ -4,6 +4,8 @@ vNext (Month Day, Year)
 **Breaking changes**
 
 - :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
+- `SmithyConnector` and `DynConnector` now return `ConnectorError` instead of `Box<dyn Error>`. If you have written a custom connector, it will need to be updated to return the new error type. (#744)
+- The `DispatchError` variant of `SdkError` now contains `ConnectorError` instead of `Box<dyn Error>` (#744).
 
 **Tasks to cut release**
 
@@ -22,9 +24,22 @@ vNext (Month Day, Year)
         - [Setting global retry mode](https://docs.aws.amazon.com/sdkref/latest/guide/setting-global-retry_mode.html)
 - :tada: Add presigned request support and examples for S3 GetObject and PutObject (smithy-rs#731, aws-sdk-rust#139)
 - :tada: Add presigned request support and example for Polly SynthesizeSpeech (smithy-rs#735, aws-sdk-rust#139)
+- Add connect & HTTP read timeouts to IMDS, defaulting to 1 second
+- IO and timeout errors from Hyper can now be retried (#744)
 - :bug: Fix error when receiving `Cont` event from S3 SelectObjectContent (smithy-rs#736)
 - :bug: Fix bug in event stream receiver that could cause the last events in the response stream to be lost when using S3 SelectObjectContent (smithy-rs#736)
+- Updated EC2 code examples to include readme; refactored operations from main into separate functions.
 - Updated Transcribe code example to take an audio file as a command-line option and added readme.
+- Refactored API Gateway code example by moving operation out of main and into a separate function; added readme.
+- Updated Auto Scaling code example to move operation from main to separate function; added readme.
+- Updated AWS Config code examples to include a readme; added command-line options; added DeleteConfigurationRecorder, DeleteDeliveryChannel, ListConfigurationRecorders, ListDeliveryChannels, ListResources, ShowResourceHistory, and EnableConfig code examples.
+- :tada: Add support for 6 new AWS services:
+    - Wisdom
+    - VoiceId
+    - Account
+    - KafkaConnect
+    - OpenSearch
+    - CloudControl
 
 v0.0.19-alpha (September 24th, 2021)
 ====================================
