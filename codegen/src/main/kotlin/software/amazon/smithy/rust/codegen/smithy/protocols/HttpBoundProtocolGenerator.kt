@@ -76,6 +76,7 @@ private class HttpBoundProtocolTraitImplGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
     private val operationSerModule = RustModule.private("operation_ser")
+    private val operationDeserModule = RustModule.private("operation_deser")
 
     private val codegenScope = arrayOf(
         "ParseStrict" to RuntimeType.parseStrict(runtimeConfig),
@@ -165,7 +166,7 @@ private class HttpBoundProtocolTraitImplGenerator(
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
-        return RuntimeType.forInlineFun(fnName, operationSerModule) {
+        return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
                 "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
@@ -237,7 +238,7 @@ private class HttpBoundProtocolTraitImplGenerator(
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
-        return RuntimeType.forInlineFun(fnName, operationSerModule) {
+        return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
                 "pub fn $fnName(op_response: &mut #{operation}::Response) -> std::result::Result<#{O}, #{E}>",
@@ -263,7 +264,7 @@ private class HttpBoundProtocolTraitImplGenerator(
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
-        return RuntimeType.forInlineFun(fnName, operationSerModule) {
+        return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
                 "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
