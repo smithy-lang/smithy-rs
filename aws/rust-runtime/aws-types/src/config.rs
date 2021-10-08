@@ -72,7 +72,7 @@ impl Builder {
     /// use smithy_types::retry::RetryConfig;
     ///
     /// let retry_config = RetryConfig::new().with_max_attempts(5);
-    /// let config = Config::builder().retry_config(retry_mode).build();
+    /// let config = Config::builder().retry_config(retry_config).build();
     /// ```
     pub fn retry_config(mut self, retry_config: RetryConfig) -> Self {
         self.set_retry_config(Some(retry_config));
