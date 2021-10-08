@@ -10,11 +10,11 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 import java.util.ServiceLoader
@@ -39,22 +39,22 @@ interface RustCodegenDecorator {
     val order: Byte
 
     fun configCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> = baseCustomizations
 
     fun operationCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> = baseCustomizations
 
     fun libRsCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> = baseCustomizations
 
-    fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {}
+    fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {}
 
     fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap = currentProtocols
 
@@ -76,31 +76,31 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
         get() = 0
 
     override fun configCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator, customizations ->
-            decorator.configCustomizations(protocolConfig, customizations)
+            decorator.configCustomizations(codegenContext, customizations)
         }
     }
 
     override fun operationCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator, customizations ->
-            decorator.operationCustomizations(protocolConfig, operation, customizations)
+            decorator.operationCustomizations(codegenContext, operation, customizations)
         }
     }
 
     override fun libRsCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator, customizations ->
             decorator.libRsCustomizations(
-                protocolConfig,
+                codegenContext,
                 customizations
             )
         }
@@ -118,8 +118,8 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
         }
     }
 
-    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
-        return orderedDecorators.forEach { it.extras(protocolConfig, rustCrate) }
+    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+        return orderedDecorators.forEach { it.extras(codegenContext, rustCrate) }
     }
 
     override fun transformModel(service: ServiceShape, baseModel: Model): Model {

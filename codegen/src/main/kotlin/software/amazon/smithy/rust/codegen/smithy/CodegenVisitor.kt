@@ -18,13 +18,12 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.HttpProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.AddErrorMessage
@@ -48,9 +47,9 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private val rustCrate: RustCrate
     private val fileManifest = context.fileManifest
     private val model: Model
-    private val protocolConfig: ProtocolConfig
-    private val protocolGenerator: ProtocolGeneratorFactory<HttpProtocolGenerator>
-    private val httpGenerator: HttpProtocolGenerator
+    private val codegenContext: CodegenContext
+    private val protocolGenerator: ProtocolGeneratorFactory<ProtocolGenerator>
+    private val httpGenerator: ProtocolGenerator
 
     init {
         val symbolVisitorConfig =
@@ -65,14 +64,14 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val baseProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
         symbolProvider = codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
-        protocolConfig =
-            ProtocolConfig(model, symbolProvider, settings.runtimeConfig, service, protocol, settings.moduleName)
+        codegenContext =
+            CodegenContext(model, symbolProvider, settings.runtimeConfig, service, protocol, settings.moduleName)
         rustCrate = RustCrate(
             context.fileManifest,
             symbolProvider,
             DefaultPublicModules
         )
-        httpGenerator = protocolGenerator.buildProtocolGenerator(protocolConfig)
+        httpGenerator = protocolGenerator.buildProtocolGenerator(codegenContext)
     }
 
     private fun baselineTransform(model: Model) =
@@ -87,11 +86,11 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val service = settings.getService(model)
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
-        codegenDecorator.extras(protocolConfig, rustCrate)
+        codegenDecorator.extras(codegenContext, rustCrate)
         rustCrate.finalize(
             settings,
             codegenDecorator.libRsCustomizations(
-                protocolConfig,
+                codegenContext,
                 listOf()
             )
         )
@@ -112,7 +111,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         rustCrate.useShapeWriter(shape) { writer ->
             StructureGenerator(model, symbolProvider, writer, shape).render()
             if (!shape.hasTrait<SyntheticInputTrait>()) {
-                val builderGenerator = BuilderGenerator(protocolConfig.model, protocolConfig.symbolProvider, shape)
+                val builderGenerator = BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
                 builderGenerator.render(writer)
                 writer.implBlock(shape, symbolProvider) {
                     builderGenerator.renderConvenienceMethod(this)
@@ -140,7 +139,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
             rustCrate,
             httpGenerator,
             protocolGenerator.support(),
-            protocolConfig,
+            codegenContext,
             codegenDecorator
         ).render()
     }

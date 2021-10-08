@@ -350,7 +350,7 @@
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>Contains an optional backup plan display name and an array of <code>BackupRule</code>\n         objects, each of which specifies a backup rule. Each rule in a backup plan is a separate\n         scheduled task and can back up a different selection of Amazon Web Services resources.\n      </p>"
+                "smithy.api#documentation": "<p>Contains an optional backup plan display name and an array of <code>BackupRule</code>\n         objects, each of which specifies a backup rule. Each rule in a backup plan is a separate\n         scheduled task. </p>"
             }
         },
         "com.amazonaws.backup#BackupPlanName": {
@@ -924,10 +924,16 @@
                     "target": "com.amazonaws.backup#string"
                 },
                 "Type": {
-                    "target": "com.amazonaws.backup#string"
+                    "target": "com.amazonaws.backup#string",
+                    "traits": {
+                        "smithy.api#documentation": "<p></p>"
+                    }
                 },
                 "Context": {
-                    "target": "com.amazonaws.backup#string"
+                    "target": "com.amazonaws.backup#string",
+                    "traits": {
+                        "smithy.api#documentation": "<p></p>"
+                    }
                 }
             },
             "traits": {
@@ -975,7 +981,7 @@
                 "ComplianceResourceIds": {
                     "target": "com.amazonaws.backup#ComplianceResourceIdList",
                     "traits": {
-                        "smithy.api#documentation": "<p>Describes whether the control scope includes a specific resource identified by its\n         unique Amazon Resource Name (ARN).</p>"
+                        "smithy.api#documentation": "<p>The ID of the only Amazon Web Services resource that you want your control scope to\n         contain.</p>"
                     }
                 },
                 "ComplianceResourceTypes": {
@@ -1436,7 +1442,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Creates a framework with one or more controls. A framework is a collection of controls\n         that you can use to evaluate your backup practices. By using pre-built customizable\n         controls to define your policies, you can evaluate whether your backup practices comply\n         with your policies. To get insights into the compliance status of your frameworks, you can\n         set up automatic daily reports.</p>",
+                "smithy.api#documentation": "<p>Creates a framework with one or more controls. A framework is a collection of controls\n         that you can use to evaluate your backup practices. By using pre-built customizable\n         controls to define your policies, you can evaluate whether your backup practices comply\n         with your policies and which resources are not yet in compliance.</p>",
                 "smithy.api#http": {
                     "method": "POST",
                     "uri": "/audit/frameworks",
@@ -1561,14 +1567,14 @@
                 "ReportSetting": {
                     "target": "com.amazonaws.backup#ReportSetting",
                     "traits": {
-                        "smithy.api#documentation": "<p>Identifies the report template for the report. Reports are built using a report\n         template. The report templates are:</p>\n         <p>\n            <code>BACKUP_JOB_REPORT | COPY_JOB_REPORT | RESTORE_JOB_REPORT</code>\n         </p>",
+                        "smithy.api#documentation": "<p>Identifies the report template for the report. Reports are built using a report\n         template. The report templates are:</p>\n         <p>\n            <code>RESOURCE_COMPLIANCE_REPORT | CONTROL_COMPLIANCE_REPORT | BACKUP_JOB_REPORT |\n            COPY_JOB_REPORT | RESTORE_JOB_REPORT</code>\n         </p>\n         <p>If the report template is <code>RESOURCE_COMPLIANCE_REPORT</code> or\n            <code>CONTROL_COMPLIANCE_REPORT</code>, this API resource also describes the report\n         coverage by Amazon Web Services Regions and frameworks.</p>",
                         "smithy.api#required": {}
                     }
                 },
                 "ReportPlanTags": {
                     "target": "com.amazonaws.backup#stringMap",
                     "traits": {
-                        "smithy.api#documentation": "<p>Metadata that you can assign to help organize the frameworks that you create. Each tag\n         is a key-value pair.</p>"
+                        "smithy.api#documentation": "<p>Metadata that you can assign to help organize the report plans that you create. Each tag\n         is a key-value pair.</p>"
                     }
                 },
                 "IdempotencyToken": {
@@ -1593,6 +1599,12 @@
                     "target": "com.amazonaws.backup#ARN",
                     "traits": {
                         "smithy.api#documentation": "<p>An Amazon Resource Name (ARN) that uniquely identifies a resource. The format of the ARN\n         depends on the resource type.</p>"
+                    }
+                },
+                "CreationTime": {
+                    "target": "com.amazonaws.backup#timestamp",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The date and time a backup vault is created, in Unix format and Coordinated Universal\n         Time (UTC). The value of <code>CreationTime</code> is accurate to milliseconds. For\n         example, the value 1516925490.087 represents Friday, January 26, 2018 12:11:30.087\n         AM.</p>"
                     }
                 }
             }
@@ -3984,7 +3996,7 @@
                 "ResourceTypes": {
                     "target": "com.amazonaws.backup#ResourceTypes",
                     "traits": {
-                        "smithy.api#documentation": "<p>Contains a string with the supported Amazon Web Services resource types:</p>\n         <ul>\n            <li>\n               <p>\n                  <code>DynamoDB</code> for Amazon DynamoDB</p>\n            </li>\n            <li>\n               <p>\n                  <code>EBS</code> for Amazon Elastic Block Store</p>\n            </li>\n            <li>\n               <p>\n                  <code>EC2</code> for Amazon Elastic Compute Cloud</p>\n            </li>\n            <li>\n               <p>\n                  <code>EFS</code> for Amazon Elastic File System</p>\n            </li>\n            <li>\n               <p>\n                  <code>RDS</code> for Amazon Relational Database Service</p>\n            </li>\n            <li>\n               <p>\n                  <code>Aurora</code> for Amazon Aurora</p>\n            </li>\n            <li>\n               <p>\n                  <code>Storage Gateway</code> for Storage Gateway</p>\n            </li>\n         </ul>"
+                        "smithy.api#documentation": "<p>Contains a string with the supported Amazon Web Services resource types:</p>\n         <ul>\n            <li>\n               <p>\n                  <code>Aurora</code> for Amazon Aurora</p>\n            </li>\n            <li>\n               <p>\n                  <code>DynamoDB</code> for Amazon DynamoDB</p>\n            </li>\n            <li>\n               <p>\n                  <code>EBS</code> for Amazon Elastic Block Store</p>\n            </li>\n            <li>\n               <p>\n                  <code>EC2</code> for Amazon Elastic Compute Cloud</p>\n            </li>\n            <li>\n               <p>\n                  <code>EFS</code> for Amazon Elastic File System</p>\n            </li>\n            <li>\n               <p>\n                  <code>FSX</code> for Amazon FSx</p>\n            </li>\n            <li>\n               <p>\n                  <code>RDS</code> for Amazon Relational Database Service</p>\n            </li>\n            <li>\n               <p>\n                  <code>Storage Gateway</code> for Storage Gateway</p>\n            </li>\n         </ul>"
                     }
                 }
             }
@@ -5951,7 +5963,7 @@
                 "ReportTemplate": {
                     "target": "com.amazonaws.backup#string",
                     "traits": {
-                        "smithy.api#documentation": "<p>Identifies the report template for the report. Reports are built using a report\n         template. The report templates are: </p>\n         <p>\n            <code>BACKUP_JOB_REPORT | COPY_JOB_REPORT | RESTORE_JOB_REPORT</code>\n         </p>"
+                        "smithy.api#documentation": "<p>Identifies the report template for the report. Reports are built using a report\n         template. The report templates are: </p>\n         <p>\n            <code>RESOURCE_COMPLIANCE_REPORT | CONTROL_COMPLIANCE_REPORT | BACKUP_JOB_REPORT |\n            COPY_JOB_REPORT | RESTORE_JOB_REPORT</code>\n         </p>"
                     }
                 },
                 "CreationTime": {
@@ -6022,7 +6034,7 @@
                 "ReportSetting": {
                     "target": "com.amazonaws.backup#ReportSetting",
                     "traits": {
-                        "smithy.api#documentation": "<p>Identifies the report template for the report. Reports are built using a report\n         template. The report templates are:</p>\n         <p>\n            <code>BACKUP_JOB_REPORT | COPY_JOB_REPORT | RESTORE_JOB_REPORT</code>\n         </p>"
+                        "smithy.api#documentation": "<p>Identifies the report template for the report. Reports are built using a report\n         template. The report templates are:</p>\n         <p>\n            <code>RESOURCE_COMPLIANCE_REPORT | CONTROL_COMPLIANCE_REPORT | BACKUP_JOB_REPORT |\n            COPY_JOB_REPORT | RESTORE_JOB_REPORT</code>\n         </p>\n         <p>If the report template is <code>RESOURCE_COMPLIANCE_REPORT</code> or\n            <code>CONTROL_COMPLIANCE_REPORT</code>, this API resource also describes the report\n         coverage by Amazon Web Services Regions and frameworks.</p>"
                     }
                 },
                 "ReportDeliveryChannel": {
@@ -6092,8 +6104,20 @@
                 "ReportTemplate": {
                     "target": "com.amazonaws.backup#string",
                     "traits": {
-                        "smithy.api#documentation": "<p>Identifies the report template for the report. Reports are built using a report\n         template. The report templates are:</p>\n         <p>\n            <code>BACKUP_JOB_REPORT | COPY_JOB_REPORT | RESTORE_JOB_REPORT</code>\n         </p>",
+                        "smithy.api#documentation": "<p>Identifies the report template for the report. Reports are built using a report\n         template. The report templates are:</p>\n         <p>\n            <code>RESOURCE_COMPLIANCE_REPORT | CONTROL_COMPLIANCE_REPORT | BACKUP_JOB_REPORT |\n            COPY_JOB_REPORT | RESTORE_JOB_REPORT</code>\n         </p>",
                         "smithy.api#required": {}
+                    }
+                },
+                "FrameworkArns": {
+                    "target": "com.amazonaws.backup#stringList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The Amazon Resource Names (ARNs) of the frameworks a report covers.</p>"
+                    }
+                },
+                "NumberOfFrameworks": {
+                    "target": "com.amazonaws.backup#integer",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The number of frameworks a report covers.</p>"
                     }
                 }
             },
@@ -6962,6 +6986,9 @@
             },
             "errors": [
                 {
+                    "target": "com.amazonaws.backup#AlreadyExistsException"
+                },
+                {
                     "target": "com.amazonaws.backup#ConflictException"
                 },
                 {
@@ -7269,7 +7296,7 @@
                 "ReportSetting": {
                     "target": "com.amazonaws.backup#ReportSetting",
                     "traits": {
-                        "smithy.api#documentation": "<p>Identifies the report template for the report. Reports are built using a report\n         template. The report templates are:</p>\n         <p>\n            <code>BACKUP_JOB_REPORT | COPY_JOB_REPORT | RESTORE_JOB_REPORT</code>\n         </p>"
+                        "smithy.api#documentation": "<p>Identifies the report template for the report. Reports are built using a report\n         template. The report templates are:</p>\n         <p>\n            <code>RESOURCE_COMPLIANCE_REPORT | CONTROL_COMPLIANCE_REPORT | BACKUP_JOB_REPORT |\n            COPY_JOB_REPORT | RESTORE_JOB_REPORT</code>\n         </p>\n         <p>If the report template is <code>RESOURCE_COMPLIANCE_REPORT</code> or\n            <code>CONTROL_COMPLIANCE_REPORT</code>, this API resource also describes the report\n         coverage by Amazon Web Services Regions and frameworks.</p>"
                     }
                 },
                 "IdempotencyToken": {

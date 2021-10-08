@@ -26,6 +26,22 @@ struct Opt {
     verbose: bool,
 }
 
+// Creates a group.
+async fn create_group(client: &Client, name: &str, id: &str) -> Result<(), Error> {
+    client
+        .create_auto_scaling_group()
+        .auto_scaling_group_name(name)
+        .instance_id(id)
+        .min_size(1)
+        .max_size(5)
+        .send()
+        .await?;
+
+    println!("Created AutoScaling group");
+
+    Ok(())
+}
+
 /// Creates an Auto Scaling group in the Region.
 /// # Arguments
 ///
@@ -49,7 +65,6 @@ async fn main() -> Result<(), Error> {
     let region_provider = RegionProviderChain::first_try(region.map(Region::new))
         .or_default_provider()
         .or_else(Region::new("us-west-2"));
-
     println!();
 
     if verbose {
@@ -67,15 +82,5 @@ async fn main() -> Result<(), Error> {
     let shared_config = aws_config::from_env().region(region_provider).load().await;
     let client = Client::new(&shared_config);
 
-    client
-        .create_auto_scaling_group()
-        .auto_scaling_group_name(autoscaling_name)
-        .instance_id(instance_id)
-        .min_size(1)
-        .max_size(5)
-        .send()
-        .await?;
-
-    println!("Created AutoScaling group");
-    Ok(())
+    create_group(&client, &autoscaling_name, &instance_id).await
 }
