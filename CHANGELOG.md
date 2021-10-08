@@ -1,6 +1,9 @@
 vNext (Month Day, Year)
 =======================
-...
+
+**New this week**
+
+- :bug: Re-add missing deserialization operations that were missing because of a typo in `HttpBoundProtocolGenerator.kt`
 
 v0.25 (October 7th, 2021)
 =========================
