@@ -133,8 +133,10 @@ pub mod retry_config {
         /// 2. [Profile file](crate::profile::retry_config::ProfileFileRetryConfigProvider)
         /// 3. [RetryConfig::default()](smithy_types::retry::RetryConfig::default)
         pub async fn retry_config(self) -> RetryConfig {
-            let retry_config_from_env = self.env_provider.retry_config();
-            let retry_config_from_profile = self.profile_file.build().retry_config().await;
+            // Both of these can return errors due to invalid config settings and we want to surface those as early as possible
+            // hence, we'll panic if any config values are invalid (missing values are OK though)
+            let retry_config_from_env = self.env_provider.retry_config().unwrap();
+            let retry_config_from_profile = self.profile_file.build().retry_config().await.unwrap();
 
             retry_config_from_env
                 .or(retry_config_from_profile)

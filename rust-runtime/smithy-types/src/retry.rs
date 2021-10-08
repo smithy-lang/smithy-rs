@@ -149,6 +149,46 @@ impl Default for RetryConfig {
     }
 }
 
+#[derive(Debug)]
+pub enum RetryConfigErr {
+    InvalidRetryMode {
+        source: RetryModeErr,
+        set_by: String,
+    },
+    MaxAttemptsMustNotBeZero {
+        set_by: String,
+    },
+    AdaptiveModeIsNotSupported {
+        set_by: String,
+    },
+}
+
+impl Display for RetryConfigErr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        use RetryConfigErr::*;
+        match self {
+            InvalidRetryMode { set_by, source } => {
+                write!(f, "invalid configuration set by {}: {}", set_by, source)
+            }
+            MaxAttemptsMustNotBeZero { set_by } => {
+                write!(f, "invalid configuration set by {}: It is invalid to set max attempts to 0. Unset it or set it to an integer greater than or equal to one.", set_by)
+            }
+            AdaptiveModeIsNotSupported { set_by } => {
+                write!(f, "invalid configuration set by {}: Setting retry mode to 'adaptive' is not yet supported. Unset it or set it to a supported mode.", set_by)
+            }
+        }
+    }
+}
+
+impl std::error::Error for RetryConfigErr {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            RetryConfigErr::InvalidRetryMode { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::retry::RetryMode;

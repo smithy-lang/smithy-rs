@@ -6,7 +6,7 @@
 use std::str::FromStr;
 
 use aws_types::os_shim_internal::Env;
-use smithy_types::retry::{RetryConfig, RetryMode};
+use smithy_types::retry::{RetryConfig, RetryConfigErr, RetryMode};
 
 const ENV_VAR_MAX_ATTEMPTS: &str = "AWS_MAX_ATTEMPTS";
 const ENV_VAR_RETRY_MODE: &str = "AWS_RETRY_MODE";
@@ -36,7 +36,7 @@ impl EnvironmentVariableRetryConfigProvider {
     }
 
     /// Attempt to create a new `RetryConfig` from environment variables
-    pub fn retry_config(&self) -> Option<RetryConfig> {
+    pub fn retry_config(&self) -> Result<Option<RetryConfig>, RetryConfigErr> {
         let max_attempts = self
             .env
             .get(ENV_VAR_MAX_ATTEMPTS)
@@ -45,38 +45,48 @@ impl EnvironmentVariableRetryConfigProvider {
         let retry_mode = self.env.get(ENV_VAR_RETRY_MODE).ok();
 
         // If neither env vars are set, we're done with this provider
-        if let (None, None) = (&max_attempts, &retry_mode) {
-            return None;
+        if let (None, None) = (max_attempts, &retry_mode) {
+            return Ok(None);
         }
 
         // If at least one env var is set, we create a RetryConfig based on the value(s)
         let mut retry_config = RetryConfig::new();
 
         if let Some(max_attempts) = max_attempts {
-            assert_ne!(max_attempts, 0, "It is invalid to set AWS_MAX_ATTEMPTS to 0. Unset it or set it to an integer greater than or equal to one.");
+            if max_attempts == 0 {
+                return Err(RetryConfigErr::MaxAttemptsMustNotBeZero {
+                    set_by: "environment variable".to_owned(),
+                });
+            };
 
             retry_config = retry_config.with_max_attempts(max_attempts);
         }
 
-        if let Some(retry_mode) = retry_mode.as_ref() {
-            match RetryMode::from_str(retry_mode).ok() {
-                Some(retry_mode) => {
-                    assert_ne!(retry_mode, RetryMode::Adaptive, r#"Setting AWS_RETRY_MODE to "adaptive" is not yet supported. Unset it or set it to a supported mode."#);
-
-                    retry_config = retry_config.with_retry_mode(retry_mode);
-                },
-                None => panic!("It is invalid to set AWS_RETRY_MODE to {}. Unset it or set it to a supported mode.", retry_mode),
-            }
+        if let Some(retry_mode) = retry_mode {
+            match RetryMode::from_str(&retry_mode) {
+                Ok(retry_mode) if retry_mode == RetryMode::Adaptive => {
+                    return Err(RetryConfigErr::AdaptiveModeIsNotSupported {
+                        set_by: "environment variable".to_owned(),
+                    });
+                }
+                Ok(retry_mode) => retry_config = retry_config.with_retry_mode(retry_mode),
+                Err(retry_mode_err) => {
+                    return Err(RetryConfigErr::InvalidRetryMode {
+                        set_by: "environment variable".to_owned(),
+                        source: retry_mode_err,
+                    });
+                }
+            };
         }
 
-        Some(retry_config)
+        Ok(Some(retry_config))
     }
 }
 
 #[cfg(test)]
 mod test {
     use aws_types::os_shim_internal::Env;
-    use smithy_types::retry::{RetryConfig, RetryMode};
+    use smithy_types::retry::{RetryConfig, RetryConfigErr, RetryMode};
 
     use super::{EnvironmentVariableRetryConfigProvider, ENV_VAR_MAX_ATTEMPTS, ENV_VAR_RETRY_MODE};
 
@@ -86,13 +96,15 @@ mod test {
 
     #[test]
     fn no_retry_config() {
-        assert_eq!(test_provider(&[]).retry_config(), None);
+        assert_eq!(test_provider(&[]).retry_config().unwrap(), None);
     }
 
     #[test]
     fn max_attempts_is_read_correctly() {
         assert_eq!(
-            test_provider(&[(ENV_VAR_MAX_ATTEMPTS, "88")]).retry_config(),
+            test_provider(&[(ENV_VAR_MAX_ATTEMPTS, "88")])
+                .retry_config()
+                .unwrap(),
             Some(RetryConfig::new().with_max_attempts(88))
         );
     }
@@ -100,7 +112,9 @@ mod test {
     #[test]
     fn max_attempts_is_ignored_when_it_cant_be_parsed_as_an_integer() {
         assert_eq!(
-            test_provider(&[(ENV_VAR_MAX_ATTEMPTS, "not an integer")]).retry_config(),
+            test_provider(&[(ENV_VAR_MAX_ATTEMPTS, "not an integer")])
+                .retry_config()
+                .unwrap(),
             None
         );
     }
@@ -108,7 +122,9 @@ mod test {
     #[test]
     fn retry_mode_is_read_correctly() {
         assert_eq!(
-            test_provider(&[(ENV_VAR_RETRY_MODE, "standard")]).retry_config(),
+            test_provider(&[(ENV_VAR_RETRY_MODE, "standard")])
+                .retry_config()
+                .unwrap(),
             Some(RetryConfig::new().with_retry_mode(RetryMode::Standard))
         );
     }
@@ -120,7 +136,8 @@ mod test {
                 (ENV_VAR_RETRY_MODE, "standard"),
                 (ENV_VAR_MAX_ATTEMPTS, "13")
             ])
-            .retry_config(),
+            .retry_config()
+            .unwrap(),
             Some(
                 RetryConfig::new()
                     .with_max_attempts(13)
@@ -130,14 +147,24 @@ mod test {
     }
 
     #[test]
-    #[should_panic = "It is invalid to set AWS_MAX_ATTEMPTS to 0. Unset it or set it to an integer greater than or equal to one."]
     fn disallow_zero_max_attempts() {
-        let _ = test_provider(&[(ENV_VAR_MAX_ATTEMPTS, "0")]).retry_config();
+        let err = test_provider(&[(ENV_VAR_MAX_ATTEMPTS, "0")])
+            .retry_config()
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            RetryConfigErr::MaxAttemptsMustNotBeZero { .. }
+        ));
     }
 
     #[test]
-    #[should_panic = "Setting AWS_RETRY_MODE to \"adaptive\" is not yet supported. Unset it or set it to a supported mode."]
     fn disallow_setting_adaptive_mode() {
-        let _ = test_provider(&[(ENV_VAR_RETRY_MODE, "adaptive")]).retry_config();
+        let err = test_provider(&[(ENV_VAR_RETRY_MODE, "adaptive")])
+            .retry_config()
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            RetryConfigErr::AdaptiveModeIsNotSupported { .. }
+        ));
     }
 }
