@@ -14,17 +14,16 @@ import software.amazon.smithy.rustsdk.customize.s3.S3Decorator
 
 val DECORATORS = listOf(
     // General AWS Decorators
-    AwsEndpointDecorator(),
-    AwsFluentClientDecorator(),
-    AwsPresigningDecorator(),
-    CrateLicenseDecorator(),
     CredentialsProviderDecorator(),
-    IntegrationTestDecorator(),
     RegionDecorator(),
-    RetryPolicyDecorator(),
-    SharedConfigDecorator(),
-    SigV4SigningDecorator(),
+    AwsEndpointDecorator(),
     UserAgentDecorator(),
+    SigV4SigningDecorator(),
+    RetryPolicyDecorator(),
+    IntegrationTestDecorator(),
+    AwsFluentClientDecorator(),
+    CrateLicenseDecorator(),
+    SharedConfigDecorator(),
 
     // Smithy specific decorators
     RetryConfigDecorator(),
