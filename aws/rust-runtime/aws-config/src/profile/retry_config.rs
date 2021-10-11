@@ -8,7 +8,7 @@
 use std::str::FromStr;
 
 use aws_types::os_shim_internal::{Env, Fs};
-use smithy_types::retry::{RetryConfig, RetryConfigErr, RetryMode};
+use smithy_types::retry::{RetryConfigBuilder, RetryConfigErr, RetryMode};
 
 use crate::provider_config::ProviderConfig;
 
@@ -88,15 +88,14 @@ impl ProfileFileRetryConfigProvider {
         Builder::default()
     }
 
-    /// Attempt to create a new RetryConfig from a profile file.
-    /// Will return None if profile file contains no retry behavior configuration.
-    /// Will panic if provided configuration is invalid.
-    pub async fn retry_config(&self) -> Result<Option<RetryConfig>, RetryConfigErr> {
+    /// Attempt to create a new RetryConfigBuilder from a profile file.
+    pub async fn retry_config_builder(&self) -> Result<RetryConfigBuilder, RetryConfigErr> {
         let profile = match super::parser::load(&self.fs, &self.env).await {
             Ok(profile) => profile,
             Err(err) => {
                 tracing::warn!(err = %err, "failed to parse profile");
-                return Ok(None);
+                // return an empty builder
+                return Ok(RetryConfigBuilder::new());
             }
         };
 
@@ -108,12 +107,18 @@ impl ProfileFileRetryConfigProvider {
             Some(profile) => profile,
             None => {
                 tracing::warn!("failed to get selected '{}' profile", selected_profile);
-                return Ok(None);
+                // return an empty builder
+                return Ok(RetryConfigBuilder::new());
             }
         };
 
         let max_attempts = match selected_profile.get("max_attempts") {
             Some(max_attempts) => match max_attempts.parse::<u32>() {
+                Ok(max_attempts) if max_attempts == 0 => {
+                    return Err(RetryConfigErr::MaxAttemptsMustNotBeZero {
+                        set_by: "aws profile".into(),
+                    });
+                }
                 Ok(max_attempts) => Some(max_attempts),
                 Err(source) => {
                     return Err(RetryConfigErr::FailedToParseMaxAttempts {
@@ -124,43 +129,25 @@ impl ProfileFileRetryConfigProvider {
             },
             None => None,
         };
-        let retry_mode = selected_profile.get("retry_mode");
 
-        // If neither profile vars are set, we're done with this provider
-        if let (None, None) = (&max_attempts, retry_mode) {
-            return Ok(None);
-        }
-
-        // If at least one is set, we need to generate a `RetryConfig` and update it with the set value(s)
-        let mut retry_config = RetryConfig::new();
-
-        if let Some(max_attempts) = max_attempts {
-            if max_attempts == 0 {
-                return Err(RetryConfigErr::MaxAttemptsMustNotBeZero {
-                    set_by: "aws profile".into(),
-                });
-            };
-
-            retry_config = retry_config.with_max_attempts(max_attempts);
-        }
-
-        if let Some(retry_mode) = retry_mode {
-            match RetryMode::from_str(retry_mode) {
-                Ok(retry_mode) if retry_mode == RetryMode::Adaptive => {
-                    return Err(RetryConfigErr::AdaptiveModeIsNotSupported {
-                        set_by: "aws profile".into(),
-                    });
-                }
-                Ok(retry_mode) => retry_config = retry_config.with_retry_mode(retry_mode),
-                Err(source) => {
+        let retry_mode = match selected_profile.get("retry_mode") {
+            Some(retry_mode) => match RetryMode::from_str(&retry_mode) {
+                Ok(retry_mode) => Some(retry_mode),
+                Err(retry_mode_err) => {
                     return Err(RetryConfigErr::InvalidRetryMode {
                         set_by: "aws profile".into(),
-                        source,
+                        source: retry_mode_err,
                     });
                 }
-            };
-        }
+            },
+            None => None,
+        };
 
-        Ok(Some(retry_config))
+        let mut retry_config_builder = RetryConfigBuilder::new();
+        retry_config_builder
+            .set_max_attempts(max_attempts)
+            .set_mode(retry_mode);
+
+        Ok(retry_config_builder)
     }
 }

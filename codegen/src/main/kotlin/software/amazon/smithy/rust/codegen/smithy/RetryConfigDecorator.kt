@@ -72,7 +72,7 @@ class RetryConfigDecorator : RustCodegenDecorator {
         codegenContext: CodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + RetryConfigProviderConfig(codegenContext.runtimeConfig)
+        return baseCustomizations + RetryConfigProviderConfig(codegenContext)
     }
 
     override fun libRsCustomizations(
@@ -83,23 +83,54 @@ class RetryConfigDecorator : RustCodegenDecorator {
     }
 }
 
-class RetryConfigProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
-    private val retryConfig = smithyTypesRetry(runtimeConfig)
+class RetryConfigProviderConfig(private val codegenContext: CodegenContext) : ConfigCustomization() {
+    private val retryConfig = smithyTypesRetry(codegenContext.runtimeConfig)
+    private val moduleName = codegenContext.moduleName
+    private val moduleUseName = moduleName.replace("-", "_")
     private val codegenScope = arrayOf("RetryConfig" to retryConfig.member("RetryConfig"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
-            is ServiceConfig.ConfigStruct -> rustTemplate("pub(crate) retry_config: Option<#{RetryConfig}>,", *codegenScope)
+            is ServiceConfig.ConfigStruct -> rustTemplate(
+                "pub(crate) retry_config: Option<#{RetryConfig}>,",
+                *codegenScope
+            )
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("retry_config: Option<#{RetryConfig}>,", *codegenScope)
             ServiceConfig.BuilderImpl ->
                 rustTemplate(
                     """
+            /// Set the retry_config for the builder
+            ///
+            /// ## Examples
+            /// ```rust
+            /// use ${moduleUseName}::config::Config;
+            /// use #{RetryConfig};
+            ///
+            /// let retry_config = RetryConfig::new().with_max_attempts(5);
+            /// let config = Config::builder().retry_config(retry_config).build();
+            /// ```
             pub fn retry_config(mut self, retry_config: #{RetryConfig}) -> Self {
                 self.set_retry_config(Some(retry_config));
                 self
             }
         
+            /// Set the retry_config for the builder
+            ///
+            /// ## Examples
+            /// ```rust
+            /// use ${moduleUseName}::config::{Builder, Config};
+            /// use #{RetryConfig};
+            ///
+            /// fn disable_retries(builder: &mut Builder) {
+            ///     let retry_config = RetryConfig::new().with_max_attempts(1);
+            ///     builder.set_retry_config(Some(retry_config));
+            /// }
+            ///
+            /// let mut builder = Config::builder();
+            /// disable_retries(&mut builder);
+            /// let config = builder.build();
+            /// ```
             pub fn set_retry_config(&mut self, retry_config: Option<#{RetryConfig}>) -> &mut Self {
                 self.retry_config = retry_config;
                 self

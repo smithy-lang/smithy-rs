@@ -115,6 +115,69 @@ impl FromStr for RetryMode {
 }
 
 #[non_exhaustive]
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct RetryConfigBuilder {
+    pub mode: Option<RetryMode>,
+    pub max_attempts: Option<u32>,
+}
+
+impl RetryConfigBuilder {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn set_mode(&mut self, retry_mode: Option<RetryMode>) -> &mut Self {
+        self.mode = retry_mode;
+        self
+    }
+
+    pub fn set_max_attempts(&mut self, max_attempts: Option<u32>) -> &mut Self {
+        self.max_attempts = max_attempts;
+        self
+    }
+
+    pub fn mode(mut self, mode: RetryMode) -> Self {
+        self.set_mode(Some(mode));
+        self
+    }
+
+    pub fn max_attempts(mut self, max_attempts: u32) -> Self {
+        self.set_max_attempts(Some(max_attempts));
+        self
+    }
+
+    /// Merge two builders together. Values from `other` will only be used as a fallback for values
+    /// from `self` Useful for merging configs from different sources together when you want to
+    /// handle "precedence" per value instead of at the config level
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use smithy_types::retry::{RetryMode, RetryConfigBuilder};
+    /// let a = RetryConfigBuilder::new().max_attempts(1);
+    /// let b = RetryConfigBuilder::new().max_attempts(5).mode(RetryMode::Adaptive);
+    /// let retry_config = a.merge_with(b).build();
+    /// // A's value take precedence over B's value
+    /// assert_eq!(retry_config.max_attempts(), 1);
+    /// // A never set a retry mode so B's value was used
+    /// assert_eq!(retry_config.mode(), RetryMode::Adaptive);
+    /// ```
+    pub fn merge_with(self, other: Self) -> Self {
+        Self {
+            mode: self.mode.or(other.mode),
+            max_attempts: self.max_attempts.or(other.max_attempts),
+        }
+    }
+
+    pub fn build(self) -> RetryConfig {
+        RetryConfig {
+            mode: self.mode.unwrap_or(RetryMode::Standard),
+            max_attempts: self.max_attempts.unwrap_or(3),
+        }
+    }
+}
+
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub struct RetryConfig {
     mode: RetryMode,
@@ -213,8 +276,22 @@ impl std::error::Error for RetryConfigErr {
 
 #[cfg(test)]
 mod tests {
-    use crate::retry::RetryMode;
+    use crate::retry::{RetryConfigBuilder, RetryMode};
     use std::str::FromStr;
+
+    #[test]
+    fn retry_config_builder_merge_with_favors_self_values_over_other_values() {
+        let self_builder = RetryConfigBuilder::new()
+            .max_attempts(1)
+            .mode(RetryMode::Adaptive);
+        let other_builder = RetryConfigBuilder::new()
+            .max_attempts(5)
+            .mode(RetryMode::Standard);
+        let retry_config = self_builder.merge_with(other_builder).build();
+
+        assert_eq!(retry_config.max_attempts, 1);
+        assert_eq!(retry_config.mode, RetryMode::Adaptive);
+    }
 
     #[test]
     fn retry_mode_from_str_parses_valid_strings_regardless_of_casing() {

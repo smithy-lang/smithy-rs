@@ -6,7 +6,7 @@
 use std::str::FromStr;
 
 use aws_types::os_shim_internal::Env;
-use smithy_types::retry::{RetryConfig, RetryConfigErr, RetryMode};
+use smithy_types::retry::{RetryConfigBuilder, RetryConfigErr, RetryMode};
 
 const ENV_VAR_MAX_ATTEMPTS: &str = "AWS_MAX_ATTEMPTS";
 const ENV_VAR_RETRY_MODE: &str = "AWS_RETRY_MODE";
@@ -36,9 +36,14 @@ impl EnvironmentVariableRetryConfigProvider {
     }
 
     /// Attempt to create a new `RetryConfig` from environment variables
-    pub fn retry_config(&self) -> Result<Option<RetryConfig>, RetryConfigErr> {
+    pub fn retry_config_builder(&self) -> Result<RetryConfigBuilder, RetryConfigErr> {
         let max_attempts = match self.env.get(ENV_VAR_MAX_ATTEMPTS).ok() {
             Some(max_attempts) => match max_attempts.parse::<u32>() {
+                Ok(max_attempts) if max_attempts == 0 => {
+                    return Err(RetryConfigErr::MaxAttemptsMustNotBeZero {
+                        set_by: "environment variable".into(),
+                    });
+                }
                 Ok(max_attempts) => Some(max_attempts),
                 Err(source) => {
                     return Err(RetryConfigErr::FailedToParseMaxAttempts {
@@ -50,39 +55,25 @@ impl EnvironmentVariableRetryConfigProvider {
             None => None,
         };
 
-        let retry_mode = self.env.get(ENV_VAR_RETRY_MODE).ok();
-
-        // If neither env vars are set, we're done with this provider
-        if let (None, None) = (max_attempts, &retry_mode) {
-            return Ok(None);
-        }
-
-        // If at least one env var is set, we create a RetryConfig based on the value(s)
-        let mut retry_config = RetryConfig::new();
-
-        if let Some(max_attempts) = max_attempts {
-            if max_attempts == 0 {
-                return Err(RetryConfigErr::MaxAttemptsMustNotBeZero {
-                    set_by: "environment variable".into(),
-                });
-            };
-
-            retry_config = retry_config.with_max_attempts(max_attempts);
-        }
-
-        if let Some(retry_mode) = retry_mode {
-            match RetryMode::from_str(&retry_mode) {
-                Ok(retry_mode) => retry_config = retry_config.with_retry_mode(retry_mode),
+        let retry_mode = match self.env.get(ENV_VAR_RETRY_MODE) {
+            Ok(retry_mode) => match RetryMode::from_str(&retry_mode) {
+                Ok(retry_mode) => Some(retry_mode),
                 Err(retry_mode_err) => {
                     return Err(RetryConfigErr::InvalidRetryMode {
                         set_by: "environment variable".into(),
                         source: retry_mode_err,
                     });
                 }
-            };
-        }
+            },
+            Err(_) => None,
+        };
 
-        Ok(Some(retry_config))
+        let mut retry_config_builder = RetryConfigBuilder::new();
+        retry_config_builder
+            .set_max_attempts(max_attempts)
+            .set_mode(retry_mode);
+
+        Ok(retry_config_builder)
     }
 }
 
@@ -99,16 +90,20 @@ mod test {
 
     #[test]
     fn no_retry_config() {
-        assert_eq!(test_provider(&[]).retry_config().unwrap(), None);
+        let builder = test_provider(&[]).retry_config_builder().unwrap();
+
+        assert_eq!(builder.mode, None);
+        assert_eq!(builder.max_attempts, None);
     }
 
     #[test]
     fn max_attempts_is_read_correctly() {
         assert_eq!(
             test_provider(&[(ENV_VAR_MAX_ATTEMPTS, "88")])
-                .retry_config()
-                .unwrap(),
-            Some(RetryConfig::new().with_max_attempts(88))
+                .retry_config_builder()
+                .unwrap()
+                .build(),
+            RetryConfig::new().with_max_attempts(88)
         );
     }
 
@@ -116,7 +111,7 @@ mod test {
     fn max_attempts_errors_when_it_cant_be_parsed_as_an_integer() {
         assert!(matches!(
             test_provider(&[(ENV_VAR_MAX_ATTEMPTS, "not an integer")])
-                .retry_config()
+                .retry_config_builder()
                 .unwrap_err(),
             RetryConfigErr::FailedToParseMaxAttempts { .. }
         ));
@@ -126,9 +121,10 @@ mod test {
     fn retry_mode_is_read_correctly() {
         assert_eq!(
             test_provider(&[(ENV_VAR_RETRY_MODE, "standard")])
-                .retry_config()
-                .unwrap(),
-            Some(RetryConfig::new().with_retry_mode(RetryMode::Standard))
+                .retry_config_builder()
+                .unwrap()
+                .build(),
+            RetryConfig::new().with_retry_mode(RetryMode::Standard)
         );
     }
 
@@ -139,20 +135,19 @@ mod test {
                 (ENV_VAR_RETRY_MODE, "standard"),
                 (ENV_VAR_MAX_ATTEMPTS, "13")
             ])
-            .retry_config()
-            .unwrap(),
-            Some(
-                RetryConfig::new()
-                    .with_max_attempts(13)
-                    .with_retry_mode(RetryMode::Standard)
-            )
+            .retry_config_builder()
+            .unwrap()
+            .build(),
+            RetryConfig::new()
+                .with_max_attempts(13)
+                .with_retry_mode(RetryMode::Standard)
         );
     }
 
     #[test]
     fn disallow_zero_max_attempts() {
         let err = test_provider(&[(ENV_VAR_MAX_ATTEMPTS, "0")])
-            .retry_config()
+            .retry_config_builder()
             .unwrap_err();
         assert!(matches!(
             err,
