@@ -70,7 +70,9 @@ impl Config {
         self
     }
 
-    /// Override the maximum number of retries
+    /// Override the maximum number of attempts
+    ///
+    /// `max_attempts` must be set to a value of at least `1` (indicating that retries are disabled).
     pub fn with_max_attempts(mut self, max_attempts: u32) -> Self {
         self.max_attempts = max_attempts;
         self
