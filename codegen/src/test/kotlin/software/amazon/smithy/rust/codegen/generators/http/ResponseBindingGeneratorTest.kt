@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.renderWithModelBuilder
-import software.amazon.smithy.rust.codegen.testutil.testProtocolConfig
+import software.amazon.smithy.rust.codegen.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -70,7 +70,7 @@ class ResponseBindingGeneratorTest {
     private val model = OperationNormalizer.transform(baseModel)
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
     private val symbolProvider = testSymbolProvider(model)
-    private val testCodegenContext: CodegenContext = testProtocolConfig(model)
+    private val testCodegenContext: CodegenContext = testCodegenContext(model)
 
     private fun RustWriter.renderOperation() {
         operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)

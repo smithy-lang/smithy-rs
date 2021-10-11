@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.renderWithModelBuilder
-import software.amazon.smithy.rust.codegen.testutil.testProtocolConfig
+import software.amazon.smithy.rust.codegen.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.lookup
@@ -45,7 +45,7 @@ class Ec2QueryParserGeneratorTest {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = Ec2QueryParserGenerator(
-            testProtocolConfig(model),
+            testCodegenContext(model),
             RuntimeType.wrappedXmlErrors(TestRuntimeConfig)
         )
         val operationParser = parserGenerator.operationParser(model.lookup("test#SomeOperation"))!!
