@@ -1,6 +1,8 @@
 vNext (Month Day, Year)
 =======================
 
+- Add `RustSettings` to `CodegenContext` (smithy-rs#616, smithy-rs#752)
+
 v0.25.1 (October 11th, 2021)
 =========================
 **New this week**
