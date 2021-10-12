@@ -81,9 +81,10 @@ The following are example scenarios that may occur that the publishing implement
 2. **Bug fixed in runtime crate**: Runtime crate is `minor` version bumped. All runtime crates that depend on it are
    also `minor` version bumped, and all of the AWS SDK crates are `minor` version bumped.
 3. **Bug fixed in codegen**: All AWS SDK crates are `minor` version bumped.
-4. **CVE discovered in external dependency**: If the external dependency is fixed in a `patch` revision where it will
-   automatically upgrade via semver, then no action is required. Otherwise, update the dependency where it is
-   included, and then follow the normal version bump process from there.
+4. **CVE discovered in external dependency**: All manifests depending on the vulnerable dependency are
+   updated to explicitly depend on the fixed version (or newer). If these changes are isolated to the runtime crates,
+   then `patch` revisions of those crates can be published. Otherwise, this will result in a `minor` version bump
+   in runtime crates and AWS SDK crates.
 5. **CVE discovered in runtime crate**: If it can be fixed in a backwards compatible way, then `patch` revision the
    runtime crate with the fix. Otherwise, `minor` version bump the runtime crate and follow the normal process from there.
 6. **CVE discovered in generated code**: Same process as a bug fix in codegen.
@@ -109,7 +110,7 @@ To keep things simple:
 - All AWS crates will have the same AWS SDK version
 - There will _NOT_ be `patch` revisions
 
-All runtime crate version numbers in smithy-rs will be locked at `0.1.0-smithy-rs-head`. This is a fake
+All runtime crate version numbers in smithy-rs will be locked at `0.0.0-smithy-rs-head`. This is a fake
 version number that gets replaced when generating the SDK.
 
 The SDK generator script in smithy-rs will be updated to:
@@ -139,6 +140,8 @@ The new release process would be:
 - [x] Prepare runtime crate manifests for publication to crates.io (https://github.com/awslabs/smithy-rs/pull/755)
 - [x] Update SDK generator to set correct crate versions (https://github.com/awslabs/smithy-rs/pull/755)
 - [ ] Write publish script
+
+**Effort estimated:** 1 dev week
 
 Long-term Proposal
 ------------------
@@ -178,7 +181,7 @@ This process will:
      - `aws/rust-runtime/*`
 
 For example, this may look as follows:
-```json
+```json5
 {
    "model_versions": {
       // NOTE: It's important to use the module name rather than the model json file name
@@ -211,7 +214,7 @@ The publish process relies on the existence of a `previous_versions.json`, which
 contents as the `next_versions.json` that the update process creates, but will also have the crates.io
 version of every crate listed in it. For example:
 
-```json
+```json5
 {
    "model_versions": {
       "aws-sdk-s3": "b88b2c3539b33ec20ca9c38ff26107e013eaa98b",
@@ -267,3 +270,10 @@ built to do the yanking automatically.
 - [ ] Implement smithy-rs pull request codegen diffing action
 - [ ] Implement update process action
 - [ ] Implement publish process
+
+**Effort estimated:** 5 dev weeks total
+- Codegen diffing action: 1 dev weeks
+- Update process action: 1 dev week
+- Publish process: 1 dev weeks
+- Security review: 1 dev week
+- Buffer time: 1 dev week
