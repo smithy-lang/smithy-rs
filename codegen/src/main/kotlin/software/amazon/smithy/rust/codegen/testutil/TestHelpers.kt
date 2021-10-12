@@ -61,7 +61,7 @@ fun testCodegenContext(
     TestRuntimeConfig,
     serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
     ShapeId.from("test#Protocol"),
-    "test",
+    settings.moduleName,
     settings
 )
 

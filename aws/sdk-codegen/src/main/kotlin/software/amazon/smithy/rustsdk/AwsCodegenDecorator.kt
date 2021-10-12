@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.rust.codegen.smithy.RetryConfigDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayDecorator
 import software.amazon.smithy.rustsdk.customize.auth.DisabledAuthDecorator
@@ -24,6 +25,9 @@ val DECORATORS = listOf(
     CrateLicenseDecorator(),
     SharedConfigDecorator(),
     AwsPresigningDecorator(),
+
+    // Smithy specific decorators
+    RetryConfigDecorator(),
 
     // Service specific decorators
     DisabledAuthDecorator(),

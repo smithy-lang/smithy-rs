@@ -2,15 +2,26 @@ vNext (Month Day, Year)
 =======================
 
 **Breaking changes**
+
 - :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
 - `SmithyConnector` and `DynConnector` now return `ConnectorError` instead of `Box<dyn Error>`. If you have written a custom connector, it will need to be updated to return the new error type. (#744)
 - The `DispatchError` variant of `SdkError` now contains `ConnectorError` instead of `Box<dyn Error>` (#744).
 
 **Tasks to cut release**
+
 - [ ] Bump MSRV on aws-sdk-rust, then delete this line.
 
 **New This Week**
 
+- :tada: Make retry behavior configurable
+    - With env vars `AWS_MAX_ATTEMPTS` and `AWS_RETRY_MODE`
+    - With `~/.aws/config` settings `max_attempts` and `retry_mode`
+    - By calling the `with_retry_config` method on a `Config` and passing in a `RetryConfig`
+    - Only the `Standard` retry mode is currently implemented. `Adaptive` retry mode will be implemented at a later
+      date.
+    - For more info, see the AWS Reference pages on configuring these settings:
+        - [Setting global max attempts](https://docs.aws.amazon.com/sdkref/latest/guide/setting-global-max_attempts.html)
+        - [Setting global retry mode](https://docs.aws.amazon.com/sdkref/latest/guide/setting-global-retry_mode.html)
 - :tada: Add presigned request support and examples for S3 GetObject and PutObject (smithy-rs#731, aws-sdk-rust#139)
 - :tada: Add presigned request support and example for Polly SynthesizeSpeech (smithy-rs#735, aws-sdk-rust#139)
 - Add connect & HTTP read timeouts to IMDS, defaulting to 1 second
