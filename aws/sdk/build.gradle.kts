@@ -290,20 +290,6 @@ task("relocateExamples") {
     outputs.dir(sdkOutputDir)
 }
 
-tasks.register<Copy>("relocateAwsRuntime") {
-    from("$rootDir/aws/rust-runtime")
-    awsModules.forEach {
-        include("$it/**")
-    }
-    exclude("**/target")
-    exclude("**/Cargo.lock")
-    filter { line ->
-        line.let(::rewritePathDependency)
-            .let(::rewriteAwsSdkCrateVersion)
-    }
-    into(sdkOutputDir)
-}
-
 /**
  * The aws/rust-runtime crates depend on local versions of the Smithy core runtime enabling local compilation. However,
  * those paths need to be replaced in the final build. We should probably fix this with some symlinking.
@@ -316,33 +302,62 @@ fun rewritePathDependency(line: String): String {
 }
 
 fun rewriteCrateVersion(line: String, version: String): String = line.replace(
-    """^\s*version\s+=\s+"0.1.0-smithy-rs-head"$""".toRegex(),
+    """^\s*version\s+=\s+"0.0.0-smithy-rs-head"$""".toRegex(),
     "version = \"$version\""
 )
 
 /**
- * AWS runtime crate versions are all `0.1.0-smithy-rs-head`. When copying over to the AWS SDK,
+ * AWS runtime crate versions are all `0.0.0-smithy-rs-head`. When copying over to the AWS SDK,
  * these should be changed to the AWS SDK version.
  */
 fun rewriteAwsSdkCrateVersion(line: String): String = rewriteCrateVersion(line, getProperty("aws.sdk.version")!!)
 
 /**
- * Smithy runtime crate versions in smithy-rs are all `0.1.0-smithy-rs-head`. When copying over to the AWS SDK,
+ * Smithy runtime crate versions in smithy-rs are all `0.0.0-smithy-rs-head`. When copying over to the AWS SDK,
  * these should be changed to the smithy-rs version.
  */
 fun rewriteSmithyRsCrateVersion(line: String): String =
     rewriteCrateVersion(line, getProperty("smithy.rs.runtime.crate.version")!!)
 
-tasks.register<Copy>("relocateRuntime") {
-    from("$rootDir/rust-runtime") {
-        runtimeModules.forEach {
-            include("$it/**")
-        }
-        exclude("**/target")
-        exclude("**/Cargo.lock")
+/** Patches a file with the result of the given `operation` being run on each line */
+fun patchFile(path: String, operation: (String) -> String) {
+    val patchedContents = File(path).readLines().joinToString("\n", transform = operation)
+    File(path).writeText(patchedContents)
+}
+
+tasks.register<Copy>("copyAllRuntimes") {
+    from("$rootDir/aws/rust-runtime") {
+        awsModules.forEach { include("$it/**") }
     }
-    filter { line -> line.let(::rewriteSmithyRsCrateVersion) }
+    from("$rootDir/rust-runtime") {
+        runtimeModules.forEach { include("$it/**") }
+    }
+    exclude("**/target")
+    exclude("**/Cargo.lock")
     into(sdkOutputDir)
+}
+tasks.register("relocateAwsRuntime") {
+    dependsOn("copyAllRuntimes")
+    doLast {
+        // Patch the Cargo.toml files
+        awsModules.forEach { moduleName ->
+            patchFile("$sdkOutputDir/$moduleName/Cargo.toml") { line ->
+                line.let(::rewritePathDependency)
+                    .let(::rewriteAwsSdkCrateVersion)
+            }
+        }
+    }
+}
+tasks.register("relocateRuntime") {
+    dependsOn("copyAllRuntimes")
+    doLast {
+        // Patch the Cargo.toml files
+        runtimeModules.forEach { moduleName ->
+            patchFile("$sdkOutputDir/$moduleName/Cargo.toml") { line ->
+                line.let(::rewriteSmithyRsCrateVersion)
+            }
+        }
+    }
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {
