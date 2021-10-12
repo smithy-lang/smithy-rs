@@ -203,7 +203,7 @@ data class CargoDependency(
         fun SmithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-tower")
 
         fun SmithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
-            runtimeConfig.runtimeCrate("smithy-protocol-test").copy(scope = DependencyScope.Dev)
+            runtimeConfig.runtimeCrate("protocol-test").copy(scope = DependencyScope.Dev)
 
         fun smithyJson(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("json")
         fun smithyQuery(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("query")

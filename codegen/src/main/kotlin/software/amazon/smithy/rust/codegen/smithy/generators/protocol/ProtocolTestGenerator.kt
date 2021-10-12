@@ -417,7 +417,7 @@ class ProtocolTestGenerator(
     }
 
     /**
-     * wraps `inner` in a call to `smithy_protocol_test_helpers::assert_ok`, a convenience wrapper
+     * wraps `inner` in a call to `smithy_protocol_test::assert_ok`, a convenience wrapper
      * for pretty prettying protocol test helper results
      */
     private fun assertOk(rustWriter: RustWriter, inner: RustWriter.() -> Unit) {
