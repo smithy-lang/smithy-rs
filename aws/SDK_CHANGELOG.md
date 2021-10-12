@@ -1,6 +1,11 @@
 vNext (Month Day, Year)
 =======================
 
+- Prepare crate manifests for publishing to crates.io (smithy-rs#755)
+
+v0.0.20-alpha (October 7, 2021)
+===============================
+
 **Breaking changes**
 
 - :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.

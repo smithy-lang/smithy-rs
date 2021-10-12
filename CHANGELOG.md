@@ -2,6 +2,7 @@ vNext (Month Day, Year)
 =======================
 
 - Add `RustSettings` to `CodegenContext` (smithy-rs#616, smithy-rs#752)
+- Prepare crate manifests for publishing to crates.io (smithy-rs#755)
 
 v0.25.1 (October 11th, 2021)
 =========================
