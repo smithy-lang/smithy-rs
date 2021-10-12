@@ -8,12 +8,7 @@ package software.amazon.smithy.rustsdk
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.testutil.stubConfigProject
-import software.amazon.smithy.rust.codegen.testutil.testCodegenContext
-import software.amazon.smithy.rust.codegen.testutil.unitTest
-import software.amazon.smithy.rust.codegen.testutil.validateConfigCustomizations
+import software.amazon.smithy.rust.codegen.testutil.*
 import software.amazon.smithy.rust.codegen.util.lookup
 
 internal class EndpointConfigCustomizationTest {
@@ -116,9 +111,9 @@ internal class EndpointConfigCustomizationTest {
     }
 
     @Test
-    fun `support region-based endpoint overrides`() {
+    fun `support region-specific endpoint overrides`() {
         val project =
-            stubConfigProject(endpointCustomization("test#TestService"))
+            stubConfigProject(endpointCustomization("test#TestService"), TestWorkspace.testProject())
         project.lib {
             it.addDependency(awsTypes(AwsTestRuntimeConfig))
             it.addDependency(CargoDependency.Http)
@@ -139,9 +134,9 @@ internal class EndpointConfigCustomizationTest {
     }
 
     @Test
-    fun `support non-regionalized services`() {
+    fun `support region-agnostic services`() {
         val project =
-            stubConfigProject(endpointCustomization("test#NoRegions"))
+            stubConfigProject(endpointCustomization("test#NoRegions"), TestWorkspace.testProject())
         project.lib {
             it.addDependency(awsTypes(AwsTestRuntimeConfig))
             it.addDependency(CargoDependency.Http)
