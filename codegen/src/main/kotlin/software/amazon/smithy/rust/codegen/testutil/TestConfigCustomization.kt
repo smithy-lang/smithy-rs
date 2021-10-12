@@ -43,16 +43,20 @@ fun stubCustomization(name: String): ConfigCustomization {
  * This test is not comprehensive, but it ensures that your customization generates Rust code that compiles and correctly
  * composes with other customizations.
  * */
-fun validateConfigCustomizations(vararg customization: ConfigCustomization): TestWriterDelegator {
-    val project = stubConfigProject(*customization)
+@Suppress("NAME_SHADOWING")
+fun validateConfigCustomizations(
+    customization: ConfigCustomization,
+    project: TestWriterDelegator? = null
+): TestWriterDelegator {
+    val project = project ?: TestWorkspace.testProject()
+    stubConfigProject(customization, project)
     project.compileAndTest()
     return project
 }
 
-fun stubConfigProject(vararg customization: ConfigCustomization): TestWriterDelegator {
-    val customizations = listOf(stubCustomization("a")) + customization.toList() + stubCustomization("b")
+fun stubConfigProject(customization: ConfigCustomization, project: TestWriterDelegator): TestWriterDelegator {
+    val customizations = listOf(stubCustomization("a")) + customization + stubCustomization("b")
     val generator = ServiceConfigGenerator(customizations = customizations.toList())
-    val project = TestWorkspace.testProject()
     project.withModule(RustModule.Config) {
         generator.render(it)
         it.unitTest(

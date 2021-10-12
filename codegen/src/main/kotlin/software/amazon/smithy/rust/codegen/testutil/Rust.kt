@@ -15,19 +15,8 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.EnumDefinition
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.RustDependency
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.raw
-import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
-import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
-import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
-import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.rustlang.*
+import software.amazon.smithy.rust.codegen.smithy.*
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.runCommand
@@ -88,6 +77,7 @@ object TestWorkspace {
         }
     }
 
+    @Suppress("NAME_SHADOWING")
     fun testProject(symbolProvider: RustSymbolProvider? = null): TestWriterDelegator {
         val subprojectDir = subproject()
         val symbolProvider = symbolProvider ?: object : RustSymbolProvider {
@@ -170,16 +160,7 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
     }
     """.asSmithyModel()
     this.finalize(
-        RustSettings(
-            ShapeId.from("fake#Fake"),
-            "test_${baseDir.toFile().nameWithoutExtension}",
-            "0.0.1",
-            moduleAuthors = listOf("test@module.com"),
-            runtimeConfig = TestRuntimeConfig,
-            codegenConfig = CodegenConfig(),
-            license = null,
-            model = stubModel
-        ),
+        rustSettings(stubModel),
         libRsCustomizations = listOf(),
     )
     try {
@@ -192,6 +173,18 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
         "cargo clippy".runCommand(baseDir)
     }
 }
+
+fun TestWriterDelegator.rustSettings(stubModel: Model) =
+    RustSettings(
+        ShapeId.from("fake#Fake"),
+        "test_${baseDir.toFile().nameWithoutExtension}",
+        "0.0.1",
+        moduleAuthors = listOf("test@module.com"),
+        runtimeConfig = TestRuntimeConfig,
+        codegenConfig = CodegenConfig(),
+        license = null,
+        model = stubModel
+    )
 
 // TODO: unify these test helpers a bit
 fun String.shouldParseAsRust() {
@@ -239,6 +232,7 @@ fun RustWriter.compileAndTest(
     }
 }
 
+@JvmOverloads
 private fun String.intoCrate(
     deps: Set<CargoDependency>,
     module: String? = null,

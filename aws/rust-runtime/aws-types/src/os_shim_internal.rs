@@ -98,11 +98,13 @@ impl Fs {
     ///
     /// # Examples
     /// ```rust
+    /// # async fn example() {
     /// use aws_types::os_shim_internal::Fs;
     /// let mock_fs = Fs::from_slice(&[
     ///     ("config", "[default]\nretry_mode = \"standard\""),
     /// ]);
-    /// assert_eq!(mock_fs.read_to_end("config").unwrap(), b"[default]\nretry_mode = \"standard\"");
+    /// assert_eq!(mock_fs.read_to_end("config").await.unwrap(), b"[default]\nretry_mode = \"standard\"");
+    /// # }
     /// ```
     pub fn from_slice<'a>(files: &[(&'a str, &'a str)]) -> Self {
         let fs: HashMap<String, Vec<u8>> = files

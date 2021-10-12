@@ -7,12 +7,35 @@ package software.amazon.smithy.rust
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.smithy.RetryConfigProviderConfig
-import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.testutil.validateConfigCustomizations
+import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
+import software.amazon.smithy.rust.codegen.testutil.*
 
 internal class RetryConfigProviderConfigTest {
+    private val baseModel = """
+        namespace test
+        use aws.protocols#awsQuery
+
+        structure SomeOutput {
+            @xmlAttribute
+            someAttribute: Long,
+
+            someVal: String
+        }
+
+        operation SomeOperation {
+            output: SomeOutput
+        }
+    """.asSmithyModel()
+
     @Test
     fun `generates a valid config`() {
-        validateConfigCustomizations(RetryConfigProviderConfig(TestRuntimeConfig))
+        val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
+        val project = TestWorkspace.testProject()
+        val codegenContext = testCodegenContext(model, settings = project.rustSettings(model))
+
+        println(codegenContext)
+
+        validateConfigCustomizations(RetryConfigProviderConfig(codegenContext), project)
     }
 }

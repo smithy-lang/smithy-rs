@@ -83,7 +83,7 @@ class RetryConfigDecorator : RustCodegenDecorator {
     }
 }
 
-class RetryConfigProviderConfig(private val codegenContext: CodegenContext) : ConfigCustomization() {
+class RetryConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
     private val retryConfig = smithyTypesRetry(codegenContext.runtimeConfig)
     private val moduleName = codegenContext.moduleName
     private val moduleUseName = moduleName.replace("-", "_")
@@ -104,7 +104,7 @@ class RetryConfigProviderConfig(private val codegenContext: CodegenContext) : Co
             ///
             /// ## Examples
             /// ```rust
-            /// use ${moduleUseName}::config::Config;
+            /// use $moduleUseName::config::Config;
             /// use #{RetryConfig};
             ///
             /// let retry_config = RetryConfig::new().with_max_attempts(5);
@@ -119,7 +119,7 @@ class RetryConfigProviderConfig(private val codegenContext: CodegenContext) : Co
             ///
             /// ## Examples
             /// ```rust
-            /// use ${moduleUseName}::config::{Builder, Config};
+            /// use $moduleUseName::config::{Builder, Config};
             /// use #{RetryConfig};
             ///
             /// fn disable_retries(builder: &mut Builder) {
