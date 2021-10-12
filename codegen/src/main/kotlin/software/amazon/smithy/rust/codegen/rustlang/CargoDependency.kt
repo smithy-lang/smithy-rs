@@ -142,7 +142,7 @@ data class CargoDependency(
         is Local -> "local"
     }
 
-    fun rustName(name: String): RuntimeType = RuntimeType(name, this, this.name)
+    fun rustName(name: String): RuntimeType = RuntimeType(name, this, this.name.replace("-", "_"))
 
     fun toMap(): Map<String, Any> {
         val attribs = mutableMapOf<String, Any>()
