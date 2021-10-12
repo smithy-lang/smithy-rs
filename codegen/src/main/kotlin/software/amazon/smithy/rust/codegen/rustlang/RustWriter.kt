@@ -103,6 +103,7 @@ fun <T : CodeWriter> T.rust(
     this.write(contents.trim(), *args)
 }
 
+// `RuntimeType`: `#D` => [`NameOfType`](link_to_type)
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>): String {
     check(scope.distinctBy { it.first.toLowerCase() }.size == scope.size) { "Duplicate cased keys not supported" }
     return template.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult ->

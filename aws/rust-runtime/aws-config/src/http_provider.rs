@@ -5,13 +5,15 @@
 
 //! Generalized HTTP credential provider. Currently, this cannot be used directly and can only
 //! be used via the ECS credential provider.
+//!
+//! Future work will stabilize this interface and enable it to be used directly.
 
 use crate::json_credentials::{parse_json_credentials, JsonCredentials};
 use aws_hyper::{DynConnector, SdkSuccess};
 use aws_types::credentials::CredentialsError;
 use aws_types::{credentials, Credentials};
 use bytes::Bytes;
-use http::{Response, Uri};
+use http::{HeaderValue, Response, Uri};
 use smithy_http::body::SdkBody;
 use smithy_http::operation::{Operation, Request};
 use smithy_http::response::ParseStrictResponse;
@@ -19,22 +21,28 @@ use smithy_http::result::SdkError;
 use smithy_http::retry::ClassifyResponse;
 use smithy_types::retry::{ErrorKind, RetryKind};
 
-use crate::provider_config::ProviderConfig;
+use crate::connector::expect_connector;
+use crate::provider_config::{HttpSettings, ProviderConfig};
+
+use http::header::{ACCEPT, AUTHORIZATION};
+use smithy_client::timeout;
+use std::time::Duration;
 use tower::layer::util::Identity;
 
+#[derive(Debug)]
 pub(crate) struct HttpCredentialProvider {
     uri: Uri,
     client: smithy_client::Client<DynConnector, Identity>,
     provider_name: &'static str,
 }
 
-pub(crate) struct Builder {
-    provider_config: Option<ProviderConfig>,
-}
-
 impl HttpCredentialProvider {
-    pub async fn credentials(&self) -> credentials::Result {
-        let credentials = self.client.call(self.operation()).await;
+    pub fn builder() -> Builder {
+        Builder::default()
+    }
+
+    pub async fn credentials(&self, auth: Option<HeaderValue>) -> credentials::Result {
+        let credentials = self.client.call(self.operation(auth)).await;
         match credentials {
             Ok(creds) => Ok(creds),
             Err(SdkError::ServiceError { err, .. }) => Err(err),
@@ -42,11 +50,18 @@ impl HttpCredentialProvider {
         }
     }
 
-    fn operation(&self) -> Operation<CredentialsResponseParser, HttpCredentialRetryPolicy> {
-        let http_req = http::Request::builder()
+    fn operation(
+        &self,
+        auth: Option<HeaderValue>,
+    ) -> Operation<CredentialsResponseParser, HttpCredentialRetryPolicy> {
+        let mut http_req = http::Request::builder()
             .uri(&self.uri)
-            .body(SdkBody::empty())
-            .expect("valid request");
+            .header(ACCEPT, "application/json");
+
+        if let Some(auth) = auth {
+            http_req = http_req.header(AUTHORIZATION, auth);
+        }
+        let http_req = http_req.body(SdkBody::empty()).expect("valid request");
         Operation::new(
             Request::new(http_req),
             CredentialsResponseParser {
@@ -54,6 +69,37 @@ impl HttpCredentialProvider {
             },
         )
         .with_retry_policy(HttpCredentialRetryPolicy)
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct Builder {
+    provider_config: Option<ProviderConfig>,
+    connect_timeout: Option<Duration>,
+    read_timeout: Option<Duration>,
+}
+
+impl Builder {
+    pub(crate) fn configure(mut self, provider_config: &ProviderConfig) -> Self {
+        self.provider_config = Some(provider_config.clone());
+        self
+    }
+
+    pub(crate) fn build(self, provider_name: &'static str, uri: Uri) -> HttpCredentialProvider {
+        let provider_config = self.provider_config.unwrap_or_default();
+        let connect_timeout = self.connect_timeout.unwrap_or(Duration::from_secs(2));
+        let read_timeout = self.read_timeout.unwrap_or(Duration::from_secs(5));
+        let timeout_settings = timeout::Settings::default()
+            .with_read_timeout(read_timeout)
+            .with_connect_timeout(connect_timeout);
+        let http_settings = HttpSettings { timeout_settings };
+        let connector = expect_connector(provider_config.connector(&http_settings));
+        let client = smithy_client::Builder::new().connector(connector).build();
+        HttpCredentialProvider {
+            provider_name,
+            uri,
+            client,
+        }
     }
 }
 
@@ -210,7 +256,18 @@ mod test {
             HttpCredentialRetryPolicy.classify(sdk_result.as_ref()),
             RetryKind::NotRetryable
         );
+        let sdk_error = sdk_result.expect_err("should be error");
 
-        assert!(sdk_result.is_ok(), "should be ok: {:?}", sdk_result)
+        assert!(
+            matches!(
+                sdk_error,
+                SdkError::ServiceError {
+                    err: CredentialsError::ProviderError(_),
+                    ..
+                }
+            ),
+            "should be provider error: {}",
+            sdk_error
+        );
     }
 }

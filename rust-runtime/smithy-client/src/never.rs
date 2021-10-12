@@ -23,11 +23,11 @@ use tower::BoxError;
 /// Returned futures will return Pending forever
 #[non_exhaustive]
 #[derive(Debug)]
-pub struct NeverService<R> {
-    _resp: PhantomData<R>,
+pub struct NeverService<Req, Resp, Err> {
+    _resp: PhantomData<(Req, Resp, Err)>,
 }
 
-impl<R> Clone for NeverService<R> {
+impl<Req, Resp, Err> Clone for NeverService<Req, Resp, Err> {
     fn clone(&self) -> Self {
         Self {
             _resp: Default::default(),
@@ -35,13 +35,13 @@ impl<R> Clone for NeverService<R> {
     }
 }
 
-impl<R> Default for NeverService<R> {
+impl<Req, Resp, Err> Default for NeverService<Req, Resp, Err> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<R> NeverService<R> {
+impl<Req, Resp, Err> NeverService<Req, Resp, Err> {
     /// Create a new NeverService
     pub fn new() -> Self {
         NeverService {
@@ -105,8 +105,8 @@ mod stream {
     }
 }
 
-/// A service where the underlying TCP connection never connects
-pub type NeverConnected = NeverService<TcpStream>;
+/// A service where the underyling TCP connection never connects
+pub type NeverConnected = NeverService<Uri, TcpStream, BoxError>;
 
 /// A service that will connect but never send any data
 #[derive(Clone, Debug, Default)]
@@ -132,9 +132,9 @@ impl tower::Service<Uri> for NeverReplies {
     }
 }
 
-impl<Req, Resp> tower::Service<Req> for NeverService<Resp> {
+impl<Req, Resp, Err> tower::Service<Req> for NeverService<Req, Resp, Err> {
     type Response = Resp;
-    type Error = ConnectorError;
+    type Error = Err;
     type Future = BoxFuture<Self::Response, Self::Error>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {

@@ -44,7 +44,7 @@ impl Display for CredentialsError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             CredentialsError::CredentialsNotLoaded => {
-                write!(f, "The provider could not provide credentials or required configuration was not set")
+                write!(f, "The credential provider was not enabled")
             }
             CredentialsError::ProviderTimedOut(d) => write!(
                 f,
