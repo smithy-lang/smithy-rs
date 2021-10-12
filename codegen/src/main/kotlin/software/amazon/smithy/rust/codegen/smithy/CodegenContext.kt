@@ -18,5 +18,14 @@ data class CodegenContext(
     val runtimeConfig: RuntimeConfig,
     val serviceShape: ServiceShape,
     val protocol: ShapeId,
-    val moduleName: String
-)
+    val moduleName: String,
+    val settings: RustSettings,
+) {
+    constructor(
+        model: Model,
+        symbolProvider: RustSymbolProvider,
+        serviceShape: ServiceShape,
+        protocol: ShapeId,
+        settings: RustSettings,
+    ) : this(model, symbolProvider, settings.runtimeConfig, serviceShape, protocol, settings.moduleName, settings)
+}
