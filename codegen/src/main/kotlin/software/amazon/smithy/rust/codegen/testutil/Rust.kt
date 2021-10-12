@@ -191,6 +191,7 @@ fun TestWriterDelegator.rustSettings(stubModel: Model) =
         "test_${baseDir.toFile().nameWithoutExtension}",
         "0.0.1",
         moduleAuthors = listOf("test@module.com"),
+        moduleRepository = null,
         runtimeConfig = TestRuntimeConfig,
         codegenConfig = CodegenConfig(),
         license = null,

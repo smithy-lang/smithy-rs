@@ -27,15 +27,16 @@ class CargoTomlGenerator(
             "package" to mapOf(
                 "name" to settings.moduleName,
                 "version" to settings.moduleVersion,
-                "description" to settings.moduleDescription,
                 "authors" to settings.moduleAuthors,
-                "license" to settings.license,
+                "description" to settings.moduleDescription,
                 "edition" to "2018",
+                "license" to settings.license,
+                "repository" to settings.moduleRepository,
             ),
-            "dependencies" to dependencies.filter { it.scope == DependencyScope.Compile }.map { it.name to it.toMap() }
-                .toMap(),
-            "dev-dependencies" to dependencies.filter { it.scope == DependencyScope.Dev }.map { it.name to it.toMap() }
-                .toMap(),
+            "dependencies" to dependencies.filter { it.scope == DependencyScope.Compile }
+                .associate { it.name to it.toMap() },
+            "dev-dependencies" to dependencies.filter { it.scope == DependencyScope.Dev }
+                .associate { it.name to it.toMap() },
             "features" to cargoFeatures.toMap()
         )
         writer.writeWithNoFormatting(TomlWriter().write(cargoToml))

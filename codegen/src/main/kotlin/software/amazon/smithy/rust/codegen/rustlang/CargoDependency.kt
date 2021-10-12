@@ -9,7 +9,6 @@ import software.amazon.smithy.codegen.core.SymbolDependency
 import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.crateLocation
 import software.amazon.smithy.rust.codegen.util.dq
 
 sealed class DependencyScope {
@@ -143,6 +142,8 @@ data class CargoDependency(
         is Local -> "local"
     }
 
+    fun rustName(name: String): RuntimeType = RuntimeType(name, this, this.name.replace("-", "_"))
+
     fun toMap(): Map<String, Any> {
         val attribs = mutableMapOf<String, Any>()
         with(location) {
@@ -201,9 +202,8 @@ data class CargoDependency(
         fun SmithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http")
         fun SmithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-tower")
 
-        fun ProtocolTestHelpers(runtimeConfig: RuntimeConfig) = CargoDependency(
-            "protocol-test-helpers", runtimeConfig.runtimeCrateLocation.crateLocation(), scope = DependencyScope.Dev
-        )
+        fun SmithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
+            runtimeConfig.runtimeCrate("protocol-test").copy(scope = DependencyScope.Dev)
 
         fun smithyJson(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("json")
         fun smithyQuery(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("query")

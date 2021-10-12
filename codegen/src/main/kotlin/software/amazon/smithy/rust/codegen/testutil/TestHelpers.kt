@@ -39,10 +39,21 @@ fun testRustSettings(
     moduleName: String = "test-module",
     moduleVersion: String = "notrelevant",
     moduleAuthors: List<String> = listOf("notrelevant"),
+    moduleRepository: String? = null,
     runtimeConfig: RuntimeConfig = RuntimeConfig(),
     codegenConfig: CodegenConfig = CodegenConfig(),
     license: String? = null
-) = RustSettings(service, moduleName, moduleVersion, moduleAuthors, runtimeConfig, codegenConfig, license, model)
+) = RustSettings(
+    service,
+    moduleName,
+    moduleVersion,
+    moduleAuthors,
+    moduleRepository,
+    runtimeConfig,
+    codegenConfig,
+    license,
+    model
+)
 
 fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSymbolProvider =
     RustCodegenPlugin.baseSymbolProvider(

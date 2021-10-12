@@ -1,17 +1,19 @@
 [package]
 name = "inlineable-aws"
-version = "0.1.0"
-authors = ["Russell Cohen <rcoh@amazon.com>"]
-edition = "2018"
+version = "0.0.0-smithy-rs-head"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
 description = """
 The modules of this crate are intended to be inlined directly into the SDK as needed. The dependencies here
 are to allow this crate to be compilable and testable in isolation, no client code actually takes these dependencies.
 """
+edition = "2018"
+license = "Apache-2.0"
+publish = false
+repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
 aws-types = { path = "../../rust-runtime/aws-types" }
 http = "0.2.4"
 smithy-http = { path = "../../../rust-runtime/smithy-http" }
 smithy-types = { path = "../../../rust-runtime/smithy-types" }
-smithy-xml = { path = "../../../rust-runtime/smithy-xml" }
 tower = { version = "0.4", no-default-features = true }

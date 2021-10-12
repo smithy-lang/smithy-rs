@@ -10,7 +10,7 @@
 use http::header::{HeaderName, CONTENT_TYPE};
 use http::Request;
 
-use protocol_test_helpers::{assert_ok, validate_body, MediaType};
+use smithy_protocol_test::{assert_ok, validate_body, MediaType};
 
 use smithy_http::body::SdkBody;
 use smithy_http::result::ConnectorError;

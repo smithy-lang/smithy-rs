@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
@@ -47,7 +46,7 @@ class EventStreamMarshallerGeneratorTest {
         )
 
         test.project.lib { writer ->
-            val protocolTestHelpers = CargoDependency.ProtocolTestHelpers(TestRuntimeConfig)
+            val protocolTestHelpers = CargoDependency.SmithyProtocolTestHelpers(TestRuntimeConfig)
                 .copy(scope = DependencyScope.Compile)
             writer.rustTemplate(
                 """
@@ -72,8 +71,8 @@ class EventStreamMarshallerGeneratorTest {
                     HeaderValue::String(value.into())
                 }
                 """,
-                "validate_body" to RuntimeType("validate_body", protocolTestHelpers, "protocol_test_helpers"),
-                "MediaType" to RuntimeType("MediaType", protocolTestHelpers, "protocol_test_helpers"),
+                "validate_body" to protocolTestHelpers.rustName("validate_body"),
+                "MediaType" to protocolTestHelpers.rustName("MediaType"),
             )
 
             writer.unitTest(

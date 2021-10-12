@@ -2,6 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
+
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.aws.traits.ServiceTrait
@@ -21,13 +22,13 @@ val smithyVersion: String by project
 
 val sdkOutputDir = buildDir.resolve("aws-sdk")
 val runtimeModules = listOf(
-    "protocol-test-helpers",
     "smithy-async",
     "smithy-client",
     "smithy-eventstream",
     "smithy-http",
     "smithy-http-tower",
     "smithy-json",
+    "smithy-protocol-test",
     "smithy-query",
     "smithy-types",
     "smithy-xml"
@@ -221,6 +222,7 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                         "module": "aws-sdk-${it.module}",
                         "moduleVersion": "${getProperty("aws.sdk.version")}",
                         "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
+                        "moduleRepository": "https://github.com/awslabs/aws-sdk-rust",
                         "license": "Apache-2.0"
                         ${it.extraConfig ?: ""}
                     }
@@ -235,7 +237,6 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
     }
     """
 }
-
 
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
@@ -289,38 +290,74 @@ task("relocateExamples") {
     outputs.dir(sdkOutputDir)
 }
 
-tasks.register<Copy>("relocateAwsRuntime") {
-    from("$rootDir/aws/rust-runtime")
-    awsModules.forEach {
-        include("$it/**")
-    }
-    exclude("**/target")
-    exclude("**/Cargo.lock")
-    filter { line -> rewritePathDependency(line) }
-    into(sdkOutputDir)
-}
-
 /**
  * The aws/rust-runtime crates depend on local versions of the Smithy core runtime enabling local compilation. However,
  * those paths need to be replaced in the final build. We should probably fix this with some symlinking.
  */
 fun rewritePathDependency(line: String): String {
-
     // some runtime crates are actually dependent on the generated bindings:
     return line.replace("../sdk/build/aws-sdk/", "")
         // others use relative dependencies::
         .replace("../../rust-runtime/", "")
 }
 
-tasks.register<Copy>("relocateRuntime") {
-    from("$rootDir/rust-runtime") {
-        runtimeModules.forEach {
-            include("$it/**")
-        }
-        exclude("**/target")
-        exclude("**/Cargo.lock")
+fun rewriteCrateVersion(line: String, version: String): String = line.replace(
+    """^\s*version\s+=\s+"0.0.0-smithy-rs-head"$""".toRegex(),
+    "version = \"$version\""
+)
+
+/**
+ * AWS runtime crate versions are all `0.0.0-smithy-rs-head`. When copying over to the AWS SDK,
+ * these should be changed to the AWS SDK version.
+ */
+fun rewriteAwsSdkCrateVersion(line: String): String = rewriteCrateVersion(line, getProperty("aws.sdk.version")!!)
+
+/**
+ * Smithy runtime crate versions in smithy-rs are all `0.0.0-smithy-rs-head`. When copying over to the AWS SDK,
+ * these should be changed to the smithy-rs version.
+ */
+fun rewriteSmithyRsCrateVersion(line: String): String =
+    rewriteCrateVersion(line, getProperty("smithy.rs.runtime.crate.version")!!)
+
+/** Patches a file with the result of the given `operation` being run on each line */
+fun patchFile(path: String, operation: (String) -> String) {
+    val patchedContents = File(path).readLines().joinToString("\n", transform = operation)
+    File(path).writeText(patchedContents)
+}
+
+tasks.register<Copy>("copyAllRuntimes") {
+    from("$rootDir/aws/rust-runtime") {
+        awsModules.forEach { include("$it/**") }
     }
+    from("$rootDir/rust-runtime") {
+        runtimeModules.forEach { include("$it/**") }
+    }
+    exclude("**/target")
+    exclude("**/Cargo.lock")
     into(sdkOutputDir)
+}
+tasks.register("relocateAwsRuntime") {
+    dependsOn("copyAllRuntimes")
+    doLast {
+        // Patch the Cargo.toml files
+        awsModules.forEach { moduleName ->
+            patchFile("$sdkOutputDir/$moduleName/Cargo.toml") { line ->
+                line.let(::rewritePathDependency)
+                    .let(::rewriteAwsSdkCrateVersion)
+            }
+        }
+    }
+}
+tasks.register("relocateRuntime") {
+    dependsOn("copyAllRuntimes")
+    doLast {
+        // Patch the Cargo.toml files
+        runtimeModules.forEach { moduleName ->
+            patchFile("$sdkOutputDir/$moduleName/Cargo.toml") { line ->
+                line.let(::rewriteSmithyRsCrateVersion)
+            }
+        }
+    }
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {
