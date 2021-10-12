@@ -28,7 +28,7 @@ val runtimeModules = listOf(
     "smithy-http",
     "smithy-http-tower",
     "smithy-json",
-    "smithy-protocol-test-helpers",
+    "smithy-protocol-test",
     "smithy-query",
     "smithy-types",
     "smithy-xml"

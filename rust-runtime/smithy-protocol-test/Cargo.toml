@@ -1,5 +1,5 @@
 [package]
-name = "smithy-protocol-test-helpers"
+name = "smithy-protocol-test"
 version = "0.0.0-smithy-rs-head"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
 description = "A collection of library functions to validate HTTP requests against Smithy protocol tests."

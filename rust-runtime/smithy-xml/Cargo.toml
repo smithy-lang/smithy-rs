@@ -14,4 +14,4 @@ thiserror = "1"
 [dev-dependencies]
 proptest = "1"
 base64 = "0.13.0"
-smithy-protocol-test-helpers = { path = "../smithy-protocol-test-helpers" }
+smithy-protocol-test = { path = "../smithy-protocol-test" }
