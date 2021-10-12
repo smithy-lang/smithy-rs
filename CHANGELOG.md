@@ -1,6 +1,12 @@
 vNext (Month Day, Year)
 =======================
-...
+
+- Add `RustSettings` to `CodegenContext` (smithy-rs#616, smithy-rs#752)
+
+v0.25.1 (October 11th, 2021)
+=========================
+**New this week**
+- :bug: Re-add missing deserialization operations that were missing because of a typo in `HttpBoundProtocolGenerator.kt`
 
 v0.25 (October 7th, 2021)
 =========================
@@ -12,12 +18,15 @@ v0.25 (October 7th, 2021)
     to rely on composition instead of inheritance
   - `HttpProtocolTestGenerator` became `ProtocolTestGenerator`
   - `Protocol` moved into `software.amazon.smithy.rust.codegen.smithy.protocols`
+- `SmithyConnector` and `DynConnector` now return `ConnectorError` instead of `Box<dyn Error>`. If you have written a custom connector, it will need to be updated to return the new error type. (#744)
+- The `DispatchError` variant of `SdkError` now contains `ConnectorError` instead of `Box<dyn Error>` (#744).
 
 **New this week**
 - :bug: Fix an issue where `smithy-xml` may have generated invalid XML (smithy-rs#719)
 - :bug: Fix error when receiving empty event stream messages (smithy-rs#736)
 - :bug: Fix bug in event stream receiver that could cause the last events in the response stream to be lost (smithy-rs#736)
-
+- Add connect & HTTP read timeouts to IMDS, defaulting to 1 second
+- IO and timeout errors from Hyper can now be retried (#744)
 
 **Contributors**
 

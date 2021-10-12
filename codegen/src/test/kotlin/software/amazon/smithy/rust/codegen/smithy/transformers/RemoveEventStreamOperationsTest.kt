@@ -11,9 +11,8 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.testutil.testRustSettings
 import java.util.Optional
 
 internal class RemoveEventStreamOperationsTest {
@@ -50,16 +49,9 @@ internal class RemoveEventStreamOperationsTest {
     fun `remove event stream ops from services that are not in the allow list`() {
         val transformed = RemoveEventStreamOperations.transform(
             model,
-            RustSettings(
-                service = ShapeId.from("notrelevant#notrelevant"),
-                moduleName = "test-module",
-                moduleVersion = "notrelevant",
-                moduleAuthors = listOf("notrelevant"),
-                moduleRepository = null,
-                runtimeConfig = RuntimeConfig(),
+            testRustSettings(
+                model,
                 codegenConfig = CodegenConfig(eventStreamAllowList = setOf("not-test-module")),
-                license = null,
-                model = model
             )
         )
         transformed.expectShape(ShapeId.from("test#BlobStream"))
@@ -70,16 +62,9 @@ internal class RemoveEventStreamOperationsTest {
     fun `keep event stream ops from services that are in the allow list`() {
         val transformed = RemoveEventStreamOperations.transform(
             model,
-            RustSettings(
-                service = ShapeId.from("notrelevant#notrelevant"),
-                moduleName = "test-module",
-                moduleVersion = "notrelevant",
-                moduleAuthors = listOf("notrelevant"),
-                moduleRepository = null,
-                runtimeConfig = RuntimeConfig(),
+            testRustSettings(
+                model,
                 codegenConfig = CodegenConfig(eventStreamAllowList = setOf("test-module")),
-                license = null,
-                model = model
             )
         )
         transformed.expectShape(ShapeId.from("test#BlobStream"))

@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.renderWithModelBuilder
-import software.amazon.smithy.rust.codegen.testutil.testProtocolConfig
+import software.amazon.smithy.rust.codegen.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.expectTrait
@@ -114,7 +114,7 @@ class JsonParserGeneratorTest {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = JsonParserGenerator(
-            testProtocolConfig(model),
+            testCodegenContext(model),
             HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json"))
         )
         val operationGenerator = parserGenerator.operationParser(model.lookup("test#Op"))
