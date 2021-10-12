@@ -38,7 +38,6 @@ internal class RetryConfigProviderConfigTest {
         val project = TestWorkspace.testProject()
         val codegenContext = testCodegenContext(model, settings = project.rustSettings(model))
 
-
         validateConfigCustomizations(RetryConfigProviderConfig(codegenContext), project)
     }
 }
