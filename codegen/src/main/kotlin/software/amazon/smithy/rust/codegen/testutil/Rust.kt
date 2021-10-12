@@ -88,6 +88,7 @@ object TestWorkspace {
         }
     }
 
+    @Suppress("NAME_SHADOWING")
     fun testProject(symbolProvider: RustSymbolProvider? = null): TestWriterDelegator {
         val subprojectDir = subproject()
         val symbolProvider = symbolProvider ?: object : RustSymbolProvider {
@@ -170,17 +171,7 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
     }
     """.asSmithyModel()
     this.finalize(
-        RustSettings(
-            ShapeId.from("fake#Fake"),
-            "test_${baseDir.toFile().nameWithoutExtension}",
-            "0.0.1",
-            moduleAuthors = listOf("test@module.com"),
-            moduleRepository = null,
-            runtimeConfig = TestRuntimeConfig,
-            codegenConfig = CodegenConfig(),
-            license = null,
-            model = stubModel
-        ),
+        rustSettings(stubModel),
         libRsCustomizations = listOf(),
     )
     try {
@@ -193,6 +184,19 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
         "cargo clippy".runCommand(baseDir)
     }
 }
+
+fun TestWriterDelegator.rustSettings(stubModel: Model) =
+    RustSettings(
+        ShapeId.from("fake#Fake"),
+        "test_${baseDir.toFile().nameWithoutExtension}",
+        "0.0.1",
+        moduleAuthors = listOf("test@module.com"),
+        moduleRepository = null,
+        runtimeConfig = TestRuntimeConfig,
+        codegenConfig = CodegenConfig(),
+        license = null,
+        model = stubModel
+    )
 
 // TODO: unify these test helpers a bit
 fun String.shouldParseAsRust() {
@@ -240,6 +244,7 @@ fun RustWriter.compileAndTest(
     }
 }
 
+@JvmOverloads
 private fun String.intoCrate(
     deps: Set<CargoDependency>,
     module: String? = null,

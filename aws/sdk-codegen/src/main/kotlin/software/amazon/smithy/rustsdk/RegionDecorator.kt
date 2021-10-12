@@ -24,26 +24,48 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfi
 /* Example Generated Code */
 /*
 pub struct Config {
-    pub region: Option<::aws_types::region::Region>,
+    pub(crate) region: Option<aws_types::region::Region>,
 }
+
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut config = f.debug_struct("Config");
+        config.finish()
+    }
+}
+
+impl Config {
+    pub fn builder() -> Builder {
+        Builder::default()
+    }
+}
+
 #[derive(Default)]
 pub struct Builder {
-    region: Option<::aws_types::region::Region>,
+    region: Option<aws_types::region::Region>,
 }
+
 impl Builder {
-    pub fn region(mut self, region_provider: impl ::aws_types::region::ProvideRegion) -> Self {
-        self.region = region_provider.region();
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn region(mut self, region: impl Into<Option<aws_types::region::Region>>) -> Self {
+        self.region = region.into();
         self
     }
 
     pub fn build(self) -> Config {
         Config {
-            region: {
-                use ::aws_types::region::ProvideRegion;
-                self.region
-                    .or_else(|| ::aws_types::region::default_provider().region())
-            },
+            region: self.region,
+        }
     }
+}
+
+#[test]
+fn test_1() {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<Config>();
 }
  */
 

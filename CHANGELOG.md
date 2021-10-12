@@ -12,6 +12,11 @@ v0.25 (October 7th, 2021)
 =========================
 **Breaking changes**
 - :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
+- :warning: `smithy_client::retry::Config` field `max_retries` is renamed to `max_attempts`
+  - This also brings a change to the semantics of the field. In the old version, setting `max_retries` to 3 would mean
+    that up to 4 requests could occur (1 initial request and 3 retries). In the new version, setting `max_attempts` to 3
+    would mean that up to 3 requests could occur (1 initial request and 2 retries).
+- :warning: `smithy_client::retry::Config::with_max_retries` method is renamed to `with_max_attempts`
 - :warning: Several classes in the codegen module were renamed and/or refactored (smithy-rs#735):
   - `ProtocolConfig` became `CodegenContext` and moved to `software.amazon.smithy.rust.codegen.smithy`
   - `HttpProtocolGenerator` became `ProtocolGenerator` and was refactored
@@ -22,7 +27,9 @@ v0.25 (October 7th, 2021)
 - The `DispatchError` variant of `SdkError` now contains `ConnectorError` instead of `Box<dyn Error>` (#744).
 
 **New this week**
+
 - :bug: Fix an issue where `smithy-xml` may have generated invalid XML (smithy-rs#719)
+- Add `RetryConfig` struct for configuring retry behavior (smithy-rs#725)
 - :bug: Fix error when receiving empty event stream messages (smithy-rs#736)
 - :bug: Fix bug in event stream receiver that could cause the last events in the response stream to be lost (smithy-rs#736)
 - Add connect & HTTP read timeouts to IMDS, defaulting to 1 second

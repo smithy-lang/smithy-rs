@@ -9,6 +9,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
 smithy-async = { path = "../../../rust-runtime/smithy-async" }
+smithy-types = { path = "../../../rust-runtime/smithy-types" }
 zeroize = "1.4.1"
 
 [dev-dependencies]
