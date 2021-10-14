@@ -30,7 +30,7 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 /**
  * Request Body Generator
  *
- * **Note:** There is only one real implementation of this trait. The other implementation is test only.
+ * **Note:** There is only one real implementation of this interface. The other implementation is test only.
  * All protocols use the same class.
  *
  * Different protocols (eg. JSON vs. XML) need to use different functionality to generate request bodies.
@@ -57,7 +57,7 @@ interface ProtocolBodyGenerator {
 /**
  * Protocol Trait implementation generator
  *
- * **Note:** There is only one real implementation of this trait. The other implementation is test only.
+ * **Note:** There is only one real implementation of this interface. The other implementation is test only.
  * All protocols use the same class.
  *
  * Protocols implement one of two traits to enable parsing HTTP responses:
@@ -108,7 +108,7 @@ open class ProtocolGenerator(
     /**
      * Render all code required for serializing requests and deserializing responses for the operation
      *
-     * This primarily relies on two components: :
+     * This primarily relies on two components:
      * 1. [traitGenerator]: Generate implementations of the `ParseHttpResponse` trait for the operations
      * 2. [bod]
      */
