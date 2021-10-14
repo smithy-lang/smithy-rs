@@ -487,7 +487,9 @@ impl Builder {
         let timeout_config = timeout::Settings::default()
             .with_connect_timeout(self.connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT))
             .with_read_timeout(self.read_timeout.unwrap_or(DEFAULT_READ_TIMEOUT));
-        let connector = expect_connector(config.connector(&HttpSettings { timeout_config }));
+        let connector = expect_connector(config.connector(&HttpSettings {
+            timeout_settings: timeout_config,
+        }));
         let endpoint_source = self
             .endpoint
             .unwrap_or_else(|| EndpointSource::Env(config.env(), config.fs()));

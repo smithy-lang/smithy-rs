@@ -298,6 +298,10 @@ mod tests {
 
     #[test]
     fn never_test() {
-        is_a_connector(&NeverService::new())
+        is_a_connector(&NeverService::<
+            http::Request<SdkBody>,
+            http::Response<SdkBody>,
+            ConnectorError,
+        >::new())
     }
 }

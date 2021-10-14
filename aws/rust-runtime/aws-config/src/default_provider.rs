@@ -255,6 +255,7 @@ pub mod credentials {
         profile_file_builder: crate::profile::credentials::Builder,
         web_identity_builder: crate::web_identity_token::Builder,
         imds_builder: crate::imds::credentials::Builder,
+        ecs_builder: crate::ecs::Builder,
         credential_cache: crate::meta::credentials::lazy_caching::Builder,
         region_override: Option<Box<dyn ProvideRegion>>,
         region_chain: crate::default_provider::region::Builder,
@@ -335,10 +336,12 @@ pub mod credentials {
             let profile_provider = self.profile_file_builder.configure(&conf).build();
             let web_identity_token_provider = self.web_identity_builder.configure(&conf).build();
             let imds_provider = self.imds_builder.configure(&conf).build();
+            let ecs_provider = self.ecs_builder.configure(&conf).build();
 
             let provider_chain = CredentialsProviderChain::first_try("Environment", env_provider)
                 .or_else("Profile", profile_provider)
                 .or_else("WebIdentityToken", web_identity_token_provider)
+                .or_else("EcsContainer", ecs_provider)
                 .or_else("Ec2InstanceMetadata", imds_provider);
             let cached_provider = self.credential_cache.configure(&conf).load(provider_chain);
 
