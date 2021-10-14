@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 
 open class RustCrate(
     fileManifest: FileManifest,
@@ -53,7 +54,7 @@ open class RustCrate(
     fun finalize(
         settings: RustSettings,
         model: Model,
-        manifestCustomizations: Map<String, Any?>,
+        manifestCustomizations: ManifestCustomizations,
         libRsCustomizations: List<LibRsCustomization>
     ) {
         injectInlineDependencies()
@@ -113,7 +114,7 @@ val DefaultPublicModules =
 fun CodegenWriterDelegator<RustWriter>.finalize(
     settings: RustSettings,
     model: Model,
-    manifestCustomizations: Map<String, Any?>,
+    manifestCustomizations: ManifestCustomizations,
     libRsCustomizations: List<LibRsCustomization>,
     modules: List<RustModule>,
     features: List<Feature>

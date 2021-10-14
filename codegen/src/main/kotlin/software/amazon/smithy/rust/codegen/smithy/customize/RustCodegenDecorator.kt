@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.util.deepMergeWith
@@ -60,7 +61,7 @@ interface RustCodegenDecorator {
      * added to the Cargo.toml `[package]` section, a `mapOf("package" to mapOf("homepage", "https://example.com"))`
      * could be returned. Properties here overwrite the default properties.
      */
-    fun crateManifestCustomizations(codegenContext: CodegenContext): Map<String, Any?> = emptyMap()
+    fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations = emptyMap()
 
     fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {}
 
@@ -126,7 +127,7 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
         }
     }
 
-    override fun crateManifestCustomizations(codegenContext: CodegenContext): Map<String, Any?> {
+    override fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations {
         return orderedDecorators.foldRight(emptyMap()) { decorator, customizations ->
             customizations.deepMergeWith(decorator.crateManifestCustomizations(codegenContext))
         }

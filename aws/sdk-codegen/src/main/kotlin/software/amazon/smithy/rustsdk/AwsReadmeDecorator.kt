@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.util.getTrait
 
 /**
@@ -20,7 +21,7 @@ class AwsReadmeDecorator : RustCodegenDecorator {
     override val name: String = "AwsReadmeDecorator"
     override val order: Byte = 0
 
-    override fun crateManifestCustomizations(codegenContext: CodegenContext): Map<String, Any?> =
+    override fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations =
         mapOf("package" to mapOf("readme" to "README.md"))
 
     override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
