@@ -25,6 +25,7 @@ val DECORATORS = listOf(
     CrateLicenseDecorator(),
     SharedConfigDecorator(),
     AwsPresigningDecorator(),
+    AwsReadmeDecorator(),
 
     // Smithy specific decorators
     RetryConfigDecorator(),

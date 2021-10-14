@@ -247,18 +247,17 @@ class RustWriter private constructor(
         }
 
         val Factory: CodegenWriterFactory<RustWriter> =
-            CodegenWriterFactory<RustWriter> { filename, namespace ->
+            CodegenWriterFactory<RustWriter> { fileName, namespace ->
                 when {
-                    filename.endsWith(".toml") -> RustWriter(filename, namespace, "#")
-                    filename == "LICENSE" -> RustWriter(
-                        filename,
-                        namespace = "ignore",
-                        commentCharacter = "ignore",
-                        printWarning = false
-                    )
-                    else -> RustWriter(filename, namespace)
+                    fileName.endsWith(".toml") -> RustWriter(fileName, namespace, "#")
+                    fileName.endsWith(".md") -> rawWriter(fileName)
+                    fileName == "LICENSE" -> rawWriter(fileName)
+                    else -> RustWriter(fileName, namespace)
                 }
             }
+
+        private fun rawWriter(fileName: String): RustWriter =
+            RustWriter(fileName, namespace = "ignore", commentCharacter = "ignore", printWarning = false)
     }
 
     private val preamble = mutableListOf<Writable>()

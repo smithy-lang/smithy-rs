@@ -10,11 +10,41 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
+import software.amazon.smithy.rust.codegen.util.deepMergeWith
 import software.amazon.smithy.utils.CodeWriter
 
+/**
+ * Customizations to apply to the generated Cargo.toml file.
+ *
+ * This is a nested map of key/value that represents the properties in a crate manifest.
+ * For example, the following
+ *
+ * ```kotlin
+ * mapOf(
+ *     "package" to mapOf(
+ *         "name" to "foo",
+ *         "version" to "1.0.0",
+ *     )
+ * )
+ * ```
+ *
+ * is equivalent to
+ *
+ * ```toml
+ * [package]
+ * name = "foo"
+ * version = "1.0.0"
+ * ```
+ */
+typealias ManifestCustomizations = Map<String, Any?>
+
+/**
+ * Generates the crate manifest Cargo.toml file.
+ */
 class CargoTomlGenerator(
     private val settings: RustSettings,
     private val writer: CodeWriter,
+    private val manifestCustomizations: ManifestCustomizations,
     private val dependencies: List<CargoDependency>,
     private val features: List<Feature>
 ) {
@@ -23,6 +53,7 @@ class CargoTomlGenerator(
         if (features.isNotEmpty()) {
             cargoFeatures.add("default" to features.filter { it.default }.map { it.name })
         }
+
         val cargoToml = mapOf(
             "package" to mapOf(
                 "name" to settings.moduleName,
@@ -38,7 +69,8 @@ class CargoTomlGenerator(
             "dev-dependencies" to dependencies.filter { it.scope == DependencyScope.Dev }
                 .associate { it.name to it.toMap() },
             "features" to cargoFeatures.toMap()
-        )
+        ).deepMergeWith(manifestCustomizations)
+
         writer.writeWithNoFormatting(TomlWriter().write(cargoToml))
     }
 }

@@ -113,6 +113,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         // performs finalization like generating a Cargo.toml
         rustCrate.finalize(
             settings,
+            model,
+            codegenDecorator.crateManifestCustomizations(codegenContext),
             codegenDecorator.libRsCustomizations(
                 codegenContext,
                 listOf()

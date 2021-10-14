@@ -129,6 +129,7 @@ fun generatePluginContext(model: Model): Pair<PluginContext, Path> {
     val settings = Node.objectNodeBuilder()
         .withMember("module", Node.from(moduleName))
         .withMember("moduleVersion", Node.from("1.0.0"))
+        .withMember("moduleDescription", Node.from("test"))
         .withMember("moduleAuthors", Node.fromStrings("testgenerator@smithy.com"))
         .withMember(
             "runtimeConfig",
@@ -172,6 +173,8 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
     """.asSmithyModel()
     this.finalize(
         rustSettings(stubModel),
+        stubModel,
+        manifestCustomizations = emptyMap(),
         libRsCustomizations = listOf(),
     )
     try {
@@ -191,6 +194,7 @@ fun TestWriterDelegator.rustSettings(stubModel: Model) =
         "test_${baseDir.toFile().nameWithoutExtension}",
         "0.0.1",
         moduleAuthors = listOf("test@module.com"),
+        moduleDescription = "test",
         moduleRepository = null,
         runtimeConfig = TestRuntimeConfig,
         codegenConfig = CodegenConfig(),

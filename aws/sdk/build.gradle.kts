@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.aws.traits.ServiceTrait
+import software.amazon.smithy.model.traits.TitleTrait
 import software.amazon.smithy.model.shapes.ServiceShape
 import java.util.Properties
 import kotlin.streams.toList
@@ -109,6 +110,7 @@ fun parseMembership(rawList: String): Membership {
 data class AwsService(
     val service: String,
     val module: String,
+    val moduleDescription: String,
     val modelFile: File,
     val extraConfig: String? = null,
     val extraFiles: List<File>
@@ -152,6 +154,7 @@ fun discoverServices(): List<AwsService> {
                 null
             } else {
                 val service = services[0]
+                val title = service.expectTrait(TitleTrait::class.java).value
                 val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId
                     .toLowerCase()
                     .replace(" ", "")
@@ -165,7 +168,13 @@ fun discoverServices(): List<AwsService> {
                 } else {
                     listOf()
                 }
-                AwsService(service = service.id.toString(), module = sdkId, modelFile = file, extraFiles = extras)
+                AwsService(
+                    service = service.id.toString(),
+                    module = sdkId,
+                    moduleDescription = "AWS SDK for $title",
+                    modelFile = file,
+                    extraFiles = extras
+                )
             }
         }
     val baseModules = baseServices.map { it.module }.toSet()
@@ -194,9 +203,9 @@ fun eventStreamAllowList(): Set<String> {
     return list.split(",").map { it.trim() }.toSet()
 }
 
-fun generateSmithyBuild(tests: List<AwsService>): String {
-    val projections = tests.joinToString(",\n") {
-        val files = it.files().map { extraFile ->
+fun generateSmithyBuild(services: List<AwsService>): String {
+    val projections = services.joinToString(",\n") { service ->
+        val files = service.files().map { extraFile ->
             software.amazon.smithy.utils.StringUtils.escapeJavaString(
                 extraFile.absolutePath,
                 ""
@@ -204,7 +213,7 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
         }
         val eventStreamAllowListMembers = eventStreamAllowList.joinToString(", ") { "\"$it\"" }
         """
-            "${it.module}": {
+            "${service.module}": {
                 "imports": [${files.joinToString()}],
 
                 "plugins": {
@@ -217,13 +226,14 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
                             "renameErrors": false,
                             "eventStreamAllowList": [$eventStreamAllowListMembers]
                         },
-                        "service": "${it.service}",
-                        "module": "aws-sdk-${it.module}",
+                        "service": "${service.service}",
+                        "module": "aws-sdk-${service.module}",
                         "moduleVersion": "${getProperty("aws.sdk.version")}",
                         "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
+                        "moduleDescription": "${service.moduleDescription}",
                         "moduleRepository": "https://github.com/awslabs/aws-sdk-rust",
                         "license": "Apache-2.0"
-                        ${it.extraConfig ?: ""}
+                        ${service.extraConfig ?: ""}
                     }
                 }
             }
