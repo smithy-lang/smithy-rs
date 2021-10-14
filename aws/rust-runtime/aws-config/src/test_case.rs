@@ -97,11 +97,7 @@ where
     pub fn assert_matches(&self, result: Result<impl Into<T>, impl Error>) {
         match (result, &self) {
             (Ok(actual), GenericTestResult::Ok(expected)) => {
-                assert_eq!(
-                    expected,
-                    &actual.into(),
-                    "incorrect credentials were returned"
-                )
+                assert_eq!(expected, &actual.into(), "incorrect result was returned")
             }
             (Err(err), GenericTestResult::ErrorContains(substr)) => {
                 assert!(
@@ -116,7 +112,7 @@ where
                 expected_creds, actual_error
             ),
             (Ok(creds), GenericTestResult::ErrorContains(substr)) => panic!(
-                "expected an error containing: `{}`, but credentials were returned: {:?}",
+                "expected an error containing: `{}`, but a result was returned: {:?}",
                 substr,
                 creds.into()
             ),

@@ -12,7 +12,8 @@
 //!
 //! ## Configuration
 //! **First**: It will check the value of `$AWS_CONTAINER_CREDENTIALS_RELATIVE_URI`. It will use this
-//! to construct a URI rooted at `http://169.254.170.2`.
+//! to construct a URI rooted at `http://169.254.170.2`. For example, if the value of the environment
+//! variable was `/credentials`, the SDK would look for credentials at `http://169.254.170.2/credentials`.
 //!
 //! **Next**: It wil check the value of `$AWS_CONTAINER_CREDENTIALS_FULL_URI`. This specifies the full
 //! URL to load credentials. The URL MUST satisfy one of the following two properties:
@@ -273,17 +274,22 @@ impl Builder {
 ///
 /// When the full URI setting is used, the URI must either be HTTPS or point to a loopback interface.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum InvalidFullUriError {
     /// The provided URI could not be parsed as a URI
+    #[non_exhaustive]
     InvalidUri(InvalidUri),
 
     /// The URI did not specify a host
+    #[non_exhaustive]
     MissingHost,
 
     /// The URI did not refer to the loopback interface
+    #[non_exhaustive]
     NotLoopback,
 
     /// Dns Lookup failed when attempting to resolve the host to an Ip Address for validation.
+    #[non_exhaustive]
     DnsLookupFailed(io::Error),
 }
 
@@ -321,8 +327,10 @@ pub type DnsService = BoxCloneService<String, Vec<IpAddr>, io::Error>;
 
 /// Validate that `uri` is valid to be used as a full provider URI
 /// Either:
-/// - the URI is HTTPs
-/// - the URI is HTTP and it refers to the loopback interface
+/// 1. The URL is uses `https`
+/// 2. The URL refers to a loopback device. If a URL contains a domain name instead of an IP address,
+/// a DNS lookup will be performed. ALL resolved IP addresses MUST refer to a loopback interface, or
+/// the credentials provider will return `CredentialsError::InvalidConfiguration`
 async fn validate_full_uri(uri: &str, dns: &mut DnsService) -> Result<Uri, InvalidFullUriError> {
     let uri = uri
         .parse::<Uri>()

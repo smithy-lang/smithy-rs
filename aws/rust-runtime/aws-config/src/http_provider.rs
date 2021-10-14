@@ -88,6 +88,16 @@ impl Builder {
         self
     }
 
+    pub(crate) fn read_timeout(mut self, read_timeout: Duration) -> Self {
+        self.read_timeout = Some(read_timeout);
+        self
+    }
+
+    pub(crate) fn connect_timeout(mut self, connect_timeout: Duration) -> Self {
+        self.connect_timeout = Some(connect_timeout);
+        self
+    }
+
     pub(crate) fn build(self, provider_name: &'static str, uri: Uri) -> HttpCredentialProvider {
         let provider_config = self.provider_config.unwrap_or_default();
         let connect_timeout = self.connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT);
