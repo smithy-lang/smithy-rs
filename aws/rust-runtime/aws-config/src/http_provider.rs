@@ -8,12 +8,9 @@
 //!
 //! Future work will stabilize this interface and enable it to be used directly.
 
-use crate::json_credentials::{parse_json_credentials, JsonCredentials};
 use aws_hyper::{DynConnector, SdkSuccess};
 use aws_types::credentials::CredentialsError;
 use aws_types::{credentials, Credentials};
-use bytes::Bytes;
-use http::{HeaderValue, Response, Uri};
 use smithy_http::body::SdkBody;
 use smithy_http::operation::{Operation, Request};
 use smithy_http::response::ParseStrictResponse;
@@ -22,8 +19,11 @@ use smithy_http::retry::ClassifyResponse;
 use smithy_types::retry::{ErrorKind, RetryKind};
 
 use crate::connector::expect_connector;
+use crate::json_credentials::{parse_json_credentials, JsonCredentials};
 use crate::provider_config::{HttpSettings, ProviderConfig};
 
+use bytes::Bytes;
+use http::{HeaderValue, Response, Uri};
 use http::header::{ACCEPT, AUTHORIZATION};
 use smithy_client::timeout;
 use std::time::Duration;
