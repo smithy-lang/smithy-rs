@@ -1,8 +1,16 @@
 vNext (Month Day, Year)
 =======================
 
+**Breaking Changes**
+
+- :warning: The `rust-codegen` plugin now requires a `moduleDescription` in the *smithy-build.json* file. This
+  property goes into the generated *Cargo.toml* file as the package description. (smithy-rs#766)
+
+**New this week**
+
 - Add `RustSettings` to `CodegenContext` (smithy-rs#616, smithy-rs#752)
 - Prepare crate manifests for publishing to crates.io (smithy-rs#755)
+- Generated *Cargo.toml* files can now be customized (smithy-rs#766)
 
 v0.25.1 (October 11th, 2021)
 =========================
