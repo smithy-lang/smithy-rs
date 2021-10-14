@@ -150,7 +150,12 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         codegenDecorator.extras(codegenContext, rustCrate)
         val module = RustMetadata(public = true)
         rustCrate.withModule(RustModule("error", module)) { writer -> renderSerdeError(writer) }
-        rustCrate.finalize(settings, codegenDecorator.libRsCustomizations(codegenContext, listOf()))
+        rustCrate.finalize(
+            settings,
+            model,
+            codegenDecorator.crateManifestCustomizations(codegenContext),
+            codegenDecorator.libRsCustomizations(codegenContext, listOf())
+        )
         try {
             "cargo fmt".runCommand(
                 fileManifest.baseDir,

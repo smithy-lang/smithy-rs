@@ -86,6 +86,7 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
                       "service": "${it.service}",
                       "module": "${it.module}",
                       "moduleVersion": "0.0.1",
+                      "moduleDescription": "test",
                       "moduleAuthors": ["protocoltest@example.com"]
                       ${it.extraConfig ?: ""}
                  }

@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy
 import software.amazon.smithy.build.FileManifest
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Feature
@@ -18,6 +19,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 
 open class RustCrate(
     fileManifest: FileManifest,
@@ -49,11 +51,16 @@ open class RustCrate(
         }
     }
 
-    fun finalize(settings: RustSettings, libRsCustomizations: List<LibRsCustomization>) {
+    fun finalize(
+        settings: RustSettings,
+        model: Model,
+        manifestCustomizations: ManifestCustomizations,
+        libRsCustomizations: List<LibRsCustomization>
+    ) {
         injectInlineDependencies()
         val modules = inner.writers.values.mapNotNull { it.module() }.filter { it != "lib" }
             .map { modules[it] ?: RustModule.default(it, false) }
-        inner.finalize(settings, libRsCustomizations, modules, this.features.toList())
+        inner.finalize(settings, model, manifestCustomizations, libRsCustomizations, modules, this.features.toList())
     }
 
     private fun injectInlineDependencies() {
@@ -106,12 +113,14 @@ val DefaultPublicModules =
  */
 fun CodegenWriterDelegator<RustWriter>.finalize(
     settings: RustSettings,
+    model: Model,
+    manifestCustomizations: ManifestCustomizations,
     libRsCustomizations: List<LibRsCustomization>,
     modules: List<RustModule>,
     features: List<Feature>
 ) {
     this.useFileWriter("src/lib.rs", "crate::lib") { writer ->
-        LibRsGenerator(settings.moduleDescription, modules, libRsCustomizations).render(writer)
+        LibRsGenerator(settings, model, modules, libRsCustomizations).render(writer)
     }
     val cargoDependencies = mergeDependencyFeatures(
         this.dependencies.map { RustDependency.fromSymbolDependency(it) }
@@ -121,6 +130,7 @@ fun CodegenWriterDelegator<RustWriter>.finalize(
         val cargoToml = CargoTomlGenerator(
             settings,
             it,
+            manifestCustomizations,
             cargoDependencies,
             features
         )
