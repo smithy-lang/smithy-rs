@@ -5,10 +5,10 @@
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.aws.traits.ServiceTrait
-import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.TitleTrait
+import software.amazon.smithy.model.shapes.ServiceShape
+import java.util.Properties
 import kotlin.streams.toList
-import java.util.*
 
 extra["displayName"] = "Smithy :: Rust :: AWS-SDK"
 extra["moduleName"] = "software.amazon.smithy.rust.awssdk"
@@ -78,7 +78,6 @@ fun getProperty(name: String): String? {
     }
     return null
 }
-
 
 // Class and functions for service and protocol membership for SDK generation
 data class Membership(val inclusions: Set<String> = emptySet(), val exclusions: Set<String> = emptySet())
@@ -184,9 +183,9 @@ fun discoverServices(): List<AwsService> {
     serviceMembership.exclusions.forEach { disabledService ->
         check(baseModules.contains(disabledService)) {
             "Service $disabledService was explicitly disabled but no service was generated with that name. Generated:\n ${
-                baseModules.joinToString(
-                    "\n "
-                )
+            baseModules.joinToString(
+                "\n "
+            )
             }"
         }
     }
@@ -344,8 +343,10 @@ tasks.register<Copy>("copyAllRuntimes") {
     }
     exclude("**/target")
     exclude("**/Cargo.lock")
+    exclude("**/node_modules")
     into(sdkOutputDir)
 }
+
 tasks.register("relocateAwsRuntime") {
     dependsOn("copyAllRuntimes")
     doLast {

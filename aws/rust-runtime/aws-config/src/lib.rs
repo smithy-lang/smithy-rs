@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-#![deny(missing_docs)]
+#![warn(missing_docs)]
 
 //! `aws-config` provides implementations of region, credential resolution.
 //!
@@ -72,12 +72,17 @@ mod test_case;
 #[cfg(feature = "web-identity-token")]
 pub mod web_identity_token;
 
+#[cfg(feature = "http-provider")]
+pub mod ecs;
+
 pub mod provider_config;
 
 mod cache;
 #[cfg(feature = "imds")]
 pub mod imds;
 mod json_credentials;
+
+mod http_provider;
 
 /// Create an environment loader for AWS Configuration
 ///
@@ -252,7 +257,7 @@ mod connector {
         sleep: Option<Arc<dyn AsyncSleep>>,
     ) -> smithy_client::hyper_ext::Builder {
         let mut hyper =
-            smithy_client::hyper_ext::Adapter::builder().timeout(&settings.timeout_config);
+            smithy_client::hyper_ext::Adapter::builder().timeout(&settings.timeout_settings);
         if let Some(sleep) = sleep {
             hyper = hyper.sleep_impl(sleep);
         }
