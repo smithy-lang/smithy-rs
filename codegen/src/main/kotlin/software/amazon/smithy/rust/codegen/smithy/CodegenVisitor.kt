@@ -76,19 +76,20 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         httpGenerator = protocolGenerator.buildProtocolGenerator(codegenContext)
     }
 
-    /** Base model transformation applied to all services
-     *
-     * - Add `Box<T>` to recursive shapes as necessary
-     * - Normalize the `message` field on errors
-     * - NormalizeOperations by ensuring every operation has an input & output shape
-     * - Drop unsupported event stream operations from the model
-     * - Normalize event stream operations
+    /**
+     * Base model transformation applied to all services
+     * See below for details.
      */
     private fun baselineTransform(model: Model) =
+        // Add `Box<T>` to recursive shapes as necessary
         model.let(RecursiveShapeBoxer::transform)
+            // Normalize the `message` field on errors when enabled in settings (default: true)
             .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
+            // NormalizeOperations by ensuring every operation has an input & output shape
             .let(OperationNormalizer::transform)
+            // Drop unsupported event stream operations from the model
             .let { RemoveEventStreamOperations.transform(it, settings) }
+            // - Normalize event stream operations
             .let(EventStreamNormalizer::transform)
 
     /**

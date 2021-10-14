@@ -80,11 +80,13 @@ open class ProtocolGenerator(
      * and an output shape is build from an http::Response.
      */
     private val protocol: Protocol,
-    /** Operations generate a `make_operation(&config)` method to build a `smithy_http::Operation` that can be dispatched
+    /**
+     * Operations generate a `make_operation(&config)` method to build a `smithy_http::Operation` that can be dispatched
      * This is the serializer side of request dispatch
      */
     private val makeOperationGenerator: MakeOperationGenerator,
-    /** Operations generate implementations of ParseHttpResponse or ParseStrictResponse.
+    /**
+     * Operations generate implementations of ParseHttpResponse or ParseStrictResponse.
      * This is the deserializer side of request dispatch (parsing the response)
      */
     private val traitGenerator: ProtocolTraitImplGenerator,
@@ -110,7 +112,8 @@ open class ProtocolGenerator(
      *
      * This primarily relies on two components: :
      * 1. [traitGenerator]: Generate implementations of the `ParseHttpResponse` trait for the operations
-     * 2. [bod]
+     * 2. [makeOperationGenerator]: Generate the `make_operation()` method which is used to serialize operations
+     *    to HTTP requests
      */
     fun renderOperation(
         operationWriter: RustWriter,
