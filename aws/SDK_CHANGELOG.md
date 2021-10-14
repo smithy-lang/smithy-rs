@@ -2,6 +2,7 @@ vNext (Month Day, Year)
 =======================
 
 - Prepare crate manifests for publishing to crates.io (smithy-rs#755)
+- Add support for IAM Roles for tasks (smithy-rs#765, aws-sdk-rust#123)
 
 v0.0.20-alpha (October 7, 2021)
 ===============================
