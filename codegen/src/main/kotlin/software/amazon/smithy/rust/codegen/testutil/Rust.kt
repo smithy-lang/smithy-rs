@@ -172,6 +172,8 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
     """.asSmithyModel()
     this.finalize(
         rustSettings(stubModel),
+        stubModel,
+        manifestCustomizations = emptyMap(),
         libRsCustomizations = listOf(),
     )
     try {
@@ -191,6 +193,7 @@ fun TestWriterDelegator.rustSettings(stubModel: Model) =
         "test_${baseDir.toFile().nameWithoutExtension}",
         "0.0.1",
         moduleAuthors = listOf("test@module.com"),
+        moduleDescription = "test",
         moduleRepository = null,
         runtimeConfig = TestRuntimeConfig,
         codegenConfig = CodegenConfig(),

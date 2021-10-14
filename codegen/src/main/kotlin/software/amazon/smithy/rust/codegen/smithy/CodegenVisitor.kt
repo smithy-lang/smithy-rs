@@ -88,6 +88,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         codegenDecorator.extras(codegenContext, rustCrate)
         rustCrate.finalize(
             settings,
+            model,
+            codegenDecorator.crateManifestCustomizations(codegenContext),
             codegenDecorator.libRsCustomizations(
                 codegenContext,
                 listOf()

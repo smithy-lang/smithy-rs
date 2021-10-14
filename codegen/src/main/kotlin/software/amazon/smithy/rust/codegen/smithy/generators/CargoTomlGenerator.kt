@@ -10,11 +10,13 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
+import software.amazon.smithy.rust.codegen.util.deepMergeWith
 import software.amazon.smithy.utils.CodeWriter
 
 class CargoTomlGenerator(
     private val settings: RustSettings,
     private val writer: CodeWriter,
+    private val manifestCustomizations: Map<String, Any?>,
     private val dependencies: List<CargoDependency>,
     private val features: List<Feature>
 ) {
@@ -23,6 +25,7 @@ class CargoTomlGenerator(
         if (features.isNotEmpty()) {
             cargoFeatures.add("default" to features.filter { it.default }.map { it.name })
         }
+
         val cargoToml = mapOf(
             "package" to mapOf(
                 "name" to settings.moduleName,
@@ -38,7 +41,8 @@ class CargoTomlGenerator(
             "dev-dependencies" to dependencies.filter { it.scope == DependencyScope.Dev }
                 .associate { it.name to it.toMap() },
             "features" to cargoFeatures.toMap()
-        )
+        ).deepMergeWith(manifestCustomizations)
+
         writer.writeWithNoFormatting(TomlWriter().write(cargoToml))
     }
 }
