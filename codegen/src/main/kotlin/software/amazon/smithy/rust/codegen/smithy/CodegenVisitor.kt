@@ -37,6 +37,9 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
 
+/**
+ * Base Entrypoint for Code generation
+ */
 class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
     ShapeVisitor.Default<Unit>() {
 
@@ -73,19 +76,41 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         httpGenerator = protocolGenerator.buildProtocolGenerator(codegenContext)
     }
 
+    /**
+     * Base model transformation applied to all services
+     * See below for details.
+     */
     private fun baselineTransform(model: Model) =
+        // Add `Box<T>` to recursive shapes as necessary
         model.let(RecursiveShapeBoxer::transform)
+            // Normalize the `message` field on errors when enabled in settings (default: true)
             .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
+            // NormalizeOperations by ensuring every operation has an input & output shape
             .let(OperationNormalizer::transform)
+            // Drop unsupported event stream operations from the model
             .let { RemoveEventStreamOperations.transform(it, settings) }
+            // - Normalize event stream operations
             .let(EventStreamNormalizer::transform)
 
+    /**
+     * Execute code generation
+     *
+     * 1. Load the service from RustSettings
+     * 2. Traverse every shape in the closure of the service.
+     * 3. Loop through each shape and visit them (calling the override functions in this class)
+     * 4. Call finalization tasks specified by decorators.
+     * 5. Write the in-memory buffers out to files.
+     *
+     * The main work of code generation (serializers, protocols, etc.) is handled in `fn serviceShape` below.
+     */
     fun execute() {
         logger.info("generating Rust client...")
         val service = settings.getService(model)
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
         codegenDecorator.extras(codegenContext, rustCrate)
+        // finalize actually writes files into the base directory, renders any inline functions that were used, and
+        // performs finalization like generating a Cargo.toml
         rustCrate.finalize(
             settings,
             codegenDecorator.libRsCustomizations(
@@ -102,9 +127,37 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         logger.info("Rust Client generation complete!")
     }
 
+    /**
+     * Generate service-specific code for the model:
+     * - Serializers
+     * - Deserializers
+     * - Fluent client
+     * - Trait implementations
+     * - Protocol tests
+     * - Operation structures
+     */
+    override fun serviceShape(shape: ServiceShape) {
+        ServiceGenerator(
+            rustCrate,
+            httpGenerator,
+            protocolGenerator.support(),
+            codegenContext,
+            codegenDecorator
+        ).render()
+    }
+
     override fun getDefault(shape: Shape?) {
     }
 
+    /**
+     * Structure Shape Visitor
+     *
+     * For each structure shape, generate:
+     * - A Rust structure for the shape (StructureGenerator)
+     * - A builder for the shape
+     *
+     * This function _does not_ generate any serializers
+     */
     override fun structureShape(shape: StructureShape) {
         logger.fine("generating a structure...")
         rustCrate.useShapeWriter(shape) { writer ->
@@ -119,6 +172,12 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         }
     }
 
+    /**
+     * String Shape Visitor
+     *
+     * Although raw strings require no code generation, enums are actually `EnumTrait` applied to string shapes.
+     * For strings that have the enum trait attached,
+     */
     override fun stringShape(shape: StringShape) {
         shape.getTrait<EnumTrait>()?.also { enum ->
             rustCrate.useShapeWriter(shape) { writer ->
@@ -127,19 +186,16 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         }
     }
 
+    /**
+     * Union Shape Visitor
+     *
+     * Generate an `enum` for union shapes.
+     *
+     * Note: this does not generate serializers
+     */
     override fun unionShape(shape: UnionShape) {
         rustCrate.useShapeWriter(shape) {
             UnionGenerator(model, symbolProvider, it, shape).render()
         }
-    }
-
-    override fun serviceShape(shape: ServiceShape) {
-        ServiceGenerator(
-            rustCrate,
-            httpGenerator,
-            protocolGenerator.support(),
-            codegenContext,
-            codegenDecorator
-        ).render()
     }
 }

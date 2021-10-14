@@ -75,7 +75,6 @@ private class HttpBoundProtocolTraitImplGenerator(
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
-    private val operationSerModule = RustModule.private("operation_ser")
     private val operationDeserModule = RustModule.private("operation_deser")
 
     private val codegenScope = arrayOf(
