@@ -212,7 +212,7 @@ fun generateSmithyBuild(services: List<AwsService>): String {
                 ""
             )
         }
-        val eventStreamAllowListMembers = eventStreamAllowList.joinToString(", ") { "\"$service\"" }
+        val eventStreamAllowListMembers = eventStreamAllowList.joinToString(", ") { "\"$it\"" }
         """
             "${service.module}": {
                 "imports": [${files.joinToString()}],
