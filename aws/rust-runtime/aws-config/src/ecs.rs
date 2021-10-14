@@ -17,7 +17,7 @@
 //!
 //! **Next**: It wil check the value of `$AWS_CONTAINER_CREDENTIALS_FULL_URI`. This specifies the full
 //! URL to load credentials. The URL MUST satisfy one of the following two properties:
-//! 1. The URL is uses `https`
+//! 1. The URL begins with `https`
 //! 2. The URL refers to a loopback device. If a URL contains a domain name instead of an IP address,
 //! a DNS lookup will be performed. ALL resolved IP addresses MUST refer to a loopback interface, or
 //! the credentials provider will return `CredentialsError::InvalidConfiguration`
@@ -36,7 +36,7 @@
 //!  }
 //! ```
 //!
-//! Credentials errors MAY be returned with a `Code` and `Message` field:
+//! Credentials errors MAY be returned with a `code` and `message` field:
 //! ```json
 //! {
 //!   "code": "ErrorCode",
@@ -63,8 +63,10 @@ use crate::http_provider::HttpCredentialProvider;
 use crate::provider_config::ProviderConfig;
 use aws_types::os_shim_internal::Env;
 use http::header::InvalidHeaderValue;
+use std::time::Duration;
 use tokio::sync::OnceCell;
 
+// URL from https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-metadata-endpoint-v2.html
 const BASE_HOST: &str = "http://169.254.170.2";
 const ENV_RELATIVE_URI: &str = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI";
 const ENV_FULL_URI: &str = "AWS_CONTAINER_CREDENTIALS_FULL_URI";
@@ -160,6 +162,8 @@ impl Provider {
         };
         let http_provider = HttpCredentialProvider::builder()
             .configure(&provider_config)
+            .connect_timeout(builder.connect_timeout)
+            .read_timeout(builder.read_timeout)
             .build("EcsContainer", uri);
         Provider::Configured(http_provider)
     }
@@ -237,6 +241,8 @@ impl Error for EcsConfigurationErr {
 pub struct Builder {
     provider_config: Option<ProviderConfig>,
     dns: Option<DnsService>,
+    connect_timeout: Option<Duration>,
+    read_timeout: Option<Duration>,
 }
 
 impl Builder {
@@ -248,10 +254,26 @@ impl Builder {
 
     /// Override the DNS resolver used to validate URIs
     ///
-    /// URIs must refer to loopback addresses. The `DnsService` is used to retrive ip addresses for
+    /// URIs must refer to loopback addresses. The `DnsService` is used to retrieve IP addresses for
     /// a given domain.
     pub fn dns(mut self, dns: DnsService) -> Self {
         self.dns = Some(dns);
+        self
+    }
+
+    /// Override the connect timeout for the HTTP client
+    ///
+    /// This value defaults to 2 seconds
+    pub fn connect_timeout(mut self, timeout: Duration) -> Self {
+        self.connect_timeout = Some(timeout);
+        self
+    }
+
+    /// Override the read timeout for the HTTP client
+    ///
+    /// This value defaults to 5 seconds
+    pub fn read_timeout(mut self, timeout: Duration) -> Self {
+        self.read_timeout = Some(timeout);
         self
     }
 
@@ -270,7 +292,7 @@ impl Builder {
     }
 }
 
-/// Invalid Full Uri
+/// Invalid Full URI
 ///
 /// When the full URI setting is used, the URI must either be HTTPS or point to a loopback interface.
 #[derive(Debug)]
@@ -288,15 +310,14 @@ pub enum InvalidFullUriError {
     #[non_exhaustive]
     NotLoopback,
 
-    /// Dns Lookup failed when attempting to resolve the host to an Ip Address for validation.
-    #[non_exhaustive]
+    /// DNS lookup failed when attempting to resolve the host to an IP Address for validation.
     DnsLookupFailed(io::Error),
 }
 
 impl Display for InvalidFullUriError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            InvalidFullUriError::InvalidUri(err) => write!(f, "uri was invalid: {}", err),
+            InvalidFullUriError::InvalidUri(err) => write!(f, "URI was invalid: {}", err),
             InvalidFullUriError::MissingHost => write!(f, "URI did not specify a host"),
             InvalidFullUriError::NotLoopback => {
                 write!(f, "URI did not refer to the loopback interface")
@@ -416,8 +437,8 @@ mod test {
         Provider,
     };
     use crate::provider_config::ProviderConfig;
-
     use crate::test_case::GenericTestResult;
+
     use aws_hyper::DynConnector;
     use aws_types::credentials::ProvideCredentials;
     use aws_types::os_shim_internal::Env;

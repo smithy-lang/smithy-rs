@@ -104,7 +104,7 @@ mod stream {
     }
 }
 
-/// A service where the underyling TCP connection never connects
+/// A service where the underlying TCP connection never connects
 pub type NeverConnected = NeverService<Uri, TcpStream, BoxError>;
 
 /// A service that will connect but never send any data

@@ -8,12 +8,9 @@
 //!
 //! Future work will stabilize this interface and enable it to be used directly.
 
-use crate::json_credentials::{parse_json_credentials, JsonCredentials};
 use aws_hyper::{DynConnector, SdkSuccess};
 use aws_types::credentials::CredentialsError;
 use aws_types::{credentials, Credentials};
-use bytes::Bytes;
-use http::{HeaderValue, Response, Uri};
 use smithy_http::body::SdkBody;
 use smithy_http::operation::{Operation, Request};
 use smithy_http::response::ParseStrictResponse;
@@ -22,9 +19,12 @@ use smithy_http::retry::ClassifyResponse;
 use smithy_types::retry::{ErrorKind, RetryKind};
 
 use crate::connector::expect_connector;
+use crate::json_credentials::{parse_json_credentials, JsonCredentials};
 use crate::provider_config::{HttpSettings, ProviderConfig};
 
+use bytes::Bytes;
 use http::header::{ACCEPT, AUTHORIZATION};
+use http::{HeaderValue, Response, Uri};
 use smithy_client::timeout;
 use std::time::Duration;
 use tower::layer::util::Identity;
@@ -88,13 +88,16 @@ impl Builder {
         self
     }
 
-    pub(crate) fn read_timeout(mut self, read_timeout: Duration) -> Self {
-        self.read_timeout = Some(read_timeout);
+    // read_timeout and connect_timeout accept options to enable easy pass through from
+    // other builders
+
+    pub(crate) fn read_timeout(mut self, read_timeout: Option<Duration>) -> Self {
+        self.read_timeout = read_timeout;
         self
     }
 
-    pub(crate) fn connect_timeout(mut self, connect_timeout: Duration) -> Self {
-        self.connect_timeout = Some(connect_timeout);
+    pub(crate) fn connect_timeout(mut self, connect_timeout: Option<Duration>) -> Self {
+        self.connect_timeout = connect_timeout;
         self
     }
 
