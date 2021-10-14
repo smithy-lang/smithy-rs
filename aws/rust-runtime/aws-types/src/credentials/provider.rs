@@ -53,7 +53,11 @@ impl Display for CredentialsError {
             ),
             CredentialsError::Unhandled(err) => write!(f, "Unexpected credentials error: {}", err),
             CredentialsError::InvalidConfiguration(err) => {
-                write!(f, "The credentials provider was not properly: {}", err)
+                write!(
+                    f,
+                    "The credentials provider was not properly configured: {}",
+                    err
+                )
             }
             CredentialsError::ProviderError(err) => {
                 write!(f, "An error occured while loading credentials: {}", err)

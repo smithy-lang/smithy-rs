@@ -139,7 +139,7 @@ impl Provider {
             Self::build_full_uri(relative_uri)
         } else if let Some(full_uri) = full_uri {
             let mut dns = dns
-                .or_else(|| tokio_dns())
+                .or_else(tokio_dns)
                 .expect("a dns service must be provided");
             validate_full_uri(&full_uri, &mut dns)
                 .await
@@ -329,9 +329,10 @@ async fn validate_full_uri(uri: &str, dns: &mut DnsService) -> Result<Uri, Inval
         .map_err(InvalidFullUriError::InvalidUri)?;
     if uri.scheme() == Some(&Scheme::HTTPS) {
         return Ok(uri);
-    } else {
-        let host = uri.host().ok_or(InvalidFullUriError::MissingHost)?;
-        let is_loopback = match host.parse::<IpAddr>() {
+    }
+    // For HTTP URIs, we need to validate that it points to a loopback address
+    let host = uri.host().ok_or(InvalidFullUriError::MissingHost)?;
+    let is_loopback = match host.parse::<IpAddr>() {
             Ok(addr) => addr.is_loopback(),
             Err(_domain_name) => {
                 dns.ready().await.map_err(InvalidFullUriError::DnsLookupFailed)?
@@ -350,10 +351,9 @@ async fn validate_full_uri(uri: &str, dns: &mut DnsService) -> Result<Uri, Inval
                     })
             },
         };
-        match is_loopback {
-            true => Ok(uri),
-            false => Err(InvalidFullUriError::NotLoopback),
-        }
+    match is_loopback {
+        true => Ok(uri),
+        false => Err(InvalidFullUriError::NotLoopback),
     }
 }
 
@@ -605,6 +605,7 @@ mod test {
     }
 
     // ignored by default because it relies on actual DNS resolution
+    #[allow(unused_attributes)]
     #[tokio::test]
     #[traced_test]
     #[ignore]

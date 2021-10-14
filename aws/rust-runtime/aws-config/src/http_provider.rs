@@ -29,6 +29,9 @@ use smithy_client::timeout;
 use std::time::Duration;
 use tower::layer::util::Identity;
 
+const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(5);
+const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
+
 #[derive(Debug)]
 pub(crate) struct HttpCredentialProvider {
     uri: Uri,
@@ -87,8 +90,8 @@ impl Builder {
 
     pub(crate) fn build(self, provider_name: &'static str, uri: Uri) -> HttpCredentialProvider {
         let provider_config = self.provider_config.unwrap_or_default();
-        let connect_timeout = self.connect_timeout.unwrap_or(Duration::from_secs(2));
-        let read_timeout = self.read_timeout.unwrap_or(Duration::from_secs(5));
+        let connect_timeout = self.connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT);
+        let read_timeout = self.read_timeout.unwrap_or(DEFAULT_READ_TIMEOUT);
         let timeout_settings = timeout::Settings::default()
             .with_read_timeout(read_timeout)
             .with_connect_timeout(connect_timeout);
@@ -96,9 +99,9 @@ impl Builder {
         let connector = expect_connector(provider_config.connector(&http_settings));
         let client = smithy_client::Builder::new().connector(connector).build();
         HttpCredentialProvider {
-            provider_name,
             uri,
             client,
+            provider_name,
         }
     }
 }

@@ -15,7 +15,6 @@ use std::task::{Context, Poll};
 use tokio::net::TcpStream;
 
 use crate::erase::boxclone::BoxFuture;
-use smithy_http::result::ConnectorError;
 use tower::BoxError;
 
 /// A service that will never return whatever it is you want
