@@ -89,7 +89,7 @@ pub(crate) enum JsonCredentials<'a> {
 /// distinguishes between a successful response that contains credentials vs. an error with a code and
 /// error message.
 ///
-/// Keys are matched case ignoring case.
+/// Keys are case insensitive.
 pub(crate) fn parse_json_credentials(
     credentials_response: &str,
 ) -> Result<JsonCredentials, InvalidJsonCredentials> {
