@@ -8,27 +8,11 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Feature
-import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
-import software.amazon.smithy.rust.codegen.rustlang.RustType
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.asOptional
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.documentShape
-import software.amazon.smithy.rust.codegen.rustlang.render
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.stripOuter
-import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.rustlang.*
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
@@ -52,7 +36,13 @@ class FluentClientDecorator : RustCodegenDecorator {
         }
 
         val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("client")), public = true)
-        rustCrate.withModule(RustModule("client", module)) { writer ->
+        rustCrate.withModule(
+            RustModule(
+                "client",
+                module,
+                documentation = "Client and fluent builders for calling the service."
+            )
+        ) { writer ->
             FluentClientGenerator(codegenContext, includeSmithyGenericClientDocs = true).render(writer)
         }
         val smithyClient = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
@@ -128,6 +118,11 @@ class FluentClientGenerator(
     private val generics: ClientGenerics = ClientGenerics(),
     private val customizations: List<FluentClientCustomization> = emptyList(),
 ) {
+    companion object {
+        fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
+            RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operationShape).name.toSnakeCase())
+    }
+
     private val serviceShape = codegenContext.serviceShape
     private val operations =
         TopDownIndex.of(codegenContext.model).getContainedOperations(serviceShape).sortedBy { it.id }
@@ -171,6 +166,7 @@ class FluentClientGenerator(
             }
 
             impl${generics.inst} Client${generics.inst} {
+                /// Creates a client with the given configuration.
                 pub fn with_config(client: #{client}::Client${generics.inst}, conf: crate::Config) -> Self {
                     Self {
                         handle: std::sync::Arc::new(Handle {
@@ -180,6 +176,7 @@ class FluentClientGenerator(
                     }
                 }
 
+                /// Returns the client's configuration.
                 pub fn conf(&self) -> &crate::Config {
                     &self.handle.conf
                 }
@@ -196,7 +193,11 @@ class FluentClientGenerator(
                 val name = symbolProvider.toSymbol(operation).name
                 rust(
                     """
-                    pub fn ${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}(&self) -> fluent_builders::$name${generics.inst} {
+                    /// Constructs a fluent builder for the `$name` operation.
+                    ///
+                    /// See [`$name`](crate::client::fluent_builders::$name) for more information about the
+                    /// operation and its arguments.
+                    pub fn ${clientOperationFnName(operation, symbolProvider)}(&self) -> fluent_builders::$name${generics.inst} {
                         fluent_builders::$name::new(self.handle.clone())
                     }
                     """
@@ -204,15 +205,27 @@ class FluentClientGenerator(
             }
         }
         writer.withModule("fluent_builders") {
+            docs(
+                """
+                Utilities to ergonomically construct a request to the service.
+                
+                Fluent builders are created through the [`Client`](crate::client::Client) by calling
+                one if its operation methods. After parameters are set using the builder methods,
+                the `send` method can be called to initiate the request.
+                """,
+                newlinePrefix = "//!"
+            )
             operations.forEach { operation ->
-                val name = symbolProvider.toSymbol(operation).name
+                val operationSymbol = symbolProvider.toSymbol(operation)
                 val input = operation.inputShape(model)
                 val members: List<MemberShape> = input.allMembers.values.toList()
 
+                rust("/// Fluent builder constructing a request to `${operationSymbol.name}`.")
+                documentShape(operation, model, autoSuppressMissingDocs = false)
                 rustTemplate(
                     """
                     ##[derive(std::fmt::Debug)]
-                    pub struct $name${generics.decl} {
+                    pub struct ${operationSymbol.name}${generics.decl} {
                         handle: std::sync::Arc<super::Handle${generics.inst}>,
                         inner: #{Inner}
                     }
@@ -220,17 +233,28 @@ class FluentClientGenerator(
                     "Inner" to input.builderSymbol(symbolProvider),
                     *generics.codegenScope.toTypedArray(),
                     "client" to clientDep.asType(),
+                    "operation" to operationSymbol
                 )
 
                 rustBlockTemplate(
-                    "impl${generics.inst} $name${generics.inst} where ${generics.bounds}",
+                    "impl${generics.inst} ${operationSymbol.name}${generics.inst} where ${generics.bounds}",
                     "client" to clientDep.asType(),
                 ) {
                     rustTemplate(
                         """
+                        /// Creates a new `${operationSymbol.name}`.
                         pub(crate) fn new(handle: std::sync::Arc<super::Handle${generics.inst}>) -> Self {
                             Self { handle, inner: Default::default() }
                         }
+
+                        /// Sends the request and returns the response.
+                        ///
+                        /// If an error occurs, an `SdkError` will be returned with additional details that
+                        /// can be matched against.
+                        ///
+                        /// By default, any retryable failures will be retried 3 times. Retry behavior
+                        /// is configurable with the [RetryConfig](crate::RetryConfig), which can be
+                        /// set when configuring the client.
                         pub async fn send(self) -> std::result::Result<#{ok}, #{sdk_err}<#{operation_err}>>
                         where
                             R::Policy: #{client}::bounds::SmithyRetryPolicy<#{input}OperationOutputAlias,
@@ -280,6 +304,7 @@ class FluentClientGenerator(
                         }
                         // pure setter
                         val inputType = outerType.asOptional()
+                        documentShape(member, model)
                         rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
                             rust(
                                 """

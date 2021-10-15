@@ -84,6 +84,7 @@ class EndpointConfigCustomization(private val codegenContext: CodegenContext, pr
             ServiceConfig.BuilderImpl ->
                 rust(
                     """
+                    /// Sets the endpoint resolver to use when making requests.
                     pub fn endpoint_resolver(mut self, endpoint_resolver: impl #T + 'static) -> Self {
                         self.endpoint_resolver = Some(::std::sync::Arc::new(endpoint_resolver));
                         self

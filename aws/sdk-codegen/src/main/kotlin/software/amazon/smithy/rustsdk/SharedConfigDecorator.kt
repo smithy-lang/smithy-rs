@@ -73,10 +73,11 @@ class NewFromShared(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
             ServiceConfig.ConfigImpl -> writable {
                 rustTemplate(
                     """
+                    /// Creates a new service config from a shared config.
                     pub fn new(config: &#{Config}) -> Self {
                         Builder::from(config).build()
                     }
-                """,
+                    """,
                     *codegenScope
                 )
             }

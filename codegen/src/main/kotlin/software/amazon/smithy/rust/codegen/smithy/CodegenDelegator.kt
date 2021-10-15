@@ -142,8 +142,14 @@ open class RustCrate(
 /**
  * Allowlist of modules that will be exposed publicly in generated crates
  */
-val DefaultPublicModules =
-    setOf("error", "operation", "model", "input", "output", "config").map { it to RustModule.default(it, true) }.toMap()
+val DefaultPublicModules = setOf(
+    RustModule.public("error", documentation = "All error types that operations can return."),
+    RustModule.public("operation", documentation = "All operations that this crate can perform."),
+    RustModule.public("model", documentation = "Data structures used by operation inputs/outputs."),
+    RustModule.public("input", documentation = "Input structures for operations."),
+    RustModule.public("output", documentation = "Output structures for operations."),
+    RustModule.public("config", documentation = "Client configuration."),
+).associateBy { it.name }
 
 /**
  * Finalize all the writers by:

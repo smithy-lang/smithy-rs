@@ -10,10 +10,7 @@ import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.raw
-import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.*
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
@@ -42,11 +39,18 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
  * ```
  */
 sealed class ServiceConfig(name: String) : Section(name) {
-    /** Struct definition of `Config`. Fields should end with `,`
-     *  eg. `foo: Box<u64>,`
-     **/
+    /**
+     * Additional documentation comments for the `Config` struct.
+     */
+    object ConfigStructAdditionalDocs : ServiceConfig("ConfigStructAdditionalDocs")
+
+    /**
+     * Struct definition of `Config`. Fields should end with `,` (eg. `foo: Box<u64>,`)
+     */
     object ConfigStruct : ServiceConfig("ConfigStruct")
-    /** impl block of `Config`. (eg. to add functions)
+
+    /**
+     * impl block of `Config`. (eg. to add functions)
      * eg.
      * ```kotlin
      * rust("pub fn is_cross_region() -> bool { true }")
@@ -56,14 +60,17 @@ sealed class ServiceConfig(name: String) : Section(name) {
 
     /** Struct definition of `ConfigBuilder` **/
     object BuilderStruct : ServiceConfig("BuilderStruct")
+
     /** impl block of `ConfigBuilder` **/
     object BuilderImpl : ServiceConfig("BuilderImpl")
-    /** Convert from a field in the builder to the final field in config
+
+    /**
+     * Convert from a field in the builder to the final field in config
      *  eg.
      *  ```kotlin
      *  rust("""my_field: my_field.unwrap_or_else(||"default")""")
      *  ```
-     **/
+     */
     object BuilderBuild : ServiceConfig("BuilderBuild")
 }
 
@@ -106,6 +113,10 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
     }
 
     fun render(writer: RustWriter) {
+        writer.docs("Service config.\n")
+        customizations.forEach {
+            it.section(ServiceConfig.ConfigStructAdditionalDocs)(writer)
+        }
         writer.rustBlock("pub struct Config") {
             customizations.forEach {
                 it.section(ServiceConfig.ConfigStruct)(this)
@@ -127,6 +138,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         writer.rustBlock("impl Config") {
             rustTemplate(
                 """
+                /// Constructs a config builder.
                 pub fn builder() -> Builder { Builder::default() }
                 """
             )
@@ -135,6 +147,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
             }
         }
 
+        writer.docs("Builder for creating a `Config`.")
         writer.raw("#[derive(Default)]")
         writer.rustBlock("pub struct Builder") {
             customizations.forEach {
@@ -142,10 +155,12 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
             }
         }
         writer.rustBlock("impl Builder") {
+            docs("Constructs a config builder.")
             rustTemplate("pub fn new() -> Self { Self::default() }")
             customizations.forEach {
                 it.section(ServiceConfig.BuilderImpl)(this)
             }
+            docs("Builds a `Config`.")
             rustBlock("pub fn build(self) -> Config") {
                 rustBlock("Config") {
                     customizations.forEach {

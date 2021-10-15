@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+//! Presigned request types and configuration.
+
 /// Presigning config and builder
 pub mod config {
     use std::fmt;

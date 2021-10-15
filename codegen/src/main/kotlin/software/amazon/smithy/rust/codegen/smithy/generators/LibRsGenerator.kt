@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.escape
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
@@ -32,6 +33,7 @@ class LibRsGenerator(
     fun render(writer: RustWriter) {
         writer.first {
             customizations.forEach { it.section(LibRsSection.Attributes)(this) }
+            rust("##![warn(missing_docs)]")
 
             val libraryDocs = settings.getService(model).getTrait<DocumentationTrait>()?.value ?: settings.moduleName
             docs(escape(libraryDocs), newlinePrefix = "//! ")
