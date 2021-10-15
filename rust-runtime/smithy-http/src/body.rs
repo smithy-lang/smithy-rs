@@ -134,7 +134,7 @@ impl SdkBody {
     /// If this SdkBody is streaming, this will return `None`
     pub fn bytes(&self) -> Option<&[u8]> {
         match &self.inner {
-            Inner::Once(Some(b)) => Some(&b),
+            Inner::Once(Some(b)) => Some(b),
             Inner::Once(None) => Some(&[]),
             _ => None,
         }
@@ -250,8 +250,8 @@ mod test {
 
     #[test]
     fn valid_eos() {
-        assert_eq!(SdkBody::from("hello").is_end_stream(), false);
-        assert_eq!(SdkBody::from("").is_end_stream(), true);
+        assert!(SdkBody::from("hello").is_end_stream());
+        assert!(SdkBody::from("").is_end_stream());
     }
 
     #[tokio::test]
