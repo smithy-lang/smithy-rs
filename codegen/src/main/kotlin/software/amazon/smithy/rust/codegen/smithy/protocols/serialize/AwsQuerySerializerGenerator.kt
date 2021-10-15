@@ -6,9 +6,11 @@
 package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
 
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.model.traits.XmlNameTrait
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.getTrait
 
 class AwsQuerySerializerGenerator(codegenContext: CodegenContext) : QuerySerializerGenerator(codegenContext) {
@@ -18,4 +20,8 @@ class AwsQuerySerializerGenerator(codegenContext: CodegenContext) : QuerySeriali
         getTrait<XmlNameTrait>()?.value ?: memberName
 
     override fun MemberShape.isFlattened(): Boolean = getTrait<XmlFlattenedTrait>() != null
+
+    override fun serverSerializer(structureShape: StructureShape, includedMembers: List<MemberShape>): RuntimeType? {
+        TODO("Not yet implemented")
+    }
 }

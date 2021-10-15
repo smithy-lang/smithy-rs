@@ -118,7 +118,7 @@ class RestJson1HttpSerializerGenerator(
             )
             return
         }
-        val serializerSymbol = jsonSerializerGenerator.serverStructureSerializer(outputShape, httpBindingResolver.responseMembers(operationShape, HttpLocation.DOCUMENT))
+        val serializerSymbol = jsonSerializerGenerator.serverSerializer(outputShape, httpBindingResolver.responseMembers(operationShape, HttpLocation.DOCUMENT))
         if (serializerSymbol == null) {
             logger.warning(
                 "[rust-server-codegen] $outputShape: response output serialization does not contain any member"
@@ -188,7 +188,9 @@ class RestJson1HttpSerializerGenerator(
                     val errorTrait = variantShape.expectTrait<ErrorTrait>()
                     val variantSymbol = symbolProvider.toSymbol(variantShape)
                     val data = safeName("var")
-                    val serializerSymbol = jsonSerializerGenerator.serverStructureSerializer(variantShape, variantShape.members().toList())
+                    // TODO: the errorShapes members should probably be grabbed from the HTTP index as we do above in the responseSerializer.
+                    // I believe it will require a complete refactor of this method.
+                    val serializerSymbol = jsonSerializerGenerator.serverSerializer(variantShape, variantShape.members().toList())
                     if (serializerSymbol != null) {
                         rustBlock("#TKind::${variantSymbol.name}($data) =>", errorSymbol) {
                             rust(
@@ -407,7 +409,7 @@ class RestJson1HttpRequestDeserializerGenerator(
             )
             return
         }
-        val deserializerSymbol = jsonParserGenerator.serverStructureParser(inputShape, httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT))
+        val deserializerSymbol = jsonParserGenerator.serverParser(inputShape, httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT))
         if (deserializerSymbol == null) {
             logger.warning(
                 "[rust-server-codegen] $inputShape: response output serialization does not contain any member"

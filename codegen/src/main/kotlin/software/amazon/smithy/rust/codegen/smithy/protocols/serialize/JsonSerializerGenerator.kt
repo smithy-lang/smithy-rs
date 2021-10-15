@@ -200,23 +200,19 @@ class JsonSerializerGenerator(
         }
     }
 
-    /*
-    * TODO: expand SdkBody to be also used here. Right now returning it instead of a String requires the server
-    * RestJson1 implementation to be heavily refactored as well as additions to the SdkBody Rust type.
-    */
-    fun serverStructureSerializer(structureShape: StructureShape, includedMembers: List<MemberShape>): RuntimeType? {
+    override fun serverSerializer(structureShape: StructureShape, includedMembers: List<MemberShape>): RuntimeType? {
         if (includedMembers.isEmpty()) {
             return null
         }
         val fnName = symbolProvider.serializeFunctionName(structureShape)
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             it.rustBlockTemplate(
-                "pub fn $fnName(input: &#{target}) -> Result<String, #{Error}>",
+                "pub fn $fnName(value: &#{target}) -> Result<String, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(structureShape)
             ) {
                 rust("let mut out = String::new();")
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
-                serializeStructure(StructContext("object", "input", structureShape), includedMembers)
+                serializeStructure(StructContext("object", "value", structureShape), includedMembers)
                 rust("object.finish();")
                 rustTemplate("Ok(out)", *codegenScope)
             }

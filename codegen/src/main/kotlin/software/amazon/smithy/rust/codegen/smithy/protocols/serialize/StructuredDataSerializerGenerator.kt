@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
 
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
 interface StructuredDataSerializerGenerator {
@@ -39,4 +40,14 @@ interface StructuredDataSerializerGenerator {
      * ```
      */
     fun documentSerializer(): RuntimeType
+
+    /**
+     * Generate a serializer for a server input / output / error structure
+     * ```rust
+     * fn serialize_structure_crate_output_my_output_structure(value: &SomeSmithyType) -> Result<String, Error> {
+     *     ...
+     * }
+     * ```
+     */
+    fun serverSerializer(structureShape: StructureShape, includedMembers: List<MemberShape>): RuntimeType?
 }

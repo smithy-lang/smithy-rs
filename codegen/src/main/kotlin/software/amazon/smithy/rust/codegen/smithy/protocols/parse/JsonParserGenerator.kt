@@ -89,13 +89,13 @@ class JsonParserGenerator(
         }
         return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
-                "pub fn $fnName(input: &[u8], mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
+                "pub fn $fnName(value: &[u8], mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
                 "Builder" to structureShape.builderSymbol(symbolProvider),
                 *codegenScope
             ) {
                 rustTemplate(
                     """
-                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
+                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(value)).peekable();
                     let tokens = &mut tokens_owned;
                     #{expect_start_object}(tokens.next())?;
                     """,
@@ -143,7 +143,7 @@ class JsonParserGenerator(
     }
 
     override fun errorParser(errorShape: StructureShape): RuntimeType? {
-        val fnName = symbolProvider.deserializeFunctionName(errorShape) + "json_err"
+        val fnName = symbolProvider.deserializeFunctionName(errorShape) + "_json_err"
         return structureParser(fnName, errorShape, errorShape.members().toList())
     }
 
@@ -183,10 +183,7 @@ class JsonParserGenerator(
         )
     }
 
-    fun serverStructureParser(
-        structureShape: StructureShape,
-        includedMembers: List<MemberShape>
-    ): RuntimeType? {
+    override fun serverParser(structureShape: StructureShape, includedMembers: List<MemberShape>): RuntimeType? {
         val fnName = symbolProvider.deserializeFunctionName(structureShape)
         return structureParser(fnName, structureShape, includedMembers)
     }

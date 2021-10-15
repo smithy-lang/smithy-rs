@@ -176,6 +176,10 @@ class XmlBindingTraitSerializerGenerator(
         }
     }
 
+    override fun serverSerializer(structureShape: StructureShape, includedMembers: List<MemberShape>): RuntimeType? {
+        TODO("Not yet implemented")
+    }
+
     private fun XmlNamespaceTrait?.apply(): String {
         this ?: return ""
         val prefix = prefix.map { prefix -> "Some(${prefix.dq()})" }.orElse("None")
