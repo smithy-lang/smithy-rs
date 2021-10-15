@@ -1606,6 +1606,12 @@
                         "smithy.api#documentation": "<p>A token that you provide to identify the request to create a data\n      source. Multiple calls to the <code>CreateDataSource</code> operation with\n      the same client token will create only one data source.</p>",
                         "smithy.api#idempotencyToken": {}
                     }
+                },
+                "LanguageCode": {
+                    "target": "com.amazonaws.kendra#LanguageCode",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The code for a language. This allows you to support a language for all \n            documents when creating the data source. English is supported \n            by default. For more information on supported languages, including their codes, \n            see <a href=\"https://docs.aws.amazon.com/kendra/latest/dg/in-adding-languages.html\">Adding \n                documents in languages other than English</a>.</p>"
+                    }
                 }
             }
         },
@@ -1710,6 +1716,12 @@
                     "traits": {
                         "smithy.api#documentation": "<p>A token that you provide to identify the request to create a FAQ. Multiple calls to\n            the <code>CreateFaqRequest</code> operation with the same client token will create only\n            one FAQ. </p>",
                         "smithy.api#idempotencyToken": {}
+                    }
+                },
+                "LanguageCode": {
+                    "target": "com.amazonaws.kendra#LanguageCode",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The code for a language. This allows you to support a language \n            for the FAQ document. English is supported by default. \n            For more information on supported languages, including their codes, \n            see <a href=\"https://docs.aws.amazon.com/kendra/latest/dg/in-adding-languages.html\">Adding \n                documents in languages other than English</a>.</p>"
                     }
                 }
             }
@@ -2259,6 +2271,12 @@
                     "target": "com.amazonaws.kendra#DataSourceStatus",
                     "traits": {
                         "smithy.api#documentation": "<p>The status of the data source. When the status is\n                <code>ACTIVE</code> the data source is ready to use.</p>"
+                    }
+                },
+                "LanguageCode": {
+                    "target": "com.amazonaws.kendra#LanguageCode",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The code for a language. This shows a supported language for all documents \n            in the data source. English is supported by default.  \n            For more information on supported languages, including their codes, \n            see <a href=\"https://docs.aws.amazon.com/kendra/latest/dg/in-adding-languages.html\">Adding \n                documents in languages other than English</a>.</p>"
                     }
                 }
             },
@@ -3062,6 +3080,12 @@
                     "traits": {
                         "smithy.api#documentation": "<p>When the <code>Status</code> field value is <code>FAILED</code>, the\n        <code>ErrorMessage</code> field contains a description of the error that\n      caused the data source to fail.</p>"
                     }
+                },
+                "LanguageCode": {
+                    "target": "com.amazonaws.kendra#LanguageCode",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The code for a language. This shows a supported language for all \n            documents in the data source. English is supported by \n            default. For more information on supported languages, including their codes, \n            see <a href=\"https://docs.aws.amazon.com/kendra/latest/dg/in-adding-languages.html\">Adding \n                documents in languages other than English</a>.</p>"
+                    }
                 }
             }
         },
@@ -3177,6 +3201,12 @@
                     "target": "com.amazonaws.kendra#FaqFileFormat",
                     "traits": {
                         "smithy.api#documentation": "<p>The file format used by the input files for the FAQ.</p>"
+                    }
+                },
+                "LanguageCode": {
+                    "target": "com.amazonaws.kendra#LanguageCode",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The code for a language. This shows a supported language \n            for the FAQ document. English is supported by default.  \n            For more information on supported languages, including their codes, \n            see <a href=\"https://docs.aws.amazon.com/kendra/latest/dg/in-adding-languages.html\">Adding \n                documents in languages other than English</a>.</p>"
                     }
                 }
             }
@@ -4432,6 +4462,12 @@
                     "traits": {
                         "smithy.api#documentation": "<p>The file type used to create the FAQ. </p>"
                     }
+                },
+                "LanguageCode": {
+                    "target": "com.amazonaws.kendra#LanguageCode",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The code for a language. This shows a supported language for the FAQ document \n            as part of the summary information for FAQs. English is supported by default.  \n            For more information on supported languages, including their codes, \n            see <a href=\"https://docs.aws.amazon.com/kendra/latest/dg/in-adding-languages.html\">Adding \n                documents in languages other than English</a>.</p>"
+                    }
                 }
             },
             "traits": {
@@ -5113,6 +5149,17 @@
                     "max": 2048
                 },
                 "smithy.api#sensitive": {}
+            }
+        },
+        "com.amazonaws.kendra#LanguageCode": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "<p>The code for a language. The default language is English. \n            For more information on supported languages, including their codes, \n            see <a href=\"https://docs.aws.amazon.com/kendra/latest/dg/in-adding-languages.html\">Adding \n                documents in languages other than English</a>.</p>",
+                "smithy.api#length": {
+                    "min": 2,
+                    "max": 10
+                },
+                "smithy.api#pattern": "^[a-zA-Z-]*$"
             }
         },
         "com.amazonaws.kendra#ListDataSourceSyncJobs": {
@@ -7373,6 +7420,10 @@
                     {
                         "value": "LOW",
                         "name": "LOW"
+                    },
+                    {
+                        "value": "NOT_AVAILABLE",
+                        "name": "NOT_AVAILABLE"
                     }
                 ]
             }
@@ -8679,6 +8730,12 @@
                     "target": "com.amazonaws.kendra#RoleArn",
                     "traits": {
                         "smithy.api#documentation": "<p>The Amazon Resource Name (ARN) of the new role to use when the data\n      source is accessing resources on your behalf.</p>"
+                    }
+                },
+                "LanguageCode": {
+                    "target": "com.amazonaws.kendra#LanguageCode",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The code for a language. This allows you to support a language for all \n            documents when updating the data source. English is supported \n            by default. For more information on supported languages, including their codes, \n            see <a href=\"https://docs.aws.amazon.com/kendra/latest/dg/in-adding-languages.html\">Adding \n                documents in languages other than English</a>.</p>"
                     }
                 }
             }
