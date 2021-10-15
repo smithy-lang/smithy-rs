@@ -41,20 +41,20 @@ resource Service {
 @http(method: "PUT", uri: "/service/{id}")
 @documentation("Service register operation")
 operation RegisterService {
-    input: RegisterServiceInput,
-    output: RegisterServiceOutput,
+    input: RegisterServiceInputRequest,
+    output: RegisterServiceOutputResponse,
     errors: [ResourceAlreadyExists]
 }
 
 @documentation("Service register input structure")
-structure RegisterServiceInput {
+structure RegisterServiceInputRequest {
     @required
     @httpLabel
     id: ServiceId,
 }
 
 @documentation("Service register output structure")
-structure RegisterServiceOutput {
+structure RegisterServiceOutputResponse {
     @required
     id: ServiceId
 }
@@ -63,16 +63,16 @@ structure RegisterServiceOutput {
 @http(uri: "/healthcheck", method: "GET")
 @documentation("Read-only healthcheck operation")
 operation Healthcheck {
-    input: HealthcheckInput,
-    output: HealthcheckOutput
+    input: HealthcheckInputRequest,
+    output: HealthcheckOutputResponse
 }
 
 @documentation("Service healthcheck output structure")
-structure HealthcheckInput {
+structure HealthcheckInputRequest {
 
 }
 
 @documentation("Service healthcheck input structure")
-structure HealthcheckOutput {
+structure HealthcheckOutputResponse {
 
 }

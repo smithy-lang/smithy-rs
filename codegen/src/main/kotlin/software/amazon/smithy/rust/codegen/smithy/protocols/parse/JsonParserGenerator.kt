@@ -79,6 +79,35 @@ class JsonParserGenerator(
         "or_empty" to orEmptyJson()
     )
 
+    /**
+     * Reusable structure parser implementation that can be used to generate parsing code for
+     * operation, error and structure shapes.
+     */
+    private fun structureParser(fnName: String, structureShape: StructureShape, includedMembers: List<MemberShape>): RuntimeType? {
+        if (includedMembers.isEmpty()) {
+            return null
+        }
+        return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
+            it.rustBlockTemplate(
+                "pub fn $fnName(input: &[u8], mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
+                "Builder" to structureShape.builderSymbol(symbolProvider),
+                *codegenScope
+            ) {
+                rustTemplate(
+                    """
+                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
+                    let tokens = &mut tokens_owned;
+                    #{expect_start_object}(tokens.next())?;
+                    """,
+                    *codegenScope
+                )
+                deserializeStructInner(includedMembers)
+                expectEndOfTokenStream()
+                rust("Ok(builder)")
+            }
+        }
+    }
+
     override fun payloadParser(member: MemberShape): RuntimeType {
         val shape = model.expectShape(member.target)
         check(shape is UnionShape || shape is StructureShape) { "payload parser should only be used on structures & unions" }
@@ -108,57 +137,14 @@ class JsonParserGenerator(
     override fun operationParser(operationShape: OperationShape): RuntimeType? {
         // Don't generate an operation JSON deserializer if there is no JSON body
         val httpDocumentMembers = httpBindingResolver.responseMembers(operationShape, HttpLocation.DOCUMENT)
-        if (httpDocumentMembers.isEmpty()) {
-            return null
-        }
-
         val outputShape = operationShape.outputShape(model)
         val fnName = symbolProvider.deserializeFunctionName(operationShape)
-        return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
-            it.rustBlockTemplate(
-                "pub fn $fnName(input: &[u8], mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
-                "Builder" to outputShape.builderSymbol(symbolProvider),
-                *codegenScope
-            ) {
-                rustTemplate(
-                    """
-                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
-                    let tokens = &mut tokens_owned;
-                    #{expect_start_object}(tokens.next())?;
-                    """,
-                    *codegenScope
-                )
-                deserializeStructInner(httpDocumentMembers)
-                expectEndOfTokenStream()
-                rust("Ok(builder)")
-            }
-        }
+        return structureParser(fnName, outputShape, httpDocumentMembers)
     }
 
     override fun errorParser(errorShape: StructureShape): RuntimeType? {
-        if (errorShape.members().isEmpty()) {
-            return null
-        }
         val fnName = symbolProvider.deserializeFunctionName(errorShape) + "json_err"
-        return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
-            it.rustBlockTemplate(
-                "pub fn $fnName(input: &[u8], mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
-                "Builder" to errorShape.builderSymbol(symbolProvider),
-                *codegenScope
-            ) {
-                rustTemplate(
-                    """
-                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
-                    let tokens = &mut tokens_owned;
-                    #{expect_start_object}(tokens.next())?;
-                    """,
-                    *codegenScope
-                )
-                deserializeStructInner(errorShape.members())
-                expectEndOfTokenStream()
-                rust("Ok(builder)")
-            }
-        }
+        return structureParser(fnName, errorShape, errorShape.members().toList())
     }
 
     override fun documentParser(operationShape: OperationShape): RuntimeType {
@@ -197,31 +183,12 @@ class JsonParserGenerator(
         )
     }
 
-    fun renderStructure(
-        writer: RustWriter,
+    fun serverStructureParser(
         structureShape: StructureShape,
-        includedMembers: List<MemberShape>,
-    ) {
+        includedMembers: List<MemberShape>
+    ): RuntimeType? {
         val fnName = symbolProvider.deserializeFunctionName(structureShape)
-        val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
-        writer.write("")
-        writer.rustBlockTemplate(
-            "##[allow(dead_code)] pub fn $fnName(input: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
-            *codegenScope,
-            "Builder" to structureShape.builderSymbol(symbolProvider),
-        ) {
-            rustTemplate(
-                """
-                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
-                    let tokens = &mut tokens_owned;
-                    #{expect_start_object}(tokens.next())?;
-                """.trimIndent(),
-                *codegenScope
-            )
-            deserializeStructInner(includedMembers)
-            expectEndOfTokenStream()
-            rust("Ok(builder)")
-        }
+        return structureParser(fnName, structureShape, includedMembers)
     }
 
     private fun RustWriter.expectEndOfTokenStream() {
