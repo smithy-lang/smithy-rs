@@ -250,8 +250,8 @@ mod test {
 
     #[test]
     fn valid_eos() {
-        assert!(SdkBody::from("hello").is_end_stream());
-        assert!(SdkBody::from("").is_end_stream());
+        assert_eq!(SdkBody::from("hello").is_end_stream(), false);
+        assert_eq!(SdkBody::from("").is_end_stream(), true);
     }
 
     #[tokio::test]
