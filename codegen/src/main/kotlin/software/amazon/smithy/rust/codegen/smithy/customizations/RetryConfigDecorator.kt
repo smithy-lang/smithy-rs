@@ -114,7 +114,7 @@ class RetryConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomiz
                 self.set_retry_config(Some(retry_config));
                 self
             }
-        
+
             /// Set the retry_config for the builder
             ///
             /// ## Examples

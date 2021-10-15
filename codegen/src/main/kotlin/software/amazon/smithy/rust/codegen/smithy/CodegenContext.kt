@@ -13,12 +13,36 @@ import software.amazon.smithy.model.shapes.ShapeId
  * Configuration needed to generate the client for a given Service<->Protocol pair
  */
 data class CodegenContext(
+    /**
+     * The smithy model.
+     *
+     * Note: This model may or not be pruned to the given service closure, so ensure that `serviceShape` is used as
+     * an entry point.
+     */
     val model: Model,
     val symbolProvider: RustSymbolProvider,
+    /**
+     * Configuration of the runtime package:
+     * - Where are the runtime crates (smithy-*) located on the file system? Or are they versioned?
+     * - What are they called?
+     */
     val runtimeConfig: RuntimeConfig,
+    /**
+     * Entrypoint service shape for code generation
+     */
     val serviceShape: ServiceShape,
+    /**
+     * Smithy Protocol to generate, eg. RestJson1
+     */
     val protocol: ShapeId,
+    /**
+     * The name of the cargo crate to generate eg. `aws-sdk-s3`
+     * This is loaded from the smithy-build.json during codegen.
+     */
     val moduleName: String,
+    /**
+     * Settings loaded from smithy-build.json
+     */
     val settings: RustSettings,
 ) {
     constructor(

@@ -20,8 +20,20 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import java.util.Optional
 
+/**
+ * Location of the runtime crates (smithy-http, smithy-types etc.)
+ *
+ * This can be configured via the `runtimeConfig.version` field in smithy-build.json
+ */
 sealed class RuntimeCrateLocation {
+    /**
+     * Relative path to find the runtime crates, eg. `../`
+     */
     data class Path(val path: String) : RuntimeCrateLocation()
+
+    /**
+     * Version for the runtime crates, eg. `v0.0.1-alpha`
+     */
     data class Versioned(val version: String) : RuntimeCrateLocation()
 }
 
@@ -30,12 +42,18 @@ fun RuntimeCrateLocation.crateLocation(): DependencyLocation = when (this) {
     is RuntimeCrateLocation.Versioned -> CratesIo(this.version)
 }
 
+/**
+ * Prefix & crate location for the runtime crates.
+ */
 data class RuntimeConfig(
     val cratePrefix: String = "smithy",
     val runtimeCrateLocation: RuntimeCrateLocation = RuntimeCrateLocation.Path("../")
 ) {
     companion object {
 
+        /**
+         * Load a `RuntimeConfig` from an [ObjectNode] (JSON)
+         */
         fun fromNode(node: Optional<ObjectNode>): RuntimeConfig {
             return if (node.isPresent) {
                 val runtimeCrateLocation = if (node.get().containsMember("version")) {
@@ -57,7 +75,31 @@ data class RuntimeConfig(
         CargoDependency("$cratePrefix-$runtimeCrateName", runtimeCrateLocation.crateLocation(), optional = optional)
 }
 
+/**
+ * `RuntimeType` captures all necessary information to render a type into a Rust file:
+ * - [name]: What type is this?
+ * - [dependency]: What other crates, if any, are required to use this type?
+ * - [namespace]: Where can we find this type.
+ *
+ * For example:
+ *
+ * `http::header::HeaderName`
+ *  ------------  ----------
+ *      |           |
+ *  [namespace]   [name]
+ *
+ *  This type would have a [CargoDependency] pointing to the `http` crate.
+ *
+ *  By grouping all of this information, when we render a type into a [RustWriter], we can not only render a fully qualified
+ *  name, but also ensure that we automatically add any dependencies **as they are used**.
+ */
 data class RuntimeType(val name: String?, val dependency: RustDependency?, val namespace: String) {
+    /**
+     * Convert this [RuntimeType] into a [Symbol].
+     *
+     * This is not commonly required, but is occasionally useful when you want to force an import without referencing a type
+     * (eg. when bringing a trait into scope). See [CodegenWriter.addUseImports].
+     */
     fun toSymbol(): Symbol {
         val builder = Symbol.builder().name(name).namespace(namespace, "::")
             .rustType(RustType.Opaque(name ?: "", namespace = namespace))
@@ -66,17 +108,31 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         return builder.build()
     }
 
+    /**
+     * Create a new [RuntimeType] with a nested name.
+     *
+     * # Example
+     * ```kotlin
+     * val http = CargoDependency.http.member("Request")
+     * ```
+     */
     fun member(member: String): RuntimeType {
         val newName = name?.let { "$name::$member" } ?: member
         return copy(name = newName)
     }
 
+    /**
+     * Returns the fully qualified name for this type
+     */
     fun fullyQualifiedName(): String {
         val postFix = name?.let { "::$name" } ?: ""
         return "$namespace$postFix"
     }
 
     // TODO: refactor to be RuntimeTypeProvider a la Symbol provider that packages the `RuntimeConfig` state.
+    /**
+     * The companion object contains commonly used RuntimeTypes
+     */
     companion object {
         fun errorKind(runtimeConfig: RuntimeConfig) = RuntimeType(
             "ErrorKind",

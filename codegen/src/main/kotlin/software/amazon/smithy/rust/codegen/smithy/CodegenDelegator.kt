@@ -21,18 +21,46 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 
+/**
+ * RustCrate abstraction.
+ *
+ * **Note**: This is the only implementation, `open` only for test purposes.
+ *
+ * All code-generation at some point goes through this class. `RustCrate` maintains a `CodegenWriterDelegator` internally
+ * which tracks a set of file-writer pairs and allows them to be loaded and cached (see: [useShapeWriter])
+ *
+ * On top of this, it adds Rust specific features:
+ * - Generation of a `lib.rs` which adds `mod` statements automatically for every module that was used
+ * - Tracking dependencies and crate features used during code generation, enabling generation of `Cargo.toml`
+ *
+ * Users will generally want to use two main entry points:
+ * 1. [useShapeWriter]: Find or create a writer that will contain a given shape. See [locatedIn] for context about how
+ *    shape locations are determined.
+ * 2. [finalize]: Write the crate out to the file system, generating a lib.rs and Cargo.toml
+ */
 open class RustCrate(
     fileManifest: FileManifest,
     symbolProvider: SymbolProvider,
+    /**
+     * For core modules like `input`, `output`, and `error`, we need to specify whether these modules should be public or
+     * private as well as any other metadata. [baseModules] enables configuring this. See [DefaultPublicModules].
+     */
     baseModules: Map<String, RustModule>
 ) {
     private val inner = CodegenWriterDelegator(fileManifest, symbolProvider, RustWriter.Factory)
     private val modules: MutableMap<String, RustModule> = baseModules.toMutableMap()
     private val features: MutableSet<Feature> = mutableSetOf()
+
+    /**
+     * Write into the module that this shape is [locatedIn]
+     */
     fun useShapeWriter(shape: Shape, f: (RustWriter) -> Unit) {
         inner.useShapeWriter(shape, f)
     }
 
+    /**
+     * Write directly into lib.rs
+     */
     fun lib(moduleWriter: (RustWriter) -> Unit) {
         inner.useFileWriter("src/lib.rs", "crate", moduleWriter)
     }
@@ -51,6 +79,11 @@ open class RustCrate(
         }
     }
 
+    /**
+     * Finalize Cargo.toml and lib.rs and flush the writers to the file system.
+     *
+     * This is also where inline dependencies are actually reified and written, potentially recursively.
+     */
     fun finalize(
         settings: RustSettings,
         model: Model,
@@ -82,6 +115,9 @@ open class RustCrate(
         }
     }
 
+    /**
+     * Create a new module directly. The resulting module will be placed in `src/<modulename>.rs`
+     */
     fun withModule(
         module: RustModule,
         moduleWriter: (RustWriter) -> Unit
@@ -92,6 +128,9 @@ open class RustCrate(
         return this
     }
 
+    /**
+     * Create a new file directly
+     */
     fun withFile(filename: String, fileWriter: (RustWriter) -> Unit) {
         inner.useFileWriter(filename) {
             fileWriter(it)
