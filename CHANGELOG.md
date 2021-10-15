@@ -1,6 +1,9 @@
 vNext (Month Day, Year)
 =======================
 
+v0.26 (October 15th, 2021)
+=======================
+
 **Breaking Changes**
 
 - :warning: The `rust-codegen` plugin now requires a `moduleDescription` in the *smithy-build.json* file. This
