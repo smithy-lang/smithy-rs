@@ -37,7 +37,6 @@ class AwsReadmeDecoratorTest {
         assertEquals(
             """
             Some text introducing a list:
-
               - foo bar baz
               - baz bar foo
                 1. nested item
@@ -55,6 +54,50 @@ class AwsReadmeDecoratorTest {
                     <ol><li>nested item</li><li>another</li></ol>
                   </li>
                 </ul> More text.</p>
+                """.trimIndent()
+            )
+        )
+    }
+
+    @Test
+    fun `it converts description lists`() {
+        assertEquals(
+            """
+            Some text introducing a description list:
+
+            __Something__
+
+            Some description of [something](test).
+
+            __Another thing__
+
+            Some description of another thing.
+
+            A second paragraph that describes another thing.
+
+            __MDN says these can be wrapped in divs__
+
+            So here we are
+
+            Some trailing text.
+            """.trimIndent(),
+            AwsReadmeDecorator().normalizeDescription(
+                "",
+                """
+                <p>Some text introducing a description list:
+                <dl>
+                  <dt>Something</dt>
+                  <dd>Some description of <a href="test">something</a>.</dd>
+                  <dt>Another thing</dt>
+                  <dd>Some description of another thing.</dd>
+                  <dd>A second paragraph that describes another thing.</dd>
+                  <div>
+                      <dt>MDN says these can be wrapped in divs</dt>
+                      <dd>So here we are</dd>
+                  </div>
+                </dl>
+                Some trailing text.
+                </p>
                 """.trimIndent()
             )
         )

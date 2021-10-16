@@ -101,6 +101,7 @@ class AwsReadmeDecorator : RustCodegenDecorator {
             normalizeAnchors() // Convert anchor tags into Markdown links
             normalizeBreaks() // Convert `<br>` tags into newlines
             normalizeLists() // Convert HTML lists into Markdown lists
+            normalizeDescriptionLists() // Converts HTML <dl> description lists into Markdown
             normalizeParagraphs() // Replace paragraph tags into blocks of text separated by newlines
             warnOnUnrecognizedElements(moduleName) // Log a warning if we missed something
         }
@@ -113,6 +114,8 @@ class AwsReadmeDecorator : RustCodegenDecorator {
     private fun Element.stripUndesiredNodes() {
         // Remove the `<fullname>` tag
         getElementsByTag("fullname").forEach { it.remove() }
+        // Unwrap `<important>` tags
+        getElementsByTag("important").forEach { it.changeInto("span") }
         // Remove the `<note>` tag
         getElementsByTag("note").forEach {
             if (it.children().isEmpty()) {
@@ -127,6 +130,10 @@ class AwsReadmeDecorator : RustCodegenDecorator {
                 text.remove()
             }
         }
+    }
+
+    private fun Element.changeInto(tagName: String) {
+        replaceWith(Element(tagName).also { elem -> elem.appendChildren(childNodesCopy()) })
     }
 
     private fun Element.normalizeInlineStyles() {
@@ -192,15 +199,34 @@ class AwsReadmeDecorator : RustCodegenDecorator {
         replaceWith(TextNode(result.toString()))
     }
 
+    private fun Element.normalizeDescriptionLists() {
+        getElementsByTag("dl").forEach { list -> list.normalizeDescriptionList() }
+    }
+
+    private fun Element.normalizeDescriptionList() {
+        getElementsByTag("dt").forEach { dt ->
+            dt.text("${LINE_BREAK_SIGIL}__${dt.text()}__$LINE_BREAK_SIGIL")
+            dt.changeInto("span")
+        }
+        getElementsByTag("dd").forEach { dd -> dd.changeInto("p") }
+        appendChild(TextNode(LINE_BREAK_SIGIL))
+        changeInto("span")
+    }
+
     private fun Element.normalizeParagraphs() {
         getElementsByTag("p").forEach { paragraph ->
-            paragraph.replaceWith(TextNode(LINE_BREAK_SIGIL + paragraph.text() + "$LINE_BREAK_SIGIL$LINE_BREAK_SIGIL"))
+            paragraph.replaceWith(TextNode(LINE_BREAK_SIGIL + paragraph.text() + LINE_BREAK_SIGIL))
         }
     }
 
     private fun Element.warnOnUnrecognizedElements(moduleName: String) {
         allElements
-            .filter { elem -> elem.tagName() != "body" } // body is always present
+            .filter { elem ->
+                // body is always present
+                elem.tagName() != "body" &&
+                    // we replace certain elements with span, so these are fine
+                    elem.tagName() != "span"
+            }
             .map { elem -> elem.tagName() }.toSortedSet().joinToString(", ")
             .let { tags ->
                 if (tags.isNotEmpty()) {
