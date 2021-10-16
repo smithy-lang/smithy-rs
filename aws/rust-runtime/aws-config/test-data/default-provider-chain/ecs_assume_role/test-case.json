@@ -1,6 +1,6 @@
 {
-  "name": "imds-token-fail",
-  "docs": "acquires credentials via IMDS and uses them to assume a role",
+  "name": "ecs-assume-role",
+  "docs": "load base creds from ECS then use those credentials to assume a role",
   "result": {
     "Ok": {
       "access_key_id": "ASIARCORRECT",

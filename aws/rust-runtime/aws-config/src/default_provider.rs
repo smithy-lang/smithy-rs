@@ -428,6 +428,9 @@ pub mod credentials {
         make_test!(imds_disabled);
         make_test!(imds_default_chain_retries);
 
+        make_test!(ecs_assume_role);
+        make_test!(ecs_credentials);
+
         #[tokio::test]
         async fn profile_name_override() {
             let (_, conf) =
