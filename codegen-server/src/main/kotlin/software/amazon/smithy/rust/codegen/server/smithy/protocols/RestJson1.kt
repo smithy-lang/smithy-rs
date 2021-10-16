@@ -187,10 +187,9 @@ class RestJson1HttpSerializerGenerator(
                     val variantShape = model.expectShape(it, StructureShape::class.java)
                     val errorTrait = variantShape.expectTrait<ErrorTrait>()
                     val variantSymbol = symbolProvider.toSymbol(variantShape)
+                    val errorMembers = httpBindingResolver.errorResponseBindings(it).filter { it.location == HttpLocation.DOCUMENT }.map { it.member }
                     val data = safeName("var")
-                    // TODO: the errorShapes members should probably be grabbed from the HTTP index as we do above in the responseSerializer.
-                    // I believe it will require a complete refactor of this method.
-                    val serializerSymbol = jsonSerializerGenerator.serverSerializer(variantShape, variantShape.members().toList())
+                    val serializerSymbol = jsonSerializerGenerator.serverSerializer(variantShape, errorMembers)
                     if (serializerSymbol != null) {
                         rustBlock("#TKind::${variantSymbol.name}($data) =>", errorSymbol) {
                             rust(
