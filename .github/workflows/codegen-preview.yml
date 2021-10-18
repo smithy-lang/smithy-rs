@@ -1,0 +1,49 @@
+name: codegen diff preview
+# This job will generate a branch containing exclusively codegen output and push it to GitHub
+# once the branch is deployed, it will comment on GitHub with a link where you can see the generated diff.
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+env:
+  java_version: 11
+jobs:
+  push-generated-code:
+    runs-on: ubuntu-latest
+    name: Push generated code to a branch
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.java_version }}
+    - name: mk-generated
+      run: ./tools/mk-generated.sh
+    - name: push generated branch
+      run: |
+        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+        git push -f origin "$(git rev-parse --abbrev-ref HEAD)"
+    - name: finalize
+      run: echo "generated output pushed to $(git rev-parse --abbrev-ref HEAD)"
+    - name: gen branch output
+      run: echo "::set-output name=branchname::$(git rev-parse --abbrev-ref HEAD)"
+      id: branch_output
+    - uses: actions/github-script@v5
+      with:
+        script: |
+          await github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `A new generated diff is ready to view: https://github.com/${context.repo.owner}/${context.repo.repo}/compare/__generated-main...${{ steps.branch_output.outputs.branchname }}`
+          })
