@@ -1,11 +1,16 @@
 vNext (Month Day, Year)
 =======================
 
+v0.0.21-alpha (October 15th, 2021)
+==================================
+
 **New this week**
 
 - Prepare crate manifests for publishing to crates.io (smithy-rs#755)
-- Add support for IAM Roles for tasks (smithy-rs#765, aws-sdk-rust#123)
+- Add support for IAM Roles for tasks credential provider (smithy-rs#765, aws-sdk-rust#123)
 - All service crates now have generated README files (smithy-rs#766)
+- Update AWS service models (smithy-rs#772)
+- :tada: Add support for Amazon Managed Grafana (smithy-rs#772)
 
 v0.0.20-alpha (October 7, 2021)
 ===============================
@@ -15,10 +20,6 @@ v0.0.20-alpha (October 7, 2021)
 - :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
 - `SmithyConnector` and `DynConnector` now return `ConnectorError` instead of `Box<dyn Error>`. If you have written a custom connector, it will need to be updated to return the new error type. (#744)
 - The `DispatchError` variant of `SdkError` now contains `ConnectorError` instead of `Box<dyn Error>` (#744).
-
-**Tasks to cut release**
-
-- [ ] Bump MSRV on aws-sdk-rust, then delete this line.
 
 **New This Week**
 
