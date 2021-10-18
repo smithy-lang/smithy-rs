@@ -118,7 +118,7 @@ class RestJson1HttpSerializerGenerator(
             )
             return
         }
-        val serializerSymbol = jsonSerializerGenerator.serverSerializer(outputShape, httpBindingResolver.responseMembers(operationShape, HttpLocation.DOCUMENT))
+        val serializerSymbol = jsonSerializerGenerator.serverOutputSerializer(operationShape)
         if (serializerSymbol == null) {
             logger.warning(
                 "[rust-server-codegen] $outputShape: response output serialization does not contain any member"
@@ -187,9 +187,8 @@ class RestJson1HttpSerializerGenerator(
                     val variantShape = model.expectShape(it, StructureShape::class.java)
                     val errorTrait = variantShape.expectTrait<ErrorTrait>()
                     val variantSymbol = symbolProvider.toSymbol(variantShape)
-                    val errorMembers = httpBindingResolver.errorResponseBindings(it).filter { it.location == HttpLocation.DOCUMENT }.map { it.member }
                     val data = safeName("var")
-                    val serializerSymbol = jsonSerializerGenerator.serverSerializer(variantShape, errorMembers)
+                    val serializerSymbol = jsonSerializerGenerator.serverErrorSerializer(it)
                     if (serializerSymbol != null) {
                         rustBlock("#TKind::${variantSymbol.name}($data) =>", errorSymbol) {
                             rust(
@@ -408,7 +407,7 @@ class RestJson1HttpRequestDeserializerGenerator(
             )
             return
         }
-        val deserializerSymbol = jsonParserGenerator.serverParser(inputShape, httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT))
+        val deserializerSymbol = jsonParserGenerator.serverInputParser(operationShape)
         if (deserializerSymbol == null) {
             logger.warning(
                 "[rust-server-codegen] $inputShape: response output serialization does not contain any member"

@@ -44,6 +44,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBinding
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
@@ -51,6 +52,7 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBox
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
 
@@ -75,7 +77,6 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private val httpSerializerGenerator: ServerGenerator
     private val httpDeserializerGenerator: ServerGenerator
     private val httpBindingResolver: HttpBindingResolver
-    private val renderedStructures = mutableSetOf<StructureShape>()
 
     init {
         val symbolVisitorConfig =
@@ -212,11 +213,13 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         logger.info("[rust-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) { writer ->
             StructureGenerator(model, symbolProvider, writer, shape).render()
-            val builderGenerator =
-                BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
-            builderGenerator.render(writer)
-            writer.implBlock(shape, symbolProvider) {
-                builderGenerator.renderConvenienceMethod(this)
+            if (!shape.hasTrait<SyntheticInputTrait>()) {
+                val builderGenerator =
+                    BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
+                builderGenerator.render(writer)
+                writer.implBlock(shape, symbolProvider) {
+                    builderGenerator.renderConvenienceMethod(this)
+                }
             }
         }
     }

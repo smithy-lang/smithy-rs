@@ -47,6 +47,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.deserializeFunctionN
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.utils.StringUtils
@@ -183,9 +184,11 @@ class JsonParserGenerator(
         )
     }
 
-    override fun serverParser(structureShape: StructureShape, includedMembers: List<MemberShape>): RuntimeType? {
-        val fnName = symbolProvider.deserializeFunctionName(structureShape)
-        return structureParser(fnName, structureShape, includedMembers)
+    override fun serverInputParser(operationShape: OperationShape): RuntimeType? {
+        val inputShape = operationShape.inputShape(model)
+        val includedMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
+        val fnName = symbolProvider.deserializeFunctionName(inputShape)
+        return structureParser(fnName, inputShape, includedMembers)
     }
 
     private fun RustWriter.expectEndOfTokenStream() {

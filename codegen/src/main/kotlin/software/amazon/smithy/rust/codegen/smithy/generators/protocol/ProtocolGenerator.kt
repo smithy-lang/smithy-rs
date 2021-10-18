@@ -122,6 +122,8 @@ open class ProtocolGenerator(
         customizations: List<OperationCustomization>
     ) {
         val inputShape = operationShape.inputShape(model)
+        val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model))
+        builderGenerator.render(inputWriter)
 
         // generate type aliases for the fluent builders
         renderTypeAliases(inputWriter, operationShape, customizations, inputShape)
@@ -152,6 +154,9 @@ open class ProtocolGenerator(
                     *codegenScope
                 )
             }
+
+            // pub fn builder() -> ... { }
+            builderGenerator.renderConvenienceMethod(this)
         }
 
         // pub struct Operation { ... }
@@ -161,7 +166,6 @@ open class ProtocolGenerator(
             write("_private: ()")
         }
         operationWriter.implBlock(operationShape, symbolProvider) {
-            val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model))
             builderGenerator.renderConvenienceMethod(this)
 
             rustBlock("pub fn new() -> Self") {
