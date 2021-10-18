@@ -134,7 +134,7 @@ impl SdkBody {
     /// If this SdkBody is streaming, this will return `None`
     pub fn bytes(&self) -> Option<&[u8]> {
         match &self.inner {
-            Inner::Once(Some(b)) => Some(&b),
+            Inner::Once(Some(b)) => Some(b),
             Inner::Once(None) => Some(&[]),
             _ => None,
         }

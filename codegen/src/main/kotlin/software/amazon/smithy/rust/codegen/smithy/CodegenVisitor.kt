@@ -178,7 +178,6 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      * String Shape Visitor
      *
      * Although raw strings require no code generation, enums are actually `EnumTrait` applied to string shapes.
-     * For strings that have the enum trait attached,
      */
     override fun stringShape(shape: StringShape) {
         shape.getTrait<EnumTrait>()?.also { enum ->

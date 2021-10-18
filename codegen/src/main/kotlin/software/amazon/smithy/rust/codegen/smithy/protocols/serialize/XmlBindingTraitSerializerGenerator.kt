@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
@@ -174,6 +175,14 @@ class XmlBindingTraitSerializerGenerator(
                 rustTemplate("Ok(out.into_bytes())", *codegenScope)
             }
         }
+    }
+
+    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType? {
+        TODO("Not yet implemented")
+    }
+
+    override fun serverErrorSerializer(shape: ShapeId): RuntimeType? {
+        TODO("Not yet implemented")
     }
 
     private fun XmlNamespaceTrait?.apply(): String {

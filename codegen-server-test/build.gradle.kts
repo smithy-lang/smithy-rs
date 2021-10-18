@@ -82,7 +82,7 @@ task("generateCargoWorkspace") {
 }
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
-
+tasks["assemble"].dependsOn("smithyBuildJar")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 tasks.register<Exec>("cargoCheck") {
@@ -112,7 +112,7 @@ tasks.register<Exec>("cargoDocs") {
 tasks.register<Exec>("cargoClippy") {
     workingDir("build/smithyprojections/codegen-server-test/")
     // disallow warnings
-    commandLine("cargo", "clippy")
+    commandLine("cargo", "clippy", "--", "-D", "warnings")
     dependsOn("assemble")
 }
 

@@ -9,7 +9,6 @@ import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
-import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
@@ -41,13 +40,10 @@ import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
-import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.smithy.transformers.EventStreamNormalizer
@@ -57,11 +53,13 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStream
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
-import software.amazon.smithy.rust.codegen.util.inputShape
-import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
 
+/**
+ * Entrypoint for server-side code generation. This class will walk the in-memory model and
+ * generate all the needed types by calling the accept() function on the available shapes.
+ */
 class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
     ShapeVisitor.Default<Unit>() {
 
@@ -76,12 +74,9 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
     private val protocolGenerator: ProtocolGenerator
 
-    private val serializerGenerator: JsonSerializerGenerator
-    private val deserializerGenerator: JsonParserGenerator
     private val httpSerializerGenerator: ServerGenerator
     private val httpDeserializerGenerator: ServerGenerator
     private val httpBindingResolver: HttpBindingResolver
-    private val renderedStructures = mutableSetOf<StructureShape>()
 
     init {
         val symbolVisitorConfig =
@@ -116,8 +111,6 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                 ProtocolContentTypes.consistent("application/json"),
             )
 
-        serializerGenerator = JsonSerializerGenerator(codegenContext, httpBindingResolver)
-        deserializerGenerator = JsonParserGenerator(codegenContext, httpBindingResolver)
         when (codegenContext.protocol) {
             RestJson1Trait.ID -> {
                 httpSerializerGenerator =
@@ -126,24 +119,43 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                     RestJson1HttpDeserializerGenerator(codegenContext, httpBindingResolver)
             }
             else -> {
-                // TODO: support other protocols
-                throw Exception("Protocol ${codegenContext.protocol} not support yet")
+                TODO("Protocol ${codegenContext.protocol} not supported yet")
             }
         }
     }
 
+    /**
+     * Base model transformation applied to all services.
+     * See below for details.
+     */
     private fun baselineTransform(model: Model) =
         model
+            // Add `Box<T>` to recursive shapes as necessary
             .let(RecursiveShapeBoxer::transform)
+            // Normalize the `message` field on errors when enabled in settings (default: true)
             .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
+            // Normalize operations by adding synthetic input and output shapes to every operation
             .let(OperationNormalizer::transform)
+            // Drop unsupported event stream operations from the model
             .let { RemoveEventStreamOperations.transform(it, settings) }
+            // Normalize event stream operations
             .let(EventStreamNormalizer::transform)
 
+    /**
+     * Execute code generation
+     *
+     * 1. Load the service from `RustSettings`.
+     * 2. Traverse every shape in the closure of the service.
+     * 3. Loop through each shape and visit them (calling the override functions in this class)
+     * 4. Call finalization tasks specified by decorators.
+     * 5. Write the in-memory buffers out to files.
+     *
+     * The main work of code generation (serializers, protocols, etc.) is handled in `fn serviceShape` below.
+     */
     fun execute() {
         val service = settings.getService(model)
         logger.info(
-            "[rust-server-codegen] Generating Rust server for service $service, protocol ${codegenContext.protocol}..."
+            "[rust-server-codegen] Generating Rust server for service $service, protocol ${codegenContext.protocol}"
         )
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
@@ -166,48 +178,39 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                 "[rust-server-codegen] Failed to run cargo fmt: [${service.id}]\n${err.output}"
             )
         }
-
         logger.info("[rust-server-codegen] Rust server generation complete!")
-    }
-
-    private fun renderStructure(
-        writer: RustWriter,
-        structureShape: StructureShape,
-        includedMembers: List<MemberShape>,
-    ) {
-        // TODO: review this deduplication mechanism as it doesn't feel very ergonomic
-        if (renderedStructures.add(structureShape)) {
-            serializerGenerator.renderStructure(writer, structureShape, includedMembers)
-            deserializerGenerator.renderStructure(writer, structureShape, includedMembers)
-        }
     }
 
     override fun getDefault(shape: Shape?) {}
 
+    /**
+     * Operation Shape Visitor
+     *
+     * For each operation shape, generate the corresponding protocol implementation.
+     */
     override fun operationShape(shape: OperationShape?) {
-        logger.info("[rust-server-codegen] Generating operation $shape...")
+        logger.info("[rust-server-codegen] Generating operation $shape")
         if (shape != null) {
-            val inputHttpDocumentMembers =
-                httpBindingResolver.requestMembers(shape, HttpLocation.DOCUMENT)
-            val outputHttpDocumentMembers =
-                httpBindingResolver.responseMembers(shape, HttpLocation.DOCUMENT)
             rustCrate.useShapeWriter(shape) { writer ->
                 shape.let {
                     httpDeserializerGenerator.render(writer, it)
                     httpSerializerGenerator.render(writer, it)
-                    renderStructure(writer, shape.inputShape(model), inputHttpDocumentMembers)
-                    renderStructure(writer, shape.outputShape(model), outputHttpDocumentMembers)
-                    shape.errors.forEach { error ->
-                        val errorShape = model.expectShape(error, StructureShape::class.java)
-                        renderStructure(writer, errorShape, errorShape.members().toList())
-                    }
                 }
             }
         }
     }
 
+    /**
+     * Structure Shape Visitor
+     *
+     * For each structure shape, generate:
+     * - A Rust structure for the shape (`StructureGenerator`).
+     * - A builder for the shape.
+     *
+     * This function _does not_ generate any serializers.
+     */
     override fun structureShape(shape: StructureShape) {
-        logger.info("[rust-server-codegen] Generating a structure $shape...")
+        logger.info("[rust-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) { writer ->
             StructureGenerator(model, symbolProvider, writer, shape).render()
             if (!shape.hasTrait<SyntheticInputTrait>()) {
@@ -221,6 +224,11 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         }
     }
 
+    /**
+     * String Shape Visitor
+     *
+     * Although raw strings require no code generation, enums are actually `EnumTrait` applied to string shapes.
+     */
     override fun stringShape(shape: StringShape) {
         shape.getTrait<EnumTrait>()?.also { enum ->
             rustCrate.useShapeWriter(shape) { writer ->
@@ -229,12 +237,28 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         }
     }
 
+    /**
+     * Union Shape Visitor
+     *
+     * Generate an `enum` for union shapes.
+     *
+     * This function _does not_ generate any serializers.
+     */
     override fun unionShape(shape: UnionShape) {
         rustCrate.useShapeWriter(shape) {
             UnionGenerator(model, symbolProvider, it, shape).render()
         }
     }
 
+    /**
+     * Generate service-specific code for the model:
+     * - Serializers
+     * - Deserializers
+     * - Fluent client
+     * - Trait implementations
+     * - Protocol tests
+     * - Operation structures
+     */
     override fun serviceShape(shape: ServiceShape) {
         ServiceGenerator(
             rustCrate,

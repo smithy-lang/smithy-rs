@@ -7,8 +7,11 @@ package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
 
 import software.amazon.smithy.aws.traits.protocols.Ec2QueryNameTrait
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.XmlNameTrait
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.utils.StringUtils
 
@@ -21,4 +24,12 @@ class Ec2QuerySerializerGenerator(codegenContext: CodegenContext) : QuerySeriali
             ?: StringUtils.capitalize(memberName)
 
     override fun MemberShape.isFlattened(): Boolean = true
+
+    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType? {
+        TODO("Not yet implemented")
+    }
+
+    override fun serverErrorSerializer(shape: ShapeId): RuntimeType? {
+        TODO("Not yet implemented")
+    }
 }
