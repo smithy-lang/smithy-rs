@@ -1,6 +1,10 @@
 vNext (Month Day, Year)
 =======================
 
+**New this week**
+
+- Moved the contents of `aws-auth` into the `aws-http` runtime crate (smithy-rs#783)
+
 v0.0.21-alpha (October 15th, 2021)
 ==================================
 
