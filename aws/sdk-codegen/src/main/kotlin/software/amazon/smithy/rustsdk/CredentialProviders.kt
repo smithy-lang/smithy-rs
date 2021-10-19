@@ -118,10 +118,10 @@ class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
     }
 }
 
-fun awsAuth(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-auth")
+fun awsHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-http")
 
 fun defaultProvider() =
     RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("no_credentials")).member("NoCredentials")
 
 fun setProvider(runtimeConfig: RuntimeConfig) =
-    RuntimeType("set_provider", awsAuth(runtimeConfig), "aws_auth")
+    RuntimeType("set_provider", awsHttp(runtimeConfig), "aws_http::auth")

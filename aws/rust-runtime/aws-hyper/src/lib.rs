@@ -5,8 +5,8 @@
 
 pub use smithy_client::retry::Config as RetryConfig;
 
-use aws_auth::middleware::CredentialsStage;
 use aws_endpoint::AwsEndpointStage;
+use aws_http::auth::CredentialsStage;
 use aws_http::user_agent::UserAgentStage;
 use aws_sig_auth::middleware::SigV4SigningStage;
 use aws_sig_auth::signer::SigV4Signer;
