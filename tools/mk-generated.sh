@@ -15,16 +15,23 @@ set -e
 {
 	git diff --quiet || (echo 'working tree not clean, aborting' && exit 1)
 	gh_branch=${GITHUB_HEAD_REF##*/}
-	echo "Loaded branch from GitHub: $gh_branch ($GITHUB_HEAD_REF)"
+	base_branch=${GITHUB_BASE_REF##*/}
+	if [ -n "$base_branch" ]; then
+	  base_branch=__generated-$base_branch
+  else
+    base_branch=__generated__
+	fi
+	echo "Loaded branch from GitHub: $gh_branch ($GITHUB_HEAD_REF). Base branch: $base_branch"
 	current_branch="${gh_branch:-$(git rev-parse --abbrev-ref HEAD)}"
 	echo "Current branch resolved to: $current_branch"
 	gen_branch="__generated-$current_branch"
-	git branch -D "$gen_branch" || echo "no branch named $gen_branch yet"
 	repo_root=$(git rev-parse --show-toplevel)
 	cd "$repo_root" && ./gradlew :aws:sdk:assemble
 	target="$(mktemp -d)"
 	mv "$repo_root"/aws/sdk/build/aws-sdk "$target"
-	git checkout --orphan "$gen_branch"
+	# checkout and reset $gen_branch to be based on the __generated__ history
+	git fetch origin "$base_branch"
+	git checkout -B "$gen_branch" origin/"$base_branch"
 	cd "$repo_root" && git rm -rf .
 	rm -rf "$repo_root/aws-sdk"
 	mv "$target"/aws-sdk "$repo_root"/.
