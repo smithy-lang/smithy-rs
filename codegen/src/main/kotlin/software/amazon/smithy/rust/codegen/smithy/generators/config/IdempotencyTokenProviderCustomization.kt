@@ -27,6 +27,7 @@ class IdempotencyTokenProviderCustomization : NamedSectionGenerator<ServiceConfi
             ServiceConfig.BuilderImpl -> writable {
                 rust(
                     """
+                    /// Sets the idempotency token provider to use for service calls that require tokens.
                     pub fn make_token(mut self, make_token: impl Into<#T::IdempotencyTokenProvider>) -> Self {
                         self.make_token = Some(make_token.into());
                         self
@@ -62,6 +63,7 @@ impl Builder {
         Self::default()
     }
 
+    /// Sets the idempotency token provider to use for service calls that require tokens.
     pub fn make_token(
         mut self,
         make_token: impl crate::idempotency_token::MakeIdempotencyToken + 'static,

@@ -271,7 +271,7 @@ class FluentClientGenerator(
                         /// can be matched against.
                         ///
                         /// By default, any retryable failures will be retried 3 times. Retry behavior
-                        /// is configurable with the [RetryConfig](crate::RetryConfig), which can be
+                        /// is configurable with the [RetryConfig](smithy_types::retry::RetryConfig), which can be
                         /// set when configuring the client.
                         pub async fn send(self) -> std::result::Result<#{ok}, #{sdk_err}<#{operation_err}>>
                         where

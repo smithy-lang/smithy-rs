@@ -81,6 +81,7 @@ internal class ServiceConfigGeneratorTest {
         class ServiceCustomizer : NamedSectionGenerator<ServiceConfig>() {
             override fun section(section: ServiceConfig): Writable {
                 return when (section) {
+                    ServiceConfig.ConfigStructAdditionalDocs -> emptySection
                     ServiceConfig.ConfigStruct -> writable { rust("config_field: u64,") }
                     ServiceConfig.ConfigImpl -> emptySection
                     ServiceConfig.BuilderStruct -> writable { rust("config_field: Option<u64>") }
