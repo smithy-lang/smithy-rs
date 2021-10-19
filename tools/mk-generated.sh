@@ -15,7 +15,8 @@ set -e
 {
 	git diff --quiet || (echo 'working tree not clean, aborting' && exit 1)
 	gh_branch=${GITHUB_HEAD_REF##*/}
-	echo "Loaded branch from GitHub: $gh_branch ($GITHUB_HEAD_REF)"
+	base_branch=${GITHUB_BASE_REF##*/:-__generated__}
+	echo "Loaded branch from GitHub: $gh_branch ($GITHUB_HEAD_REF). Base branch: $base_branch"
 	current_branch="${gh_branch:-$(git rev-parse --abbrev-ref HEAD)}"
 	echo "Current branch resolved to: $current_branch"
 	gen_branch="__generated-$current_branch"
@@ -24,8 +25,8 @@ set -e
 	target="$(mktemp -d)"
 	mv "$repo_root"/aws/sdk/build/aws-sdk "$target"
 	# checkout and reset $gen_branch to be based on the __generated__ history
-	git fetch origin __generated-main
-	git checkout -B "$gen_branch" origin/__generated-main
+	git fetch origin "$base_branch"
+	git checkout -B "$gen_branch" origin/"$base_branch"
 	cd "$repo_root" && git rm -rf .
 	rm -rf "$repo_root/aws-sdk"
 	mv "$target"/aws-sdk "$repo_root"/.
