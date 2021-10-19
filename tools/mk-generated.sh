@@ -19,12 +19,12 @@ set -e
 	current_branch="${gh_branch:-$(git rev-parse --abbrev-ref HEAD)}"
 	echo "Current branch resolved to: $current_branch"
 	gen_branch="__generated-$current_branch"
-	git branch -D "$gen_branch" || echo "no branch named $gen_branch yet"
 	repo_root=$(git rev-parse --show-toplevel)
 	cd "$repo_root" && ./gradlew :aws:sdk:assemble
 	target="$(mktemp -d)"
 	mv "$repo_root"/aws/sdk/build/aws-sdk "$target"
-	git checkout --orphan "$gen_branch"
+	# checkout and reset $gen_branch to be based on the __generated__ history
+	git checkout -B "$gen_branch" __generated__
 	cd "$repo_root" && git rm -rf .
 	rm -rf "$repo_root/aws-sdk"
 	mv "$target"/aws-sdk "$repo_root"/.
