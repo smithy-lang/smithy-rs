@@ -32,7 +32,7 @@ pub struct ProviderConfig {
     env: Env,
     fs: Fs,
     time_source: TimeSource,
-    connector: Connector,
+    connector: HttpConnector,
     sleep: Option<Arc<dyn AsyncSleep>>,
     region: Option<Region>,
 }
@@ -41,15 +41,15 @@ pub(crate) type MakeConnectorFn =
     dyn Fn(&HttpSettings, Option<Arc<dyn AsyncSleep>>) -> Option<DynConnector> + Send + Sync;
 
 #[derive(Clone)]
-pub(crate) enum Connector {
+pub(crate) enum HttpConnector {
     Prebuilt(Option<DynConnector>),
-    MakeConnector(Arc<MakeConnectorFn>),
+    ConnectorFn(Arc<MakeConnectorFn>),
     TcpConnector(BoxCloneService<Uri, TcpStream, BoxError>),
 }
 
-impl Default for Connector {
+impl Default for HttpConnector {
     fn default() -> Self {
-        Self::MakeConnector(Arc::new(
+        Self::ConnectorFn(Arc::new(
             |settings: &HttpSettings, sleep: Option<Arc<dyn AsyncSleep>>| {
                 default_connector(&settings, sleep)
             },
@@ -57,16 +57,16 @@ impl Default for Connector {
     }
 }
 
-impl Connector {
+impl HttpConnector {
     fn make_connector(
         &self,
         settings: &HttpSettings,
         sleep: Option<Arc<dyn AsyncSleep>>,
     ) -> Option<DynConnector> {
         match self {
-            Connector::Prebuilt(conn) => conn.clone(),
-            Connector::MakeConnector(func) => func(&settings, sleep),
-            Connector::TcpConnector(connection) => Some(DynConnector::new(
+            HttpConnector::Prebuilt(conn) => conn.clone(),
+            HttpConnector::ConnectorFn(func) => func(&settings, sleep),
+            HttpConnector::TcpConnector(connection) => Some(DynConnector::new(
                 smithy_client::hyper_ext::Adapter::builder()
                     .timeout(&settings.timeout_settings)
                     .sleep_impl(sleep.unwrap())
@@ -93,7 +93,7 @@ impl Default for ProviderConfig {
             env: Env::default(),
             fs: Fs::default(),
             time_source: TimeSource::default(),
-            connector: Connector::default(),
+            connector: HttpConnector::default(),
             sleep: default_async_sleep(),
             region: None,
         }
@@ -114,7 +114,7 @@ impl ProviderConfig {
             env: Env::from_slice(&[]),
             fs: Fs::from_raw_map(HashMap::new()),
             time_source: TimeSource::manual(&ManualTimeSource::new(UNIX_EPOCH)),
-            connector: Connector::Prebuilt(None),
+            connector: HttpConnector::Prebuilt(None),
             sleep: None,
             region: None,
         }
@@ -163,7 +163,7 @@ impl ProviderConfig {
             env: Env::default(),
             fs: Fs::default(),
             time_source: TimeSource::default(),
-            connector: Connector::Prebuilt(None),
+            connector: HttpConnector::Prebuilt(None),
             sleep: None,
             region: None,
         }
@@ -270,7 +270,7 @@ impl ProviderConfig {
     /// This method is expected to change to support HTTP configuration
     pub fn with_http_connector(self, connector: DynConnector) -> Self {
         ProviderConfig {
-            connector: Connector::Prebuilt(Some(connector)),
+            connector: HttpConnector::Prebuilt(Some(connector)),
             ..self
         }
     }
@@ -281,7 +281,7 @@ impl ProviderConfig {
     /// This method is may to change to support HTTP configuration.
     pub fn with_tcp_connector(self, connector: BoxCloneService<Uri, TcpStream, BoxError>) -> Self {
         ProviderConfig {
-            connector: Connector::TcpConnector(connector),
+            connector: HttpConnector::TcpConnector(connector),
             ..self
         }
     }

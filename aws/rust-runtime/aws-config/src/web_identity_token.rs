@@ -232,7 +232,7 @@ async fn load_credentials(
     let token = fs
         .read_to_end(token_file)
         .await
-        .map_err(|err| CredentialsError::provider_error(err))?;
+        .map_err(CredentialsError::provider_error)?;
     let token = String::from_utf8(token).map_err(|_utf_8_error| {
         CredentialsError::unhandled("WebIdentityToken was not valid UTF-8")
     })?;

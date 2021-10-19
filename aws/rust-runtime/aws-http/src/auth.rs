@@ -126,7 +126,7 @@ mod tests {
         where
             Self: 'a,
         {
-            future::ProvideCredentials::ready(Err(CredentialsError::Unhandled("whoops".into())))
+            future::ProvideCredentials::ready(Err(CredentialsError::unhandled("whoops")))
         }
     }
 
@@ -137,7 +137,7 @@ mod tests {
         where
             Self: 'a,
         {
-            future::ProvideCredentials::ready(Err(CredentialsError::CredentialsNotLoaded))
+            future::ProvideCredentials::ready(Err(CredentialsError::not_loaded("no creds")))
         }
     }
 

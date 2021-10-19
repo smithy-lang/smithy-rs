@@ -60,7 +60,7 @@ impl AssumeRoleProvider {
             .core_client
             .call(operation)
             .await
-            .map_err(|err| CredentialsError::provider_error(err))?
+            .map_err(CredentialsError::provider_error)?
             .credentials;
         sts::util::into_credentials(assume_role_creds, "AssumeRoleProvider")
     }

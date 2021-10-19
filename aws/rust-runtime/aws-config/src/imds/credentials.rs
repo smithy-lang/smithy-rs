@@ -169,7 +169,7 @@ impl ImdsCredentialsProvider {
                 profile
             ))
             .await
-            .map_err(|e| CredentialsError::provider_error(e))?;
+            .map_err(CredentialsError::provider_error)?;
         match parse_json_credentials(&credentials) {
             Ok(JsonCredentials::RefreshableCredentials {
                 access_key_id,

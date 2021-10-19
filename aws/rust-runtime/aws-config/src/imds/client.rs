@@ -186,7 +186,7 @@ impl Client {
                 Err(other) => ImdsError::Unexpected(other),
             },
             SdkError::DispatchFailure(err) => ImdsError::IoError(err.into()),
-            SdkError::ResponseError { err, .. } => ImdsError::IoError(err.into()),
+            SdkError::ResponseError { err, .. } => ImdsError::IoError(err),
             SdkError::ServiceError {
                 err: InnerImdsError::BadStatus,
                 raw,

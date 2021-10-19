@@ -127,10 +127,9 @@ impl ParseStrictResponse for CredentialsResponseParser {
     type Output = credentials::Result;
 
     fn parse(&self, response: &Response<Bytes>) -> Self::Output {
-        let str_resp = std::str::from_utf8(response.body().as_ref())
-            .map_err(|err| CredentialsError::unhandled(err))?;
-        let json_creds =
-            parse_json_credentials(str_resp).map_err(|err| CredentialsError::unhandled(err))?;
+        let str_resp =
+            std::str::from_utf8(response.body().as_ref()).map_err(CredentialsError::unhandled)?;
+        let json_creds = parse_json_credentials(str_resp).map_err(CredentialsError::unhandled)?;
         match json_creds {
             JsonCredentials::RefreshableCredentials {
                 access_key_id,
