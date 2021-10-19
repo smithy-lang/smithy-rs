@@ -178,15 +178,15 @@ impl Instant {
     }
 
     /// Returns the epoch seconds component of the `Instant`.
-    /// # Note
-    /// This does not include the sub-second nanos.
+    ///
+    /// _Note: this does not include the sub-second nanos._
     pub fn epoch_seconds(&self) -> i64 {
         self.seconds
     }
 
     /// Returns the sub-second nanos component of the `Instant`.
-    /// # Note
-    /// This does not include the number of seconds since the epoch.
+    ///
+    /// _Note: this does not include the number of seconds since the epoch._
     pub fn epoch_subsecond_nanos(&self) -> u32 {
         self.subsecond_nanos
     }

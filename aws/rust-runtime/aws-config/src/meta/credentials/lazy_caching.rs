@@ -206,7 +206,7 @@ mod builder {
 
         /// Creates the [`LazyCachingCredentialsProvider`].
         ///
-        /// ## Note:
+        /// # Panics
         /// This will panic if no `sleep` implementation is given and if no default crate features
         /// are used. By default, the [`TokioSleep`](smithy_async::rt::sleep::TokioSleep)
         /// implementation will be set automatically.

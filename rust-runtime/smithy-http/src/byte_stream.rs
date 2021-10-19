@@ -73,7 +73,9 @@
 //! ```
 //!
 //! ### Create a ByteStream from a file
-//! **Note:** This is only available with `bytestream-util` enabled.
+//!
+//! _Note: This is only available with `bytestream-util` enabled._
+//!
 //! ```rust
 //! use smithy_http::byte_stream::ByteStream;
 //! use std::path::Path;
@@ -129,7 +131,9 @@ mod bytestream_util;
 ///     }
 ///     ```
 /// 2. Via [`impl Stream`](futures_core::Stream):
-///     **Note**: An import of `StreamExt` is required to use `try_next()`.
+///
+///     _Note: An import of `StreamExt` is required to use `try_next()`._
+///
 ///     For use-cases where holding the entire ByteStream in memory is unecessary, use the
 ///     `Stream` implementation:
 ///     ```rust

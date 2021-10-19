@@ -21,11 +21,10 @@ pub mod config {
     }
 
     impl PresigningConfig {
-        /// Creates a `PresigningConfig` with the given `expires_in` duration as the total
-        /// amount of time the presigned request should be valid for. Other config values are
-        /// defaulted.
+        /// Creates a `PresigningConfig` with the given `expires_in` duration.
         ///
-        /// # Note
+        /// The `expires_in` duration is the total amount of time the presigned request should
+        /// be valid for. Other config values are defaulted.
         ///
         /// Credential expiration time takes priority over the `expires_in` value.
         /// If the credentials used to sign the request expire before the presigned request is
@@ -110,13 +109,11 @@ pub mod config {
         /// Sets how long the request should be valid after the `start_time` (which defaults
         /// to the current time).
         ///
-        /// Required.
-        ///
-        /// # Note
-        ///
         /// Credential expiration time takes priority over the `expires_in` value.
         /// If the credentials used to sign the request expire before the presigned request is
         /// set to expire, then the presigned request will become invalid.
+        ///
+        /// Required.
         pub fn expires_in(mut self, expires_in: Duration) -> Self {
             self.set_expires_in(Some(expires_in));
             self
@@ -125,13 +122,11 @@ pub mod config {
         /// Sets how long the request should be valid after the `start_time` (which defaults
         /// to the current time).
         ///
-        /// Required.
-        ///
-        /// # Note
-        ///
         /// Credential expiration time takes priority over the `expires_in` value.
         /// If the credentials used to sign the request expire before the presigned request is
         /// set to expire, then the presigned request will become invalid.
+        ///
+        /// Required.
         pub fn set_expires_in(&mut self, expires_in: Option<Duration>) {
             self.expires_in = expires_in;
         }

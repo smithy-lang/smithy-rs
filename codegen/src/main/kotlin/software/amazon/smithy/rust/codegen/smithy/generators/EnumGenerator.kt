@@ -65,7 +65,7 @@ private fun RustWriter.docWithNote(doc: String?, note: String?) {
         note?.also {
             // Add a blank line between the docs and the note to visually differentiate
             doc?.also { write("///") }
-            docs("**NOTE:** $it")
+            docs("_Note: ${it}_")
         }
     }
 }

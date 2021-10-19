@@ -252,7 +252,7 @@ impl ProviderConfig {
 
     /// Override the HTTPS connector for this configuration
     ///
-    /// ## Note: Stability
+    /// # Stability
     /// This method is expected to change to support HTTP configuration
     pub fn with_connector(self, connector: DynConnector) -> Self {
         ProviderConfig {
