@@ -24,8 +24,8 @@ set -e
 	target="$(mktemp -d)"
 	mv "$repo_root"/aws/sdk/build/aws-sdk "$target"
 	# checkout and reset $gen_branch to be based on the __generated__ history
-	git fetch origin __generated__
-	git checkout -B "$gen_branch" origin/__generated__
+	git fetch origin __generated-main
+	git checkout -B "$gen_branch" origin/__generated-main
 	cd "$repo_root" && git rm -rf .
 	rm -rf "$repo_root/aws-sdk"
 	mv "$target"/aws-sdk "$repo_root"/.
