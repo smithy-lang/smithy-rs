@@ -71,13 +71,13 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
             ServiceConfig.BuilderImpl -> {
                 rustTemplate(
                     """
-                    /// Set the credentials provider for this service
+                    /// Sets the credentials provider for this service
                     pub fn credentials_provider(mut self, credentials_provider: impl #{credentials}::ProvideCredentials + 'static) -> Self {
                         self.credentials_provider = Some(#{credentials}::SharedCredentialsProvider::new(credentials_provider));
                         self
                     }
 
-                    /// Set the credentials provider for this service
+                    /// Sets the credentials provider for this service
                     pub fn set_credentials_provider(&mut self, credentials_provider: Option<#{credentials}::SharedCredentialsProvider>) -> &mut Self {
                         self.credentials_provider = credentials_provider;
                         self

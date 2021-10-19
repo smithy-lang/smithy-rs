@@ -83,6 +83,7 @@ pub fn decode<T: AsRef<str>>(input: T) -> Result<Vec<u8>, DecodeError> {
 
 /// Failure to decode a base64 value.
 #[derive(Debug, Clone, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum DecodeError {
     /// Encountered an invalid byte.
     InvalidByte,

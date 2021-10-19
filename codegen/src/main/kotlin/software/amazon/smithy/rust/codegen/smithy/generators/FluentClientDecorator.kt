@@ -184,7 +184,7 @@ class FluentClientGenerator(
             }
 
             impl${generics.inst} Client${generics.inst} {
-                /// Creates a client with the given configuration.
+                /// Creates a client with the given service configuration.
                 pub fn with_config(client: #{client}::Client${generics.inst}, conf: crate::Config) -> Self {
                     Self {
                         handle: std::sync::Arc::new(Handle {
@@ -270,7 +270,7 @@ class FluentClientGenerator(
                         /// If an error occurs, an `SdkError` will be returned with additional details that
                         /// can be matched against.
                         ///
-                        /// By default, any retryable failures will be retried 3 times. Retry behavior
+                        /// By default, any retryable failures will be retried twice. Retry behavior
                         /// is configurable with the [RetryConfig](smithy_types::retry::RetryConfig), which can be
                         /// set when configuring the client.
                         pub async fn send(self) -> std::result::Result<#{ok}, #{sdk_err}<#{operation_err}>>

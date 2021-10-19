@@ -73,7 +73,7 @@ class NewFromShared(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
             ServiceConfig.ConfigImpl -> writable {
                 rustTemplate(
                     """
-                    /// Creates a new service config from a shared config.
+                    /// Creates a new [service config](crate::Config) from a [shared `config`](aws_types::Config).
                     pub fn new(config: &#{Config}) -> Self {
                         Builder::from(config).build()
                     }

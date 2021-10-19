@@ -4,6 +4,10 @@
  */
 
 //! Instant value for representing Smithy timestamps.
+//!
+//! Unlike [`std::time::Instant`], this instant is not opaque. The time inside of it can be
+//! read and modified. It also holds logic for parsing and formatting timestamps in any of
+//! the timestamp formats that [Smithy](https://awslabs.github.io/smithy/) supports.
 
 use crate::instant::format::DateParseError;
 use chrono::{DateTime, NaiveDateTime, Utc};

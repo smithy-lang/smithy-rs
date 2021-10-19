@@ -53,7 +53,7 @@ class UnionGenerator(
                 if (sortedMembers.size == 1) {
                     Attribute.Custom("allow(irrefutable_let_patterns)").render(this)
                 }
-                rust("/// Tries to convert the enum instance into its `${unionSymbol.name}` variant.")
+                rust("/// Tries to convert the enum instance into its #D variant.", unionSymbol)
                 rust("/// Returns `Err(&Self) if it can't be converted.` ")
                 rustBlock("pub fn as_$funcNamePart(&self) -> std::result::Result<&#T, &Self>", memberSymbol) {
                     rust("if let ${unionSymbol.name}::$variantName(val) = &self { Ok(&val) } else { Err(&self) }")
