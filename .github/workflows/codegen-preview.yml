@@ -27,7 +27,7 @@ jobs:
     - uses: actions/github-script@v5
       with:
         script: |
-          console.log("deleteing the generated code branch");
+          console.log("deleting the generated code branch");
           await github.rest.git.deleteRef({
             owner: context.repo.owner,
             repo: context.repo.repo,
@@ -40,7 +40,7 @@ jobs:
     if: ${{ github.event.action != 'closed' }}
     steps:
     # this is not technically necessary because of the branch filter above, but better to check
-    # twice that have an infinitely recursing PR job
+    # twice than have an infinitely recursing PR job
     - name: Assert we aren't already on a generated branch
       run: |
         [[ ${GITHUB_HEAD_REF:-$GITHUB_REF} != "*__generated*" ]]
