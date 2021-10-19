@@ -88,12 +88,21 @@ open class RustCrate(
         settings: RustSettings,
         model: Model,
         manifestCustomizations: ManifestCustomizations,
-        libRsCustomizations: List<LibRsCustomization>
+        libRsCustomizations: List<LibRsCustomization>,
+        requireDocs: Boolean = true,
     ) {
         injectInlineDependencies()
         val modules = inner.writers.values.mapNotNull { it.module() }.filter { it != "lib" }
             .map { modules[it] ?: RustModule.default(it, false) }
-        inner.finalize(settings, model, manifestCustomizations, libRsCustomizations, modules, this.features.toList())
+        inner.finalize(
+            settings,
+            model,
+            manifestCustomizations,
+            libRsCustomizations,
+            modules,
+            this.features.toList(),
+            requireDocs
+        )
     }
 
     private fun injectInlineDependencies() {
@@ -162,10 +171,11 @@ fun CodegenWriterDelegator<RustWriter>.finalize(
     manifestCustomizations: ManifestCustomizations,
     libRsCustomizations: List<LibRsCustomization>,
     modules: List<RustModule>,
-    features: List<Feature>
+    features: List<Feature>,
+    requireDocs: Boolean,
 ) {
     this.useFileWriter("src/lib.rs", "crate::lib") { writer ->
-        LibRsGenerator(settings, model, modules, libRsCustomizations).render(writer)
+        LibRsGenerator(settings, model, modules, libRsCustomizations, requireDocs).render(writer)
     }
     val cargoDependencies = mergeDependencyFeatures(
         this.dependencies.map { RustDependency.fromSymbolDependency(it) }

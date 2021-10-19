@@ -172,7 +172,9 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
             settings,
             model,
             codegenDecorator.crateManifestCustomizations(codegenContext),
-            codegenDecorator.libRsCustomizations(codegenContext, listOf())
+            codegenDecorator.libRsCustomizations(codegenContext, listOf()),
+            // TODO: Remove `requireDocs` and always require them once the server codegen is far enough along
+            requireDocs = false
         )
         try {
             "cargo fmt".runCommand(

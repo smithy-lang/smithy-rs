@@ -28,12 +28,15 @@ class LibRsGenerator(
     private val settings: RustSettings,
     private val model: Model,
     private val modules: List<RustModule>,
-    private val customizations: List<LibRsCustomization>
+    private val customizations: List<LibRsCustomization>,
+    private val requireDocs: Boolean,
 ) {
     fun render(writer: RustWriter) {
         writer.first {
             customizations.forEach { it.section(LibRsSection.Attributes)(this) }
-            rust("##![warn(missing_docs)]")
+            if (requireDocs) {
+                rust("##![warn(missing_docs)]")
+            }
 
             val libraryDocs = settings.getService(model).getTrait<DocumentationTrait>()?.value ?: settings.moduleName
             docs(escape(libraryDocs), newlinePrefix = "//! ")
