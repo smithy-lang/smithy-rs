@@ -3,26 +3,42 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+//! Protocol-agnostic types for smithy-rs.
+
+#![warn(
+    missing_docs,
+    missing_crate_level_docs,
+    missing_debug_implementations,
+    rust_2018_idioms,
+    unreachable_pub
+)]
+
+use std::collections::HashMap;
+
 pub mod base64;
 pub mod instant;
 pub mod primitive;
 pub mod retry;
 
-use std::collections::HashMap;
-
 pub use crate::instant::Instant;
 
+/// Binary Blob Type
+///
+/// Blobs represent protocol-agnostic binary content.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Blob {
     inner: Vec<u8>,
 }
 
 impl Blob {
+    /// Creates a new blob from the given `input`.
     pub fn new<T: Into<Vec<u8>>>(input: T) -> Self {
         Blob {
             inner: input.into(),
         }
     }
+
+    /// Consumes the `Blob` and returns a `Vec<u8>` with its contents.
     pub fn into_inner(self) -> Vec<u8> {
         self.inner
     }
@@ -44,11 +60,17 @@ impl AsRef<[u8]> for Blob {
 /// The serialization format of a document is an implementation detail of a protocol.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Document {
+    /// JSON object
     Object(HashMap<String, Document>),
+    /// JSON array
     Array(Vec<Document>),
+    /// JSON number
     Number(Number),
+    /// JSON string
     String(String),
+    /// JSON boolean
     Bool(bool),
+    /// JSON null
     Null,
 }
 
@@ -56,8 +78,11 @@ pub enum Document {
 /// <https://docs.serde.rs/src/serde_json/number.rs.html#20-22>
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Number {
+    /// Unsigned 64-bit integer value
     PosInt(u64),
+    /// Signed 64-bit integer value
     NegInt(i64),
+    /// 64-bit floating-point value
     Float(f64),
 }
 
@@ -93,6 +118,7 @@ impl Number {
 
 pub use error::Error;
 
+/// Generic errors for Smithy codegen
 pub mod error {
     use crate::retry::{ErrorKind, ProvideErrorKind};
     use std::collections::HashMap;
@@ -112,22 +138,26 @@ pub mod error {
         extras: HashMap<&'static str, String>,
     }
 
-    #[derive(Default)]
+    /// Builder for [`Error`].
+    #[derive(Debug, Default)]
     pub struct Builder {
         inner: Error,
     }
 
     impl Builder {
+        /// Sets the error message.
         pub fn message(&mut self, message: impl Into<String>) -> &mut Self {
             self.inner.message = Some(message.into());
             self
         }
 
+        /// Sets the error code.
         pub fn code(&mut self, code: impl Into<String>) -> &mut Self {
             self.inner.code = Some(code.into());
             self
         }
 
+        /// Sets the request ID the error happened for.
         pub fn request_id(&mut self, request_id: impl Into<String>) -> &mut Self {
             self.inner.request_id = Some(request_id.into());
             self
@@ -163,29 +193,36 @@ pub mod error {
             self
         }
 
+        /// Creates the error.
         pub fn build(&mut self) -> Error {
             std::mem::take(&mut self.inner)
         }
     }
 
     impl Error {
+        /// Returns the error code.
         pub fn code(&self) -> Option<&str> {
             self.code.as_deref()
         }
+        /// Returns the error message.
         pub fn message(&self) -> Option<&str> {
             self.message.as_deref()
         }
+        /// Returns the request ID the error occurred for, if it's available.
         pub fn request_id(&self) -> Option<&str> {
             self.request_id.as_deref()
         }
+        /// Returns additional information about the error if it's present.
         pub fn extra(&self, key: &'static str) -> Option<&str> {
             self.extras.get(key).map(|k| k.as_str())
         }
 
+        /// Creates an `Error` builder.
         pub fn builder() -> Builder {
             Builder::default()
         }
 
+        /// Converts an `Error` into a builder.
         pub fn into_builder(self) -> Builder {
             Builder { inner: self }
         }

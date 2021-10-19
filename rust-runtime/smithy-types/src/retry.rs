@@ -11,6 +11,7 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 use std::time::Duration;
 
+/// Type of error that occurred when making a request.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 #[non_exhaustive]
 pub enum ErrorKind {
@@ -39,6 +40,7 @@ pub enum ErrorKind {
     ClientError,
 }
 
+/// Trait that provides an `ErrorKind` and an error code.
 pub trait ProvideErrorKind {
     /// Returns the `ErrorKind` when the error is modeled as retryable
     ///
@@ -73,15 +75,24 @@ pub enum RetryKind {
     NotRetryable,
 }
 
+/// Specifies how failed requests should be retried.
 #[non_exhaustive]
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
 pub enum RetryMode {
+    /// The standard set of retry rules across AWS SDKs. This mode includes a standard set of errors
+    /// that are retried, and support for retry quotas. The default maximum number of attempts
+    /// with this mode is three, unless otherwise explicitly configured with [`RetryConfig`].
     Standard,
+
+    /// An experimental retry mode that includes the functionality of standard mode but includes
+    /// automatic client-side throttling. Because this mode is experimental, it might change
+    /// behavior in the future.
     Adaptive,
 }
 
 const VALID_RETRY_MODES: &[RetryMode] = &[RetryMode::Standard];
 
+/// Failure to parse a `RetryMode` from string.
 #[derive(Debug)]
 pub struct RetryModeParseErr(String);
 
@@ -114,33 +125,39 @@ impl FromStr for RetryMode {
     }
 }
 
+/// Builder for [`RetryConfig`].
 #[non_exhaustive]
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct RetryConfigBuilder {
-    pub mode: Option<RetryMode>,
-    pub max_attempts: Option<u32>,
+    mode: Option<RetryMode>,
+    max_attempts: Option<u32>,
 }
 
 impl RetryConfigBuilder {
+    /// Creates a new builder.
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// Sets the retry mode.
     pub fn set_mode(&mut self, retry_mode: Option<RetryMode>) -> &mut Self {
         self.mode = retry_mode;
         self
     }
 
+    /// Sets the max attempts. This value must be greater than zero.
     pub fn set_max_attempts(&mut self, max_attempts: Option<u32>) -> &mut Self {
         self.max_attempts = max_attempts;
         self
     }
 
+    /// Sets the retry mode.
     pub fn mode(mut self, mode: RetryMode) -> Self {
         self.set_mode(Some(mode));
         self
     }
 
+    /// Sets the max attempts. This value must be greater than zero.
     pub fn max_attempts(mut self, max_attempts: u32) -> Self {
         self.set_max_attempts(Some(max_attempts));
         self
@@ -169,6 +186,7 @@ impl RetryConfigBuilder {
         }
     }
 
+    /// Builds a `RetryConfig`.
     pub fn build(self) -> RetryConfig {
         RetryConfig {
             mode: self.mode.unwrap_or(RetryMode::Standard),
@@ -177,6 +195,7 @@ impl RetryConfigBuilder {
     }
 }
 
+/// Retry configuration for requests.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub struct RetryConfig {
@@ -185,28 +204,34 @@ pub struct RetryConfig {
 }
 
 impl RetryConfig {
+    /// Creates a default `RetryConfig` with `RetryMode::Standard` and max attempts of three.
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// Creates a `RetryConfig` that has retries disabled.
     pub fn disabled() -> Self {
         Self::default().with_max_attempts(1)
     }
 
+    /// Changes the retry mode.
     pub fn with_retry_mode(mut self, retry_mode: RetryMode) -> Self {
         self.mode = retry_mode;
         self
     }
 
+    /// Changes the max attempts. This value must be greater than zero.
     pub fn with_max_attempts(mut self, max_attempts: u32) -> Self {
         self.max_attempts = max_attempts;
         self
     }
 
+    /// Returns the retry mode.
     pub fn mode(&self) -> RetryMode {
         self.mode
     }
 
+    /// Returns the max attempts.
     pub fn max_attempts(&self) -> u32 {
         self.max_attempts
     }
@@ -221,20 +246,36 @@ impl Default for RetryConfig {
     }
 }
 
+/// Failure to parse retry config from profile file or environment variable.
+#[non_exhaustive]
 #[derive(Debug)]
 pub enum RetryConfigErr {
+    /// The configured retry mode wasn't recognized.
+    #[non_exhaustive]
     InvalidRetryMode {
+        /// Cause of the error.
         source: RetryModeParseErr,
+        /// Where the invalid retry mode value originated from.
         set_by: Cow<'static, str>,
     },
+    /// Max attempts must be greater than zero.
+    #[non_exhaustive]
     MaxAttemptsMustNotBeZero {
+        /// Where the invalid max attempts value originated from.
         set_by: Cow<'static, str>,
     },
+    /// The max attempts value couldn't be parsed to an integer.
+    #[non_exhaustive]
     FailedToParseMaxAttempts {
+        /// Cause of the error.
         source: ParseIntError,
+        /// Where the invalid max attempts value originated from.
         set_by: Cow<'static, str>,
     },
+    /// The adaptive retry mode hasn't been implemented yet.
+    #[non_exhaustive]
     AdaptiveModeIsNotSupported {
+        /// Where the invalid retry mode value originated from.
         set_by: Cow<'static, str>,
     },
 }

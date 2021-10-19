@@ -27,7 +27,7 @@ impl fmt::Display for DateParseError {
     }
 }
 
-pub mod http_date {
+pub(crate) mod http_date {
     use std::str::FromStr;
 
     use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike, Weekday};
@@ -49,7 +49,7 @@ pub mod http_date {
     ///   you need to zero-out the instant before formatting
     /// - If subsecond nanos are 0, no fractional seconds are added
     /// - If subsecond nanos are nonzero, 3 digits of fractional seconds are added
-    pub fn format(instant: &Instant) -> String {
+    pub(crate) fn format(instant: &Instant) -> String {
         let structured = instant.to_chrono_internal();
         let weekday = match structured.weekday() {
             Weekday::Mon => "Mon",
@@ -151,7 +151,7 @@ pub mod http_date {
     /// Ok: "Mon, 16 Dec 2019 23:48:18.123 GMT"
     /// Ok: "Mon, 16 Dec 2019 23:48:18.12 GMT"
     /// Not Ok: "Mon, 16 Dec 2019 23:48:18.1234 GMT"
-    pub fn parse(s: &str) -> Result<Instant, DateParseError> {
+    pub(crate) fn parse(s: &str) -> Result<Instant, DateParseError> {
         if !s.is_ascii() {
             return Err(DateParseError::Invalid("not ascii"));
         }
@@ -159,7 +159,7 @@ pub mod http_date {
         parse_imf_fixdate(x)
     }
 
-    pub fn read(s: &str) -> Result<(Instant, &str), DateParseError> {
+    pub(crate) fn read(s: &str) -> Result<(Instant, &str), DateParseError> {
         if !s.is_ascii() {
             return Err(DateParseError::Invalid("Date must be valid ascii"));
         }
@@ -401,7 +401,7 @@ mod test_http_date {
     }
 }
 
-pub mod rfc3339 {
+pub(crate) mod rfc3339 {
     use chrono::format;
 
     use crate::instant::format::DateParseError;
@@ -413,7 +413,7 @@ pub mod rfc3339 {
     //
     // Timezones not supported:
     // Not OK: 1985-04-12T23:20:50-02:00
-    pub fn parse(s: &str) -> Result<Instant, DateParseError> {
+    pub(crate) fn parse(s: &str) -> Result<Instant, DateParseError> {
         let mut date = format::Parsed::new();
         let format = format::StrftimeItems::new("%Y-%m-%dT%H:%M:%S%.fZ");
         // TODO: it may be helpful for debugging to keep these errors around
@@ -429,14 +429,14 @@ pub mod rfc3339 {
     }
 
     /// Read 1 RFC-3339 date from &str and return the remaining str
-    pub fn read(s: &str) -> Result<(Instant, &str), DateParseError> {
+    pub(crate) fn read(s: &str) -> Result<(Instant, &str), DateParseError> {
         let delim = s.find('Z').map(|idx| idx + 1).unwrap_or_else(|| s.len());
         let (head, rest) = s.split_at(delim);
         Ok((parse(head)?, &rest))
     }
 
     /// Format an [Instant] in the RFC-3339 date format
-    pub fn format(instant: &Instant) -> String {
+    pub(crate) fn format(instant: &Instant) -> String {
         use std::fmt::Write;
         let (year, month, day, hour, minute, second, nanos) = {
             let s = instant.to_chrono_internal();
@@ -539,11 +539,11 @@ mod test {
         );
         assert_eq!(
             "1970-01-01T00:00:00.000001Z",
-            format(&Instant::from_secs_and_nanos(0, 000_001_000))
+            format(&Instant::from_secs_and_nanos(0, 1_000))
         );
         assert_eq!(
             "1970-01-01T00:00:00Z",
-            format(&Instant::from_secs_and_nanos(0, 000_000_001))
+            format(&Instant::from_secs_and_nanos(0, 1))
         );
         assert_eq!(
             "1970-01-01T00:00:00.101Z",

@@ -81,10 +81,14 @@ pub fn decode<T: AsRef<str>>(input: T) -> Result<Vec<u8>, DecodeError> {
     decode_inner(input.as_ref())
 }
 
+/// Failure to decode a base64 value.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum DecodeError {
+    /// Encountered an invalid byte.
     InvalidByte,
+    /// Encountered an invalid base64 padding value.
     InvalidPadding,
+    /// Input wasn't long enough to be a valid base64 value.
     InvalidLength,
 }
 
