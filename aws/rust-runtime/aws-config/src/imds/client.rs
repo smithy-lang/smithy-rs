@@ -178,11 +178,26 @@ impl Client {
     ///   .expect("failure communicating with IMDS");
     /// # }
     /// ```
-    pub async fn get(&self, path: &str) -> Result<String, SdkError<ImdsError>> {
-        let operation = self
-            .make_operation(path)
-            .map_err(|err| SdkError::ConstructionFailure(err.into()))?;
-        self.inner.call(operation).await
+    pub async fn get(&self, path: &str) -> Result<String, ImdsError> {
+        let operation = self.make_operation(path)?;
+        self.inner.call(operation).await.map_err(|err| match err {
+            SdkError::ConstructionFailure(err) => match err.downcast::<ImdsError>() {
+                Ok(token_failure) => *token_failure,
+                Err(other) => ImdsError::Unexpected(other),
+            },
+            SdkError::DispatchFailure(err) => ImdsError::IoError(err.into()),
+            SdkError::ResponseError { err, .. } => ImdsError::IoError(err.into()),
+            SdkError::ServiceError {
+                err: InnerImdsError::BadStatus,
+                raw,
+            } => ImdsError::ErrorResponse {
+                response: raw.into_parts().0,
+            },
+            SdkError::ServiceError {
+                err: InnerImdsError::InvalidUtf8,
+                ..
+            } => ImdsError::Unexpected("IMDS returned invalid UTF-8".into()),
+        })
     }
 
     /// Creates a smithy_http Operation to for `path`
@@ -222,17 +237,20 @@ pub enum ImdsError {
     /// The `path` parameter must be a valid URI path segment, and it must begin with `/`.
     InvalidPath,
 
-    /// The response returned from IMDS was not valid UTF-8.
-    ///
-    /// This should never occur during normal operation.
-    Utf8Error,
-
     /// An error response was returned from IMDS
     #[non_exhaustive]
     ErrorResponse {
-        /// The returned status code
-        code: u16,
+        /// The returned raw response
+        response: http::Response<SdkBody>,
     },
+
+    /// IO Error
+    ///
+    /// An error occurred comunication with IMDS
+    IoError(Box<dyn Error + Send + Sync + 'static>),
+
+    /// An unexpected error occured communicating with IMDS
+    Unexpected(Box<dyn Error + Send + Sync + 'static>),
 }
 
 impl Display for ImdsError {
@@ -245,8 +263,20 @@ impl Display for ImdsError {
                 f,
                 "IMDS path was not a valid URI. Hint: Does it begin with `/`?"
             ),
-            ImdsError::Utf8Error => write!(f, "Response from IMDS was not valid UTF-8"),
-            ImdsError::ErrorResponse { code } => write!(f, "Error response from IMDS (code: {}). Consult the `raw` field of the parent error for more information.", code),
+            ImdsError::ErrorResponse { response } => write!(
+                f,
+                "Error response from IMDS (code: {}). {:?}",
+                response.status().as_u16(),
+                response
+            ),
+            ImdsError::IoError(err) => {
+                write!(f, "An IO error occured communicating with IMDS: {}", err)
+            }
+            ImdsError::Unexpected(err) => write!(
+                f,
+                "An unexpected error occured communicating with IMDS: {}",
+                err
+            ),
         }
     }
 }
@@ -280,18 +310,33 @@ impl<S> tower::Layer<S> for ImdsMiddleware {
 #[derive(Copy, Clone)]
 struct ImdsGetResponseHandler;
 
+#[derive(Debug)]
+enum InnerImdsError {
+    BadStatus,
+    InvalidUtf8,
+}
+
+impl Display for InnerImdsError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InnerImdsError::BadStatus => write!(f, "failing status code returned from IMDS"),
+            InnerImdsError::InvalidUtf8 => write!(f, "IMDS did not return valid UTF-8"),
+        }
+    }
+}
+
+impl Error for InnerImdsError {}
+
 impl ParseStrictResponse for ImdsGetResponseHandler {
-    type Output = Result<String, ImdsError>;
+    type Output = Result<String, InnerImdsError>;
 
     fn parse(&self, response: &Response<Bytes>) -> Self::Output {
         if response.status().is_success() {
             std::str::from_utf8(response.body().as_ref())
                 .map(|data| data.to_string())
-                .map_err(|_| ImdsError::Utf8Error)
+                .map_err(|_| InnerImdsError::InvalidUtf8)
         } else {
-            Err(ImdsError::ErrorResponse {
-                code: response.status().as_u16(),
-            })
+            Err(InnerImdsError::BadStatus)
         }
     }
 }
@@ -677,10 +722,9 @@ pub(crate) mod test {
     use smithy_http::body::SdkBody;
     use tracing_test::traced_test;
 
-    use crate::imds::client::{Client, EndpointMode};
+    use crate::imds::client::{Client, EndpointMode, ImdsError};
     use crate::provider_config::ProviderConfig;
     use http::header::USER_AGENT;
-    use smithy_client::SdkError;
 
     const TOKEN_A: &str = "AQAEAFTNrA4eEGx0AQgJ1arIq_Cc-t4tWt3fB0Hd8RKhXlKc5ccvhg==";
     const TOKEN_B: &str = "alternatetoken==";
@@ -722,7 +766,8 @@ pub(crate) mod test {
     {
         super::Client::builder()
             .configure(
-                &ProviderConfig::no_configuration().with_connector(DynConnector::new(conn.clone())),
+                &ProviderConfig::no_configuration()
+                    .with_http_connector(DynConnector::new(conn.clone())),
             )
             .build()
             .await
@@ -779,7 +824,7 @@ pub(crate) mod test {
         let client = super::Client::builder()
             .configure(
                 &ProviderConfig::no_configuration()
-                    .with_connector(DynConnector::new(connection.clone()))
+                    .with_http_connector(DynConnector::new(connection.clone()))
                     .with_time_source(TimeSource::manual(&time_source)),
             )
             .endpoint_mode(EndpointMode::IpV6)
@@ -829,7 +874,7 @@ pub(crate) mod test {
         let client = super::Client::builder()
             .configure(
                 &ProviderConfig::no_configuration()
-                    .with_connector(DynConnector::new(connection.clone()))
+                    .with_http_connector(DynConnector::new(connection.clone()))
                     .with_time_source(TimeSource::manual(&time_source)),
             )
             .endpoint_mode(EndpointMode::IpV6)
@@ -945,7 +990,7 @@ pub(crate) mod test {
         ]);
         let client = make_client(&connection).await;
         let err = client.get("/latest/metadata").await.expect_err("no token");
-        assert!(format!("{}", err).contains("not valid UTF-8"), "{}", err);
+        assert!(format!("{}", err).contains("invalid UTF-8"), "{}", err);
         connection.assert_requests_match(&[]);
     }
 
@@ -967,7 +1012,7 @@ pub(crate) mod test {
         assert!(now.elapsed().unwrap() > Duration::from_secs(1));
         assert!(now.elapsed().unwrap() < Duration::from_secs(2));
         match resp {
-            SdkError::ConstructionFailure(err) if format!("{}", err).contains("timed out") => {} // ok,
+            ImdsError::FailedToLoadToken(err) if format!("{}", err).contains("timed out") => {} // ok,
             other => panic!(
                 "wrong error, expected construction failure with TimedOutError inside: {}",
                 other
@@ -1006,7 +1051,7 @@ pub(crate) mod test {
         let provider_config = ProviderConfig::no_configuration()
             .with_env(Env::from(test_case.env))
             .with_fs(Fs::from_map(test_case.fs))
-            .with_connector(DynConnector::new(server));
+            .with_http_connector(DynConnector::new(server));
         let mut imds_client = Client::builder().configure(&provider_config);
         if let Some(endpoint_override) = test_case.endpoint_override {
             imds_client = imds_client.endpoint(endpoint_override.parse::<Uri>().unwrap());

@@ -11,9 +11,13 @@ use aws_types::region::Region;
 use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use smithy_client::erase::DynConnector;
 
+use http::Uri;
+use smithy_client::erase::boxclone::BoxCloneService;
 use smithy_client::timeout;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use tokio::net::TcpStream;
+use tower::BoxError;
 
 /// Configuration options for Credential Providers
 ///
@@ -33,13 +37,14 @@ pub struct ProviderConfig {
     region: Option<Region>,
 }
 
-type MakeConnectorFn =
+pub(crate) type MakeConnectorFn =
     dyn Fn(&HttpSettings, Option<Arc<dyn AsyncSleep>>) -> Option<DynConnector> + Send + Sync;
 
 #[derive(Clone)]
-enum Connector {
+pub(crate) enum Connector {
     Prebuilt(Option<DynConnector>),
     MakeConnector(Arc<MakeConnectorFn>),
+    TcpConnector(BoxCloneService<Uri, TcpStream, BoxError>),
 }
 
 impl Default for Connector {
@@ -61,6 +66,12 @@ impl Connector {
         match self {
             Connector::Prebuilt(conn) => conn.clone(),
             Connector::MakeConnector(func) => func(&settings, sleep),
+            Connector::TcpConnector(connection) => Some(DynConnector::new(
+                smithy_client::hyper_ext::Adapter::builder()
+                    .timeout(&settings.timeout_settings)
+                    .sleep_impl(sleep.unwrap())
+                    .build(connection.clone()),
+            )),
         }
     }
 }
@@ -252,11 +263,25 @@ impl ProviderConfig {
 
     /// Override the HTTPS connector for this configuration
     ///
+    /// **Warning**: Use of this method will prevent you from taking advantage of the timeout machinery.
+    /// Consider `with_tcp_connector`.
+    ///
     /// ## Note: Stability
     /// This method is expected to change to support HTTP configuration
-    pub fn with_connector(self, connector: DynConnector) -> Self {
+    pub fn with_http_connector(self, connector: DynConnector) -> Self {
         ProviderConfig {
             connector: Connector::Prebuilt(Some(connector)),
+            ..self
+        }
+    }
+
+    /// Override the TCP connector for this configuration
+    ///
+    /// ## Note: Stability
+    /// This method is may to change to support HTTP configuration.
+    pub fn with_tcp_connector(self, connector: BoxCloneService<Uri, TcpStream, BoxError>) -> Self {
+        ProviderConfig {
+            connector: Connector::TcpConnector(connector),
             ..self
         }
     }

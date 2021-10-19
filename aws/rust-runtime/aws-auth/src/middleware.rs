@@ -41,7 +41,7 @@ impl CredentialsStage {
                 request.properties_mut().insert(creds);
             }
             // ignore the case where there is no provider wired up
-            Err(CredentialsError::CredentialsNotLoaded) => {
+            Err(CredentialsError::CredentialsNotLoaded { .. }) => {
                 tracing::info!("provider returned CredentialsNotLoaded, ignoring")
             }
             // if we get another error class, there is probably something actually wrong that the user will
