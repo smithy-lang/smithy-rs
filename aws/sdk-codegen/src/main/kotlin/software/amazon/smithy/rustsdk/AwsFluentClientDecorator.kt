@@ -117,7 +117,7 @@ private class AwsFluentClientExtensions(private val types: Types) {
                     Self::from_conf(config.into())
                 }
 
-                /// Creates a new client from the service [`Config`].
+                /// Creates a new client from the service [`Config`](crate::Config).
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn from_conf(conf: crate::Config) -> Self {
                     let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();

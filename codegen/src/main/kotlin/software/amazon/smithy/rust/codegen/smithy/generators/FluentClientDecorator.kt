@@ -231,14 +231,19 @@ class FluentClientGenerator(
                 one if its operation methods. After parameters are set using the builder methods,
                 the `send` method can be called to initiate the request.
                 """,
-                newlinePrefix = "//!"
+                newlinePrefix = "//! "
             )
             operations.forEach { operation ->
                 val operationSymbol = symbolProvider.toSymbol(operation)
                 val input = operation.inputShape(model)
                 val members: List<MemberShape> = input.allMembers.values.toList()
 
-                rust("/// Fluent builder constructing a request to `${operationSymbol.name}`.")
+                rust(
+                    """
+                    /// Fluent builder constructing a request to `${operationSymbol.name}`.
+                    ///
+                    """
+                )
                 documentShape(operation, model, autoSuppressMissingDocs = false)
                 rustTemplate(
                     """
