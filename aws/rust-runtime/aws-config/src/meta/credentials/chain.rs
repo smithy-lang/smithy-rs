@@ -76,13 +76,14 @@ impl CredentialsProviderChain {
     async fn credentials(&self) -> credentials::Result {
         for (name, provider) in &self.providers {
             let span = tracing::info_span!("load_credentials", provider = %name);
+            tracing::error!(name = %name, "loading credentials");
             match provider.provide_credentials().instrument(span).await {
                 Ok(credentials) => {
                     tracing::info!(provider = %name, "loaded credentials");
                     return Ok(credentials);
                 }
-                Err(CredentialsError::CredentialsNotLoaded) => {
-                    tracing::info!(provider = %name, "provider in chain did not provide credentials");
+                Err(CredentialsError::CredentialsNotLoaded { context, .. }) => {
+                    tracing::info!(provider = %name, context = %context, "provider in chain did not provide credentials");
                 }
                 Err(e) => {
                     tracing::warn!(provider = %name, error = %e, "provider failed to provide credentials");
@@ -90,7 +91,9 @@ impl CredentialsProviderChain {
                 }
             }
         }
-        Err(CredentialsError::CredentialsNotLoaded)
+        Err(CredentialsError::not_loaded(
+            "no providers in chain provided credentials",
+        ))
     }
 }
 

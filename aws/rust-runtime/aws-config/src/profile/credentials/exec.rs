@@ -60,7 +60,7 @@ impl AssumeRoleProvider {
             .core_client
             .call(operation)
             .await
-            .map_err(|err| CredentialsError::ProviderError(err.into()))?
+            .map_err(|err| CredentialsError::provider_error(err))?
             .credentials;
         sts::util::into_credentials(assume_role_creds, "AssumeRoleProvider")
     }
@@ -105,7 +105,7 @@ impl ProviderChain {
                 session_name,
             } => {
                 let conf = ProviderConfig::empty()
-                    .with_connector(connector.clone())
+                    .with_http_connector(connector.clone())
                     .with_fs(fs)
                     .with_region(region);
                 let provider = WebIdentityTokenCredentialsProvider::builder()
