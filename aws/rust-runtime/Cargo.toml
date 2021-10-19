@@ -3,7 +3,6 @@
 [workspace]
 
 members = [
-    "aws-auth",
     "aws-endpoint",
     "aws-http",
     "aws-hyper",

@@ -3,10 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use aws_types::credentials::{CredentialsError, ProvideCredentials, SharedCredentialsProvider};
 use smithy_http::middleware::AsyncMapRequest;
 use smithy_http::operation::Request;
+use smithy_http::property_bag::PropertyBag;
 use std::future::Future;
 use std::pin::Pin;
+
+pub fn set_provider(bag: &mut PropertyBag, provider: SharedCredentialsProvider) {
+    bag.insert(provider);
+}
 
 /// Middleware stage that loads credentials from a [CredentialsProvider](aws_types::credentials::ProvideCredentials)
 /// and places them in the property bag of the request.
@@ -88,7 +94,6 @@ mod error {
     }
 }
 
-use aws_types::credentials::{CredentialsError, ProvideCredentials, SharedCredentialsProvider};
 pub use error::*;
 
 type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
@@ -104,8 +109,8 @@ impl AsyncMapRequest for CredentialsStage {
 
 #[cfg(test)]
 mod tests {
+    use super::set_provider;
     use super::CredentialsStage;
-    use crate::set_provider;
     use aws_types::credentials::{
         future, CredentialsError, ProvideCredentials, SharedCredentialsProvider,
     };
