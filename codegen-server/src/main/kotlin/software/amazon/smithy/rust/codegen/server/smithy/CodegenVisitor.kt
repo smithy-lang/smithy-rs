@@ -161,7 +161,13 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         serviceShapes.forEach { it.accept(this) }
         codegenDecorator.extras(codegenContext, rustCrate)
         val module = RustMetadata(public = true)
-        rustCrate.withModule(RustModule("error", module)) { writer -> renderSerdeError(writer) }
+        rustCrate.withModule(
+            RustModule(
+                "error",
+                module,
+                documentation = "All error types that operations can respond with."
+            )
+        ) { writer -> renderSerdeError(writer) }
         rustCrate.finalize(
             settings,
             model,

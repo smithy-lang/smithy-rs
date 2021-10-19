@@ -251,7 +251,6 @@ impl Default for RetryConfig {
 #[derive(Debug)]
 pub enum RetryConfigErr {
     /// The configured retry mode wasn't recognized.
-    #[non_exhaustive]
     InvalidRetryMode {
         /// Cause of the error.
         source: RetryModeParseErr,
@@ -259,13 +258,11 @@ pub enum RetryConfigErr {
         set_by: Cow<'static, str>,
     },
     /// Max attempts must be greater than zero.
-    #[non_exhaustive]
     MaxAttemptsMustNotBeZero {
         /// Where the invalid max attempts value originated from.
         set_by: Cow<'static, str>,
     },
     /// The max attempts value couldn't be parsed to an integer.
-    #[non_exhaustive]
     FailedToParseMaxAttempts {
         /// Cause of the error.
         source: ParseIntError,
@@ -273,7 +270,6 @@ pub enum RetryConfigErr {
         set_by: Cow<'static, str>,
     },
     /// The adaptive retry mode hasn't been implemented yet.
-    #[non_exhaustive]
     AdaptiveModeIsNotSupported {
         /// Where the invalid retry mode value originated from.
         set_by: Cow<'static, str>,
