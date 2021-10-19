@@ -4,15 +4,46 @@ name: codegen diff preview
 on:
   push:
     branches:
+    # this is a load-bearing branch filter: if this isn't here, you may
+    # end up generating diffs for __generated-* branches which would lead to infinite recursion...
     - main
   pull_request:
+    types:
+    - opened
+    - reopened
+    - closed
+    - synchronize
 env:
   java_version: 11
 jobs:
+  cleanup-branch:
+    if: ${{ github.event.action == 'closed' }}
+    runs-on: ubuntu-latest
+    name: cleanup generated code branch
+    steps:
+    - name: gen branch output
+      run: echo "::set-output name=branchname::${GITHUB_HEAD_REF##*/}"
+      id: branch_output
+    - uses: actions/github-script@v5
+      with:
+        script: |
+          console.log("deleteing the generated code branch");
+          await github.rest.git.deleteRef({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: "heads/__generated-${{ steps.branch_output.outputs.branchname }}"
+          })
+
   push-generated-code:
     runs-on: ubuntu-latest
     name: Push generated code to a branch
+    if: ${{ github.event.action != 'closed' }}
     steps:
+    # this is not technically necessary because of the branch filter above, but better to check
+    # twice that have an infinitely recursing PR job
+    - name: Assert we aren't already on a generated branch
+      run: |
+        [[ ${GITHUB_HEAD_REF:-$GITHUB_REF} != "*__generated*" ]]
     - uses: actions/checkout@v2
     - uses: actions/cache@v2
       name: Gradle Cache
@@ -39,6 +70,8 @@ jobs:
       run: echo "::set-output name=branchname::$(git rev-parse --abbrev-ref HEAD)"
       id: branch_output
     - uses: actions/github-script@v5
+      # NOTE: if comments on each commit become bothersome, add a check that github.event.pull_request.action == "opened"
+      if: ${{ env.GITHUB_HEAD_REF }} != null
       with:
         script: |
           await github.rest.issues.createComment({
