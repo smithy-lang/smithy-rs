@@ -35,7 +35,6 @@ val runtimeModules = listOf(
     "smithy-xml"
 )
 val awsModules = listOf(
-    "aws-auth",
     "aws-config",
     "aws-endpoint",
     "aws-http",
