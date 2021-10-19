@@ -90,7 +90,7 @@ fn test_operation() -> Operation<TestOperationParser, AwsErrorRetryPolicy> {
                 signature_versions: SignatureVersion::V4,
             }),
         );
-        aws_auth::set_provider(
+        aws_http::auth::set_provider(
             &mut conf,
             SharedCredentialsProvider::new(Credentials::from_keys(
                 "access_key",

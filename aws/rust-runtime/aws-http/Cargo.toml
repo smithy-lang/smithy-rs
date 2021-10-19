@@ -9,9 +9,17 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
 aws-types = { path = "../aws-types" }
+http = "0.2.3"
+lazy_static = "1"
 smithy-http = { path = "../../../rust-runtime/smithy-http" }
 smithy-types = { path = "../../../rust-runtime/smithy-types" }
-
-http = "0.2.3"
 thiserror = "1"
-lazy_static = "1"
+tracing = "0.1"
+
+[dev-dependencies]
+async-trait = "0.1.50"
+env_logger = "*"
+http = "0.2.3"
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "test-util"] }
+tracing-subscriber = { version = "0.2.16", features = ["fmt"] }
+smithy-async = { path = "../../../rust-runtime/smithy-async", features = ["rt-tokio"] }
