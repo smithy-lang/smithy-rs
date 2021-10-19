@@ -71,7 +71,7 @@ jobs:
       id: branch_output
     - uses: actions/github-script@v5
       # NOTE: if comments on each commit become bothersome, add a check that github.event.pull_request.action == "opened"
-      if: ${{ env.GITHUB_HEAD_REF != null }}
+      if: ${{ github.head_ref != null }}
       with:
         script: |
           await github.rest.issues.createComment({
