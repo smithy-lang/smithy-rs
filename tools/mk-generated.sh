@@ -15,7 +15,8 @@ set -e
 {
 	git diff --quiet || (echo 'working tree not clean, aborting' && exit 1)
 	gh_branch=${GITHUB_HEAD_REF##*/}
-	base_branch=${GITHUB_BASE_REF##*/:-__generated__}
+	base_branch=__generated-${GITHUB_BASE_REF##*/}
+	base_branch=${base_branch:-__generated__}
 	echo "Loaded branch from GitHub: $gh_branch ($GITHUB_HEAD_REF). Base branch: $base_branch"
 	current_branch="${gh_branch:-$(git rev-parse --abbrev-ref HEAD)}"
 	echo "Current branch resolved to: $current_branch"
