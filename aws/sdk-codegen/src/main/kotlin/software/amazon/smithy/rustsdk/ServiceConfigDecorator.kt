@@ -40,7 +40,7 @@ class SharedConfigDocsCustomization : ConfigCustomization() {
                 )
             }
         } else {
-            writable {}
+            emptySection
         }
     }
 }
