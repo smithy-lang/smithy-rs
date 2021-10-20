@@ -50,7 +50,7 @@ impl Instant {
     ///
     /// # Example
     /// ```
-    /// # use smithy_types::Instant;
+    /// # use aws_smithy_types::Instant;
     /// assert_eq!(
     ///     Instant::from_secs_and_nanos(1, 500_000_000u32),
     ///     Instant::from_fractional_seconds(1, 0.5),
@@ -65,7 +65,7 @@ impl Instant {
     ///
     /// # Example
     /// ```
-    /// # use smithy_types::Instant;
+    /// # use aws_smithy_types::Instant;
     /// assert_eq!(
     ///     Instant::from_fractional_seconds(1, 0.5),
     ///     Instant::from_secs_and_nanos(1, 500_000_000u32),
@@ -85,7 +85,7 @@ impl Instant {
     ///
     /// # Example
     /// ```
-    /// # use smithy_types::Instant;
+    /// # use aws_smithy_types::Instant;
     /// assert_eq!(
     ///     Instant::from_fractional_seconds(1, 0.5),
     ///     Instant::from_f64(1.5),
