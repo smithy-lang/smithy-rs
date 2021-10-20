@@ -27,14 +27,14 @@ class SharedConfigDocsCustomization : ConfigCustomization() {
                     Service configuration allows for customization of endpoints, region, credentials providers,
                     and retry configuration. Generally, it is constructed automatically for you from a shared
                     configuration loaded by the `aws-config` crate. For example:
-                    
+
                     ```ignore
                     // Load a shared config from the environment
                     let shared_config = aws_config::from_env().load().await;
                     // The client constructor automatically converts the shared config into the service config
                     let client = Client::new(&shared_config);
                     ```
-                    
+
                     The service config can also be constructed manually using its builder.
                     """
                 )
