@@ -50,16 +50,16 @@ resource Service {
         id: "RegisterServiceRequestTest",
         protocol: "aws.protocols#restJson1",
         uri: "/service/1",
-        params: { id: "1" },
+        params: { id: "1", name: "TestService" },
         body: "{\"name\":\"TestService\"}",
-        method: "POST",
+        method: "PUT",
     }
 ])
 @httpResponseTests([
     {
         id: "RegisterServiceResponseTest",
         protocol: "aws.protocols#restJson1",
-        params: { id: "1" },
+        params: { id: "1", name: "TestService" },
         body: "{\"id\":\"1\",\"name\":\"TestService\"}",
         code: 200,
     }

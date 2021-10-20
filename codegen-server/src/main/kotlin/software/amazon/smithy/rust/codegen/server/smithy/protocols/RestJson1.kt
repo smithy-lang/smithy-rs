@@ -618,6 +618,8 @@ class RestJson1HttpDeserializerGenerator(
                 "let request = request.map(|body| #{Bytes}::from(body.bytes().unwrap().to_vec()));",
                 *codegenScope
             )
+            rust("assert_eq!(request.method().as_str(), \"${testCase.method}\");")
+            rust("assert_eq!(request.uri().to_owned(), \"${testCase.uri}\");")
             rust(
                 """let actual = #T(&request).expect("failed to parse request");""",
                 operation.member(deserFnName)
