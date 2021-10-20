@@ -3,6 +3,8 @@ $version: "1.0"
 namespace com.amazonaws.simple
 
 use aws.protocols#restJson1
+use smithy.test#httpRequestTests
+use smithy.test#httpResponseTests
 
 @restJson1
 @title("SimpleService")
@@ -19,6 +21,9 @@ service SimpleService {
 
 @documentation("Id of the service that will be registered")
 string ServiceId
+
+@documentation("Name of the service that will be registered")
+string ServiceName
 
 @error("client")
 @documentation(
@@ -40,6 +45,25 @@ resource Service {
 @idempotent
 @http(method: "PUT", uri: "/service/{id}")
 @documentation("Service register operation")
+@httpRequestTests([
+    {
+        id: "RegisterServiceRequestTest",
+        protocol: "aws.protocols#restJson1",
+        uri: "/service/1",
+        params: { id: "1" },
+        body: "{\"name\":\"TestService\"}",
+        method: "POST",
+    }
+])
+@httpResponseTests([
+    {
+        id: "RegisterServiceResponseTest",
+        protocol: "aws.protocols#restJson1",
+        params: { id: "1" },
+        body: "{\"id\":\"1\",\"name\":\"TestService\"}",
+        code: 200,
+    }
+])
 operation RegisterService {
     input: RegisterServiceInputRequest,
     output: RegisterServiceOutputResponse,
@@ -51,12 +75,14 @@ structure RegisterServiceInputRequest {
     @required
     @httpLabel
     id: ServiceId,
+    name: ServiceName,
 }
 
 @documentation("Service register output structure")
 structure RegisterServiceOutputResponse {
     @required
-    id: ServiceId
+    id: ServiceId,
+    name: ServiceName,
 }
 
 @readonly

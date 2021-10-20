@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpDeserializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpSerializerGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
@@ -74,8 +73,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
     private val protocolGenerator: ProtocolGenerator
 
-    private val httpSerializerGenerator: ServerGenerator
-    private val httpDeserializerGenerator: ServerGenerator
+    private val httpSerializerGenerator: RestJson1HttpSerializerGenerator
+    private val httpDeserializerGenerator: RestJson1HttpDeserializerGenerator
     private val httpBindingResolver: HttpBindingResolver
 
     init {
@@ -230,6 +229,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      * Although raw strings require no code generation, enums are actually `EnumTrait` applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
+        logger.info("[rust-server-codegen] Generating an enum $shape")
         shape.getTrait<EnumTrait>()?.also { enum ->
             rustCrate.useShapeWriter(shape) { writer ->
                 EnumGenerator(model, symbolProvider, writer, shape, enum).render()
@@ -245,6 +245,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      * This function _does not_ generate any serializers.
      */
     override fun unionShape(shape: UnionShape) {
+        logger.info("[rust-server-codegen] Generating an union $shape")
         rustCrate.useShapeWriter(shape) {
             UnionGenerator(model, symbolProvider, it, shape).render()
         }
@@ -260,6 +261,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      * - Operation structures
      */
     override fun serviceShape(shape: ServiceShape) {
+        logger.info("[rust-server-codegen] Generating a service $shape")
         ServiceGenerator(
             rustCrate,
             protocolGenerator,
