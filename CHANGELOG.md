@@ -1,6 +1,9 @@
 vNext (Month Day, Year)
 =======================
 
+v0.27 (October 20th, 2021)
+==========================
+
 **Breaking Changes**
 
 - :warning: All Smithy runtime crates have been renamed to have an `aws-` prefix. This may require code changes:

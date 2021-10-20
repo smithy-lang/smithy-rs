@@ -1,6 +1,9 @@
 vNext (Month Day, Year)
 =======================
 
+v0.0.22-alpha (October 20th, 2021)
+==================================
+
 **Breaking Changes**
 
 - `CredentialsError` variants became non-exhaustive. This makes them impossible to construct directly outside of the `aws_types` crate. In order to construct credentials errors, new methods have been added for each variant. Instead of `CredentialsError::Unhandled(...)`, you should instead use `CredentialsError::unhandled`. Matching methods exist for all variants. (#781)
