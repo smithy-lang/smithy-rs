@@ -28,7 +28,7 @@ use std::sync::Arc;
 /// - The URI of the endpoint (needed to actually send the request)
 /// - The name of the service (needed downstream for signing)
 /// - The signing region (which may differ from the actual region)
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AwsEndpoint {
     endpoint: Endpoint,
     credential_scope: CredentialScope,
@@ -186,6 +186,7 @@ impl MapRequest for AwsEndpointStage {
             let endpoint = provider
                 .resolve_endpoint(region)
                 .map_err(AwsEndpointStageError::EndpointResolutionError)?;
+            tracing::debug!(endpoint = ?endpoint, base_region = ?region, "resolved endpoint");
             let signing_region = endpoint
                 .credential_scope
                 .region
