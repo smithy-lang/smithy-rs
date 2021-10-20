@@ -57,8 +57,8 @@ class FluentClientDecorator : RustCodegenDecorator {
         }
         val smithyClient = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
         rustCrate.mergeFeature(Feature("client", true, listOf(smithyClient.name)))
-        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("smithy-client/rustls")))
-        rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("smithy-client/native-tls")))
+        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-client/rustls")))
+        rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("aws-smithy-client/native-tls")))
     }
 
     override fun libRsCustomizations(
@@ -368,7 +368,7 @@ class FluentClientGenerator(
                 /// use aws_http::user_agent::UserAgentStage;
                 /// use aws_sig_auth::middleware::SigV4SigningStage;
                 /// use aws_sig_auth::signer::SigV4Signer;
-                /// use smithy_http_tower::map_request::MapRequestLayer;
+                /// use aws_smithy_http_tower::map_request::MapRequestLayer;
                 /// use tower::layer::util::Stack;
                 /// use tower::ServiceBuilder;
                 ///

@@ -10,13 +10,13 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, UNIX_EPOCH};
 
 use crate::provider_config::{HttpSettings, ProviderConfig};
+use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep, TokioSleep};
 use aws_types::credentials::{self, ProvideCredentials};
 use aws_types::os_shim_internal::{Env, Fs};
 use serde::Deserialize;
-use smithy_async::rt::sleep::{AsyncSleep, Sleep, TokioSleep};
 
-use smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
-use smithy_client::erase::DynConnector;
+use aws_smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
+use aws_smithy_client::erase::DynConnector;
 
 use std::fmt::Debug;
 use std::future::Future;
@@ -61,7 +61,7 @@ impl From<aws_types::Credentials> for Credentials {
 /// A credentials test environment is a directory containing:
 /// - an `fs` directory. This is loaded into the test as if it was mounted at `/`
 /// - an `env.json` file containing environment variables
-/// - an  `http-traffic.json` file containing an http traffic log from [`dvr`](smithy_client::dvr)
+/// - an  `http-traffic.json` file containing an http traffic log from [`dvr`](aws_smithy_client::dvr)
 /// - a `test-case.json` file defining the expected output of the test
 pub struct TestEnvironment {
     env: Env,

@@ -8,8 +8,8 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
-smithy-async = { path = "../../../rust-runtime/smithy-async" }
-smithy-types = { path = "../../../rust-runtime/smithy-types" }
+aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 zeroize = "1.4.1"
 
 [dev-dependencies]

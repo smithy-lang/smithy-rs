@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.codegen.util.isEventStream
 import software.amazon.smithy.rust.codegen.util.isInputEventStream
 
 /**
- * Wrapping symbol provider to wrap modeled types with the smithy-http Event Stream send/receive types.
+ * Wrapping symbol provider to wrap modeled types with the aws-smithy-http Event Stream send/receive types.
  */
 class EventStreamSymbolProvider(
     private val runtimeConfig: RuntimeConfig,
@@ -49,7 +49,7 @@ class EventStreamSymbolProvider(
                     true -> "EventStreamInput<$innerFmt>"
                     else -> "Receiver<$innerFmt, $errorFmt>"
                 }
-                val rustType = RustType.Opaque(outer, "smithy_http::event_stream")
+                val rustType = RustType.Opaque(outer, "aws_smithy_http::event_stream")
                 return initial.toBuilder()
                     .name(rustType.name)
                     .rustType(rustType)

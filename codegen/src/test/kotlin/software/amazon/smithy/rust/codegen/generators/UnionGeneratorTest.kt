@@ -72,7 +72,7 @@ class UnionGeneratorTest {
         writer.compileAndTest(
             """
             // If the document isn't optional, this will compile
-            MyUnion::Doc(smithy_types::Document::Null);
+            MyUnion::Doc(aws_smithy_types::Document::Null);
             """
         )
     }

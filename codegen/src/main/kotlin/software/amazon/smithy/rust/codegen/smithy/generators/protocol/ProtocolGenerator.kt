@@ -81,7 +81,7 @@ open class ProtocolGenerator(
      */
     private val protocol: Protocol,
     /**
-     * Operations generate a `make_operation(&config)` method to build a `smithy_http::Operation` that can be dispatched
+     * Operations generate a `make_operation(&config)` method to build a `aws_smithy_http::Operation` that can be dispatched
      * This is the serializer side of request dispatch
      */
     private val makeOperationGenerator: MakeOperationGenerator,

@@ -50,11 +50,11 @@ class EventStreamMarshallerGenerator(
     private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
-        "MarshallMessage" to RuntimeType("MarshallMessage", smithyEventStream, "smithy_eventstream::frame"),
-        "Message" to RuntimeType("Message", smithyEventStream, "smithy_eventstream::frame"),
-        "Header" to RuntimeType("Header", smithyEventStream, "smithy_eventstream::frame"),
-        "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "smithy_eventstream::frame"),
-        "Error" to RuntimeType("Error", smithyEventStream, "smithy_eventstream::error"),
+        "MarshallMessage" to RuntimeType("MarshallMessage", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "Message" to RuntimeType("Message", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "Header" to RuntimeType("Header", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "Error" to RuntimeType("Error", smithyEventStream, "aws_smithy_eventstream::error"),
     )
 
     fun render(): RuntimeType {
