@@ -103,9 +103,6 @@ class RestJson1HttpSerializerGenerator(
         }
         val serializerSymbol = jsonSerializerGenerator.serverOutputSerializer(operationShape)
         if (serializerSymbol == null) {
-            logger.warning(
-                "[rust-server-codegen] $outputShape: response output serialization does not contain any member"
-            )
             return
         }
         val outputSymbol = symbolProvider.toSymbol(outputShape)
@@ -239,7 +236,7 @@ class RestJson1HttpSerializerGenerator(
         val responseTests =
             operationShape
                 .getTrait<HttpResponseTestsTrait>()
-                ?.getTestCasesFor(AppliesTo.CLIENT)
+                ?.getTestCasesFor(AppliesTo.SERVER)
                 .orEmpty()
                 .map { it to outputShape }
         val errorTests =
@@ -373,9 +370,6 @@ class RestJson1HttpDeserializerGenerator(
         }
         val deserializerSymbol = jsonParserGenerator.serverInputParser(operationShape)
         if (deserializerSymbol == null) {
-            logger.warning(
-                "[rust-server-codegen] $inputShape: request input deserialization does not contain any member"
-            )
             return
         }
         val inputSymbol = symbolProvider.toSymbol(inputShape)
