@@ -277,7 +277,7 @@ impl ProviderConfig {
 
     /// Override the TCP connector for this configuration
     ///
-    /// ## Note: Stability
+    /// # Stability
     /// This method is may to change to support HTTP configuration.
     pub fn with_tcp_connector(self, connector: BoxCloneService<Uri, TcpStream, BoxError>) -> Self {
         ProviderConfig {
