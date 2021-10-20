@@ -9,7 +9,7 @@ vNext (Month Day, Year)
 **New this week**
 
 - Moved the contents of `aws-auth` into the `aws-http` runtime crate (smithy-rs#783)
-- Filled in missing docs for services in the rustdoc documentation (smithy-rs#779)
+- Fix instances where docs were missing in generated services and add `#[warn_missing_docs]`  (smithy-rs#779)
 - Add tracing output for resolved AWS endpoint (smithy-rs#784)
 
 v0.0.21-alpha (October 15th, 2021)
