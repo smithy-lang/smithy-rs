@@ -204,7 +204,7 @@ fun <T : CodeWriter> T.docs(text: String, vararg args: Any, newlinePrefix: Strin
     val cleaned = text.lines()
         // We need to filter out blank lines—an empty line causes the markdown parser to interpret the subsequent
         // docs as a code block because they are indented.
-        .filter { it.isNotBlank() }
+        // .filter { it.isNotBlank() }
         .joinToString("\n") {
             // Rustdoc warns on tabs in documentation
             it.trimStart().replace("\t", "  ")
