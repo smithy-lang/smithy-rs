@@ -31,6 +31,7 @@ vNext (Month Day, Year)
 
 - Moved the contents of `aws-auth` into the `aws-http` runtime crate (smithy-rs#783)
 - Add tracing output for resolved AWS endpoint (smithy-rs#784)
+- Update AWS service models (smithy-rs#789)
 
 v0.0.21-alpha (October 15th, 2021)
 ==================================
