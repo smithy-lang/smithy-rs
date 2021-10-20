@@ -300,15 +300,15 @@ class RequestBindingGenerator(
     /**
      * When needed, generate a function to build a query string
      *
-     * This function uses smithy_http::query::Query to append params to a query string:
+     * This function uses aws_smithy_http::query::Query to append params to a query string:
      * ```rust
      *    fn uri_query(input: &Input, mut output: &mut String) {
-     *      let mut query = smithy_http::query::Query::new(&mut output);
+     *      let mut query = aws_smithy_http::query::Query::new(&mut output);
      *      if let Some(inner_89) = &input.null_value {
-     *          query.push_kv("Null", &smithy_http::query::fmt_string(&inner_89));
+     *          query.push_kv("Null", &aws_smithy_http::query::fmt_string(&inner_89));
      *      }
      *      if let Some(inner_90) = &input.empty_string {
-     *          query.push_kv("Empty", &smithy_http::query::fmt_string(&inner_90));
+     *          query.push_kv("Empty", &aws_smithy_http::query::fmt_string(&inner_90));
      *      }
      *    }
      *  ```

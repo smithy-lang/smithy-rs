@@ -55,17 +55,17 @@ class EventStreamUnmarshallerGenerator(
     private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
-        "Blob" to RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "smithy_types"),
-        "Error" to RuntimeType("Error", smithyEventStream, "smithy_eventstream::error"),
-        "expect_fns" to RuntimeType("smithy", smithyEventStream, "smithy_eventstream"),
-        "Header" to RuntimeType("Header", smithyEventStream, "smithy_eventstream::frame"),
-        "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "smithy_eventstream::frame"),
-        "Message" to RuntimeType("Message", smithyEventStream, "smithy_eventstream::frame"),
+        "Blob" to RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "aws_smithy_types"),
+        "Error" to RuntimeType("Error", smithyEventStream, "aws_smithy_eventstream::error"),
+        "expect_fns" to RuntimeType("smithy", smithyEventStream, "aws_smithy_eventstream"),
+        "Header" to RuntimeType("Header", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "Message" to RuntimeType("Message", smithyEventStream, "aws_smithy_eventstream::frame"),
         "OpError" to operationErrorSymbol,
-        "SmithyError" to RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "smithy_types"),
+        "SmithyError" to RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "aws_smithy_types"),
         "tracing" to CargoDependency.Tracing.asType(),
-        "UnmarshalledMessage" to RuntimeType("UnmarshalledMessage", smithyEventStream, "smithy_eventstream::frame"),
-        "UnmarshallMessage" to RuntimeType("UnmarshallMessage", smithyEventStream, "smithy_eventstream::frame"),
+        "UnmarshalledMessage" to RuntimeType("UnmarshalledMessage", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "UnmarshallMessage" to RuntimeType("UnmarshallMessage", smithyEventStream, "aws_smithy_eventstream::frame"),
     )
 
     fun render(): RuntimeType {

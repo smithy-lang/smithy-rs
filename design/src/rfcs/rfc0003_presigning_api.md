@@ -17,8 +17,8 @@ Terminology
 To differentiate between the clients that are present in the generated SDK today, the following
 terms will be used throughout this doc:
 
-- **Smithy Client**: A `smithy_client::Client<C, M, R>` struct that is responsible for gluing together
-  the connector, middleware, and retry policy. This is not generated and lives in the `smithy-client` crate.
+- **Smithy Client**: A `aws_smithy_client::Client<C, M, R>` struct that is responsible for gluing together
+  the connector, middleware, and retry policy. This is not generated and lives in the `aws-smithy-client` crate.
 - **Fluent Client**: A code-generated `Client<C, M, R>` that has methods for each service operation on it.
   A fluent builder is generated alongside it to make construction easier.
 

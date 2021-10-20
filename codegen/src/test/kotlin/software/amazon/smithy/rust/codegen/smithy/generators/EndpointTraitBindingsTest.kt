@@ -152,7 +152,7 @@ internal class EndpointTraitBindingsTest {
                         .build().expect("valid operation")
                         .make_operation(&conf).expect("hello is a valid prefix");
                     let properties = op.properties();
-                    let prefix = properties.get::<smithy_http::endpoint::EndpointPrefix>()
+                    let prefix = properties.get::<aws_smithy_http::endpoint::EndpointPrefix>()
                         .expect("prefix should be in config")
                         .as_str();
                     assert_eq!(prefix, "test123.hello.");

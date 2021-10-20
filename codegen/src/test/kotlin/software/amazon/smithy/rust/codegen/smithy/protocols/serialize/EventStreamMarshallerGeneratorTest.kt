@@ -50,9 +50,9 @@ class EventStreamMarshallerGeneratorTest {
                 .copy(scope = DependencyScope.Compile)
             writer.rustTemplate(
                 """
-                use smithy_eventstream::frame::{Message, Header, HeaderValue, MarshallMessage};
+                use aws_smithy_eventstream::frame::{Message, Header, HeaderValue, MarshallMessage};
                 use std::collections::HashMap;
-                use smithy_types::{Blob, Instant};
+                use aws_smithy_types::{Blob, Instant};
                 use crate::error::*;
                 use crate::model::*;
 

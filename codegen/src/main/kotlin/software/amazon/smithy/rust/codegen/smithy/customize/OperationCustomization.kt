@@ -33,7 +33,7 @@ sealed class OperationSection(name: String) : Section(name) {
 
     /** Write custom code into the block that builds an operation
      *
-     * [request]: Name of the variable holding the `smithy_http::Request`
+     * [request]: Name of the variable holding the `aws_smithy_http::Request`
      * [config]: Name of the variable holding the service config.
      *
      * */
