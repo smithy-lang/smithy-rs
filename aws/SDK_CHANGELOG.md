@@ -1,10 +1,16 @@
 vNext (Month Day, Year)
 =======================
 
+**Breaking Changes**
+
+- `CredentialsError` variants became non-exhaustive. This makes them impossible to construct directly outside of the `aws_types` crate. In order to construct credentials errors, new methods have been added for each variant. Instead of `CredentialsError::Unhandled(...)`, you should instead use `CredentialsError::unhandled`. Matching methods exist for all variants. (#781)
+- The default credentials chain now returns `CredentialsError::CredentialsNotLoaded` instead of `ProviderError` when no credentials providers are configured.
+
 **New this week**
 
 - Moved the contents of `aws-auth` into the `aws-http` runtime crate (smithy-rs#783)
 - Filled in missing docs for services in the rustdoc documentation (smithy-rs#779)
+- Add tracing output for resolved AWS endpoint (smithy-rs#784)
 
 v0.0.21-alpha (October 15th, 2021)
 ==================================

@@ -353,14 +353,18 @@ pub mod credentials {
     mod test {
         use tracing_test::traced_test;
 
-        use aws_types::credentials::ProvideCredentials;
-        use aws_types::os_shim_internal::{Env, Fs};
+        use aws_types::credentials::{CredentialsError, ProvideCredentials};
+        use aws_types::os_shim_internal::{Env, Fs, TimeSource};
         use smithy_types::retry::{RetryConfig, RetryMode};
 
         use crate::default_provider::credentials::DefaultCredentialsChain;
         use crate::default_provider::retry_config;
         use crate::provider_config::ProviderConfig;
         use crate::test_case::TestEnvironment;
+
+        use smithy_async::rt::sleep::TokioSleep;
+        use smithy_client::erase::boxclone::BoxCloneService;
+        use smithy_client::never::NeverConnected;
 
         /// Test generation macro
         ///
@@ -376,7 +380,7 @@ pub mod credentials {
         /// ```
         ///
         /// **Run the test case against a real HTTPS connection:**
-        /// > Note: Be careful to remove sensitive information before commiting. Always use a temporary
+        /// > Note: Be careful to remove sensitive information before committing. Always use a temporary
         /// > AWS account when recording live traffic.
         /// ```rust
         /// make_test!(live: test_name)
@@ -448,6 +452,28 @@ pub mod credentials {
                 .await
                 .expect("creds should load");
             assert_eq!(creds.access_key_id(), "correct_key_secondary");
+        }
+
+        #[tokio::test]
+        #[traced_test]
+        async fn no_providers_configured_err() {
+            let conf = ProviderConfig::no_configuration()
+                .with_tcp_connector(BoxCloneService::new(NeverConnected::new()))
+                .with_time_source(TimeSource::real())
+                .with_sleep(TokioSleep::new());
+            let provider = DefaultCredentialsChain::builder()
+                .configure(conf)
+                .build()
+                .await;
+            let creds = provider
+                .provide_credentials()
+                .await
+                .expect_err("no providers enabled");
+            assert!(
+                matches!(creds, CredentialsError::CredentialsNotLoaded { .. }),
+                "should be NotLoaded: {:?}",
+                creds
+            )
         }
 
         #[tokio::test]

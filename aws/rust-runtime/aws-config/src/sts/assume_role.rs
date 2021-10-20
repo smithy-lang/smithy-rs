@@ -187,18 +187,18 @@ impl AssumeRoleProvider {
                 match err.kind {
                     AssumeRoleErrorKind::RegionDisabledException(_)
                     | AssumeRoleErrorKind::MalformedPolicyDocumentException(_) => {
-                        return Err(CredentialsError::InvalidConfiguration(
-                            aws_hyper::SdkError::ServiceError { err, raw }.into(),
+                        return Err(CredentialsError::invalid_configuration(
+                            aws_hyper::SdkError::ServiceError { err, raw },
                         ))
                     }
                     _ => {}
                 }
                 tracing::warn!(error = ?err.message(), "sts refused to grant assume role");
-                Err(CredentialsError::ProviderError(
-                    aws_hyper::SdkError::ServiceError { err, raw }.into(),
+                Err(CredentialsError::provider_error(
+                    aws_hyper::SdkError::ServiceError { err, raw },
                 ))
             }
-            Err(err) => Err(CredentialsError::ProviderError(err.into())),
+            Err(err) => Err(CredentialsError::provider_error(err)),
         }
     }
 }

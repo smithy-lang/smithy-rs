@@ -49,7 +49,7 @@ impl HttpCredentialProvider {
         match credentials {
             Ok(creds) => Ok(creds),
             Err(SdkError::ServiceError { err, .. }) => Err(err),
-            Err(other) => Err(CredentialsError::Unhandled(other.into())),
+            Err(other) => Err(CredentialsError::unhandled(other)),
         }
     }
 
@@ -127,10 +127,9 @@ impl ParseStrictResponse for CredentialsResponseParser {
     type Output = credentials::Result;
 
     fn parse(&self, response: &Response<Bytes>) -> Self::Output {
-        let str_resp = std::str::from_utf8(response.body().as_ref())
-            .map_err(|err| CredentialsError::Unhandled(err.into()))?;
-        let json_creds = parse_json_credentials(str_resp)
-            .map_err(|err| CredentialsError::Unhandled(err.into()))?;
+        let str_resp =
+            std::str::from_utf8(response.body().as_ref()).map_err(CredentialsError::unhandled)?;
+        let json_creds = parse_json_credentials(str_resp).map_err(CredentialsError::unhandled)?;
         match json_creds {
             JsonCredentials::RefreshableCredentials {
                 access_key_id,
@@ -144,8 +143,8 @@ impl ParseStrictResponse for CredentialsResponseParser {
                 Some(expiration),
                 self.provider_name,
             )),
-            JsonCredentials::Error { code, message } => Err(CredentialsError::ProviderError(
-                format!("failed to load credentials [{}]: {}", code, message).into(),
+            JsonCredentials::Error { code, message } => Err(CredentialsError::provider_error(
+                format!("failed to load credentials [{}]: {}", code, message),
             )),
         }
     }
@@ -177,7 +176,7 @@ impl ClassifyResponse<SdkSuccess<Credentials>, SdkError<CredentialsError>>
             }
             // non-parseable 200s
             Err(SdkError::ServiceError {
-                err: CredentialsError::Unhandled(_),
+                err: CredentialsError::Unhandled { .. },
                 raw,
             }) if raw.http().status().is_success() => RetryKind::Error(ErrorKind::ServerError),
             // 5xx errors
@@ -278,7 +277,7 @@ mod test {
             matches!(
                 sdk_error,
                 SdkError::ServiceError {
-                    err: CredentialsError::ProviderError(_),
+                    err: CredentialsError::ProviderError { .. },
                     ..
                 }
             ),

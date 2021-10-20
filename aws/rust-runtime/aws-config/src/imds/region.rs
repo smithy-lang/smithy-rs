@@ -48,6 +48,7 @@ impl ImdsRegionProvider {
     /// This provider uses the API `/latest/meta-data/placement/region`
     pub async fn region(&self) -> Option<Region> {
         if self.imds_disabled() {
+            tracing::debug!("not using IMDS to load region, IMDS is disabled");
             return None;
         }
         let client = self.client.client().await.ok()?;
@@ -146,7 +147,7 @@ mod test {
         let provider = ImdsRegionProvider::builder()
             .configure(
                 &ProviderConfig::no_configuration()
-                    .with_connector(DynConnector::new(conn))
+                    .with_http_connector(DynConnector::new(conn))
                     .with_sleep(TokioSleep::new()),
             )
             .build();
@@ -169,7 +170,7 @@ mod test {
         let provider = ImdsRegionProvider::builder()
             .configure(
                 &ProviderConfig::no_configuration()
-                    .with_connector(DynConnector::new(conn))
+                    .with_http_connector(DynConnector::new(conn))
                     .with_sleep(TokioSleep::new()),
             )
             .build();
