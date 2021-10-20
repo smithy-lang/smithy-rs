@@ -88,7 +88,7 @@ pub mod region {
 
 /// Default retry behavior configuration provider chain
 pub mod retry_config {
-    use smithy_types::retry::RetryConfig;
+    use aws_smithy_types::retry::RetryConfig;
 
     use crate::environment::retry_config::EnvironmentVariableRetryConfigProvider;
     use crate::profile;
@@ -148,10 +148,10 @@ pub mod retry_config {
             self
         }
 
-        /// Attempt to create a [RetryConfig](smithy_types::retry::RetryConfig) from following sources in order:
+        /// Attempt to create a [RetryConfig](aws_smithy_types::retry::RetryConfig) from following sources in order:
         /// 1. [Environment variables](crate::environment::retry_config::EnvironmentVariableRetryConfigProvider)
         /// 2. [Profile file](crate::profile::retry_config::ProfileFileRetryConfigProvider)
-        /// 3. [RetryConfig::default()](smithy_types::retry::RetryConfig::default)
+        /// 3. [RetryConfig::default()](aws_smithy_types::retry::RetryConfig::default)
         ///
         /// Precedence is considered on a per-field basis
         ///
@@ -353,18 +353,18 @@ pub mod credentials {
     mod test {
         use tracing_test::traced_test;
 
+        use aws_smithy_types::retry::{RetryConfig, RetryMode};
         use aws_types::credentials::{CredentialsError, ProvideCredentials};
         use aws_types::os_shim_internal::{Env, Fs, TimeSource};
-        use smithy_types::retry::{RetryConfig, RetryMode};
 
         use crate::default_provider::credentials::DefaultCredentialsChain;
         use crate::default_provider::retry_config;
         use crate::provider_config::ProviderConfig;
         use crate::test_case::TestEnvironment;
 
-        use smithy_async::rt::sleep::TokioSleep;
-        use smithy_client::erase::boxclone::BoxCloneService;
-        use smithy_client::never::NeverConnected;
+        use aws_smithy_async::rt::sleep::TokioSleep;
+        use aws_smithy_client::erase::boxclone::BoxCloneService;
+        use aws_smithy_client::never::NeverConnected;
 
         /// Test generation macro
         ///

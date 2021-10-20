@@ -51,7 +51,7 @@ interface Protocol {
     /**
      * Generates a function signature like the following:
      * ```rust
-     * fn parse_http_generic_error(response: &Response<Bytes>) -> smithy_types::error::Error
+     * fn parse_http_generic_error(response: &Response<Bytes>) -> aws_smithy_types::error::Error
      * ```
      */
     fun parseHttpGenericError(operationShape: OperationShape): RuntimeType
@@ -59,7 +59,7 @@ interface Protocol {
     /**
      * Generates a function signature like the following:
      * ```rust
-     * fn parse_event_stream_generic_error(payload: &Bytes) -> smithy_types::error::Error
+     * fn parse_event_stream_generic_error(payload: &Bytes) -> aws_smithy_types::error::Error
      * ```
      *
      * Event Stream generic errors are almost identical to HTTP generic errors, except that

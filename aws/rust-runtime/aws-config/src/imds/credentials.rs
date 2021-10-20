@@ -12,10 +12,10 @@ use crate::imds;
 use crate::imds::client::{ImdsError, LazyClient};
 use crate::json_credentials::{parse_json_credentials, JsonCredentials};
 use crate::provider_config::ProviderConfig;
+use aws_smithy_client::SdkError;
 use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
 use aws_types::os_shim_internal::Env;
 use aws_types::{credentials, Credentials};
-use smithy_client::SdkError;
 
 use tokio::sync::OnceCell;
 

@@ -192,8 +192,8 @@ pub mod request {
 #[allow(dead_code)]
 pub(crate) mod service {
     use crate::presigning::request::PresignedRequest;
+    use aws_smithy_http::operation;
     use http::header::{CONTENT_LENGTH, CONTENT_TYPE, USER_AGENT};
-    use smithy_http::operation;
     use std::future::{ready, Ready};
     use std::marker::PhantomData;
     use std::task::{Context, Poll};

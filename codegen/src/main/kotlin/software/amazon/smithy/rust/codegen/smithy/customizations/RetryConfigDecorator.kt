@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfi
 /* Example Generated Code */
 /*
 pub struct Config {
-    pub(crate) retry_config: Option<smithy_types::retry::RetryConfig>,
+    pub(crate) retry_config: Option<aws_smithy_types::retry::RetryConfig>,
 }
 impl std::fmt::Debug for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -33,19 +33,19 @@ impl Config {
 }
 #[derive(Default)]
 pub struct Builder {
-    retry_config: Option<smithy_types::retry::RetryConfig>,
+    retry_config: Option<aws_smithy_types::retry::RetryConfig>,
 }
 impl Builder {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn retry_config(mut self, retry_config: smithy_types::retry::RetryConfig) -> Self {
+    pub fn retry_config(mut self, retry_config: aws_smithy_types::retry::RetryConfig) -> Self {
         self.set_retry_config(Some(retry_config));
         self
     }
     pub fn set_retry_config(
         &mut self,
-        retry_config: Option<smithy_types::retry::RetryConfig>,
+        retry_config: Option<aws_smithy_types::retry::RetryConfig>,
     ) -> &mut Self {
         self.retry_config = retry_config;
         self
@@ -155,6 +155,6 @@ class PubUseRetryConfig(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
     }
 }
 
-// Generate path to the retry module in smithy_types
+// Generate path to the retry module in aws_smithy_types
 fun smithyTypesRetry(runtimeConfig: RuntimeConfig) =
-    RuntimeType("retry", runtimeConfig.runtimeCrate("types"), "smithy_types")
+    RuntimeType("retry", runtimeConfig.runtimeCrate("types"), "aws_smithy_types")

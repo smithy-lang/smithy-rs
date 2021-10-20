@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpDeserializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpSerializerGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
@@ -74,8 +73,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
     private val protocolGenerator: ProtocolGenerator
 
-    private val httpSerializerGenerator: ServerGenerator
-    private val httpDeserializerGenerator: ServerGenerator
+    private val httpSerializerGenerator: RestJson1HttpSerializerGenerator
+    private val httpDeserializerGenerator: RestJson1HttpDeserializerGenerator
     private val httpBindingResolver: HttpBindingResolver
 
     init {
@@ -238,6 +237,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      * Although raw strings require no code generation, enums are actually `EnumTrait` applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
+        logger.info("[rust-server-codegen] Generating an enum $shape")
         shape.getTrait<EnumTrait>()?.also { enum ->
             rustCrate.useShapeWriter(shape) { writer ->
                 EnumGenerator(model, symbolProvider, writer, shape, enum).render()
@@ -253,6 +253,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      * This function _does not_ generate any serializers.
      */
     override fun unionShape(shape: UnionShape) {
+        logger.info("[rust-server-codegen] Generating an union $shape")
         rustCrate.useShapeWriter(shape) {
             UnionGenerator(model, symbolProvider, it, shape).render()
         }
@@ -268,6 +269,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      * - Operation structures
      */
     override fun serviceShape(shape: ServiceShape) {
+        logger.info("[rust-server-codegen] Generating a service $shape")
         ServiceGenerator(
             rustCrate,
             protocolGenerator,
@@ -284,12 +286,12 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                 ##[derive(Debug)]
                 pub enum Error {
                     Generic(std::borrow::Cow<'static, str>),
-                    DeserializeJson(smithy_json::deserialize::Error),
-                    DeserializeHeader(smithy_http::header::ParseError),
+                    DeserializeJson(aws_smithy_json::deserialize::Error),
+                    DeserializeHeader(aws_smithy_http::header::ParseError),
                     DeserializeLabel(std::string::String),
-                    BuildInput(smithy_http::operation::BuildError),
+                    BuildInput(aws_smithy_http::operation::BuildError),
                     BuildResponse(http::Error),
-                    SmithyType(smithy_types::Error),
+                    SmithyType(aws_smithy_types::Error),
                 }
 
                 impl Error {
@@ -299,26 +301,26 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                     }
                 }
 
-                impl From<smithy_json::deserialize::Error> for Error {
-                    fn from(err: smithy_json::deserialize::Error) -> Self {
+                impl From<aws_smithy_json::deserialize::Error> for Error {
+                    fn from(err: aws_smithy_json::deserialize::Error) -> Self {
                         Self::DeserializeJson(err)
                     }
                 }
 
-                impl From<smithy_http::header::ParseError> for Error {
-                    fn from(err: smithy_http::header::ParseError) -> Self {
+                impl From<aws_smithy_http::header::ParseError> for Error {
+                    fn from(err: aws_smithy_http::header::ParseError) -> Self {
                         Self::DeserializeHeader(err)
                     }
                 }
 
-                impl From<smithy_http::operation::BuildError> for Error {
-                    fn from(err: smithy_http::operation::BuildError) -> Self {
+                impl From<aws_smithy_http::operation::BuildError> for Error {
+                    fn from(err: aws_smithy_http::operation::BuildError) -> Self {
                         Self::BuildInput(err)
                     }
                 }
 
-                impl From<smithy_types::Error> for Error {
-                    fn from(err: smithy_types::Error) -> Self {
+                impl From<aws_smithy_types::Error> for Error {
+                    fn from(err: aws_smithy_types::Error) -> Self {
                         Self::SmithyType(err)
                     }
                 }

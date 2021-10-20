@@ -12,8 +12,8 @@
 | double | `f64` |
 | [bigInteger](#big-numbers) | `BigInteger` (Not implemented yet) |
 | [bigDecimal](#big-numbers) | `BigDecimal` (Not implemented yet) |
-| [timestamp](#timestamps)  | [`Instant`](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/smithy-types/src/instant/mod.rs) |
-| [document](#documents) | [`Document`](https://github.com/awslabs/smithy-rs/blob/v0.14/rust-runtime/smithy-types/src/lib.rs#L38-L52) |
+| [timestamp](#timestamps)  | [`Instant`](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-types/src/instant/mod.rs) |
+| [document](#documents) | [`Document`](https://github.com/awslabs/smithy-rs/blob/v0.14/rust-runtime/aws-smithy-types/src/lib.rs#L38-L52) |
 
 ### Big Numbers
 Rust currently has no standard library or universally accepted large-number crate. Until one is stabilized, a string representation is a reasonable compromise:
@@ -30,7 +30,7 @@ As of 5/23/2021 BigInteger / BigDecimal are not included in AWS models. Implemen
 [chrono](https://github.com/chronotope/chrono) is the current de facto library for datetime in Rust, but it is pre-1.0. Instants are represented by an SDK defined structure modeled on `std::time::Duration` from the Rust standard library.
 
 ```rust
-{{#include ../../../rust-runtime/smithy-types/src/instant/mod.rs:instant}}
+{{#include ../../../rust-runtime/aws-smithy-types/src/instant/mod.rs:instant}}
 ```
 
 A `to_chrono()` method on `Instant` enables conversion from SDK instants to `chrono` dates.
@@ -52,7 +52,7 @@ Smithy defines the concept of "Document Types":
 > [Documents represent] protocol-agnostic open content that is accessed like JSON data. Open content is useful for modeling unstructured data that has no schema, data that can't be modeled using rigid types, or data that has a schema that evolves outside of the purview of a model. The serialization format of a document is an implementation detail of a protocol and MUST NOT have any effect on the types exposed by tooling to represent a document value.
 
 ```rust
-{{#include ../../../rust-runtime/smithy-types/src/lib.rs:document}}
+{{#include ../../../rust-runtime/aws-smithy-types/src/lib.rs:document}}
 ```
 
 Individual protocols define their own document serialization behavior, with some protocols such as AWS and EC2 Query not supporting document types.

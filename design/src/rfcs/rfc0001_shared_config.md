@@ -278,7 +278,7 @@ even if a dependency mismatch exists, it is still possible for customers to work
 - [x] ProvideCredentials moved into `aws-types`. `Credentials` moved into `aws-types`
 - [x] Create `aws-config`.
 - [x] Profile-file parsing moved into `aws-config`, region chain & region environment loaders moved to `aws-config`.
-- [ ] os_shim_internal moved to ??? `smithy-types`?
+- [ ] os_shim_internal moved to ??? `aws-smithy-types`?
 - [x] Add `Config` to `aws-types`. Ensure that it's set up to add new members while remaining backwards
   compatible.
 - [x] Code generate `From<&SharedConfig> for <everyservice>::Config`

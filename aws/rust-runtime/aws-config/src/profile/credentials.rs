@@ -38,7 +38,7 @@ use crate::profile::credentials::exec::named::NamedProviderFactory;
 use crate::profile::credentials::exec::{ClientConfiguration, ProviderChain};
 use crate::profile::parser::ProfileParseError;
 use crate::provider_config::ProviderConfig;
-use smithy_client::erase::DynConnector;
+use aws_smithy_client::erase::DynConnector;
 
 mod exec;
 mod repr;
