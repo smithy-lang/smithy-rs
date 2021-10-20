@@ -162,7 +162,7 @@ impl TestEnvironment {
             ProviderConfig::empty()
                 .with_fs(self.fs.clone())
                 .with_env(self.env.clone())
-                .with_connector(DynConnector::new(connector.clone()))
+                .with_http_connector(DynConnector::new(connector.clone()))
                 .with_sleep(TokioSleep::new())
                 .load_default_region()
                 .await,
@@ -184,7 +184,7 @@ impl TestEnvironment {
         let live_connector =
             crate::connector::default_connector(&settings, config.sleep()).unwrap();
         let live_connector = RecordingConnection::new(live_connector);
-        let config = config.with_connector(DynConnector::new(live_connector.clone()));
+        let config = config.with_http_connector(DynConnector::new(live_connector.clone()));
         let provider = make_provider(config).await;
         let result = provider.provide_credentials().await;
         std::fs::write(
@@ -207,7 +207,7 @@ impl TestEnvironment {
     {
         let (connector, config) = self.provider_config().await;
         let recording_connector = RecordingConnection::new(connector);
-        let config = config.with_connector(DynConnector::new(recording_connector.clone()));
+        let config = config.with_http_connector(DynConnector::new(recording_connector.clone()));
         let provider = make_provider(config).await;
         let result = provider.provide_credentials().await;
         std::fs::write(

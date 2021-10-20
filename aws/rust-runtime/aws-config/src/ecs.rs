@@ -95,17 +95,20 @@ impl EcsCredentialsProvider {
         let auth = match self.env.get(ENV_AUTHORIZATION).ok() {
             Some(auth) => Some(HeaderValue::from_str(&auth).map_err(|err| {
                 tracing::warn!(token = %auth, "invalid auth token");
-                CredentialsError::InvalidConfiguration(
-                    EcsConfigurationErr::InvalidAuthToken { err, value: auth }.into(),
-                )
+                CredentialsError::invalid_configuration(EcsConfigurationErr::InvalidAuthToken {
+                    err,
+                    value: auth,
+                })
             })?),
             None => None,
         };
         match self.provider().await {
-            Provider::NotConfigured => Err(CredentialsError::CredentialsNotLoaded),
-            Provider::InvalidConfiguration(err) => Err(CredentialsError::InvalidConfiguration(
-                format!("{}", err).into(),
-            )),
+            Provider::NotConfigured => {
+                Err(CredentialsError::not_loaded("ECS provider not configured"))
+            }
+            Provider::InvalidConfiguration(err) => {
+                Err(CredentialsError::invalid_configuration(format!("{}", err)))
+            }
             Provider::Configured(provider) => provider.credentials(auth).await,
         }
     }
@@ -459,7 +462,7 @@ mod test {
     fn provider(env: Env, connector: DynConnector) -> EcsCredentialsProvider {
         let provider_config = ProviderConfig::empty()
             .with_env(env)
-            .with_connector(connector);
+            .with_http_connector(connector);
         Builder::default().configure(&provider_config).build()
     }
 

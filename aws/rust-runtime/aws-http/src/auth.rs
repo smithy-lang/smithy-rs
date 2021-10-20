@@ -47,7 +47,7 @@ impl CredentialsStage {
                 request.properties_mut().insert(creds);
             }
             // ignore the case where there is no provider wired up
-            Err(CredentialsError::CredentialsNotLoaded) => {
+            Err(CredentialsError::CredentialsNotLoaded { .. }) => {
                 tracing::info!("provider returned CredentialsNotLoaded, ignoring")
             }
             // if we get another error class, there is probably something actually wrong that the user will
@@ -126,7 +126,7 @@ mod tests {
         where
             Self: 'a,
         {
-            future::ProvideCredentials::ready(Err(CredentialsError::Unhandled("whoops".into())))
+            future::ProvideCredentials::ready(Err(CredentialsError::unhandled("whoops")))
         }
     }
 
@@ -137,7 +137,7 @@ mod tests {
         where
             Self: 'a,
         {
-            future::ProvideCredentials::ready(Err(CredentialsError::CredentialsNotLoaded))
+            future::ProvideCredentials::ready(Err(CredentialsError::not_loaded("no creds")))
         }
     }
 
