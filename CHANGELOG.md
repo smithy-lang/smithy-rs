@@ -1,6 +1,32 @@
 vNext (Month Day, Year)
 =======================
 
+**Breaking Changes**
+
+- :warning: All Smithy runtime crates have been renamed to have an `aws-` prefix. This may require code changes:
+  - _Cargo.toml_ changes:
+    - `smithy-async` -> `aws-smithy-async`
+    - `smithy-client` -> `aws-smithy-client`
+    - `smithy-eventstream` -> `aws-smithy-eventstream`
+    - `smithy-http` -> `aws-smithy-http`
+    - `smithy-http-tower` -> `aws-smithy-http-tower`
+    - `smithy-json` -> `aws-smithy-json`
+    - `smithy-protocol-test` -> `aws-smithy-protocol-test`
+    - `smithy-query` -> `aws-smithy-query`
+    - `smithy-types` -> `aws-smithy-types`
+    - `smithy-xml` -> `aws-smithy-xml`
+  - Rust `use` statement changes:
+    - `smithy_async` -> `aws_smithy_async`
+    - `smithy_client` -> `aws_smithy_client`
+    - `smithy_eventstream` -> `aws_smithy_eventstream`
+    - `smithy_http` -> `aws_smithy_http`
+    - `smithy_http_tower` -> `aws_smithy_http_tower`
+    - `smithy_json` -> `aws_smithy_json`
+    - `smithy_protocol_test` -> `aws_smithy_protocol_test`
+    - `smithy_query` -> `aws_smithy_query`
+    - `smithy_types` -> `aws_smithy_types`
+    - `smithy_xml` -> `aws_smithy_xml`
+
 v0.26 (October 15th, 2021)
 =======================
 
