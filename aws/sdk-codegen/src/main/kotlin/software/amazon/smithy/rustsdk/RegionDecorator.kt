@@ -108,11 +108,12 @@ class RegionProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization()
             ServiceConfig.BuilderImpl ->
                 rustTemplate(
                     """
-            pub fn region(mut self, region: impl Into<Option<#{Region}>>) -> Self {
-                self.region = region.into();
-                self
-            }
-            """,
+                    /// Sets the AWS region to use when making requests.
+                    pub fn region(mut self, region: impl Into<Option<#{Region}>>) -> Self {
+                        self.region = region.into();
+                        self
+                    }
+                    """,
                     *codegenScope
                 )
             ServiceConfig.BuilderBuild -> rustTemplate(

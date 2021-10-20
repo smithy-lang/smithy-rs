@@ -13,7 +13,7 @@ pub use token::{EscapeError, EscapedStr, Offset, Token};
 
 use ErrorReason::*;
 
-/// ### JSON token parser as a Rust iterator
+/// JSON token parser as a Rust iterator
 ///
 /// This parser will parse and yield exactly one [Token] per iterator `next()` call.
 /// Validation is done on the fly, so it is possible for it to parse an invalid JSON document
@@ -23,11 +23,9 @@ use ErrorReason::*;
 /// which is a new type around a slice of original `input` bytes so that the caller can decide
 /// when to unescape and allocate into a [String].
 ///
-/// ### Note:
-///
-/// The parser *will* accept multiple valid JSON values. For example, `b"null true"` will yield
-/// `ValueNull` and `ValueTrue`. It is the responsibility of the caller
-/// to handle this for their use-case.
+/// The parser *will* accept multiple valid JSON values. For example, `b"null true"` will
+/// yield `ValueNull` and `ValueTrue`. It is the responsibility of the caller to handle this for
+/// their use-case.
 pub fn json_token_iter(input: &[u8]) -> JsonTokenIterator {
     JsonTokenIterator {
         input,

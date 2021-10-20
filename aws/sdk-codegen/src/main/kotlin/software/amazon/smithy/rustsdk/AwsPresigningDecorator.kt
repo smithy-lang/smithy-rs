@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -180,15 +181,9 @@ class AwsInputPresignedMethod(
             ).generateMakeOperation(this, syntheticOp, section.customizations)
         }
 
+        documentPresignedMethod(hasConfigArg = true)
         rustBlockTemplate(
             """
-            /// Creates a presigned request for this operation. The credentials provider from the `config`
-            /// will be used to generate the request's signature, and the `presigning_config` provides additional
-            /// presigning-specific config values, such as the amount of time the request should be valid for after
-            /// creation.
-            ///
-            /// Presigned requests can be given to other users or applications to access a resource or perform
-            /// an operation without having access to the AWS security credentials.
             ##[cfg(feature = "client")]
             pub async fn presigned(
                 self,
@@ -263,6 +258,7 @@ class AwsPresignedFluentBuilderMethod(
 
     override fun section(section: FluentClientSection): Writable = writable {
         if (section is FluentClientSection.FluentBuilderImpl && section.operationShape.hasTrait(PresignableTrait::class.java)) {
+            documentPresignedMethod(hasConfigArg = false)
             rustBlockTemplate(
                 """
                 pub async fn presigned(
@@ -353,4 +349,22 @@ class MoveDocumentMembersToQueryParamsTransform(
             }
         }
     }
+}
+
+private fun RustWriter.documentPresignedMethod(hasConfigArg: Boolean) {
+    val configBlurb = if (hasConfigArg)
+        "The credentials provider from the `config` will be used to generate the request's signature.\n"
+    else
+        ""
+    docs(
+        """
+        Creates a presigned request for this operation.
+
+        ${configBlurb}The `presigning_config` provides additional presigning-specific config values, such as the
+        amount of time the request should be valid for after creation.
+
+        Presigned requests can be given to other users or applications to access a resource or perform
+        an operation without having access to the AWS security credentials.
+        """
+    )
 }

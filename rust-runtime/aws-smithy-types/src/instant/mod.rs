@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+//! Instant value for representing Smithy timestamps.
+//!
+//! Unlike [`std::time::Instant`], this instant is not opaque. The time inside of it can be
+//! read and modified. It also holds logic for parsing and formatting timestamps in any of
+//! the timestamp formats that [Smithy](https://awslabs.github.io/smithy/) supports.
+
 use crate::instant::format::DateParseError;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use num_integer::div_mod_floor;
@@ -19,6 +25,10 @@ const NANOS_PER_MILLI: u32 = 1_000_000;
 
 /* ANCHOR: instant */
 
+/// Instant in time.
+///
+/// Instant in time represented as seconds and sub-second nanos since
+/// the Unix epoch (January 1, 1970 at midnight UTC/GMT).
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Instant {
     seconds: i64,
@@ -28,6 +38,7 @@ pub struct Instant {
 /* ANCHOR_END: instant */
 
 impl Instant {
+    /// Creates an `Instant` from a number of seconds since the Unix epoch.
     pub fn from_epoch_seconds(epoch_seconds: i64) -> Self {
         Instant {
             seconds: epoch_seconds,
@@ -35,11 +46,31 @@ impl Instant {
         }
     }
 
+    /// Creates an `Instant` from a number of seconds and a fractional second since the Unix epoch.
+    ///
+    /// # Example
+    /// ```
+    /// # use aws_smithy_types::Instant;
+    /// assert_eq!(
+    ///     Instant::from_secs_and_nanos(1, 500_000_000u32),
+    ///     Instant::from_fractional_seconds(1, 0.5),
+    /// );
+    /// ```
     pub fn from_fractional_seconds(epoch_seconds: i64, fraction: f64) -> Self {
         let subsecond_nanos = (fraction * 1_000_000_000_f64) as u32;
         Instant::from_secs_and_nanos(epoch_seconds, subsecond_nanos)
     }
 
+    /// Creates an `Instant` from a number of seconds and sub-second nanos since the Unix epoch.
+    ///
+    /// # Example
+    /// ```
+    /// # use aws_smithy_types::Instant;
+    /// assert_eq!(
+    ///     Instant::from_fractional_seconds(1, 0.5),
+    ///     Instant::from_secs_and_nanos(1, 500_000_000u32),
+    /// );
+    /// ```
     pub fn from_secs_and_nanos(seconds: i64, subsecond_nanos: u32) -> Self {
         if subsecond_nanos >= 1_000_000_000 {
             panic!("{} is > 1_000_000_000", subsecond_nanos)
@@ -50,12 +81,23 @@ impl Instant {
         }
     }
 
+    /// Creates an `Instant` from an `f64` representing the number of seconds since the Unix epoch.
+    ///
+    /// # Example
+    /// ```
+    /// # use aws_smithy_types::Instant;
+    /// assert_eq!(
+    ///     Instant::from_fractional_seconds(1, 0.5),
+    ///     Instant::from_f64(1.5),
+    /// );
+    /// ```
     pub fn from_f64(epoch_seconds: f64) -> Self {
         let seconds = epoch_seconds.floor() as i64;
         let rem = epoch_seconds - epoch_seconds.floor();
         Instant::from_fractional_seconds(seconds, rem)
     }
 
+    /// Creates an `Instant` from a [`SystemTime`].
     pub fn from_system_time(system_time: SystemTime) -> Self {
         let duration = system_time
             .duration_since(UNIX_EPOCH)
@@ -66,6 +108,7 @@ impl Instant {
         }
     }
 
+    /// Parses an `Instant` from a string using the given `format`.
     pub fn from_str(s: &str, format: Format) -> Result<Self, DateParseError> {
         match format {
             Format::DateTime => format::rfc3339::parse(s),
@@ -99,6 +142,7 @@ impl Instant {
         }
     }
 
+    /// Converts the `Instant` to a chrono `DateTime<Utc>`.
     #[cfg(feature = "chrono-conversions")]
     pub fn to_chrono(self) -> DateTime<Utc> {
         self.to_chrono_internal()
@@ -127,18 +171,26 @@ impl Instant {
         }
     }
 
+    /// Returns true if sub-second nanos is greater than zero.
     pub fn has_nanos(&self) -> bool {
         self.subsecond_nanos != 0
     }
 
+    /// Returns the `Instant` value as an `f64` representing the seconds since the Unix epoch.
     pub fn epoch_fractional_seconds(&self) -> f64 {
         self.seconds as f64 + self.subsecond_nanos as f64 / 1_000_000_000_f64
     }
 
+    /// Returns the epoch seconds component of the `Instant`.
+    ///
+    /// _Note: this does not include the sub-second nanos._
     pub fn epoch_seconds(&self) -> i64 {
         self.seconds
     }
 
+    /// Returns the sub-second nanos component of the `Instant`.
+    ///
+    /// _Note: this does not include the number of seconds since the epoch._
     pub fn epoch_subsecond_nanos(&self) -> u32 {
         self.subsecond_nanos
     }
@@ -170,6 +222,7 @@ impl Instant {
         Instant::from_secs_and_nanos(seconds, millis as u32 * NANOS_PER_MILLI)
     }
 
+    /// Formats the `Instant` to a string using the given `format`.
     pub fn fmt(&self, format: Format) -> String {
         match format {
             Format::DateTime => format::rfc3339::format(&self),
@@ -186,6 +239,7 @@ impl Instant {
     }
 }
 
+/// Failure to convert an `Instant` to or from another type.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct ConversionError(&'static str);
@@ -212,10 +266,14 @@ impl From<DateTime<chrono::FixedOffset>> for Instant {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+/// Formats for representing an `Instant` in the Smithy protocols.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Format {
+    /// RFC-3339 Date Time.
     DateTime,
+    /// Date format used by the HTTP `Date` header, specified in RFC-7231.
     HttpDate,
+    /// Number of seconds since the Unix epoch formatted as a floating point.
     EpochSeconds,
 }
 

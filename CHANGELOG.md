@@ -27,6 +27,10 @@ vNext (Month Day, Year)
     - `smithy_types` -> `aws_smithy_types`
     - `smithy_xml` -> `aws_smithy_xml`
 
+**New this week**
+
+- Filled in missing docs for services in the rustdoc documentation (smithy-rs#779)
+
 v0.26 (October 15th, 2021)
 =======================
 

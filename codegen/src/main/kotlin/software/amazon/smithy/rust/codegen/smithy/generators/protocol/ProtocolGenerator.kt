@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -22,6 +21,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomizati
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
@@ -160,7 +160,17 @@ open class ProtocolGenerator(
         }
 
         // pub struct Operation { ... }
-        operationWriter.documentShape(operationShape, model)
+        val fluentBuilderName = FluentClientGenerator.clientOperationFnName(operationShape, symbolProvider)
+        operationWriter.rust(
+            """
+            /// Operation shape for `$operationName`.
+            ///
+            /// This is usually constructed for you using the the fluent builder returned by
+            /// [`$fluentBuilderName`](crate::client::Client::$fluentBuilderName).
+            ///
+            /// See [`crate::client::fluent_builders::$operationName`] for more details about the operation.
+            """
+        )
         Attribute.Derives(setOf(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
         operationWriter.rustBlock("pub struct $operationName") {
             write("_private: ()")
@@ -168,6 +178,7 @@ open class ProtocolGenerator(
         operationWriter.implBlock(operationShape, symbolProvider) {
             builderGenerator.renderConvenienceMethod(this)
 
+            rust("/// Creates a new `$operationName` operation.")
             rustBlock("pub fn new() -> Self") {
                 rust("Self { _private: () }")
             }

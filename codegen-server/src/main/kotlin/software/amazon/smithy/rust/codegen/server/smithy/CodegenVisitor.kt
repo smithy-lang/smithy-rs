@@ -160,12 +160,20 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         serviceShapes.forEach { it.accept(this) }
         codegenDecorator.extras(codegenContext, rustCrate)
         val module = RustMetadata(public = true)
-        rustCrate.withModule(RustModule("error", module)) { writer -> renderSerdeError(writer) }
+        rustCrate.withModule(
+            RustModule(
+                "error",
+                module,
+                documentation = "All error types that operations can respond with."
+            )
+        ) { writer -> renderSerdeError(writer) }
         rustCrate.finalize(
             settings,
             model,
             codegenDecorator.crateManifestCustomizations(codegenContext),
-            codegenDecorator.libRsCustomizations(codegenContext, listOf())
+            codegenDecorator.libRsCustomizations(codegenContext, listOf()),
+            // TODO: Remove `requireDocs` and always require them once the server codegen is far enough along
+            requireDocs = false
         )
         try {
             "cargo fmt".runCommand(

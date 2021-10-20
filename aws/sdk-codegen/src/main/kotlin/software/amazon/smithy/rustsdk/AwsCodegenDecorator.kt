@@ -25,6 +25,7 @@ val DECORATORS = listOf(
     AwsFluentClientDecorator(),
     CrateLicenseDecorator(),
     SharedConfigDecorator(),
+    ServiceConfigDecorator(),
     AwsPresigningDecorator(),
     AwsReadmeDecorator(),
 
