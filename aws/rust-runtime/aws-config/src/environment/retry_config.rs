@@ -89,11 +89,11 @@ mod test {
     }
 
     #[test]
-    fn no_retry_config() {
-        let builder = test_provider(&[]).retry_config_builder().unwrap();
+    fn defaults() {
+        let built = test_provider(&[]).retry_config_builder().unwrap().build();
 
-        assert_eq!(builder.mode, None);
-        assert_eq!(builder.max_attempts, None);
+        assert_eq!(built.mode(), RetryMode::Standard);
+        assert_eq!(built.max_attempts(), 3);
     }
 
     #[test]

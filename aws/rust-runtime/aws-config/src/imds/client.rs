@@ -55,9 +55,9 @@ const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(1);
 /// Client for IMDSv2. This client handles fetching tokens, retrying on failure, and token
 /// caching according to the specified token TTL.
 ///
-/// **NOTE:** This client ONLY supports IMDSv2. It will not fallback to IMDSv1. See
+/// _Note: This client ONLY supports IMDSv2. It will not fallback to IMDSv1. See
 /// [transitioning to IMDSv2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html#instance-metadata-transition-to-version-2)
-/// for more information.
+/// for more information._
 ///
 /// # Client Configuration
 /// The IMDS client can load configuration explicitly, via environment variables, or via

@@ -16,7 +16,12 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 class CrateVersionGenerator : LibRsCustomization() {
     override fun section(section: LibRsSection) = writable {
         when (section) {
-            is LibRsSection.Body -> rust("""pub static PKG_VERSION: &str = env!("CARGO_PKG_VERSION");""")
+            is LibRsSection.Body -> rust(
+                """
+                /// Crate version number.
+                pub static PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+                """
+            )
         }
     }
 }

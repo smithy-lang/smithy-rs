@@ -21,7 +21,7 @@ use tokio::sync::OnceCell;
 
 /// IMDSv2 Credentials Provider
 ///
-/// **Note**: This credentials provider will NOT fallback to the IMDSv1 flow.
+/// _Note: This credentials provider will NOT fallback to the IMDSv1 flow._
 #[derive(Debug)]
 pub struct ImdsCredentialsProvider {
     client: LazyClient,

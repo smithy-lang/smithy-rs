@@ -266,7 +266,7 @@ impl ProviderConfig {
     /// **Warning**: Use of this method will prevent you from taking advantage of the timeout machinery.
     /// Consider `with_tcp_connector`.
     ///
-    /// ## Note: Stability
+    /// # Stability
     /// This method is expected to change to support HTTP configuration
     pub fn with_http_connector(self, connector: DynConnector) -> Self {
         ProviderConfig {

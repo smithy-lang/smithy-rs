@@ -32,7 +32,7 @@
 //! ```
 use crate::primitive::private::Sealed;
 use std::error::Error;
-use std::fmt::{Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::str::FromStr;
 
 /// An error during primitive parsing
@@ -48,6 +48,7 @@ impl Error for PrimitiveParseError {}
 
 /// Sealed trait for custom parsing of primitive types
 pub trait Parse: Sealed {
+    /// Parses a Smithy primitive from a string.
     fn parse_smithy_primitive(input: &str) -> Result<Self, PrimitiveParseError>
     where
         Self: Sized;
@@ -95,28 +96,55 @@ impl Parse for f64 {
 
 /// Primitive Type Encoder
 ///
+/// Encodes primitive types in Smithy's specified format. For floating-point numbers,
+/// Smithy requires that NaN and Infinity values be specially encoded.
+///
 /// This type implements `From<T>` for all Smithy primitive types.
 #[non_exhaustive]
 pub enum Encoder {
+    /// Boolean
     #[non_exhaustive]
     Bool(bool),
+    /// 8-bit signed integer
     #[non_exhaustive]
     I8(i8, itoa::Buffer),
+    /// 16-bit signed integer
     #[non_exhaustive]
     I16(i16, itoa::Buffer),
+    /// 32-bit signed integer
     #[non_exhaustive]
     I32(i32, itoa::Buffer),
+    /// 64-bit signed integer
     #[non_exhaustive]
     I64(i64, itoa::Buffer),
+    /// 64-bit unsigned integer
     #[non_exhaustive]
     U64(u64, itoa::Buffer),
     #[non_exhaustive]
+    /// 32-bit IEEE 754 single-precision floating-point number
     F32(f32, ryu::Buffer),
+    /// 64-bit IEEE 754 double-precision floating-point number
     #[non_exhaustive]
     F64(f64, ryu::Buffer),
 }
 
+impl Debug for Encoder {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Bool(v) => write!(f, "Bool({})", v),
+            Self::I8(v, _) => write!(f, "I8({})", v),
+            Self::I16(v, _) => write!(f, "I16({})", v),
+            Self::I32(v, _) => write!(f, "I32({})", v),
+            Self::I64(v, _) => write!(f, "I64({})", v),
+            Self::U64(v, _) => write!(f, "U64({})", v),
+            Self::F32(v, _) => write!(f, "F32({})", v),
+            Self::F64(v, _) => write!(f, "F64({})", v),
+        }
+    }
+}
+
 impl Encoder {
+    /// Encodes a Smithy primitive as a string.
     pub fn encode(&mut self) -> &str {
         match self {
             Encoder::Bool(true) => "true",
@@ -202,11 +230,18 @@ impl From<f64> for Encoder {
 
 mod float {
     use std::num::ParseFloatError;
-    pub const INFINITY: &str = "Infinity";
-    pub const NEG_INFINITY: &str = "-Infinity";
-    pub const NAN: &str = "NaN";
 
-    pub fn parse_f32(data: &str) -> Result<f32, ParseFloatError> {
+    /// Smithy encoded value for `f64::INFINITY`
+    pub(crate) const INFINITY: &str = "Infinity";
+
+    /// Smithy encoded value for `f64::NEG_INFINITY`
+    pub(crate) const NEG_INFINITY: &str = "-Infinity";
+
+    /// Smithy encoded value for `f64::NAN`
+    pub(crate) const NAN: &str = "NaN";
+
+    /// Parses a Smithy encoded primitive string into an `f32`.
+    pub(crate) fn parse_f32(data: &str) -> Result<f32, ParseFloatError> {
         match data {
             INFINITY => Ok(f32::INFINITY),
             NEG_INFINITY => Ok(f32::NEG_INFINITY),
@@ -215,7 +250,8 @@ mod float {
         }
     }
 
-    pub fn parse_f64(data: &str) -> Result<f64, ParseFloatError> {
+    /// Parses a Smithy encoded primitive string into an `f64`.
+    pub(crate) fn parse_f64(data: &str) -> Result<f64, ParseFloatError> {
         match data {
             INFINITY => Ok(f64::INFINITY),
             NEG_INFINITY => Ok(f64::NEG_INFINITY),

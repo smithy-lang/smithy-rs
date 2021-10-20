@@ -5,8 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
-import java.util.logging.Level
-import java.util.logging.Logger
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
@@ -21,6 +19,8 @@ import software.amazon.smithy.rust.codegen.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
+import java.util.logging.Level
+import java.util.logging.Logger
 
 class RustCodegenPlugin : SmithyBuildPlugin {
     private val logger = Logger.getLogger(javaClass.name)
@@ -36,17 +36,17 @@ class RustCodegenPlugin : SmithyBuildPlugin {
 
     companion object {
         fun baseSymbolProvider(
-                model: Model,
-                serviceShape: ServiceShape,
-                symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig
+            model: Model,
+            serviceShape: ServiceShape,
+            symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig
         ) =
-                SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
-                        .let {
-                            EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model)
-                        }
-                        .let { StreamingShapeSymbolProvider(it, model) }
-                        .let { BaseSymbolMetadataProvider(it) }
-                        .let { StreamingShapeMetadataProvider(it, model) }
-                        .let { RustReservedWordSymbolProvider(it) }
+            SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
+                .let {
+                    EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model)
+                }
+                .let { StreamingShapeSymbolProvider(it, model) }
+                .let { BaseSymbolMetadataProvider(it) }
+                .let { StreamingShapeMetadataProvider(it, model) }
+                .let { RustReservedWordSymbolProvider(it) }
     }
 }
