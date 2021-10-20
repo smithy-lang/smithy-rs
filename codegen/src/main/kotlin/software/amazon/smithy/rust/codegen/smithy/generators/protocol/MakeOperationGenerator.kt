@@ -80,7 +80,7 @@ open class MakeOperationGenerator(
         ) {
             generateRequestBuilderBaseFn(this, shape)
             writeCustomizations(customizations, OperationSection.MutateInput(customizations, "self", "_config"))
-            rust("let properties = smithy_http::property_bag::SharedPropertyBag::new();")
+            rust("let properties = aws_smithy_http::property_bag::SharedPropertyBag::new();")
             rust("let request = request_builder_base(&self)?;")
             withBlock("let body =", ";") {
                 bodyGenerator.generateBody(this, "self", shape)

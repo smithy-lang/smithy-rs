@@ -45,8 +45,8 @@ class EventStreamUnmarshallerGeneratorTest {
         test.project.lib { writer ->
             writer.rust(
                 """
-                use smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
-                use smithy_types::{Blob, Instant};
+                use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
+                use aws_smithy_types::{Blob, Instant};
                 use crate::error::*;
                 use crate::model::*;
 

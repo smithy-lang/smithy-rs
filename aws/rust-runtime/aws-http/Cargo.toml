@@ -8,18 +8,18 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
+aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-types = { path = "../aws-types" }
 http = "0.2.3"
 lazy_static = "1"
-smithy-http = { path = "../../../rust-runtime/smithy-http" }
-smithy-types = { path = "../../../rust-runtime/smithy-types" }
 thiserror = "1"
 tracing = "0.1"
 
 [dev-dependencies]
 async-trait = "0.1.50"
+aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
 env_logger = "*"
 http = "0.2.3"
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "test-util"] }
 tracing-subscriber = { version = "0.2.16", features = ["fmt"] }
-smithy-async = { path = "../../../rust-runtime/smithy-async", features = ["rt-tokio"] }

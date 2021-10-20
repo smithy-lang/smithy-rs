@@ -38,7 +38,7 @@ use crate::profile::credentials::exec::named::NamedProviderFactory;
 use crate::profile::credentials::exec::{ClientConfiguration, ProviderChain};
 use crate::profile::parser::ProfileParseError;
 use crate::provider_config::ProviderConfig;
-use smithy_client::erase::DynConnector;
+use aws_smithy_client::erase::DynConnector;
 
 mod exec;
 mod repr;
@@ -158,11 +158,12 @@ impl ProfileFileCredentialsProvider {
         let inner_provider = profile.map_err(|err| match err {
             ProfileFileError::NoProfilesDefined
             | ProfileFileError::ProfileDidNotContainCredentials { .. } => {
-                CredentialsError::CredentialsNotLoaded
+                CredentialsError::not_loaded(err)
             }
-            _ => CredentialsError::InvalidConfiguration(
-                format!("ProfileFile provider could not be built: {}", &err).into(),
-            ),
+            _ => CredentialsError::invalid_configuration(format!(
+                "ProfileFile provider could not be built: {}",
+                &err
+            )),
         })?;
         let mut creds = match inner_provider
             .base()
@@ -176,7 +177,7 @@ impl ProfileFileCredentialsProvider {
             }
             Err(e) => {
                 tracing::warn!(error = %e, "failed to load base credentials");
-                return Err(CredentialsError::ProviderError(e.into()));
+                return Err(CredentialsError::provider_error(e));
             }
         };
         for provider in inner_provider.chain().iter() {
@@ -191,7 +192,7 @@ impl ProfileFileCredentialsProvider {
                 }
                 Err(e) => {
                     tracing::warn!(provider = ?provider, "failed to load assume role credentials");
-                    return Err(CredentialsError::ProviderError(e.into()));
+                    return Err(CredentialsError::provider_error(e));
                 }
             }
         }

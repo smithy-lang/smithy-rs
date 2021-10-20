@@ -278,12 +278,12 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                 ##[derive(Debug)]
                 pub enum Error {
                     Generic(std::borrow::Cow<'static, str>),
-                    DeserializeJson(smithy_json::deserialize::Error),
-                    DeserializeHeader(smithy_http::header::ParseError),
+                    DeserializeJson(aws_smithy_json::deserialize::Error),
+                    DeserializeHeader(aws_smithy_http::header::ParseError),
                     DeserializeLabel(std::string::String),
-                    BuildInput(smithy_http::operation::BuildError),
+                    BuildInput(aws_smithy_http::operation::BuildError),
                     BuildResponse(http::Error),
-                    SmithyType(smithy_types::Error),
+                    SmithyType(aws_smithy_types::Error),
                 }
 
                 impl Error {
@@ -293,26 +293,26 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                     }
                 }
 
-                impl From<smithy_json::deserialize::Error> for Error {
-                    fn from(err: smithy_json::deserialize::Error) -> Self {
+                impl From<aws_smithy_json::deserialize::Error> for Error {
+                    fn from(err: aws_smithy_json::deserialize::Error) -> Self {
                         Self::DeserializeJson(err)
                     }
                 }
 
-                impl From<smithy_http::header::ParseError> for Error {
-                    fn from(err: smithy_http::header::ParseError) -> Self {
+                impl From<aws_smithy_http::header::ParseError> for Error {
+                    fn from(err: aws_smithy_http::header::ParseError) -> Self {
                         Self::DeserializeHeader(err)
                     }
                 }
 
-                impl From<smithy_http::operation::BuildError> for Error {
-                    fn from(err: smithy_http::operation::BuildError) -> Self {
+                impl From<aws_smithy_http::operation::BuildError> for Error {
+                    fn from(err: aws_smithy_http::operation::BuildError) -> Self {
                         Self::BuildInput(err)
                     }
                 }
 
-                impl From<smithy_types::Error> for Error {
-                    fn from(err: smithy_types::Error) -> Self {
+                impl From<aws_smithy_types::Error> for Error {
+                    fn from(err: aws_smithy_types::Error) -> Self {
                         Self::SmithyType(err)
                     }
                 }
