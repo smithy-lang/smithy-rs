@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use aws_smithy_http::middleware::AsyncMapRequest;
+use aws_smithy_http::operation::Request;
+use aws_smithy_http::property_bag::PropertyBag;
 use aws_types::credentials::{CredentialsError, ProvideCredentials, SharedCredentialsProvider};
-use smithy_http::middleware::AsyncMapRequest;
-use smithy_http::operation::Request;
-use smithy_http::property_bag::PropertyBag;
 use std::future::Future;
 use std::pin::Pin;
 
@@ -17,7 +17,7 @@ pub fn set_provider(bag: &mut PropertyBag, provider: SharedCredentialsProvider) 
 /// Middleware stage that loads credentials from a [CredentialsProvider](aws_types::credentials::ProvideCredentials)
 /// and places them in the property bag of the request.
 ///
-/// [CredentialsStage] implements [`AsyncMapRequest`](smithy_http::middleware::AsyncMapRequest), and:
+/// [CredentialsStage] implements [`AsyncMapRequest`](aws_smithy_http::middleware::AsyncMapRequest), and:
 /// 1. Retrieves a `CredentialsProvider` from the property bag.
 /// 2. Calls the credential provider's `provide_credentials` and awaits its result.
 /// 3. Places returned `Credentials` into the property bad to drive downstream signing middleware.
@@ -111,13 +111,13 @@ impl AsyncMapRequest for CredentialsStage {
 mod tests {
     use super::set_provider;
     use super::CredentialsStage;
+    use aws_smithy_http::body::SdkBody;
+    use aws_smithy_http::middleware::AsyncMapRequest;
+    use aws_smithy_http::operation;
     use aws_types::credentials::{
         future, CredentialsError, ProvideCredentials, SharedCredentialsProvider,
     };
     use aws_types::Credentials;
-    use smithy_http::body::SdkBody;
-    use smithy_http::middleware::AsyncMapRequest;
-    use smithy_http::operation;
 
     #[derive(Debug)]
     struct Unhandled;

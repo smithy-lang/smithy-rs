@@ -91,7 +91,7 @@ class SigV4SigningConfig(
         "SharedPropertyBag" to RuntimeType(
             "SharedPropertyBag",
             CargoDependency.SmithyHttp(runtimeConfig),
-            "smithy_http::property_bag"
+            "aws_smithy_http::property_bag"
         )
     )
 

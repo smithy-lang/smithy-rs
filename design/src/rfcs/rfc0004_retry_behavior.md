@@ -5,13 +5,13 @@ RFC: Retry Behavior
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
-It is not currently possible for users of the SDK to configure a client's maximum number of retry attempts. This RFC establishes a method for users to set the number of retries to attempt when calling a service and would allow users to disable retries entirely. This RFC would introduce breaking changes to the `retry` module of the `smithy-client` crate.
+It is not currently possible for users of the SDK to configure a client's maximum number of retry attempts. This RFC establishes a method for users to set the number of retries to attempt when calling a service and would allow users to disable retries entirely. This RFC would introduce breaking changes to the `retry` module of the `aws-smithy-client` crate.
 
 Terminology
 -----------
 
-- **Smithy Client**: A `smithy_client::Client<C, M, R>` struct that is responsible for gluing together
-  the connector, middleware, and retry policy. This is not generated and lives in the `smithy-client` crate.
+- **Smithy Client**: A `aws_smithy_client::Client<C, M, R>` struct that is responsible for gluing together
+  the connector, middleware, and retry policy. This is not generated and lives in the `aws-smithy-client` crate.
 - **Fluent Client**: A code-generated `Client<C, M, R>` that has methods for each service operation on it.
   A fluent builder is generated alongside it to make construction easier.
 - **AWS Client**: A specialized Fluent Client that defaults to using a `DynConnector`, `AwsMiddleware`,
@@ -177,8 +177,8 @@ Changes checklist
   - Based on [RegionDecorator.kt](https://github.com/awslabs/smithy-rs/blob/main/aws/sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/RegionDecorator.kt)
   - This decorator will live in the `codegen` project because it has relevance outside of the SDK
 - [ ] **Breaking changes:**
-  - [ ] Rename `smithy_client::retry::Config` to `StandardRetryConfig`
-  - [ ] Rename `smithy_client::retry::Config::with_max_retries` method to `with_max_attempts` in order to follow AWS convention
+  - [ ] Rename `aws_smithy_client::retry::Config` to `StandardRetryConfig`
+  - [ ] Rename `aws_smithy_client::retry::Config::with_max_retries` method to `with_max_attempts` in order to follow AWS convention
   - [ ] Passing 0 to `with_max_attempts` will panic with a helpful, descriptive error message
 - [ ] Create non-exhaustive `aws_types::retry_config::RetryConfig` enum wrapping structs that represent specific retry behaviors
   - [ ] A `NoRetry` variant that disables retries. Doesn't wrap a struct since it doesn't need to contain any data

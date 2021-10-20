@@ -141,7 +141,7 @@ impl Error for CredentialsError {
 pub type Result = std::result::Result<Credentials, CredentialsError>;
 
 pub mod future {
-    use smithy_async::future::now_or_later::NowOrLater;
+    use aws_smithy_async::future::now_or_later::NowOrLater;
     use std::future::Future;
     use std::pin::Pin;
     use std::task::{Context, Poll};
