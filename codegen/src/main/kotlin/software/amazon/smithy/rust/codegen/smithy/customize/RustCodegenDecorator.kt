@@ -84,6 +84,8 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
     override val order: Byte
         get() = 0
 
+    fun withDecorator(decorator: RustCodegenDecorator) = CombinedCodegenDecorator(orderedDecorators + decorator)
+
     override fun configCustomizations(
         codegenContext: CodegenContext,
         baseCustomizations: List<ConfigCustomization>
@@ -145,7 +147,7 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
 
     companion object {
         private val logger = Logger.getLogger("RustCodegenSPILoader")
-        fun fromClasspath(context: PluginContext): RustCodegenDecorator {
+        fun fromClasspath(context: PluginContext): CombinedCodegenDecorator {
             val decorators = ServiceLoader.load(
                 RustCodegenDecorator::class.java,
                 context.pluginClassLoader.orElse(RustCodegenDecorator::class.java.classLoader)

@@ -611,7 +611,7 @@ class RestJson1HttpDeserializerGenerator(
             instantiator.render(this, inputShape, testCase.params)
             write(";")
             rust(
-                """let op = expected.make_operation(&config).expect("failed to build operation");"""
+                """let op = expected.make_operation(&config).await.expect("failed to build operation");"""
             )
             rust("let (request, parts) = op.into_request_response().0.into_parts();")
             rustTemplate(
