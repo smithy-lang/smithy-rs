@@ -9,7 +9,12 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
@@ -96,3 +101,12 @@ fun StructureShape.renderWithModelBuilder(model: Model, symbolProvider: RustSymb
         modelBuilder.renderConvenienceMethod(this)
     }
 }
+
+private val Tokio = CargoDependency(
+    "tokio",
+    CratesIo("1"),
+    features = setOf("macros", "test-util", "rt"),
+    scope = DependencyScope.Dev
+)
+
+val TokioTest = Attribute.Custom("tokio::test", listOf(Tokio.asType()))
