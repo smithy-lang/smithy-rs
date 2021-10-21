@@ -192,6 +192,7 @@ data class CargoDependency(
         val Axum: CargoDependency = CargoDependency("axum", CratesIo("0.3"))
         val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1"))
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.1"))
+        val DeriveBuilder = CargoDependency("derive_builder", CratesIo("0.10"))
         val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("1"))
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
         val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4"))
@@ -213,7 +214,6 @@ data class CargoDependency(
         fun SmithyEventStream(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("eventstream")
         fun SmithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http")
         fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server")
-        fun SmithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-tower")
         fun SmithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
             runtimeConfig.runtimeCrate("protocol-test").copy(scope = DependencyScope.Dev)
         fun smithyJson(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("json")
