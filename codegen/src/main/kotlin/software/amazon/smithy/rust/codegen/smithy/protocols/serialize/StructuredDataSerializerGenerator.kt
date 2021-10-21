@@ -49,7 +49,7 @@ interface StructuredDataSerializerGenerator {
      * }
      * ```
      */
-    fun serverOutputSerializer(operationShape: OperationShape): RuntimeType?
+    fun serverOutputSerializer(operationShape: OperationShape): RuntimeType
 
     /**
      * Generate a serializer for a server operation error structure
@@ -59,5 +59,5 @@ interface StructuredDataSerializerGenerator {
      * }
      * ```
      */
-    fun serverErrorSerializer(shape: ShapeId): RuntimeType?
+    fun serverErrorSerializer(shape: ShapeId): RuntimeType
 }

@@ -83,14 +83,14 @@ class JsonParserGenerator(
     /**
      * Reusable structure parser implementation that can be used to generate parsing code for
      * operation, error and structure shapes.
+     * We still generate the parser symbol even if there are no included members because the server
+     * generation requires parsers for all input structures.
      */
-    private fun structureParser(fnName: String, structureShape: StructureShape, includedMembers: List<MemberShape>): RuntimeType? {
-        if (includedMembers.isEmpty()) {
-            return null
-        }
+    private fun structureParser(fnName: String, structureShape: StructureShape, includedMembers: List<MemberShape>): RuntimeType {
+        val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
         return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
-                "pub fn $fnName(value: &[u8], mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
+                "pub fn $fnName(value: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
                 "Builder" to structureShape.builderSymbol(symbolProvider),
                 *codegenScope
             ) {
@@ -138,12 +138,18 @@ class JsonParserGenerator(
     override fun operationParser(operationShape: OperationShape): RuntimeType? {
         // Don't generate an operation JSON deserializer if there is no JSON body
         val httpDocumentMembers = httpBindingResolver.responseMembers(operationShape, HttpLocation.DOCUMENT)
+        if (httpDocumentMembers.isEmpty()) {
+            return null
+        }
         val outputShape = operationShape.outputShape(model)
         val fnName = symbolProvider.deserializeFunctionName(operationShape)
         return structureParser(fnName, outputShape, httpDocumentMembers)
     }
 
     override fun errorParser(errorShape: StructureShape): RuntimeType? {
+        if (errorShape.members().isEmpty()) {
+            return null
+        }
         val fnName = symbolProvider.deserializeFunctionName(errorShape) + "_json_err"
         return structureParser(fnName, errorShape, errorShape.members().toList())
     }
@@ -184,7 +190,7 @@ class JsonParserGenerator(
         )
     }
 
-    override fun serverInputParser(operationShape: OperationShape): RuntimeType? {
+    override fun serverInputParser(operationShape: OperationShape): RuntimeType {
         val inputShape = operationShape.inputShape(model)
         val includedMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
         val fnName = symbolProvider.deserializeFunctionName(inputShape)

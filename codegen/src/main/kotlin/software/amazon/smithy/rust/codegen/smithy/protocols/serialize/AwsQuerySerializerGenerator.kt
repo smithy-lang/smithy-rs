@@ -22,11 +22,11 @@ class AwsQuerySerializerGenerator(codegenContext: CodegenContext) : QuerySeriali
 
     override fun MemberShape.isFlattened(): Boolean = getTrait<XmlFlattenedTrait>() != null
 
-    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType? {
+    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType {
         TODO("Not yet implemented")
     }
 
-    override fun serverErrorSerializer(shape: ShapeId): RuntimeType? {
+    override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
         TODO("Not yet implemented")
     }
 }
