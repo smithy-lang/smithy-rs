@@ -177,11 +177,11 @@ class XmlBindingTraitSerializerGenerator(
         }
     }
 
-    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType? {
+    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType {
         TODO("Not yet implemented")
     }
 
-    override fun serverErrorSerializer(shape: ShapeId): RuntimeType? {
+    override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
         TODO("Not yet implemented")
     }
 
