@@ -61,7 +61,6 @@ jobs:
     - name: mk-generated
       run: ./tools/mk-generated.sh
     - name: push generated branch
-      if: ${{ secrets.GITHUB_TOKEN }}
       run: |
         git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
         git push -f origin "$(git rev-parse --abbrev-ref HEAD)"
