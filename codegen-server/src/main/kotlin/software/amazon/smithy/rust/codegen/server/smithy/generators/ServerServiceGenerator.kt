@@ -53,7 +53,5 @@ class ServerServiceGenerator(
                     .render(writer)
             }
         }
-
-        TopLevelErrorGenerator(context, operations).render(rustCrate)
     }
 }
