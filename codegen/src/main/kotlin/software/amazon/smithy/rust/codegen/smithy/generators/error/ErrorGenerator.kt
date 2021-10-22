@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators.error
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RetryableTrait
@@ -60,7 +59,6 @@ fun StructureShape.modeledRetryKind(errorTrait: ErrorTrait): ErrorKind? {
 }
 
 class ErrorGenerator(
-    val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape,
