@@ -79,7 +79,6 @@ class RestJson1HttpSerializerGenerator(
     fun render(writer: RustWriter, operationShape: OperationShape) {
         renderResponseSerializer(writer, operationShape)
         renderErrorSerializer(writer, operationShape)
-        // renderTests(writer, operationShape)
     }
 
     private fun renderResponseSerializer(writer: RustWriter, operationShape: OperationShape) {
