@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.generators.protocol
+package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.knowledge.OperationIndex
@@ -21,10 +21,11 @@ import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -33,7 +34,6 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.util.getTrait
@@ -46,11 +46,10 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import java.util.logging.Logger
 
 data class ProtocolSupport(
-    /* Client support */
-    val requestSerialization: Boolean,
-    val requestBodySerialization: Boolean,
-    val responseDeserialization: Boolean,
-    val errorDeserialization: Boolean
+    val requestDeserialization: Boolean,
+    val requestBodyDeserialization: Boolean,
+    val responseSerialization: Boolean,
+    val errorSerialization: Boolean
 )
 
 /**
@@ -68,6 +67,7 @@ class ProtocolTestGenerator(
     private val outputShape = operationShape.outputShape(codegenContext.model)
     private val operationSymbol = codegenContext.symbolProvider.toSymbol(operationShape)
     private val operationIndex = OperationIndex.of(codegenContext.model)
+    private val operationMod = RuntimeType("operation", null, "crate")
 
     private val instantiator = with(codegenContext) {
         Instantiator(symbolProvider, model, runtimeConfig)
@@ -76,16 +76,17 @@ class ProtocolTestGenerator(
     sealed class TestCase {
         abstract val testCase: HttpMessageTestCase
 
-        data class RequestTest(override val testCase: HttpRequestTestCase) : TestCase()
+        data class RequestTest(override val testCase: HttpRequestTestCase, val targetShape: StructureShape) :
+            TestCase()
         data class ResponseTest(override val testCase: HttpResponseTestCase, val targetShape: StructureShape) :
             TestCase()
     }
 
     fun render() {
         val requestTests = operationShape.getTrait<HttpRequestTestsTrait>()
-            ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.RequestTest(it) }
+            ?.getTestCasesFor(AppliesTo.SERVER).orEmpty().map { TestCase.RequestTest(it, inputShape) }
         val responseTests = operationShape.getTrait<HttpResponseTestsTrait>()
-            ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.ResponseTest(it, outputShape) }
+            ?.getTestCasesFor(AppliesTo.SERVER).orEmpty().map { TestCase.ResponseTest(it, outputShape) }
 
         val errorTests = operationIndex.getErrors(operationShape).flatMap { error ->
             val testCases = error.getTrait<HttpResponseTestsTrait>()?.testCases.orEmpty()
@@ -94,7 +95,7 @@ class ProtocolTestGenerator(
         val allTests: List<TestCase> = (requestTests + responseTests + errorTests).filterMatching()
         if (allTests.isNotEmpty()) {
             val operationName = operationSymbol.name
-            val testModuleName = "${operationName.toSnakeCase()}_request_test"
+            val testModuleName = "server_${operationName.toSnakeCase()}_test"
             val moduleMeta = RustMetadata(
                 public = false,
                 additionalAttributes = listOf(
@@ -112,7 +113,7 @@ class ProtocolTestGenerator(
         allTests.forEach {
             renderTestCaseBlock(it.testCase, this) {
                 when (it) {
-                    is TestCase.RequestTest -> this.renderHttpRequestTestCase(it.testCase)
+                    is TestCase.RequestTest -> this.renderHttpRequestTestCase(it.testCase, it.targetShape)
                     is TestCase.ResponseTest -> this.renderHttpResponseTestCase(it.testCase, it.targetShape)
                 }
             }
@@ -144,7 +145,14 @@ class ProtocolTestGenerator(
         }
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.setNewlinePrefix("")
-        TokioTest.render(testModuleWriter)
+        testModuleWriter.writeWithNoFormatting("#[tokio::test]")
+        val Tokio = CargoDependency(
+            "tokio",
+            CratesIo("1"),
+            features = setOf("macros", "test-util", "rt"),
+            scope = DependencyScope.Dev
+        )
+        testModuleWriter.addDependency(Tokio)
         val action = when (testCase) {
             is HttpResponseTestCase -> Action.Response
             is HttpRequestTestCase -> Action.Request
@@ -163,9 +171,10 @@ class ProtocolTestGenerator(
     }
 
     private fun RustWriter.renderHttpRequestTestCase(
-        httpRequestTestCase: HttpRequestTestCase
+        httpRequestTestCase: HttpRequestTestCase,
+        inputShape: StructureShape,
     ) {
-        if (!protocolSupport.requestSerialization) {
+        if (!protocolSupport.requestDeserialization) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
         }
@@ -176,11 +185,11 @@ class ProtocolTestGenerator(
             """let config = #T::Config::builder()$customToken.build();""",
             RuntimeType.Config
         )
-        writeInline("let input =")
+        writeInline("let expected =")
         instantiator.render(this, inputShape, httpRequestTestCase.params)
-
-        rust(""".make_operation(&config).await.expect("operation failed to build");""")
-        rust("let (http_request, parts) = input.into_request_response().0.into_parts();")
+        write(";")
+        rust("""let op = expected.make_operation(&config).await.expect("operation failed to build");""")
+        rust("let (http_request, parts) = op.into_request_response().0.into_parts();")
         with(httpRequestTestCase) {
             host.orNull()?.also { host ->
                 val withScheme = "http://$host"
@@ -209,10 +218,11 @@ class ProtocolTestGenerator(
         checkHeaders(this, httpRequestTestCase.headers)
         checkForbidHeaders(this, httpRequestTestCase.forbidHeaders)
         checkRequiredHeaders(this, httpRequestTestCase.requireHeaders)
-        if (protocolSupport.requestBodySerialization) {
+        if (protocolSupport.requestBodyDeserialization) {
             // "If no request body is defined, then no assertions are made about the body of the message."
             httpRequestTestCase.body.orNull()?.also { body ->
-                checkBody(this, body, httpRequestTestCase.bodyMediaType.orNull())
+                val fnName = "deser_${operationShape.id.name.toSnakeCase()}_request"
+                checkBody(this, fnName, body)
             }
         }
 
@@ -241,8 +251,8 @@ class ProtocolTestGenerator(
         testCase: HttpResponseTestCase,
         expectedShape: StructureShape
     ) {
-        if (!protocolSupport.responseDeserialization || (
-            !protocolSupport.errorDeserialization && expectedShape.hasTrait(
+        if (!protocolSupport.responseSerialization || (
+            !protocolSupport.errorSerialization && expectedShape.hasTrait(
                     ErrorTrait::class.java
                 )
             )
@@ -250,38 +260,24 @@ class ProtocolTestGenerator(
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
         }
+        val fnName = if (expectedShape.hasTrait<ErrorTrait>())
+            "serialize_${operationShape.id.name.toSnakeCase()}_error"
+        else
+            "serialize_${operationShape.id.name.toSnakeCase()}_response"
         writeInline("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        write("let http_response = #T::new()", RuntimeType.HttpResponseBuilder)
-        testCase.headers.forEach { (key, value) ->
-            writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
-        }
-        rust(
-            """
-                .status(${testCase.code})
-                .body(#T::from(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"}))
-                .unwrap();
-            """,
-            RuntimeType.sdkBody(runtimeConfig = codegenContext.runtimeConfig)
-        )
         write(
-            "let mut op_response = #T::new(http_response);",
-            RuntimeType.operationModule(codegenContext.runtimeConfig).member("Response")
+            """let http_response = #T(&expected_output).expect("failed to serialize response");""",
+            operationMod.member(fnName)
         )
         rustTemplate(
             """
             use #{parse_http_response};
             let parser = #{op}::new();
-            let parsed = parser.parse_unloaded(&mut op_response);
-            let parsed = parsed.unwrap_or_else(|| {
-                let (http_response, _) = op_response.into_parts();
-                let http_response = http_response.map(|body|#{bytes}::copy_from_slice(body.bytes().unwrap()));
-                <#{op} as #{parse_http_response}>::parse_loaded(&parser, &http_response)
-            });
+            let parsed = parser.parse_loaded(&http_response);
         """,
             "op" to operationSymbol,
-            "bytes" to RuntimeType.Bytes,
             "parse_http_response" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType()
                 .member("response::ParseHttpResponse"),
         )
@@ -335,22 +331,20 @@ class ProtocolTestGenerator(
         basicCheck(forbidHeaders, rustWriter, "forbidden_headers", "forbid_headers")
     }
 
-    private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {
-        rustWriter.write("""let body = http_request.body().bytes().expect("body should be strict");""")
+    private fun checkBody(rustWriter: RustWriter, fnName: String, body: String) {
+        rustWriter.write(
+            """let http_request = http_request.map(|body| #T::from(body.bytes().unwrap().to_vec()));""",
+            RuntimeType.Bytes
+        )
+        rustWriter.write(
+            """let body = #T(&http_request).expect("failed to parse request");""",
+            operationMod.member(fnName)
+        )
         if (body == "") {
             rustWriter.write("// No body")
             rustWriter.write("assert_eq!(std::str::from_utf8(body).unwrap(), ${"".dq()});")
         } else {
-            // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
-            assertOk(rustWriter) {
-                rustWriter.write(
-                    "#T(&body, ${
-                    rustWriter.escape(body).dq()
-                    }, #T::from(${(mediaType ?: "unknown").dq()}))",
-                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_body"),
-                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "MediaType")
-                )
-            }
+            rustWriter.write("assert_eq!(expected, body);")
         }
     }
 
