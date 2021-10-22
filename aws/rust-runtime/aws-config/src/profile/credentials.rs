@@ -38,7 +38,7 @@ use crate::profile::credentials::exec::named::NamedProviderFactory;
 use crate::profile::credentials::exec::{ClientConfiguration, ProviderChain};
 use crate::profile::parser::ProfileParseError;
 use crate::provider_config::ProviderConfig;
-use smithy_client::erase::DynConnector;
+use aws_smithy_client::erase::DynConnector;
 
 mod exec;
 mod repr;
@@ -67,9 +67,9 @@ impl ProvideCredentials for ProfileFileCredentialsProvider {
 /// let provider = ProfileFileCredentialsProvider::builder().build();
 /// ```
 ///
-/// **Note:** Profile providers to not implement any caching. They will reload and reparse the profile
+/// _Note: Profile providers to not implement any caching. They will reload and reparse the profile
 /// from the file system when called. See [lazy_caching](crate::meta::credentials::LazyCachingCredentialsProvider) for
-/// more information about caching.
+/// more information about caching._
 ///
 /// This provider supports several different credentials formats:
 /// ### Credentials defined explicitly within the file

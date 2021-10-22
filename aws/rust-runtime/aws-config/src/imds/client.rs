@@ -15,22 +15,22 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent, UserAgentStage};
+use aws_smithy_client::{erase::DynConnector, timeout, SdkSuccess};
+use aws_smithy_client::{retry, SdkError};
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::endpoint::Endpoint;
+use aws_smithy_http::operation;
+use aws_smithy_http::operation::{Metadata, Operation};
+use aws_smithy_http::response::ParseStrictResponse;
+use aws_smithy_http::retry::ClassifyResponse;
+use aws_smithy_http_tower::map_request::{
+    AsyncMapRequestLayer, AsyncMapRequestService, MapRequestLayer, MapRequestService,
+};
+use aws_smithy_types::retry::{ErrorKind, RetryKind};
 use aws_types::os_shim_internal::{Env, Fs};
 use bytes::Bytes;
 use http::uri::InvalidUri;
 use http::{Response, Uri};
-use smithy_client::{erase::DynConnector, timeout, SdkSuccess};
-use smithy_client::{retry, SdkError};
-use smithy_http::body::SdkBody;
-use smithy_http::endpoint::Endpoint;
-use smithy_http::operation;
-use smithy_http::operation::{Metadata, Operation};
-use smithy_http::response::ParseStrictResponse;
-use smithy_http::retry::ClassifyResponse;
-use smithy_http_tower::map_request::{
-    AsyncMapRequestLayer, AsyncMapRequestService, MapRequestLayer, MapRequestService,
-};
-use smithy_types::retry::{ErrorKind, RetryKind};
 
 use crate::connector::expect_connector;
 use crate::imds::client::token::TokenMiddleware;
@@ -55,9 +55,9 @@ const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(1);
 /// Client for IMDSv2. This client handles fetching tokens, retrying on failure, and token
 /// caching according to the specified token TTL.
 ///
-/// **NOTE:** This client ONLY supports IMDSv2. It will not fallback to IMDSv1. See
+/// _Note: This client ONLY supports IMDSv2. It will not fallback to IMDSv1. See
 /// [transitioning to IMDSv2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html#instance-metadata-transition-to-version-2)
-/// for more information.
+/// for more information._
 ///
 /// # Client Configuration
 /// The IMDS client can load configuration explicitly, via environment variables, or via
@@ -113,7 +113,7 @@ const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(1);
 #[derive(Debug)]
 pub struct Client {
     endpoint: Endpoint,
-    inner: smithy_client::Client<DynConnector, ImdsMiddleware>,
+    inner: aws_smithy_client::Client<DynConnector, ImdsMiddleware>,
 }
 
 /// Client where build is sync, but usage is async
@@ -200,7 +200,7 @@ impl Client {
         })
     }
 
-    /// Creates a smithy_http Operation to for `path`
+    /// Creates a aws_smithy_http Operation to for `path`
     /// - Convert the path to a URI
     /// - Set the base endpoint on the URI
     /// - Add a user agent
@@ -550,7 +550,7 @@ impl Builder {
             retry_config.clone(),
         );
         let middleware = ImdsMiddleware { token_loader };
-        let inner_client = smithy_client::Builder::new()
+        let inner_client = aws_smithy_client::Builder::new()
             .connector(connector.clone())
             .middleware(middleware)
             .build()
@@ -715,11 +715,11 @@ pub(crate) mod test {
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     use aws_hyper::DynConnector;
+    use aws_smithy_client::test_connection::{capture_request, TestConnection};
+    use aws_smithy_http::body::SdkBody;
     use aws_types::os_shim_internal::{Env, Fs, ManualTimeSource, TimeSource};
     use http::Uri;
     use serde::Deserialize;
-    use smithy_client::test_connection::{capture_request, TestConnection};
-    use smithy_http::body::SdkBody;
     use tracing_test::traced_test;
 
     use crate::imds::client::{Client, EndpointMode, ImdsError};

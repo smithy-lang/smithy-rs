@@ -77,7 +77,7 @@ class EnumGeneratorTest {
                 """
                 /// It has some docs that #need to be escaped
                 ///
-                /// **NOTE:** `::Unknown` has been renamed to `::UnknownValue`.
+                /// _Note: `::Unknown` has been renamed to `::UnknownValue`._
                 UnknownValue,
                 """.trimIndent()
         }
@@ -268,7 +268,7 @@ class EnumGeneratorTest {
                 """
                     /// Some top-level documentation.
                     ///
-                    /// **NOTE:** `SomeEnum::Unknown` has been renamed to `::UnknownValue`.
+                    /// _Note: `SomeEnum::Unknown` has been renamed to `::UnknownValue`._
                 """.trimIndent()
         }
 

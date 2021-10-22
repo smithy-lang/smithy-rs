@@ -10,10 +10,10 @@
 //! 2. [AWS profile](#aws-profile-configuration) defined in `~/.aws/config`
 //! 3. Static configuration via [`static_configuration`](Builder::static_configuration)
 //!
-//! **Note:** [WebIdentityTokenCredentialsProvider] is part of the [default provider chain](crate::default_provider).
+//! _Note: [WebIdentityTokenCredentialsProvider] is part of the [default provider chain](crate::default_provider).
 //! Unless you need specific behavior or configuration overrides, it is recommended to use the
 //! default chain instead of using this provider directly. This client should be considered a "low level"
-//! client as it does not include caching or profile-file resolution when used in isolation.
+//! client as it does not include caching or profile-file resolution when used in isolation._
 //!
 //! ## Environment Variable Configuration
 //! WebIdentityTokenCredentialProvider will load the following environment variables:
@@ -22,8 +22,8 @@
 //! - `AWS_IAM_ROLE_SESSION_NAME`: **optional**: Session name to use when assuming the role
 //!
 //! ## AWS Profile Configuration
-//! **Note:** Configuration of the web identity token provider via a shared profile is only supported
-//! when using the [`ProfileFileCredentialsProvider`](crate::profile::credentials).
+//! _Note: Configuration of the web identity token provider via a shared profile is only supported
+//! when using the [`ProfileFileCredentialsProvider`](crate::profile::credentials)._
 //!
 //! Web identity token credentials can be loaded from `~/.aws/config` in two ways:
 //! 1. Directly:
@@ -247,6 +247,7 @@ async fn load_credentials(
         .build()
         .expect("valid operation")
         .make_operation(&conf)
+        .await
         .expect("valid operation");
     let resp = client.call(operation).await.map_err(|sdk_error| {
         tracing::warn!(error = ?sdk_error, "sts returned an error assuming web identity role");

@@ -6,13 +6,13 @@
 use aws_http::user_agent::AwsUserAgent;
 use aws_hyper::{Client, SdkError};
 use aws_sdk_kms as kms;
+use aws_smithy_client::test_connection::TestConnection;
+use aws_smithy_http::body::SdkBody;
 use http::header::AUTHORIZATION;
 use http::Uri;
 use kms::operation::GenerateRandom;
 use kms::Credentials;
 use kms::{Config, Region};
-use smithy_client::test_connection::TestConnection;
-use smithy_http::body::SdkBody;
 use std::time::{Duration, UNIX_EPOCH};
 
 // TODO: having the full HTTP requests right in the code is a bit gross, consider something
@@ -84,6 +84,7 @@ async fn generate_random() {
         .build()
         .unwrap()
         .make_operation(&conf)
+        .await
         .expect("valid operation");
     op.properties_mut()
         .insert(UNIX_EPOCH + Duration::from_secs(1614952162));
@@ -126,6 +127,7 @@ async fn generate_random_malformed_response() {
         .build()
         .unwrap()
         .make_operation(&conf)
+        .await
         .expect("valid operation");
     client.call(op).await.expect_err("response was malformed");
 }
@@ -171,6 +173,7 @@ async fn generate_random_keystore_not_found() {
         .build()
         .unwrap()
         .make_operation(&conf)
+        .await
         .expect("valid operation");
 
     op.properties_mut()

@@ -12,8 +12,8 @@ publish = false
 repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
+aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-types = { path = "../../rust-runtime/aws-types" }
 http = "0.2.4"
-smithy-http = { path = "../../../rust-runtime/smithy-http" }
-smithy-types = { path = "../../../rust-runtime/smithy-types" }
 tower = { version = "0.4", default-features = false }

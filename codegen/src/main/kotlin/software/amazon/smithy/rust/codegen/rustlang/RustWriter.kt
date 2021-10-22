@@ -178,12 +178,18 @@ fun <T : CodeWriter> T.rustBlock(
 /**
  * Generate a RustDoc comment for [shape]
  */
-fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model): T {
+fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model, autoSuppressMissingDocs: Boolean = true): T {
     // TODO: support additional Smithy documentation traits like @example
     val docTrait = shape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
 
-    docTrait?.value?.also {
-        this.docs(escape(it))
+    when (docTrait?.value?.isNotBlank()) {
+        // If docs are modeled, then place them on the code generated shape
+        true -> this.docs(escape(docTrait.value))
+        // Otherwise, suppress the missing docs lint for this shape since
+        // the lack of documentation is a modeling issue rather than a codegen issue.
+        else -> if (autoSuppressMissingDocs) {
+            rust("##[allow(missing_docs)] // documentation missing in model")
+        }
     }
 
     return this
@@ -202,9 +208,6 @@ fun <T : CodeWriter> T.docs(text: String, vararg args: Any, newlinePrefix: Strin
     setNewlinePrefix(newlinePrefix)
     // TODO: Smithy updates should remove the need for a number of these changes
     val cleaned = text.lines()
-        // We need to filter out blank lines—an empty line causes the markdown parser to interpret the subsequent
-        // docs as a code block because they are indented.
-        .filter { it.isNotBlank() }
         .joinToString("\n") {
             // Rustdoc warns on tabs in documentation
             it.trimStart().replace("\t", "  ")
@@ -267,13 +270,13 @@ class RustWriter private constructor(
     init {
         expressionStart = '#'
         if (filename.endsWith(".rs")) {
-            require(namespace.startsWith("crate")) { "We can only write into files in the crate (got $namespace)" }
+            require(namespace.startsWith("crate") || filename.startsWith("tests/")) { "We can only write into files in the crate (got $namespace)" }
         }
         putFormatter('T', formatter)
         putFormatter('D', RustDocLinker())
     }
 
-    fun module(): String? = if (filename.endsWith(".rs")) {
+    fun module(): String? = if (filename.startsWith("src") && filename.endsWith(".rs")) {
         filename.removeSuffix(".rs").split('/').last()
     } else null
 

@@ -32,10 +32,10 @@ private class Types(runtimeConfig: RuntimeConfig) {
 
     val awsTypes = awsTypes(runtimeConfig).asType()
     val awsHyper = awsHyperDep.asType()
-    val smithyClientRetry = RuntimeType("retry", smithyClientDep, "smithy_client")
+    val smithyClientRetry = RuntimeType("retry", smithyClientDep, "aws_smithy_client")
 
     val AwsMiddleware = RuntimeType("AwsMiddleware", awsHyperDep, "aws_hyper")
-    val DynConnector = RuntimeType("DynConnector", smithyClientDep, "smithy_client::erase")
+    val DynConnector = RuntimeType("DynConnector", smithyClientDep, "aws_smithy_client::erase")
 }
 
 class AwsFluentClientDecorator : RustCodegenDecorator {
@@ -47,7 +47,13 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
     override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
         val types = Types(codegenContext.runtimeConfig)
         val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("client")), public = true)
-        rustCrate.withModule(RustModule("client", module)) { writer ->
+        rustCrate.withModule(
+            RustModule(
+                "client",
+                module,
+                documentation = "Client and fluent builders for calling the service."
+            )
+        ) { writer ->
             FluentClientGenerator(
                 codegenContext,
                 includeSmithyGenericClientDocs = false,
@@ -66,7 +72,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
             AwsFluentClientExtensions(types).render(writer)
         }
         val awsHyper = "aws-hyper"
-        rustCrate.mergeFeature(Feature("client", default = true, listOf(awsHyper, "smithy-client")))
+        rustCrate.mergeFeature(Feature("client", default = true, listOf(awsHyper, "aws-smithy-client")))
         rustCrate.mergeFeature(Feature("rustls", default = true, listOf("$awsHyper/rustls")))
         rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("$awsHyper/native-tls")))
     }
@@ -89,9 +95,10 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
 
 private class AwsFluentClientExtensions(private val types: Types) {
     fun render(writer: RustWriter) {
-        writer.rustBlock("impl<C> Client<C, aws_hyper::AwsMiddleware, smithy_client::retry::Standard>") {
+        writer.rustBlock("impl<C> Client<C, aws_hyper::AwsMiddleware, aws_smithy_client::retry::Standard>") {
             rustTemplate(
                 """
+                /// Creates a client with the given service config and connector override.
                 pub fn from_conf_conn(conf: crate::Config, conn: C) -> Self {
                     let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
                     let client = #{aws_hyper}::Client::new(conn).with_retry_config(retry_config.into());
@@ -101,14 +108,16 @@ private class AwsFluentClientExtensions(private val types: Types) {
                 "aws_hyper" to types.awsHyper,
             )
         }
-        writer.rustBlock("impl Client<smithy_client::erase::DynConnector, aws_hyper::AwsMiddleware, smithy_client::retry::Standard>") {
+        writer.rustBlock("impl Client<aws_smithy_client::erase::DynConnector, aws_hyper::AwsMiddleware, aws_smithy_client::retry::Standard>") {
             rustTemplate(
                 """
+                /// Creates a new client from a shared config.
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn new(config: &#{aws_types}::config::Config) -> Self {
                     Self::from_conf(config.into())
                 }
 
+                /// Creates a new client from the service [`Config`](crate::Config).
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn from_conf(conf: crate::Config) -> Self {
                     let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();

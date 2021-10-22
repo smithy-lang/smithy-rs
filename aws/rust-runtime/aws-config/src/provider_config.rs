@@ -6,14 +6,14 @@
 //! Configuration Options for Credential Providers
 
 use crate::connector::default_connector;
+use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
+use aws_smithy_client::erase::DynConnector;
 use aws_types::os_shim_internal::{Env, Fs, TimeSource};
 use aws_types::region::Region;
-use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
-use smithy_client::erase::DynConnector;
 
+use aws_smithy_client::erase::boxclone::BoxCloneService;
+use aws_smithy_client::timeout;
 use http::Uri;
-use smithy_client::erase::boxclone::BoxCloneService;
-use smithy_client::timeout;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use tokio::net::TcpStream;
@@ -67,7 +67,7 @@ impl HttpConnector {
             HttpConnector::Prebuilt(conn) => conn.clone(),
             HttpConnector::ConnectorFn(func) => func(&settings, sleep),
             HttpConnector::TcpConnector(connection) => Some(DynConnector::new(
-                smithy_client::hyper_ext::Adapter::builder()
+                aws_smithy_client::hyper_ext::Adapter::builder()
                     .timeout(&settings.timeout_settings)
                     .sleep_impl(sleep.unwrap())
                     .build(connection.clone()),
@@ -266,7 +266,7 @@ impl ProviderConfig {
     /// **Warning**: Use of this method will prevent you from taking advantage of the timeout machinery.
     /// Consider `with_tcp_connector`.
     ///
-    /// ## Note: Stability
+    /// # Stability
     /// This method is expected to change to support HTTP configuration
     pub fn with_http_connector(self, connector: DynConnector) -> Self {
         ProviderConfig {

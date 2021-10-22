@@ -44,7 +44,6 @@ internal class EnumMemberModel(private val definition: EnumDefinition, private v
             name.renamedFrom?.let { renamedFrom ->
                 "`::$renamedFrom` has been renamed to `::${name.name}`."
             }
-
         )
     }
 
@@ -57,11 +56,17 @@ internal class EnumMemberModel(private val definition: EnumDefinition, private v
 }
 
 private fun RustWriter.docWithNote(doc: String?, note: String?) {
-    doc?.also { docs(escape(it)) }
-    note?.also {
-        // Add a blank line between the docs and the note to visually differentiate
-        doc?.also { write("///") }
-        docs("**NOTE:** $it")
+    if (doc.isNullOrBlank() && note.isNullOrBlank()) {
+        // If the model doesn't have any documentation for the shape, then suppress the missing docs lint
+        // since the lack of documentation is a modeling issue rather than a codegen issue.
+        rust("##[allow(missing_docs)] // documentation missing in model")
+    } else {
+        doc?.also { docs(escape(it)) }
+        note?.also {
+            // Add a blank line between the docs and the note to visually differentiate
+            doc?.also { write("///") }
+            docs("_Note: ${it}_")
+        }
     }
 }
 
@@ -111,11 +116,13 @@ class EnumGenerator(
         meta.render(writer)
         writer.write("struct $enumName(String);")
         writer.rustBlock("impl $enumName") {
-            writer.rustBlock("pub fn as_str(&self) -> &str") {
+            rust("/// Returns the `&str` value of the enum member.")
+            rustBlock("pub fn as_str(&self) -> &str") {
                 write("&self.0")
             }
 
-            writer.rustBlock("pub fn $Values() -> &'static [&'static str]") {
+            rust("/// Returns all the `&str` representations of the enum members.")
+            rustBlock("pub fn $Values() -> &'static [&'static str]") {
                 withBlock("&[", "]") {
                     val memberList = sortedMembers.joinToString(", ") { it.value.doubleQuote() }
                     write(memberList)
@@ -151,6 +158,7 @@ class EnumGenerator(
 
     private fun implBlock() {
         writer.rustBlock("impl $enumName") {
+            rust("/// Returns the `&str` value of the enum member.")
             writer.rustBlock("pub fn as_str(&self) -> &str") {
                 writer.rustBlock("match self") {
                     sortedMembers.forEach { member ->
@@ -160,6 +168,7 @@ class EnumGenerator(
                 }
             }
 
+            rust("/// Returns all the `&str` values of the enum members.")
             writer.rustBlock("pub fn $Values() -> &'static [&'static str]") {
                 withBlock("&[", "]") {
                     val memberList = sortedMembers.joinToString(", ") { it.value.doubleQuote() }

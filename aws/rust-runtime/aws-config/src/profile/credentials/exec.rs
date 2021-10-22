@@ -15,9 +15,9 @@ use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
+use aws_smithy_client::erase::DynConnector;
 use aws_types::credentials::{self, CredentialsError, ProvideCredentials};
 use aws_types::os_shim_internal::Fs;
-use smithy_client::erase::DynConnector;
 use std::fmt::Debug;
 
 #[derive(Debug)]
@@ -55,6 +55,7 @@ impl AssumeRoleProvider {
             .build()
             .expect("operation is valid")
             .make_operation(&config)
+            .await
             .expect("valid operation");
         let assume_role_creds = client_config
             .core_client

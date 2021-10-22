@@ -88,12 +88,21 @@ open class RustCrate(
         settings: RustSettings,
         model: Model,
         manifestCustomizations: ManifestCustomizations,
-        libRsCustomizations: List<LibRsCustomization>
+        libRsCustomizations: List<LibRsCustomization>,
+        requireDocs: Boolean = true,
     ) {
         injectInlineDependencies()
         val modules = inner.writers.values.mapNotNull { it.module() }.filter { it != "lib" }
             .map { modules[it] ?: RustModule.default(it, false) }
-        inner.finalize(settings, model, manifestCustomizations, libRsCustomizations, modules, this.features.toList())
+        inner.finalize(
+            settings,
+            model,
+            manifestCustomizations,
+            libRsCustomizations,
+            modules,
+            this.features.toList(),
+            requireDocs
+        )
     }
 
     private fun injectInlineDependencies() {
@@ -142,8 +151,14 @@ open class RustCrate(
 /**
  * Allowlist of modules that will be exposed publicly in generated crates
  */
-val DefaultPublicModules =
-    setOf("error", "operation", "model", "input", "output", "config").map { it to RustModule.default(it, true) }.toMap()
+val DefaultPublicModules = setOf(
+    RustModule.public("error", documentation = "All error types that operations can return."),
+    RustModule.public("operation", documentation = "All operations that this crate can perform."),
+    RustModule.public("model", documentation = "Data structures used by operation inputs/outputs."),
+    RustModule.public("input", documentation = "Input structures for operations."),
+    RustModule.public("output", documentation = "Output structures for operations."),
+    RustModule.public("config", documentation = "Client configuration."),
+).associateBy { it.name }
 
 /**
  * Finalize all the writers by:
@@ -156,10 +171,11 @@ fun CodegenWriterDelegator<RustWriter>.finalize(
     manifestCustomizations: ManifestCustomizations,
     libRsCustomizations: List<LibRsCustomization>,
     modules: List<RustModule>,
-    features: List<Feature>
+    features: List<Feature>,
+    requireDocs: Boolean,
 ) {
     this.useFileWriter("src/lib.rs", "crate::lib") { writer ->
-        LibRsGenerator(settings, model, modules, libRsCustomizations).render(writer)
+        LibRsGenerator(settings, model, modules, libRsCustomizations, requireDocs).render(writer)
     }
     val cargoDependencies = mergeDependencyFeatures(
         this.dependencies.map { RustDependency.fromSymbolDependency(it) }

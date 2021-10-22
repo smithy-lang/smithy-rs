@@ -27,6 +27,11 @@ val CodegenTests = listOf(
     CodegenTest("com.amazonaws.ebs#Ebs", "ebs")
 )
 
+/**
+ * The fluent client is generated to prevent warnings in RustDoc since the client is
+ * referenced by multiple documentations.
+ * TODO: review client generation in the future.
+ */
 fun generateSmithyBuild(tests: List<CodegenTest>): String {
     val projections =
         tests.joinToString(",\n") {
@@ -35,7 +40,7 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
                 "plugins": {
                     "rust-server-codegen": {
                       "codegen": {
-                        "includeFluentClient": false
+                        "includeFluentClient": true
                       },
                       "runtimeConfig": {
                         "relativePath": "${rootProject.projectDir.absolutePath}/rust-runtime"

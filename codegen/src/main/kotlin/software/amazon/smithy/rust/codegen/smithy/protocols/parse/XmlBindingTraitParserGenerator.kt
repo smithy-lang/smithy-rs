@@ -104,7 +104,7 @@ class XmlBindingTraitParserGenerator(
         "next_start_element" to smithyXml.member("decode::next_start_element"),
         "try_data" to smithyXml.member("decode::try_data"),
         "ScopedDecoder" to scopedDecoder,
-        "smithy_types" to CargoDependency.SmithyTypes(runtimeConfig).asType()
+        "aws_smithy_types" to CargoDependency.SmithyTypes(runtimeConfig).asType()
     )
     private val model = codegenContext.model
     private val index = HttpBindingIndex.of(model)
@@ -241,7 +241,7 @@ class XmlBindingTraitParserGenerator(
         TODO("Document shapes are not supported by rest XML")
     }
 
-    override fun serverInputParser(operationShape: OperationShape): RuntimeType? {
+    override fun serverInputParser(operationShape: OperationShape): RuntimeType {
         TODO("Not yet implemented")
     }
 
@@ -576,7 +576,7 @@ class XmlBindingTraitParserGenerator(
             is NumberShape, is BooleanShape -> {
                 rustBlock("") {
                     withBlockTemplate(
-                        "<#{shape} as #{smithy_types}::primitive::Parse>::parse_smithy_primitive(",
+                        "<#{shape} as #{aws_smithy_types}::primitive::Parse>::parse_smithy_primitive(",
                         ")",
                         *codegenScope,
                         "shape" to symbolProvider.toSymbol(shape)

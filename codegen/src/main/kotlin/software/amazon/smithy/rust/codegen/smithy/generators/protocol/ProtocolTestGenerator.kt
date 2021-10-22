@@ -21,8 +21,6 @@ import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.CratesIo
-import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -35,6 +33,7 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.util.getTrait
@@ -144,14 +143,7 @@ class ProtocolTestGenerator(
         }
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.setNewlinePrefix("")
-        testModuleWriter.writeWithNoFormatting("#[tokio::test]")
-        val Tokio = CargoDependency(
-            "tokio",
-            CratesIo("1"),
-            features = setOf("macros", "test-util", "rt"),
-            scope = DependencyScope.Dev
-        )
-        testModuleWriter.addDependency(Tokio)
+        TokioTest.render(testModuleWriter)
         val action = when (testCase) {
             is HttpResponseTestCase -> Action.Response
             is HttpRequestTestCase -> Action.Request
@@ -186,7 +178,7 @@ class ProtocolTestGenerator(
         writeInline("let input =")
         instantiator.render(this, inputShape, httpRequestTestCase.params)
 
-        rust(""".make_operation(&config).expect("operation failed to build");""")
+        rust(""".make_operation(&config).await.expect("operation failed to build");""")
         rust("let (http_request, parts) = input.into_request_response().0.into_parts();")
         with(httpRequestTestCase) {
             host.orNull()?.also { host ->
@@ -417,7 +409,7 @@ class ProtocolTestGenerator(
     }
 
     /**
-     * wraps `inner` in a call to `smithy_protocol_test::assert_ok`, a convenience wrapper
+     * wraps `inner` in a call to `aws_smithy_protocol_test::assert_ok`, a convenience wrapper
      * for pretty prettying protocol test helper results
      */
     private fun assertOk(rustWriter: RustWriter, inner: RustWriter.() -> Unit) {

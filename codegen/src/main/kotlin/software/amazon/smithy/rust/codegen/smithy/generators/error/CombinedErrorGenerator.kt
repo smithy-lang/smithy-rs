@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -46,7 +47,7 @@ fun OperationShape.errorSymbol(symbolProvider: SymbolProvider): RuntimeType {
  * but we must still combine those variants into an enum covering all possible errors for a given operation.
  */
 class CombinedErrorGenerator(
-    model: Model,
+    private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val operation: OperationShape
 ) {
@@ -56,6 +57,7 @@ class CombinedErrorGenerator(
 
     fun render(writer: RustWriter) {
         val errors = operationIndex.getErrors(operation)
+        val operationSymbol = symbolProvider.toSymbol(operation)
         val symbol = operation.errorSymbol(symbolProvider)
         val meta = RustMetadata(
             derives = Attribute.Derives(setOf(RuntimeType.Debug)),
@@ -63,19 +65,24 @@ class CombinedErrorGenerator(
             public = true
         )
 
+        writer.rust("/// Error type for the `${operationSymbol.name}` operation.")
         meta.render(writer)
         writer.rustBlock("struct ${symbol.name}") {
             rust(
                 """
+                /// Kind of error that occurred.
                 pub kind: ${symbol.name}Kind,
+                /// Additional metadata about the error, including error code, message, and request ID.
                 pub (crate) meta: #T
                 """,
                 RuntimeType.GenericError(runtimeConfig)
             )
         }
+        writer.rust("/// Types of errors that can occur for the `${operationSymbol.name}` operation.")
         meta.render(writer)
         writer.rustBlock("enum ${symbol.name}Kind") {
             errors.forEach { errorVariant ->
+                documentShape(errorVariant, model)
                 val errorSymbol = symbolProvider.toSymbol(errorVariant)
                 write("${errorSymbol.name}(#T),", errorSymbol)
             }
@@ -123,10 +130,12 @@ class CombinedErrorGenerator(
         writer.rustBlock("impl ${symbol.name}") {
             writer.rustTemplate(
                 """
+                /// Creates a new `${symbol.name}`.
                 pub fn new(kind: ${symbol.name}Kind, meta: #{generic_error}) -> Self {
                     Self { kind, meta }
                 }
 
+                /// Creates the `${symbol.name}::Unhandled` variant from any error type.
                 pub fn unhandled(err: impl Into<Box<dyn #{std_error} + Send + Sync + 'static>>) -> Self {
                     Self {
                         kind: ${symbol.name}Kind::Unhandled(err.into()),
@@ -134,6 +143,7 @@ class CombinedErrorGenerator(
                     }
                 }
 
+                /// Creates the `${symbol.name}::Unhandled` variant from a `#{generic_error}`.
                 pub fn generic(err: #{generic_error}) -> Self {
                     Self {
                         meta: err.clone(),
@@ -141,20 +151,25 @@ class CombinedErrorGenerator(
                     }
                 }
 
-                // Consider if this should actually be `Option<Cow<&str>>`. This would enable us to use display
+                // TODO: Consider if this should actually be `Option<Cow<&str>>`. This would enable us to use display
                 // as implemented by std::Error to generate a message in that case.
+                /// Returns the error message if one is available.
                 pub fn message(&self) -> Option<&str> {
                     self.meta.message()
                 }
 
+                /// Returns error metadata, which includes the error code, message,
+                /// request ID, and potentially additional information.
                 pub fn meta(&self) -> &#{generic_error} {
                     &self.meta
                 }
 
+                /// Returns the request ID if it's available.
                 pub fn request_id(&self) -> Option<&str> {
                     self.meta.request_id()
                 }
 
+                /// Returns the error code if it's available.
                 pub fn code(&self) -> Option<&str> {
                     self.meta.code()
                 }
@@ -164,6 +179,7 @@ class CombinedErrorGenerator(
             errors.forEach { error ->
                 val errorSymbol = symbolProvider.toSymbol(error)
                 val fnName = errorSymbol.name.toSnakeCase()
+                writer.rust("/// Returns true if the error kind is `${symbol.name}Kind::${errorSymbol.name}`.")
                 writer.rustBlock("pub fn is_$fnName(&self) -> bool") {
                     rust("matches!(&self.kind, ${symbol.name}Kind::${errorSymbol.name}(_))")
                 }
