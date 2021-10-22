@@ -189,14 +189,14 @@ impl<'a> CanonicalRequest<'a> {
         // - x-amz-security-token (if provided)
         // - x-amz-content-sha256 (if requested by signing settings)
         let mut canonical_headers = HeaderMap::with_capacity(req.headers().len());
-            for (name, value) in req.headers().iter() {
+        for (name, value) in req.headers().iter() {
             // Header names and values need to be normalized according to Step 4 of https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html
             // Using append instead of insert means this will not clobber headers that have the same lowercased name
             canonical_headers.append(
                 HeaderName::from_str(&name.as_str().to_lowercase())?,
                 normalize_header_value(&value)?,
             );
-        };
+        }
 
         Self::insert_host_header(&mut canonical_headers, req.uri());
 
@@ -353,13 +353,13 @@ static MULTIPLE_SPACES: once_cell::sync::OnceCell<regex::Regex> = once_cell::syn
 /// spaces to a single space e.g. "  Some  example   text  " -> "Some example text".
 ///
 /// This function ONLY affects spaces and not other kinds of whitespace.
-fn trim_all(text: &str) -> String {
+fn trim_all(text: &str) -> Cow<'_, str> {
     // this regex matches on 2 or more spaces
     let re = MULTIPLE_SPACES.get_or_init(|| regex::Regex::new(" {2,}").unwrap());
     // The normal trim function will trim non-breaking spaces and other various whitespace chars.
     // S3 ONLY trims spaces so we use trim_matches to trim spaces only
-    let text = text.trim_matches(' ').clone();
-    re.replace(text, " ").to_string()
+    let text = text.trim_matches(' ');
+    re.replace_all(text, " ").into()
 }
 
 /// Works just like [trim_all] but acts on HeaderValues instead of strings
@@ -532,7 +532,9 @@ impl<'a> fmt::Display for StringToSign<'a> {
 #[cfg(test)]
 mod tests {
     use crate::date_fmt::parse_date_time;
-    use crate::http_request::canonical_request::{CanonicalRequest, SigningScope, StringToSign};
+    use crate::http_request::canonical_request::{
+        trim_all, CanonicalRequest, SigningScope, StringToSign,
+    };
     use crate::http_request::test::{test_canonical_request, test_request, test_sts};
     use crate::http_request::{
         PayloadChecksumKind, SignableBody, SignableRequest, SigningSettings,
@@ -703,5 +705,21 @@ mod tests {
 
         let values = canonical.values.into_query_params().unwrap();
         assert_eq!("host", values.signed_headers.as_str());
+    }
+
+    #[test]
+    fn test_trim_all_handles_spaces_correctly() {
+        let expected = "Some example text";
+        let actual = trim_all("  Some  example   text  ");
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_trim_all_ignores_other_forms_of_whitespace() {
+        let expected = " Some  example  text ";
+        let actual = trim_all(" Some      example    text ");
+
+        assert_eq!(expected, actual);
     }
 }

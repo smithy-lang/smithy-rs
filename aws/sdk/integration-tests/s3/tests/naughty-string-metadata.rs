@@ -3,15 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use std::time::UNIX_EPOCH;
 use aws_http::user_agent::AwsUserAgent;
 use aws_sdk_s3::{operation::PutObject, Credentials, Region};
 use http::HeaderValue;
 use smithy_client::test_connection::TestConnection;
 use smithy_http::body::SdkBody;
+use std::time::UNIX_EPOCH;
 use tokio::time::Duration;
 
-const NAUGHTY_STRINGS: &str = include_str!("../../blns.txt");
+const NAUGHTY_STRINGS: &str = include_str!("../../blns/blns.txt");
 
 // // A useful way to find leaks in the signing system that requires an actual S3 bucket to test with
 // // If you want to use this, change the bucket name to your bucket
@@ -78,13 +78,9 @@ async fn test_signer_with_naughty_strings() -> Result<(), aws_sdk_s3::Error> {
 
             builder = builder.metadata(key, line);
         }
-    };
+    }
 
-    let mut op = builder
-        .build()
-        .unwrap()
-        .make_operation(&conf)
-        .unwrap();
+    let mut op = builder.build().unwrap().make_operation(&conf).unwrap();
     op.properties_mut()
         .insert(UNIX_EPOCH + Duration::from_secs(1624036048));
     op.properties_mut().insert(AwsUserAgent::for_tests());

@@ -5,7 +5,7 @@
 
 use http::HeaderValue;
 
-const NAUGHTY_STRINGS: &str = include_str!("../../blns.txt");
+const NAUGHTY_STRINGS: &str = include_str!("../../blns/blns.txt");
 
 /// A list of lines to skipped when iterating over the blns. These lines should all fail when
 /// entered into the AWS CLI too. In the below test, every one of these lines will produce an
