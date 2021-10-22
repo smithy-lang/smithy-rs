@@ -36,5 +36,8 @@ set -e
 	rm -rf "$repo_root/aws-sdk"
 	mv "$target"/aws-sdk "$repo_root"/.
 	git add "$repo_root"/aws-sdk
-	PRE_COMMIT_ALLOW_NO_CONFIG=1 git -c "user.name=GitHub Action (generated code preview)" -c "user.email=generated-code-action@github.com" commit -m "Generated code for $current_branch"
+	PRE_COMMIT_ALLOW_NO_CONFIG=1 git \
+  	-c "user.name=GitHub Action (generated code preview)" \
+	  -c "user.email=generated-code-action@github.com" \
+	  commit -m "Generated code for $current_branch" --allow-empty
 } >&2
