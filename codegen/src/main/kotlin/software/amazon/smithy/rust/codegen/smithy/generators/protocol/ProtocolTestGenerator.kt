@@ -46,7 +46,6 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import java.util.logging.Logger
 
 data class ProtocolSupport(
-    /* Client support */
     val requestSerialization: Boolean,
     val requestBodySerialization: Boolean,
     val responseDeserialization: Boolean,
