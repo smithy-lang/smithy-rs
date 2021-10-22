@@ -5,6 +5,7 @@ members = [
     "dynamodb",
     "iam",
     "kms",
+    "lambda",
     "polly",
     "qldbsession",
     "s3",

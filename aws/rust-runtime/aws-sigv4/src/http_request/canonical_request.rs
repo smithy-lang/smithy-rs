@@ -17,6 +17,7 @@ use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::Formatter;
+use std::str::FromStr;
 
 pub(crate) mod header {
     pub(crate) const X_AMZ_CONTENT_SHA_256: &str = "x-amz-content-sha256";
@@ -181,13 +182,22 @@ impl<'a> CanonicalRequest<'a> {
         date_time: &str,
     ) -> Result<(Vec<CanonicalHeaderName>, HeaderMap), Error> {
         // Header computation:
-        // The canonical request will include headers not present in the input. We need to clone
-        // the headers from the original request and add:
+        // The canonical request will include headers not present in the input. We need to clone and
+        // normalize the headers from the original request and add:
         // - host
         // - x-amz-date
         // - x-amz-security-token (if provided)
         // - x-amz-content-sha256 (if requested by signing settings)
-        let mut canonical_headers = req.headers().clone();
+        let mut canonical_headers = HeaderMap::with_capacity(req.headers().len());
+            for (name, value) in req.headers().iter() {
+            // Header names and values need to be normalized according to Step 4 of https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html
+            // Using append instead of insert means this will not clobber headers that have the same lowercased name
+            canonical_headers.append(
+                HeaderName::from_str(&name.as_str().to_lowercase())?,
+                normalize_header_value(&value)?,
+            );
+        };
+
         Self::insert_host_header(&mut canonical_headers, req.uri());
 
         if params.settings.signature_location == SignatureLocation::Headers {
@@ -333,6 +343,38 @@ impl<'a> fmt::Display for CanonicalRequest<'a> {
         write!(f, "{}", self.values.content_sha256())?;
         Ok(())
     }
+}
+
+/// A regex for matching on 2 or more spaces. Initialized by [trim_all] the first time that function
+/// is called
+static MULTIPLE_SPACES: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
+
+/// Removes excess spaces before and after a given string, and converts multiple sequential
+/// spaces to a single space e.g. "  Some  example   text  " -> "Some example text".
+///
+/// This function ONLY affects spaces and not other kinds of whitespace.
+fn trim_all(text: &str) -> String {
+    // this regex matches on 2 or more spaces
+    let re = MULTIPLE_SPACES.get_or_init(|| regex::Regex::new(" {2,}").unwrap());
+    // The normal trim function will trim non-breaking spaces and other various whitespace chars.
+    // S3 ONLY trims spaces so we use trim_matches to trim spaces only
+    let text = text.trim_matches(' ').clone();
+    re.replace(text, " ").to_string()
+}
+
+/// Works just like [trim_all] but acts on HeaderValues instead of strings
+fn normalize_header_value(header_value: &HeaderValue) -> Result<HeaderValue, Error> {
+    // We can't just use the to_str value from HeaderValue because it will fail if a header value
+    // contains non-ASCII characters. In Rust, strings are UTF-8 so I believe that it's reasonable
+    // to assume that String::from_utf8 won't fail for any supported use case.
+    // https://docs.rs/http/0.2.5/http/header/struct.HeaderValue.html#method.to_str
+    let original_value = String::from_utf8(header_value.as_bytes().to_vec())?;
+    let trimmed_value = trim_all(&original_value);
+    // I don't think that this could ever fail because we're just modifying the HeaderValue's
+    // whitespace. Still, I decided to err on the side of caution and `Try` it anyways.
+    let header_value = HeaderValue::from_str(&trimmed_value)?;
+
+    Ok(header_value)
 }
 
 #[derive(Debug, PartialEq, Default)]
