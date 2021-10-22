@@ -28,7 +28,7 @@ const X_AMZ_CONTENT_SHA256: &str = "x-amz-content-sha256";
 /// will be assembled, recursively pairing neighboring chunks and computing their combined checksum. The 1 leftover
 /// chunk (if it exists) is paired at the end.
 ///
-/// See https://docs.aws.amazon.com/amazonglacier/latest/dev/checksum-calculations.html for more information.
+/// See <https://docs.aws.amazon.com/amazonglacier/latest/dev/checksum-calculations.html> for more information.
 pub async fn add_checksum_treehash(request: &mut Request) -> Result<(), byte_stream::Error> {
     let clonable = request.http().body().try_clone();
     let http_request = request.http_mut();
@@ -101,7 +101,7 @@ async fn compute_hashes(
 ///
 /// Adjacent hashes are combined into a single hash. This process occurs recursively until only 1 hash remains.
 ///
-/// See https://docs.aws.amazon.com/amazonglacier/latest/dev/checksum-calculations.html for more information.
+/// See <https://docs.aws.amazon.com/amazonglacier/latest/dev/checksum-calculations.html> for more information.
 fn compute_hash_tree(mut hashes: Vec<Digest>) -> Digest {
     assert!(!hashes.is_empty());
     while hashes.len() > 1 {
