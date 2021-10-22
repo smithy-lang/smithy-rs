@@ -28,11 +28,11 @@ async fn set_correct_headers() {
         &[
             (
                 "x-amz-sha256-tree-hash",
-                "38a9ecd968dd9049330fcbc914cf97b099682f58af5590e47e3413760778bec8",
+                "2af02ea61585d13604b26ae314a99fc8e972d1f11daba655a68681843cfced9f",
             ),
             (
                 "x-amz-content-sha256",
-                "38a9ecd968dd9049330fcbc914cf97b099682f58af5590e47e3413760778bec8",
+                "2af02ea61585d13604b26ae314a99fc8e972d1f11daba655a68681843cfced9f",
             ),
         ],
     ));
