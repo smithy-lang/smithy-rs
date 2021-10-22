@@ -172,6 +172,7 @@ impl AssumeRoleProvider {
             .op
             .clone()
             .make_operation(&self.conf)
+            .await
             .expect("valid operation");
 
         let assumed = self.sts.call(op).in_current_span().await;

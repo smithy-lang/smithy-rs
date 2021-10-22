@@ -47,6 +47,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
+import software.amazon.smithy.rust.codegen.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
@@ -585,8 +586,8 @@ class RestJson1HttpDeserializerGenerator(
     }
 
     private fun RustWriter.renderRequestDeserializerTestCase(testCase: HttpRequestTestCase, operationShape: OperationShape) {
-        Attribute.Custom("test").render(this)
-        rustBlock("fn ${testCase.id.toSnakeCase()}()") {
+        TokioTest.render(this)
+        rustBlock("async fn ${testCase.id.toSnakeCase()}()") {
             val inputShape = operationShape.inputShape(model)
             val deserFnName = "deser_${operationShape.id.name.toSnakeCase()}_request"
             val customToken =
@@ -599,7 +600,7 @@ class RestJson1HttpDeserializerGenerator(
             instantiator.render(this, inputShape, testCase.params)
             write(";")
             rust(
-                """let op = expected.make_operation(&config).expect("failed to build operation");"""
+                """let op = expected.make_operation(&config).await.expect("failed to build operation");"""
             )
             rust("let (request, parts) = op.into_request_response().0.into_parts();")
             rustTemplate(

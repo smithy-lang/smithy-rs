@@ -8,7 +8,13 @@ package software.amazon.smithy.rustsdk
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.testutil.*
+import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.testutil.stubConfigProject
+import software.amazon.smithy.rust.codegen.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.testutil.unitTest
+import software.amazon.smithy.rust.codegen.testutil.validateConfigCustomizations
 import software.amazon.smithy.rust.codegen.util.lookup
 
 internal class EndpointConfigCustomizationTest {

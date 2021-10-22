@@ -36,6 +36,7 @@ async fn test_signer() -> Result<(), aws_sdk_s3::Error> {
         .build()
         .unwrap()
         .make_operation(&conf)
+        .await
         .unwrap();
     op.properties_mut()
         .insert(UNIX_EPOCH + Duration::from_secs(1624036048));

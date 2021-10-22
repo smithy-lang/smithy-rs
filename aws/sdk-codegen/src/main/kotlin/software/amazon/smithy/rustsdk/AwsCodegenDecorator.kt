@@ -6,6 +6,8 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.smithy.RetryConfigDecorator
+import software.amazon.smithy.rust.codegen.smithy.customizations.DocsRsMetadataDecorator
+import software.amazon.smithy.rust.codegen.smithy.customizations.DocsRsMetadataSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayDecorator
 import software.amazon.smithy.rustsdk.customize.auth.DisabledAuthDecorator
@@ -37,7 +39,10 @@ val DECORATORS = listOf(
     ApiGatewayDecorator(),
     S3Decorator(),
     Ec2Decorator(),
-    GlacierDecorator()
+    GlacierDecorator(),
+
+    // Only build docs-rs for linux to reduce load on docs.rs
+    DocsRsMetadataDecorator(DocsRsMetadataSettings(targets = listOf("x86_64-unknown-linux-gnu")))
 )
 
 class AwsCodegenDecorator : CombinedCodegenDecorator(DECORATORS) {
