@@ -1,6 +1,10 @@
 vNext (Month Day, Year)
 =======================
 
+**New this week**
+
+- Fix `native-tls` feature in `aws-config` (aws-sdk-rust#265, smithy-rs#803)
+
 v0.0.22-alpha (October 20th, 2021)
 ==================================
 
