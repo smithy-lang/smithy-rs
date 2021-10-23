@@ -141,10 +141,13 @@ class JsonSerializerGenerator(
     private val operationSerModule = RustModule.private("operation_ser")
     private val jsonSerModule = RustModule.private("json_ser")
 
-    private fun structureSerializer(fnName: String, structureShape: StructureShape, includedMembers: List<MemberShape>): RuntimeType? {
-        if (includedMembers.isEmpty()) {
-            return null
-        }
+    /**
+     * Reusable structure serializer implementation that can be used to generate serializing code for
+     * operation, error and structure shapes.
+     * We still generate the serializer symbol even if there are no included members because the server
+     * generation requires serializers for all output/error structures.
+     */
+    private fun structureSerializer(fnName: String, structureShape: StructureShape, includedMembers: List<MemberShape>): RuntimeType {
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             it.rustBlockTemplate(
                 "pub fn $fnName(value: &#{target}) -> Result<String, #{Error}>",
@@ -220,14 +223,14 @@ class JsonSerializerGenerator(
         }
     }
 
-    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType? {
+    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType {
         val outputShape = operationShape.outputShape(model)
         val includedMembers = httpBindingResolver.responseMembers(operationShape, HttpLocation.DOCUMENT)
         val fnName = symbolProvider.serializeFunctionName(outputShape)
         return structureSerializer(fnName, outputShape, includedMembers)
     }
 
-    override fun serverErrorSerializer(shape: ShapeId): RuntimeType? {
+    override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
         val errorShape = model.expectShape(shape, StructureShape::class.java)
         val includedMembers = httpBindingResolver.errorResponseBindings(shape).filter { it.location == HttpLocation.DOCUMENT }.map { it.member }
         val fnName = symbolProvider.serializeFunctionName(errorShape)

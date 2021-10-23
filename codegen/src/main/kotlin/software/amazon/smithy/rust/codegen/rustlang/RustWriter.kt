@@ -270,13 +270,13 @@ class RustWriter private constructor(
     init {
         expressionStart = '#'
         if (filename.endsWith(".rs")) {
-            require(namespace.startsWith("crate")) { "We can only write into files in the crate (got $namespace)" }
+            require(namespace.startsWith("crate") || filename.startsWith("tests/")) { "We can only write into files in the crate (got $namespace)" }
         }
         putFormatter('T', formatter)
         putFormatter('D', RustDocLinker())
     }
 
-    fun module(): String? = if (filename.endsWith(".rs")) {
+    fun module(): String? = if (filename.startsWith("src") && filename.endsWith(".rs")) {
         filename.removeSuffix(".rs").split('/').last()
     } else null
 

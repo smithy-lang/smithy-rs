@@ -19,7 +19,7 @@ tracing = "0.1"
 [dev-dependencies]
 async-trait = "0.1.50"
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
-env_logger = "*"
+env_logger = "0.9"
 http = "0.2.3"
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "test-util"] }
 tracing-subscriber = { version = "0.2.16", features = ["fmt"] }

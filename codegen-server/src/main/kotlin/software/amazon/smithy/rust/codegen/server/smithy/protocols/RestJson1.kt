@@ -47,6 +47,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
+import software.amazon.smithy.rust.codegen.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
@@ -102,9 +103,6 @@ class RestJson1HttpSerializerGenerator(
             return
         }
         val serializerSymbol = jsonSerializerGenerator.serverOutputSerializer(operationShape)
-        if (serializerSymbol == null) {
-            return
-        }
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         writer.write("")
         writer.rustBlockTemplate(
@@ -169,44 +167,38 @@ class RestJson1HttpSerializerGenerator(
                     val variantSymbol = symbolProvider.toSymbol(variantShape)
                     val data = safeName("var")
                     val serializerSymbol = jsonSerializerGenerator.serverErrorSerializer(it)
-                    if (serializerSymbol != null) {
-                        rustBlock("#TKind::${variantSymbol.name}($data) =>", errorSymbol) {
+                    rustBlock("#TKind::${variantSymbol.name}($data) =>", errorSymbol) {
+                        rust(
+                            """
+                                #T(&$data)?;
+                                object.key(${"code".dq()}).string(${httpBindingResolver.errorCode(variantShape).dq()});
+                            """.trimIndent(),
+                            serializerSymbol
+                        )
+                        if (variantShape.errorMessageMember() != null) {
                             rust(
                                 """
-                                    #T(&$data)?;
-                                    object.key(${"code".dq()}).string(${httpBindingResolver.errorCode(variantShape).dq()});
-                                """.trimIndent(),
-                                serializerSymbol
-                            )
-                            if (variantShape.errorMessageMember() != null) {
-                                rust(
-                                    """
-                                        if let Some(message) = $data.message() {
-                                            object.key(${"message".dq()}).string(message);
-                                        }
-                                    """.trimIndent()
-                                )
-                            }
-                            val bindings = httpBindingResolver.errorResponseBindings(it)
-                            bindings.forEach { binding ->
-                                when (val location = binding.location) {
-                                    HttpLocation.RESPONSE_CODE, HttpLocation.DOCUMENT -> {}
-                                    else -> {
-                                        logger.warning(
-                                            "$operationShape: response serialization does not currently support $location bindings"
-                                        )
+                                    if let Some(message) = $data.message() {
+                                        object.key(${"message".dq()}).string(message);
                                     }
+                                """.trimIndent()
+                            )
+                        }
+                        val bindings = httpBindingResolver.errorResponseBindings(it)
+                        bindings.forEach { binding ->
+                            when (val location = binding.location) {
+                                HttpLocation.RESPONSE_CODE, HttpLocation.DOCUMENT -> {}
+                                else -> {
+                                    logger.warning(
+                                        "$operationShape: response serialization does not currently support $location bindings"
+                                    )
                                 }
                             }
-                            val status =
-                                variantShape.getTrait<HttpErrorTrait>()?.let { trait -> trait.code }
-                                    ?: errorTrait.defaultHttpStatusCode
-                            rust("response = response.status($status);")
                         }
-                    } else {
-                        logger.warning(
-                            "[rust-server-codegen] $variantShape: response error serialization does not contain any member"
-                        )
+                        val status =
+                            variantShape.getTrait<HttpErrorTrait>()?.let { trait -> trait.code }
+                                ?: errorTrait.defaultHttpStatusCode
+                        rust("response = response.status($status);")
                     }
                 }
                 rust(
@@ -369,9 +361,6 @@ class RestJson1HttpDeserializerGenerator(
             return
         }
         val deserializerSymbol = jsonParserGenerator.serverInputParser(operationShape)
-        if (deserializerSymbol == null) {
-            return
-        }
         val inputSymbol = symbolProvider.toSymbol(inputShape)
         writer.write("")
         writer.rustBlockTemplate(
@@ -597,8 +586,8 @@ class RestJson1HttpDeserializerGenerator(
     }
 
     private fun RustWriter.renderRequestDeserializerTestCase(testCase: HttpRequestTestCase, operationShape: OperationShape) {
-        Attribute.Custom("test").render(this)
-        rustBlock("fn ${testCase.id.toSnakeCase()}()") {
+        TokioTest.render(this)
+        rustBlock("async fn ${testCase.id.toSnakeCase()}()") {
             val inputShape = operationShape.inputShape(model)
             val deserFnName = "deser_${operationShape.id.name.toSnakeCase()}_request"
             val customToken =
@@ -611,7 +600,7 @@ class RestJson1HttpDeserializerGenerator(
             instantiator.render(this, inputShape, testCase.params)
             write(";")
             rust(
-                """let op = expected.make_operation(&config).expect("failed to build operation");"""
+                """let op = expected.make_operation(&config).await.expect("failed to build operation");"""
             )
             rust("let (request, parts) = op.into_request_response().0.into_parts();")
             rustTemplate(

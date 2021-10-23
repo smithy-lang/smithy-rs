@@ -1,5 +1,7 @@
 vNext (Month Day, Year)
 =======================
+**Breaking Changes**
+- `<operation>.make_operation(&config)` is now an `async` function for all operations. Code should be updated to call `.await`. This will only impact users using the low-level API. (smithy-rs#797)
 
 **New this week**
 
