@@ -115,6 +115,7 @@ const SKIPPED_LINES: &[usize] = &[
 ];
 
 #[tokio::test]
+#[ignore]
 async fn test_client_context_field_against_naughty_strings_list() {
     tracing_subscriber::fmt::init();
 
