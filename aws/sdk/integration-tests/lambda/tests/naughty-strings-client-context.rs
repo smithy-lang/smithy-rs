@@ -121,6 +121,8 @@ async fn test_client_context_field_against_naughty_strings_list() {
     let config = aws_config::load_from_env().await;
     let client = aws_sdk_lambda::Client::new(&config);
     let invalid_request_content_exception = "InvalidRequestContentException: Client context must be a valid Base64-encoded JSON object.";
+    let unrecognized_client_exception =
+        "UnrecognizedClientException: The security token included in the request is invalid.";
 
     let mut encountered_errors = false;
 
@@ -141,16 +143,25 @@ async fn test_client_context_field_against_naughty_strings_list() {
                 .await
                 .unwrap_err();
 
-            if err.to_string() != invalid_request_content_exception {
-                encountered_errors = true;
-                // 1 is added to idx because line numbers start at one
-                eprintln!(
-                    "line {} '{}' caused unexpected error: {}",
-                    idx + 1,
-                    line,
-                    err
-                );
-            };
+            match err.to_string() {
+                // If this happens, it means that someone tried to run the test without valid creds
+                err if err == unrecognized_client_exception => {
+                    panic!("Set valid credentials before running this test.");
+                }
+                // This is the expected error so we ignore it and continue
+                err if err == invalid_request_content_exception => continue,
+                // Other errors are bad and so we bring attention to them
+                err => {
+                    encountered_errors = true;
+                    // 1 is added to idx because line numbers start at one
+                    eprintln!(
+                        "line {} '{}' caused unexpected error: {}",
+                        idx + 1,
+                        line,
+                        err
+                    );
+                }
+            }
         }
     }
 

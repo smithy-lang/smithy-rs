@@ -5,9 +5,9 @@
 
 use aws_http::user_agent::AwsUserAgent;
 use aws_sdk_s3::{operation::PutObject, Credentials, Region};
+use aws_smithy_client::test_connection::TestConnection;
+use aws_smithy_http::body::SdkBody;
 use http::HeaderValue;
-use smithy_client::test_connection::TestConnection;
-use smithy_http::body::SdkBody;
 use std::time::UNIX_EPOCH;
 use tokio::time::Duration;
 
@@ -46,7 +46,7 @@ const NAUGHTY_STRINGS: &str = include_str!("../../blns/blns.txt");
 
 // TODO figure out how to actually make this test work
 #[tokio::test]
-async fn test_signer_with_naughty_strings() -> Result<(), aws_sdk_s3::Error> {
+async fn test_s3_signer_with_naughty_string_metadata() -> Result<(), aws_sdk_s3::Error> {
     let creds = Credentials::from_keys(
         "ANOTREAL",
         "notrealrnrELgWzOk3IfjzDKtFBhDby",
@@ -80,7 +80,12 @@ async fn test_signer_with_naughty_strings() -> Result<(), aws_sdk_s3::Error> {
         }
     }
 
-    let mut op = builder.build().unwrap().make_operation(&conf).unwrap();
+    let mut op = builder
+        .build()
+        .unwrap()
+        .make_operation(&conf)
+        .await
+        .unwrap();
     op.properties_mut()
         .insert(UNIX_EPOCH + Duration::from_secs(1624036048));
     op.properties_mut().insert(AwsUserAgent::for_tests());
