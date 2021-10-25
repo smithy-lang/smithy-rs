@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpDeserializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
@@ -273,7 +274,12 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         ServiceGenerator(
             rustCrate,
             protocolGenerator,
-            protocolGeneratorFactory.support(),
+            ProtocolSupport(
+                requestDeserialization = true,
+                requestBodyDeserialization = true,
+                responseSerialization = true,
+                errorSerialization = true
+            ),
             codegenContext,
             codegenDecorator
         )
@@ -296,7 +302,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
 
                 impl Error {
                     ##[allow(dead_code)]
-                    fn generic(msg: &'static str) -> Self {
+                    pub fn generic(msg: &'static str) -> Self {
                         Self::Generic(msg.into())
                     }
                 }
