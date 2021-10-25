@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
@@ -13,9 +14,18 @@ import software.amazon.smithy.rust.codegen.smithy.crateLocation
 import java.io.File
 import java.nio.file.Path
 
-fun RuntimeConfig.awsRoot(): RuntimeCrateLocation = when (runtimeCrateLocation) {
-    is RuntimeCrateLocation.Path -> {
-        val cratePath = (runtimeCrateLocation as RuntimeCrateLocation.Path).path
+fun defaultSdkVersion(): String {
+    // generated as part of the build, see codegen/build.gradle.kts
+    try {
+        return object {}.javaClass.getResource("sdk-crate-version.txt")?.readText()
+            ?: throw CodegenException("sdk-crate-version.txt does not exist")
+    } catch (ex: Exception) {
+        throw CodegenException("failed to load sdk-crate-version.txt which sets the default client-runtime version", ex)
+    }
+}
+
+fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
+    val updatedPath = runtimeCrateLocation.path?.let { cratePath ->
         val asPath = Path.of(cratePath)
         val path = if (asPath.isAbsolute) {
             asPath.parent.resolve("aws/rust-runtime").toAbsolutePath().toString()
@@ -23,9 +33,11 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation = when (runtimeCrateLocation) 
             cratePath
         }
         check(File(path).exists()) { "$path must exist to generate a working SDK" }
-        RuntimeCrateLocation.Path(path)
+        path
     }
-    is RuntimeCrateLocation.Versioned -> runtimeCrateLocation
+    return runtimeCrateLocation.copy(
+        path = updatedPath, version = defaultSdkVersion()
+    )
 }
 
 object AwsRuntimeType {

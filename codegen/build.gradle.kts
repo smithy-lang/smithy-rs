@@ -32,13 +32,27 @@ dependencies {
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
 
-// unlike the client-runtime, software.amazon.smithy.rust.codegen.smithy-kotlin codegen package is not expected to run on Android...we can target 1.8
-tasks.compileKotlin {
+tasks.compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
 
-tasks.compileTestKotlin {
+val generateSmithyRuntimeCrateVersion by tasks.registering {
+    // generate the version of the runtime to use as a resource.
+    // this keeps us from having to manually change version numbers in multiple places
+    val resourcesDir = "$buildDir/resources/main/software/amazon/smithy/rust/codegen/smithy"
+    val versionFile = file("$resourcesDir/runtime-crate-version.txt")
+    outputs.file(versionFile)
+    val crateVersion = project.properties["smithy.rs.runtime.crate.version"].toString()
+    inputs.property("crateVersion", crateVersion)
+    sourceSets.main.get().output.dir(resourcesDir)
+    doLast {
+        versionFile.writeText(crateVersion)
+    }
+}
+
+tasks.compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
+    dependsOn(generateSmithyRuntimeCrateVersion)
 }
 
 // Reusable license copySpec
@@ -90,7 +104,6 @@ tasks.jacocoTestReport {
 
 // Always run the jacoco test report after testing.
 tasks["test"].finalizedBy(tasks["jacocoTestReport"])
-
 
 publishing {
     publications {

@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
-import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -135,7 +134,7 @@ fun generatePluginContext(model: Model): Pair<PluginContext, Path> {
             "runtimeConfig",
             Node.objectNodeBuilder().withMember(
                 "relativePath",
-                Node.from((TestRuntimeConfig.runtimeCrateLocation as RuntimeCrateLocation.Path).path)
+                Node.from((TestRuntimeConfig.runtimeCrateLocation).path)
             ).build()
         )
         .build()
