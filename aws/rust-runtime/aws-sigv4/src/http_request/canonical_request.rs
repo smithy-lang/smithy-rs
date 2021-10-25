@@ -359,7 +359,7 @@ fn trim_all(text: &str) -> Cow<'_, str> {
     // The normal trim function will trim non-breaking spaces and other various whitespace chars.
     // S3 ONLY trims spaces so we use trim_matches to trim spaces only
     let text = text.trim_matches(' ');
-    re.replace_all(text, " ").into()
+    re.replace_all(text, " ")
 }
 
 /// Works just like [trim_all] but acts on HeaderValues instead of strings
