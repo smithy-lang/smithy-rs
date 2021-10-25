@@ -87,13 +87,24 @@ async fn test_s3_signer_with_naughty_string_metadata() -> Result<(), aws_sdk_s3:
     client.call(op).await.unwrap();
 
     let expected_req = rcvr.expect_request();
-    let auth_header = expected_req.headers().get("Authorization").unwrap();
+    let auth_header = expected_req
+        .headers()
+        .get("Authorization")
+        .unwrap()
+        .to_owned();
 
     // This is a snapshot test taken from a known working test result
-    assert!(auth_header
-        .to_str()
-        .unwrap()
-        .contains("Signature=ec1b206cc8c5f9e05f583516521e1412a2c555b81fad011be661199612c53cb7"));
+    let snapshot_signature =
+        "Signature=8dfa41f2db599a9fba53393b0ae5da646e5e452fa3685f7a1487d6eade5ec5c8";
+    assert!(
+        auth_header
+            .to_str()
+            .unwrap()
+            .contains(snapshot_signature),
+        "authorization header signature did not match expected signature: got {}, expected it to contain {}",
+        auth_header.to_str().unwrap(),
+        snapshot_signature
+    );
 
     Ok(())
 }

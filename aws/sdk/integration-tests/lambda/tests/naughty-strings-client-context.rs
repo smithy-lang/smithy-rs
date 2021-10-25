@@ -1,9 +1,10 @@
+#![allow(dead_code)]
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use http::HeaderValue;
+// use http::HeaderValue;
 
 const NAUGHTY_STRINGS: &str = include_str!("blns/blns.txt");
 
