@@ -70,7 +70,7 @@ async fn compute_hashes(
     chunk_size: usize,
 ) -> Result<(Digest, Vec<Digest>), byte_stream::Error> {
     let mut hashes = vec![];
-    let mut remining_in_chunk = chunk_size;
+    let mut remaining_in_chunk = chunk_size;
     let mut body = ByteStream::new(body);
     let mut local = Context::new(&SHA256);
     let mut full_body = Context::new(&SHA256);
@@ -79,19 +79,19 @@ async fn compute_hashes(
         segmented.push(data);
         while segmented.has_remaining() {
             let next = segmented.chunk();
-            let len = next.len().min(remining_in_chunk);
+            let len = next.len().min(remaining_in_chunk);
             local.update(&next[..len]);
             full_body.update(&next[..len]);
             segmented.advance(len);
-            remining_in_chunk -= len;
-            if remining_in_chunk == 0 {
+            remaining_in_chunk -= len;
+            if remaining_in_chunk == 0 {
                 hashes.push(local.finish());
                 local = Context::new(&SHA256);
-                remining_in_chunk = chunk_size;
+                remaining_in_chunk = chunk_size;
             }
         }
     }
-    if remining_in_chunk != chunk_size || hashes.is_empty() {
+    if remaining_in_chunk != chunk_size || hashes.is_empty() {
         hashes.push(local.finish());
     }
     Ok((full_body.finish(), hashes))
@@ -103,13 +103,16 @@ async fn compute_hashes(
 ///
 /// See <https://docs.aws.amazon.com/amazonglacier/latest/dev/checksum-calculations.html> for more information.
 fn compute_hash_tree(mut hashes: Vec<Digest>) -> Digest {
-    assert!(!hashes.is_empty());
+    assert!(
+        !hashes.is_empty(),
+        "even an empty file will produce a digest. this function assumes that hashes is non-empty"
+    );
     while hashes.len() > 1 {
         let next = hashes.chunks(2).into_iter().map(|chunk| match *chunk {
             [left, right] => {
                 let mut ctx = Context::new(&SHA256);
                 ctx.update(left.as_ref());
-                ctx.update(&right.as_ref());
+                ctx.update(right.as_ref());
                 ctx.finish()
             }
             [last] => last,
