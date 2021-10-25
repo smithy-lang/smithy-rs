@@ -5,7 +5,7 @@
 
 use http::HeaderValue;
 
-const NAUGHTY_STRINGS: &str = include_str!("../../blns/blns.txt");
+const NAUGHTY_STRINGS: &str = include_str!("blns/blns.txt");
 
 /// A list of lines to skipped when iterating over the blns. These lines should all fail when
 /// entered into the AWS CLI too. In the below test, every one of these lines will produce an
@@ -114,61 +114,61 @@ const SKIPPED_LINES: &[usize] = &[
     737, // 'گچپژ'
 ];
 
-#[tokio::test]
-#[ignore]
-async fn test_client_context_field_against_naughty_strings_list() {
-    tracing_subscriber::fmt::init();
-
-    let config = aws_config::load_from_env().await;
-    let client = aws_sdk_lambda::Client::new(&config);
-    let invalid_request_content_exception = "InvalidRequestContentException: Client context must be a valid Base64-encoded JSON object.";
-    let unrecognized_client_exception =
-        "UnrecognizedClientException: The security token included in the request is invalid.";
-
-    let mut encountered_errors = false;
-
-    for (idx, line) in NAUGHTY_STRINGS.split('\n').enumerate() {
-        // Some lines in blns aren't even accepted by the AWS CLI so it's reasonable to skip them
-        if SKIPPED_LINES.contains(&(idx + 1)) {
-            continue;
-        }
-
-        // add lines to metadata unless they're a comment or empty
-        // Some naughty strings aren't valid HeaderValues so we skip those too
-        if !line.starts_with("#") && !line.is_empty() && HeaderValue::from_str(line).is_ok() {
-            let err = client
-                .invoke()
-                .function_name("testFunctionThatDoesNothing")
-                .client_context(line)
-                .send()
-                .await
-                .unwrap_err();
-
-            match err.to_string() {
-                // If this happens, it means that someone tried to run the test without valid creds
-                err if err == unrecognized_client_exception => {
-                    panic!("Set valid credentials before running this test.");
-                }
-                // This is the expected error so we ignore it and continue
-                err if err == invalid_request_content_exception => continue,
-                // Other errors are bad and so we bring attention to them
-                err => {
-                    encountered_errors = true;
-                    // 1 is added to idx because line numbers start at one
-                    eprintln!(
-                        "line {} '{}' caused unexpected error: {}",
-                        idx + 1,
-                        line,
-                        err
-                    );
-                }
-            }
-        }
-    }
-
-    if encountered_errors {
-        panic!(
-            "one or more errors were encountered while testing lambda invoke with naughty strings"
-        );
-    }
-}
+// #[tokio::test]
+// async fn test_client_context_field_against_naughty_strings_list() {
+//     tracing_subscriber::fmt::init();
+//
+//     // re-add `aws-config = { path = "../../build/aws-sdk/aws-config" }` to this project's Cargo.toml
+//     let config = aws_config::load_from_env().await;
+//     let client = aws_sdk_lambda::Client::new(&config);
+//     let invalid_request_content_exception = "InvalidRequestContentException: Client context must be a valid Base64-encoded JSON object.";
+//     let unrecognized_client_exception =
+//         "UnrecognizedClientException: The security token included in the request is invalid.";
+//
+//     let mut encountered_errors = false;
+//
+//     for (idx, line) in NAUGHTY_STRINGS.split('\n').enumerate() {
+//         // Some lines in blns aren't even accepted by the AWS CLI so it's reasonable to skip them
+//         if SKIPPED_LINES.contains(&(idx + 1)) {
+//             continue;
+//         }
+//
+//         // add lines to metadata unless they're a comment or empty
+//         // Some naughty strings aren't valid HeaderValues so we skip those too
+//         if !line.starts_with("#") && !line.is_empty() && HeaderValue::from_str(line).is_ok() {
+//             let err = client
+//                 .invoke()
+//                 .function_name("testFunctionThatDoesNothing")
+//                 .client_context(line)
+//                 .send()
+//                 .await
+//                 .unwrap_err();
+//
+//             match err.to_string() {
+//                 // If this happens, it means that someone tried to run the test without valid creds
+//                 err if err == unrecognized_client_exception => {
+//                     panic!("Set valid credentials before running this test.");
+//                 }
+//                 // This is the expected error so we ignore it and continue
+//                 err if err == invalid_request_content_exception => continue,
+//                 // Other errors are bad and so we bring attention to them
+//                 err => {
+//                     encountered_errors = true;
+//                     // 1 is added to idx because line numbers start at one
+//                     eprintln!(
+//                         "line {} '{}' caused unexpected error: {}",
+//                         idx + 1,
+//                         line,
+//                         err
+//                     );
+//                 }
+//             }
+//         }
+//     }
+//
+//     if encountered_errors {
+//         panic!(
+//             "one or more errors were encountered while testing lambda invoke with naughty strings"
+//         );
+//     }
+// }

@@ -10,38 +10,40 @@ use http::HeaderValue;
 use std::time::UNIX_EPOCH;
 use tokio::time::Duration;
 
-const NAUGHTY_STRINGS: &str = include_str!("../../blns/blns.txt");
+const NAUGHTY_STRINGS: &str = include_str!("blns/blns.txt");
 
-// A useful way to find leaks in the signing system that requires an actual S3 bucket to test with
-// If you want to use this, change the bucket name to your bucket
-#[tokio::test]
-#[ignore]
-async fn test_metadata_field_against_naughty_strings_list() -> Result<(), aws_sdk_s3::Error> {
-    let config = aws_config::load_from_env().await;
-    let client = aws_sdk_s3::Client::new(&config);
-
-    let mut req = client
-        .put_object()
-        .bucket("your-test-bucket-goes-here")
-        .key("test.txt")
-        .body(aws_sdk_s3::ByteStream::from_static(b"some test text"));
-
-    for (idx, line) in NAUGHTY_STRINGS.split('\n').enumerate() {
-        // add lines to metadata unless they're a comment or empty
-        // Some naughty strings aren't valid HeaderValues so we skip those too
-        if !line.starts_with("#") && !line.is_empty() && HeaderValue::from_str(line).is_ok() {
-            let key = format!("line-{}", idx);
-
-            req = req.metadata(key, line);
-        }
-    }
-
-    // If this fails due to signing then the signer choked on a bad string. To find out which string,
-    // send one request per line instead of adding all lines as metadata for one request.
-    let _ = req.send().await.unwrap();
-
-    Ok(())
-}
+// // A useful way to find leaks in the signing system that requires an actual S3 bucket to test with
+// // If you want to use this, update the credentials to be your credentials and change the bucket name
+// // to your bucket
+// #[tokio::test]
+// async fn test_metadata_field_against_naughty_strings_list() -> Result<(), aws_sdk_s3::Error> {
+//     // re-add `aws-config = { path = "../../build/aws-sdk/aws-config" }` to this project's Cargo.toml
+//
+//     let config = aws_config::load_from_env().await;
+//     let client = aws_sdk_s3::Client::new(&config);
+//
+//     let mut req = client
+//         .put_object()
+//         .bucket("your-test-bucket-goes-here")
+//         .key("test.txt")
+//         .body(aws_sdk_s3::ByteStream::from_static(b"some test text"));
+//
+//     for (idx, line) in NAUGHTY_STRINGS.split('\n').enumerate() {
+//         // add lines to metadata unless they're a comment or empty
+//         // Some naughty strings aren't valid HeaderValues so we skip those too
+//         if !line.starts_with("#") && !line.is_empty() && HeaderValue::from_str(line).is_ok() {
+//             let key = format!("line-{}", idx);
+//
+//             req = req.metadata(key, line);
+//         }
+//     }
+//
+//     // If this fails due to signing then the signer choked on a bad string. To find out which string,
+//     // send one request per line instead of adding all lines as metadata for one request.
+//     let _ = req.send().await.unwrap();
+//
+//     Ok(())
+// }
 
 #[tokio::test]
 async fn test_s3_signer_with_naughty_string_metadata() -> Result<(), aws_sdk_s3::Error> {

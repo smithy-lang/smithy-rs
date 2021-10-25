@@ -8,7 +8,6 @@ edition = "2018"
 async-stream = "0.3"
 aws-http = { path = "../../build/aws-sdk/aws-http"}
 aws-hyper = { path = "../../build/aws-sdk/aws-hyper"}
-aws-config = { path = "../../build/aws-sdk/aws-config"}
 aws-sdk-lambda = { path = "../../build/aws-sdk/lambda" }
 base64 = "0.13"
 bytes = "1"

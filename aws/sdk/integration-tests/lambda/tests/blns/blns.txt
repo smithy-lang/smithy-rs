@@ -211,7 +211,7 @@ INF
 #	あ          HIRAGANA LETTER A (U+3042)
 #	A           LATIN CAPITAL LETTER A (U+0041)
 #	鷗          CJK_UNIFIED_IDEOGRAPHS (U+9DD7)
-#	Œ           LATIN SMALL LIGATURE OE (U+0153) 
+#	Œ           LATIN SMALL LIGATURE OE (U+0153)
 #	é           LATIN SMALL LETTER E WITH ACUTE (U+00E9)
 #	Ｂ           FULLWIDTH LATIN CAPITAL LETTER B (U+FF22)
 #	逍          CJK_UNIFIED_IDEOGRAPHS (U+900D)
@@ -591,7 +591,7 @@ http://a/%%30%30
 ' OR 1=1 -- 1
 ' OR '1'='1
 '; EXEC sp_MSForEachTable 'DROP TABLE ?'; --
- 
+
 %
 _
 

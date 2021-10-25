@@ -441,7 +441,10 @@ mod tests {
 
         let original = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")
-            .header("some-header", HeaderValue::from_str("  test  test   ").unwrap())
+            .header(
+                "some-header",
+                HeaderValue::from_str("  test  test   ").unwrap(),
+            )
             .body("")
             .unwrap();
         let signable = SignableRequest::from(&original);
@@ -456,7 +459,10 @@ mod tests {
 
         let mut expected = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")
-            .header("some-header", HeaderValue::from_str("  test  test   ").unwrap())
+            .header(
+                "some-header",
+                HeaderValue::from_str("  test  test   ").unwrap(),
+            )
             .header(
                 "x-amz-date",
                 HeaderValue::from_str("20150830T123600Z").unwrap(),
@@ -469,7 +475,7 @@ mod tests {
                         SignedHeaders=host;some-header;x-amz-date, \
                         Signature=0bd74dbf6f21161f61a1a3a1c313b6a4bc67ec57bf5ea9ae956a63753ca1d7f7",
                 )
-                    .unwrap(),
+                .unwrap(),
             )
             .body("")
             .unwrap();
