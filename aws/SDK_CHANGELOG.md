@@ -3,6 +3,10 @@ vNext (Month Day, Year)
 **Breaking Changes**
 - `<operation>.make_operation(&config)` is now an `async` function for all operations. Code should be updated to call `.await`. This will only impact users using the low-level API. (smithy-rs#797)
 
+**New this week**
+
+- Fix `native-tls` feature in `aws-config` (aws-sdk-rust#265, smithy-rs#803)
+
 v0.0.22-alpha (October 20th, 2021)
 ==================================
 
