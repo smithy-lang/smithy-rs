@@ -5,9 +5,6 @@ namespace com.amazonaws.glacier
 use smithy.test#httpRequestTests
 use aws.protocols#restJson1
 
-// The account_id test and the checksums tests will fail until https://github.com/awslabs/smithy-rs/issues/137 and
-// https://github.com/awslabs/smithy-rs/issues/135 are implemented
-
 apply UploadArchive @httpRequestTests([
     {
         id: "GlacierVersionHeader",
