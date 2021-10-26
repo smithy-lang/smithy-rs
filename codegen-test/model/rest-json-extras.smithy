@@ -278,7 +278,8 @@ operation CaseInsensitiveErrorOperation {
 
 @httpResponseTests([
     {
-        id: "Upper case error modeled lower case",
+        documentation: "Upper case error modeled lower case",
+        id: "UpperErrorModeledLower",
         protocol: "aws.protocols#restJson1",
         code: 500,
         body: "{\"Message\": \"hello\"}",
