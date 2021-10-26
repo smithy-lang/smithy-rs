@@ -59,7 +59,7 @@ private class TestProtocolTraitImplGenerator(
                             ${operationWriter.escape(correctResponse)}
                         }
                     }""",
-            "parse_strict" to RuntimeType.parseStrict(codegenContext.runtimeConfig),
+            "parse_strict" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
             "output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
             "error" to operationShape.errorSymbol(symbolProvider),
             "response" to RuntimeType.Http("Response"),

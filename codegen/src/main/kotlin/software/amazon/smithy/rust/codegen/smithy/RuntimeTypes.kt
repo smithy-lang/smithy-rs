@@ -251,12 +251,29 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun sdkBody(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType("SdkBody", dependency = CargoDependency.SmithyHttp(runtimeConfig), "aws_smithy_http::body")
 
-        fun parseStrict(runtimeConfig: RuntimeConfig) = RuntimeType(
+        fun parseStrictResponse(runtimeConfig: RuntimeConfig) = RuntimeType(
             "ParseStrictResponse",
             dependency = CargoDependency.SmithyHttp(runtimeConfig),
             namespace = "aws_smithy_http::response"
         )
 
+        fun parseStrictRequest(runtimeConfig: RuntimeConfig) = RuntimeType(
+            "ParseStrictRequest",
+            dependency = CargoDependency.SmithyHttp(runtimeConfig),
+            namespace = "aws_smithy_http::request"
+        )
+
+        fun serializeStrictResponse(runtimeConfig: RuntimeConfig) = RuntimeType(
+            "SerializeStrictResponse",
+            dependency = CargoDependency.SmithyHttp(runtimeConfig),
+            namespace = "aws_smithy_http::response"
+        )
+
+        fun serializeStrictError(runtimeConfig: RuntimeConfig) = RuntimeType(
+            "SerializeStrictError",
+            dependency = CargoDependency.SmithyHttp(runtimeConfig),
+            namespace = "aws_smithy_http::response"
+        )
         val Bytes = RuntimeType("Bytes", dependency = CargoDependency.Bytes, namespace = "bytes")
 
         fun forInlineDependency(inlineDependency: InlineDependency) =
@@ -275,6 +292,12 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             "ParseHttpResponse",
             dependency = CargoDependency.SmithyHttp(runtimeConfig),
             namespace = "aws_smithy_http::response"
+        )
+
+        fun parseRequest(runtimeConfig: RuntimeConfig) = RuntimeType(
+            "ParseHttpRequest",
+            dependency = CargoDependency.SmithyHttp(runtimeConfig),
+            namespace = "aws_smithy_http::request"
         )
 
         fun ec2QueryErrors(runtimeConfig: RuntimeConfig) =

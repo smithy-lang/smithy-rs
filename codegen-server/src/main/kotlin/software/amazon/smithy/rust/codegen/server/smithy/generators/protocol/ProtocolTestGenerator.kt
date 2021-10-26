@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.util.getTrait
@@ -44,13 +45,6 @@ import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import java.util.logging.Logger
-
-data class ProtocolSupport(
-    val requestDeserialization: Boolean,
-    val requestBodyDeserialization: Boolean,
-    val responseSerialization: Boolean,
-    val errorSerialization: Boolean
-)
 
 /**
  * Generate protocol tests for an operation
@@ -67,7 +61,7 @@ class ProtocolTestGenerator(
     private val outputShape = operationShape.outputShape(codegenContext.model)
     private val operationSymbol = codegenContext.symbolProvider.toSymbol(operationShape)
     private val operationIndex = OperationIndex.of(codegenContext.model)
-    private val operationMod = RuntimeType("operation", null, "crate")
+    private val operationSerType = RuntimeType("operation_ser", null, "crate")
 
     private val instantiator = with(codegenContext) {
         Instantiator(symbolProvider, model, runtimeConfig)
@@ -221,8 +215,7 @@ class ProtocolTestGenerator(
         if (protocolSupport.requestBodyDeserialization) {
             // "If no request body is defined, then no assertions are made about the body of the message."
             httpRequestTestCase.body.orNull()?.also { body ->
-                val fnName = "deser_${operationShape.id.name.toSnakeCase()}_request"
-                checkBody(this, fnName, body)
+                checkBody(this, body)
             }
         }
 
@@ -267,19 +260,17 @@ class ProtocolTestGenerator(
         writeInline("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        write(
-            """let http_response = #T(&expected_output).expect("failed to serialize response");""",
-            operationMod.member(fnName)
-        )
         rustTemplate(
             """
-            use #{parse_http_response};
-            let parser = #{op}::new();
-            let parsed = parser.parse_loaded(&http_response);
+            use #{ParseStrictResponse};
+            use #{SerializeStrictResponse};
+            let op = #{op}::new();
+            let http_response = op.serialize_response(&expected_output).expect("unable to serialize response");
+            let parsed = op.parse(&http_response);
         """,
             "op" to operationSymbol,
-            "parse_http_response" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType()
-                .member("response::ParseHttpResponse"),
+            "ParseStrictResponse" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
+            "SerializeStrictResponse" to RuntimeType.serializeStrictResponse(codegenContext.runtimeConfig),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = operationShape.errorSymbol(codegenContext.symbolProvider)
@@ -331,14 +322,19 @@ class ProtocolTestGenerator(
         basicCheck(forbidHeaders, rustWriter, "forbidden_headers", "forbid_headers")
     }
 
-    private fun checkBody(rustWriter: RustWriter, fnName: String, body: String) {
+    private fun checkBody(rustWriter: RustWriter, body: String) {
         rustWriter.write(
             """let http_request = http_request.map(|body| #T::from(body.bytes().unwrap().to_vec()));""",
             RuntimeType.Bytes
         )
-        rustWriter.write(
-            """let body = #T(&http_request).expect("failed to parse request");""",
-            operationMod.member(fnName)
+        rustWriter.rustTemplate(
+            """
+            use #{parse_strict_request};
+            let op = #{op}::new();
+            let body = op.parse(&http_request).expect("failed to parse request");
+            """,
+            "op" to operationSymbol,
+            "parse_strict_request" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType().member("request::ParseStrictRequest"),
         )
         if (body == "") {
             rustWriter.write("// No body")

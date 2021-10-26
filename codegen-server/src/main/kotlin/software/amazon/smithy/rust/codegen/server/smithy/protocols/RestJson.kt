@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.protocols
+package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
@@ -15,31 +15,36 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
+import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
+import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 
-class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
+class RestJsonFactory : ProtocolGeneratorFactory<ServerHttpProtocolGenerator> {
     override fun protocol(codegenContext: CodegenContext): Protocol = RestJson(codegenContext)
 
-    override fun buildProtocolGenerator(codegenContext: CodegenContext): HttpBoundProtocolGenerator =
-        HttpBoundProtocolGenerator(codegenContext, RestJson(codegenContext))
+    override fun buildProtocolGenerator(codegenContext: CodegenContext): ServerHttpProtocolGenerator =
+        ServerHttpProtocolGenerator(codegenContext, RestJson(codegenContext))
 
     override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
             /* Client support */
-            requestSerialization = true,
-            requestBodySerialization = true,
-            responseDeserialization = true,
-            errorDeserialization = true,
+            requestSerialization = false,
+            requestBodySerialization = false,
+            responseDeserialization = false,
+            errorDeserialization = false,
             /* Server support */
-            requestDeserialization = false,
-            requestBodyDeserialization = false,
-            responseSerialization = false,
-            errorSerialization = false
+            requestDeserialization = true,
+            requestBodyDeserialization = true,
+            responseSerialization = true,
+            errorSerialization = true
         )
     }
 }

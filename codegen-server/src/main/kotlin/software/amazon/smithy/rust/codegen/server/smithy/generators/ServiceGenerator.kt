@@ -7,20 +7,21 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.CombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.TopLevelErrorGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.outputShape
 
 class ServiceGenerator(
     private val rustCrate: RustCrate,
-    private val protocolGenerator: ProtocolGenerator,
+    private val protocolGenerator: ServerProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
     private val context: CodegenContext,
     private val decorator: RustCodegenDecorator,
@@ -32,16 +33,19 @@ class ServiceGenerator(
         operations.map { operation ->
             rustCrate.useShapeWriter(operation) { operationWriter ->
                 rustCrate.useShapeWriter(operation.inputShape(context.model)) { inputWriter ->
-                    protocolGenerator.renderOperation(
-                        operationWriter,
-                        inputWriter,
-                        operation,
-                        decorator.operationCustomizations(context, operation, listOf())
-                    )
-                    // render protocol tests into `operation.rs` (note operationWriter vs.
-                    // inputWriter)
-                    ProtocolTestGenerator(context, protocolSupport, operation, operationWriter)
-                        .render()
+                    rustCrate.useShapeWriter(operation.outputShape(context.model)) { outputWriter ->
+                        protocolGenerator.serverRenderOperation(
+                            operationWriter,
+                            inputWriter,
+                            outputWriter,
+                            operation,
+                            decorator.operationCustomizations(context, operation, listOf())
+                        )
+                        // render protocol tests into `operation.rs` (note operationWriter vs.
+                        // inputWriter)
+                        ProtocolTestGenerator(context, protocolSupport, operation, operationWriter)
+                            .render()
+                    }
                 }
             }
             rustCrate.withModule(RustModule.Error) { writer ->

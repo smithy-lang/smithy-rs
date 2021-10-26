@@ -5,11 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
-import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeVisitor
@@ -23,9 +21,8 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpDeserializerGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpSerializerGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
@@ -38,13 +35,8 @@ import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.letIf
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.smithy.transformers.EventStreamNormalizer
@@ -72,12 +64,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private val fileManifest = context.fileManifest
     private val model: Model
     private val codegenContext: CodegenContext
-    private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
-    private val protocolGenerator: ProtocolGenerator
-
-    private val httpSerializerGenerator: RestJson1HttpSerializerGenerator
-    private val httpDeserializerGenerator: RestJson1HttpDeserializerGenerator
-    private val httpBindingResolver: HttpBindingResolver
+    private val protocolGeneratorFactory: ProtocolGeneratorFactory<ServerProtocolGenerator>
+    private val protocolGenerator: ServerProtocolGenerator
 
     init {
         val symbolVisitorConfig =
@@ -88,10 +76,10 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
         val (protocol, generator) =
-            ProtocolLoader(
+            ServerProtocolLoader(
                 codegenDecorator.protocols(
                     service.id,
-                    ProtocolLoader.DefaultProtocols
+                    ServerProtocolLoader.DefaultProtocols
                 )
             )
                 .protocolFor(context.model, service)
@@ -105,24 +93,6 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
 
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
-
-        httpBindingResolver =
-            HttpTraitHttpBindingResolver(
-                codegenContext.model,
-                ProtocolContentTypes.consistent("application/json"),
-            )
-
-        when (codegenContext.protocol) {
-            RestJson1Trait.ID -> {
-                httpSerializerGenerator =
-                    RestJson1HttpSerializerGenerator(codegenContext, httpBindingResolver)
-                httpDeserializerGenerator =
-                    RestJson1HttpDeserializerGenerator(codegenContext, httpBindingResolver)
-            }
-            else -> {
-                TODO("Protocol ${codegenContext.protocol} not supported yet")
-            }
-        }
     }
 
     /**
@@ -195,23 +165,6 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     override fun getDefault(shape: Shape?) {}
 
     /**
-     * Operation Shape Visitor
-     *
-     * For each operation shape, generate the corresponding protocol implementation.
-     */
-    override fun operationShape(shape: OperationShape?) {
-        logger.info("[rust-server-codegen] Generating operation $shape")
-        if (shape != null) {
-            rustCrate.useShapeWriter(shape) { writer ->
-                shape.let {
-                    httpDeserializerGenerator.render(writer, it)
-                    httpSerializerGenerator.render(writer, it)
-                }
-            }
-        }
-    }
-
-    /**
      * Structure Shape Visitor
      *
      * For each structure shape, generate:
@@ -277,12 +230,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         ServiceGenerator(
             rustCrate,
             protocolGenerator,
-            ProtocolSupport(
-                requestDeserialization = true,
-                requestBodyDeserialization = true,
-                responseSerialization = true,
-                errorSerialization = true
-            ),
+            protocolGeneratorFactory.support(),
             codegenContext,
             codegenDecorator
         )

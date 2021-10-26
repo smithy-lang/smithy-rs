@@ -81,6 +81,46 @@ impl<T: ParseStrictResponse> ParseHttpResponse for T {
     }
 }
 
+pub trait SerializeHttpResponse {
+    type Struct;
+    type Output;
+    fn serialize_loaded(&self, output: &Self::Struct) -> Self::Output;
+}
+
+pub trait SerializeStrictResponse {
+    type Struct;
+    type Output;
+    fn serialize_response(&self, output: &Self::Struct) -> Self::Output;
+}
+
+impl<T: SerializeStrictResponse> SerializeHttpResponse for T {
+    type Struct = T::Struct;
+    type Output = T::Output;
+    fn serialize_loaded(&self, output: &Self::Struct) -> Self::Output {
+        self.serialize_response(output)
+    }
+}
+
+pub trait SerializeHttpError {
+    type Struct;
+    type Output;
+    fn serialize_loaded(&self, error: &Self::Struct) -> Self::Output;
+}
+
+pub trait SerializeStrictError {
+    type Struct;
+    type Output;
+    fn serialize_error(&self, error: &Self::Struct) -> Self::Output;
+}
+
+impl<T: SerializeStrictError> SerializeHttpError for T {
+    type Struct = T::Struct;
+    type Output = T::Output;
+    fn serialize_loaded(&self, error: &Self::Struct) -> Self::Output {
+        self.serialize_error(error)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::body::SdkBody;

@@ -34,10 +34,16 @@ class RestXmlFactory(private val generator: (CodegenContext) -> Protocol = { Res
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
+            /* Client support */
             requestSerialization = true,
             requestBodySerialization = true,
             responseDeserialization = true,
-            errorDeserialization = true
+            errorDeserialization = true,
+            /* Server support */
+            requestDeserialization = false,
+            requestBodyDeserialization = false,
+            responseSerialization = false,
+            errorSerialization = false
         )
     }
 }
