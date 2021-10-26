@@ -23,7 +23,7 @@ async fn test_signer() -> Result<(), aws_sdk_s3::Error> {
         .build();
     let conn = TestConnection::new(vec![(
         http::Request::builder()
-            .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210618/us-east-1/s3/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-content-sha256;x-amz-date;x-amz-security-token;x-amz-user-agent, Signature=c3f78ce4969bd55cbb90ba91f46e4fcd14d08dae858f1ac9e508712997eabde7")
+            .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210618/us-east-1/s3/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-content-sha256;x-amz-date;x-amz-security-token;x-amz-user-agent, Signature=c55fb770a89c535e56b502f8c949766c7bde7cfc84f89d2b7761d13b8e82234c")
             .uri("https://s3.us-east-1.amazonaws.com/test-bucket?list-type=2&prefix=prefix~")
             .body(SdkBody::empty())
             .unwrap(),
