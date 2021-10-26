@@ -11,11 +11,13 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 
+val Glacier: ShapeId = ShapeId.from("com.amazonaws.glacier#Glacier")
+
 class GlacierDecorator : RustCodegenDecorator {
     override val name: String = "Glacier"
     override val order: Byte = 0
 
-    private fun applies(codegenContext: CodegenContext) = codegenContext.serviceShape.id == ShapeId.from("com.amazonaws.glacier#Glacier")
+    private fun applies(codegenContext: CodegenContext) = codegenContext.serviceShape.id == Glacier
     override fun operationCustomizations(
         codegenContext: CodegenContext,
         operation: OperationShape,
@@ -23,7 +25,11 @@ class GlacierDecorator : RustCodegenDecorator {
     ): List<OperationCustomization> {
         val extras = if (applies(codegenContext)) {
             val apiVersion = codegenContext.serviceShape.version
-            listOf(ApiVersionHeader(apiVersion))
+            listOfNotNull(
+                ApiVersionHeader(apiVersion),
+                TreeHashHeader.forOperation(operation, codegenContext.runtimeConfig),
+                AccountIdAutofill.forOperation(operation, codegenContext.model)
+            )
         } else {
             emptyList()
         }
