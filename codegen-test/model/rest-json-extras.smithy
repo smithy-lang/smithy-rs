@@ -64,8 +64,24 @@ service RestJsonExtras {
         NullInNonSparse,
         CaseInsensitiveErrorOperation,
         EmptyStructWithContentOnWireOp,
-    ]
+    ],
+    errors: [ExtraError]
 }
+
+@httpResponseTests([
+    {
+        documentation: "Upper case error modeled lower case",
+        id: "ServiceLevelError",
+        protocol: "aws.protocols#restJson1",
+        code: 500,
+        body: "",
+        headers: { "X-Amzn-Errortype": "ExtraError" },
+        params: {}
+    }
+])
+@error("server")
+@error("server")
+structure ExtraError {}
 
 @http(uri: "/StringPayload", method: "POST")
 @httpRequestTests([
