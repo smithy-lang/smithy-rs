@@ -95,7 +95,7 @@ async fn test_s3_signer_with_naughty_string_metadata() -> Result<(), aws_sdk_s3:
 
     // This is a snapshot test taken from a known working test result
     let snapshot_signature =
-        "Signature=8dfa41f2db599a9fba53393b0ae5da646e5e452fa3685f7a1487d6eade5ec5c8";
+        "Signature=849f8737d8e8239a349d74af5b2c1d24be43a199e591bd2fc9db7d8a62f49d71";
     assert!(
         auth_header
             .to_str()

@@ -356,44 +356,44 @@ static MULTIPLE_SPACES: once_cell::sync::Lazy<regex::bytes::Regex> =
 fn trim_all(text: &[u8]) -> Cow<'_, [u8]> {
     // The normal trim function will trim non-breaking spaces and other various whitespace chars.
     // S3 ONLY trims spaces so we use trim_matches to trim spaces only
-    let text = trim_ascii_whitespace(text);
+    let text = trim_spaces_from_byte_string(text);
     MULTIPLE_SPACES.replace_all(text, " ".as_bytes())
 }
 
 /// Removes excess spaces before and after a given byte string by returning a subset of those bytes.
 /// Will return an empty slice if a string is composed entirely of whitespace.
-fn trim_ascii_whitespace(bytes: &[u8]) -> &[u8] {
+fn trim_spaces_from_byte_string(bytes: &[u8]) -> &[u8] {
     if bytes.is_empty() {
         return bytes;
     }
 
     let mut starting_index = 0;
 
-    for (index, byte) in bytes.iter().enumerate() {
+    for i in 0..bytes.len() {
         // If we get to the end of the array without hitting a non-whitespace char, return empty slice
-        if index == bytes.len() - 1 {
+        if i == bytes.len() - 1 {
             // This range equates to an empty slice
             return &bytes[0..0];
         // otherwise, skip over each instance of whitespace
-        } else if byte.is_ascii_whitespace() {
+        } else if bytes[i] == b' ' {
             continue;
         }
 
         // return the index of the first non-whitespace character
-        starting_index = index;
+        starting_index = i;
         break;
     }
 
     // Now we do the same but in reverse
     let mut ending_index = 0;
-    for (index, byte) in bytes.iter().enumerate().rev() {
+    for i in (0..bytes.len()).rev() {
         // skip over each instance of whitespace
-        if byte.is_ascii_whitespace() {
+        if bytes[i] == b' ' {
             continue;
         }
 
         // return the index of the first non-whitespace character
-        ending_index = index;
+        ending_index = i;
         break;
     }
 
@@ -750,9 +750,9 @@ mod tests {
     #[test]
     fn test_trim_all_ignores_other_forms_of_whitespace() {
         // Can't compare a byte array to a Cow so we convert both to slices before comparing
-        let expected = &b"\xA0Some\xA0 example \xA0text\xA0"[..];
+        let expected = &b"\t\xA0Some\xA0 example \xA0text\xA0\n"[..];
         // \xA0 is a non-breaking space character
-        let actual = &trim_all(b"\xA0Some\xA0     example   \xA0text\xA0")[..];
+        let actual = &trim_all(b"\t\xA0Some\xA0     example   \xA0text\xA0\n")[..];
 
         assert_eq!(expected, actual);
     }
