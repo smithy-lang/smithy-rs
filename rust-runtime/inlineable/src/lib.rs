@@ -27,10 +27,7 @@ mod test {
     fn test_uuid() {
         assert_eq!(uuid_v4(0), "00000000-0000-4000-8000-000000000000");
         assert_eq!(uuid_v4(12341234), "2ff4cb00-0000-4000-8000-000000000000");
-        assert_eq!(
-            uuid_v4(u128::max_value()),
-            "ffffffff-ffff-4fff-ffff-ffffffffffff"
-        );
+        assert_eq!(uuid_v4(u128::MAX), "ffffffff-ffff-4fff-ffff-ffffffffffff");
     }
 
     #[test]

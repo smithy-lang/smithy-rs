@@ -28,5 +28,6 @@ tracing = "0.1"
 
 [dev-dependencies]
 bytes = "1"
-pretty_assertions = "1.0"
 httparse = "1.5"
+pretty_assertions = "1.0"
+proptest = "1"
