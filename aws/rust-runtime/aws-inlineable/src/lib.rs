@@ -26,3 +26,6 @@ pub mod presigning;
 
 /// Special logic for handling S3's error responses.
 pub mod s3_errors;
+
+/// Glacier-specific checksumming behavior
+pub mod glacier_checksums;

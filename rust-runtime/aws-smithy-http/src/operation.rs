@@ -64,6 +64,9 @@ pub enum BuildError {
     },
     #[error("Failed during serialization: {0}")]
     SerializationError(#[from] Box<dyn Error + Send + Sync + 'static>),
+
+    #[error("Error during request construction: {0}")]
+    Other(Box<dyn Error + Send + Sync + 'static>),
 }
 
 #[derive(Debug)]
