@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.aws.traits.ServiceTrait
-import software.amazon.smithy.model.traits.TitleTrait
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.traits.TitleTrait
 import java.util.Properties
 import kotlin.streams.toList
 
@@ -218,7 +218,8 @@ fun generateSmithyBuild(services: List<AwsService>): String {
                 "plugins": {
                     "rust-codegen": {
                         "runtimeConfig": {
-                            "relativePath": "../"
+                            "relativePath": "../",
+                            "version": "DEFAULT"
                         },
                         "codegen": {
                             "includeFluentClient": false,
