@@ -1844,7 +1844,7 @@
                 "Message": {
                     "target": "com.amazonaws.translate#UnboundedLengthString",
                     "traits": {
-                        "smithy.api#documentation": "<p>An explanation of any errors that may have occured during the translation job.</p>"
+                        "smithy.api#documentation": "<p>An explanation of any errors that may have occurred during the translation job.</p>"
                     }
                 },
                 "SubmittedTime": {

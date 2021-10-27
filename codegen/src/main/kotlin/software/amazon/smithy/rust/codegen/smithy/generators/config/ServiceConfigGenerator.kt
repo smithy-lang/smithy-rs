@@ -49,13 +49,13 @@ sealed class ServiceConfig(name: String) : Section(name) {
     object ConfigStructAdditionalDocs : ServiceConfig("ConfigStructAdditionalDocs")
 
     /**
-     * Struct definition of `Config`. Fields should end with `,` (eg. `foo: Box<u64>,`)
+     * Struct definition of `Config`. Fields should end with `,` (e.g. `foo: Box<u64>,`)
      */
     object ConfigStruct : ServiceConfig("ConfigStruct")
 
     /**
-     * impl block of `Config`. (eg. to add functions)
-     * eg.
+     * impl block of `Config`. (e.g. to add functions)
+     * e.g.
      * ```kotlin
      * rust("pub fn is_cross_region() -> bool { true }")
      * ```
@@ -70,7 +70,7 @@ sealed class ServiceConfig(name: String) : Section(name) {
 
     /**
      * Convert from a field in the builder to the final field in config
-     *  eg.
+     *  e.g.
      *  ```kotlin
      *  rust("""my_field: my_field.unwrap_or_else(||"default")""")
      *  ```

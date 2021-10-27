@@ -1101,7 +1101,7 @@
                 "ElasticsearchVersion": {
                     "target": "com.amazonaws.elasticsearchservice#ElasticsearchVersionString",
                     "traits": {
-                        "smithy.api#documentation": "<p>String of format X.Y to specify version for the Elasticsearch domain eg. \"1.5\" or \"2.3\". For more information,\n          see <a href=\"http://docs.aws.amazon.com/elasticsearch-service/latest/developerguide/es-createupdatedomains.html#es-createdomains\" target=\"_blank\">Creating Elasticsearch Domains</a> in the <i>Amazon Elasticsearch Service Developer Guide</i>.</p>"
+                        "smithy.api#documentation": "<p>String of format X.Y to specify version for the Elasticsearch domain e.g. \"1.5\" or \"2.3\". For more information,\n          see <a href=\"http://docs.aws.amazon.com/elasticsearch-service/latest/developerguide/es-createupdatedomains.html#es-createdomains\" target=\"_blank\">Creating Elasticsearch Domains</a> in the <i>Amazon Elasticsearch Service Developer Guide</i>.</p>"
                     }
                 },
                 "ElasticsearchClusterConfig": {
@@ -2510,7 +2510,7 @@
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>An error occured because the client wanted to access a not supported operation. Gives http status code of 409.</p>",
+                "smithy.api#documentation": "<p>An error occurred because the client wanted to access a not supported operation. Gives http status code of 409.</p>",
                 "smithy.api#error": "client",
                 "smithy.api#httpError": 409
             }

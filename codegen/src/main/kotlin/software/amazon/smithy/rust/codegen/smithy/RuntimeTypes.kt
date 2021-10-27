@@ -27,12 +27,12 @@ import java.util.Optional
  */
 sealed class RuntimeCrateLocation {
     /**
-     * Relative path to find the runtime crates, eg. `../`
+     * Relative path to find the runtime crates, e.g. `../`
      */
     data class Path(val path: String) : RuntimeCrateLocation()
 
     /**
-     * Version for the runtime crates, eg. `v0.0.1-alpha`
+     * Version for the runtime crates, e.g. `v0.0.1-alpha`
      */
     data class Versioned(val version: String) : RuntimeCrateLocation()
 }
@@ -100,7 +100,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
      * Convert this [RuntimeType] into a [Symbol].
      *
      * This is not commonly required, but is occasionally useful when you want to force an import without referencing a type
-     * (eg. when bringing a trait into scope). See [CodegenWriter.addUseImports].
+     * (e.g. when bringing a trait into scope). See [CodegenWriter.addUseImports].
      */
     fun toSymbol(): Symbol {
         val builder = Symbol.builder().name(name).namespace(namespace, "::")

@@ -852,7 +852,7 @@
                 "StatusMessage": {
                     "target": "com.amazonaws.textract#StatusMessage",
                     "traits": {
-                        "smithy.api#documentation": "<p>Returns if the detection job could not be completed. Contains explanation for what error occured.</p>"
+                        "smithy.api#documentation": "<p>Returns if the detection job could not be completed. Contains explanation for what error occurred.</p>"
                     }
                 },
                 "AnalyzeDocumentModelVersion": {
@@ -961,7 +961,7 @@
                 "StatusMessage": {
                     "target": "com.amazonaws.textract#StatusMessage",
                     "traits": {
-                        "smithy.api#documentation": "<p>Returns if the detection job could not be completed. Contains explanation for what error occured. </p>"
+                        "smithy.api#documentation": "<p>Returns if the detection job could not be completed. Contains explanation for what error occurred. </p>"
                     }
                 },
                 "DetectDocumentTextModelVersion": {

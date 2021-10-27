@@ -230,13 +230,13 @@
                 "resourceId": {
                     "target": "com.amazonaws.mgn#LargeBoundedString",
                     "traits": {
-                        "smithy.api#documentation": "<p>A conflict occured when prompting for the Resource ID.</p>"
+                        "smithy.api#documentation": "<p>A conflict occurred when prompting for the Resource ID.</p>"
                     }
                 },
                 "resourceType": {
                     "target": "com.amazonaws.mgn#LargeBoundedString",
                     "traits": {
-                        "smithy.api#documentation": "<p>A conflict occured when prompting for resource type.</p>"
+                        "smithy.api#documentation": "<p>A conflict occurred when prompting for resource type.</p>"
                     }
                 }
             },

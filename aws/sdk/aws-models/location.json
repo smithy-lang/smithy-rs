@@ -3507,14 +3507,14 @@
                 "StartPosition": {
                     "target": "com.amazonaws.location#Position",
                     "traits": {
-                        "smithy.api#documentation": "<p>The starting position of the leg. Follows the format\n            <code>[longitude,latitude]</code>.</p>\n        <note>\n            <p>If the <code>StartPosition</code> isn't located on a road, it's <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route.html#snap-to-nearby-road\">snapped to a nearby road</a>. </p>\n        </note>",
+                        "smithy.api#documentation": "<p>The starting position of the le.g. Follows the format\n            <code>[longitude,latitude]</code>.</p>\n        <note>\n            <p>If the <code>StartPosition</code> isn't located on a road, it's <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route.html#snap-to-nearby-road\">snapped to a nearby road</a>. </p>\n        </note>",
                         "smithy.api#required": {}
                     }
                 },
                 "EndPosition": {
                     "target": "com.amazonaws.location#Position",
                     "traits": {
-                        "smithy.api#documentation": "<p>The terminating position of the leg. Follows the format\n                <code>[longitude,latitude]</code>.</p>\n        <note>\n            <p>If the <code>EndPosition</code> isn't located on a road, it's <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route.html#snap-to-nearby-road\">snapped to a nearby road</a>. </p>\n        </note>",
+                        "smithy.api#documentation": "<p>The terminating position of the le.g. Follows the format\n                <code>[longitude,latitude]</code>.</p>\n        <note>\n            <p>If the <code>EndPosition</code> isn't located on a road, it's <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route.html#snap-to-nearby-road\">snapped to a nearby road</a>. </p>\n        </note>",
                         "smithy.api#required": {}
                     }
                 },
@@ -3547,7 +3547,7 @@
                 "Steps": {
                     "target": "com.amazonaws.location#StepList",
                     "traits": {
-                        "smithy.api#documentation": "<p>Contains a list of steps, which represent subsections of a leg. Each step provides\n            instructions for how to move to the next step in the leg such as the step's start\n            position, end position, travel distance, travel duration, and geometry offset.</p>",
+                        "smithy.api#documentation": "<p>Contains a list of steps, which represent subsections of a le.g. Each step provides\n            instructions for how to move to the next step in the leg such as the step's start\n            position, end position, travel distance, travel duration, and geometry offset.</p>",
                         "smithy.api#required": {}
                     }
                 }
@@ -3562,7 +3562,7 @@
                 "LineString": {
                     "target": "com.amazonaws.location#LineString",
                     "traits": {
-                        "smithy.api#documentation": "<p>An ordered list of positions used to plot a route on a map. </p>\n        <p>The first position is closest to the start position for the leg, and the last position\n            is the closest to the end position for the leg.</p>\n        <ul>\n            <li>\n                <p>For example, <code>[[-123.117, 49.284],[-123.115, 49.285],[-123.115,\n                        49.285]]</code>\n               </p>\n            </li>\n         </ul>"
+                        "smithy.api#documentation": "<p>An ordered list of positions used to plot a route on a map. </p>\n        <p>The first position is closest to the start position for the leg, and the last position\n            is the closest to the end position for the le.g.</p>\n        <ul>\n            <li>\n                <p>For example, <code>[[-123.117, 49.284],[-123.115, 49.285],[-123.115,\n                        49.285]]</code>\n               </p>\n            </li>\n         </ul>"
                     }
                 }
             },
@@ -5492,14 +5492,14 @@
                 "StartPosition": {
                     "target": "com.amazonaws.location#Position",
                     "traits": {
-                        "smithy.api#documentation": "<p>The starting position of a step. If the position is the first step in the leg, this\n            position is the same as the start position of the leg.</p>",
+                        "smithy.api#documentation": "<p>The starting position of a step. If the position is the first step in the leg, this\n            position is the same as the start position of the le.g.</p>",
                         "smithy.api#required": {}
                     }
                 },
                 "EndPosition": {
                     "target": "com.amazonaws.location#Position",
                     "traits": {
-                        "smithy.api#documentation": "<p>The end position of a step. If the position the last step in the leg, this position is\n            the same as the end position of the leg.</p>",
+                        "smithy.api#documentation": "<p>The end position of a step. If the position the last step in the leg, this position is\n            the same as the end position of the le.g.</p>",
                         "smithy.api#required": {}
                     }
                 },
@@ -5534,7 +5534,7 @@
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p> Represents an element of a leg within a route. A step contains instructions for how\n            to move to the next step in the leg. </p>"
+                "smithy.api#documentation": "<p> Represents an element of a leg within a route. A step contains instructions for how\n            to move to the next step in the le.g. </p>"
             }
         },
         "com.amazonaws.location#StepList": {

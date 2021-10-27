@@ -21,7 +21,7 @@ This document proposes an overhaul to the configuration design to facilitate thr
 
 Using the SDK requires two crates:
 
-1. `aws-sdk-<someservice>`: The service you want to use (eg. `dynamodb`, `s3`, `sesv2`)
+1. `aws-sdk-<someservice>`: The service you want to use (e.g. `dynamodb`, `s3`, `sesv2`)
 2. `aws-config`: AWS metaconfiguration. This crate contains all the of logic to load configuration for the SDK (regions,
    credentials, retry configuration, etc.)
 
@@ -50,7 +50,7 @@ async fn main() -> Result<(), dynamodb::Error> {
 }
 ```
 
-> Tip: Every AWS service exports a top level `Error` type (eg. [aws_sdk_dynamodb::Error](https://awslabs.github.io/aws-sdk-rust/aws_sdk_dynamodb/enum.Error.html)).
+> Tip: Every AWS service exports a top level `Error` type (e.g. [aws_sdk_dynamodb::Error](https://awslabs.github.io/aws-sdk-rust/aws_sdk_dynamodb/enum.Error.html)).
 > Individual operations return specific error types that contain only the [error variants returned by the operation](https://awslabs.github.io/aws-sdk-rust/aws_sdk_dynamodb/error/struct.ListTablesError.html).
 > Because all the individual errors implement `Into<dynamodb::Error>`, you can use `dynamodb::Error` as the return type along with `?`.
 
