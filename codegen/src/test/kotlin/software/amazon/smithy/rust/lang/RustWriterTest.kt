@@ -43,7 +43,7 @@ class RustWriterTest {
         val sut = RustWriter.forModule("parent")
         val requestBuilder = RuntimeType.HttpRequestBuilder
         sut.withModule("inner") {
-            rustBlock("fn build(builer: #T)", requestBuilder) {
+            rustBlock("fn build(builder: #T)", requestBuilder) {
             }
         }
         val httpDep = CargoDependency.Http.dependencies[0]

@@ -32,11 +32,11 @@ data class CodegenContext(
      */
     val serviceShape: ServiceShape,
     /**
-     * Smithy Protocol to generate, eg. RestJson1
+     * Smithy Protocol to generate, e.g. RestJson1
      */
     val protocol: ShapeId,
     /**
-     * The name of the cargo crate to generate eg. `aws-sdk-s3`
+     * The name of the cargo crate to generate e.g. `aws-sdk-s3`
      * This is loaded from the smithy-build.json during codegen.
      */
     val moduleName: String,

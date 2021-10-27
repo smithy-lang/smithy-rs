@@ -88,7 +88,7 @@ class CombinedErrorGenerator(
             }
             rust(
                 """
-                /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
+                /// An unexpected error, e.g. invalid JSON returned by the service or an unknown error code
                 Unhandled(Box<dyn #T + Send + Sync + 'static>),
                 """,
                 RuntimeType.StdError

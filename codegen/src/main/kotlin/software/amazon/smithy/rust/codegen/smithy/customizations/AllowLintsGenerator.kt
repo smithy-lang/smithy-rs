@@ -11,10 +11,10 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 
 val ClippyAllowLints = listOf(
-    // Sometimes operations are named the same as our module eg. output leading to `output::output`
+    // Sometimes operations are named the same as our module e.g. output leading to `output::output`
     "module_inception",
 
-    // Currently, we don't recase acronyms in models, eg. SSEVersion
+    // Currently, we don't recase acronyms in models, e.g. SSEVersion
     "upper_case_acronyms",
 
     // Large errors trigger this warning, we are unlikely to optimize this case currently

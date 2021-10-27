@@ -57,7 +57,7 @@ interface StructuredDataParserGenerator {
     fun documentParser(operationShape: OperationShape): RuntimeType
 
     /**
-     * Generate a parser for a server operation input structuree
+     * Generate a parser for a server operation input structure
      * ```rust
      * fn deser_operation_crate_operation_my_operation_input(
      *    value: &[u8], builder: my_operation_input::Builder
