@@ -18,7 +18,7 @@ sealed class DependencyScope {
 
 sealed class DependencyLocation
 data class CratesIo(val version: String) : DependencyLocation()
-data class Local(val basePath: String) : DependencyLocation()
+data class Local(val basePath: String, val version: String? = null) : DependencyLocation()
 
 sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
     abstract fun version(): String
@@ -152,6 +152,7 @@ data class CargoDependency(
                 is Local -> {
                     val fullPath = "$basePath/$name"
                     attribs["path"] = fullPath
+                    version?.also { attribs["version"] = version }
                 }
             }
         }
