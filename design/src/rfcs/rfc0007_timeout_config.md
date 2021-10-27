@@ -25,27 +25,45 @@ Terminology
   Each `Config` is defined in the `config` module of its parent service. For example, the S3-specific config struct
   is `use`able from `aws_sdk_s3::config::Config` and re-exported as `aws_sdk_s3::Config`.
 
+// TODO clean this up
+
+- Middleware: almost means the same thing as layer but is the only thing allowed to contain a `DispatchService`
+- Connector: overloaded word,
+  - (esp. `DynConnector`) generally refers to a service that handles HTTP. HTTP is the lowest level we handle
+    - Dyn means that we're erasing the inner type
+  - `Connector` has its own meaning in `hyper`. Something that implements the `Connect` trait
+- `Connection` is also a hyper term representing a low level protocol talky thing
+- Service: The lowest level of abstraction, cares about actual data
+- Layer: an abstraction for wrapping services inside one another. Makes it easy to define services that can wrap other services that they have no knowledge of. Layers are Middleware
+    A layer is the ability to define how one service gets wrapped around another. You can wrap services without the layer abstraction but then defining the types gets tough and is rigid. A higher-order service. Only used to define the relationships between services
+when creating layer structs, they don't contain services but they do create them. synthesis of the inputs, a third object.
+- Stage: not tower-specific. Functions as a way of mapping requests right now. Timeouts wont be a stage because we don't want to give them the ability to handle responses because it would make them too complex
+- Stack: higher order abstraction over a stack
+
+ParseResponse is the Bizarro version of MapRequest
+
 Configuring timeouts
 --------------------
 
 This section will define the kinds of timeouts that will be configurable and the ways that a user could configure them.
 
-- Connect Timeout: A limit on the amount of time after making an initial connect attempt on a socket to complete the
+- **Connect Timeout**: A limit on the amount of time after making an initial connect attempt on a socket to complete the
   connect-handshake.
     - _TODO: the runtime is based on Hyper which reuses connection and doesn't currently have a way of guaranteeing that
       a fresh connection will be use for a given request._
-- TLS Negotiation Timeout: A limit on the amount of time a TLS handshake takes from when the CLIENT HELLO message is
+- **TLS Negotiation Timeout**: A limit on the amount of time a TLS handshake takes from when the CLIENT HELLO message is
   sent to the time the client and server have fully negotiated ciphers and exchanged keys.
     - _QUESTION: Our HTTP client supports multiple TLS implementations. Is there any reason that that would make
       implementing this feature difficult?_
-- Time to First Byte Timeout: A limit on the amount of time an application takes to attempt to read the first byte over
+- **Time to First Byte Timeout**: A limit on the amount of time an application takes to attempt to read the first byte over
   an established, open connection after write request.
-- HTTP Request Timeout For A Single Request: A limit on the amount of time it takes for the first byte to be sent over
+  - _QUESTION: Is this the same as a "write timeout"? If yes, should we refer to it by that name? Also, if yes, should we not also support "read timeouts" for completeness' sake?_
+- **HTTP Request Timeout For A Single Request**: A limit on the amount of time it takes for the first byte to be sent over
   an established, open connection and when the last byte is received from the service.
-- HTTP Request Timeout For Multiple Attempts: This timeout acts like the previous timeout but constrains the total time
+- **HTTP Request Timeout For Multiple Attempts**: This timeout acts like the previous timeout but constrains the total time
   it takes to make a request plus any retries.
     - _NOTE: In a way, this is already possible in that users are free to race requests against timer futures with
-      the [futures::future::select] macro or to use [tokio::time::timeout]_
+      the [futures::future::select] macro or to use [tokio::time::timeout]. See relevant discussion in [hyper#1097]_
 
 Just like with [Retry Behavior Configuration], these settings can be configured in several places and have the same
 precedence rules _(paraphrased here for clarity)_.
@@ -74,10 +92,31 @@ The table below details the specific ways each timeout can be configured. In all
 
 _QUESTION: How does the SDK currently handle these defaults?_
 
+Prior Art
+---------
+
+- [hjr3/hyper-timeout] is a `Connector` for hyper that enables setting connect, read, and write timeouts
+- [sfackler/tokio-io-timeout] provides timeouts for tokio IO operations. Used within `hyper-timeout`.
+- [tokio::time::sleep_until] creates a `Future` that completes after some time has elapsed. Used within `tokio-io-timeout`.
+
 Behind the scenes
 -----------------
 
-// TODO
+// TODO This is just Zelda thinking out loud and working backwards.
+
+Timeouts are achieved by racing a future against a `tokio::time::Sleep` future. The question, then, is "how can I create a future that represents a condition I want to watch for?". For example, in the case of a `ConnectTimeout`, how do we watch an ongoing request to see if it's completed the connect-handshake?
+
+```rust
+#[tokio::main]
+async fn main() {
+  let req = make_fake_request();
+  todo!("???")
+}
+
+fn make_fake_request() -> Future<Output = FakeRequest> {
+  todo!("???")
+}
+```
 
 Changes checklist
 -----------------
@@ -87,3 +126,6 @@ Changes checklist
 [tokio::time::timeout]: https://docs.rs/tokio/1.12.0/tokio/time/fn.timeout.html
 [futures::future::select]: https://docs.rs/futures/0.3.17/futures/future/fn.select.html
 [Retry Behavior Configuration]: ./rfc0004_retry_behavior.md
+[hyper#1097]: https://github.com/hyperium/hyper/issues/1097
+[hjr3/hyper-timeout]: https://github.com/hjr3/hyper-timeout
+[sfackler/tokio-io-timeout]: https://github.com/sfackler/tokio-io-timeout
