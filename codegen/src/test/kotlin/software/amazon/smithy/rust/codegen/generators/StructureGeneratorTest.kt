@@ -174,7 +174,7 @@ class StructureGeneratorTest {
         writer
             .withModule(
                 "model",
-                // By attaching this lint, any missing documentation becomes a compiler erorr
+                // By attaching this lint, any missing documentation becomes a compiler error
                 RustMetadata(additionalAttributes = listOf(Attribute.Custom("deny(missing_docs)")), public = true)
             ) {
                 StructureGenerator(model, provider, this, model.lookup("com.test#Inner")).render()

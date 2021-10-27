@@ -30,7 +30,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.Structured
 /**
  * Describes a protocol to the [HttpBoundProtocolGenerator].
  *
- * Each protocol (eg. RestXml, RestJson, etc.) will provide its own implementation of the [Protocol] interface.
+ * Each protocol (e.g. RestXml, RestJson, etc.) will provide its own implementation of the [Protocol] interface.
  */
 interface Protocol {
     /** Resolves HTTP bindings (which part of a request fields are mapped to) */

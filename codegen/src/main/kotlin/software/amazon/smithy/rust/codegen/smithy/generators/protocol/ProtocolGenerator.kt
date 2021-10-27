@@ -33,7 +33,7 @@ import software.amazon.smithy.rust.codegen.util.inputShape
  * **Note:** There is only one real implementation of this interface. The other implementation is test only.
  * All protocols use the same class.
  *
- * Different protocols (eg. JSON vs. XML) need to use different functionality to generate request bodies.
+ * Different protocols (e.g. JSON vs. XML) need to use different functionality to generate request bodies.
  */
 interface ProtocolBodyGenerator {
     data class BodyMetadata(val takesOwnership: Boolean)
@@ -75,7 +75,7 @@ interface ProtocolTraitImplGenerator {
 open class ProtocolGenerator(
     codegenContext: CodegenContext,
     /**
-     * `Protocol` contains all protocol specific information. Each smithy protocol, eg. RestJson, RestXml, etc. will
+     * `Protocol` contains all protocol specific information. Each smithy protocol, e.g. RestJson, RestXml, etc. will
      * have their own implementation of the protocol interface which defines how an input shape becomes and http::Request
      * and an output shape is build from an http::Response.
      */

@@ -11,7 +11,7 @@ import software.amazon.smithy.utils.StringUtils
 fun String.doubleQuote(): String = StringUtils.escapeJavaString(this, "")
 
 /**
- * Double quote a string, eg. "abc" -> "\"abc\""
+ * Double quote a string, e.g. "abc" -> "\"abc\""
  */
 fun String.dq(): String = this.doubleQuote()
 

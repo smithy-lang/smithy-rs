@@ -27,6 +27,7 @@ import java.util.Optional
  *
  * This can be configured via the `runtimeConfig.version` field in smithy-build.json
  */
+
 data class RuntimeCrateLocation(val path: String?, val version: String?) {
     init {
         check(path != null || version != null) {
@@ -114,7 +115,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
      * Convert this [RuntimeType] into a [Symbol].
      *
      * This is not commonly required, but is occasionally useful when you want to force an import without referencing a type
-     * (eg. when bringing a trait into scope). See [CodegenWriter.addUseImports].
+     * (e.g. when bringing a trait into scope). See [CodegenWriter.addUseImports].
      */
     fun toSymbol(): Symbol {
         val builder = Symbol.builder().name(name).namespace(namespace, "::")

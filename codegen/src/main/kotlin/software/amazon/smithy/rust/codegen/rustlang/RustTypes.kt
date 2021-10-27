@@ -27,7 +27,7 @@ sealed class RustType {
     // TODO: when Kotlin supports, sealed interfaces, seal Container
     /**
      * A Rust type that contains [member], another RustType. Used to generically operate over
-     * shapes that contain other shapes, eg. [stripOuter] and [contains].
+     * shapes that contain other shapes, e.g. [stripOuter] and [contains].
      */
     interface Container {
         val member: RustType
@@ -238,7 +238,7 @@ sealed class Attribute {
     /**
      * A custom Attribute
      *
-     * [annotation] represents the body of the attribute, eg. `cfg(foo)` in `#[cfg(foo)]`
+     * [annotation] represents the body of the attribute, e.g. `cfg(foo)` in `#[cfg(foo)]`
      * If [container] is set, this attribute refers to its container rather than its successor. This generates `#![cfg(foo)]`
      *
      * Finally, any symbols listed will be imported when this attribute is rendered. This enables using attributes like
