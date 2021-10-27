@@ -7,6 +7,7 @@ vNext (Month Day, Year)
 - SDK code generation now includes a version in addition to path parameters when the `version` parameter is included in smithy-build.json
 - `moduleDescription` in `smithy-build.json` settings is now optional
 - Upgrade to Smithy 1.12
+- `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
 
 v0.27 (October 20th, 2021)
 ==========================
