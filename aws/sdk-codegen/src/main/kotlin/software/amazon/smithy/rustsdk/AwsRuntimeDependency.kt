@@ -36,7 +36,7 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
         path
     }
     return runtimeCrateLocation.copy(
-        path = updatedPath, version = defaultSdkVersion()
+        path = updatedPath, version = runtimeCrateLocation.version?.let { defaultSdkVersion() }
     )
 }
 
