@@ -5,7 +5,7 @@ use smithy.test#httpResponseTests
 
 apply ValidationException @httpResponseTests([
     {
-        id: "lowercase message",
+        id: "LowercaseMessage",
         documentation: "This test case validates case insensitive parsing of `message`",
         params: {
             Message: "1 validation error detected"
@@ -28,7 +28,7 @@ apply ValidationException @httpResponseTests([
     },
 
     {
-        id: "uppercase message",
+        id: "UppercaseMessage",
         documentation: "This test case validates case insensitive parsing of `message`",
         params: {
             Message: "Invalid volume size: 99999999999",

@@ -5,6 +5,8 @@ vNext (Month Day, Year)
 
 **New this week**
 - SDK code generation now includes a version in addition to path parameters when the `version` parameter is included in smithy-build.json
+- `moduleDescription` in `smithy-build.json` settings is now optional
+- Upgrade to Smithy 1.12
 
 v0.27 (October 20th, 2021)
 ==========================

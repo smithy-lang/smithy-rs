@@ -15,5 +15,17 @@ repository = "https://github.com/awslabs/smithy-rs"
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-types = { path = "../../rust-runtime/aws-types" }
+aws-sig-auth = { path = "../../rust-runtime/aws-sig-auth" }
 http = "0.2.4"
 tower = { version = "0.4", default-features = false }
+
+# Checksum dependencies:
+ring = "0.16"
+bytes-utils = "0.1.1"
+tokio-stream = "0.1.7"
+bytes = "1"
+tokio = { version = "1", features = ["full"] }
+hex = "0.4.3"
+
+[dev-dependencies]
+temp-file = "0.1.6"

@@ -17,11 +17,13 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpDeserializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
@@ -129,6 +131,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      */
     private fun baselineTransform(model: Model) =
         model
+            // Add errors attached at the service level to the models
+            .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
             // Add `Box<T>` to recursive shapes as necessary
             .let(RecursiveShapeBoxer::transform)
             // Normalize the `message` field on errors when enabled in settings (default: true)
@@ -273,7 +277,12 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         ServiceGenerator(
             rustCrate,
             protocolGenerator,
-            protocolGeneratorFactory.support(),
+            ProtocolSupport(
+                requestDeserialization = true,
+                requestBodyDeserialization = true,
+                responseSerialization = true,
+                errorSerialization = true
+            ),
             codegenContext,
             codegenDecorator
         )
@@ -296,7 +305,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
 
                 impl Error {
                     ##[allow(dead_code)]
-                    fn generic(msg: &'static str) -> Self {
+                    pub fn generic(msg: &'static str) -> Self {
                         Self::Generic(msg.into())
                     }
                 }

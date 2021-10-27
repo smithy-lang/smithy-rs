@@ -211,5 +211,10 @@ data class CargoDependency(
         fun smithyXml(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("xml")
 
         val Bytes: RustDependency = CargoDependency("bytes", CratesIo("1"))
+        val TokioStream = CargoDependency("tokio-stream", CratesIo("0.1.7"))
+        val BytesUtils = CargoDependency("bytes-utils", CratesIo("0.1.1"))
+        val Hex = CargoDependency("hex", CratesIo("0.4.3"))
+        val TempFile = CargoDependency("temp-file", CratesIo("0.1.6"), scope = DependencyScope.Dev)
+        val Ring = CargoDependency("ring", CratesIo("0.16"))
     }
 }
