@@ -2729,7 +2729,7 @@
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>An input validation error occurred. For example, invalid characters in a project name,\n      or if a pagination token is invalid.</p>",
+                "smithy.api#documentation": "<p>An input validation error occured. For example, invalid characters in a project name,\n      or if a pagination token is invalid.</p>",
                 "smithy.api#error": "client",
                 "smithy.api#httpError": 400
             }

@@ -2097,7 +2097,7 @@
                 "Type": {
                     "target": "com.amazonaws.apprunner#OperationType",
                     "traits": {
-                        "smithy.api#documentation": "<p>The type of operation. It indicates a specific action that occurred.</p>"
+                        "smithy.api#documentation": "<p>The type of operation. It indicates a specific action that occured.</p>"
                     }
                 },
                 "Status": {

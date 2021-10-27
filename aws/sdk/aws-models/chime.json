@@ -4268,7 +4268,7 @@
                 "SipHeaders": {
                     "target": "com.amazonaws.chime#SipHeadersMap",
                     "traits": {
-                        "smithy.api#documentation": "<p>The SIP headers added to an outbound call le.g.</p>"
+                        "smithy.api#documentation": "<p>The SIP headers added to an outbound call leg.</p>"
                     }
                 }
             }

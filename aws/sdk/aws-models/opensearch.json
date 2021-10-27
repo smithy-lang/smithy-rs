@@ -2616,7 +2616,7 @@
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>An error occurred because the client wanted to access a not supported operation. Gives http status code of 409.</p>",
+                "smithy.api#documentation": "<p>An error occured because the client wanted to access a not supported operation. Gives http status code of 409.</p>",
                 "smithy.api#error": "client",
                 "smithy.api#httpError": 409
             }

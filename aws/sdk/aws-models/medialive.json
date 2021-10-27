@@ -790,7 +790,7 @@
                 "StreamName": {
                     "target": "com.amazonaws.medialive#__string",
                     "traits": {
-                        "smithy.api#documentation": "Used for MS Smooth and Apple HLS outputs. Indicates the name displayed by the player (e.g. English, or Director Commentary).",
+                        "smithy.api#documentation": "Used for MS Smooth and Apple HLS outputs. Indicates the name displayed by the player (eg. English, or Director Commentary).",
                         "smithy.api#jsonName": "streamName"
                     }
                 }
@@ -2288,7 +2288,7 @@
                 "LanguageDescription": {
                     "target": "com.amazonaws.medialive#__string",
                     "traits": {
-                        "smithy.api#documentation": "Human readable information to indicate captions available for players (e.g. English, or Spanish).",
+                        "smithy.api#documentation": "Human readable information to indicate captions available for players (eg. English, or Spanish).",
                         "smithy.api#jsonName": "languageDescription"
                     }
                 },
@@ -11339,7 +11339,7 @@
                 "Uri": {
                     "target": "com.amazonaws.medialive#__string",
                     "traits": {
-                        "smithy.api#documentation": "Uniform Resource Identifier - This should be a path to a file accessible to the Live system (e.g. a http:// URI) depending on the output type. For example, a RTMP destination should have a uri simliar to: \"rtmp://fmsserver/live\".",
+                        "smithy.api#documentation": "Uniform Resource Identifier - This should be a path to a file accessible to the Live system (eg. a http:// URI) depending on the output type. For example, a RTMP destination should have a uri simliar to: \"rtmp://fmsserver/live\".",
                         "smithy.api#jsonName": "uri",
                         "smithy.api#required": {}
                     }
@@ -16856,7 +16856,7 @@
                 "Destination": {
                     "target": "com.amazonaws.medialive#OutputLocationRef",
                     "traits": {
-                        "smithy.api#documentation": "The RTMP endpoint excluding the stream name (e.g. rtmp://host/appname). For connection to Akamai, a username and password must be supplied. URI fields accept format identifiers.",
+                        "smithy.api#documentation": "The RTMP endpoint excluding the stream name (eg. rtmp://host/appname). For connection to Akamai, a username and password must be supplied. URI fields accept format identifiers.",
                         "smithy.api#jsonName": "destination",
                         "smithy.api#required": {}
                     }
@@ -19002,7 +19002,7 @@
                 "Destination": {
                     "target": "com.amazonaws.medialive#OutputLocationRef",
                     "traits": {
-                        "smithy.api#documentation": "Destination address and port number for RTP or UDP packets. Can be unicast or multicast RTP or UDP (e.g. rtp://239.10.10.10:5001 or udp://10.100.100.100:5002).",
+                        "smithy.api#documentation": "Destination address and port number for RTP or UDP packets. Can be unicast or multicast RTP or UDP (eg. rtp://239.10.10.10:5001 or udp://10.100.100.100:5002).",
                         "smithy.api#jsonName": "destination",
                         "smithy.api#required": {}
                     }
