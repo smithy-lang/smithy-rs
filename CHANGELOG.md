@@ -5,6 +5,7 @@ vNext (Month Day, Year)
 
 **New this week**
 - Upgrade to Smithy 1.12
+- `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
 
 v0.27 (October 20th, 2021)
 ==========================
