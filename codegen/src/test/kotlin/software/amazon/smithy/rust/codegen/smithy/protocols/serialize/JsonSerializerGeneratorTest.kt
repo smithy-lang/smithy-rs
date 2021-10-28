@@ -112,7 +112,7 @@ class JsonSerializerGeneratorTest {
         project.lib { writer ->
             writer.unitTest(
                 """
-                use model::Top;
+                use model::{Top, Choice};
 
                 // Generate the document serializer even though it's not tested directly
                 // ${writer.format(documentGenerator)}
@@ -127,6 +127,13 @@ class JsonSerializerGeneratorTest {
                 let serialized = ${writer.format(operationGenerator!!)}(&input).unwrap();
                 let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
                 assert_eq!(output, r#"{"top":{"field":"hello!","extra":45,"rec":[{"extra":55}]}}"#);
+
+                let input = crate::input::OpInput::builder().top(
+                    Top::builder()
+                        .choice(Choice::Unknown)
+                        .build()
+                ).build().unwrap();
+                let serialized = ${writer.format(operationGenerator!!)}(&input).expect_err("cannot serialize unknown variant");
                 """
             )
         }

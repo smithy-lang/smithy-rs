@@ -11,10 +11,12 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -39,10 +41,13 @@ class UnionGenerator(
         writer.rustBlock("enum ${unionSymbol.name}") {
             sortedMembers.forEach { member ->
                 val memberSymbol = symbolProvider.toSymbol(member)
-                documentShape(member, model)
+                val note = memberSymbol.renamedFrom()?.let { oldName -> "This variant has been renamed from `$oldName`." }
+                documentShape(member, model, note = note)
                 memberSymbol.expectRustMetadata().renderAttributes(this)
                 write("${symbolProvider.toMemberName(member)}(#T),", symbolProvider.toSymbol(member))
             }
+            docs("""The `Unknown` variant represents cases where new union variant was received. Consider upgrading the SDK to the latest available version.""")
+            rust("Unknown,")
         }
         writer.rustBlock("impl ${unionSymbol.name}") {
             sortedMembers.forEach { member ->
