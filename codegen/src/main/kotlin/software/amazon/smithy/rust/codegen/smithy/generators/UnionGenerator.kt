@@ -41,7 +41,7 @@ class UnionGenerator(
                 val memberSymbol = symbolProvider.toSymbol(member)
                 documentShape(member, model)
                 memberSymbol.expectRustMetadata().renderAttributes(this)
-                write("${member.memberName.toPascalCase()}(#T),", symbolProvider.toSymbol(member))
+                write("${symbolProvider.toMemberName(member)}(#T),", symbolProvider.toSymbol(member))
             }
         }
         writer.rustBlock("impl ${unionSymbol.name}") {
@@ -64,5 +64,9 @@ class UnionGenerator(
                 }
             }
         }
+    }
+
+    companion object {
+        const val UnknownVariantName = "Unknown"
     }
 }

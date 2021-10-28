@@ -15,7 +15,7 @@ set -e
 {
 	git diff --quiet || (echo 'working tree not clean, aborting' && exit 1)
 	gh_branch=${GITHUB_HEAD_REF##*/}
-	base_branch=${GITHUB_BASE_REF##*/}
+	base_branch=${BASE:-GITHUB_BASE_REF##*/}
 	if [ -n "$base_branch" ]; then
 	  base_branch=__generated-$base_branch
   else

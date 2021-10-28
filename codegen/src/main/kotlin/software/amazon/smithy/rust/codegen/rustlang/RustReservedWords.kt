@@ -8,33 +8,77 @@ package software.amazon.smithy.rust.codegen.rustlang
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.codegen.core.ReservedWords
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.smithy.letIf
+import software.amazon.smithy.rust.codegen.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
-class RustReservedWordSymbolProvider(private val base: RustSymbolProvider) : WrappingSymbolProvider(base) {
+class RustReservedWordSymbolProvider(private val base: RustSymbolProvider, private val model: Model) :
+    WrappingSymbolProvider(base) {
     private val internal =
         ReservedWordSymbolProvider.builder().symbolProvider(base).memberReservedWords(RustReservedWords).build()
 
     override fun toMemberName(shape: MemberShape): String {
-        return when (val baseName = internal.toMemberName(shape)) {
-            "build" -> "build_value"
-            "default" -> "default_value"
-            "send" -> "send_value"
-            // To avoid conflicts with the `make_operation` and `presigned` functions on generated inputs
-            "make_operation" -> "make_operation_value"
-            "presigned" -> "presigned_value"
-            else -> baseName
+        val baseName = internal.toMemberName(shape)
+        return when (val container = model.expectShape(shape.container)) {
+            is StructureShape -> when (baseName) {
+                "build" -> "build_value"
+                "default" -> "default_value"
+                "send" -> "send_value"
+                // To avoid conflicts with the `make_operation` and `presigned` functions on generated inputs
+                "make_operation" -> "make_operation_value"
+                "presigned" -> "presigned_value"
+                else -> baseName
+            }
+            is UnionShape -> when (baseName) {
+                // Unions contain an `Unknown` variant. This exists to support parsing data returned from the server
+                // that represent union variants that have been added since this SDK was generated.
+                UnionGenerator.UnknownVariantName -> "${UnionGenerator.UnknownVariantName}Value"
+                "${UnionGenerator.UnknownVariantName}Value" -> "${UnionGenerator.UnknownVariantName}Value_"
+                // Self cannot be used as a raw identifier, so we can't use the normal escaping strategy
+                // https://internals.rust-lang.org/t/raw-identifiers-dont-work-for-all-identifiers/9094/4
+                "Self" -> "SelfValue"
+                // Real models won't end in `_` so it's safe to stop here
+                "SelfValue" -> "SelfValue_"
+                else -> baseName
+            }
+            else -> error("unexpected container: $container")
         }
     }
 
+    /**
+     * Convert shape to a Symbol
+     *
+     * If this symbol provider renamed the symbol, a `renamedFrom` field will be set on the symbol, enabling
+     * code generators to generate special docs.
+     */
     override fun toSymbol(shape: Shape): Symbol {
-        return internal.toSymbol(shape)
+        return when (shape) {
+            is MemberShape -> {
+                val container = model.expectShape(shape.container)
+                if (!(container is StructureShape || container is UnionShape)) {
+                    return base.toSymbol(shape)
+                }
+                val previousName = base.toMemberName(shape)
+                val escapedName = this.toMemberName(shape)
+                val baseSymbol = base.toSymbol(shape)
+                // if the names don't match and it isn't a simple escaping with `r#`, record a rename
+                baseSymbol.letIf(escapedName != previousName && !escapedName.contains("r#")) {
+                    it.toBuilder().renamedFrom(previousName).build()
+                }
+            }
+            else -> base.toSymbol(shape)
+        }
     }
 
     override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {

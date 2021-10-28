@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
@@ -101,7 +102,13 @@ class StructureGenerator(
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
                     rust(
-                        "formatter.field(${memberName.dq()}, &${redactIfNecessary(member, model, "self.$memberName")});",
+                        "formatter.field(${memberName.dq()}, &${
+                        redactIfNecessary(
+                            member,
+                            model,
+                            "self.$memberName"
+                        )
+                        });",
                     )
                 }
                 rust("formatter.finish()")
@@ -119,8 +126,13 @@ class StructureGenerator(
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
-                writer.documentShape(member, model)
-                symbolProvider.toSymbol(member).expectRustMetadata().render(this)
+                val memberSymbol = symbolProvider.toSymbol(member)
+                writer.documentShape(
+                    member,
+                    model,
+                    note = memberSymbol.renamedFrom()?.let { oldName -> "This member has been renamed from `$oldName`." }
+                )
+                memberSymbol.expectRustMetadata().render(this)
                 write("$memberName: #T,", symbolProvider.toSymbol(member))
             }
         }
