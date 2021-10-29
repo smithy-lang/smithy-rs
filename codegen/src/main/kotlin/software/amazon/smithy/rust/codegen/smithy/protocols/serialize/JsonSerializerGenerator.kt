@@ -35,9 +35,8 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -135,7 +134,7 @@ class JsonSerializerGenerator(
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
-        "Error" to runtimeConfig.operationBuildError(),
+        "Error" to runtimeConfig.serializationError(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "JsonObjectWriter" to smithyJson.member("serialize::JsonObjectWriter"),
         "JsonValueWriter" to smithyJson.member("serialize::JsonValueWriter"),
@@ -397,16 +396,7 @@ class JsonSerializerGenerator(
                         }
                     }
                     rustTemplate(
-                        "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(${
-                        OperationBuildError(
-                            runtimeConfig
-                        ).invalidField(
-                            this,
-                            // not exactly the name of the field, but retrieving that here is quite difficult
-                            unionSymbol.name,
-                            "cannot serialize an `Unknown` union variant. Hint: you may need to upgrade your SDK."
-                        )
-                        })",
+                        "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
                         "Union" to unionSymbol,
                         *codegenScope
                     )

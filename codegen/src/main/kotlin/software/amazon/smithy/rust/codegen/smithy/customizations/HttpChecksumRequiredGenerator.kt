@@ -41,9 +41,7 @@ class HttpChecksumRequiredGenerator(
                         let data = req
                             .body()
                             .bytes()
-                            .ok_or_else(||#{BuildError}::SerializationError(
-                                "checksum can only be computed for non-streaming operations".into())
-                            )?;
+                            .expect("checksum can only be computed for non-streaming operations");
                         let checksum = #{md5}::compute(data);
                         req.headers_mut().insert(
                             #{http}::header::HeaderName::from_static("content-md5"),

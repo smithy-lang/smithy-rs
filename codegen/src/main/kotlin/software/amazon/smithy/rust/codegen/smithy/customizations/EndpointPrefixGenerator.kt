@@ -36,7 +36,7 @@ class EndpointPrefixGenerator(private val codegenContext: CodegenContext, privat
                 }
                 rustBlock("match endpoint_prefix") {
                     rust("Ok(prefix) => { request.properties_mut().insert(prefix); },")
-                    rust("Err(err) => return Err(${buildError.serializationError(this, "err")})")
+                    rust("Err(err) => return Err(err)")
                 }
             }
         }

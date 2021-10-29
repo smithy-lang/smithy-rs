@@ -110,13 +110,13 @@ internal class XmlBindingTraitSerializerGeneratorTest {
             testCodegenContext(model),
             HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/xml"))
         )
-        val operationParser = parserGenerator.payloadSerializer(model.lookup("test#OpInput\$payload"))
+        val operationSerializer = parserGenerator.payloadSerializer(model.lookup("test#OpInput\$payload"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
             writer.unitTest(
                 """
-                 use model::Top;
+                 use model::{Top, Choice};
                 let inp = crate::input::OpInput::builder().payload(
                     Top::builder()
                         .field("hello!")
@@ -124,9 +124,16 @@ internal class XmlBindingTraitSerializerGeneratorTest {
                         .recursive(Top::builder().extra(55).build())
                         .build()
                 ).build().unwrap();
-                let serialized = ${writer.format(operationParser)}(&inp.payload.unwrap()).unwrap();
+                let serialized = ${writer.format(operationSerializer)}(&inp.payload.unwrap()).unwrap();
                 let output = std::str::from_utf8(&serialized).unwrap();
                 assert_eq!(output, "<Top extra=\"45\"><field>hello!</field><recursive extra=\"55\"></recursive></Top>");
+
+                let input = crate::input::OpInput::builder().payload(
+                    Top::builder()
+                        .choice(Choice::Unknown)
+                        .build()
+                ).build().unwrap();
+                let serialized = ${writer.format(operationSerializer!!)}(&input.payload.unwrap()).expect_err("cannot serialize unknown variant");
             """
             )
         }

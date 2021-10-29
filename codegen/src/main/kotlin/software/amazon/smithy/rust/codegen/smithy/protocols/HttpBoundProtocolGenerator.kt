@@ -578,13 +578,13 @@ class HttpBoundProtocolBodyGenerator(
 
                 // JSON serialize the structure or union targeted
                 rust(
-                    """#T(&$payloadName).map_err(|err|#T::SerializationError(err.into()))?""",
+                    """#T(&$payloadName).map_err(|err|#T::SerializationError(err))?""",
                     serializer.payloadSerializer(member), runtimeConfig.operationBuildError()
                 )
             }
             is DocumentShape -> {
                 rust(
-                    "#T(&$payloadName).map_err(|err|#T::SerializationError(err.into()))?",
+                    "#T(&$payloadName).map_err(|err|#T::SerializationError(err))?",
                     serializer.documentSerializer(),
                     runtimeConfig.operationBuildError()
                 )
