@@ -143,7 +143,7 @@ class EventStreamUnmarshallerGenerator(
                     renderUnmarshallUnionMember(member, target)
                 }
             }
-            rustBlock("smithy_type => ") {
+            rustBlock("_unknown_variant => ") {
                 when (mode.renderUnknownVariant()) {
                     true -> rustTemplate(
                         "Ok(#{UnmarshalledMessage}::Event(#{Output}::${UnionGenerator.UnknownVariantName}))",
