@@ -32,7 +32,7 @@ There's a lot of terminology to define so I've broken it up into two sections
 ### HTTP stack terms
 
 - **Service**: A trait defined in the [`tower-service` crate][tower_service::Service]. The lowest level of abstraction we deal with when making HTTP requests. Services act directly on data to transform and modify that data. A Service is what eventually turns a request into a response.
-- **Layer**: Layers are a higher-order abstraction over services that is used to compose multiple services together, creating a new service from that combination. Nothing prevents us from manually wrapping services withing services, but Layers allow us to do it in a maintainable, flexible, and generic manner. Layers don't directly act on data but produce a new compose service that does. Layers can be thought of as middleware.
+- **Layer**: Layers are a higher-order abstraction over services that is used to compose multiple services together, creating a new service from that combination. Nothing prevents us from manually wrapping services withing services, but Layers allow us to do it in a maintainable, flexible, and generic manner. Layers don't directly act on data but instead can wrap an existing service with additional functionality, creating a new service.. Layers can be thought of as middleware.
 - **Middleware**: a term with several meanings,
   - Generically speaking, middlewares are similar to Services and Layers in that they modify requests and responses.
   - In the SDK, Middlewares have the specific meaning of being the only kind of struct that contains a `DispatchService`.
