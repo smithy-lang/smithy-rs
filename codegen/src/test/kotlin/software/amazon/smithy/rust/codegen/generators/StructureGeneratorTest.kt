@@ -78,10 +78,10 @@ class StructureGeneratorTest {
             StructureGenerator(model, provider, writer, inner).render()
             StructureGenerator(model, provider, writer, struct).render()
             writer.unitTest(
-                """
-                let s: Option<MyStruct> = None;
-                s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
-                """
+                test = """
+                                let s: Option<MyStruct> = None;
+                                s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
+                                """
             )
             writer.toString().shouldContainInOrder(
                 "this documents the shape", "#[non_exhaustive]", "pub", "struct MyStruct"
@@ -139,14 +139,14 @@ class StructureGeneratorTest {
         val generator = StructureGenerator(model, provider, writer, credentials)
         generator.render()
         writer.unitTest(
-            """
-            let creds = Credentials {
-                username: Some("not_redacted".to_owned()),
-                password: Some("don't leak me".to_owned()),
-                secret_key: Some("don't leak me".to_owned())
-            };
-            assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
-        """
+            test = """
+                        let creds = Credentials {
+                            username: Some("not_redacted".to_owned()),
+                            password: Some("don't leak me".to_owned()),
+                            secret_key: Some("don't leak me".to_owned())
+                        };
+                        assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
+                    """
         )
         writer.compileAndTest()
     }

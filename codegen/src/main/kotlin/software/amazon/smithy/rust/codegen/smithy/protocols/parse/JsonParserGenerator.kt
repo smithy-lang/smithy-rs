@@ -446,7 +446,7 @@ class JsonParserGenerator(
                                         "Union" to symbol, *codegenScope
                                     )
                                     // in server mode, use strict parsing
-                                    false -> rustTemplate("""_ => return Err(#{Error::custom("unexpected union variant")})""")
+                                    false -> rustTemplate("""_ => return Err(#{Error}::custom("unexpected union variant"))""", *codegenScope)
                                 }
                             }
                         }

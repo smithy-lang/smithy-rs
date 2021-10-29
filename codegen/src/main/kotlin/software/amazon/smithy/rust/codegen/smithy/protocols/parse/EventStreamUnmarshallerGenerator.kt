@@ -31,10 +31,13 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.util.dq
@@ -49,6 +52,7 @@ class EventStreamUnmarshallerGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val operationShape: OperationShape,
     private val unionShape: UnionShape,
+    private val mode: CodegenMode,
 ) {
     private val unionSymbol = symbolProvider.toSymbol(unionShape)
     private val operationErrorSymbol = operationShape.errorSymbol(symbolProvider)
@@ -140,11 +144,17 @@ class EventStreamUnmarshallerGenerator(
                 }
             }
             rustBlock("smithy_type => ") {
-                // TODO: Handle this better once unions support unknown variants
-                rustTemplate(
-                    "return Err(#{Error}::Unmarshalling(format!(\"unrecognized :event-type: {}\", smithy_type)));",
-                    *codegenScope
-                )
+                when (mode.renderUnknownVariant()) {
+                    true -> rustTemplate(
+                        "Ok(#{UnmarshalledMessage}::Event(#{Output}::${UnionGenerator.UnknownVariantName}))",
+                        "Output" to unionSymbol,
+                        *codegenScope
+                    )
+                    false -> rustTemplate(
+                        "return Err(#{Error}::Unmarshalling(format!(\"unrecognized :event-type: {}\", smithy_type)));",
+                        *codegenScope
+                    )
+                }
             }
         }
     }

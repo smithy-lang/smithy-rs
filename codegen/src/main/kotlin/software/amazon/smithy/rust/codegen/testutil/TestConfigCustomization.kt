@@ -60,11 +60,11 @@ fun stubConfigProject(customization: ConfigCustomization, project: TestWriterDel
     project.withModule(RustModule.Config) {
         generator.render(it)
         it.unitTest(
-            """
-            fn assert_send_sync<T: Send + Sync>() {}
-            assert_send_sync::<Config>();
+            test = """
+                        fn assert_send_sync<T: Send + Sync>() {}
+                        assert_send_sync::<Config>();
 
-        """
+                    """
         )
     }
     return project

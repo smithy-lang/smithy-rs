@@ -143,8 +143,8 @@ fun generatePluginContext(model: Model): Pair<PluginContext, Path> {
 }
 
 fun RustWriter.unitTest(
-    @Language("Rust", prefix = "fn test() {", suffix = "}") test: String,
-    name: String? = null
+    name: String? = null,
+    @Language("Rust", prefix = "fn test() {", suffix = "}") test: String
 ) {
     val testName = name ?: safeName("test")
     raw("#[test]")

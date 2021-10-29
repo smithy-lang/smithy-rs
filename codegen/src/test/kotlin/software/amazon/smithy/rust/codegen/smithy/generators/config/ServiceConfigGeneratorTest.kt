@@ -96,12 +96,12 @@ internal class ServiceConfigGeneratorTest {
         project.withModule(RustModule.Config) {
             sut.render(it)
             it.unitTest(
-                """
-                let mut builder = Config::builder();
-                builder.config_field = Some(99);
-                let config = builder.build();
-                assert_eq!(config.config_field, 99);
-            """
+                test = """
+                                let mut builder = Config::builder();
+                                builder.config_field = Some(99);
+                                let config = builder.build();
+                                assert_eq!(config.config_field, 99);
+                            """
             )
         }
         project.compileAndTest()

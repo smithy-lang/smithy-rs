@@ -411,6 +411,7 @@ class HttpBoundProtocolBodyGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val mode = codegenContext.mode
     private val httpBindingResolver = protocol.httpBindingResolver
 
     private val operationSerModule = RustModule.private("operation_ser")
@@ -483,6 +484,7 @@ class HttpBoundProtocolBodyGenerator(
 
         val marshallerConstructorFn = EventStreamMarshallerGenerator(
             model,
+            mode,
             runtimeConfig,
             symbolProvider,
             unionShape,

@@ -124,16 +124,16 @@ internal class EndpointConfigCustomizationTest {
             it.addDependency(awsTypes(AwsTestRuntimeConfig))
             it.addDependency(CargoDependency.Http)
             it.unitTest(
-                """
-                use aws_types::region::Region;
-                use http::Uri;
-                let conf = crate::config::Config::builder().build();
-                let endpoint = conf.endpoint_resolver
-                    .resolve_endpoint(&Region::new("fips-ca-central-1")).expect("default resolver produces a valid endpoint");
-                let mut uri = Uri::from_static("/?k=v");
-                endpoint.set_endpoint(&mut uri, None);
-                assert_eq!(uri, Uri::from_static("https://access-analyzer-fips.ca-central-1.amazonaws.com/?k=v"));
-            """
+                test = """
+                                use aws_types::region::Region;
+                                use http::Uri;
+                                let conf = crate::config::Config::builder().build();
+                                let endpoint = conf.endpoint_resolver
+                                    .resolve_endpoint(&Region::new("fips-ca-central-1")).expect("default resolver produces a valid endpoint");
+                                let mut uri = Uri::from_static("/?k=v");
+                                endpoint.set_endpoint(&mut uri, None);
+                                assert_eq!(uri, Uri::from_static("https://access-analyzer-fips.ca-central-1.amazonaws.com/?k=v"));
+                            """
             )
         }
         project.compileAndTest()
@@ -147,22 +147,22 @@ internal class EndpointConfigCustomizationTest {
             it.addDependency(awsTypes(AwsTestRuntimeConfig))
             it.addDependency(CargoDependency.Http)
             it.unitTest(
-                """
-                use aws_types::region::Region;
-                use http::Uri;
-                let conf = crate::config::Config::builder().build();
-                let endpoint = conf.endpoint_resolver
-                    .resolve_endpoint(&Region::new("us-east-1")).expect("default resolver produces a valid endpoint");
-                let mut uri = Uri::from_static("/?k=v");
-                endpoint.set_endpoint(&mut uri, None);
-                assert_eq!(uri, Uri::from_static("https://iam.amazonaws.com/?k=v"));
+                test = """
+                                use aws_types::region::Region;
+                                use http::Uri;
+                                let conf = crate::config::Config::builder().build();
+                                let endpoint = conf.endpoint_resolver
+                                    .resolve_endpoint(&Region::new("us-east-1")).expect("default resolver produces a valid endpoint");
+                                let mut uri = Uri::from_static("/?k=v");
+                                endpoint.set_endpoint(&mut uri, None);
+                                assert_eq!(uri, Uri::from_static("https://iam.amazonaws.com/?k=v"));
 
-                let endpoint = conf.endpoint_resolver
-                    .resolve_endpoint(&Region::new("iam-fips")).expect("default resolver produces a valid endpoint");
-                let mut uri = Uri::from_static("/?k=v");
-                endpoint.set_endpoint(&mut uri, None);
-                assert_eq!(uri, Uri::from_static("https://iam-fips.amazonaws.com/?k=v"));
-            """
+                                let endpoint = conf.endpoint_resolver
+                                    .resolve_endpoint(&Region::new("iam-fips")).expect("default resolver produces a valid endpoint");
+                                let mut uri = Uri::from_static("/?k=v");
+                                endpoint.set_endpoint(&mut uri, None);
+                                assert_eq!(uri, Uri::from_static("https://iam-fips.amazonaws.com/?k=v"));
+                            """
             )
         }
         println("file:///" + project.baseDir + "/src/aws_endpoint.rs")

@@ -19,12 +19,14 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.CombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -123,6 +125,7 @@ object EventStreamTestModels {
         val validTestUnion: String,
         val validSomeError: String,
         val validUnmodeledError: String,
+        val mode: CodegenMode = CodegenMode.Client,
         val protocolBuilder: (CodegenContext) -> Protocol,
     ) {
         override fun toString(): String = protocolShapeId
@@ -131,6 +134,21 @@ object EventStreamTestModels {
     private val testCases = listOf(
         //
         // restJson1
+        //
+        TestCase(
+            protocolShapeId = "aws.protocols#restJson1",
+            model = restJson1(),
+            requestContentType = "application/json",
+            responseContentType = "application/json",
+            validTestStruct = """{"someString":"hello","someInt":5}""",
+            validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
+            validTestUnion = """{"Foo":"hello"}""",
+            validSomeError = """{"Message":"some error"}""",
+            validUnmodeledError = """{"Message":"unmodeled error"}""",
+        ) { RestJson(it) },
+
+        //
+        // restJson1, server mode
         //
         TestCase(
             protocolShapeId = "aws.protocols#restJson1",
@@ -285,7 +303,7 @@ object EventStreamTestModels {
                         </Response>
             """.trimIndent(),
         ) { Ec2QueryProtocol(it) },
-    )
+    ).flatMap { listOf(it, it.copy(mode = CodegenMode.Server)) }
 
     class UnmarshallTestCasesProvider : ArgumentsProvider {
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
@@ -311,8 +329,8 @@ data class TestEventStreamProject(
 )
 
 object EventStreamTestTools {
-    fun generateTestProject(model: Model): TestEventStreamProject {
-        val model = EventStreamNormalizer.transform(OperationNormalizer.transform(model))
+    fun generateTestProject(testCase: EventStreamTestModels.TestCase): TestEventStreamProject {
+        val model = EventStreamNormalizer.transform(OperationNormalizer.transform(testCase.model))
         val serviceShape = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
         val operationShape = model.expectShape(ShapeId.from("test#TestStreamOp")) as OperationShape
         val unionShape = model.expectShape(ShapeId.from("test#TestStream")) as UnionShape
@@ -332,7 +350,7 @@ object EventStreamTestTools {
         }
         project.withModule(RustModule.public("model")) {
             val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")
-            recursivelyGenerateModels(model, symbolProvider, inputOutput, it)
+            recursivelyGenerateModels(model, symbolProvider, inputOutput, it, testCase.mode)
         }
         project.withModule(RustModule.public("output")) {
             operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, it)
@@ -351,7 +369,8 @@ object EventStreamTestTools {
         model: Model,
         symbolProvider: RustSymbolProvider,
         shape: Shape,
-        writer: RustWriter
+        writer: RustWriter,
+        mode: CodegenMode
     ) {
         for (member in shape.members()) {
             val target = model.expectShape(member.target)
@@ -359,9 +378,9 @@ object EventStreamTestTools {
                 if (target is StructureShape) {
                     target.renderWithModelBuilder(model, symbolProvider, writer)
                 } else if (target is UnionShape) {
-                    UnionGenerator(model, symbolProvider, writer, target).render()
+                    UnionGenerator(model, symbolProvider, writer, target, renderUnknownVariant = mode.renderUnknownVariant()).render()
                 }
-                recursivelyGenerateModels(model, symbolProvider, target, writer)
+                recursivelyGenerateModels(model, symbolProvider, target, writer, mode)
             }
         }
     }

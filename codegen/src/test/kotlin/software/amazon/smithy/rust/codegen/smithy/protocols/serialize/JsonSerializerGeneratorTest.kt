@@ -111,30 +111,30 @@ class JsonSerializerGeneratorTest {
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
             writer.unitTest(
-                """
-                use model::{Top, Choice};
+                test = """
+                                use model::{Top, Choice};
 
-                // Generate the document serializer even though it's not tested directly
-                // ${writer.format(documentGenerator)}
+                                // Generate the document serializer even though it's not tested directly
+                                // ${writer.format(documentGenerator)}
 
-                let input = crate::input::OpInput::builder().top(
-                    Top::builder()
-                        .field("hello!")
-                        .extra(45)
-                        .recursive(Top::builder().extra(55).build())
-                        .build()
-                ).build().unwrap();
-                let serialized = ${writer.format(operationGenerator!!)}(&input).unwrap();
-                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
-                assert_eq!(output, r#"{"top":{"field":"hello!","extra":45,"rec":[{"extra":55}]}}"#);
+                                let input = crate::input::OpInput::builder().top(
+                                    Top::builder()
+                                        .field("hello!")
+                                        .extra(45)
+                                        .recursive(Top::builder().extra(55).build())
+                                        .build()
+                                ).build().unwrap();
+                                let serialized = ${writer.format(operationGenerator!!)}(&input).unwrap();
+                                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
+                                assert_eq!(output, r#"{"top":{"field":"hello!","extra":45,"rec":[{"extra":55}]}}"#);
 
-                let input = crate::input::OpInput::builder().top(
-                    Top::builder()
-                        .choice(Choice::Unknown)
-                        .build()
-                ).build().unwrap();
-                let serialized = ${writer.format(operationGenerator!!)}(&input).expect_err("cannot serialize unknown variant");
-                """
+                                let input = crate::input::OpInput::builder().top(
+                                    Top::builder()
+                                        .choice(Choice::Unknown)
+                                        .build()
+                                ).build().unwrap();
+                                let serialized = ${writer.format(operationGenerator!!)}(&input).expect_err("cannot serialize unknown variant");
+                                """
             )
         }
         project.withModule(RustModule.public("model")) {

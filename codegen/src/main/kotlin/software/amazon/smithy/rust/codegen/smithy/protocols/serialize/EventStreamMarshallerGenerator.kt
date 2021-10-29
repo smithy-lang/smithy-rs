@@ -30,9 +30,12 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
@@ -41,6 +44,7 @@ import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 class EventStreamMarshallerGenerator(
     private val model: Model,
+    private val mode: CodegenMode,
     runtimeConfig: RuntimeConfig,
     private val symbolProvider: RustSymbolProvider,
     private val unionShape: UnionShape,
@@ -101,6 +105,12 @@ class EventStreamMarshallerGenerator(
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             renderMarshallEvent(member, target)
                         }
+                    }
+                    if (mode.renderUnknownVariant()) {
+                        rustTemplate(
+                            """Self::Input::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::Marshalling("cannot marshall `Unknown` variant".to_owned()))""",
+                            *codegenScope
+                        )
                     }
                 }
                 rustTemplate("; Ok(#{Message}::new_from_parts(headers, payload))", *codegenScope)
@@ -164,6 +174,7 @@ class EventStreamMarshallerGenerator(
         val optional = symbolProvider.toSymbol(member).isOptional()
         if (target is BlobShape || target is StringShape) {
             data class PayloadContext(val conversionFn: String, val contentType: String)
+
             val ctx = when (target) {
                 is BlobShape -> PayloadContext("into_inner", "application/octet-stream")
                 is StringShape -> PayloadContext("into_bytes", "text/plain")
