@@ -48,7 +48,7 @@ class EndpointTraitBindings(
      * The returned expression is a `Result<EndpointPrefix, UriError>`
      */
     fun render(writer: RustWriter, input: String) {
-        // the Rust format pattern to make the endpoint prefix eg. "{}.foo"
+        // the Rust format pattern to make the endpoint prefix e.g. "{}.foo"
         val formatLiteral = endpointTrait.prefixFormatString()
         if (endpointTrait.hostPrefix.labels.isEmpty()) {
             // if there are no labels, we don't need string formatting

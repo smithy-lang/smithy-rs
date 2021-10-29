@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
  *      // Sections can be state-carrying to allow implementations to make different choices based on
  *      // different operations
  *      data class RequestCreation(protocolConfig: ProtocolConfig, operation: OperationShape) : Section("RequestCreation")
- *      // Sections can be stateless, eg. this section that could write code into the
+ *      // Sections can be stateless, e.g. this section that could write code into the
  *      // top level operation module
  *      object OperationModule : ServiceConfig("OperationTopLevel")
  * }

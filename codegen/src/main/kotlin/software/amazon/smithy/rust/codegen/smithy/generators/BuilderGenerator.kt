@@ -180,7 +180,7 @@ class BuilderGenerator(
                 val outerType = memberSymbol.rustType()
                 val coreType = outerType.stripOuter<RustType.Option>()
                 val memberName = symbolProvider.toMemberName(member)
-                // Render a context-aware builder method for certain types, eg. a method for vectors that automatically
+                // Render a context-aware builder method for certain types, e.g. a method for vectors that automatically
                 // appends
                 when (coreType) {
                     is RustType.Vec -> renderVecHelper(member, memberName, coreType)

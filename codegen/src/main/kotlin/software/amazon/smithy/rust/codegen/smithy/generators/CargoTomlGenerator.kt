@@ -55,15 +55,15 @@ class CargoTomlGenerator(
         }
 
         val cargoToml = mapOf(
-            "package" to mapOf(
+            "package" to listOfNotNull(
                 "name" to settings.moduleName,
                 "version" to settings.moduleVersion,
                 "authors" to settings.moduleAuthors,
-                "description" to settings.moduleDescription,
+                settings.moduleDescription?.let { "description" to it },
                 "edition" to "2018",
                 "license" to settings.license,
                 "repository" to settings.moduleRepository,
-            ),
+            ).toMap(),
             "dependencies" to dependencies.filter { it.scope == DependencyScope.Compile }
                 .associate { it.name to it.toMap() },
             "dev-dependencies" to dependencies.filter { it.scope == DependencyScope.Dev }

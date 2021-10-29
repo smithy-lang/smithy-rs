@@ -123,7 +123,7 @@ impl ProviderConfig {
 
 /// HttpSettings for HTTP connectors
 ///
-/// # Stabilility
+/// # Stability
 /// As HTTP settings stabilize, they will move to `aws-types::config::Config` so that they
 /// can be used to configure HTTP connectors for service clients.
 #[non_exhaustive]
