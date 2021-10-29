@@ -35,15 +35,12 @@ There's a lot of terminology to define so I've broken it up into two sections
 - **Layer**: Layers are a higher-order abstraction over services that is used to compose multiple services together, creating a new service from that combination. Nothing prevents us from manually wrapping services withing services, but Layers allow us to do it in a maintainable, flexible, and generic manner. Layers don't directly act on data but instead can wrap an existing service with additional functionality, creating a new service.. Layers can be thought of as middleware.
 - **Middleware**: a term with several meanings,
   - Generically speaking, middlewares are similar to Services and Layers in that they modify requests and responses.
-  - In the SDK, Middlewares have the specific meaning of being the only kind of struct that contains a `DispatchService`.
-  - Examples of Middleware include [MapRequest], [AsyncMapRequest], and [ParseResponse]. **TODO** is this true or am I getting things mixed up?
-- **DispatchService**: Connects Operation driven middleware to an HTTP implementation. It will also wrap the error type in OperationError to enable operation middleware reporting specific errors.
-  - **TODO** This definition is taken directly from a code comment. It makes it sound like this is the first and last layer that gets hit when making a request; Is that actually the case?
+  - In the SDK, "Middleware" refers to a layer that can be wrapped around a `DispatchService`. In practice, this means that the resulting `Service` (and the inner service) must meet the bound `T: where T: Service<operation::Request, Response=operation::Response, Error=SendOperationError>`.
+  - The most notable example of a Middleware is the [AwsMiddleware]. Other notable examples include [MapRequest], [AsyncMapRequest], and [ParseResponse].
+- **DispatchService**: The innermost part of a group of nested services. The Service that actually makes an HTTP call on behalf of a request. Responsible for parsing success and error responses.
 - **Connector**: a term with several meanings,
-  - (esp. `DynConnector`) generally refers to a service that handles HTTP. HTTP is the lowest level we handle
-    - Dyn means that we're erasing the inner type
-    - **TODO** is this then a Service that we've erased the type of?
-  - A term from `hyper` for any object that implements the [Connect] trait. Actually just an alias for [tower_service::Service]. Sometimes referred to as a `Connection`.
+  - [DynConnector]s are Services with their specific type erased so that we can do dynamic dispatch.
+  - A term from `hyper` for any object that implements the [Connect] trait. Really just an alias for [tower_service::Service]. Sometimes referred to as a `Connection`.
 - **Stage**: A form of middleware that's not related to `tower`. These currently function as a way of transforming requests. We don't want to implement Timeouts as stages because we don't want to give them the ability to handle responses. This is because it would introduce lots of new complexity that we aren't yet ready to take on but this may change in the future.
 - **Stack**: higher order abstraction over Layers defined in the [tower crate][tower::layer::util::Stack] e.g. Layers wrap services in one another and Stacks wrap layers within one another.
 
@@ -55,11 +52,9 @@ There's a lot of terminology to define so I've broken it up into two sections
       a fresh connection will be use for a given request._
 - **TLS Negotiation Timeout**: A limit on the amount of time a TLS handshake takes from when the CLIENT HELLO message is
   sent to the time the client and server have fully negotiated ciphers and exchanged keys.
-    - _QUESTION: Our HTTP client supports multiple TLS implementations. Is there any reason that that would make
-      implementing this feature difficult?_
-- **Time to First Byte Timeout**: A limit on the amount of time an application takes to attempt to read the first byte over
+    - _Note: Our HTTP client supports multiple TLS implementations. We'll likely have to implement this feature once per library._
+- **Time to First Byte Timeout**: _Sometimes referred to as a "read timeout."_ A limit on the amount of time an application takes to attempt to read the first byte over
   an established, open connection after write request.
-  - _QUESTION: Is this the same as a "write timeout"? If yes, should we refer to it by that name? Also, if yes, should we not also support "read timeouts" for completeness' sake?_
 - **HTTP Request Timeout For A Single Request**: A limit on the amount of time it takes for the first byte to be sent over
   an established, open connection and when the last byte is received from the service.
 - **HTTP Request Timeout For Multiple Attempts**: This timeout acts like the previous timeout but constrains the total time
@@ -136,6 +131,8 @@ Changes checklist
 
 // TODO
 
+<!--- Links -->
+
 [tokio::time::timeout]: https://docs.rs/tokio/1.12.0/tokio/time/fn.timeout.html
 [futures::future::select]: https://docs.rs/futures/0.3.17/futures/future/fn.select.html
 [Retry Behavior Configuration]: ./rfc0004_retry_behavior.md
@@ -143,8 +140,10 @@ Changes checklist
 [hjr3/hyper-timeout]: https://github.com/hjr3/hyper-timeout
 [sfackler/tokio-io-timeout]: https://github.com/sfackler/tokio-io-timeout
 [tower_service::Service]: https://docs.rs/tower-service/0.3.1/tower_service/trait.Service.html
+[AwsMiddleware]: https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29
 [MapRequest]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L122
 [AsyncMapRequest]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L42
 [ParseResponse]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/parse_response.rs#L27
+[DynConnect]: https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/rust-runtime/aws-smithy-client/src/erase.rs#L139
 [Connect]: https://docs.rs/hyper/0.14.14/hyper/client/connect/trait.Connect.html
 [tower::layer::util::Stack]: https://docs.rs/tower/0.4.10/tower/layer/util/struct.Stack.html
