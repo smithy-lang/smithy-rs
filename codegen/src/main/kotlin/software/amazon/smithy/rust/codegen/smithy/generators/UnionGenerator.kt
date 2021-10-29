@@ -44,7 +44,7 @@ class UnionGenerator(
     private val symbolProvider: SymbolProvider,
     private val writer: RustWriter,
     private val shape: UnionShape,
-    private val renderUnknownVariant: Boolean,
+    private val renderUnknownVariant: Boolean = true,
 ) {
     private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
 
@@ -69,6 +69,8 @@ class UnionGenerator(
             }
             if (renderUnknownVariant) {
                 docs("""The `Unknown` variant represents cases where new union variant was received. Consider upgrading the SDK to the latest available version.""")
+                // at some point in the future, we may start actually putting data in here.
+                Attribute.NonExhaustive.render(this)
                 rust("Unknown,")
             }
         }
@@ -89,6 +91,12 @@ class UnionGenerator(
                 rust("/// Returns true if the enum instance is the `${unionSymbol.name}` variant.")
                 rustBlock("pub fn is_$funcNamePart(&self) -> bool") {
                     rust("self.as_$funcNamePart().is_ok()")
+                }
+            }
+            if (renderUnknownVariant) {
+                rust("/// Returns true if the enum instance is the `Unknown` variant.")
+                rustBlock("pub fn is_unknown(&self) -> bool") {
+                    rust("matches!(self, Self::Unknown)")
                 }
             }
         }

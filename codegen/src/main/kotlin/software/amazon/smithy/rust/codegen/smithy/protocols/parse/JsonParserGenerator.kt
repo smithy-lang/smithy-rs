@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isBoxed
@@ -86,7 +87,11 @@ class JsonParserGenerator(
      * We still generate the parser symbol even if there are no included members because the server
      * generation requires parsers for all input structures.
      */
-    private fun structureParser(fnName: String, structureShape: StructureShape, includedMembers: List<MemberShape>): RuntimeType {
+    private fun structureParser(
+        fnName: String,
+        structureShape: StructureShape,
+        includedMembers: List<MemberShape>
+    ): RuntimeType {
         val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
         return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
@@ -427,8 +432,15 @@ class JsonParserGenerator(
                                         }
                                     }
                                 }
-                                // TODO: Handle unrecognized union variants (https://github.com/awslabs/smithy-rs/issues/185)
-                                rust("_ => None")
+                                rustTemplate(
+                                    """
+                                    _ => {
+                                      #{skip_value}(tokens)?;
+                                      Some(#{Union}::${UnionGenerator.UnknownVariantName})
+                                    }
+                                    """,
+                                    "Union" to symbol, *codegenScope
+                                )
                             }
                         }
                     }
@@ -470,7 +482,7 @@ class JsonParserGenerator(
                         inner()
                     }
                     rustTemplate(
-                        "_ => return Err(#{Error}::custom(\"expected object key or end object\"))",
+                        """other => return Err(#{Error}::custom(format!("expected object key or end object, found: {:?}", other)))""",
                         *codegenScope
                     )
                 }

@@ -136,9 +136,10 @@ class JsonParserGeneratorTest {
                     { "top":
                         { "extra": 45,
                           "field": "something",
-                          "choice":
-                              { "int": 5 },
-                          "empty": { "not_empty": true }}}
+                          "choice": { "int": 5 },
+                          "empty": { "not_empty": true }
+                        }
+                    }
                 "#;
 
                 let output = ${writer.format(operationGenerator!!)}(json, output::op_output::Builder::default()).unwrap().build();
@@ -146,8 +147,15 @@ class JsonParserGeneratorTest {
                 assert_eq!(Some(45), top.extra);
                 assert_eq!(Some("something".to_string()), top.field);
                 assert_eq!(Some(Choice::Int(5)), top.choice);
-                let output = ${writer.format(operationGenerator!!)}(b"", output::op_output::Builder::default()).unwrap().build();
+
+                // empty body
+                let output = ${writer.format(operationGenerator)}(b"", output::op_output::Builder::default()).unwrap().build();
                 assert_eq!(output.top, None);
+
+                // unknown variant
+                let input = br#"{ "top": { "choice": { "somenewvariant": "data" } } }"#;
+                let output = ${writer.format(operationGenerator)}(input, output::op_output::Builder::default()).unwrap().build();
+                assert!(output.top.unwrap().choice.unwrap().is_unknown());
 
 
                 // empty error
@@ -155,7 +163,7 @@ class JsonParserGeneratorTest {
                 assert_eq!(error_output.message, None);
 
                 // error with message
-                let error_output = ${writer.format(errorParser!!)}(br#"{"message": "hello"}"#, error::error::Builder::default()).unwrap().build();
+                let error_output = ${writer.format(errorParser)}(br#"{"message": "hello"}"#, error::error::Builder::default()).unwrap().build();
                 assert_eq!(error_output.message.expect("message should be set"), "hello");
                 """
             )

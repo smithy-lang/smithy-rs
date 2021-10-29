@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
@@ -30,7 +31,8 @@ class EventStreamUnmarshallerGeneratorTest {
             test.serviceShape,
             ShapeId.from(testCase.protocolShapeId),
             "test",
-            testRustSettings(test.model)
+            testRustSettings(test.model),
+            mode = CodegenMode.Client
         )
         val protocol = testCase.protocolBuilder(codegenContext)
         val generator = EventStreamUnmarshallerGenerator(
