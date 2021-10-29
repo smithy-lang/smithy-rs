@@ -80,6 +80,12 @@ pub enum BuildError {
     Other(Box<dyn Error + Send + Sync + 'static>),
 }
 
+impl From<SerializationError> for BuildError {
+    fn from(err: SerializationError) -> Self {
+        BuildError::SerializationError(err)
+    }
+}
+
 impl Display for BuildError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {

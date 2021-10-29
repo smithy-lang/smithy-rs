@@ -455,8 +455,10 @@ class HttpBoundProtocolBodyGenerator(
             httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
         if (payloadMemberName == null) {
             serializerGenerator.operationSerializer(operationShape)?.let { serializer ->
+                // some serializers return SerializationError directly, others errors must be converted
+
                 writer.rust(
-                    "#T(&self).map_err(|err|#T::SerializationError(err.into()))?",
+                    "#T(&self).map_err(|err|#T::SerializationError(##[allow(clippy::useless_conversion)] err.into()))?",
                     serializer,
                     runtimeConfig.operationBuildError()
                 )
@@ -578,13 +580,13 @@ class HttpBoundProtocolBodyGenerator(
 
                 // JSON serialize the structure or union targeted
                 rust(
-                    """#T(&$payloadName).map_err(|err|#T::SerializationError(err))?""",
+                    """#T(&$payloadName).map_err(|err|#T::SerializationError(##[allow(clippy::useless_conversion)] err.into()))?""",
                     serializer.payloadSerializer(member), runtimeConfig.operationBuildError()
                 )
             }
             is DocumentShape -> {
                 rust(
-                    "#T(&$payloadName).map_err(|err|#T::SerializationError(err))?",
+                    "#T(&$payloadName).map_err(|err|#T::SerializationError(##[allow(clippy::useless_conversion)] err.into()))?",
                     serializer.documentSerializer(),
                     runtimeConfig.operationBuildError()
                 )
