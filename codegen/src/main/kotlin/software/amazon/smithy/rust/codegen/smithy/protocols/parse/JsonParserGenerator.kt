@@ -40,6 +40,7 @@ import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isBoxed
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
@@ -60,6 +61,7 @@ class JsonParserGenerator(
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val mode = codegenContext.mode
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val jsonDeserModule = RustModule.private("json_deser")
     private val codegenScope = arrayOf(
@@ -432,20 +434,25 @@ class JsonParserGenerator(
                                         }
                                     }
                                 }
-                                rustTemplate(
-                                    """
+                                when (mode.renderUnknownVariant()) {
+                                    // in client mode, resolve an unknown union variant to the unknown variant
+                                    true -> rustTemplate(
+                                        """
                                     _ => {
                                       #{skip_value}(tokens)?;
                                       Some(#{Union}::${UnionGenerator.UnknownVariantName})
                                     }
                                     """,
-                                    "Union" to symbol, *codegenScope
-                                )
+                                        "Union" to symbol, *codegenScope
+                                    )
+                                    // in server mode, use strict parsing
+                                    false -> rustTemplate("""_ => return Err(#{Error::custom("unexpected union variant")})""")
+                                }
                             }
                         }
                     }
                     rustTemplate(
-                        "_ => return Err(#{Error}::custom(\"expected start object or null\"))",
+                        """_ => return Err(#{Error}::custom("expected start object or null"))""",
                         *codegenScope
                     )
                 }
