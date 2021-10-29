@@ -15,16 +15,36 @@ import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
+fun CodegenMode.renderUnknownVariant() = when (this) {
+    is CodegenMode.Server -> false
+    is CodegenMode.Client -> true
+}
+
+/**
+ * Generate an `enum` for a Smithy Union Shape
+ *
+ * This generator will render a Rust enum representing [shape] when [render] is called. It will also render convenience
+ * methods:
+ * - `is_<variant>()`
+ * - `as_<variant>()`
+ *
+ * for each variant.
+ *
+ * Finally, if `[renderUnknownVariant]` is true (default false), it will render an `Unknown` variant. This is used by
+ * clients to enable parsing to succeed, even if the server has added a new variant since the client was generated.
+ */
 class UnionGenerator(
     val model: Model,
     private val symbolProvider: SymbolProvider,
     private val writer: RustWriter,
-    private val shape: UnionShape
+    private val shape: UnionShape,
+    private val renderUnknownVariant: Boolean,
 ) {
     private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
 
@@ -41,13 +61,16 @@ class UnionGenerator(
         writer.rustBlock("enum ${unionSymbol.name}") {
             sortedMembers.forEach { member ->
                 val memberSymbol = symbolProvider.toSymbol(member)
-                val note = memberSymbol.renamedFrom()?.let { oldName -> "This variant has been renamed from `$oldName`." }
+                val note =
+                    memberSymbol.renamedFrom()?.let { oldName -> "This variant has been renamed from `$oldName`." }
                 documentShape(member, model, note = note)
                 memberSymbol.expectRustMetadata().renderAttributes(this)
                 write("${symbolProvider.toMemberName(member)}(#T),", symbolProvider.toSymbol(member))
             }
-            docs("""The `Unknown` variant represents cases where new union variant was received. Consider upgrading the SDK to the latest available version.""")
-            rust("Unknown,")
+            if (renderUnknownVariant) {
+                docs("""The `Unknown` variant represents cases where new union variant was received. Consider upgrading the SDK to the latest available version.""")
+                rust("Unknown,")
+            }
         }
         writer.rustBlock("impl ${unionSymbol.name}") {
             sortedMembers.forEach { member ->

@@ -40,6 +40,7 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
@@ -62,6 +63,7 @@ class XmlBindingTraitSerializerGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val model = codegenContext.model
     private val smithyXml = CargoDependency.smithyXml(runtimeConfig).asType()
+    private val mode = codegenContext.mode
     private val codegenScope =
         arrayOf(
             "XmlWriter" to smithyXml.member("encode::XmlWriter"),
@@ -319,11 +321,13 @@ class XmlBindingTraitSerializerGenerator(
                         }
                     }
 
-                    rustTemplate(
-                        "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
-                        "Union" to unionSymbol,
-                        *codegenScope
-                    )
+                    if (mode.renderUnknownVariant()) {
+                        rustTemplate(
+                            "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
+                            "Union" to unionSymbol,
+                            *codegenScope
+                        )
+                    }
                 }
                 rust("Ok(())")
             }

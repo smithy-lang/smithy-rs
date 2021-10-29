@@ -68,7 +68,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val baseProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
         symbolProvider = codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
-        codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings)
+        codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, mode = CodegenMode.Client)
         rustCrate = RustCrate(
             context.fileManifest,
             symbolProvider,
@@ -200,7 +200,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      */
     override fun unionShape(shape: UnionShape) {
         rustCrate.useShapeWriter(shape) {
-            UnionGenerator(model, symbolProvider, it, shape).render()
+            UnionGenerator(model, symbolProvider, it, shape, renderUnknownVariant = true).render()
         }
     }
 }

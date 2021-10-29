@@ -36,6 +36,7 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
@@ -129,6 +130,7 @@ class JsonSerializerGenerator(
 
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
+    private val mode = codegenContext.mode
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
@@ -395,11 +397,13 @@ class JsonSerializerGenerator(
                             serializeMember(MemberContext.unionMember(context, "inner", member))
                         }
                     }
-                    rustTemplate(
-                        "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
-                        "Union" to unionSymbol,
-                        *codegenScope
-                    )
+                    if (mode.renderUnknownVariant()) {
+                        rustTemplate(
+                            "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
+                            "Union" to unionSymbol,
+                            *codegenScope
+                        )
+                    }
                 }
                 rust("Ok(())")
             }

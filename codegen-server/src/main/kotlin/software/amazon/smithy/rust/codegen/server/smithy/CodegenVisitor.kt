@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Pro
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpDeserializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
@@ -101,7 +102,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         symbolProvider =
             codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
-        codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings)
+        codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, mode = CodegenMode.Server)
 
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
@@ -259,7 +260,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     override fun unionShape(shape: UnionShape) {
         logger.info("[rust-server-codegen] Generating an union $shape")
         rustCrate.useShapeWriter(shape) {
-            UnionGenerator(model, symbolProvider, it, shape).render()
+            UnionGenerator(model, symbolProvider, it, shape, renderUnknownVariant = false).render()
         }
     }
 
