@@ -13,6 +13,10 @@ crate.
 Terminology
 -----------
 
+There's a lot of terminology to define so I've broken it up into two sections
+
+### General terms
+
 - **Smithy Client**: A `aws_smithy_client::Client<C, M, R>` struct that is responsible for gluing together the
   connector, middleware, and retry policy. This is not generated and lives in the `aws-smithy-client` crate.
 - **Fluent Client**: A code-generated `Client<C, M, R>` that has methods for each service operation on it. A fluent
@@ -23,29 +27,27 @@ Terminology
   used across all services. This is not generated and lives in the `aws-types` crate.
 - **Service-specific Config**: A code-generated `Config` that has methods for setting service-specific configuration.
   Each `Config` is defined in the `config` module of its parent service. For example, the S3-specific config struct
-  is `use`able from `aws_sdk_s3::config::Config` and re-exported as `aws_sdk_s3::Config`.
+  is `use`able from `aws_sdk_s3::config::Config` and re-exported as `aws_sdk_s3::Config`. In this case, "service" refers to an AWS offering like S3.
 
-// TODO clean this up
+### HTTP stack terms
 
-- Middleware: almost means the same thing as layer but is the only thing allowed to contain a `DispatchService`
-- Connector: overloaded word,
+- **Service**: A trait defined in the [`tower-service` crate][tower_service::Service]. The lowest level of abstraction we deal with when making HTTP requests. Services act directly on data to transform and modify that data. A Service is what eventually turns a request into a response.
+- **Layer**: Layers are a higher-order abstraction over services that is used to compose multiple services together, creating a new service from that combination. Nothing prevents us from manually wrapping services withing services, but Layers allow us to do it in a maintainable, flexible, and generic manner. Layers don't directly act on data but produce a new compose service that does. Layers can be thought of as middleware.
+- **Middleware**: a term with several meanings,
+  - Generically speaking, middlewares are similar to Services and Layers in that they modify requests and responses.
+  - In the SDK, Middlewares have the specific meaning of being the only kind of struct that contains a `DispatchService`.
+  - Examples of Middleware include [MapRequest], [AsyncMapRequest], and [ParseResponse]. **TODO** is this true or am I getting things mixed up?
+- **DispatchService**: Connects Operation driven middleware to an HTTP implementation. It will also wrap the error type in OperationError to enable operation middleware reporting specific errors.
+  - **TODO** This definition is taken directly from a code comment. It makes it sound like this is the first and last layer that gets hit when making a request; Is that actually the case?
+- **Connector**: a term with several meanings,
   - (esp. `DynConnector`) generally refers to a service that handles HTTP. HTTP is the lowest level we handle
     - Dyn means that we're erasing the inner type
-  - `Connector` has its own meaning in `hyper`. Something that implements the `Connect` trait
-- `Connection` is also a hyper term representing a low level protocol talky thing
-- Service: The lowest level of abstraction, cares about actual data
-- Layer: an abstraction for wrapping services inside one another. Makes it easy to define services that can wrap other services that they have no knowledge of. Layers are Middleware
-    A layer is the ability to define how one service gets wrapped around another. You can wrap services without the layer abstraction but then defining the types gets tough and is rigid. A higher-order service. Only used to define the relationships between services
-when creating layer structs, they don't contain services but they do create them. synthesis of the inputs, a third object.
-- Stage: not tower-specific. Functions as a way of mapping requests right now. Timeouts wont be a stage because we don't want to give them the ability to handle responses because it would make them too complex
-- Stack: higher order abstraction over a stack
+    - **TODO** is this then a Service that we've erased the type of?
+  - A term from `hyper` for any object that implements the [Connect] trait. Actually just an alias for [tower_service::Service]. Sometimes referred to as a `Connection`.
+- **Stage**: A form of middleware that's not related to `tower`. These currently function as a way of transforming requests. We don't want to implement Timeouts as stages because we don't want to give them the ability to handle responses. This is because it would introduce lots of new complexity that we aren't yet ready to take on but this may change in the future.
+- **Stack**: higher order abstraction over Layers defined in the [tower crate][tower::layer::util::Stack] e.g. Layers wrap services in one another and Stacks wrap layers within one another.
 
-ParseResponse is the Bizarro version of MapRequest
-
-Configuring timeouts
---------------------
-
-This section will define the kinds of timeouts that will be configurable and the ways that a user could configure them.
+### Timeout terms
 
 - **Connect Timeout**: A limit on the amount of time after making an initial connect attempt on a socket to complete the
   connect-handshake.
@@ -64,6 +66,9 @@ This section will define the kinds of timeouts that will be configurable and the
   it takes to make a request plus any retries.
     - _NOTE: In a way, this is already possible in that users are free to race requests against timer futures with
       the [futures::future::select] macro or to use [tokio::time::timeout]. See relevant discussion in [hyper#1097]_
+
+Configuring timeouts
+--------------------
 
 Just like with [Retry Behavior Configuration], these settings can be configured in several places and have the same
 precedence rules _(paraphrased here for clarity)_.
@@ -118,6 +123,14 @@ fn make_fake_request() -> Future<Output = FakeRequest> {
 }
 ```
 
+HTTP calls are made by turning an operation into a request and passing that request into a service. Middleware acts on the request and resulting response to modify them.
+
+### What is a Service?
+
+Ser
+
+### What is a Middleware?
+
 Changes checklist
 -----------------
 
@@ -129,3 +142,9 @@ Changes checklist
 [hyper#1097]: https://github.com/hyperium/hyper/issues/1097
 [hjr3/hyper-timeout]: https://github.com/hjr3/hyper-timeout
 [sfackler/tokio-io-timeout]: https://github.com/sfackler/tokio-io-timeout
+[tower_service::Service]: https://docs.rs/tower-service/0.3.1/tower_service/trait.Service.html
+[MapRequest]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L122
+[AsyncMapRequest]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L42
+[ParseResponse]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/parse_response.rs#L27
+[Connect]: https://docs.rs/hyper/0.14.14/hyper/client/connect/trait.Connect.html
+[tower::layer::util::Stack]: https://docs.rs/tower/0.4.10/tower/layer/util/struct.Stack.html
