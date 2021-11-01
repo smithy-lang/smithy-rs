@@ -185,7 +185,7 @@ class XmlBindingTraitSerializerGenerator(
                 pub fn $fnName() -> std::vec::Vec<u8> {
                     vec![]
                 }
-            """
+                """
             )
         }
     }
@@ -232,7 +232,10 @@ class XmlBindingTraitSerializerGenerator(
                 rust("$input.as_ref()")
             }
             is BooleanShape, is NumberShape -> {
-                rust("#T::from(${autoDeref(input)}).encode()", CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder"))
+                rust(
+                    "#T::from(${autoDeref(input)}).encode()",
+                    CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
+                )
             }
             is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.Base64Encode(runtimeConfig))
             is TimestampShape -> {

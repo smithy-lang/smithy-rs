@@ -135,9 +135,8 @@ class HttpTraitHttpBindingResolver(
     ): TimestampFormatTrait.Format =
         httpIndex.determineTimestampFormat(memberShape, location, defaultTimestampFormat)
 
-    override fun requestContentType(operationShape: OperationShape): String? {
-        return httpIndex.determineRequestContentType(operationShape, contentTypes.requestDocument).orNull()
-    }
+    override fun requestContentType(operationShape: OperationShape): String? =
+        httpIndex.determineRequestContentType(operationShape, contentTypes.requestDocument).orNull()
 
     override fun responseContentType(operationShape: OperationShape): String? =
         httpIndex.determineResponseContentType(operationShape, contentTypes.responseDocument).orNull()

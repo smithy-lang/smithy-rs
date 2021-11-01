@@ -191,7 +191,7 @@ class JsonSerializerGenerator(
                 pub fn rest_json_unsetpayload() -> std::vec::Vec<u8> {
                     b"{}"[..].into()
                 }
-            """
+                """
             )
         }
     }

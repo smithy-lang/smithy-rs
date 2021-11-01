@@ -144,15 +144,15 @@ open class ProtocolGenerator(
                 if (needsContentLength(operationShape)) {
                     rustTemplate(
                         """
-                    let mut builder = builder;
-                    if let Some(content_length) = body.content_length() {
-                        builder = #{header_util}::set_header_if_absent(
-                                    builder,
-                                    #{http}::header::CONTENT_LENGTH,
-                                    content_length
-                        );
-                    }
-                    """,
+                        let mut builder = builder;
+                        if let Some(content_length) = body.content_length() {
+                            builder = #{header_util}::set_header_if_absent(
+                                        builder,
+                                        #{http}::header::CONTENT_LENGTH,
+                                        content_length
+                            );
+                        }
+                        """,
                         *codegenScope
                     )
                 }
@@ -193,7 +193,8 @@ open class ProtocolGenerator(
     }
 
     private fun needsContentLength(operationShape: OperationShape): Boolean {
-        return protocol.httpBindingResolver.requestBindings(operationShape).any { it.location == HttpLocation.DOCUMENT || it.location == HttpLocation.PAYLOAD }
+        return protocol.httpBindingResolver.requestBindings(operationShape)
+            .any { it.location == HttpLocation.DOCUMENT || it.location == HttpLocation.PAYLOAD }
     }
 
     private fun renderTypeAliases(
