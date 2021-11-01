@@ -7,7 +7,6 @@ use crate::body::SdkBody;
 use crate::property_bag::{PropertyBag, SharedPropertyBag};
 use http::uri::InvalidUri;
 use std::borrow::Cow;
-use std::convert::Infallible;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};

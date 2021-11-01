@@ -461,9 +461,8 @@ class HttpBoundProtocolBodyGenerator(
                 // some serializers return SerializationError directly, others errors must be converted
 
                 writer.rust(
-                    "#T(&self).map_err(|err|#T::SerializationError(##[allow(clippy::useless_conversion)] err.into()))?",
+                    "#T(&self)?",
                     serializer,
-                    runtimeConfig.operationBuildError()
                 )
             } ?: writer.rustTemplate("#{SdkBody}::from(\"\")", *codegenScope)
         } else {
@@ -491,7 +490,8 @@ class HttpBoundProtocolBodyGenerator(
             symbolProvider,
             unionShape,
             serializerGenerator,
-            httpBindingResolver.requestContentType(operationShape) ?: throw CodegenException("event streams must set a content type"),
+            httpBindingResolver.requestContentType(operationShape)
+                ?: throw CodegenException("event streams must set a content type"),
         ).render()
 
         // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the
@@ -589,15 +589,14 @@ class HttpBoundProtocolBodyGenerator(
 
                 // JSON serialize the structure or union targeted
                 rust(
-                    """#T(&$payloadName)?""",
-                    serializer.payloadSerializer(member), runtimeConfig.operationBuildError()
+                    "#T(&$payloadName)?",
+                    serializer.payloadSerializer(member)
                 )
             }
             is DocumentShape -> {
                 rust(
                     "#T(&$payloadName)?",
                     serializer.documentSerializer(),
-                    runtimeConfig.operationBuildError()
                 )
             }
             else -> TODO("Unexpected payload target type")
