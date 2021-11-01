@@ -192,6 +192,18 @@ class JsonSerializerGenerator(
         }
     }
 
+    override fun unsetStructure(structure: StructureShape): RuntimeType {
+        return RuntimeType.forInlineFun("rest_json_unsetpayload", operationSerModule) { writer ->
+            writer.rustTemplate(
+                """
+                pub fn rest_json_unsetpayload() -> std::vec::Vec<u8> {
+                    b"{}"[..].into()
+                }
+                """
+            )
+        }
+    }
+
     override fun operationSerializer(operationShape: OperationShape): RuntimeType? {
         // Don't generate an operation JSON serializer if there is no JSON body
         val httpDocumentMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
