@@ -101,10 +101,12 @@ data class ProtocolContentTypes(
     val requestDocument: String? = null,
     /** Response content type override for when the shape is a Document */
     val responseDocument: String? = null,
+    /** EventStream content type */
+    val eventStreamContentType: String? = null
 ) {
     companion object {
         /** Create an instance of [ProtocolContentTypes] where all content types are the same */
-        fun consistent(type: String) = ProtocolContentTypes(type, type)
+        fun consistent(type: String) = ProtocolContentTypes(type, type, type)
     }
 }
 
@@ -136,10 +138,10 @@ class HttpTraitHttpBindingResolver(
         httpIndex.determineTimestampFormat(memberShape, location, defaultTimestampFormat)
 
     override fun requestContentType(operationShape: OperationShape): String? =
-        httpIndex.determineRequestContentType(operationShape, contentTypes.requestDocument).orNull()
+        httpIndex.determineRequestContentType(operationShape, contentTypes.requestDocument, contentTypes.eventStreamContentType).orNull()
 
     override fun responseContentType(operationShape: OperationShape): String? =
-        httpIndex.determineResponseContentType(operationShape, contentTypes.responseDocument).orNull()
+        httpIndex.determineResponseContentType(operationShape, contentTypes.responseDocument, contentTypes.eventStreamContentType).orNull()
 
     // Sort the members after extracting them from the map to have a consistent order
     private fun mappedBindings(bindings: Map<String, HttpBinding>): List<HttpBindingDescriptor> =
