@@ -442,10 +442,7 @@ class ProtocolTestGenerator(
         private val RestXml = "aws.protocoltests.restxml#RestXml"
         private val AwsQuery = "aws.protocoltests.query#AwsQuery"
         private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
-        private val ExpectFail = setOf<FailingTest>(
-            // this is a buggy test, will be fixed in 1.13
-            FailingTest(RestJson, "RestJsonNoInputAndOutput", Action.Request)
-        )
+        private val ExpectFail = setOf<FailingTest>()
         private val RunOnly: Set<String>? = null
 
         // These tests are not even attempted to be generated, either because they will not compile

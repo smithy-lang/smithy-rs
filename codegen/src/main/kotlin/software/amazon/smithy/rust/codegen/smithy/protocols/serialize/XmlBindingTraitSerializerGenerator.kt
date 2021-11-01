@@ -177,6 +177,19 @@ class XmlBindingTraitSerializerGenerator(
         }
     }
 
+    override fun unsetStructure(structure: StructureShape): RuntimeType {
+        val fnName = "rest_xml_unset_payload"
+        return RuntimeType.forInlineFun(fnName, operationSerModule) { writer ->
+            writer.rustTemplate(
+                """
+                pub fn $fnName() -> std::vec::Vec<u8> {
+                    vec![]
+                }
+            """
+            )
+        }
+    }
+
     override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType {
         TODO("Not yet implemented")
     }

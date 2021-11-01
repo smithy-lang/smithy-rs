@@ -65,7 +65,7 @@ impl Future for Sleep {
 /// Implementation of [`AsyncSleep`] for Tokio.
 #[non_exhaustive]
 #[cfg(feature = "rt-tokio")]
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct TokioSleep;
 
 #[cfg(feature = "rt-tokio")]

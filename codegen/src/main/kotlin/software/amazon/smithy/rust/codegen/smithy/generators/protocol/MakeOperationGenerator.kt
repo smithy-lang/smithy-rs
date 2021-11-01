@@ -147,8 +147,9 @@ open class MakeOperationGenerator(
         val contentType = httpBindingResolver.requestContentType(operationShape)
         httpBindingGenerator.renderUpdateHttpBuilder(writer)
         writer.inRequestBuilderBaseFn(inputShape) {
+            Attribute.AllowUnusedMut.render(this)
             writer.rust("let mut builder = update_http_builder(input, #T::new())?;", RuntimeType.HttpRequestBuilder)
-            val additionalHeaders = listOf("content-type" to contentType) + protocol.additionalHeaders(operationShape)
+            val additionalHeaders = listOfNotNull(contentType?.let { "content-type" to it }) + protocol.additionalHeaders(operationShape)
             for (header in additionalHeaders) {
                 writer.rustTemplate(
                     """

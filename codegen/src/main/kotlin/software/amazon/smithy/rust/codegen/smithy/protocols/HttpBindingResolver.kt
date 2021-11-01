@@ -85,22 +85,18 @@ interface HttpBindingResolver {
     /**
      * Determines the request content type for given [operationShape].
      */
-    fun requestContentType(operationShape: OperationShape): String
+    fun requestContentType(operationShape: OperationShape): String?
 
     /**
      * Determines the response content type for given [operationShape].
      */
-    fun responseContentType(operationShape: OperationShape): String
+    fun responseContentType(operationShape: OperationShape): String?
 }
 
 /**
  * Content types a protocol uses.
  */
 data class ProtocolContentTypes(
-    /** Default request content type when the shape isn't, for example, a Blob */
-    val requestDefault: String,
-    /** Default response content type when the shape isn't, for example, a Blob */
-    val responseDefault: String,
     /** Request content type override for when the shape is a Document */
     val requestDocument: String? = null,
     /** Response content type override for when the shape is a Document */
@@ -139,13 +135,12 @@ class HttpTraitHttpBindingResolver(
     ): TimestampFormatTrait.Format =
         httpIndex.determineTimestampFormat(memberShape, location, defaultTimestampFormat)
 
-    override fun requestContentType(operationShape: OperationShape): String =
-        httpIndex.determineRequestContentType(operationShape, contentTypes.requestDocument)
-            .orElse(contentTypes.requestDefault)
+    override fun requestContentType(operationShape: OperationShape): String? {
+        return httpIndex.determineRequestContentType(operationShape, contentTypes.requestDocument).orNull()
+    }
 
-    override fun responseContentType(operationShape: OperationShape): String =
-        httpIndex.determineResponseContentType(operationShape, contentTypes.responseDocument)
-            .orElse(contentTypes.responseDefault)
+    override fun responseContentType(operationShape: OperationShape): String? =
+        httpIndex.determineResponseContentType(operationShape, contentTypes.responseDocument).orNull()
 
     // Sort the members after extracting them from the map to have a consistent order
     private fun mappedBindings(bindings: Map<String, HttpBinding>): List<HttpBindingDescriptor> =
