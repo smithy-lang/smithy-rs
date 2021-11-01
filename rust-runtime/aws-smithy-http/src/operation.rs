@@ -129,12 +129,6 @@ pub enum SerializationError {
     CannotSerializeUnknownVariant { union: &'static str },
 }
 
-impl From<Infallible> for SerializationError {
-    fn from(_: Infallible) -> Self {
-        unreachable!()
-    }
-}
-
 impl SerializationError {
     pub fn unknown_variant(union: &'static str) -> Self {
         Self::CannotSerializeUnknownVariant { union }

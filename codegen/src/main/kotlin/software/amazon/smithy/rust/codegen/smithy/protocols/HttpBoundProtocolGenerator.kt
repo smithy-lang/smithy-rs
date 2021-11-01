@@ -589,13 +589,13 @@ class HttpBoundProtocolBodyGenerator(
 
                 // JSON serialize the structure or union targeted
                 rust(
-                    """#T(&$payloadName).map_err(|err|#T::SerializationError(##[allow(clippy::useless_conversion)] err.into()))?""",
+                    """#T(&$payloadName)?""",
                     serializer.payloadSerializer(member), runtimeConfig.operationBuildError()
                 )
             }
             is DocumentShape -> {
                 rust(
-                    "#T(&$payloadName).map_err(|err|#T::SerializationError(##[allow(clippy::useless_conversion)] err.into()))?",
+                    "#T(&$payloadName)?",
                     serializer.documentSerializer(),
                     runtimeConfig.operationBuildError()
                 )
