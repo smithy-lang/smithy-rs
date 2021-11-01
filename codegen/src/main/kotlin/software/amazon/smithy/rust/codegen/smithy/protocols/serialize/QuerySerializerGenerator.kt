@@ -34,6 +34,9 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
+import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -61,14 +64,22 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
         val shape: MemberShape,
     ) {
         companion object {
-            fun structMember(context: Context<StructureShape>, member: MemberShape, symProvider: RustSymbolProvider): MemberContext =
+            fun structMember(
+                context: Context<StructureShape>,
+                member: MemberShape,
+                symProvider: RustSymbolProvider
+            ): MemberContext =
                 MemberContext(
                     context.writerExpression,
                     ValueExpression.Value("${context.valueExpression.name}.${symProvider.toMemberName(member)}"),
                     member
                 )
 
-            fun unionMember(context: Context<UnionShape>, variantReference: String, member: MemberShape): MemberContext =
+            fun unionMember(
+                context: Context<UnionShape>,
+                variantReference: String,
+                member: MemberShape
+            ): MemberContext =
                 MemberContext(
                     context.writerExpression,
                     ValueExpression.Reference(variantReference),
@@ -80,8 +91,9 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     protected val model = codegenContext.model
     protected val symbolProvider = codegenContext.symbolProvider
     protected val runtimeConfig = codegenContext.runtimeConfig
+    private val mode = codegenContext.mode
     private val serviceShape = codegenContext.serviceShape
-    private val serializerError = RuntimeType.Infallible
+    private val serializerError = runtimeConfig.serializationError()
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
     private val smithyQuery = CargoDependency.smithyQuery(runtimeConfig).asType()
     private val serdeUtil = SerializerUtil(model)
@@ -146,7 +158,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
         val structureSerializer = RuntimeType.forInlineFun(fnName, querySerModule) { writer ->
             Attribute.AllowUnusedMut.render(writer)
             writer.rustBlockTemplate(
-                "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input})",
+                "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> Result<(), #{Error}>",
                 "Input" to structureSymbol,
                 *codegenScope
             ) {
@@ -154,9 +166,10 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                     rust("let (_, _) = (writer, input);") // Suppress unused argument warnings
                 }
                 serializeStructureInner(context)
+                rust("Ok(())")
             }
         }
-        rust("#T(${context.writerExpression}, ${context.valueExpression.name});", structureSerializer)
+        rust("#T(${context.writerExpression}, ${context.valueExpression.name})?;", structureSerializer)
     }
 
     private fun RustWriter.serializeStructureInner(context: Context<StructureShape>) {
@@ -294,7 +307,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
         val unionSerializer = RuntimeType.forInlineFun(fnName, querySerModule) { writer ->
             Attribute.AllowUnusedMut.render(writer)
             writer.rustBlockTemplate(
-                "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input})",
+                "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> Result<(), #{Error}>",
                 "Input" to unionSymbol,
                 *codegenScope,
             ) {
@@ -311,9 +324,17 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                             )
                         }
                     }
+                    if (mode.renderUnknownVariant()) {
+                        rustTemplate(
+                            "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
+                            "Union" to unionSymbol,
+                            *codegenScope
+                        )
+                    }
                 }
+                rust("Ok(())")
             }
         }
-        rust("#T(${context.writerExpression}, ${context.valueExpression.asRef()});", unionSerializer)
+        rust("#T(${context.writerExpression}, ${context.valueExpression.asRef()})?;", unionSerializer)
     }
 }

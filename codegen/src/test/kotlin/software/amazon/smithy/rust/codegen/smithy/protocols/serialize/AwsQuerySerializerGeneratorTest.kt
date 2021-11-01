@@ -5,11 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
 
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
@@ -84,11 +86,16 @@ class AwsQuerySerializerGeneratorTest {
         }
     """.asSmithyModel()
 
-    @Test
-    fun `generates valid serializers`() {
+    @ParameterizedTest
+    @CsvSource("true", "false")
+    fun `generates valid serializers`(generateUnknownVariant: Boolean) {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
-        val parserGenerator = AwsQuerySerializerGenerator(testCodegenContext(model))
+        val mode = when (generateUnknownVariant) {
+            true -> CodegenMode.Client
+            false -> CodegenMode.Server
+        }
+        val parserGenerator = AwsQuerySerializerGenerator(testCodegenContext(model).copy(mode = mode))
         val operationGenerator = parserGenerator.operationSerializer(model.lookup("test#Op"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
@@ -126,7 +133,7 @@ class AwsQuerySerializerGeneratorTest {
         }
         project.withModule(RustModule.public("model")) {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
-            UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice")).render()
+            UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice"), renderUnknownVariant = generateUnknownVariant).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
             EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
         }

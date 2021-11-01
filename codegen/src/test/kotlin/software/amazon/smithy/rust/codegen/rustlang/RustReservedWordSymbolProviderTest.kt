@@ -35,7 +35,12 @@ internal class RustReservedWordSymbolProviderTest {
 
     @Test
     fun `member names are escaped`() {
-        val model = "namespace foo".asSmithyModel()
+        val model = """
+            namespace namespace
+            structure container {
+                async: String
+            }
+        """.trimMargin().asSmithyModel()
         val provider = RustReservedWordSymbolProvider(Stub(), model)
         provider.toMemberName(
             MemberShape.builder().id("namespace#container\$async").target("namespace#Integer").build()

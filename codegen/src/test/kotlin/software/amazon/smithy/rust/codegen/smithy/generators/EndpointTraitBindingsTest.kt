@@ -76,7 +76,6 @@ internal class EndpointTraitBindingsTest {
                     TestRuntimeConfig.operationBuildError()
                 ) {
                     endpointBindingGenerator.render(this, "self")
-                    rust(".map_err(|e|#T::SerializationError(e.into()))", TestRuntimeConfig.operationBuildError())
                 }
             }
             it.unitTest(

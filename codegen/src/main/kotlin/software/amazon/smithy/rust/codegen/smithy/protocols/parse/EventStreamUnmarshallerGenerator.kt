@@ -151,7 +151,7 @@ class EventStreamUnmarshallerGenerator(
                         *codegenScope
                     )
                     false -> rustTemplate(
-                        "return Err(#{Error}::Unmarshalling(format!(\"unrecognized :event-type: {}\", smithy_type)));",
+                        "return Err(#{Error}::Unmarshalling(format!(\"unrecognized :event-type: {}\", _unknown_variant)));",
                         *codegenScope
                     )
                 }

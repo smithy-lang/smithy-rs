@@ -406,7 +406,7 @@ class XmlBindingTraitParserGenerator(
                     }
                     when (mode.renderUnknownVariant()) {
                         true -> rust("_unknown => base = Some(#T::${UnionGenerator.UnknownVariantName}),", symbol)
-                        false -> rust("""_ => return Err(#{XmlError}::custom("unexpected union variant"))""")
+                        false -> rustTemplate("""_ => return Err(#{XmlError}::custom("unexpected union variant"))""", *codegenScope)
                     }
                 }
                 rustTemplate("""base.ok_or_else(||#{XmlError}::custom("expected union, got nothing"))""", *codegenScope)
