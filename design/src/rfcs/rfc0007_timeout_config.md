@@ -39,7 +39,7 @@ There's a lot of terminology to define so I've broken it up into two sections
   - The most notable example of a Middleware is the [AwsMiddleware]. Other notable examples include [MapRequest], [AsyncMapRequest], and [ParseResponse].
 - **DispatchService**: The innermost part of a group of nested services. The Service that actually makes an HTTP call on behalf of a request. Responsible for parsing success and error responses.
 - **Connector**: a term with several meanings,
-  - [DynConnector]s are Services with their specific type erased so that we can do dynamic dispatch.
+  - DynConnectors (a struct that implements [DynConnect]) are Services with their specific type erased so that we can do dynamic dispatch.
   - A term from `hyper` for any object that implements the [Connect] trait. Really just an alias for [tower_service::Service]. Sometimes referred to as a `Connection`.
 - **Stage**: A form of middleware that's not related to `tower`. These currently function as a way of transforming requests. We don't want to implement Timeouts as stages because we don't want to give them the ability to handle responses. This is because it would introduce lots of new complexity that we aren't yet ready to take on but this may change in the future.
 - **Stack**: higher order abstraction over Layers defined in the [tower crate][tower::layer::util::Stack] e.g. Layers wrap services in one another and Stacks wrap layers within one another.
@@ -180,14 +180,36 @@ The Smithy Client creates a new service to handle each request it sends. Each se
 
 Timeouts will be implemented in the following places:
 
-- HTTP request timeout for multiple requests will be implemented as the outermost Layer in `call_raw`.
+- HTTP request timeout for multiple requests will be implemented as the outermost Layer in `Client::call_raw`.
 - HTTP request timeout for a single request will be implemented within `RetryHandler::retry`.
 - Time to first byte, TLS negotiation, and connect timeouts will be implemented within the central `hyper` connector.
 
 Changes checklist
 -----------------
 
-// TODO
+Changes are broken into to sections:
+
+- HTTP requests (single or multiple) are implementable as layers within our current stack
+- Other timeouts will require changes to our dependencies and may be slower to implement
+
+### Implementing HTTP request timeouts
+
+- [ ] Add `TimeoutConfig` to `smithy-types`
+- [ ] Add `TimeoutConfigProvider` to `aws-config`
+  - [ ] Add provider that fetches config from environment variables
+  - [ ] Add provider that fetches config from profile
+- [ ] Add `timeout` method to `aws_types::Config` for setting timeout configuration
+- [ ] Add `timeout` method to generated `Config`s too
+- [ ] Add method `timeout` to `ServiceBuilder` to handle timeouts for multiple-attempt requests
+- [ ] Add configurable timeout to `SmithyRetryPolicy` to handle timeouts for single-attempt requests
+- [ ] Add tests for timeout behavior
+  - [ ] test multi-request timeout triggers after 3 slow retries
+  - [ ] test single-request timeout triggers correctly
+  - [ ] test single-request timeout doesn't trigger if request completes in time
+
+### Implementing other timeouts
+
+TODO
 
 <!--- Links -->
 
