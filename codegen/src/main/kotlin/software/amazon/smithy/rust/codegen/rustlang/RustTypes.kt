@@ -214,9 +214,7 @@ sealed class Attribute {
          * indicates that more fields may be added in the future
          */
         val NonExhaustive = Custom("non_exhaustive")
-        val AllowUnused = Custom("allow(dead_code)")
         val AllowUnusedMut = Custom("allow(unused_mut)")
-        fun allow(nitpick: String) = Custom("allow($nitpick)")
     }
 
     data class Derives(val derives: Set<RuntimeType>) : Attribute() {
