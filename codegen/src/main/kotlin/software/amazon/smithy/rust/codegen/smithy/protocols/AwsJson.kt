@@ -48,10 +48,16 @@ class AwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFac
     override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport = ProtocolSupport(
+        /* Client support */
         requestSerialization = true,
         requestBodySerialization = true,
         responseDeserialization = true,
-        errorDeserialization = true
+        errorDeserialization = true,
+        /* Server support */
+        requestDeserialization = false,
+        requestBodyDeserialization = false,
+        responseSerialization = false,
+        errorSerialization = false
     )
 }
 

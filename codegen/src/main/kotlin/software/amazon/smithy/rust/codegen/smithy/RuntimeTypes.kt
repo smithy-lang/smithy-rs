@@ -266,12 +266,29 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun sdkBody(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType("SdkBody", dependency = CargoDependency.SmithyHttp(runtimeConfig), "aws_smithy_http::body")
 
-        fun parseStrict(runtimeConfig: RuntimeConfig) = RuntimeType(
+        fun parseStrictResponse(runtimeConfig: RuntimeConfig) = RuntimeType(
             "ParseStrictResponse",
             dependency = CargoDependency.SmithyHttp(runtimeConfig),
             namespace = "aws_smithy_http::response"
         )
 
+        fun parseHttpRequest(runtimeConfig: RuntimeConfig) = RuntimeType(
+            "ParseHttpRequest",
+            dependency = CargoDependency.SmithyHttpServer(runtimeConfig),
+            namespace = "aws_smithy_http_server::request"
+        )
+
+        fun serializeHttpResponse(runtimeConfig: RuntimeConfig) = RuntimeType(
+            "SerializeHttpResponse",
+            dependency = CargoDependency.SmithyHttpServer(runtimeConfig),
+            namespace = "aws_smithy_http_server::response"
+        )
+
+        fun serializeHttpError(runtimeConfig: RuntimeConfig) = RuntimeType(
+            "SerializeHttpError",
+            dependency = CargoDependency.SmithyHttpServer(runtimeConfig),
+            namespace = "aws_smithy_http_server::response"
+        )
         val Bytes = RuntimeType("Bytes", dependency = CargoDependency.Bytes, namespace = "bytes")
 
         fun forInlineDependency(inlineDependency: InlineDependency) =

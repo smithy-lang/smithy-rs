@@ -67,7 +67,7 @@ class HttpBoundProtocolGenerator(
     HttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
 )
 
-private class HttpBoundProtocolTraitImplGenerator(
+class HttpBoundProtocolTraitImplGenerator(
     private val codegenContext: CodegenContext,
     private val protocol: Protocol,
 ) : ProtocolTraitImplGenerator {
@@ -78,7 +78,7 @@ private class HttpBoundProtocolTraitImplGenerator(
     private val operationDeserModule = RustModule.private("operation_deser")
 
     private val codegenScope = arrayOf(
-        "ParseStrict" to RuntimeType.parseStrict(runtimeConfig),
+        "ParseStrict" to RuntimeType.parseStrictResponse(runtimeConfig),
         "ParseResponse" to RuntimeType.parseResponse(runtimeConfig),
         "http" to RuntimeType.http,
         "operation" to RuntimeType.operationModule(runtimeConfig),
@@ -160,7 +160,7 @@ private class HttpBoundProtocolTraitImplGenerator(
         )
     }
 
-    private fun parseError(operationShape: OperationShape): RuntimeType {
+    fun parseError(operationShape: OperationShape): RuntimeType {
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_error"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
@@ -258,7 +258,7 @@ private class HttpBoundProtocolTraitImplGenerator(
         }
     }
 
-    private fun parseResponse(operationShape: OperationShape): RuntimeType {
+    fun parseResponse(operationShape: OperationShape): RuntimeType {
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_response"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
@@ -416,7 +416,7 @@ class HttpBoundProtocolBodyGenerator(
     private val operationSerModule = RustModule.private("operation_ser")
 
     private val codegenScope = arrayOf(
-        "ParseStrict" to RuntimeType.parseStrict(runtimeConfig),
+        "ParseStrict" to RuntimeType.parseStrictResponse(runtimeConfig),
         "ParseResponse" to RuntimeType.parseResponse(runtimeConfig),
         "http" to RuntimeType.http,
         "hyper" to CargoDependency.HyperWithStream.asType(),
