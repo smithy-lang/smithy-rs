@@ -104,27 +104,85 @@ Behind the scenes
 
 // TODO This is just Zelda thinking out loud and working backwards.
 
-Timeouts are achieved by racing a future against a `tokio::time::Sleep` future. The question, then, is "how can I create a future that represents a condition I want to watch for?". For example, in the case of a `ConnectTimeout`, how do we watch an ongoing request to see if it's completed the connect-handshake?
+Timeouts are achieved by racing a future against a `tokio::time::Sleep` future. The question, then, is "how can I create a future that represents a condition I want to watch for?". For example, in the case of a `ConnectTimeout`, how do we watch an ongoing request to see if it's completed the connect-handshake? Our current stack of Middleware acts on requests at different levels of granularity. The timeout Middlewares will be no different.
+
+### Middlewares for AWS Client requests
+
+_View [AwsMiddleware] in GitHub_
 
 ```rust
-#[tokio::main]
-async fn main() {
-  let req = make_fake_request();
-  todo!("???")
-}
+#[derive(Debug, Default)]
+#[non_exhaustive]
+pub struct AwsMiddleware;
+impl<S> tower::Layer<S> for AwsMiddleware {
+  type Service = <AwsMiddlewareStack as tower::Layer<S>>::Service;
 
-fn make_fake_request() -> Future<Output = FakeRequest> {
-  todo!("???")
+  fn layer(&self, inner: S) -> Self::Service {
+    let credential_provider = AsyncMapRequestLayer::for_mapper(CredentialsStage::new());
+    let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
+    let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);
+    let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new());
+    ServiceBuilder::new()
+            .layer(endpoint_resolver)
+            .layer(user_agent)
+            .layer(credential_provider)
+            .layer(signer)
+            .service(inner)
+  }
 }
 ```
 
-HTTP calls are made by turning an operation into a request and passing that request into a service. Middleware acts on the request and resulting response to modify them.
+The above code is only included for context. This RFC doesn't define any timeouts specific to AWS so `AwsMiddleware` won't require any changes.
 
-### What is a Service?
+### Middlewares for Smithy Client requests
 
-Ser
+_View [aws_smithy_client::Client::call_raw] in GitHub_
 
-### What is a Middleware?
+```rust
+impl<C, M, R> Client<C, M, R>
+  where
+          C: bounds::SmithyConnector,
+          M: bounds::SmithyMiddleware<C>,
+          R: retry::NewRequestPolicy,
+{
+  // ...other methods omitted
+  pub async fn call_raw<O, T, E, Retry>(
+    &self,
+    input: Operation<O, Retry>,
+  ) -> Result<SdkSuccess<T>, SdkError<E>>
+    where
+            R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
+            bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
+            Service<Operation<O, Retry>, Response=SdkSuccess<T>, Error=SdkError<E>> + Clone,
+  {
+    let connector = self.connector.clone();
+    let mut svc = ServiceBuilder::new()
+            // Create a new request-scoped policy
+            .retry(self.retry_policy.new_request_policy())
+            .layer(ParseResponseLayer::<O, Retry>::new())
+            // These layers can be considered as occurring in order. That is, first invoke the
+            // customer-provided middleware, then dispatch dispatch over the wire.
+            .layer(&self.middleware)
+            .layer(DispatchLayer::new())
+            .service(connector);
+    svc.ready().await?.call(input).await
+  }
+}
+```
+
+The Smithy Client creates a new service to handle each request it sends. Each service is constructed with the following features:
+
+- A method `retry` is used to pass in retry-related configuration such as the maximum number of times to attempt the request.
+- A Layer for transforming responses into operation-specific outputs or errors. The `O` generic parameter of `input` is what decides exactly how the transformation is implemented.
+- The middleware stack that was included during Client creation. In the case of the AWS SDK, this would be `AwsMiddleware`.
+- The `DispatchLayer`, a layer for transforming an `http::Request` into an `operation::Request`. It's also responsible for re-attaching the property bag from the Operation that triggered the request.
+- The innermost Service is a `DynConnector` wrapping a `hyper` client (which one depends on the TLS implementation that was chosen.)
+
+Timeouts will be implemented in the following places:
+
+- HTTP request timeout for multiple requests will be implemented as the outermost Layer in `call_raw`.
+- HTTP request timeout for a single request will be implemented within `RetryHandler::retry`.
+- Time to first byte, TLS negotiation, and connect timeouts will be implemented within the central `hyper` connector.
 
 Changes checklist
 -----------------
@@ -147,3 +205,4 @@ Changes checklist
 [DynConnect]: https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/rust-runtime/aws-smithy-client/src/erase.rs#L139
 [Connect]: https://docs.rs/hyper/0.14.14/hyper/client/connect/trait.Connect.html
 [tower::layer::util::Stack]: https://docs.rs/tower/0.4.10/tower/layer/util/struct.Stack.html
+[aws_smithy_client::Client::call_raw]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-client/src/lib.rs#L175
