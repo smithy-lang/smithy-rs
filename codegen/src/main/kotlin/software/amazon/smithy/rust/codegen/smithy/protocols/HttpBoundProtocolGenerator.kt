@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.DocumentShape
@@ -27,6 +28,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -485,7 +487,7 @@ class HttpBoundProtocolBodyGenerator(
             symbolProvider,
             unionShape,
             serializerGenerator,
-            httpBindingResolver.requestContentType(operationShape),
+            httpBindingResolver.requestContentType(operationShape) ?: throw CodegenException("event streams must set a content type"),
         ).render()
 
         // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the
@@ -530,14 +532,19 @@ class HttpBoundProtocolBodyGenerator(
                 }
 
                 if (symbolProvider.toSymbol(member).isOptional()) {
-                    rustTemplate(
+                    withBlockTemplate(
                         """
                         let payload = match payload$ref {
                             Some(t) => t,
-                            None => return Ok(#{SdkBody}::from(""))
-                        };""",
+                            None => return Ok(#{SdkBody}::from(""",
+                        "))};",
                         *codegenScope
-                    )
+                    ) {
+                        when (val targetShape = model.expectShape(member.target)) {
+                            is StringShape, is BlobShape, is DocumentShape -> rust("".dq())
+                            is StructureShape -> rust("#T()", serializerGenerator.unsetStructure(targetShape))
+                        }
+                    }
                 }
                 // When the body is a streaming blob it _literally_ is a SdkBody already
                 // mute this clippy warning to make the codegen a little simpler
