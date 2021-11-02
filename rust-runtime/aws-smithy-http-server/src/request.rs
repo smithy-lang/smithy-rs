@@ -20,10 +20,10 @@ pub trait ParseHttpRequest {
     /// Input type of the HttpRequest
     ///
     /// For request/response style operations, this is typically something like:
-    /// `Result<OperationInput, OperationInputError>`
+    /// `Result<OperationInput, Error>`
     ///
     /// For streaming operations, this is something like:
-    /// `Result<EventStream<OperationEvent>>, OperationStreamingError>`
+    /// `Result<EventStream<OperationEvent>>, Error>`
     type Input;
 
     /// Parse an HTTP request without reading the body. If the body must be provided to proceed,
