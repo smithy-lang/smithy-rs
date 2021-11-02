@@ -59,7 +59,7 @@ private class TestProtocolTraitImplGenerator(
                     ${operationWriter.escape(correctResponse)}
                 }
                     }""",
-            "parse_strict" to RuntimeType.parseStrict(codegenContext.runtimeConfig),
+            "parse_strict" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
             "output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
             "error" to operationShape.errorSymbol(symbolProvider),
             "response" to RuntimeType.Http("Response"),
@@ -119,7 +119,7 @@ private class TestProtocolFactory(
     override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport {
-        return ProtocolSupport(true, true, true, true)
+        return ProtocolSupport(true, true, true, true, false, false, false, false)
     }
 }
 
