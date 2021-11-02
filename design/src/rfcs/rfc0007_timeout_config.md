@@ -84,7 +84,7 @@ The table below details the specific ways each timeout can be configured. In all
 | ----------------------------- | ---------------------------- | ------------------------ | ------------------------ |
 | Connect                       | AWS_CONNECT_TIMEOUT          | connect_timeout          | connect_timeout          |
 | TLS Negotiation               | AWS_TLS_NEGOTIATION_TIMEOUT  | tls_negotiation_timeout  | tls_negotiation_timeout  |
-| Time To First Byte            | AWS_WRITE_TIMEOUT            | write_timeout            | write_timeout            |
+| Time To First Byte            | AWS_READ_TIMEOUT             | read_timeout             | read_timeout             |
 | HTTP Request - single attempt | AWS_API_CALL_ATTEMPT_TIMEOUT | api_call_attempt_timeout | api_call_attempt_timeout |
 | HTTP Request - all attempts   | AWS_API_CALL_TIMEOUT         | api_call_timeout         | api_call_timeout         |
 
