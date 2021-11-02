@@ -11,5 +11,6 @@ members = [
     "aws-smithy-protocol-test",
     "aws-smithy-query",
     "aws-smithy-types",
-    "aws-smithy-xml"
+    "aws-smithy-xml",
+    "aws-smithy-http-server"
 ]

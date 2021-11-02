@@ -266,7 +266,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun sdkBody(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType("SdkBody", dependency = CargoDependency.SmithyHttp(runtimeConfig), "aws_smithy_http::body")
 
-        fun parseStrict(runtimeConfig: RuntimeConfig) = RuntimeType(
+        fun parseStrictResponse(runtimeConfig: RuntimeConfig) = RuntimeType(
             "ParseStrictResponse",
             dependency = CargoDependency.SmithyHttp(runtimeConfig),
             namespace = "aws_smithy_http::response"
