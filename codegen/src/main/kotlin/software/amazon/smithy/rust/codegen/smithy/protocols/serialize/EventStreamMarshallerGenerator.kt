@@ -101,7 +101,7 @@ class EventStreamMarshallerGenerator(
                 rustBlock("let payload = match input") {
                     for (member in unionShape.members()) {
                         val eventType = member.memberName // must be the original name, not the Rust-safe name
-                        rustBlock("Self::Input::${member.memberName.toPascalCase()}(inner) => ") {
+                        rustBlock("Self::Input::${symbolProvider.toMemberName(member)}(inner) => ") {
                             addStringHeader(":event-type", "${eventType.dq()}.into()")
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             renderMarshallEvent(member, target)

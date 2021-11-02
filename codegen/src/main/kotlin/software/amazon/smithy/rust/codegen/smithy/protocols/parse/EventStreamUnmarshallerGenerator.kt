@@ -160,7 +160,7 @@ class EventStreamUnmarshallerGenerator(
     }
 
     private fun RustWriter.renderUnmarshallUnionMember(unionMember: MemberShape, unionStruct: StructureShape) {
-        val unionMemberName = unionMember.memberName.toPascalCase()
+        val unionMemberName = symbolProvider.toMemberName(unionMember)
         val empty = unionStruct.members().isEmpty()
         val payloadOnly =
             unionStruct.members().none { it.hasTrait<EventPayloadTrait>() || it.hasTrait<EventHeaderTrait>() }
@@ -278,7 +278,7 @@ class EventStreamUnmarshallerGenerator(
 
     private fun RustWriter.renderParseProtocolPayload(member: MemberShape) {
         val parser = protocol.structuredDataParser(operationShape).payloadParser(member)
-        val memberName = member.memberName.toPascalCase()
+        val memberName = symbolProvider.toMemberName(member)
         rustTemplate(
             """
             #{parser}(&message.payload()[..])
@@ -322,7 +322,7 @@ class EventStreamUnmarshallerGenerator(
                                     })?;
                                 return Ok(#{UnmarshalledMessage}::Error(
                                     #{OpError}::new(
-                                        #{OpError}Kind::${member.memberName.toPascalCase()}(builder.build()),
+                                        #{OpError}Kind::${symbolProvider.toMemberName(member)}(builder.build()),
                                         generic,
                                     )
                                 ))

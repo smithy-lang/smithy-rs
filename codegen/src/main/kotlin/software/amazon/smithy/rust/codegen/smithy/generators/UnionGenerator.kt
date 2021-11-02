@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.renamedFrom
-import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 fun CodegenMode.renderUnknownVariant() = when (this) {
@@ -90,7 +89,7 @@ class UnionGenerator(
             sortedMembers.forEach { member ->
                 val memberSymbol = symbolProvider.toSymbol(member)
                 val funcNamePart = member.memberName.toSnakeCase()
-                val variantName = member.memberName.toPascalCase()
+                val variantName = symbolProvider.toMemberName(member)
 
                 if (sortedMembers.size == 1) {
                     Attribute.Custom("allow(irrefutable_let_patterns)").render(this)

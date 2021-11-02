@@ -51,7 +51,6 @@ import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
-import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.utils.StringUtils
 
 class JsonParserGenerator(
@@ -426,7 +425,7 @@ class JsonParserGenerator(
                             )
                             withBlock("variant = match key.to_unescaped()?.as_ref() {", "};") {
                                 for (member in shape.members()) {
-                                    val variantName = member.memberName.toPascalCase()
+                                    val variantName = symbolProvider.toMemberName(member)
                                     rustBlock("${member.wireName().dq()} =>") {
                                         withBlock("Some(#T::$variantName(", "))", symbol) {
                                             deserializeMember(member)

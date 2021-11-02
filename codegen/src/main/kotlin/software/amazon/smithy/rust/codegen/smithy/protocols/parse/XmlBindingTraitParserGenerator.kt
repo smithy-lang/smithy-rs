@@ -53,7 +53,6 @@ import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.outputShape
-import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 // The string argument is the name of the XML ScopedDecoder to continue parsing from
 typealias OperationInnerWriteable = RustWriter.(String) -> Unit
@@ -388,7 +387,7 @@ class XmlBindingTraitParserGenerator(
                 rustTemplate("let mut base: Option<#{Shape}> = None;", *codegenScope, "Shape" to symbol)
                 parseLoop(Ctx(tag = "decoder", accum = null), ignoreUnexpected = false) { ctx ->
                     members.forEach { member ->
-                        val variantName = member.memberName.toPascalCase()
+                        val variantName = symbolProvider.toMemberName(member)
                         case(member) {
                             val current =
                                 """
@@ -406,7 +405,7 @@ class XmlBindingTraitParserGenerator(
                     }
                     when (mode.renderUnknownVariant()) {
                         true -> rust("_unknown => base = Some(#T::${UnionGenerator.UnknownVariantName}),", symbol)
-                        false -> rustTemplate("""variant => return Err(#{XmlError}::custom(format!("unexpected union variant: {}")))""", *codegenScope)
+                        false -> rustTemplate("""variant => return Err(#{XmlError}::custom(format!("unexpected union variant: {:?}", variant)))""", *codegenScope)
                     }
                 }
                 rustTemplate("""base.ok_or_else(||#{XmlError}::custom("expected union, got nothing"))""", *codegenScope)

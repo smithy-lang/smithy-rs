@@ -53,7 +53,6 @@ import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
-import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 class XmlBindingTraitSerializerGenerator(
     codegenContext: CodegenContext,
@@ -331,7 +330,7 @@ class XmlBindingTraitSerializerGenerator(
                 rustBlock("match input") {
                     val members = unionShape.members()
                     members.forEach { member ->
-                        val variantName = member.memberName.toPascalCase()
+                        val variantName = symbolProvider.toMemberName(member)
                         withBlock("#T::$variantName(inner) =>", ",", unionSymbol) {
                             serializeMember(member, Ctx.Scope("scope_writer", "inner"))
                         }

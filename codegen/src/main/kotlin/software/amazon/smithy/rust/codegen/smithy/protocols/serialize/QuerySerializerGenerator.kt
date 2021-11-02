@@ -45,7 +45,6 @@ import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
-import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : StructuredDataSerializerGenerator {
     protected data class Context<T : Shape>(
@@ -313,7 +312,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
             ) {
                 rustBlock("match input") {
                     for (member in context.shape.members()) {
-                        val variantName = member.memberName.toPascalCase()
+                        val variantName = symbolProvider.toMemberName(member)
                         withBlock("#T::$variantName(inner) => {", "},", unionSymbol) {
                             serializeMember(
                                 MemberContext.unionMember(
