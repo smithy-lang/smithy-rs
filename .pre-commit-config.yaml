@@ -5,6 +5,13 @@ repos:
   - id: check-yaml
   - id: end-of-file-fixer
   - id: trailing-whitespace
+- repo: local
+  hooks:
+  - id: kotlin-block-quotes
+    name: Kotlin Block Quotes
+    entry: ./.pre-commit-hooks/kotlin-block-quotes.py
+    language: python
+    files: ^.*\.kt$
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
   rev: v1.6.1
   hooks:

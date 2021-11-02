@@ -30,78 +30,78 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
 
 class RequestBindingGeneratorTest {
     private val baseModel = """
-            namespace smithy.example
+        namespace smithy.example
 
-            @idempotent
-            @http(method: "PUT", uri: "/{bucketName}/{key}", code: 200)
-            operation PutObject {
-                input: PutObjectRequest
-            }
+        @idempotent
+        @http(method: "PUT", uri: "/{bucketName}/{key}", code: 200)
+        operation PutObject {
+            input: PutObjectRequest
+        }
 
-            list Extras {
-                member: Integer
-            }
+        list Extras {
+            member: Integer
+        }
 
-            list Dates {
-                member: Timestamp
-            }
+        list Dates {
+            member: Timestamp
+        }
 
-            @mediaType("video/quicktime")
-            string Video
+        @mediaType("video/quicktime")
+        string Video
 
-            map StringMap {
-                key: String,
-                value: String
-            }
+        map StringMap {
+            key: String,
+            value: String
+        }
 
-            structure PutObjectRequest {
-                // Sent in the URI label named "key".
-                @required
-                @httpLabel
-                key: Timestamp,
+        structure PutObjectRequest {
+            // Sent in the URI label named "key".
+            @required
+            @httpLabel
+            key: Timestamp,
 
-                // Sent in the URI label named "bucketName".
-                @required
-                @httpLabel
-                bucketName: String,
+            // Sent in the URI label named "bucketName".
+            @required
+            @httpLabel
+            bucketName: String,
 
-                // Sent in the X-Dates header
-                @httpHeader("X-Dates")
-                dateHeaderList: Dates,
+            // Sent in the X-Dates header
+            @httpHeader("X-Dates")
+            dateHeaderList: Dates,
 
-                @httpHeader("X-Ints")
-                intList: Extras,
+            @httpHeader("X-Ints")
+            intList: Extras,
 
-                @httpHeader("X-MediaType")
-                mediaType: Video,
+            @httpHeader("X-MediaType")
+            mediaType: Video,
 
-                // Sent in the query string as paramName
-                @httpQuery("paramName")
-                someValue: String,
+            // Sent in the query string as paramName
+            @httpQuery("paramName")
+            someValue: String,
 
-                @httpQuery("primitive")
-                primitive: PrimitiveInteger,
+            @httpQuery("primitive")
+            primitive: PrimitiveInteger,
 
-                @httpQuery("enabled")
-                enabled: PrimitiveBoolean,
+            @httpQuery("enabled")
+            enabled: PrimitiveBoolean,
 
-                @httpQuery("hello")
-                extras: Extras,
+            @httpQuery("hello")
+            extras: Extras,
 
-                // Sent in the body
-                data: Blob,
+            // Sent in the body
+            data: Blob,
 
-                // Sent in the body
-                additional: String,
+            // Sent in the body
+            additional: String,
 
-                @httpPrefixHeaders("X-Prefix-")
-                prefix: StringMap,
+            @httpPrefixHeaders("X-Prefix-")
+            prefix: StringMap,
 
-                @sensitive
-                @httpHeader("stringHeader")
-                stringHeader: String
-            }
-        """.asSmithyModel()
+            @sensitive
+            @httpHeader("stringHeader")
+            stringHeader: String
+        }
+    """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
 
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
@@ -236,7 +236,7 @@ class RequestBindingGeneratorTest {
 
             let prefix_header = http_request.headers().get_all("X-Prefix-k").iter().map(|hv|std::str::from_utf8(hv.as_ref()).unwrap()).collect::<Vec<_>>();
             assert_eq!(prefix_header, vec!["😹"])
-        """
+            """
         )
     }
 
@@ -246,16 +246,16 @@ class RequestBindingGeneratorTest {
         renderOperation(writer)
         writer.compileAndTest(
             """
-        use std::collections::HashMap;
-        let ts = aws_smithy_types::Instant::from_epoch_seconds(10123125);
-        let inp = PutObjectInput::builder()
-            .bucket_name("buk")
-            .key(ts.clone())
-            .prefix("😹".to_string(), "😹".to_string())
-            .build().unwrap();
-        let err = inp.test_request_builder_base().expect_err("can't make a header out of a cat emoji");
-        assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `😹` cannot be used as a header name: invalid HTTP header name)");
-        """
+            use std::collections::HashMap;
+            let ts = aws_smithy_types::Instant::from_epoch_seconds(10123125);
+            let inp = PutObjectInput::builder()
+                .bucket_name("buk")
+                .key(ts.clone())
+                .prefix("😹".to_string(), "😹".to_string())
+                .build().unwrap();
+            let err = inp.test_request_builder_base().expect_err("can't make a header out of a cat emoji");
+            assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `😹` cannot be used as a header name: invalid HTTP header name)");
+            """
         )
     }
 
@@ -265,16 +265,16 @@ class RequestBindingGeneratorTest {
         renderOperation(writer)
         writer.compileAndTest(
             """
-        use std::collections::HashMap;
-        let ts = aws_smithy_types::Instant::from_epoch_seconds(10123125);
-        let inp = PutObjectInput::builder()
-            .bucket_name("buk")
-            .key(ts.clone())
-            .prefix("valid-key".to_string(), "\n can't put a newline in a header value".to_string())
-            .build().unwrap();
-        let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
-        assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `\n can\'t put a newline in a header value` cannot be used as a header value: failed to parse header value)");
-        """
+            use std::collections::HashMap;
+            let ts = aws_smithy_types::Instant::from_epoch_seconds(10123125);
+            let inp = PutObjectInput::builder()
+                .bucket_name("buk")
+                .key(ts.clone())
+                .prefix("valid-key".to_string(), "\n can't put a newline in a header value".to_string())
+                .build().unwrap();
+            let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
+            assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `\n can\'t put a newline in a header value` cannot be used as a header value: failed to parse header value)");
+            """
         )
     }
 
@@ -284,16 +284,16 @@ class RequestBindingGeneratorTest {
         renderOperation(writer)
         writer.compileAndTest(
             """
-        let ts = aws_smithy_types::Instant::from_epoch_seconds(10123125);
-        let inp = PutObjectInput::builder()
-            .bucket_name("buk")
-            .key(ts.clone())
-            .string_header("\n is not valid")
-            .build().unwrap();
-        let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
-        // make sure we obey the sensitive trait
-        assert_eq!(format!("{}", err), "Invalid field in input: string_header (Details: `*** Sensitive Data Redacted ***` cannot be used as a header value: failed to parse header value)");
-        """
+            let ts = aws_smithy_types::Instant::from_epoch_seconds(10123125);
+            let inp = PutObjectInput::builder()
+                .bucket_name("buk")
+                .key(ts.clone())
+                .string_header("\n is not valid")
+                .build().unwrap();
+            let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
+            // make sure we obey the sensitive trait
+            assert_eq!(format!("{}", err), "Invalid field in input: string_header (Details: `*** Sensitive Data Redacted ***` cannot be used as a header value: failed to parse header value)");
+            """
         )
     }
 
@@ -303,15 +303,15 @@ class RequestBindingGeneratorTest {
         renderOperation(writer)
         writer.compileAndTest(
             """
-        let ts = aws_smithy_types::Instant::from_epoch_seconds(10123125);
-        let inp = PutObjectInput::builder()
-            // don't set bucket
-            // .bucket_name("buk")
-            .key(ts.clone())
-            .build().unwrap();
-        let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
-        assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
-        """
+            let ts = aws_smithy_types::Instant::from_epoch_seconds(10123125);
+            let inp = PutObjectInput::builder()
+                // don't set bucket
+                // .bucket_name("buk")
+                .key(ts.clone())
+                .build().unwrap();
+            let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
+            assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+            """
         )
     }
 
@@ -321,15 +321,15 @@ class RequestBindingGeneratorTest {
         renderOperation(writer)
         writer.compileAndTest(
             """
-        let ts = aws_smithy_types::Instant::from_epoch_seconds(10123125);
-        let inp = PutObjectInput::builder()
-            .bucket_name("buk")
-            // don't set key
-            // .key(ts.clone())
-            .build().unwrap();
-        let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
-        assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
-        """
+            let ts = aws_smithy_types::Instant::from_epoch_seconds(10123125);
+            let inp = PutObjectInput::builder()
+                .bucket_name("buk")
+                // don't set key
+                // .key(ts.clone())
+                .build().unwrap();
+            let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
+            assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+            """
         )
     }
 
@@ -339,14 +339,14 @@ class RequestBindingGeneratorTest {
         renderOperation(writer)
         writer.compileAndTest(
             """
-        let ts = aws_smithy_types::Instant::from_epoch_seconds(10123125);
-        let inp = PutObjectInput::builder()
-            .bucket_name("")
-            .key(ts.clone())
-            .build().unwrap();
-        let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
-        assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
-        """
+            let ts = aws_smithy_types::Instant::from_epoch_seconds(10123125);
+            let inp = PutObjectInput::builder()
+                .bucket_name("")
+                .key(ts.clone())
+                .build().unwrap();
+            let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
+            assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+            """
         )
     }
 }
