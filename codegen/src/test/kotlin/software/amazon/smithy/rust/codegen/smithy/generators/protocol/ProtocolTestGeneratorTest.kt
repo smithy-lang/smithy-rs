@@ -53,11 +53,11 @@ private class TestProtocolTraitImplGenerator(
     override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
         operationWriter.rustTemplate(
             """
-                    impl #{parse_strict} for ${operationShape.id.name}{
-                        type Output = Result<#{output}, #{error}>;
-                        fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
-                            ${operationWriter.escape(correctResponse)}
-                        }
+            impl #{parse_strict} for ${operationShape.id.name}{
+                type Output = Result<#{output}, #{error}>;
+                fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
+                    ${operationWriter.escape(correctResponse)}
+                }
                     }""",
             "parse_strict" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
             "output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),

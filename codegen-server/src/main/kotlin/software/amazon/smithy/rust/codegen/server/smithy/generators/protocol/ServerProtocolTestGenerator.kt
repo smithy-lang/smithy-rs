@@ -191,7 +191,7 @@ class ServerProtocolTestGenerator(
                     let mut http_request = http_request;
                     let ep = #{SmithyHttp}::endpoint::Endpoint::mutable(#{Http}::Uri::from_static(${withScheme.dq()}));
                     ep.set_endpoint(http_request.uri_mut(), parts.acquire().get());
-                """,
+                    """,
                     *codegenScope,
                 )
             }
@@ -256,7 +256,7 @@ class ServerProtocolTestGenerator(
             let op = #{op}::new();
             let http_response = op.serialize(&expected_output).expect("unable to serialize response body");
             let parsed = op.parse(&http_response);
-        """,
+            """,
             *codegenScope,
             "op" to operationSymbol,
         )
@@ -277,8 +277,8 @@ class ServerProtocolTestGenerator(
                 if (member.isStreaming(codegenContext.model)) {
                     rust(
                         """assert_eq!(
-                                        parsed.$memberName.collect().await.unwrap().into_bytes(),
-                                        expected_output.$memberName.collect().await.unwrap().into_bytes()
+                        parsed.$memberName.collect().await.unwrap().into_bytes(),
+                        expected_output.$memberName.collect().await.unwrap().into_bytes()
                                     );"""
                     )
                 } else {

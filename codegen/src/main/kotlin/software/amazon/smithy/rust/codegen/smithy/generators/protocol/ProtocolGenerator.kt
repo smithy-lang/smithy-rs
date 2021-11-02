@@ -213,9 +213,9 @@ open class ProtocolGenerator(
 
         inputWriter.rust(
             """
-                ##[doc(hidden)] pub type ${inputPrefix}OperationOutputAlias = $operationTypeOutput;
-                ##[doc(hidden)] pub type ${inputPrefix}OperationRetryAlias = $operationTypeRetry;
-                """
+            ##[doc(hidden)] pub type ${inputPrefix}OperationOutputAlias = $operationTypeOutput;
+            ##[doc(hidden)] pub type ${inputPrefix}OperationRetryAlias = $operationTypeRetry;
+            """
         )
     }
 

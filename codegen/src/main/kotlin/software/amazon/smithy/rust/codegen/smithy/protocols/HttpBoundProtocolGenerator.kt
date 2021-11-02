@@ -139,20 +139,20 @@ class HttpBoundProtocolTraitImplGenerator(
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
-                impl #{ParseResponse} for $operationName {
-                    type Output = std::result::Result<#{O}, #{E}>;
-                    fn parse_unloaded(&self, response: &mut #{operation}::Response) -> Option<Self::Output> {
-                        // This is an error, defer to the non-streaming parser
-                        if !response.http().status().is_success() && response.http().status().as_u16() != $successCode {
-                            return None;
-                        }
-                        Some(#{parse_streaming_response}(response))
+            impl #{ParseResponse} for $operationName {
+                type Output = std::result::Result<#{O}, #{E}>;
+                fn parse_unloaded(&self, response: &mut #{operation}::Response) -> Option<Self::Output> {
+                    // This is an error, defer to the non-streaming parser
+                    if !response.http().status().is_success() && response.http().status().as_u16() != $successCode {
+                        return None;
                     }
-                    fn parse_loaded(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
-                        // if streaming, we only hit this case if its an error
-                        #{parse_error}(response)
-                    }
+                    Some(#{parse_streaming_response}(response))
                 }
+                fn parse_loaded(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
+                    // if streaming, we only hit this case if its an error
+                    #{parse_error}(response)
+                }
+            }
             """,
             "O" to outputSymbol,
             "E" to operationShape.errorSymbol(symbolProvider),
@@ -348,8 +348,8 @@ class HttpBoundProtocolTraitImplGenerator(
                 val fnName = httpBindingGenerator.generateDeserializeHeaderFn(binding)
                 rust(
                     """
-                        #T(response.headers())
-                            .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
+                    #T(response.headers())
+                        .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
                     """,
                     fnName, errorSymbol
                 )
