@@ -80,7 +80,7 @@ class State(Enum):
     InsideBlockComment = 1
     InsideBlockQuote = 2
 
-# Fixes block quote indentation and returns True if changes were made
+# Fixes block quote indentation and returns a list of line numbers changed
 def fix_lines(lines):
     state = State.Default
     changed = []
