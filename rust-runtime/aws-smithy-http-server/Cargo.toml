@@ -1,7 +1,7 @@
 [package]
 name = "aws-smithy-http-server"
 version = "0.1.0"
-authors = ["Matteo Bigoi <matbigoi@amazon.com>", "David Perez <davidpz@amazon.com>"]
+authors = ["Matteo Bigoi <matbigoi@amazon.com>", "David Pérez <davidpz@amazon.com>"]
 edition = "2018"
 description = """
 Server traits and utilities used by the code generator.
