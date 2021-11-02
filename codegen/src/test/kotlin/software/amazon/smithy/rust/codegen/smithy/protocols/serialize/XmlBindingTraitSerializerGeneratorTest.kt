@@ -116,18 +116,18 @@ internal class XmlBindingTraitSerializerGeneratorTest {
         project.lib { writer ->
             writer.unitTest(
                 """
-                 use model::Top;
+                use model::Top;
                 let inp = crate::input::OpInput::builder().payload(
-                    Top::builder()
-                        .field("hello!")
-                        .extra(45)
-                        .recursive(Top::builder().extra(55).build())
-                        .build()
+                   Top::builder()
+                       .field("hello!")
+                       .extra(45)
+                       .recursive(Top::builder().extra(55).build())
+                       .build()
                 ).build().unwrap();
                 let serialized = ${writer.format(operationParser)}(&inp.payload.unwrap()).unwrap();
                 let output = std::str::from_utf8(&serialized).unwrap();
                 assert_eq!(output, "<Top extra=\"45\"><field>hello!</field><recursive extra=\"55\"></recursive></Top>");
-            """
+                """
             )
         }
         project.withModule(RustModule.public("model")) {

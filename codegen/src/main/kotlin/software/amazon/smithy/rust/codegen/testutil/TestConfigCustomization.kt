@@ -26,12 +26,12 @@ fun stubCustomization(name: String): ConfigCustomization {
                             self.$name = Some($name);
                         self
                     }
-                """
+                    """
                 )
                 ServiceConfig.BuilderBuild -> rust(
                     """
                     $name: self.$name.unwrap_or(123),
-                """
+                    """
                 )
             }
         }
@@ -64,7 +64,7 @@ fun stubConfigProject(customization: ConfigCustomization, project: TestWriterDel
             fn assert_send_sync<T: Send + Sync>() {}
             assert_send_sync::<Config>();
 
-        """
+            """
         )
     }
     return project

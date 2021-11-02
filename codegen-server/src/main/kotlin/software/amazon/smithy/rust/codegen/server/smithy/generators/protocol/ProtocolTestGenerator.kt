@@ -198,14 +198,14 @@ class ProtocolTestGenerator(
                     let mut http_request = http_request;
                     let ep = #T::endpoint::Endpoint::mutable(#T::Uri::from_static(${withScheme.dq()}));
                     ep.set_endpoint(http_request.uri_mut(), parts.acquire().get());
-                """,
+                    """,
                     CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(), CargoDependency.Http.asType()
                 )
             }
             rust(
                 """
-                    assert_eq!(http_request.method(), ${method.dq()});
-                    assert_eq!(http_request.uri().path(), ${uri.dq()});
+                assert_eq!(http_request.method(), ${method.dq()});
+                assert_eq!(http_request.uri().path(), ${uri.dq()});
                 """
             )
             resolvedHost.orNull()?.also { host ->
@@ -276,7 +276,7 @@ class ProtocolTestGenerator(
             use #{parse_http_response};
             let parser = #{op}::new();
             let parsed = parser.parse_loaded(&http_response);
-        """,
+            """,
             "op" to operationSymbol,
             "parse_http_response" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType()
                 .member("response::ParseHttpResponse"),
@@ -298,8 +298,8 @@ class ProtocolTestGenerator(
                 if (member.isStreaming(codegenContext.model)) {
                     rust(
                         """assert_eq!(
-                                        parsed.$memberName.collect().await.unwrap().into_bytes(),
-                                        expected_output.$memberName.collect().await.unwrap().into_bytes()
+                        parsed.$memberName.collect().await.unwrap().into_bytes(),
+                        expected_output.$memberName.collect().await.unwrap().into_bytes()
                                     );"""
                     )
                 } else {

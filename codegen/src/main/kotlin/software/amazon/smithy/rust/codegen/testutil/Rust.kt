@@ -165,10 +165,10 @@ class TestWriterDelegator(fileManifest: FileManifest, symbolProvider: RustSymbol
  */
 fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
     val stubModel = """
-    namespace fake
-    service Fake {
-        version: "123"
-    }
+        namespace fake
+        service Fake {
+            version: "123"
+        }
     """.asSmithyModel()
     this.finalize(
         rustSettings(stubModel),
@@ -258,14 +258,14 @@ private fun String.intoCrate(
     val tempDir = TestWorkspace.subproject()
     // TODO: unify this with CargoTomlGenerator
     val cargoToml = """
-    [package]
-    name = ${tempDir.nameWithoutExtension.dq()}
-    version = "0.0.1"
-    authors = ["rcoh@amazon.com"]
-    edition = "2018"
+        [package]
+        name = ${tempDir.nameWithoutExtension.dq()}
+        version = "0.0.1"
+        authors = ["rcoh@amazon.com"]
+        edition = "2018"
 
-    [dependencies]
-    ${deps.joinToString("\n") { it.toString() }}
+        [dependencies]
+        ${deps.joinToString("\n") { it.toString() }}
     """.trimIndent()
     tempDir.resolve("Cargo.toml").writeText(cargoToml)
     tempDir.resolve("src").mkdirs()

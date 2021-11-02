@@ -43,10 +43,10 @@ class TreeHashHeader(private val runtimeConfig: RuntimeConfig) : OperationCustom
                 }
                 rustTemplate(
                     """
-                        #{glacier_checksums}::add_checksum_treehash(
-                            &mut ${section.request}
-                        ).await.map_err(|e|#{BuildError}::Other(e.into()))?;
-                        """,
+                    #{glacier_checksums}::add_checksum_treehash(
+                        &mut ${section.request}
+                    ).await.map_err(|e|#{BuildError}::Other(e.into()))?;
+                    """,
                     "glacier_checksums" to glacierChecksums, "BuildError" to runtimeConfig.operationBuildError()
                 )
             }
