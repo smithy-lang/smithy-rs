@@ -101,14 +101,11 @@ class StructureGenerator(
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
+                    val fieldValue = redactIfNecessary(
+                        member, model, "self.$memberName"
+                    )
                     rust(
-                        "formatter.field(${memberName.dq()}, &${
-                        redactIfNecessary(
-                            member,
-                            model,
-                            "self.$memberName"
-                        )
-                        });",
+                        "formatter.field(${memberName.dq()}, &$fieldValue);",
                     )
                 }
                 rust("formatter.finish()")
@@ -130,7 +127,8 @@ class StructureGenerator(
                 writer.documentShape(
                     member,
                     model,
-                    note = memberSymbol.renamedFrom()?.let { oldName -> "This member has been renamed from `$oldName`." }
+                    note = memberSymbol.renamedFrom()
+                        ?.let { oldName -> "This member has been renamed from `$oldName`." }
                 )
                 memberSymbol.expectRustMetadata().render(this)
                 write("$memberName: #T,", symbolProvider.toSymbol(member))

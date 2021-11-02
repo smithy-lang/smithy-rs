@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.UnknownVariantError
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -108,7 +109,11 @@ class EventStreamMarshallerGenerator(
                     }
                     if (mode.renderUnknownVariant()) {
                         rustTemplate(
-                            """Self::Input::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::Marshalling("cannot marshall `Unknown` variant".to_owned()))""",
+                            """
+                            Self::Input::${UnionGenerator.UnknownVariantName} => return Err(
+                                #{Error}::Marshalling(${UnknownVariantError.dq()}.to_owned())
+                            )
+                            """,
                             *codegenScope
                         )
                     }

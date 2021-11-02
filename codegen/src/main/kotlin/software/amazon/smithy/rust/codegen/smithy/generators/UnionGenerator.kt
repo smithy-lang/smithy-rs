@@ -26,6 +26,12 @@ fun CodegenMode.renderUnknownVariant() = when (this) {
     is CodegenMode.Client -> true
 }
 
+const val UnknownVariantError = """
+Cannot serialize  `${UnionGenerator.UnknownVariantName}::Unknown` for the request.
+The `Unknown` variant is intended for responses only. It occurs when
+an outdated client is used after a new enum variant was added on the server side.
+"""
+
 /**
  * Generate an `enum` for a Smithy Union Shape
  *
@@ -36,8 +42,8 @@ fun CodegenMode.renderUnknownVariant() = when (this) {
  *
  * for each variant.
  *
- * Finally, if `[renderUnknownVariant]` is true (default false), it will render an `Unknown` variant. This is used by
- * clients to enable parsing to succeed, even if the server has added a new variant since the client was generated.
+ * Finally, if `[renderUnknownVariant]` is true (the default), it will render an `Unknown` variant. This is used by
+ * clients to allow response parsing to succeed, even if the server has added a new variant since the client was generated.
  */
 class UnionGenerator(
     val model: Model,
@@ -69,7 +75,13 @@ class UnionGenerator(
             }
             if (renderUnknownVariant) {
                 docs("""The `Unknown` variant represents cases where new union variant was received. Consider upgrading the SDK to the latest available version.""")
-                // at some point in the future, we may start actually putting data in here.
+                rust("/// An unknown enum variant")
+                rust("///")
+                rust("/// _Note: If you encounter this error, consider upgrading your SDK to the latest version._")
+                rust("/// The `Unknown` variant represents cases where the server sent a value that wasn't recognized")
+                rust("/// by the client. This can happen when the server adds new functionality, but the client has not been updated.")
+                rust("/// To investigate this, consider turning on debug logging to print the raw HTTP response.")
+                // at some point in the future, we may start actually putting things like the raw data in here.
                 Attribute.NonExhaustive.render(this)
                 rust("Unknown,")
             }

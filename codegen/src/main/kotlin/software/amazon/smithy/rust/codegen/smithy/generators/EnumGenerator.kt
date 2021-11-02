@@ -55,7 +55,7 @@ internal class EnumMemberModel(private val definition: EnumDefinition, private v
     }
 }
 
-fun RustWriter.docWithNote(doc: String?, note: String?) {
+private fun RustWriter.docWithNote(doc: String?, note: String?) {
     if (doc.isNullOrBlank() && note.isNullOrBlank()) {
         // If the model doesn't have any documentation for the shape, then suppress the missing docs lint
         // since the lack of documentation is a modeling issue rather than a codegen issue.

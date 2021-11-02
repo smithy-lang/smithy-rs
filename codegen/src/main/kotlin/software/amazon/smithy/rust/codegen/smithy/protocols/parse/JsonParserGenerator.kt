@@ -438,15 +438,18 @@ class JsonParserGenerator(
                                     // in client mode, resolve an unknown union variant to the unknown variant
                                     true -> rustTemplate(
                                         """
-                                    _ => {
-                                      #{skip_value}(tokens)?;
-                                      Some(#{Union}::${UnionGenerator.UnknownVariantName})
-                                    }
-                                    """,
+                                        _ => {
+                                          #{skip_value}(tokens)?;
+                                          Some(#{Union}::${UnionGenerator.UnknownVariantName})
+                                        }
+                                        """,
                                         "Union" to symbol, *codegenScope
                                     )
                                     // in server mode, use strict parsing
-                                    false -> rustTemplate("""_ => return Err(#{Error}::custom("unexpected union variant"))""", *codegenScope)
+                                    false -> rustTemplate(
+                                        """variant => return Err(#{Error}::custom(format!("unexpected union variant: {}", variant)))""",
+                                        *codegenScope
+                                    )
                                 }
                             }
                         }

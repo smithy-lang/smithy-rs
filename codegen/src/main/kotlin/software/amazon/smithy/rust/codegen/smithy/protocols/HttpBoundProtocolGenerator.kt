@@ -458,8 +458,6 @@ class HttpBoundProtocolBodyGenerator(
             httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
         if (payloadMemberName == null) {
             serializerGenerator.operationSerializer(operationShape)?.let { serializer ->
-                // some serializers return SerializationError directly, others errors must be converted
-
                 writer.rust(
                     "#T(&self)?",
                     serializer,
