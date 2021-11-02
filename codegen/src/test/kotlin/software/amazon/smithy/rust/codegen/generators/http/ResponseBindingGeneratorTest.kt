@@ -96,19 +96,20 @@ class ResponseBindingGeneratorTest {
         testProject.withModule(RustModule.public("output")) {
             it.renderOperation()
             it.unitTest(
-                test = """
-                                use crate::http_serde;
-                                let resp = http::Response::builder()
-                                    .header("X-Ints", "1,2,3")
-                                    .header("X-Ints", "4,5,6")
-                                    .header("X-MediaType", "c21pdGh5LXJz")
-                                    .header("X-Dates", "Mon, 16 Dec 2019 23:48:18 GMT")
-                                    .header("X-Dates", "Mon, 16 Dec 2019 23:48:18 GMT,Tue, 17 Dec 2019 23:48:18 GMT")
-                                    .body(()).expect("valid request");
-                                assert_eq!(http_serde::deser_header_put_object_put_object_output_int_list(resp.headers()).unwrap(), Some(vec![1,2,3,4,5,6]));
-                                assert_eq!(http_serde::deser_header_put_object_put_object_output_media_type(resp.headers()).expect("valid").unwrap(), "smithy-rs");
-                                assert_eq!(http_serde::deser_header_put_object_put_object_output_date_header_list(resp.headers()).unwrap().unwrap().len(), 3);
-                            """
+                "http_header_deser",
+                """
+                use crate::http_serde;
+                let resp = http::Response::builder()
+                    .header("X-Ints", "1,2,3")
+                    .header("X-Ints", "4,5,6")
+                    .header("X-MediaType", "c21pdGh5LXJz")
+                    .header("X-Dates", "Mon, 16 Dec 2019 23:48:18 GMT")
+                    .header("X-Dates", "Mon, 16 Dec 2019 23:48:18 GMT,Tue, 17 Dec 2019 23:48:18 GMT")
+                    .body(()).expect("valid request");
+                assert_eq!(http_serde::deser_header_put_object_put_object_output_int_list(resp.headers()).unwrap(), Some(vec![1,2,3,4,5,6]));
+                assert_eq!(http_serde::deser_header_put_object_put_object_output_media_type(resp.headers()).expect("valid").unwrap(), "smithy-rs");
+                assert_eq!(http_serde::deser_header_put_object_put_object_output_date_header_list(resp.headers()).unwrap().unwrap().len(), 3);
+                """
             )
         }
         testProject.compileAndTest()

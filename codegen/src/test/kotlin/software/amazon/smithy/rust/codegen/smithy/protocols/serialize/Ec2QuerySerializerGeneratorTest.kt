@@ -93,34 +93,35 @@ class Ec2QuerySerializerGeneratorTest {
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
             writer.unitTest(
-                test = """
-                                use model::Top;
+                "ec2query_serializer",
+                """
+                use model::Top;
 
-                                let input = crate::input::OpInput::builder()
-                                    .top(
-                                        Top::builder()
-                                            .field("hello!")
-                                            .extra(45)
-                                            .recursive(Top::builder().extra(55).build())
-                                            .build()
-                                    )
-                                    .boolean(true)
-                                    .build()
-                                    .unwrap();
-                                let serialized = ${writer.format(operationGenerator!!)}(&input).unwrap();
-                                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
-                                assert_eq!(
-                                    output,
-                                    "\
-                                    Action=Op\
-                                    &Version=test\
-                                    &Some_bool=true\
-                                    &Top.Field=hello%21\
-                                    &Top.Extra=45\
-                                    &Top.Rec.1.Extra=55\
-                                    "
-                                );
-                                """
+                let input = crate::input::OpInput::builder()
+                    .top(
+                        Top::builder()
+                            .field("hello!")
+                            .extra(45)
+                            .recursive(Top::builder().extra(55).build())
+                            .build()
+                    )
+                    .boolean(true)
+                    .build()
+                    .unwrap();
+                let serialized = ${writer.format(operationGenerator!!)}(&input).unwrap();
+                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
+                assert_eq!(
+                    output,
+                    "\
+                    Action=Op\
+                    &Version=test\
+                    &Some_bool=true\
+                    &Top.Field=hello%21\
+                    &Top.Extra=45\
+                    &Top.Rec.1.Extra=55\
+                    "
+                );
+                """
             )
         }
         project.withModule(RustModule.public("model")) {
