@@ -47,8 +47,8 @@ class UnionGenerator(
         writer.rustBlock("impl ${unionSymbol.name}") {
             sortedMembers.forEach { member ->
                 val memberSymbol = symbolProvider.toSymbol(member)
-                val variantName = symbolProvider.toMemberName(member).toPascalCase()
-                val funcNamePart = variantName.toSnakeCase()
+                val variantName = member.memberName.toPascalCase()
+                val funcNamePart = member.memberName.toSnakeCase()
 
                 if (sortedMembers.size == 1) {
                     Attribute.Custom("allow(irrefutable_let_patterns)").render(this)
