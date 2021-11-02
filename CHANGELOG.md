@@ -8,6 +8,7 @@ vNext (Month Day, Year)
 - `moduleDescription` in `smithy-build.json` settings is now optional
 - Upgrade to Smithy 1.12
 - `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
+- Fix generated docs on unions. (smithy-rs#826)
 
 v0.27 (October 20th, 2021)
 ==========================
