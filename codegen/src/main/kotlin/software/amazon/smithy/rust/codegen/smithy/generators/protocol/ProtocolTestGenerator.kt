@@ -194,14 +194,14 @@ class ProtocolTestGenerator(
                     let mut http_request = http_request;
                     let ep = #T::endpoint::Endpoint::mutable(#T::Uri::from_static(${withScheme.dq()}));
                     ep.set_endpoint(http_request.uri_mut(), parts.acquire().get());
-                """,
+                    """,
                     CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(), CargoDependency.Http.asType()
                 )
             }
             rust(
                 """
-                    assert_eq!(http_request.method(), ${method.dq()});
-                    assert_eq!(http_request.uri().path(), ${uri.dq()});
+                assert_eq!(http_request.method(), ${method.dq()});
+                assert_eq!(http_request.uri().path(), ${uri.dq()});
                 """
             )
             resolvedHost.orNull()?.also { host ->
@@ -264,9 +264,9 @@ class ProtocolTestGenerator(
         }
         rust(
             """
-                .status(${testCase.code})
-                .body(#T::from(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"}))
-                .unwrap();
+            .status(${testCase.code})
+            .body(#T::from(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"}))
+            .unwrap();
             """,
             RuntimeType.sdkBody(runtimeConfig = codegenContext.runtimeConfig)
         )
@@ -284,7 +284,7 @@ class ProtocolTestGenerator(
                 let http_response = http_response.map(|body|#{bytes}::copy_from_slice(body.bytes().unwrap()));
                 <#{op} as #{parse_http_response}>::parse_loaded(&parser, &http_response)
             });
-        """,
+            """,
             "op" to operationSymbol,
             "bytes" to RuntimeType.Bytes,
             "parse_http_response" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType()
@@ -306,10 +306,12 @@ class ProtocolTestGenerator(
                 val memberName = codegenContext.symbolProvider.toMemberName(member)
                 if (member.isStreaming(codegenContext.model)) {
                     rust(
-                        """assert_eq!(
+                        """
+                        assert_eq!(
                                         parsed.$memberName.collect().await.unwrap().into_bytes(),
                                         expected_output.$memberName.collect().await.unwrap().into_bytes()
-                                    );"""
+                                    );
+                        """
                     )
                 } else {
                     when (codegenContext.model.expectShape(member.target)) {

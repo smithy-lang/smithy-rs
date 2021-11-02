@@ -57,7 +57,7 @@ class SharedConfigDecorator : RustCodegenDecorator {
                         Builder::from(config).build()
                     }
                 }
-            """,
+                """,
                 *codegenScope
             )
         }

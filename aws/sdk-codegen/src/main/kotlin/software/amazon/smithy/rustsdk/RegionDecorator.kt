@@ -131,10 +131,10 @@ class RegionConfigPlugin : OperationCustomization() {
                 // Allow the region to be late-inserted via another method
                 rust(
                     """
-                if let Some(region) = &${section.config}.region {
-                    ${section.request}.properties_mut().insert(region.clone());
-                }
-                """
+                    if let Some(region) = &${section.config}.region {
+                        ${section.request}.properties_mut().insert(region.clone());
+                    }
+                    """
                 )
             }
             else -> emptySection

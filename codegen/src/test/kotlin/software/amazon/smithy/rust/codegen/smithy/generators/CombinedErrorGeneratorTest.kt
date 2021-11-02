@@ -19,25 +19,25 @@ internal class CombinedErrorGeneratorTest {
     @Test
     fun `generate combined error enums`() {
         val model = """
-        namespace error
-        operation Greeting {
-            errors: [InvalidGreeting, ComplexError, FooException]
-        }
+            namespace error
+            operation Greeting {
+                errors: [InvalidGreeting, ComplexError, FooException]
+            }
 
-        @error("client")
-        @retryable
-        structure InvalidGreeting {
-            message: String,
-        }
+            @error("client")
+            @retryable
+            structure InvalidGreeting {
+                message: String,
+            }
 
-        @error("server")
-        structure FooException {}
+            @error("server")
+            structure FooException {}
 
-        @error("server")
-        structure ComplexError {
-            abc: String,
-            other: Integer
-        }
+            @error("server")
+            structure ComplexError {
+                abc: String,
+                other: Integer
+            }
         """.asSmithyModel()
         val symbolProvider = testSymbolProvider(model)
         val writer = RustWriter.forModule("error")
@@ -73,7 +73,7 @@ internal class CombinedErrorGeneratorTest {
             // indicate the original name in the display output
             let error = FooError::builder().build();
             assert_eq!(format!("{}", error), "FooError [FooException]")
-        """
+            """
         )
     }
 }

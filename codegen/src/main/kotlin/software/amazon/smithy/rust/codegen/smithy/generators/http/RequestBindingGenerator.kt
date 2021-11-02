@@ -197,7 +197,7 @@ class RequestBindingGenerator(
                     builder = builder.header(header_name, header_value);
                 }
 
-            """,
+                """,
                 "build_error" to runtimeConfig.operationBuildError()
             )
         }
@@ -232,7 +232,7 @@ class RequestBindingGenerator(
                         }, err)}
                         })?;
                         builder = builder.header(${httpBinding.locationName.dq()}, header_value);
-                    """,
+                        """,
                         "build_error" to runtimeConfig.operationBuildError()
                     )
                 }
@@ -437,9 +437,9 @@ class RequestBindingGenerator(
         }
         rust(
             """
-                if $outputVar.is_empty() {
-                    return Err(${buildError()})
-                }
+            if $outputVar.is_empty() {
+                return Err(${buildError()})
+            }
             """
         )
     }
