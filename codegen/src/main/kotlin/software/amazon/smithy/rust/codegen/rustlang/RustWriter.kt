@@ -397,7 +397,7 @@ class RustWriter private constructor(
     inner class RustDocLinker : BiFunction<Any, String, String> {
         override fun apply(t: Any, u: String): String {
             return when (t) {
-                is Symbol -> "[`${t.name}`](${t.fullName})"
+                is Symbol -> "[`${t.name}`](${t.rustType().qualifiedName()})"
                 else -> throw CodegenException("Invalid type provided to RustDocLinker ($t) expected Symbol")
             }
         }
