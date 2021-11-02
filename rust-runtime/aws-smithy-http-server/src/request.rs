@@ -39,9 +39,9 @@ pub trait ParseHttpRequest {
     /// Currently `parse_unloaded` operates on a borrowed HTTP request to enable
     /// the caller to provide a raw HTTP response to the caller for inspection after the response is
     /// returned. For EventStream-like use cases, the caller can use `mem::swap` to replace
-    /// the streaming body with an empty body as long as the body implements default.
+    /// the streaming body with an empty body as long as the body implements `std::default::Default`.
     ///
-    /// We should consider if this is too limiting & if this should take an owned response instead.
+    /// We should consider if this is too limiting and if this should take an owned request instead.
     fn parse_unloaded(&self, request: &mut http::Request<SdkBody>) -> Option<Self::Input>;
 
     /// Parse an HTTP request from a fully loaded body. This is for standard request/response style

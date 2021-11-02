@@ -23,11 +23,11 @@ pub trait SerializeHttpResponse {
     /// HTTP response output
     ///
     /// For request/response style operations, this is typically something like:
-    /// `Result<ResponseBytes>, Error>`
+    /// `Result<ResponseBytes, Error>`
     type Output;
 
     /// Serialize an HTTP response from a fully loaded body. This is for standard request/response style
-    /// APIs like RestJson1.
+    /// protocols like RestJson1.
     fn serialize(&self, output: &Self::Struct) -> Self::Output;
 }
 
@@ -40,7 +40,7 @@ pub trait SerializeHttpResponse {
 /// It also enables this critical and core trait to avoid being async, and it makes code that uses
 /// the trait easier to test.
 ///
-/// TODO: streaming and not-fully loaded body serialization is no developed yet
+/// TODO: streaming and not-fully loaded body serialization is not developed yet
 pub trait SerializeHttpError {
     /// Struct instance to be serialized into the HTTP body
     ///
@@ -50,11 +50,11 @@ pub trait SerializeHttpError {
     /// HTTP response output
     ///
     /// For request/response style operations, this is typically something like:
-    /// `Result<ResponseBytes>, Error>`
+    /// `Result<ResponseBytes, Error>`
     type Output;
 
     /// Serialize an HTTP response from a fully loaded body. This is for standard request/response style
-    /// APIs like RestJson1.
+    /// protocols like RestJson1.
     fn serialize(&self, error: &Self::Struct) -> Self::Output;
 }
 
