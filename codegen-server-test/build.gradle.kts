@@ -28,9 +28,10 @@ val CodegenTests = listOf(
 )
 
 /**
- * The fluent client is generated to prevent warnings in RustDoc since the client is
- * referenced by multiple documentations.
- * TODO: review client generation in the future.
+ * The fluent HAVE to be set to false as we are not generating all the supporting
+ * code for it.
+ * TODO: Review how can we make this a default in the server so that customers don't
+ *       have to specify it.
  */
 fun generateSmithyBuild(tests: List<CodegenTest>): String {
     val projections =
@@ -40,7 +41,7 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
                 "plugins": {
                     "rust-server-codegen": {
                       "codegen": {
-                        "includeFluentClient": true
+                        "includeFluentClient": false
                       },
                       "runtimeConfig": {
                         "relativePath": "${rootProject.projectDir.absolutePath}/rust-runtime"
