@@ -26,12 +26,12 @@ fun stubCustomization(name: String): ConfigCustomization {
                             self.$name = Some($name);
                         self
                     }
-                """
+                    """
                 )
                 ServiceConfig.BuilderBuild -> rust(
                     """
                     $name: self.$name.unwrap_or(123),
-                """
+                    """
                 )
             }
         }

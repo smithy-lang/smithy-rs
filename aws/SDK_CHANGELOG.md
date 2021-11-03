@@ -7,6 +7,7 @@ vNext (Month Day, Year)
 - :bug: `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
 - :bug: S3 request metadata signing now correctly trims headers fixing [problems like this](https://github.com/awslabs/aws-sdk-rust/issues/248) (smithy-rs#761)
 - All unions (eg. `dynamodb::model::AttributeValue`) now include an additional `Unknown` variant. These support cases where a new union variant has been added on the server but the client has not been updated.
+- :bug: Fix generated docs on unions like `dynamodb::AttributeValue`. (smithy-rs#826)
 
 **Breaking Changes**
 - `<operation>.make_operation(&config)` is now an `async` function for all operations. Code should be updated to call `.await`. This will only impact users using the low-level API. (smithy-rs#797)

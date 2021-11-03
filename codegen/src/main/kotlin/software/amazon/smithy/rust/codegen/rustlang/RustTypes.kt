@@ -112,6 +112,22 @@ sealed class RustType {
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
 }
 
+/**
+ * Return the fully qualified name of this type NOT including generic type parameters, references, etc.
+ *
+ * - To generate something like `std::collections::HashMap`, use this function.
+ * - To generate something like `std::collections::HashMap<String, String>`, use [render]
+ */
+fun RustType.qualifiedName(): String {
+    val namespace = this.namespace?.let { "$it::" } ?: ""
+    return "$namespace$name"
+}
+
+/**
+ * Render this type, including references and generic parameters.
+ * - To generate something like `std::collections::HashMap<String, String>`, use this function
+ * - To generate something like `std::collections::HashMap`, use [qualifiedName]
+ */
 fun RustType.render(fullyQualified: Boolean = true): String {
     val namespace = if (fullyQualified) {
         this.namespace?.let { "$it::" } ?: ""

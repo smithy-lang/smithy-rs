@@ -66,7 +66,7 @@ class InstantiatorTest {
             member: WithBox,
             value: Integer
         }
-        """.asSmithyModel().let { RecursiveShapeBoxer.transform(it) }
+    """.asSmithyModel().let { RecursiveShapeBoxer.transform(it) }
 
     private val symbolProvider = testSymbolProvider(model)
     private val runtimeConfig = TestRuntimeConfig
@@ -120,9 +120,9 @@ class InstantiatorTest {
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
         val data = Node.parse(
             """ {
-                "member": {
-                    "member": { }
-                }, "value": 10
+            "member": {
+                "member": { }
+            }, "value": 10
             }
             """.trimIndent()
         )
@@ -141,7 +141,7 @@ class InstantiatorTest {
                         member: Some(Box::new(WithBox { value: None, member: None })),
                     }))
                 });
-            """
+                """
             )
         }
         writer.compileAndTest()
@@ -153,8 +153,8 @@ class InstantiatorTest {
             """ [
             "bar",
             "foo"
-        ]
-        """
+            ]
+            """
         )
         val writer = RustWriter.forModule("lib")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
@@ -174,8 +174,8 @@ class InstantiatorTest {
             "bar",
             "foo",
             null
-        ]
-        """
+            ]
+            """
         )
         val writer = RustWriter.forModule("lib")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
@@ -195,8 +195,8 @@ class InstantiatorTest {
             "k1": { "map": {} },
             "k2": { "map": { "k3": {} } },
             "k3": { }
-        }
-        """
+            }
+            """
         )
         val writer = RustWriter.forModule("model")
         val sut = Instantiator(symbolProvider, model, runtimeConfig)
@@ -212,7 +212,7 @@ class InstantiatorTest {
                 assert_eq!(result.get("k1").unwrap().map.as_ref().unwrap().len(), 0);
                 assert_eq!(result.get("k2").unwrap().map.as_ref().unwrap().len(), 1);
                 assert_eq!(result.get("k3").unwrap().map, None);
-            """
+                """
             )
         }
         writer.compileAndTest(clippy = true)

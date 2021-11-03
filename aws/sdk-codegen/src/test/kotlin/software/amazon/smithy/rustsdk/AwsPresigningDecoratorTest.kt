@@ -44,21 +44,21 @@ class AwsPresigningDecoratorTest {
 
     private fun testOperation(namespace: String, name: String): Model =
         """
-            namespace $namespace
-            use aws.protocols#restJson1
+        namespace $namespace
+        use aws.protocols#restJson1
 
-            @restJson1
-            service TestService {
-                version: "2019-12-16",
-                operations: ["$name"],
-            }
+        @restJson1
+        service TestService {
+            version: "2019-12-16",
+            operations: ["$name"],
+        }
 
-            operation $name {
-                input: ${name}InputOutput,
-                output: ${name}InputOutput,
-            }
-            structure ${name}InputOutput {
-            }
+        operation $name {
+            input: ${name}InputOutput,
+            output: ${name}InputOutput,
+        }
+        structure ${name}InputOutput {
+        }
         """.asSmithyModel()
 }
 

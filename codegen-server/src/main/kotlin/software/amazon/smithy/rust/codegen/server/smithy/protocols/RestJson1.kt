@@ -109,10 +109,10 @@ class RestJson1HttpSerializerGenerator(
                     HttpLocation.RESPONSE_CODE -> {
                         rustTemplate(
                             """
-                                let status = output.${it.memberName.toLowerCase()}
-                                    .ok_or(#{JsonSerdeError}::generic(${(it.member.memberName + " missing or empty").dq()}))?;
-                                let http_status: u16 = #{Convert}::TryFrom::<i32>::try_from(status)
-                                    .map_err(|_| #{JsonSerdeError}::generic(${("invalid status code").dq()}))?;
+                            let status = output.${it.memberName.toLowerCase()}
+                                .ok_or(#{JsonSerdeError}::generic(${(it.member.memberName + " missing or empty").dq()}))?;
+                            let http_status: u16 = #{Convert}::TryFrom::<i32>::try_from(status)
+                                .map_err(|_| #{JsonSerdeError}::generic(${("invalid status code").dq()}))?;
                             """.trimIndent(),
                             *codegenScope,
                         )
@@ -128,8 +128,8 @@ class RestJson1HttpSerializerGenerator(
             }
             rustTemplate(
                 """
-                    response.body(#{Bytes}::from(payload))
-                        .map_err(#{JsonSerdeError}::BuildResponse)
+                response.body(#{Bytes}::from(payload))
+                    .map_err(#{JsonSerdeError}::BuildResponse)
                 """.trimIndent(),
                 *codegenScope,
             )
@@ -158,17 +158,17 @@ class RestJson1HttpSerializerGenerator(
                     rustBlock("#TKind::${variantSymbol.name}($data) =>", errorSymbol) {
                         rust(
                             """
-                                #T(&$data)?;
-                                object.key(${"code".dq()}).string(${httpBindingResolver.errorCode(variantShape).dq()});
+                            #T(&$data)?;
+                            object.key(${"code".dq()}).string(${httpBindingResolver.errorCode(variantShape).dq()});
                             """.trimIndent(),
                             serializerSymbol
                         )
                         if (variantShape.errorMessageMember() != null) {
                             rust(
                                 """
-                                    if let Some(message) = $data.message() {
-                                        object.key(${"message".dq()}).string(message);
-                                    }
+                                if let Some(message) = $data.message() {
+                                    object.key(${"message".dq()}).string(message);
+                                }
                                 """.trimIndent()
                             )
                         }
@@ -191,10 +191,10 @@ class RestJson1HttpSerializerGenerator(
                 }
                 rust(
                     """
-                        #TKind::Unhandled(_) => {
-                            object.key(${"code".dq()}).string(${"Unhandled".dq()});
-                            response = response.status(500);
-                        }
+                    #TKind::Unhandled(_) => {
+                        object.key(${"code".dq()}).string(${"Unhandled".dq()});
+                        response = response.status(500);
+                    }
                     """.trimIndent(),
                     errorSymbol
                 )
@@ -202,8 +202,8 @@ class RestJson1HttpSerializerGenerator(
             rust("object.finish();")
             rustTemplate(
                 """
-                    response.body(#{Bytes}::from(out))
-                        .map_err(#{JsonSerdeError}::BuildResponse)
+                response.body(#{Bytes}::from(out))
+                    .map_err(#{JsonSerdeError}::BuildResponse)
                 """.trimIndent(),
                 *codegenScope
             )
@@ -325,9 +325,9 @@ class RestJson1HttpDeserializerGenerator(
         with(writer) {
             rustTemplate(
                 """
-                    #{Static}::lazy_static! {
-                        static ref RE: #{Regex}::Regex = #{Regex}::Regex::new("$pattern").unwrap();
-                    }
+                #{Static}::lazy_static! {
+                    static ref RE: #{Regex}::Regex = #{Regex}::Regex::new("$pattern").unwrap();
+                }
                 """.trimIndent(),
                 *codegenScope,
             )
@@ -336,11 +336,11 @@ class RestJson1HttpDeserializerGenerator(
                     val deserializer = generateDeserializeLabelFn(it)
                     rustTemplate(
                         """
-                            if let Some(m) = captures.name("${it.locationName}") {
-                                input = input.${it.member.setterName()}(
-                                    #{deserializer}(m.as_str())?
-                                );
-                            }
+                        if let Some(m) = captures.name("${it.locationName}") {
+                            input = input.${it.member.setterName()}(
+                                #{deserializer}(m.as_str())?
+                            );
+                        }
                         """.trimIndent(),
                         "deserializer" to deserializer,
                         "E" to errorShape,
@@ -360,7 +360,7 @@ class RestJson1HttpDeserializerGenerator(
         val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
         writer.rust(
             """
-                #T(request.headers())?
+            #T(request.headers())?
             """.trimIndent(),
             deserializer,
         )
@@ -387,10 +387,10 @@ class RestJson1HttpDeserializerGenerator(
             ) {
                 rustTemplate(
                     """
-                        let value = #{PercentEncoding}::percent_decode_str(value)
-                            .decode_utf8()
-                            .map_err(|err| #{JsonSerdeError}::DeserializeLabel(err.to_string()))?;
-                        Ok(Some(value.into_owned()))
+                    let value = #{PercentEncoding}::percent_decode_str(value)
+                        .decode_utf8()
+                        .map_err(|err| #{JsonSerdeError}::DeserializeLabel(err.to_string()))?;
+                    Ok(Some(value.into_owned()))
                     """.trimIndent(),
                     *codegenScope,
                 )
@@ -416,12 +416,12 @@ class RestJson1HttpDeserializerGenerator(
             ) {
                 rustTemplate(
                     """
-                        let value = #{PercentEncoding}::percent_decode_str(value)
-                            .decode_utf8()
-                            .map_err(|err| #{JsonSerdeError}::DeserializeLabel(err.to_string()))?;
-                        let value = #{Instant}::Instant::from_str(&value, #{format})
-                            .map_err(|err| #{JsonSerdeError}::DeserializeLabel(err.to_string()))?;
-                        Ok(Some(value))
+                    let value = #{PercentEncoding}::percent_decode_str(value)
+                        .decode_utf8()
+                        .map_err(|err| #{JsonSerdeError}::DeserializeLabel(err.to_string()))?;
+                    let value = #{Instant}::Instant::from_str(&value, #{format})
+                        .map_err(|err| #{JsonSerdeError}::DeserializeLabel(err.to_string()))?;
+                    Ok(Some(value))
                     """.trimIndent(),
                     *codegenScope,
                     "format" to timestampFormatType,
@@ -441,9 +441,9 @@ class RestJson1HttpDeserializerGenerator(
             ) {
                 rustTemplate(
                     """
-                        let value = #{FromStr}::from_str(value)
-                            .map_err(|_| #{JsonSerdeError}::DeserializeLabel(${"label parse error".dq()}.to_string()))?;
-                        Ok(Some(value))
+                    let value = #{FromStr}::from_str(value)
+                        .map_err(|_| #{JsonSerdeError}::DeserializeLabel(${"label parse error".dq()}.to_string()))?;
+                    Ok(Some(value))
                     """.trimIndent(),
                     *codegenScope,
                 )

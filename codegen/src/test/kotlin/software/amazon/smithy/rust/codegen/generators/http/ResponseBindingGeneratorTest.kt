@@ -30,43 +30,43 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 
 class ResponseBindingGeneratorTest {
     private val baseModel = """
-            namespace smithy.example
+        namespace smithy.example
 
-            @idempotent
-            @http(method: "PUT", uri: "/", code: 200)
-            operation PutObject {
-                output: PutObjectResponse
-            }
+        @idempotent
+        @http(method: "PUT", uri: "/", code: 200)
+        operation PutObject {
+            output: PutObjectResponse
+        }
 
-            list Extras {
-                member: Integer
-            }
+        list Extras {
+            member: Integer
+        }
 
-            list Dates {
-                member: Timestamp
-            }
+        list Dates {
+            member: Timestamp
+        }
 
-            @mediaType("video/quicktime")
-            string Video
+        @mediaType("video/quicktime")
+        string Video
 
-            structure PutObjectResponse {
-                // Sent in the X-Dates header
-                @httpHeader("X-Dates")
-                dateHeaderList: Dates,
+        structure PutObjectResponse {
+            // Sent in the X-Dates header
+            @httpHeader("X-Dates")
+            dateHeaderList: Dates,
 
-                @httpHeader("X-Ints")
-                intList: Extras,
+            @httpHeader("X-Ints")
+            intList: Extras,
 
-                @httpHeader("X-MediaType")
-                mediaType: Video,
+            @httpHeader("X-MediaType")
+            mediaType: Video,
 
-                // Sent in the body
-                data: Blob,
+            // Sent in the body
+            data: Blob,
 
-                // Sent in the body
-                additional: String,
-            }
-        """.asSmithyModel()
+            // Sent in the body
+            additional: String,
+        }
+    """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
     private val symbolProvider = testSymbolProvider(model)

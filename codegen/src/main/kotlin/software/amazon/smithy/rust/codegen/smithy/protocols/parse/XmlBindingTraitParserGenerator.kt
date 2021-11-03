@@ -358,9 +358,11 @@ class XmlBindingTraitParserGenerator(
     private fun RustWriter.parseAttributeMember(memberShape: MemberShape, ctx: Ctx) {
         rustBlock("") {
             rustTemplate(
-                """let s = ${ctx.tag}
+                """
+                let s = ${ctx.tag}
                     .start_el()
-                    .attr(${memberShape.xmlName().toString().dq()});""",
+                    .attr(${memberShape.xmlName().toString().dq()});
+                """,
                 *codegenScope
             )
             rustBlock("match s") {
@@ -391,11 +393,11 @@ class XmlBindingTraitParserGenerator(
                         case(member) {
                             val current =
                                 """
-                                    (match base.take() {
-                                        None => None,
-                                        Some(${format(symbol)}::$variantName(inner)) => Some(inner),
-                                        Some(_) => return Err(#{XmlError}::custom("mixed variants"))
-                                    })
+                                (match base.take() {
+                                    None => None,
+                                    Some(${format(symbol)}::$variantName(inner)) => Some(inner),
+                                    Some(_) => return Err(#{XmlError}::custom("mixed variants"))
+                                })
                                 """
                             withBlock("let tmp =", ";") {
                                 parseMember(member, ctx.copy(accum = current.trim()))
@@ -522,10 +524,10 @@ class XmlBindingTraitParserGenerator(
             val accum = ctx.accum ?: throw CodegenException("need accum to parse flat map")
             rustTemplate(
                 """
-            let mut $map = $accum.unwrap_or_default();
-            #{decoder}(&mut tag, &mut $map)?;
-            $map
-            """,
+                let mut $map = $accum.unwrap_or_default();
+                #{decoder}(&mut tag, &mut $map)?;
+                $map
+                """,
                 *codegenScope,
                 "decoder" to entryDecoder
             )
@@ -561,11 +563,11 @@ class XmlBindingTraitParserGenerator(
 
                 rustTemplate(
                     """
-                let k = k.ok_or_else(||#{XmlError}::custom("missing key map entry"))?;
-                let v = v.ok_or_else(||#{XmlError}::custom("missing value map entry"))?;
-                out.insert(k, v);
-                Ok(())
-                        """,
+                    let k = k.ok_or_else(||#{XmlError}::custom("missing key map entry"))?;
+                    let v = v.ok_or_else(||#{XmlError}::custom("missing value map entry"))?;
+                    out.insert(k, v);
+                    Ok(())
+                    """,
                     *codegenScope
                 )
             }

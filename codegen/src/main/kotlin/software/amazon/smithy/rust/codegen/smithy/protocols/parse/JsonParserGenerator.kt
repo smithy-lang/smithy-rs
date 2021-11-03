@@ -192,7 +192,7 @@ class JsonParserGenerator(
                     data
                 }
             }
-        """
+            """
         )
     }
 
@@ -505,8 +505,8 @@ class JsonParserGenerator(
         rustBlockTemplate("match tokens.next().transpose()?", *codegenScope) {
             rustBlockTemplate(
                 """
-                    Some(#{Token}::ValueNull { .. }) => Ok(None),
-                    Some(#{Token}::Start${StringUtils.capitalize(objectOrArray)} { .. }) =>
+                Some(#{Token}::ValueNull { .. }) => Ok(None),
+                Some(#{Token}::Start${StringUtils.capitalize(objectOrArray)} { .. }) =>
                 """,
                 *codegenScope
             ) {

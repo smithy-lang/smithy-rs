@@ -186,35 +186,35 @@ object EventStreamTestModels {
             requestContentType = "application/xml",
             responseContentType = "application/xml",
             validTestStruct = """
-                        <TestStruct>
-                            <someString>hello</someString>
-                            <someInt>5</someInt>
-                        </TestStruct>
+                <TestStruct>
+                    <someString>hello</someString>
+                    <someInt>5</someInt>
+                </TestStruct>
             """.trimIndent(),
             validMessageWithNoHeaderPayloadTraits = """
-                        <MessageWithNoHeaderPayloadTraits>
-                            <someString>hello</someString>
-                            <someInt>5</someInt>
-                        </MessageWithNoHeaderPayloadTraits>
+                <MessageWithNoHeaderPayloadTraits>
+                    <someString>hello</someString>
+                    <someInt>5</someInt>
+                </MessageWithNoHeaderPayloadTraits>
             """.trimIndent(),
             validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
             validSomeError = """
-                        <ErrorResponse>
-                            <Error>
-                                <Type>SomeError</Type>
-                                <Code>SomeError</Code>
-                                <Message>some error</Message>
-                            </Error>
-                        </ErrorResponse>
+                <ErrorResponse>
+                    <Error>
+                        <Type>SomeError</Type>
+                        <Code>SomeError</Code>
+                        <Message>some error</Message>
+                    </Error>
+                </ErrorResponse>
             """.trimIndent(),
             validUnmodeledError = """
-                        <ErrorResponse>
-                            <Error>
-                                <Type>UnmodeledError</Type>
-                                <Code>UnmodeledError</Code>
-                                <Message>unmodeled error</Message>
-                            </Error>
-                        </ErrorResponse>
+                <ErrorResponse>
+                    <Error>
+                        <Type>UnmodeledError</Type>
+                        <Code>UnmodeledError</Code>
+                        <Message>unmodeled error</Message>
+                    </Error>
+                </ErrorResponse>
             """.trimIndent(),
         ) { RestXml(it) },
 
@@ -227,35 +227,35 @@ object EventStreamTestModels {
             requestContentType = "application/x-www-form-urlencoded",
             responseContentType = "text/xml",
             validTestStruct = """
-                        <TestStruct>
-                            <someString>hello</someString>
-                            <someInt>5</someInt>
-                        </TestStruct>
+                <TestStruct>
+                    <someString>hello</someString>
+                    <someInt>5</someInt>
+                </TestStruct>
             """.trimIndent(),
             validMessageWithNoHeaderPayloadTraits = """
-                        <MessageWithNoHeaderPayloadTraits>
-                            <someString>hello</someString>
-                            <someInt>5</someInt>
-                        </MessageWithNoHeaderPayloadTraits>
+                <MessageWithNoHeaderPayloadTraits>
+                    <someString>hello</someString>
+                    <someInt>5</someInt>
+                </MessageWithNoHeaderPayloadTraits>
             """.trimIndent(),
             validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
             validSomeError = """
-                        <ErrorResponse>
-                            <Error>
-                                <Type>SomeError</Type>
-                                <Code>SomeError</Code>
-                                <Message>some error</Message>
-                            </Error>
-                        </ErrorResponse>
+                <ErrorResponse>
+                    <Error>
+                        <Type>SomeError</Type>
+                        <Code>SomeError</Code>
+                        <Message>some error</Message>
+                    </Error>
+                </ErrorResponse>
             """.trimIndent(),
             validUnmodeledError = """
-                        <ErrorResponse>
-                            <Error>
-                                <Type>UnmodeledError</Type>
-                                <Code>UnmodeledError</Code>
-                                <Message>unmodeled error</Message>
-                            </Error>
-                        </ErrorResponse>
+                <ErrorResponse>
+                    <Error>
+                        <Type>UnmodeledError</Type>
+                        <Code>UnmodeledError</Code>
+                        <Message>unmodeled error</Message>
+                    </Error>
+                </ErrorResponse>
             """.trimIndent(),
         ) { AwsQueryProtocol(it) },
 
@@ -268,39 +268,39 @@ object EventStreamTestModels {
             requestContentType = "application/x-www-form-urlencoded",
             responseContentType = "text/xml",
             validTestStruct = """
-                        <TestStruct>
-                            <someString>hello</someString>
-                            <someInt>5</someInt>
-                        </TestStruct>
+                <TestStruct>
+                    <someString>hello</someString>
+                    <someInt>5</someInt>
+                </TestStruct>
             """.trimIndent(),
             validMessageWithNoHeaderPayloadTraits = """
-                        <MessageWithNoHeaderPayloadTraits>
-                            <someString>hello</someString>
-                            <someInt>5</someInt>
-                        </MessageWithNoHeaderPayloadTraits>
+                <MessageWithNoHeaderPayloadTraits>
+                    <someString>hello</someString>
+                    <someInt>5</someInt>
+                </MessageWithNoHeaderPayloadTraits>
             """.trimIndent(),
             validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
             validSomeError = """
-                        <Response>
-                            <Errors>
-                                <Error>
-                                    <Type>SomeError</Type>
-                                    <Code>SomeError</Code>
-                                    <Message>some error</Message>
-                                </Error>
-                            </Errors>
-                        </Response>
+                <Response>
+                    <Errors>
+                        <Error>
+                            <Type>SomeError</Type>
+                            <Code>SomeError</Code>
+                            <Message>some error</Message>
+                        </Error>
+                    </Errors>
+                </Response>
             """.trimIndent(),
             validUnmodeledError = """
-                        <Response>
-                            <Errors>
-                                <Error>
-                                    <Type>UnmodeledError</Type>
-                                    <Code>UnmodeledError</Code>
-                                    <Message>unmodeled error</Message>
-                                </Error>
-                            </Errors>
-                        </Response>
+                <Response>
+                    <Errors>
+                        <Error>
+                            <Type>UnmodeledError</Type>
+                            <Code>UnmodeledError</Code>
+                            <Message>unmodeled error</Message>
+                        </Error>
+                    </Errors>
+                </Response>
             """.trimIndent(),
         ) { Ec2QueryProtocol(it) },
     ).flatMap { listOf(it, it.copy(mode = CodegenMode.Server)) }

@@ -27,7 +27,7 @@ class FluentClientCore(private val model: Model) {
                 """
                 self.inner = self.inner.$memberName(inp);
                 self
-            """
+                """
             )
         }
     }
@@ -46,7 +46,7 @@ class FluentClientCore(private val model: Model) {
                 """
                 self.inner = self.inner.$memberName(k, v);
                 self
-            """
+                """
             )
         }
     }

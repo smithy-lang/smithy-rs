@@ -20,21 +20,21 @@ import software.amazon.smithy.rust.codegen.util.lookup
 internal class EndpointConfigCustomizationTest {
 
     private val model = """
-    namespace test
-    @aws.api#service(sdkId: "Test", endpointPrefix: "service-with-prefix")
-    service TestService {
-        version: "123"
-    }
+        namespace test
+        @aws.api#service(sdkId: "Test", endpointPrefix: "service-with-prefix")
+        service TestService {
+            version: "123"
+        }
 
-    @aws.api#service(sdkId: "Test", endpointPrefix: "iam")
-    service NoRegions {
-        version: "123"
-    }
+        @aws.api#service(sdkId: "Test", endpointPrefix: "iam")
+        service NoRegions {
+            version: "123"
+        }
 
-    @aws.api#service(sdkId: "Test")
-    service NoEndpointPrefix {
-        version: "123"
-    }
+        @aws.api#service(sdkId: "Test")
+        service NoEndpointPrefix {
+            version: "123"
+        }
     """.asSmithyModel()
 
     private val endpointConfig = """
@@ -94,7 +94,7 @@ internal class EndpointConfigCustomizationTest {
               }
             }
         }]
-    }
+        }
     """.let { ObjectNode.parse(it).expectObjectNode() }
 
     fun endpointCustomization(service: String) =

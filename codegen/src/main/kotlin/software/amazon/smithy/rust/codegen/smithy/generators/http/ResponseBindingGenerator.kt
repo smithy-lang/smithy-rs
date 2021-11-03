@@ -289,11 +289,13 @@ class ResponseBindingGenerator(
             )
             if (coreShape.hasTrait<MediaTypeTrait>()) {
                 rustTemplate(
-                    """let $parsedValue: std::result::Result<Vec<_>, _> = $parsedValue
+                    """
+                    let $parsedValue: std::result::Result<Vec<_>, _> = $parsedValue
                         .iter().map(|s|
                             #{base_64_decode}(s).map_err(|_|#{header}::ParseError::new_with_message("failed to decode base64"))
                             .and_then(|bytes|String::from_utf8(bytes).map_err(|_|#{header}::ParseError::new_with_message("base64 encoded data was not valid utf-8")))
-                        ).collect();""",
+                        ).collect();
+                    """,
                     "base_64_decode" to RuntimeType.Base64Decode(runtimeConfig),
                     "header" to headerUtil
                 )

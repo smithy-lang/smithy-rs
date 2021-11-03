@@ -9,6 +9,7 @@ vNext (Month Day, Year)
 - Upgrade to Smithy 1.12
 - `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
 - Unions will optionally generate an `Unknown` variant to support parsing variants that don't exist on the client. These variants will fail to serialize if they are ever included in requests.
+- Fix generated docs on unions. (smithy-rs#826)
 
 v0.27 (October 20th, 2021)
 ==========================

@@ -38,7 +38,7 @@ internal class InlineDependencyTest {
             use crate::idempotency_token::uuid_v4;
             let res = uuid_v4(0);
             assert_eq!(res, "00000000-0000-4000-8000-000000000000");
-        """
+            """
         )
     }
 }

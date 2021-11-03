@@ -26,9 +26,9 @@ fun CodegenMode.renderUnknownVariant() = when (this) {
 }
 
 const val UnknownVariantError = """
-Cannot serialize  `${UnionGenerator.UnknownVariantName}::Unknown` for the request.
-The `Unknown` variant is intended for responses only. It occurs when
-an outdated client is used after a new enum variant was added on the server side.
+    Cannot serialize  `${UnionGenerator.UnknownVariantName}::Unknown` for the request.
+    The `Unknown` variant is intended for responses only. It occurs when
+    an outdated client is used after a new enum variant was added on the server side.
 """
 
 /**
@@ -94,12 +94,12 @@ class UnionGenerator(
                 if (sortedMembers.size == 1) {
                     Attribute.Custom("allow(irrefutable_let_patterns)").render(this)
                 }
-                rust("/// Tries to convert the enum instance into its #D variant.", unionSymbol)
-                rust("/// Returns `Err(&Self) if it can't be converted.` ")
+                rust("/// Tries to convert the enum instance into [`$variantName`](#T::$variantName), extracting the inner #D.", unionSymbol, memberSymbol)
+                rust("/// Returns `Err(&Self)` if it can't be converted.")
                 rustBlock("pub fn as_$funcNamePart(&self) -> std::result::Result<&#T, &Self>", memberSymbol) {
                     rust("if let ${unionSymbol.name}::$variantName(val) = &self { Ok(&val) } else { Err(&self) }")
                 }
-                rust("/// Returns true if the enum instance is the `${unionSymbol.name}` variant.")
+                rust("/// Returns true if this is a [`$variantName`](#T::$variantName).", unionSymbol)
                 rustBlock("pub fn is_$funcNamePart(&self) -> bool") {
                     rust("self.as_$funcNamePart().is_ok()")
                 }
