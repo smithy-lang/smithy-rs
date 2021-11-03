@@ -8,6 +8,7 @@ vNext (Month Day, Year)
 - `moduleDescription` in `smithy-build.json` settings is now optional
 - Upgrade to Smithy 1.12
 - `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
+- Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request.
 
 v0.27 (October 20th, 2021)
 ==========================
