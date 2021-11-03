@@ -115,7 +115,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     /**
      * Execute code generation
      *
-     * 1. Load the service from `RustSettings`.
+     * 1. Load the service from [RustSettings].
      * 2. Traverse every shape in the closure of the service.
      * 3. Loop through each shape and visit them (calling the override functions in this class)
      * 4. Call finalization tasks specified by decorators.
@@ -166,7 +166,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
      * Structure Shape Visitor
      *
      * For each structure shape, generate:
-     * - A Rust structure for the shape (`StructureGenerator`).
+     * - A Rust structure for the shape ([StructureGenerator]).
      * - A builder for the shape.
      *
      * This function _does not_ generate any serializers.
@@ -187,7 +187,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     /**
      * String Shape Visitor
      *
-     * Although raw strings require no code generation, enums are actually `EnumTrait` applied to string shapes.
+     * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
         logger.info("[rust-server-codegen] Generating an enum $shape")

@@ -52,7 +52,7 @@ import java.util.logging.Logger
 
 /*
  * Implement operations' input parsing and output serialization. Protocols can plug their own implementations
- * and overrides by creating a protocol factory inheriting from this class and feeding it to the `ServerProtocolLoader`.
+ * and overrides by creating a protocol factory inheriting from this class and feeding it to the [ServerProtocolLoader].
  * See `ServerRestJson.kt` for more info.
  */
 class ServerHttpProtocolGenerator(
@@ -66,7 +66,7 @@ class ServerHttpProtocolGenerator(
 )
 
 /*
- * Class used to expose Rust server traits types. Is is used in `ServerHttpProtocolGenerator` and `ServerProtocolTestGenerator`.
+ * Class used to expose Rust server traits types. Is is used in [ServerHttpProtocolGenerator] and [ServerProtocolTestGenerator].
  */
 class HttpServerTraits {
     fun parseHttpRequest(runtimeConfig: RuntimeConfig) = RuntimeType(
@@ -161,7 +161,7 @@ private class ServerHttpProtocolImplGenerator(
             """
             impl #{ParseStrictResponse} for $operationName {
                 type Output = std::result::Result<#{O}, #{E}>;
-                fn parse(&self, response: &#{Http}::Response<#{Bytes}>) -> Self::Output {
+                fn parse(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
                      if !response.status().is_success() && response.status().as_u16() != $successCode {
                         #{parse_error}(response)
                      } else {
@@ -180,10 +180,10 @@ private class ServerHttpProtocolImplGenerator(
             """
             impl #{ParseHttpRequest} for $operationName {
                 type Input = std::result::Result<#{I}, #{Error}>;
-                fn parse_unloaded(&self, _request: &mut #{Http}::Request<#{SdkBody}>) -> Option<Self::Input> {
+                fn parse_unloaded(&self, _request: &mut #{http}::Request<#{SdkBody}>) -> Option<Self::Input> {
                     None
                 }
-                fn parse_loaded(&self, request: &#{Http}::Request<#{Bytes}>) -> Self::Input {
+                fn parse_loaded(&self, request: &#{http}::Request<#{Bytes}>) -> Self::Input {
                     #{parse_request}(request)
                 }
             }""",
@@ -195,7 +195,7 @@ private class ServerHttpProtocolImplGenerator(
         rustTemplate(
             """
             impl #{SerializeHttpResponse} for $operationName {
-                type Output = std::result::Result<#{Http}::Response<#{Bytes}>, #{Error}>;
+                type Output = std::result::Result<#{http}::Response<#{Bytes}>, #{Error}>;
                 type Struct = #{O};
                 fn serialize(&self, output: &Self::Struct) -> Self::Output {
                     #{serialize_response}(output)
@@ -209,7 +209,7 @@ private class ServerHttpProtocolImplGenerator(
         rustTemplate(
             """
             impl #{SerializeHttpError} for $operationName {
-                type Output = std::result::Result<#{Http}::Response<#{Bytes}>, #{Error}>;
+                type Output = std::result::Result<#{http}::Response<#{Bytes}>, #{Error}>;
                 type Struct = #{E}Kind;
                 fn serialize(&self, error: &Self::Struct) -> Self::Output {
                     #{serialize_error}(error)
@@ -222,16 +222,14 @@ private class ServerHttpProtocolImplGenerator(
     }
 
     /*
-     * TODO: implement straming traits
+     * TODO: implement streaming traits
      */
     private fun RustWriter.renderStreamingTraits(
         operationName: String,
         outputSymbol: Symbol,
         operationShape: OperationShape
     ) {
-        logger.warning(
-            "[rust-server-codegen] $operationShape: streaming trait is not yet implemented"
-        )
+        logger.warning("[rust-server-codegen] $operationName: streaming trait is not yet implemented")
     }
 
     private fun serverParseRequest(operationShape: OperationShape): RuntimeType {
@@ -241,7 +239,7 @@ private class ServerHttpProtocolImplGenerator(
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(request: &#{Http}::Request<#{Bytes}>) -> std::result::Result<#{I}, #{Error}>",
+                "pub fn $fnName(request: &#{http}::Request<#{Bytes}>) -> std::result::Result<#{I}, #{Error}>",
                 *codegenScope,
                 "I" to inputSymbol,
             ) {
@@ -263,7 +261,7 @@ private class ServerHttpProtocolImplGenerator(
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(output: &#{O}) -> std::result::Result<#{Http}::Response<#{Bytes}>, #{Error}>",
+                "pub fn $fnName(output: &#{O}) -> std::result::Result<#{http}::Response<#{Bytes}>, #{Error}>",
                 *codegenScope,
                 "O" to outputSymbol,
             ) {
@@ -283,7 +281,7 @@ private class ServerHttpProtocolImplGenerator(
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(error: &#{E}Kind) -> std::result::Result<#{Http}::Response<#{Bytes}>, #{Error}>",
+                "pub fn $fnName(error: &#{E}Kind) -> std::result::Result<#{http}::Response<#{Bytes}>, #{Error}>",
                 *codegenScope,
                 "E" to errorSymbol
             ) {
@@ -299,8 +297,9 @@ private class ServerHttpProtocolImplGenerator(
         operationShape: OperationShape,
         errorSymbol: RuntimeType,
     ) {
+        val operationName = symbolProvider.toSymbol(operationShape).name
         val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
-        rustTemplate("let mut response = #{Http}::Response::builder();", *codegenScope)
+        rustTemplate("let mut response = #{http}::Response::builder();", *codegenScope)
         rust("let mut out = String::new();")
         rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
         withBlock("match error {", "};") {
@@ -313,17 +312,17 @@ private class ServerHttpProtocolImplGenerator(
                 rustBlock("#TKind::${variantSymbol.name}($data) =>", errorSymbol) {
                     rust(
                         """
-                            #T(&$data)?;
-                            object.key(${"code".dq()}).string(${httpBindingResolver.errorCode(variantShape).dq()});
+                        #T(&$data)?;
+                        object.key(${"code".dq()}).string(${httpBindingResolver.errorCode(variantShape).dq()});
                         """.trimIndent(),
                         serializerSymbol
                     )
                     if (variantShape.errorMessageMember() != null) {
                         rust(
                             """
-                                if let Some(message) = $data.message() {
-                                    object.key(${"message".dq()}).string(message);
-                                }
+                            if let Some(message) = $data.message() {
+                                object.key(${"message".dq()}).string(message);
+                            }
                             """.trimIndent()
                         )
                     }
@@ -332,9 +331,7 @@ private class ServerHttpProtocolImplGenerator(
                         when (val location = binding.location) {
                             HttpLocation.RESPONSE_CODE, HttpLocation.DOCUMENT -> {}
                             else -> {
-                                logger.warning(
-                                    "$operationShape: response serialization does not currently support $location bindings"
-                                )
+                                logger.warning("[rust-server-codegen] $operationName: error serialization does not currently support $location bindings")
                             }
                         }
                     }
@@ -346,10 +343,10 @@ private class ServerHttpProtocolImplGenerator(
             }
             rust(
                 """
-                    #TKind::Unhandled(_) => {
-                        object.key(${"code".dq()}).string(${"Unhandled".dq()});
-                        response = response.status(500);
-                    }
+                #TKind::Unhandled(_) => {
+                    object.key(${"code".dq()}).string(${"Unhandled".dq()});
+                    response = response.status(500);
+                }
                 """.trimIndent(),
                 errorSymbol
             )
@@ -357,8 +354,8 @@ private class ServerHttpProtocolImplGenerator(
         rust("object.finish();")
         rustTemplate(
             """
-                response.body(#{Bytes}::from(out))
-                    .map_err(#{Error}::BuildResponse)
+            response.body(#{Bytes}::from(out))
+                .map_err(#{Error}::BuildResponse)
             """.trimIndent(),
             *codegenScope
         )
@@ -377,7 +374,7 @@ private class ServerHttpProtocolImplGenerator(
         }
         // avoid non-usage warnings for response
         Attribute.AllowUnusedMut.render(this)
-        rustTemplate("let mut response = #{Http}::Response::builder();", *codegenScope)
+        rustTemplate("let mut response = #{http}::Response::builder();", *codegenScope)
         for (binding in bindings) {
             val serializedValue = serverRenderBindingSerializer(binding, operationShape)
             if (serializedValue != null) {
@@ -386,8 +383,8 @@ private class ServerHttpProtocolImplGenerator(
         }
         rustTemplate(
             """
-                response.body(#{Bytes}::from(payload))
-                    .map_err(#{Error}::BuildResponse)?
+            response.body(#{Bytes}::from(payload))
+                .map_err(#{Error}::BuildResponse)?
             """.trimIndent(),
             *codegenScope,
         )
@@ -397,12 +394,11 @@ private class ServerHttpProtocolImplGenerator(
         binding: HttpBindingDescriptor,
         operationShape: OperationShape,
     ): Writable? {
+        val operationName = symbolProvider.toSymbol(operationShape).name
         val member = binding.member
         return when (binding.location) {
             HttpLocation.HEADER, HttpLocation.PREFIX_HEADERS, HttpLocation.PAYLOAD -> {
-                logger.warning(
-                    "[rust-server-codegen] $operationShape: response serialization does not currently support ${binding.location} bindings"
-                )
+                logger.warning("[rust-server-codegen] $operationName: response serialization does not currently support ${binding.location} bindings")
                 null
             }
             HttpLocation.DOCUMENT -> {
@@ -410,12 +406,13 @@ private class ServerHttpProtocolImplGenerator(
                 null
             }
             HttpLocation.RESPONSE_CODE -> writable {
+                val memberName = symbolProvider.toMemberName(member)
                 rustTemplate(
                     """
-                        let status = output.${member.memberName.toLowerCase()}
-                            .ok_or(#{Error}::generic(${(member.memberName + " missing or empty").dq()}))?;
-                        let http_status: u16 = #{Convert}::TryFrom::<i32>::try_from(status)
-                            .map_err(|_| #{Error}::generic(${("invalid status code").dq()}))?;
+                    let status = output.$memberName
+                        .ok_or(#{Error}::generic(${(memberName + " missing or empty").dq()}))?;
+                    let http_status: u16 = #{Convert}::TryFrom::<i32>::try_from(status)
+                        .map_err(|_| #{Error}::generic(${("invalid status code").dq()}))?;
                     """.trimIndent(),
                     *codegenScope,
                 )
@@ -450,7 +447,7 @@ private class ServerHttpProtocolImplGenerator(
                 }
             }
         }
-        serverRenderPathParser(this, operationShape)
+        serverRenderUriPathParser(this, operationShape)
 
         val err = if (StructureGenerator.fallibleBuilder(inputShape, symbolProvider)) {
             ".map_err(#{Error}::from)?"
@@ -462,6 +459,7 @@ private class ServerHttpProtocolImplGenerator(
         binding: HttpBindingDescriptor,
         operationShape: OperationShape,
     ): Writable? {
+        val operationName = symbolProvider.toSymbol(operationShape).name
         return when (val location = binding.location) {
             HttpLocation.HEADER -> writable { serverRenderHeaderParser(this, binding, operationShape) }
             HttpLocation.LABEL -> {
@@ -471,9 +469,7 @@ private class ServerHttpProtocolImplGenerator(
                 null
             }
             else -> {
-                logger.warning(
-                    "[rust-server-codegen] $operationShape: request deserialization does not currently support $location bindings"
-                )
+                logger.warning("[rust-server-codegen] $operationName: request parsing does not currently support $location bindings")
                 null
             }
         }
@@ -507,9 +503,9 @@ private class ServerHttpProtocolImplGenerator(
         with(writer) {
             rustTemplate(
                 """
-                    #{LazyStatic}::lazy_static! {
-                        static ref RE: #{Regex}::Regex = #{Regex}::Regex::new("$pattern").unwrap();
-                    }
+                #{LazyStatic}::lazy_static! {
+                    static ref RE: #{Regex}::Regex = #{Regex}::Regex::new("$pattern").unwrap();
+                }
                 """.trimIndent(),
                 *codegenScope,
             )
@@ -518,11 +514,11 @@ private class ServerHttpProtocolImplGenerator(
                     val deserializer = generateParseLabelFn(it)
                     rustTemplate(
                         """
-                            if let Some(m) = captures.name("${it.locationName}") {
-                                input = input.${it.member.setterName()}(
-                                    #{deserializer}(m.as_str())?
-                                );
-                            }
+                        if let Some(m) = captures.name("${it.locationName}") {
+                            input = input.${it.member.setterName()}(
+                                #{deserializer}(m.as_str())?
+                            );
+                        }
                         """.trimIndent(),
                         "deserializer" to deserializer,
                         "E" to errorShape,
@@ -542,7 +538,7 @@ private class ServerHttpProtocolImplGenerator(
         val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
         writer.rust(
             """
-                #T(request.headers())?
+            #T(request.headers())?
             """.trimIndent(),
             deserializer,
         )
@@ -563,16 +559,16 @@ private class ServerHttpProtocolImplGenerator(
         val fnName = generateParseLabelFnName(binding)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
-                "##[allow(dead_code)] pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{Error}>",
+                "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{Error}>",
                 *codegenScope,
                 "O" to output,
             ) {
                 rustTemplate(
                     """
-                        let value = #{PercentEncoding}::percent_decode_str(value)
-                            .decode_utf8()
-                            .map_err(|err| #{Error}::DeserializeLabel(err.to_string()))?;
-                        Ok(Some(value.into_owned()))
+                    let value = #{PercentEncoding}::percent_decode_str(value)
+                        .decode_utf8()
+                        .map_err(|err| #{Error}::DeserializeLabel(err.to_string()))?;
+                    Ok(Some(value.into_owned()))
                     """.trimIndent(),
                     *codegenScope,
                 )
@@ -593,18 +589,18 @@ private class ServerHttpProtocolImplGenerator(
         val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
-                "##[allow(dead_code)] pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{Error}>",
+                "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{Error}>",
                 *codegenScope,
                 "O" to output,
             ) {
                 rustTemplate(
                     """
-                        let value = #{PercentEncoding}::percent_decode_str(value)
-                            .decode_utf8()
-                            .map_err(|err| #{Error}::DeserializeLabel(err.to_string()))?;
-                        let value = #{Instant}::Instant::from_str(&value, #{format})
-                            .map_err(|err| #{Error}::DeserializeLabel(err.to_string()))?;
-                        Ok(Some(value))
+                    let value = #{PercentEncoding}::percent_decode_str(value)
+                        .decode_utf8()
+                        .map_err(|err| #{Error}::DeserializeLabel(err.to_string()))?;
+                    let value = #{Instant}::Instant::from_str(&value, #{format})
+                        .map_err(|err| #{Error}::DeserializeLabel(err.to_string()))?;
+                    Ok(Some(value))
                     """.trimIndent(),
                     *codegenScope,
                     "format" to timestampFormatType,
@@ -618,15 +614,15 @@ private class ServerHttpProtocolImplGenerator(
         val fnName = generateParseLabelFnName(binding)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
-                "##[allow(dead_code)] pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{Error}>",
+                "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{Error}>",
                 *codegenScope,
                 "O" to output,
             ) {
                 rustTemplate(
                     """
-                        let value = std::str::FromStr::from_str(value)
-                            .map_err(|_| #{Error}::DeserializeLabel(${"label parse error".dq()}.to_string()))?;
-                        Ok(Some(value))
+                    let value = std::str::FromStr::from_str(value)
+                        .map_err(|_| #{Error}::DeserializeLabel(${"label parse error".dq()}.to_string()))?;
+                    Ok(Some(value))
                     """.trimIndent(),
                     *codegenScope,
                 )

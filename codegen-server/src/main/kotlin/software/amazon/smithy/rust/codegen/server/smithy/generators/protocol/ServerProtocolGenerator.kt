@@ -27,7 +27,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 open class ServerProtocolGenerator(
     codegenContext: CodegenContext,
     /**
-     * `Protocol` contains all protocol specific information. Each Smithy protocol, e.g. RestJson, RestXml, etc. will
+     * [Protocol] contains all protocol specific information. Each Smithy protocol, e.g. RestJson, RestXml, etc. will
      * have their own implementation of the protocol interface, which defines how an input shape becomes an `http::Request`
      * and an output shape becomes an `http::Response`.
      */
@@ -55,9 +55,7 @@ open class ServerProtocolGenerator(
         operationShape: OperationShape,
         customizations: List<OperationCustomization>
     ) {
-        // impl OperationInputShape { ... }
         val operationName = symbolProvider.toSymbol(operationShape).name
-        // pub struct Operation { ... }
         operationWriter.rust(
             """
             /// Operation shape for `$operationName`.

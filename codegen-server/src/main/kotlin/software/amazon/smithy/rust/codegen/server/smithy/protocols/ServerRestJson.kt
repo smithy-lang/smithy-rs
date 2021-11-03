@@ -26,7 +26,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerial
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 
 /*
- * RestJson1 server-side protocol implementation and details. This factory generates the `ServerHttpProtocolGenerator`
+ * RestJson1 server-side protocol implementation and details. This factory generates the [ServerHttpProtocolGenerator]
  * with RestJson1 specific configurations.
  */
 class ServerRestJsonFactory : ProtocolGeneratorFactory<ServerHttpProtocolGenerator> {
@@ -54,7 +54,7 @@ class ServerRestJsonFactory : ProtocolGeneratorFactory<ServerHttpProtocolGenerat
 }
 
 /*
- * RestJson1 implementation. This class is fed to the `ServerHttpProtocolGenerator` to configure things like
+ * RestJson1 implementation. This class is fed to the [ServerHttpProtocolGenerator] to configure things like
  * wire-protocol serializers, content-type, etc.
  */
 class ServerRestJson(private val codegenContext: CodegenContext) : Protocol {

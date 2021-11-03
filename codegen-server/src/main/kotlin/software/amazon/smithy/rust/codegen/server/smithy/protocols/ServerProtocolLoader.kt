@@ -16,6 +16,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 
+typealias ServerProtocolMap = Map<ShapeId, ProtocolGeneratorFactory<ServerProtocolGenerator>>
+
 /*
  * Protocol dispatcher, responsible for protocol selection.
  */
@@ -40,6 +42,5 @@ class ServerProtocolLoader(private val supportedProtocols: ProtocolMap) {
             // TODO: support other protocols.
             RestJson1Trait.ID to ServerRestJsonFactory(),
         )
-        val Default = ServerProtocolLoader(DefaultProtocols)
     }
 }

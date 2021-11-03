@@ -32,7 +32,7 @@ class ServerServiceGenerator(
     private val index = TopDownIndex.of(context.model)
 
     /**
-     * Render Service Specific code. Code will end up in different files via `useShapeWriter`. See `SymbolVisitor.kt`
+     * Render Service Specific code. Code will end up in different files via [useShapeWriter]. See `SymbolVisitor.kt`
      * which assigns a symbol location to each shape.
      *
      */
