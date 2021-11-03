@@ -25,12 +25,6 @@ fun CodegenMode.renderUnknownVariant() = when (this) {
     is CodegenMode.Client -> true
 }
 
-const val UnknownVariantError = """
-    Cannot serialize  `${UnionGenerator.UnknownVariantName}::Unknown` for the request.
-    The `Unknown` variant is intended for responses only. It occurs when
-    an outdated client is used after a new enum variant was added on the server side.
-"""
-
 /**
  * Generate an `enum` for a Smithy Union Shape
  *
@@ -117,3 +111,8 @@ class UnionGenerator(
         const val UnknownVariantName = "Unknown"
     }
 }
+fun unknownVariantError(union: String) = """
+    Cannot serialize  `$union::${UnionGenerator.UnknownVariantName}` for the request.
+    The `Unknown` variant is intended for responses only. It occurs when
+    an outdated client is used after a new enum variant was added on the server side.
+"""
