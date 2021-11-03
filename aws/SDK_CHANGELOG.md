@@ -1,5 +1,8 @@
 vNext (Month Day, Year)
 =======================
+
+v0.0.23-alpha (November 3rd, 2021)
+==================================
 **New this week**
 - :tada: Add support for AWS Glacier (smithy-rs#801)
 - :tada: Add support for AWS Panorama
