@@ -7,7 +7,7 @@
 
 #![warn(
     missing_docs,
-    missing_crate_level_docs,
+    rustdoc::missing_crate_level_docs,
     missing_debug_implementations,
     rust_2018_idioms,
     unreachable_pub
@@ -19,6 +19,7 @@ pub mod base64;
 pub mod instant;
 pub mod primitive;
 pub mod retry;
+pub mod timeout;
 
 pub use crate::instant::Instant;
 

@@ -10,6 +10,7 @@
 //! This module contains an shared configuration representation that is agnostic from a specific service.
 
 use aws_smithy_types::retry::RetryConfig;
+use aws_smithy_types::timeout::TimeoutConfig;
 
 use crate::credentials::SharedCredentialsProvider;
 use crate::region::Region;
@@ -18,6 +19,7 @@ use crate::region::Region;
 pub struct Config {
     region: Option<Region>,
     retry_config: Option<RetryConfig>,
+    timeout_config: Option<TimeoutConfig>,
     credentials_provider: Option<SharedCredentialsProvider>,
 }
 
@@ -26,6 +28,7 @@ pub struct Config {
 pub struct Builder {
     region: Option<Region>,
     retry_config: Option<RetryConfig>,
+    timeout_config: Option<TimeoutConfig>,
     credentials_provider: Option<SharedCredentialsProvider>,
 }
 
@@ -100,6 +103,44 @@ impl Builder {
         self
     }
 
+    /// Set the [TimeoutConfig] for the builder
+    ///
+    /// # Examples
+    /// ```rust
+    /// use aws_types::config::Config;
+    /// use aws_smithy_types::timeout::TimeoutConfig;
+    ///
+    /// let timeout_config = TimeoutConfig::new().with_api_call_attempt_timeout(1.0);
+    /// let config = Config::builder().timeout_config(timeout_config).build();
+    /// ```
+    pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
+        self.set_timeout_config(Some(timeout_config));
+        self
+    }
+
+    /// Set the [TimeoutConfig] for the builder
+    ///
+    /// # Examples
+    /// ```rust
+    /// use aws_types::config::{Config, Builder};
+    /// use aws_smithy_types::timeout::TimeoutConfig;
+    ///
+    /// fn set_preferred_timeouts(builder: &mut Builder) {
+    ///     let timeout_config = TimeoutConfig::new()
+    ///         .with_api_call_attempt_timeout(2.0)
+    ///         .with_api_call_timeout(5.0);
+    ///     builder.set_timeout_config(Some(timeout_config));
+    /// }
+    ///
+    /// let mut builder = Config::builder();
+    /// set_preferred_timeouts(&mut builder);
+    /// let config = builder.build();
+    /// ```
+    pub fn set_timeout_config(&mut self, timeout_config: Option<TimeoutConfig>) -> &mut Self {
+        self.timeout_config = timeout_config;
+        self
+    }
+
     /// Set the credentials provider for the builder
     ///
     /// # Examples
@@ -157,6 +198,7 @@ impl Builder {
         Config {
             region: self.region,
             retry_config: self.retry_config,
+            timeout_config: self.timeout_config,
             credentials_provider: self.credentials_provider,
         }
     }
@@ -171,6 +213,11 @@ impl Config {
     /// Configured retry config
     pub fn retry_config(&self) -> Option<&RetryConfig> {
         self.retry_config.as_ref()
+    }
+
+    /// Configured timeout config
+    pub fn timeout_config_config(&self) -> Option<&TimeoutConfig> {
+        self.timeout_config.as_ref()
     }
 
     /// Configured credentials provider
