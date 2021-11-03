@@ -16,8 +16,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGe
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 
-typealias ServerProtocolMap = Map<ShapeId, ProtocolGeneratorFactory<ServerProtocolGenerator>>
-
 /*
  * Protocol dispatcher, responsible for protocol selection.
  */
