@@ -106,6 +106,11 @@ pub struct TimeoutConfigBuilder {
 }
 
 impl TimeoutConfigBuilder {
+    /// Create a new `TimeoutConfigBuilder`
+    pub fn new() -> Self {
+        Default::default()
+    }
+
     /// Sets the connect timeout if `Some(f32)` is passed. Unsets the timeout when `None` is passed.
     /// Timeout must be a non-negative number.
     pub fn set_connect_timeout(&mut self, connect_timeout: Option<f32>) -> &mut Self {
@@ -271,5 +276,33 @@ impl Display for TimeoutConfigError {
                 )
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TimeoutConfigBuilder;
+
+    #[test]
+    fn retry_config_builder_merge_with_favors_self_values_over_other_values() {
+        let self_builder = TimeoutConfigBuilder::new()
+            .connect_timeout(1.0)
+            .read_timeout(1.0)
+            .tls_negotiation_timeout(1.0)
+            .api_call_timeout(1.0)
+            .api_call_attempt_timeout(1.0);
+        let other_builder = TimeoutConfigBuilder::new()
+            .connect_timeout(2.0)
+            .read_timeout(2.0)
+            .tls_negotiation_timeout(2.0)
+            .api_call_timeout(2.0)
+            .api_call_attempt_timeout(2.0);
+        let timeout_config = self_builder.merge_with(other_builder).build();
+
+        assert_eq!(timeout_config.connect_timeout(), Some(1.0));
+        assert_eq!(timeout_config.read_timeout(), Some(1.0));
+        assert_eq!(timeout_config.tls_negotiation_timeout(), Some(1.0));
+        assert_eq!(timeout_config.api_call_timeout(), Some(1.0));
+        assert_eq!(timeout_config.api_call_attempt_timeout(), Some(1.0));
     }
 }
