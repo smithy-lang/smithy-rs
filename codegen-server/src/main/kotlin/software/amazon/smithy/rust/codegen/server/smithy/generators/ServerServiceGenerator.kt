@@ -7,13 +7,13 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.CombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.TopLevelErrorGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 
 /**
@@ -24,7 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSu
  */
 class ServerServiceGenerator(
     private val rustCrate: RustCrate,
-    private val protocolGenerator: ServerProtocolGenerator,
+    private val protocolGenerator: ProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
     private val context: CodegenContext,
     private val decorator: RustCodegenDecorator,

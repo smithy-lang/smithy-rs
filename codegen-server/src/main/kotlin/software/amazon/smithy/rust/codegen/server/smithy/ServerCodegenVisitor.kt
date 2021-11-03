@@ -21,7 +21,6 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
@@ -35,6 +34,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.transformers.AddErrorMessage
@@ -62,8 +62,8 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     private val fileManifest = context.fileManifest
     private val model: Model
     private val codegenContext: CodegenContext
-    private val protocolGeneratorFactory: ProtocolGeneratorFactory<ServerProtocolGenerator>
-    private val protocolGenerator: ServerProtocolGenerator
+    private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
+    private val protocolGenerator: ProtocolGenerator
 
     init {
         val symbolVisitorConfig =

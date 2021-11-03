@@ -12,7 +12,7 @@ import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.Trait
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 
@@ -25,7 +25,7 @@ class ServerProtocolLoader(private val supportedProtocols: ProtocolMap) {
     fun protocolFor(
         model: Model,
         serviceShape: ServiceShape
-    ): Pair<ShapeId, ProtocolGeneratorFactory<ServerProtocolGenerator>> {
+    ): Pair<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator>> {
         val protocols: MutableMap<ShapeId, Trait> = ServiceIndex.of(model).getProtocols(serviceShape)
         val matchingProtocols =
             protocols.keys.mapNotNull { protocolId -> supportedProtocols[protocolId]?.let { protocolId to it } }
@@ -34,7 +34,7 @@ class ServerProtocolLoader(private val supportedProtocols: ProtocolMap) {
         }
         val pair = matchingProtocols.first()
         // TODO: is there a better way than an unsafe cast here?
-        return Pair(pair.first, pair.second as ProtocolGeneratorFactory<ServerProtocolGenerator>)
+        return Pair(pair.first, pair.second)
     }
 
     companion object {
