@@ -216,7 +216,7 @@ pub fn expect_timestamp_or_null(
 ) -> Result<Option<Instant>, Error> {
     Ok(match timestamp_format {
         Format::EpochSeconds => {
-            expect_number_or_null(token)?.map(|v| Instant::from_f64(v.to_f64()))
+            expect_number_or_null(token)?.map(|v| Instant::from_secs_f64(v.to_f64()))
         }
         Format::DateTime | Format::HttpDate => expect_string_or_null(token)?
             .map(|v| Instant::from_str(v.as_escaped_str(), timestamp_format))
@@ -578,18 +578,18 @@ pub mod test {
             expect_timestamp_or_null(value_null(0), Format::HttpDate)
         );
         assert_eq!(
-            Ok(Some(Instant::from_f64(2048.0))),
+            Ok(Some(Instant::from_secs_f64(2048.0))),
             expect_timestamp_or_null(value_number(0, Number::Float(2048.0)), Format::EpochSeconds)
         );
         assert_eq!(
-            Ok(Some(Instant::from_f64(1445412480.0))),
+            Ok(Some(Instant::from_secs_f64(1445412480.0))),
             expect_timestamp_or_null(
                 value_string(0, "Wed, 21 Oct 2015 07:28:00 GMT"),
                 Format::HttpDate
             )
         );
         assert_eq!(
-            Ok(Some(Instant::from_f64(1445412480.0))),
+            Ok(Some(Instant::from_secs_f64(1445412480.0))),
             expect_timestamp_or_null(value_string(0, "2015-10-21T07:28:00Z"), Format::DateTime)
         );
         let err = Error::new(

@@ -199,9 +199,7 @@ mod value {
                 TYPE_TIMESTAMP => {
                     if buffer.remaining() >= size_of::<i64>() {
                         let epoch_millis = buffer.get_i64();
-                        Ok(HeaderValue::Timestamp(Instant::from_epoch_millis(
-                            epoch_millis,
-                        )))
+                        Ok(HeaderValue::Timestamp(Instant::from_millis(epoch_millis)))
                     } else {
                         Err(Error::InvalidHeaderValue)
                     }
@@ -244,7 +242,7 @@ mod value {
                 Timestamp(time) => {
                     buffer.put_u8(TYPE_TIMESTAMP);
                     buffer.put_i64(
-                        time.to_epoch_millis()
+                        time.to_millis()
                             .map_err(|_| Error::TimestampValueTooLarge(*time))?,
                     );
                 }
@@ -273,7 +271,7 @@ mod value {
                 }
                 TYPE_STRING => HeaderValue::String(StrBytes::from(String::arbitrary(unstruct)?)),
                 TYPE_TIMESTAMP => {
-                    HeaderValue::Timestamp(Instant::from_epoch_seconds(i64::arbitrary(unstruct)?))
+                    HeaderValue::Timestamp(Instant::from_secs(i64::arbitrary(unstruct)?))
                 }
                 TYPE_UUID => HeaderValue::Uuid(u128::arbitrary(unstruct)?),
                 _ => unreachable!(),
@@ -639,7 +637,7 @@ mod message_tests {
                 Header::new("str", HeaderValue::String("some str".into())),
                 Header::new(
                     "time",
-                    HeaderValue::Timestamp(Instant::from_epoch_seconds(5_000_000))
+                    HeaderValue::Timestamp(Instant::from_secs(5_000_000))
                 ),
                 Header::new(
                     "uuid",
@@ -667,7 +665,7 @@ mod message_tests {
             .add_header(Header::new("str", HeaderValue::String("some str".into())))
             .add_header(Header::new(
                 "time",
-                HeaderValue::Timestamp(Instant::from_epoch_seconds(5_000_000)),
+                HeaderValue::Timestamp(Instant::from_secs(5_000_000)),
             ))
             .add_header(Header::new(
                 "uuid",

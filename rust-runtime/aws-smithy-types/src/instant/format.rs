@@ -3,25 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;
 
 const NANOS_PER_SECOND: u32 = 1_000_000_000;
 
 #[non_exhaustive]
-#[derive(Debug, Eq, PartialEq)]
-pub enum DateParseError {
-    Invalid(&'static str),
+#[derive(Debug)]
+pub enum InstantParseError {
+    Invalid(Cow<'static, str>),
     IntParseError,
 }
 
-impl Error for DateParseError {}
+impl Error for InstantParseError {}
 
-impl fmt::Display for DateParseError {
+impl fmt::Display for InstantParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use DateParseError::*;
+        use InstantParseError::*;
         match self {
-            Invalid(msg) => write!(f, "invalid date: {}", msg),
+            Invalid(msg) => write!(f, "invalid instant: {}", msg),
             IntParseError => write!(f, "failed to parse int"),
         }
     }
@@ -35,7 +36,7 @@ fn remove_trailing_zeros(string: &mut String) {
 
 pub(crate) mod epoch_seconds {
     use super::remove_trailing_zeros;
-    use super::DateParseError;
+    use super::InstantParseError;
     use crate::Instant;
     use std::str::FromStr;
 
@@ -51,21 +52,25 @@ pub(crate) mod epoch_seconds {
     }
 
     /// Parses the Smithy epoch seconds date-time format into an `Instant`.
-    pub(crate) fn parse(value: &str) -> Result<Instant, DateParseError> {
+    pub(crate) fn parse(value: &str) -> Result<Instant, InstantParseError> {
         let mut parts = value.splitn(2, '.');
         let (mut whole, mut decimal) = (0i64, 0u32);
         if let Some(whole_str) = parts.next() {
-            whole = <i64>::from_str(whole_str).map_err(|_| DateParseError::IntParseError)?;
+            whole = <i64>::from_str(whole_str).map_err(|_| InstantParseError::IntParseError)?;
         }
         if let Some(decimal_str) = parts.next() {
             if decimal_str.starts_with('+') || decimal_str.starts_with('-') {
-                return Err(DateParseError::Invalid("invalid epoch-seconds timestamp"));
+                return Err(InstantParseError::Invalid(
+                    "invalid epoch-seconds timestamp".into(),
+                ));
             }
             if decimal_str.len() > 9 {
-                return Err(DateParseError::Invalid("decimal is longer than 9 digits"));
+                return Err(InstantParseError::Invalid(
+                    "decimal is longer than 9 digits".into(),
+                ));
             }
             let missing_places = 9 - decimal_str.len() as isize;
-            decimal = <u32>::from_str(decimal_str).map_err(|_| DateParseError::IntParseError)?;
+            decimal = <u32>::from_str(decimal_str).map_err(|_| InstantParseError::IntParseError)?;
             for _ in 0..missing_places {
                 decimal *= 10;
             }
@@ -76,10 +81,10 @@ pub(crate) mod epoch_seconds {
 
 pub(crate) mod http_date {
     use super::remove_trailing_zeros;
-    use crate::instant::format::{DateParseError, NANOS_PER_SECOND};
+    use crate::instant::format::{InstantParseError, NANOS_PER_SECOND};
     use crate::Instant;
-    use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike, Weekday};
     use std::str::FromStr;
+    use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time, UtcOffset, Weekday};
 
     // This code is taken from https://github.com/pyfisch/httpdate and modified under an
     // Apache 2.0 License. Modifications:
@@ -97,39 +102,40 @@ pub(crate) mod http_date {
     /// - If subsecond nanos are 0, no fractional seconds are added
     /// - If subsecond nanos are nonzero, 3 digits of fractional seconds are added
     pub(crate) fn format(instant: &Instant) -> String {
-        let structured = instant.to_chrono_internal();
+        let structured = OffsetDateTime::from_unix_timestamp_nanos(instant.as_nanos())
+            .expect("i64 -> i128 -> OffsetDateTime should always succeed");
         let weekday = match structured.weekday() {
-            Weekday::Mon => "Mon",
-            Weekday::Tue => "Tue",
-            Weekday::Wed => "Wed",
-            Weekday::Thu => "Thu",
-            Weekday::Fri => "Fri",
-            Weekday::Sat => "Sat",
-            Weekday::Sun => "Sun",
+            Weekday::Monday => "Mon",
+            Weekday::Tuesday => "Tue",
+            Weekday::Wednesday => "Wed",
+            Weekday::Thursday => "Thu",
+            Weekday::Friday => "Fri",
+            Weekday::Saturday => "Sat",
+            Weekday::Sunday => "Sun",
         };
         let month = match structured.month() {
-            1 => "Jan",
-            2 => "Feb",
-            3 => "Mar",
-            4 => "Apr",
-            5 => "May",
-            6 => "Jun",
-            7 => "Jul",
-            8 => "Aug",
-            9 => "Sep",
-            10 => "Oct",
-            11 => "Nov",
-            12 => "Dec",
-            _ => unreachable!(),
+            Month::January => "Jan",
+            Month::February => "Feb",
+            Month::March => "Mar",
+            Month::April => "Apr",
+            Month::May => "May",
+            Month::June => "Jun",
+            Month::July => "Jul",
+            Month::August => "Aug",
+            Month::September => "Sep",
+            Month::October => "Oct",
+            Month::November => "Nov",
+            Month::December => "Dec",
         };
         let mut out = String::with_capacity(32);
         fn push_digit(out: &mut String, digit: u8) {
+            debug_assert!(digit < 10);
             out.push((b'0' + digit as u8) as char);
         }
 
         out.push_str(weekday);
         out.push_str(", ");
-        let day = structured.date().day() as u8;
+        let day = structured.day();
         push_digit(&mut out, day / 10);
         push_digit(&mut out, day % 10);
 
@@ -155,7 +161,7 @@ pub(crate) mod http_date {
 
         out.push(' ');
 
-        let hour = structured.time().hour() as u8;
+        let hour = structured.hour();
 
         // Extract the individual digits from hour
         push_digit(&mut out, hour / 10);
@@ -164,23 +170,23 @@ pub(crate) mod http_date {
         out.push(':');
 
         // Extract the individual digits from minute
-        let minute = structured.minute() as u8;
+        let minute = structured.minute();
         push_digit(&mut out, minute / 10);
         push_digit(&mut out, minute % 10);
 
         out.push(':');
 
-        let second = structured.second() as u8;
+        let second = structured.second();
         push_digit(&mut out, second / 10);
         push_digit(&mut out, second % 10);
 
         // If non-zero nanos, push a 3-digit fractional second
-        let nanos = structured.timestamp_subsec_nanos();
-        if nanos / (NANOS_PER_SECOND / 1000) != 0 {
+        let millis = structured.millisecond();
+        if millis != 0 {
             out.push('.');
-            push_digit(&mut out, (nanos / (NANOS_PER_SECOND / 10)) as u8);
-            push_digit(&mut out, (nanos / (NANOS_PER_SECOND / 100) % 10) as u8);
-            push_digit(&mut out, (nanos / (NANOS_PER_SECOND / 1000) % 10) as u8);
+            push_digit(&mut out, (millis / 100 % 10) as u8);
+            push_digit(&mut out, (millis / 10 % 10) as u8);
+            push_digit(&mut out, (millis % 10) as u8);
             remove_trailing_zeros(&mut out);
         }
 
@@ -199,23 +205,23 @@ pub(crate) mod http_date {
     /// Ok: "Mon, 16 Dec 2019 23:48:18.123 GMT"
     /// Ok: "Mon, 16 Dec 2019 23:48:18.12 GMT"
     /// Not Ok: "Mon, 16 Dec 2019 23:48:18.1234 GMT"
-    pub(crate) fn parse(s: &str) -> Result<Instant, DateParseError> {
+    pub(crate) fn parse(s: &str) -> Result<Instant, InstantParseError> {
         if !s.is_ascii() {
-            return Err(DateParseError::Invalid("not ascii"));
+            return Err(InstantParseError::Invalid("date-time must be ASCII".into()));
         }
         let x = s.trim().as_bytes();
         parse_imf_fixdate(x)
     }
 
-    pub(crate) fn read(s: &str) -> Result<(Instant, &str), DateParseError> {
+    pub(crate) fn read(s: &str) -> Result<(Instant, &str), InstantParseError> {
         if !s.is_ascii() {
-            return Err(DateParseError::Invalid("Date must be valid ascii"));
+            return Err(InstantParseError::Invalid("date-time must be ASCII".into()));
         }
         let (first_date, rest) = match find_subsequence(s.as_bytes(), b" GMT") {
             // split_at is correct because we asserted that this date is only valid ASCII so the byte index is
             // the same as the char index
             Some(idx) => s.split_at(idx),
-            None => return Err(DateParseError::Invalid("Date did not end in GMT")),
+            None => return Err(InstantParseError::Invalid("date-time is not GMT".into())),
         };
         Ok((parse(first_date)?, rest))
     }
@@ -227,7 +233,7 @@ pub(crate) mod http_date {
             .map(|idx| idx + needle.len())
     }
 
-    fn parse_imf_fixdate(s: &[u8]) -> Result<Instant, DateParseError> {
+    fn parse_imf_fixdate(s: &[u8]) -> Result<Instant, InstantParseError> {
         // Example: `Sun, 06 Nov 1994 08:49:37 GMT`
         if s.len() < 29
             || s.len() > 33
@@ -236,7 +242,9 @@ pub(crate) mod http_date {
             || s[19] != b':'
             || s[22] != b':'
         {
-            return Err(DateParseError::Invalid("incorrectly shaped string"));
+            return Err(InstantParseError::Invalid(
+                "incorrectly shaped string".into(),
+            ));
         }
         let nanos: u32 = match &s[25] {
             b'.' => {
@@ -245,7 +253,9 @@ pub(crate) mod http_date {
                 let fraction_slice = &s[26..s.len() - 4];
                 if fraction_slice.len() > 3 {
                     // Only thousandths are supported
-                    return Err(DateParseError::Invalid("too much precision"));
+                    return Err(InstantParseError::Invalid(
+                        "Smithy http-date only supports millisecond precision".into(),
+                    ));
                 }
                 let fraction: u32 = parse_slice(fraction_slice)?;
                 // We need to convert the fractional second to nanoseconds, so we need to scale
@@ -254,41 +264,55 @@ pub(crate) mod http_date {
                 fraction * (NANOS_PER_SECOND / multiplier[fraction_slice.len() - 1])
             }
             b' ' => 0,
-            _ => return Err(DateParseError::Invalid("incorrectly shaped string")),
+            _ => {
+                return Err(InstantParseError::Invalid(
+                    "incorrectly shaped string".into(),
+                ))
+            }
         };
 
         let hours = parse_slice(&s[17..19])?;
-
         let minutes = parse_slice(&s[20..22])?;
         let seconds = parse_slice(&s[23..25])?;
-        let time = NaiveTime::from_hms_nano(hours, minutes, seconds, nanos);
+        let time = Time::from_hms_nano(hours, minutes, seconds, nanos).map_err(|err| {
+            InstantParseError::Invalid(format!("time components are out of range: {}", err).into())
+        })?;
+
         let month = match &s[7..12] {
-            b" Jan " => 1,
-            b" Feb " => 2,
-            b" Mar " => 3,
-            b" Apr " => 4,
-            b" May " => 5,
-            b" Jun " => 6,
-            b" Jul " => 7,
-            b" Aug " => 8,
-            b" Sep " => 9,
-            b" Oct " => 10,
-            b" Nov " => 11,
-            b" Dec " => 12,
-            _ => return Err(DateParseError::Invalid("invalid month")),
+            b" Jan " => Month::January,
+            b" Feb " => Month::February,
+            b" Mar " => Month::March,
+            b" Apr " => Month::April,
+            b" May " => Month::May,
+            b" Jun " => Month::June,
+            b" Jul " => Month::July,
+            b" Aug " => Month::August,
+            b" Sep " => Month::September,
+            b" Oct " => Month::October,
+            b" Nov " => Month::November,
+            b" Dec " => Month::December,
+            month => {
+                return Err(InstantParseError::Invalid(
+                    format!(
+                        "invalid month: {}",
+                        std::str::from_utf8(month).unwrap_or_default()
+                    )
+                    .into(),
+                ))
+            }
         };
         let year = parse_slice(&s[12..16])?;
         let day = parse_slice(&s[5..7])?;
-        let date = NaiveDate::from_ymd(year, month, day);
-        let datetime = NaiveDateTime::new(date, time);
+        let date = Date::from_calendar_date(year, month, day).map_err(|err| {
+            InstantParseError::Invalid(format!("date components are out of range: {}", err).into())
+        })?;
+        let date_time = PrimitiveDateTime::new(date, time).assume_offset(UtcOffset::UTC);
 
-        Ok(Instant::from_secs_and_nanos(
-            datetime.timestamp(),
-            datetime.timestamp_subsec_nanos(),
-        ))
+        Ok(Instant::from_nanos(date_time.unix_timestamp_nanos())
+            .expect("this date format cannot produce out of range instants"))
     }
 
-    fn parse_slice<T>(ascii_slice: &[u8]) -> Result<T, DateParseError>
+    fn parse_slice<T>(ascii_slice: &[u8]) -> Result<T, InstantParseError>
     where
         T: FromStr,
     {
@@ -296,39 +320,31 @@ pub(crate) mod http_date {
             std::str::from_utf8(ascii_slice).expect("should only be called on ascii strings");
         as_str
             .parse::<T>()
-            .map_err(|_| DateParseError::IntParseError)
+            .map_err(|_| InstantParseError::IntParseError)
     }
 }
 
 pub(crate) mod rfc3339 {
-    use chrono::format;
-
-    use crate::instant::format::DateParseError;
+    use crate::instant::format::InstantParseError;
     use crate::Instant;
-    use chrono::{Datelike, Timelike};
+    use time::format_description::well_known::Rfc3339;
+    use time::OffsetDateTime;
 
     // OK: 1985-04-12T23:20:50.52Z
     // OK: 1985-04-12T23:20:50Z
     //
     // Timezones not supported:
     // Not OK: 1985-04-12T23:20:50-02:00
-    pub(crate) fn parse(s: &str) -> Result<Instant, DateParseError> {
-        let mut date = format::Parsed::new();
-        let format = format::StrftimeItems::new("%Y-%m-%dT%H:%M:%S%.fZ");
-        // TODO: it may be helpful for debugging to keep these errors around
-        chrono::format::parse(&mut date, s, format)
-            .map_err(|_| DateParseError::Invalid("invalid rfc3339 date"))?;
-        let utc_date = date
-            .to_naive_datetime_with_offset(0)
-            .map_err(|_| DateParseError::Invalid("invalid date"))?;
-        Ok(Instant::from_secs_and_nanos(
-            utc_date.timestamp(),
-            utc_date.timestamp_subsec_nanos(),
-        ))
+    pub(crate) fn parse(s: &str) -> Result<Instant, InstantParseError> {
+        let date_time = OffsetDateTime::parse(s, &Rfc3339).map_err(|err| {
+            InstantParseError::Invalid(format!("invalid RFC-3339 date-time: {}", err).into())
+        })?;
+        Ok(Instant::from_nanos(date_time.unix_timestamp_nanos())
+            .expect("this date format cannot produce out of range instants"))
     }
 
     /// Read 1 RFC-3339 date from &str and return the remaining str
-    pub(crate) fn read(s: &str) -> Result<(Instant, &str), DateParseError> {
+    pub(crate) fn read(s: &str) -> Result<(Instant, &str), InstantParseError> {
         let delim = s.find('Z').map(|idx| idx + 1).unwrap_or_else(|| s.len());
         let (head, rest) = s.split_at(delim);
         Ok((parse(head)?, &rest))
@@ -337,21 +353,24 @@ pub(crate) mod rfc3339 {
     /// Format an [Instant] in the RFC-3339 date format
     pub(crate) fn format(instant: &Instant) -> String {
         use std::fmt::Write;
-        let (year, month, day, hour, minute, second, nanos) = {
-            let s = instant.to_chrono_internal();
+        let (year, month, day, hour, minute, second, micros) = {
+            // TODO(time): make format() fallible, and error below
+            let s = OffsetDateTime::from_unix_timestamp_nanos(instant.as_nanos())
+                .expect("i64 -> i128 -> OffsetDateTime should always succeed");
             (
                 s.year(),
-                s.month(),
+                u8::from(s.month()),
                 s.day(),
-                s.time().hour(),
-                s.time().minute(),
-                s.time().second(),
-                s.timestamp_subsec_nanos(),
+                s.hour(),
+                s.minute(),
+                s.second(),
+                s.microsecond(),
             )
         };
 
         // This is stated in the assumptions for RFC-3339. ISO-8601 allows for years
         // between -99,999 and 99,999 inclusive, but RFC-3339 is bound between 0 and 9,999.
+        // TODO(time): make format() fallible, and error rather than asserting
         assert!(
             (0..=9_999).contains(&year),
             "years must be between 0 and 9,999 in RFC-3339"
@@ -364,17 +383,15 @@ pub(crate) mod rfc3339 {
             year, month, day, hour, minute, second
         )
         .unwrap();
-        format_subsecond_fraction(&mut out, nanos);
+        format_subsecond_fraction(&mut out, micros);
         out.push('Z');
         out
     }
 
     /// Formats sub-second fraction for RFC-3339 (including the '.').
-    /// Expects to be called with a number of `nanos` between 0 and 999_999_999 inclusive.
-    /// The formatted fraction will be truncated to microseconds.
-    fn format_subsecond_fraction(into: &mut String, nanos: u32) {
-        debug_assert!(nanos < 1_000_000_000);
-        let micros = nanos / 1000;
+    /// Expects to be called with a number of `micros` between 0 and 999_999 inclusive.
+    fn format_subsecond_fraction(into: &mut String, micros: u32) {
+        debug_assert!(micros < 1_000_000);
         if micros > 0 {
             into.push('.');
             let (mut remaining, mut place) = (micros, 100_000);
@@ -452,7 +469,7 @@ mod tests {
 
     fn parse_test<F>(test_cases: &[TestCase], parse: F)
     where
-        F: Fn(&str) -> Result<Instant, DateParseError>,
+        F: Fn(&str) -> Result<Instant, InstantParseError>,
     {
         for test_case in test_cases {
             let expected = test_case.time();
@@ -539,26 +556,26 @@ mod tests {
     #[test]
     fn http_date_too_much_fraction() {
         let fractional = "Mon, 16 Dec 2019 23:48:18.1212 GMT";
-        assert_eq!(
+        assert!(matches!(
             http_date::parse(fractional),
-            Err(DateParseError::Invalid("incorrectly shaped string"))
-        );
+            Err(InstantParseError::Invalid(_))
+        ));
     }
 
     #[test]
     fn http_date_bad_fraction() {
         let fractional = "Mon, 16 Dec 2019 23:48:18. GMT";
-        assert_eq!(
+        assert!(matches!(
             http_date::parse(fractional),
-            Err(DateParseError::IntParseError)
-        );
+            Err(InstantParseError::IntParseError)
+        ));
     }
 
     #[test]
     fn http_date_read_date() {
         let fractional = "Mon, 16 Dec 2019 23:48:18.123 GMT,some more stuff";
         let ts = 1576540098;
-        let expected = Instant::from_fractional_seconds(ts, 0.123);
+        let expected = Instant::from_fractional_secs(ts, 0.123);
         let (actual, rest) = http_date::read(fractional).expect("valid");
         assert_eq!(rest, ",some more stuff");
         assert_eq!(expected, actual);

@@ -21,15 +21,11 @@ pub(crate) mod util {
     ) -> credentials::Result {
         let sts_credentials = sts_credentials
             .ok_or_else(|| CredentialsError::unhandled("STS credentials must be defined"))?;
-        let expiration = sts_credentials
-            .expiration
-            .ok_or_else(|| CredentialsError::unhandled("missing expiration"))?;
-        let expiration = expiration.to_system_time().ok_or_else(|| {
-            CredentialsError::unhandled(format!(
-                "expiration is before unix epoch: {:?}",
-                &expiration
-            ))
-        })?;
+        let expiration = SystemTime::from(
+            sts_credentials
+                .expiration
+                .ok_or_else(|| CredentialsError::unhandled("missing expiration"))?,
+        );
         Ok(AwsCredentials::new(
             sts_credentials
                 .access_key_id

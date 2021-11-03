@@ -167,14 +167,11 @@ pub(crate) fn parse_json_credentials(
                 session_token.ok_or(InvalidJsonCredentials::MissingField("Token"))?;
             let expiration =
                 expiration.ok_or(InvalidJsonCredentials::MissingField("Expiration"))?;
-            let expiration = Instant::from_str(expiration.as_ref(), Format::DateTime)
-                .map_err(|err| {
+            let expiration = SystemTime::from(
+                Instant::from_str(expiration.as_ref(), Format::DateTime).map_err(|err| {
                     InvalidJsonCredentials::Other(format!("invalid date: {}", err).into())
-                })?
-                .to_system_time()
-                .ok_or_else(|| {
-                    InvalidJsonCredentials::Other("invalid expiration (prior to unix epoch)".into())
-                })?;
+                })?,
+            );
             Ok(JsonCredentials::RefreshableCredentials {
                 access_key_id,
                 secret_access_key,

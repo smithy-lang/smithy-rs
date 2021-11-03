@@ -327,7 +327,7 @@ mod tests {
 
         writer
             .prefix("epoch_seconds")
-            .instant(&Instant::from_f64(5.2), Format::EpochSeconds);
+            .instant(&Instant::from_secs_f64(5.2), Format::EpochSeconds);
         writer.prefix("date_time").instant(
             &Instant::from_str("2021-05-24T15:34:50.123Z", Format::DateTime).unwrap(),
             Format::DateTime,

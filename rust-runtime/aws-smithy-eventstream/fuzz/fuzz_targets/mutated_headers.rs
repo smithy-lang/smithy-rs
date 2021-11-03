@@ -35,7 +35,7 @@ fn mutate(data: &mut [u8], size: usize, max_size: usize) -> usize {
             .add_header(Header::new("str", HeaderValue::String("some str".into())))
             .add_header(Header::new(
                 "time",
-                HeaderValue::Timestamp(Instant::from_epoch_seconds(5_000_000_000)),
+                HeaderValue::Timestamp(Instant::from_secs(5_000_000_000)),
             ))
             .add_header(Header::new(
                 "uuid",

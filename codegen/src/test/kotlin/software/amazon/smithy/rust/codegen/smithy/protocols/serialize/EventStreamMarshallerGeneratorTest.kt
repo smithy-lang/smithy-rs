@@ -171,7 +171,7 @@ class EventStreamMarshallerGeneratorTest {
                     .long(9_000_000_000i64)
                     .short(16_000i16)
                     .string("test")
-                    .timestamp(Instant::from_epoch_seconds(5))
+                    .timestamp(Instant::from_secs(5))
                     .build()
                 );
                 let result = ${writer.format(generator.render())}().marshall(event);
@@ -187,7 +187,7 @@ class EventStreamMarshallerGeneratorTest {
                     .add_header(Header::new("long", HeaderValue::Int64(9_000_000_000i64)))
                     .add_header(Header::new("short", HeaderValue::Int16(16_000i16)))
                     .add_header(Header::new("string", HeaderValue::String("test".into())))
-                    .add_header(Header::new("timestamp", HeaderValue::Timestamp(Instant::from_epoch_seconds(5))));
+                    .add_header(Header::new("timestamp", HeaderValue::Timestamp(Instant::from_secs(5))));
                 assert_eq!(expected_message, actual_message);
                 """,
             )

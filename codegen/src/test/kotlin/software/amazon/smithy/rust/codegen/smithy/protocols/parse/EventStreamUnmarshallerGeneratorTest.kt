@@ -86,15 +86,15 @@ class EventStreamUnmarshallerGeneratorTest {
             writer.unitTest(
                 name = "message_with_blob",
                 test = """
-                let message = msg("event", "MessageWithBlob", "application/octet-stream", b"hello, world!");
-                let result = ${writer.format(generator.render())}().unmarshall(&message);
-                assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                assert_eq!(
-                    TestStream::MessageWithBlob(
-                        MessageWithBlob::builder().data(Blob::new(&b"hello, world!"[..])).build()
-                    ),
-                    expect_event(result.unwrap())
-                );
+                    let message = msg("event", "MessageWithBlob", "application/octet-stream", b"hello, world!");
+                    let result = ${writer.format(generator.render())}().unmarshall(&message);
+                    assert!(result.is_ok(), "expected ok, got: {:?}", result);
+                    assert_eq!(
+                        TestStream::MessageWithBlob(
+                            MessageWithBlob::builder().data(Blob::new(&b"hello, world!"[..])).build()
+                        ),
+                        expect_event(result.unwrap())
+                    );
                 """,
             )
 
@@ -102,14 +102,14 @@ class EventStreamUnmarshallerGeneratorTest {
                 writer.unitTest(
                     "unknown_message",
                     """
-                let message = msg("event", "NewUnmodeledMessageType", "application/octet-stream", b"hello, world!");
-                let result = ${writer.format(generator.render())}().unmarshall(&message);
-                assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                assert_eq!(
-                    TestStream::Unknown,
-                    expect_event(result.unwrap())
-                );
-                """,
+                    let message = msg("event", "NewUnmodeledMessageType", "application/octet-stream", b"hello, world!");
+                    let result = ${writer.format(generator.render())}().unmarshall(&message);
+                    assert!(result.is_ok(), "expected ok, got: {:?}", result);
+                    assert_eq!(
+                        TestStream::Unknown,
+                        expect_event(result.unwrap())
+                    );
+                    """,
                 )
             }
 
@@ -180,7 +180,7 @@ class EventStreamUnmarshallerGeneratorTest {
                     .add_header(Header::new("long", HeaderValue::Int64(9_000_000_000i64)))
                     .add_header(Header::new("short", HeaderValue::Int16(16_000i16)))
                     .add_header(Header::new("string", HeaderValue::String("test".into())))
-                    .add_header(Header::new("timestamp", HeaderValue::Timestamp(Instant::from_epoch_seconds(5))));
+                    .add_header(Header::new("timestamp", HeaderValue::Timestamp(Instant::from_secs(5))));
                 let result = ${writer.format(generator.render())}().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
@@ -192,7 +192,7 @@ class EventStreamUnmarshallerGeneratorTest {
                         .long(9_000_000_000i64)
                         .short(16_000i16)
                         .string("test")
-                        .timestamp(Instant::from_epoch_seconds(5))
+                        .timestamp(Instant::from_secs(5))
                         .build()
                     ),
                     expect_event(result.unwrap())
