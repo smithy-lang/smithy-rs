@@ -51,9 +51,9 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import java.util.logging.Logger
 
 /*
- * Implement operations input parsing and output serialization. Protocols can plug their own implementations
- * and overrides by creating a protocol factory inheriting from this class and feeding it to the ServerProtocolLoader.
- * See ServerRestJson.kt for more info.
+ * Implement operations' input parsing and output serialization. Protocols can plug their own implementations
+ * and overrides by creating a protocol factory inheriting from this class and feeding it to the `ServerProtocolLoader`.
+ * See `ServerRestJson.kt` for more info.
  */
 class ServerHttpProtocolGenerator(
     codegenContext: CodegenContext,
@@ -66,7 +66,7 @@ class ServerHttpProtocolGenerator(
 )
 
 /*
- * Class used to expose Rust server traits types. Is is used in ServerHttpProtocolGenerator and ServerProtocolTestGenerator.
+ * Class used to expose Rust server traits types. Is is used in `ServerHttpProtocolGenerator` and `ServerProtocolTestGenerator`.
  */
 class HttpServerTraits {
     fun parseHttpRequest(runtimeConfig: RuntimeConfig) = RuntimeType(
@@ -113,7 +113,7 @@ private class ServerHttpProtocolImplGenerator(
         "SerializeHttpResponse" to httpServerTraits.serializeHttpResponse(runtimeConfig),
         "SerializeHttpError" to httpServerTraits.serializeHttpError(runtimeConfig),
         "JsonObjectWriter" to smithyJson.member("serialize::JsonObjectWriter"),
-        "Http" to RuntimeType.http,
+        "http" to RuntimeType.http,
         "Bytes" to RuntimeType.Bytes,
         "Error" to errorType.member("Error"),
         "LazyStatic" to CargoDependency("lazy_static", CratesIo("1.4")).asType(),
@@ -144,9 +144,9 @@ private class ServerHttpProtocolImplGenerator(
 
     /*
      * Generation of non-streaming traits. A non-streaming trait requires the HTTP body to be fully read in
-     * memory before persing or deserialization. From a server perspective we need a way to parse a HTTP
+     * memory before parsing or deserialization. From a server perspective we need a way to parse an HTTP
      * request from `Bytes` and serialize a HTTP response to `Bytes`. These traits are the public entrypoint
-     * of the ser/de logic of smithy-rs server.
+     * of the ser/de logic of the smithy-rs server.
      */
     private fun RustWriter.renderNonStreamingTraits(
         operationName: String?,
@@ -156,7 +156,7 @@ private class ServerHttpProtocolImplGenerator(
     ) {
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         val successCode = httpBindingResolver.httpTrait(operationShape).code
-        /* Implement ParseStrictResponse from client codegen to be used inside tests */
+        /* Implement `ParseStrictResponse` from client codegen to be used inside tests */
         rustTemplate(
             """
             impl #{ParseStrictResponse} for $operationName {
@@ -175,7 +175,7 @@ private class ServerHttpProtocolImplGenerator(
             "parse_error" to httpBoundProtocolGenerator.parseError(operationShape),
             "parse_response" to httpBoundProtocolGenerator.parseResponse(operationShape)
         )
-        /* Implement ParseHttpRequest for non streaming types. This is done by only implementing `parse_loaded` */
+        /* Implement `ParseHttpRequest` for non streaming types. This is done by only implementing `parse_loaded` */
         rustTemplate(
             """
             impl #{ParseHttpRequest} for $operationName {
@@ -191,7 +191,7 @@ private class ServerHttpProtocolImplGenerator(
             "I" to inputSymbol,
             "parse_request" to serverParseRequest(operationShape)
         )
-        /* Implement SerializeHttpResponse for non streaming types. This is done by only implementing `serialize` */
+        /* Implement `SerializeHttpResponse` for non streaming types. This is done by only implementing `serialize` */
         rustTemplate(
             """
             impl #{SerializeHttpResponse} for $operationName {
@@ -205,7 +205,7 @@ private class ServerHttpProtocolImplGenerator(
             "O" to outputSymbol,
             "serialize_response" to serverSerializeResponse(operationShape)
         )
-        /* Implement SerializeHttpError for non streaming types. This is done by only implementing `serialize` */
+        /* Implement `SerializeHttpError` for non streaming types. This is done by only implementing `serialize` */
         rustTemplate(
             """
             impl #{SerializeHttpError} for $operationName {
@@ -479,7 +479,7 @@ private class ServerHttpProtocolImplGenerator(
         }
     }
 
-    private fun serverRenderPathParser(writer: RustWriter, operationShape: OperationShape) {
+    private fun serverRenderUriPathParser(writer: RustWriter, operationShape: OperationShape) {
         val pathBindings =
             httpBindingResolver.requestBindings(operationShape).filter {
                 it.location == HttpLocation.LABEL

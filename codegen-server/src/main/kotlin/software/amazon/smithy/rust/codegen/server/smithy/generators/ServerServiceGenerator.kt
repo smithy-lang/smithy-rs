@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSu
  * ServerServiceGenerator
  *
  * Service generator is the main codegeneration entry point for Smithy services. Individual structures and unions are
- * generated in codegen visitor, but this class handles all protocol-specific code generation (ie: operations).
+ * generated in codegen visitor, but this class handles all protocol-specific code generation (i.e. operations).
  */
 class ServerServiceGenerator(
     private val rustCrate: RustCrate,

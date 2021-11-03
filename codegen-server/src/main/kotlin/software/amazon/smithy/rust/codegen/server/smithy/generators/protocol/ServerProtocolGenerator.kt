@@ -27,28 +27,28 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 open class ServerProtocolGenerator(
     codegenContext: CodegenContext,
     /**
-     * `Protocol` contains all protocol specific information. Each smithy protocol, eg. RestJson, RestXml, etc. will
-     * have their own implementation of the protocol interface which defines how an input shape becomes and http::Request
-     * and an output shape is build from an http::Response.
+     * `Protocol` contains all protocol specific information. Each Smithy protocol, e.g. RestJson, RestXml, etc. will
+     * have their own implementation of the protocol interface, which defines how an input shape becomes an `http::Request`
+     * and an output shape becomes an `http::Response`.
      */
     private val protocol: Protocol,
     /**
-     * Operations generate a `make_operation(&config)` method to build a `aws_smithy_http::Operation` that can be dispatch.
+     * Operations generate a `make_operation(&config)` method to build a `aws_smithy_http::Operation` that can be dispatched.
      * While this is not run inside the server codegen, it has to be here to obey to the interface constraints.
      */
     private val makeOperationGenerator: MakeOperationGenerator,
     /**
-     * Operations generate implementations of ParseHttpRequest, SerializeHttpResponse and SerializeHttpError.
+     * Operations generate implementations of `ParseHttpRequest`, `SerializeHttpResponse` and `SerializeHttpError`.
      */
     private val traitGenerator: ProtocolTraitImplGenerator,
 ) : ProtocolGenerator(codegenContext, protocol, makeOperationGenerator, traitGenerator) {
     private val symbolProvider = codegenContext.symbolProvider
 
     /**
-     * Render all code required for serializing responses and deserializing requests for the operation
+     * Render all code required for serializing responses and deserializing requests for an operation.
      *
      * This primarily relies on the [traitGenerator] to generate implementations of the `ParseHttpRequest`,
-     * `SerializeHttpResponse` and `SerializeHttpError` traits for the operations
+     * `SerializeHttpResponse` and `SerializeHttpError` traits for the operations.
      */
     fun serverRenderOperation(
         operationWriter: RustWriter,

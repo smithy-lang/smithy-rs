@@ -28,7 +28,7 @@ val CodegenTests = listOf(
 )
 
 /**
- * The fluent HAVE to be set to false as we are not generating all the supporting
+ * `includeFluentClient` must be set to `false` as we are not generating all the supporting
  * code for it.
  * TODO: Review how can we make this a default in the server so that customers don't
  *       have to specify it.

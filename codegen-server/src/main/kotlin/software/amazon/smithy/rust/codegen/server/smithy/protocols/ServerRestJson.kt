@@ -54,8 +54,8 @@ class ServerRestJsonFactory : ProtocolGeneratorFactory<ServerHttpProtocolGenerat
 }
 
 /*
- * RestJson1 implementation. This class is fed to the `ServerHttpProtocolGenerator` and configure things like
- * wire-protocol serializers, content-type, etc..
+ * RestJson1 implementation. This class is fed to the `ServerHttpProtocolGenerator` to configure things like
+ * wire-protocol serializers, content-type, etc.
  */
 class ServerRestJson(private val codegenContext: CodegenContext) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
