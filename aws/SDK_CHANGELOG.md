@@ -1,7 +1,11 @@
 vNext (Month Day, Year)
 =======================
+
+v0.0.23-alpha (November 3rd, 2021)
+==================================
 **New this week**
 - :tada: Add support for AWS Glacier (smithy-rs#801)
+- :tada: Add support for AWS Panorama
 - :bug: Fix `native-tls` feature in `aws-config` (aws-sdk-rust#265, smithy-rs#803)
 - Add example to aws-sig-auth for generating an IAM Token for RDS (smithy-rs#811, aws-sdk-rust#147)
 - :bug: `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
