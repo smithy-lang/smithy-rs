@@ -317,16 +317,15 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
                 }
             }
 
-                impl From<aws_smithy_http::operation::SerializationError> for Error {
-                    fn from(err: aws_smithy_http::operation::SerializationError) -> Self {
-                        Self::BuildInput(err.into())
-                    }
+            impl From<aws_smithy_http::operation::SerializationError> for Error {
+                fn from(err: aws_smithy_http::operation::SerializationError) -> Self {
+                    Self::BuildInput(err.into())
                 }
+            }
 
-                impl From<aws_smithy_http::header::ParseError> for Error {
-                    fn from(err: aws_smithy_http::header::ParseError) -> Self {
-                        Self::DeserializeHeader(err)
-                    }
+            impl From<aws_smithy_http::header::ParseError> for Error {
+                fn from(err: aws_smithy_http::header::ParseError) -> Self {
+                    Self::DeserializeHeader(err)
                 }
             }
 
