@@ -96,11 +96,11 @@ class EndpointConfigCustomization(private val codegenContext: CodegenContext, pr
             ServiceConfig.BuilderBuild -> {
                 val resolverGenerator = EndpointResolverGenerator(codegenContext, endpointData)
                 rust(
-                    """endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||
-                                ::std::sync::Arc::new(
-                                    #T()
-                                )
-                         ),""",
+                    """
+                    endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||
+                        ::std::sync::Arc::new(#T())
+                    ),
+                    """,
                     resolverGenerator.resolver(),
                 )
             }
@@ -118,8 +118,8 @@ class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private 
             is OperationSection.MutateRequest -> writable {
                 rust(
                     """
-                #T::set_endpoint_resolver(&mut ${section.request}.properties_mut(), ${section.config}.endpoint_resolver.clone());
-                """,
+                    #T::set_endpoint_resolver(&mut ${section.request}.properties_mut(), ${section.config}.endpoint_resolver.clone());
+                    """,
                     runtimeConfig.awsEndpointDependency().asType()
                 )
             }
@@ -335,7 +335,7 @@ class EndpointResolverGenerator(codegenContext: CodegenContext, private val endp
             rustTemplate(
                 """
                 #{CredentialScope}::builder()
-            """,
+                """,
                 *codegenScope
             )
             objectNode.getStringMember("service").map {

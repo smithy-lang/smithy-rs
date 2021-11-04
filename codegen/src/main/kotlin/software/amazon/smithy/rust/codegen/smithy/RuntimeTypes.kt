@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.traits.TimestampFormatTrait
@@ -18,6 +19,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.util.orNull
 import java.util.Optional
 
 /**
@@ -25,21 +27,32 @@ import java.util.Optional
  *
  * This can be configured via the `runtimeConfig.version` field in smithy-build.json
  */
-sealed class RuntimeCrateLocation {
-    /**
-     * Relative path to find the runtime crates, eg. `../`
-     */
-    data class Path(val path: String) : RuntimeCrateLocation()
 
-    /**
-     * Version for the runtime crates, eg. `v0.0.1-alpha`
-     */
-    data class Versioned(val version: String) : RuntimeCrateLocation()
+data class RuntimeCrateLocation(val path: String?, val version: String?) {
+    init {
+        check(path != null || version != null) {
+            "path ($path) or version ($version) must not be null"
+        }
+    }
+
+    companion object {
+        fun Path(path: String) = RuntimeCrateLocation(path, null)
+    }
 }
 
-fun RuntimeCrateLocation.crateLocation(): DependencyLocation = when (this) {
-    is RuntimeCrateLocation.Path -> Local(this.path)
-    is RuntimeCrateLocation.Versioned -> CratesIo(this.version)
+fun RuntimeCrateLocation.crateLocation(): DependencyLocation = when (this.path) {
+    null -> CratesIo(this.version!!)
+    else -> Local(this.path, this.version)
+}
+
+fun defaultRuntimeCrateVersion(): String {
+    // generated as part of the build, see codegen/build.gradle.kts
+    try {
+        return object {}.javaClass.getResource("runtime-crate-version.txt")?.readText()
+            ?: throw CodegenException("sdk-version.txt does not exist")
+    } catch (ex: Exception) {
+        throw CodegenException("failed to load sdk-version.txt which sets the default client-runtime version", ex)
+    }
 }
 
 /**
@@ -56,11 +69,13 @@ data class RuntimeConfig(
          */
         fun fromNode(node: Optional<ObjectNode>): RuntimeConfig {
             return if (node.isPresent) {
-                val runtimeCrateLocation = if (node.get().containsMember("version")) {
-                    RuntimeCrateLocation.Versioned(node.get().expectStringMember("version").value)
-                } else {
-                    RuntimeCrateLocation.Path(node.get().getStringMemberOrDefault("relativePath", "../"))
+                val resolvedVersion = when (val configuredVersion = node.get().getStringMember("version").orNull()?.value) {
+                    "DEFAULT" -> defaultRuntimeCrateVersion()
+                    null -> null
+                    else -> configuredVersion
                 }
+                val path = node.get().getStringMember("relativePath").orNull()?.value
+                val runtimeCrateLocation = RuntimeCrateLocation(path = path, version = resolvedVersion)
                 RuntimeConfig(
                     node.get().getStringMemberOrDefault("cratePrefix", "aws-smithy"),
                     runtimeCrateLocation = runtimeCrateLocation
@@ -100,7 +115,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
      * Convert this [RuntimeType] into a [Symbol].
      *
      * This is not commonly required, but is occasionally useful when you want to force an import without referencing a type
-     * (eg. when bringing a trait into scope). See [CodegenWriter.addUseImports].
+     * (e.g. when bringing a trait into scope). See [CodegenWriter.addUseImports].
      */
     fun toSymbol(): Symbol {
         val builder = Symbol.builder().name(name).namespace(namespace, "::")
@@ -251,7 +266,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun sdkBody(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType("SdkBody", dependency = CargoDependency.SmithyHttp(runtimeConfig), "aws_smithy_http::body")
 
-        fun parseStrict(runtimeConfig: RuntimeConfig) = RuntimeType(
+        fun parseStrictResponse(runtimeConfig: RuntimeConfig) = RuntimeType(
             "ParseStrictResponse",
             dependency = CargoDependency.SmithyHttp(runtimeConfig),
             namespace = "aws_smithy_http::response"

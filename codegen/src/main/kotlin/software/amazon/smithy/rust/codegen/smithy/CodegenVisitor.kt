@@ -15,6 +15,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
@@ -81,8 +82,11 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      * See below for details.
      */
     private fun baselineTransform(model: Model) =
-        // Add `Box<T>` to recursive shapes as necessary
-        model.let(RecursiveShapeBoxer::transform)
+        model
+            // Add errors attached at the service level to the models
+            .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
+            // Add `Box<T>` to recursive shapes as necessary
+            .let(RecursiveShapeBoxer::transform)
             // Normalize the `message` field on errors when enabled in settings (default: true)
             .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
             // NormalizeOperations by ensuring every operation has an input & output shape

@@ -5,11 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
-import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeVisitor
@@ -17,13 +15,13 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpDeserializerGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.RestJson1HttpSerializerGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
@@ -38,12 +36,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.letIf
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
@@ -51,7 +44,6 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBox
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.getTrait
-import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
 
@@ -59,7 +51,7 @@ import java.util.logging.Logger
  * Entrypoint for server-side code generation. This class will walk the in-memory model and
  * generate all the needed types by calling the accept() function on the available shapes.
  */
-class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
+class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
     ShapeVisitor.Default<Unit>() {
 
     private val logger = Logger.getLogger(javaClass.name)
@@ -73,10 +65,6 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
     private val protocolGenerator: ProtocolGenerator
 
-    private val httpSerializerGenerator: RestJson1HttpSerializerGenerator
-    private val httpDeserializerGenerator: RestJson1HttpDeserializerGenerator
-    private val httpBindingResolver: HttpBindingResolver
-
     init {
         val symbolVisitorConfig =
             SymbolVisitorConfig(
@@ -86,16 +74,16 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
         val (protocol, generator) =
-            ProtocolLoader(
+            ServerProtocolLoader(
                 codegenDecorator.protocols(
                     service.id,
-                    ProtocolLoader.DefaultProtocols
+                    ServerProtocolLoader.DefaultProtocols
                 )
             )
                 .protocolFor(context.model, service)
         protocolGeneratorFactory = generator
         model = generator.transformModel(codegenDecorator.transformModel(service, baseModel))
-        val baseProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
+        val baseProvider = RustCodegenServerPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
         symbolProvider =
             codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
@@ -103,24 +91,6 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
 
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
-
-        httpBindingResolver =
-            HttpTraitHttpBindingResolver(
-                codegenContext.model,
-                ProtocolContentTypes.consistent("application/json"),
-            )
-
-        when (codegenContext.protocol) {
-            RestJson1Trait.ID -> {
-                httpSerializerGenerator =
-                    RestJson1HttpSerializerGenerator(codegenContext, httpBindingResolver)
-                httpDeserializerGenerator =
-                    RestJson1HttpDeserializerGenerator(codegenContext, httpBindingResolver)
-            }
-            else -> {
-                TODO("Protocol ${codegenContext.protocol} not supported yet")
-            }
-        }
     }
 
     /**
@@ -129,6 +99,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      */
     private fun baselineTransform(model: Model) =
         model
+            // Add errors attached at the service level to the models
+            .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
             // Add `Box<T>` to recursive shapes as necessary
             .let(RecursiveShapeBoxer::transform)
             // Normalize the `message` field on errors when enabled in settings (default: true)
@@ -143,7 +115,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     /**
      * Execute code generation
      *
-     * 1. Load the service from `RustSettings`.
+     * 1. Load the service from [RustSettings].
      * 2. Traverse every shape in the closure of the service.
      * 3. Loop through each shape and visit them (calling the override functions in this class)
      * 4. Call finalization tasks specified by decorators.
@@ -191,27 +163,10 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     override fun getDefault(shape: Shape?) {}
 
     /**
-     * Operation Shape Visitor
-     *
-     * For each operation shape, generate the corresponding protocol implementation.
-     */
-    override fun operationShape(shape: OperationShape?) {
-        logger.info("[rust-server-codegen] Generating operation $shape")
-        if (shape != null) {
-            rustCrate.useShapeWriter(shape) { writer ->
-                shape.let {
-                    httpDeserializerGenerator.render(writer, it)
-                    httpSerializerGenerator.render(writer, it)
-                }
-            }
-        }
-    }
-
-    /**
      * Structure Shape Visitor
      *
      * For each structure shape, generate:
-     * - A Rust structure for the shape (`StructureGenerator`).
+     * - A Rust structure for the shape ([StructureGenerator]).
      * - A builder for the shape.
      *
      * This function _does not_ generate any serializers.
@@ -220,13 +175,11 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         logger.info("[rust-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) { writer ->
             StructureGenerator(model, symbolProvider, writer, shape).render()
-            if (!shape.hasTrait<SyntheticInputTrait>()) {
-                val builderGenerator =
-                    BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
-                builderGenerator.render(writer)
-                writer.implBlock(shape, symbolProvider) {
-                    builderGenerator.renderConvenienceMethod(this)
-                }
+            val builderGenerator =
+                BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
+            builderGenerator.render(writer)
+            writer.implBlock(shape, symbolProvider) {
+                builderGenerator.renderConvenienceMethod(this)
             }
         }
     }
@@ -234,7 +187,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     /**
      * String Shape Visitor
      *
-     * Although raw strings require no code generation, enums are actually `EnumTrait` applied to string shapes.
+     * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
         logger.info("[rust-server-codegen] Generating an enum $shape")
@@ -270,7 +223,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      */
     override fun serviceShape(shape: ServiceShape) {
         logger.info("[rust-server-codegen] Generating a service $shape")
-        ServiceGenerator(
+        ServerServiceGenerator(
             rustCrate,
             protocolGenerator,
             protocolGeneratorFactory.support(),
@@ -283,63 +236,63 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private fun renderSerdeError(writer: RustWriter) {
         writer.rust(
             """
-                ##[derive(Debug)]
-                pub enum Error {
-                    Generic(std::borrow::Cow<'static, str>),
-                    DeserializeJson(aws_smithy_json::deserialize::Error),
-                    DeserializeHeader(aws_smithy_http::header::ParseError),
-                    DeserializeLabel(std::string::String),
-                    BuildInput(aws_smithy_http::operation::BuildError),
-                    BuildResponse(http::Error),
-                    SmithyType(aws_smithy_types::Error),
-                }
+            ##[derive(Debug)]
+            pub enum Error {
+                Generic(std::borrow::Cow<'static, str>),
+                DeserializeJson(aws_smithy_json::deserialize::Error),
+                DeserializeHeader(aws_smithy_http::header::ParseError),
+                DeserializeLabel(std::string::String),
+                BuildInput(aws_smithy_http::operation::BuildError),
+                BuildResponse(http::Error),
+                SmithyType(aws_smithy_types::Error),
+            }
 
-                impl Error {
-                    ##[allow(dead_code)]
-                    fn generic(msg: &'static str) -> Self {
-                        Self::Generic(msg.into())
+            impl Error {
+                ##[allow(dead_code)]
+                pub fn generic(msg: &'static str) -> Self {
+                    Self::Generic(msg.into())
+                }
+            }
+
+            impl From<aws_smithy_json::deserialize::Error> for Error {
+                fn from(err: aws_smithy_json::deserialize::Error) -> Self {
+                    Self::DeserializeJson(err)
+                }
+            }
+
+            impl From<aws_smithy_http::header::ParseError> for Error {
+                fn from(err: aws_smithy_http::header::ParseError) -> Self {
+                    Self::DeserializeHeader(err)
+                }
+            }
+
+            impl From<aws_smithy_http::operation::BuildError> for Error {
+                fn from(err: aws_smithy_http::operation::BuildError) -> Self {
+                    Self::BuildInput(err)
+                }
+            }
+
+            impl From<aws_smithy_types::Error> for Error {
+                fn from(err: aws_smithy_types::Error) -> Self {
+                    Self::SmithyType(err)
+                }
+            }
+
+            impl std::fmt::Display for Error {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    match *self {
+                        Self::Generic(ref msg) => write!(f, "serde error: {}", msg),
+                        Self::DeserializeJson(ref err) => write!(f, "json parse error: {}", err),
+                        Self::DeserializeHeader(ref err) => write!(f, "header parse error: {}", err),
+                        Self::DeserializeLabel(ref msg) => write!(f, "label parse error: {}", msg),
+                        Self::BuildInput(ref err) => write!(f, "json payload error: {}", err),
+                        Self::BuildResponse(ref err) => write!(f, "http response error: {}", err),
+                        Self::SmithyType(ref err) => write!(f, "type error: {}", err),
                     }
                 }
+            }
 
-                impl From<aws_smithy_json::deserialize::Error> for Error {
-                    fn from(err: aws_smithy_json::deserialize::Error) -> Self {
-                        Self::DeserializeJson(err)
-                    }
-                }
-
-                impl From<aws_smithy_http::header::ParseError> for Error {
-                    fn from(err: aws_smithy_http::header::ParseError) -> Self {
-                        Self::DeserializeHeader(err)
-                    }
-                }
-
-                impl From<aws_smithy_http::operation::BuildError> for Error {
-                    fn from(err: aws_smithy_http::operation::BuildError) -> Self {
-                        Self::BuildInput(err)
-                    }
-                }
-
-                impl From<aws_smithy_types::Error> for Error {
-                    fn from(err: aws_smithy_types::Error) -> Self {
-                        Self::SmithyType(err)
-                    }
-                }
-
-                impl std::fmt::Display for Error {
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        match *self {
-                            Self::Generic(ref msg) => write!(f, "serde error: {}", msg),
-                            Self::DeserializeJson(ref err) => write!(f, "json parse error: {}", err),
-                            Self::DeserializeHeader(ref err) => write!(f, "header parse error: {}", err),
-                            Self::DeserializeLabel(ref msg) => write!(f, "label parse error: {}", msg),
-                            Self::BuildInput(ref err) => write!(f, "json payload error: {}", err),
-                            Self::BuildResponse(ref err) => write!(f, "http response error: {}", err),
-                            Self::SmithyType(ref err) => write!(f, "type error: {}", err),
-                        }
-                    }
-                }
-
-                impl std::error::Error for Error {}
+            impl std::error::Error for Error {}
             """.trimIndent()
         )
     }

@@ -43,7 +43,7 @@ class RustWriterTest {
         val sut = RustWriter.forModule("parent")
         val requestBuilder = RuntimeType.HttpRequestBuilder
         sut.withModule("inner") {
-            rustBlock("fn build(builer: #T)", requestBuilder) {
+            rustBlock("fn build(builder: #T)", requestBuilder) {
             }
         }
         val httpDep = CargoDependency.Http.dependencies[0]
@@ -77,10 +77,10 @@ class RustWriterTest {
         output shouldContain "struct Test"
         output.compileAndRun(
             """
-        let test = Test { member: ${RustType.HashSet.Namespace}::${RustType.HashSet.Type}::default(), otherMember: "hello".to_string() };
-        assert_eq!(test.otherMember, "hello");
-        assert_eq!(test.member.is_empty(), true);
-         """
+            let test = Test { member: ${RustType.HashSet.Namespace}::${RustType.HashSet.Type}::default(), otherMember: "hello".to_string() };
+            assert_eq!(test.otherMember, "hello");
+            assert_eq!(test.member.is_empty(), true);
+            """
         )
     }
 
@@ -93,7 +93,7 @@ class RustWriterTest {
             |/* handle weird characters */
             |`a backtick`
             |[a link](asdf)
-        """.trimMargin()
+            """.trimMargin()
         )
         sut.rustBlock("fn main()") { }
         sut.compileAndTest()
@@ -103,8 +103,8 @@ class RustWriterTest {
     @Test
     fun `generate doc links`() {
         val model = """
-        namespace test
-        structure Foo {}
+            namespace test
+            structure Foo {}
         """.asSmithyModel()
         val shape = model.lookup<StructureShape>("test#Foo")
         val symbol = testSymbolProvider(model).toSymbol(shape)

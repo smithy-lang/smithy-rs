@@ -7,17 +7,22 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.CombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.TopLevelErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.util.inputShape
 
-class ServiceGenerator(
+/**
+ * ServerServiceGenerator
+ *
+ * Service generator is the main codegeneration entry point for Smithy services. Individual structures and unions are
+ * generated in codegen visitor, but this class handles all protocol-specific code generation (i.e. operations).
+ */
+class ServerServiceGenerator(
     private val rustCrate: RustCrate,
     private val protocolGenerator: ProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
@@ -26,18 +31,22 @@ class ServiceGenerator(
 ) {
     private val index = TopDownIndex.of(context.model)
 
+    /**
+     * Render Service Specific code. Code will end up in different files via [useShapeWriter]. See `SymbolVisitor.kt`
+     * which assigns a symbol location to each shape.
+     *
+     */
     fun render() {
         val operations = index.getContainedOperations(context.serviceShape).sortedBy { it.id }
         operations.map { operation ->
             rustCrate.useShapeWriter(operation) { operationWriter ->
-                rustCrate.useShapeWriter(operation.inputShape(context.model)) { inputWriter ->
-                    protocolGenerator.renderOperation(
-                        operationWriter,
-                        inputWriter,
-                        operation,
-                        decorator.operationCustomizations(context, operation, listOf())
-                    )
-                }
+                protocolGenerator.serverRenderOperation(
+                    operationWriter,
+                    operation,
+                    decorator.operationCustomizations(context, operation, listOf())
+                )
+                ServerProtocolTestGenerator(context, protocolSupport, operation, operationWriter)
+                    .render()
             }
             rustCrate.withModule(RustModule.Error) { writer ->
                 CombinedErrorGenerator(context.model, context.symbolProvider, operation)
@@ -46,15 +55,5 @@ class ServiceGenerator(
         }
 
         TopLevelErrorGenerator(context, operations).render(rustCrate)
-
-        rustCrate.withModule(RustModule.Config) { writer ->
-            ServiceConfigGenerator.withBaseBehavior(
-                context,
-                extraCustomizations = decorator.configCustomizations(context, listOf())
-            )
-                .render(writer)
-        }
-
-        rustCrate.lib { it.write("pub use config::Config;") }
     }
 }

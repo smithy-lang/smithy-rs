@@ -20,21 +20,21 @@ import software.amazon.smithy.rust.codegen.util.lookup
 internal class EndpointConfigCustomizationTest {
 
     private val model = """
-    namespace test
-    @aws.api#service(sdkId: "Test", endpointPrefix: "service-with-prefix")
-    service TestService {
-        version: "123"
-    }
+        namespace test
+        @aws.api#service(sdkId: "Test", endpointPrefix: "service-with-prefix")
+        service TestService {
+            version: "123"
+        }
 
-    @aws.api#service(sdkId: "Test", endpointPrefix: "iam")
-    service NoRegions {
-        version: "123"
-    }
+        @aws.api#service(sdkId: "Test", endpointPrefix: "iam")
+        service NoRegions {
+            version: "123"
+        }
 
-    @aws.api#service(sdkId: "Test")
-    service NoEndpointPrefix {
-        version: "123"
-    }
+        @aws.api#service(sdkId: "Test")
+        service NoEndpointPrefix {
+            version: "123"
+        }
     """.asSmithyModel()
 
     private val endpointConfig = """
@@ -94,7 +94,7 @@ internal class EndpointConfigCustomizationTest {
               }
             }
         }]
-    }
+        }
     """.let { ObjectNode.parse(it).expectObjectNode() }
 
     fun endpointCustomization(service: String) =
@@ -133,7 +133,7 @@ internal class EndpointConfigCustomizationTest {
                 let mut uri = Uri::from_static("/?k=v");
                 endpoint.set_endpoint(&mut uri, None);
                 assert_eq!(uri, Uri::from_static("https://access-analyzer-fips.ca-central-1.amazonaws.com/?k=v"));
-            """
+                """
             )
         }
         project.compileAndTest()
@@ -162,7 +162,7 @@ internal class EndpointConfigCustomizationTest {
                 let mut uri = Uri::from_static("/?k=v");
                 endpoint.set_endpoint(&mut uri, None);
                 assert_eq!(uri, Uri::from_static("https://iam-fips.amazonaws.com/?k=v"));
-            """
+                """
             )
         }
         println("file:///" + project.baseDir + "/src/aws_endpoint.rs")

@@ -18,7 +18,7 @@ sealed class DependencyScope {
 
 sealed class DependencyLocation
 data class CratesIo(val version: String) : DependencyLocation()
-data class Local(val basePath: String) : DependencyLocation()
+data class Local(val basePath: String, val version: String? = null) : DependencyLocation()
 
 sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
     abstract fun version(): String
@@ -152,6 +152,7 @@ data class CargoDependency(
                 is Local -> {
                     val fullPath = "$basePath/$name"
                     attribs["path"] = fullPath
+                    version?.also { attribs["version"] = version }
                 }
             }
         }
@@ -200,6 +201,7 @@ data class CargoDependency(
         fun SmithyClient(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("client")
         fun SmithyEventStream(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("eventstream")
         fun SmithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http")
+        fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server")
         fun SmithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-tower")
 
         fun SmithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
@@ -210,5 +212,10 @@ data class CargoDependency(
         fun smithyXml(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("xml")
 
         val Bytes: RustDependency = CargoDependency("bytes", CratesIo("1"))
+        val TokioStream = CargoDependency("tokio-stream", CratesIo("0.1.7"))
+        val BytesUtils = CargoDependency("bytes-utils", CratesIo("0.1.1"))
+        val Hex = CargoDependency("hex", CratesIo("0.4.3"))
+        val TempFile = CargoDependency("temp-file", CratesIo("0.1.6"), scope = DependencyScope.Dev)
+        val Ring = CargoDependency("ring", CratesIo("0.16"))
     }
 }

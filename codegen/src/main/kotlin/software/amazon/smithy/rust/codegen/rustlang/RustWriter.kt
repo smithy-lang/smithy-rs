@@ -67,7 +67,7 @@ private fun <T : CodeWriter, U> T.withTemplate(
  * Write a block to the writer.
  * If [conditional] is true, the [textBeforeNewLine], followed by [block], followed by [textAfterNewLine]
  * If [conditional] is false, only [block] is written.
- * This enables conditionally wrapping a block in a prefix/suffix, eg.
+ * This enables conditionally wrapping a block in a prefix/suffix, e.g.
  *
  * ```
  * writer.withBlock("Some(", ")", conditional = symbol.isOptional()) {
@@ -392,12 +392,12 @@ class RustWriter private constructor(
     }
 
     /**
-     * Generate RustDoc links, eg. [`Abc`](crate::module::Abc)
+     * Generate RustDoc links, e.g. [`Abc`](crate::module::Abc)
      */
     inner class RustDocLinker : BiFunction<Any, String, String> {
         override fun apply(t: Any, u: String): String {
             return when (t) {
-                is Symbol -> "[`${t.name}`](${t.fullName})"
+                is Symbol -> "[`${t.name}`](${t.rustType().qualifiedName()})"
                 else -> throw CodegenException("Invalid type provided to RustDocLinker ($t) expected Symbol")
             }
         }

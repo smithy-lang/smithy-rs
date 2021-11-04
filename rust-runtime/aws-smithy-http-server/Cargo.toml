@@ -1,0 +1,20 @@
+[package]
+name = "aws-smithy-http-server"
+version = "0.1.0"
+authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
+edition = "2018"
+description = """
+Server traits and utilities used by the code generator.
+
+NOTE: THIS IS HIGHLY EXPERIMENTAL AND SHOULD NOT BE USED YET.
+"""
+# until this is not stable, it is not publishable.
+publish = false
+
+[dependencies]
+aws-smithy-http = { path = "../aws-smithy-http" }
+bytes = "1.1"
+http = "0.2"
+
+[dev-dependencies]
+pretty_assertions = "1"

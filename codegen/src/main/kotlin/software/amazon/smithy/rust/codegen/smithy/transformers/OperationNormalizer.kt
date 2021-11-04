@@ -26,7 +26,7 @@ import kotlin.streams.toList
  *
  * This works by **adding** new shapes to the model for operation inputs & outputs. These new shapes have `SyntheticInputTrait`
  * and `SyntheticOutputTrait` attached to them as needed. This enables downstream code generators to determine if a shape is
- * "real" vs. a shape created as a synethic input/output.
+ * "real" vs. a shape created as a synthetic input/output.
  *
  * The trait also tracks the original shape id for certain serialization tasks that require it to exist.
  */
@@ -34,7 +34,7 @@ object OperationNormalizer {
     // Functions to construct synthetic shape IDs—Don't rely on these in external code.
     // Rename safety: Operations cannot be renamed
     // In order to ensure that the fully qualified smithy id of a synthetic shape can never conflict with an existing shape,
-    // the `synthetic` namespace is appened.
+    // the `synthetic` namespace is appended.
     private fun OperationShape.syntheticInputId() =
         ShapeId.fromParts(this.id.namespace + ".synthetic", "${this.id.name}Input")
 
@@ -76,7 +76,7 @@ object OperationNormalizer {
 
     /**
      * Synthetic output shape for `operation`
-     * eg. `<SomeOperation>Output`
+     * e.g. `<SomeOperation>Output`
      *
      * If the operation does not have an output, an empty shape is generated
      */
@@ -95,7 +95,7 @@ object OperationNormalizer {
 
     /**
      * Synthetic input shape for `operation`
-     * eg. `<SomeOperation>Input`
+     * e.g. `<SomeOperation>Input`
      *
      * If the input operation does not have an input, an empty shape is generated
      */

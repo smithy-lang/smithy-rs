@@ -75,7 +75,7 @@ class StructureGenerator(
 
     /**
      * Search for lifetimes used by the members of the struct and generate a declaration.
-     * eg. `<'a, 'b>`
+     * e.g. `<'a, 'b>`
      */
     private fun lifetimeDeclaration(): String {
         val lifetimes = members

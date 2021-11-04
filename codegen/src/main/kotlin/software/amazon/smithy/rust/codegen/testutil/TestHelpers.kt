@@ -102,11 +102,11 @@ fun StructureShape.renderWithModelBuilder(model: Model, symbolProvider: RustSymb
     }
 }
 
-private val Tokio = CargoDependency(
+val TokioWithTestMacros = CargoDependency(
     "tokio",
     CratesIo("1"),
     features = setOf("macros", "test-util", "rt"),
     scope = DependencyScope.Dev
 )
 
-val TokioTest = Attribute.Custom("tokio::test", listOf(Tokio.asType()))
+val TokioTest = Attribute.Custom("tokio::test", listOf(TokioWithTestMacros.asType()))

@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.inputShape
 
@@ -33,7 +34,7 @@ import software.amazon.smithy.rust.codegen.util.inputShape
  * **Note:** There is only one real implementation of this interface. The other implementation is test only.
  * All protocols use the same class.
  *
- * Different protocols (eg. JSON vs. XML) need to use different functionality to generate request bodies.
+ * Different protocols (e.g. JSON vs. XML) need to use different functionality to generate request bodies.
  */
 interface ProtocolBodyGenerator {
     data class BodyMetadata(val takesOwnership: Boolean)
@@ -75,7 +76,7 @@ interface ProtocolTraitImplGenerator {
 open class ProtocolGenerator(
     codegenContext: CodegenContext,
     /**
-     * `Protocol` contains all protocol specific information. Each smithy protocol, eg. RestJson, RestXml, etc. will
+     * `Protocol` contains all protocol specific information. Each smithy protocol, e.g. RestJson, RestXml, etc. will
      * have their own implementation of the protocol interface which defines how an input shape becomes and http::Request
      * and an output shape is build from an http::Response.
      */
@@ -137,22 +138,25 @@ open class ProtocolGenerator(
             )
             makeOperationGenerator.generateMakeOperation(this, operationShape, customizations)
             rustBlockTemplate(
-                "fn assemble(mut builder: #{RequestBuilder}, body: #{SdkBody}) -> #{Request}<#{SdkBody}>",
+                "fn assemble(builder: #{RequestBuilder}, body: #{SdkBody}) -> #{Request}<#{SdkBody}>",
                 *codegenScope
             ) {
-                rustTemplate(
-                    """
-                    if let Some(content_length) = body.content_length() {
-                        builder = #{header_util}::set_header_if_absent(
-                                    builder,
-                                    #{http}::header::CONTENT_LENGTH,
-                                    content_length
-                        );
-                    }
-                    builder.body(body).expect("should be valid request")
-                    """,
-                    *codegenScope
-                )
+                if (needsContentLength(operationShape)) {
+                    rustTemplate(
+                        """
+                        let mut builder = builder;
+                        if let Some(content_length) = body.content_length() {
+                            builder = #{header_util}::set_header_if_absent(
+                                        builder,
+                                        #{http}::header::CONTENT_LENGTH,
+                                        content_length
+                            );
+                        }
+                        """,
+                        *codegenScope
+                    )
+                }
+                rust("""builder.body(body).expect("should be valid request")""")
             }
 
             // pub fn builder() -> ... { }
@@ -188,6 +192,44 @@ open class ProtocolGenerator(
         traitGenerator.generateTraitImpls(operationWriter, operationShape)
     }
 
+    /**
+     * Render all code required for serializing responses and deserializing requests for an operation.
+     *
+     * This primarily relies on the [traitGenerator] to generate implementations of the `ParseHttpRequest`,
+     * `SerializeHttpResponse` and `SerializeHttpError` traits for the operations.
+     */
+    fun serverRenderOperation(
+        operationWriter: RustWriter,
+        operationShape: OperationShape,
+        customizations: List<OperationCustomization>
+    ) {
+        val operationName = symbolProvider.toSymbol(operationShape).name
+        operationWriter.rust(
+            """
+            /// Operation shape for `$operationName`.
+            """
+        )
+        Attribute.Derives(setOf(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
+        operationWriter.rustBlock("pub struct $operationName") {
+            write("_private: ()")
+        }
+        operationWriter.implBlock(operationShape, symbolProvider) {
+            rust("/// Creates a new `$operationName` operation.")
+            rustBlock("pub fn new() -> Self") {
+                rust("Self { _private: () }")
+            }
+
+            writeCustomizations(customizations, OperationSection.OperationImplBlock(customizations))
+        }
+        // Render all operation traits
+        traitGenerator.generateTraitImpls(operationWriter, operationShape)
+    }
+
+    private fun needsContentLength(operationShape: OperationShape): Boolean {
+        return protocol.httpBindingResolver.requestBindings(operationShape)
+            .any { it.location == HttpLocation.DOCUMENT || it.location == HttpLocation.PAYLOAD }
+    }
+
     private fun renderTypeAliases(
         inputWriter: RustWriter,
         operationShape: OperationShape,
@@ -204,9 +246,9 @@ open class ProtocolGenerator(
 
         inputWriter.rust(
             """
-                ##[doc(hidden)] pub type ${inputPrefix}OperationOutputAlias = $operationTypeOutput;
-                ##[doc(hidden)] pub type ${inputPrefix}OperationRetryAlias = $operationTypeRetry;
-                """
+            ##[doc(hidden)] pub type ${inputPrefix}OperationOutputAlias = $operationTypeOutput;
+            ##[doc(hidden)] pub type ${inputPrefix}OperationRetryAlias = $operationTypeRetry;
+            """
         )
     }
 

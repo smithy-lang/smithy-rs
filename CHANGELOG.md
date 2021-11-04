@@ -1,7 +1,17 @@
 vNext (Month Day, Year)
 =======================
+
+v0.27.0-alpha.1 (November 3rd, 2021)
+====================================
 **Breaking Changes**
 - `<operation>.make_operation(&config)` is now an `async` function for all operations. Code should be updated to call `.await`. This will only impact users using the low-level API. (smithy-rs#797)
+
+**New this week**
+- SDK code generation now includes a version in addition to path parameters when the `version` parameter is included in smithy-build.json
+- `moduleDescription` in `smithy-build.json` settings is now optional
+- Upgrade to Smithy 1.12
+- `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
+- Fix generated docs on unions. (smithy-rs#826)
 
 v0.27 (October 20th, 2021)
 ==========================

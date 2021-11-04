@@ -25,43 +25,43 @@ import software.amazon.smithy.rust.codegen.util.lookup
 class StructureGeneratorTest {
     companion object {
         val model = """
-        namespace com.test
-        @documentation("this documents the shape")
-        structure MyStruct {
-           foo: String,
-           @documentation("This *is* documentation about the member.")
-           bar: PrimitiveInteger,
-           baz: Integer,
-           ts: Timestamp,
-           inner: Inner,
-           byteValue: Byte
-        }
+            namespace com.test
+            @documentation("this documents the shape")
+            structure MyStruct {
+               foo: String,
+               @documentation("This *is* documentation about the member.")
+               bar: PrimitiveInteger,
+               baz: Integer,
+               ts: Timestamp,
+               inner: Inner,
+               byteValue: Byte
+            }
 
-        // Intentionally empty
-        structure Inner {
-        }
+            // Intentionally empty
+            structure Inner {
+            }
 
-        @error("server")
-        @retryable
-        structure MyError {
-            message: String
-        }
+            @error("server")
+            @retryable
+            structure MyError {
+                message: String
+            }
 
-        @sensitive
-        string SecretKey
-
-        structure Credentials {
-            username: String,
             @sensitive
-            password: String,
+            string SecretKey
 
-            // test that sensitive can be applied directly to a member or to the shape
-            secretKey: SecretKey
-        }
+            structure Credentials {
+                username: String,
+                @sensitive
+                password: String,
 
-        structure StructWithDoc {
-            doc: Document
-        }
+                // test that sensitive can be applied directly to a member or to the shape
+                secretKey: SecretKey
+            }
+
+            structure StructWithDoc {
+                doc: Document
+            }
         """.asSmithyModel()
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
         val structWithDoc = model.lookup<StructureShape>("com.test#StructWithDoc")
@@ -111,7 +111,7 @@ class StructureGeneratorTest {
                     """
                     let s: Option<crate::structs::MyStruct> = None;
                     s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
-                """
+                    """
                 )
             }
         }
@@ -128,7 +128,7 @@ class StructureGeneratorTest {
             """
             let err = MyError { message: None };
             assert_eq!(err.retryable_error_kind(), aws_smithy_types::retry::ErrorKind::ServerError);
-        """
+            """
         )
     }
 
@@ -146,7 +146,7 @@ class StructureGeneratorTest {
                 secret_key: Some("don't leak me".to_owned())
             };
             assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
-        """
+            """
         )
         writer.compileAndTest()
     }
@@ -154,19 +154,19 @@ class StructureGeneratorTest {
     @Test
     fun `attach docs to everything`() {
         val model = """
-        namespace com.test
-        @documentation("inner doc")
-        structure Inner { }
+            namespace com.test
+            @documentation("inner doc")
+            structure Inner { }
 
-        @documentation("shape doc")
-        structure MyStruct {
-           @documentation("member doc")
-           member: String,
+            @documentation("shape doc")
+            structure MyStruct {
+               @documentation("member doc")
+               member: String,
 
-           @documentation("specific docs")
-           nested: Inner,
+               @documentation("specific docs")
+               nested: Inner,
 
-           nested2: Inner
+               nested2: Inner
         }""".asSmithyModel()
         val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
@@ -174,7 +174,7 @@ class StructureGeneratorTest {
         writer
             .withModule(
                 "model",
-                // By attaching this lint, any missing documentation becomes a compiler erorr
+                // By attaching this lint, any missing documentation becomes a compiler error
                 RustMetadata(additionalAttributes = listOf(Attribute.Custom("deny(missing_docs)")), public = true)
             ) {
                 StructureGenerator(model, provider, this, model.lookup("com.test#Inner")).render()

@@ -102,75 +102,75 @@ internal class XmlBindingTraitParserGeneratorTest {
             writer.unitTest(
                 name = "valid_input",
                 test = """
-                let xml = br#"<Top>
-                    <choice>
-                        <Hi>
-                            <Name>some key</Name>
-                            <Setting>
-                                <s>hello</s>
-                            </Setting>
-                        </Hi>
-                    </choice>
-                    <prefix:local>hey</prefix:local>
-                </Top>
-                "#;
-                let output = ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
-                let mut map = std::collections::HashMap::new();
-                map.insert("some key".to_string(), model::Choice::S("hello".to_string()));
-                assert_eq!(output.choice, Some(model::Choice::FlatMap(map)));
-                assert_eq!(output.renamed_with_prefix.as_deref(), Some("hey"));
-            """
+                    let xml = br#"<Top>
+                        <choice>
+                            <Hi>
+                                <Name>some key</Name>
+                                <Setting>
+                                    <s>hello</s>
+                                </Setting>
+                            </Hi>
+                        </choice>
+                        <prefix:local>hey</prefix:local>
+                    </Top>
+                    "#;
+                    let output = ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
+                    let mut map = std::collections::HashMap::new();
+                    map.insert("some key".to_string(), model::Choice::S("hello".to_string()));
+                    assert_eq!(output.choice, Some(model::Choice::FlatMap(map)));
+                    assert_eq!(output.renamed_with_prefix.as_deref(), Some("hey"));
+                """
             )
 
             writer.unitTest(
                 name = "ignore_extras",
                 test = """
-                let xml = br#"<Top>
-                    <notchoice>
-                        <extra/>
-                        <stuff/>
-                        <noone/>
-                        <needs>5</needs>
-                    </notchoice>
-                    <choice>
-                        <Hi>
-                            <Name>some key</Name>
-                            <Setting>
-                                <s>hello</s>
-                            </Setting>
-                        </Hi>
-                    </choice>
-                </Top>
-                "#;
-                let output = ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
-                let mut map = std::collections::HashMap::new();
-                map.insert("some key".to_string(), model::Choice::S("hello".to_string()));
-                assert_eq!(output.choice, Some(model::Choice::FlatMap(map)));
-            """
+                    let xml = br#"<Top>
+                        <notchoice>
+                            <extra/>
+                            <stuff/>
+                            <noone/>
+                            <needs>5</needs>
+                        </notchoice>
+                        <choice>
+                            <Hi>
+                                <Name>some key</Name>
+                                <Setting>
+                                    <s>hello</s>
+                                </Setting>
+                            </Hi>
+                        </choice>
+                    </Top>
+                    "#;
+                    let output = ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
+                    let mut map = std::collections::HashMap::new();
+                    map.insert("some key".to_string(), model::Choice::S("hello".to_string()));
+                    assert_eq!(output.choice, Some(model::Choice::FlatMap(map)));
+                """
             )
 
             writer.unitTest(
                 name = "nopanics_on_invalid",
                 test = """
-                let xml = br#"<Top>
-                    <notchoice>
-                        <extra/>
-                        <stuff/>
-                        <noone/>
-                        <needs>5</needs>
-                    </notchoice>
-                    <choice>
-                        <Hey>
-                            <Name>some key</Name>
-                            <Setting>
-                                <s>hello</s>
-                            </Setting>
-                        </Hey>
-                    </choice>
-                </Top>
-                "#;
-                ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).expect_err("invalid input");
-            """
+                    let xml = br#"<Top>
+                        <notchoice>
+                            <extra/>
+                            <stuff/>
+                            <noone/>
+                            <needs>5</needs>
+                        </notchoice>
+                        <choice>
+                            <Hey>
+                                <Name>some key</Name>
+                                <Setting>
+                                    <s>hello</s>
+                                </Setting>
+                            </Hey>
+                        </choice>
+                    </Top>
+                    "#;
+                    ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).expect_err("invalid input");
+                """
             )
         }
         project.withModule(RustModule.public("model")) {

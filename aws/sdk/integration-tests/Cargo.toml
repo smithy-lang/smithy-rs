@@ -1,5 +1,5 @@
-# Note: this workspace exists solely for the convenience of running tests. These packages will all eventually
-# end up in the final SDK workspace.
+# Note: This workspace exists so that these tests can be run without having to build the entire SDK. When you run
+# `./gradlew -Paws.fullsdk=true :aws:sdk:assemble` these tests are copied into their respective Service crates.
 [workspace]
 members = [
     "dynamodb",
@@ -9,5 +9,6 @@ members = [
     "qldbsession",
     "s3",
     "sts",
-    "transcribestreaming"
+    "transcribestreaming",
+    "glacier"
 ]

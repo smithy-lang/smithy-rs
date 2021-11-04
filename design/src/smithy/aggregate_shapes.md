@@ -17,7 +17,7 @@ List objects in Smithy are transformed into vectors in Rust. Based on the output
 Because floats are not Hashable in Rust, for simplicity smithy-rs translates all sets to into `Vec<T>` instead of `HashSet<T>`. In the future, a breaking change may be made to introduce a library-provided wrapper type for Sets.
 
 ## Map
-Because `key` MUST be a string in Smithy maps, we avoid the hashibility issue encountered with `Set`. There are optimizations that could be considered (eg. since these maps will probably never be modified), however, pending customer feedback, Smithy Maps become `HashMap<String, V>` in Rust.
+Because `key` MUST be a string in Smithy maps, we avoid the hashibility issue encountered with `Set`. There are optimizations that could be considered (e.g. since these maps will probably never be modified), however, pending customer feedback, Smithy Maps become `HashMap<String, V>` in Rust.
 
 ## Structure
 > See `StructureGenerator.kt` for more details

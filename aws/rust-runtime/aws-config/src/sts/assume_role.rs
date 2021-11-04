@@ -24,7 +24,7 @@ use tracing::Instrument;
 /// the desired role.
 ///
 /// # Examples
-/// ```rust
+/// ```no_run
 /// use aws_config::sts::{AssumeRoleProvider};
 /// use aws_types::{Credentials, region::Region};
 /// use aws_config::environment;

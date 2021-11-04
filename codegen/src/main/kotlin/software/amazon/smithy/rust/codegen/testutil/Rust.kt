@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
-import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -135,7 +134,7 @@ fun generatePluginContext(model: Model): Pair<PluginContext, Path> {
             "runtimeConfig",
             Node.objectNodeBuilder().withMember(
                 "relativePath",
-                Node.from((TestRuntimeConfig.runtimeCrateLocation as RuntimeCrateLocation.Path).path)
+                Node.from((TestRuntimeConfig.runtimeCrateLocation).path)
             ).build()
         )
         .build()
@@ -166,10 +165,10 @@ class TestWriterDelegator(fileManifest: FileManifest, symbolProvider: RustSymbol
  */
 fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
     val stubModel = """
-    namespace fake
-    service Fake {
-        version: "123"
-    }
+        namespace fake
+        service Fake {
+            version: "123"
+        }
     """.asSmithyModel()
     this.finalize(
         rustSettings(stubModel),
@@ -259,14 +258,14 @@ private fun String.intoCrate(
     val tempDir = TestWorkspace.subproject()
     // TODO: unify this with CargoTomlGenerator
     val cargoToml = """
-    [package]
-    name = ${tempDir.nameWithoutExtension.dq()}
-    version = "0.0.1"
-    authors = ["rcoh@amazon.com"]
-    edition = "2018"
+        [package]
+        name = ${tempDir.nameWithoutExtension.dq()}
+        version = "0.0.1"
+        authors = ["rcoh@amazon.com"]
+        edition = "2018"
 
-    [dependencies]
-    ${deps.joinToString("\n") { it.toString() }}
+        [dependencies]
+        ${deps.joinToString("\n") { it.toString() }}
     """.trimIndent()
     tempDir.resolve("Cargo.toml").writeText(cargoToml)
     tempDir.resolve("src").mkdirs()

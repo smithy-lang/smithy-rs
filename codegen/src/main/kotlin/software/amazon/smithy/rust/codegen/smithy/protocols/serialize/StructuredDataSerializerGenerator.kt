@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
 interface StructuredDataSerializerGenerator {
@@ -20,6 +21,11 @@ interface StructuredDataSerializerGenerator {
      * ```
      */
     fun payloadSerializer(member: MemberShape): RuntimeType
+
+    /**
+     * Generate the correct data when attempting to serialize a structure that is unset
+     */
+    fun unsetStructure(structure: StructureShape): RuntimeType
 
     /**
      * Generate a serializer for an operation input.

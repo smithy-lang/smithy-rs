@@ -28,12 +28,12 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
- * For a given Operation ([this]), return the symbol referring to the unified error? This can be used
- * if you, eg. want to return a unfied error from a function:
+ * For a given Operation ([this]), return the symbol referring to the unified error. This can be used
+ * if you, e.g. want to return a unified error from a function:
  *
  * ```kotlin
  * rustWriter.rustBlock("fn get_error() -> #T", operation.errorSymbol(symbolProvider)) {
- *   write("todo!() // function body")
+ *     write("todo!() // function body")
  * }
  * ```
  */
@@ -88,7 +88,7 @@ class CombinedErrorGenerator(
             }
             rust(
                 """
-                /// An unexpected error, eg. invalid JSON returned by the service or an unknown error code
+                /// An unexpected error, e.g. invalid JSON returned by the service or an unknown error code
                 Unhandled(Box<dyn #T + Send + Sync + 'static>),
                 """,
                 RuntimeType.StdError
@@ -179,7 +179,7 @@ class CombinedErrorGenerator(
             errors.forEach { error ->
                 val errorSymbol = symbolProvider.toSymbol(error)
                 val fnName = errorSymbol.name.toSnakeCase()
-                writer.rust("/// Returns true if the error kind is `${symbol.name}Kind::${errorSymbol.name}`.")
+                writer.rust("/// Returns `true` if the error kind is `${symbol.name}Kind::${errorSymbol.name}`.")
                 writer.rustBlock("pub fn is_$fnName(&self) -> bool") {
                     rust("matches!(&self.kind, ${symbol.name}Kind::${errorSymbol.name}(_))")
                 }
@@ -207,12 +207,13 @@ class CombinedErrorGenerator(
 
     /**
      * Generates code to delegate behavior to the variants, for example:
+     *
      * ```rust
-     *  match self {
-     *    GreetingWithErrorsError::InvalidGreeting(_inner) => inner.fmt(f),
-     *    GreetingWithErrorsError::ComplexError(_inner) => inner.fmt(f),
-     *    GreetingWithErrorsError::FooError(_inner) => inner.fmt(f),
-     *    GreetingWithErrorsError::Unhandled(_inner) => _inner.fmt(f),
+     *  match &self.kind {
+     *      GreetingWithErrorsError::InvalidGreeting(_inner) => inner.fmt(f),
+     *      GreetingWithErrorsError::ComplexError(_inner) => inner.fmt(f),
+     *      GreetingWithErrorsError::FooError(_inner) => inner.fmt(f),
+     *      GreetingWithErrorsError::Unhandled(_inner) => _inner.fmt(f),
      *  }
      *  ```
      *
