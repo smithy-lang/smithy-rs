@@ -27,7 +27,14 @@ impl fmt::Display for DateParseError {
     }
 }
 
+fn remove_trailing_zeros(string: &mut String) {
+    while let Some(b'0') = string.as_bytes().last() {
+        string.pop();
+    }
+}
+
 pub(crate) mod epoch_seconds {
+    use super::remove_trailing_zeros;
     use super::DateParseError;
     use crate::Instant;
     use std::str::FromStr;
@@ -37,8 +44,9 @@ pub(crate) mod epoch_seconds {
         if instant.subsecond_nanos == 0 {
             format!("{}", instant.seconds)
         } else {
-            let fraction = format!("{:0>9}", instant.subsecond_nanos);
-            format!("{}.{}", instant.seconds, fraction.trim_end_matches('0'))
+            let mut result = format!("{}.{:0>9}", instant.seconds, instant.subsecond_nanos);
+            remove_trailing_zeros(&mut result);
+            result
         }
     }
 
@@ -71,6 +79,7 @@ pub(crate) mod epoch_seconds {
 }
 
 pub(crate) mod http_date {
+    use super::remove_trailing_zeros;
     use crate::instant::format::{DateParseError, NANOS_PER_SECOND};
     use crate::Instant;
     use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike, Weekday};
@@ -176,9 +185,7 @@ pub(crate) mod http_date {
             push_digit(&mut out, (nanos / (NANOS_PER_SECOND / 10)) as u8);
             push_digit(&mut out, (nanos / (NANOS_PER_SECOND / 100) % 10) as u8);
             push_digit(&mut out, (nanos / (NANOS_PER_SECOND / 1000) % 10) as u8);
-            while let Some(b'0') = out.as_bytes().last() {
-                out.pop();
-            }
+            remove_trailing_zeros(&mut out);
         }
 
         out.push_str(" GMT");
