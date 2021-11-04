@@ -11,6 +11,7 @@ v0.0.23-alpha (November 3rd, 2021)
 - :bug: `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
 - :bug: Fix generated docs on unions like `dynamodb::AttributeValue`. (smithy-rs#826)
 - Updated SES email-contact-list code example: renamed it to send-email and added a readme.
+- Added SES code example is-email-verified, which determines whether an email address has been verified.
 
 **Breaking Changes**
 - `<operation>.make_operation(&config)` is now an `async` function for all operations. Code should be updated to call `.await`. This will only impact users using the low-level API. (smithy-rs#797)
