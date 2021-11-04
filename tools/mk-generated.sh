@@ -34,7 +34,7 @@ set -e
     cd "$repo_root" && ./gradlew :codegen-server-test:assemble
     mv "$repo_root"/codegen-server-test/build/smithyprojections/codegen-server-test "$target"/server-test
     # Cleanup the server-test folder
-    rm -rf "$target"/server-test/sources
+    rm -rf "$target"/server-test/source
     find "$target"/server-test |grep -E "smithy-build-info.json|sources/manifest|sources/model.json" | xargs rm -f
     # checkout and reset $gen_branch to be based on the __generated__ history
     git fetch origin "$base_branch"
