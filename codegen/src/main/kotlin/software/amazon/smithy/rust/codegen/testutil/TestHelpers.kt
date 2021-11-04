@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.smithy.RustCodegenPlugin
@@ -30,7 +31,8 @@ import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.util.dq
 import java.io.File
 
-val TestRuntimeConfig = RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.Path(File("../rust-runtime/").absolutePath))
+val TestRuntimeConfig =
+    RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.Path(File("../rust-runtime/").absolutePath))
 val TestSymbolVisitorConfig = SymbolVisitorConfig(
     runtimeConfig = TestRuntimeConfig,
     codegenConfig = CodegenConfig(),
@@ -72,7 +74,8 @@ fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSy
 fun testCodegenContext(
     model: Model,
     serviceShape: ServiceShape? = null,
-    settings: RustSettings = testRustSettings(model)
+    settings: RustSettings = testRustSettings(model),
+    mode: CodegenMode = CodegenMode.Client
 ): CodegenContext = CodegenContext(
     model,
     testSymbolProvider(model),
@@ -80,7 +83,7 @@ fun testCodegenContext(
     serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
     ShapeId.from("test#Protocol"),
     settings.moduleName,
-    settings
+    settings, mode
 )
 
 private const val SmithyVersion = "1.0"

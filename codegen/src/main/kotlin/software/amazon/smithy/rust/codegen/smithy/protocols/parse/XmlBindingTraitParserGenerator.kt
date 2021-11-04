@@ -40,7 +40,9 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isBoxed
 import software.amazon.smithy.rust.codegen.smithy.isOptional
@@ -51,7 +53,6 @@ import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.outputShape
-import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 // The string argument is the name of the XML ScopedDecoder to continue parsing from
 typealias OperationInnerWriteable = RustWriter.(String) -> Unit
@@ -109,6 +110,7 @@ class XmlBindingTraitParserGenerator(
     private val model = codegenContext.model
     private val index = HttpBindingIndex.of(model)
     private val xmlIndex = XmlNameIndex.of(model)
+    private val mode = codegenContext.mode
     private val xmlDeserModule = RustModule.private("xml_deser")
 
     /**
@@ -385,9 +387,9 @@ class XmlBindingTraitParserGenerator(
             ) {
                 val members = shape.members()
                 rustTemplate("let mut base: Option<#{Shape}> = None;", *codegenScope, "Shape" to symbol)
-                parseLoop(Ctx(tag = "decoder", accum = null)) { ctx ->
+                parseLoop(Ctx(tag = "decoder", accum = null), ignoreUnexpected = false) { ctx ->
                     members.forEach { member ->
-                        val variantName = member.memberName.toPascalCase()
+                        val variantName = symbolProvider.toMemberName(member)
                         case(member) {
                             val current =
                                 """
@@ -402,6 +404,10 @@ class XmlBindingTraitParserGenerator(
                             }
                             rust("base = Some(#T::$variantName(tmp));", symbol)
                         }
+                    }
+                    when (mode.renderUnknownVariant()) {
+                        true -> rust("_unknown => base = Some(#T::${UnionGenerator.UnknownVariantName}),", symbol)
+                        false -> rustTemplate("""variant => return Err(#{XmlError}::custom(format!("unexpected union variant: {:?}", variant)))""", *codegenScope)
                     }
                 }
                 rustTemplate("""base.ok_or_else(||#{XmlError}::custom("expected union, got nothing"))""", *codegenScope)

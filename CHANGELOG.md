@@ -16,6 +16,7 @@ v0.27.0-alpha.1 (November 3rd, 2021)
 - `moduleDescription` in `smithy-build.json` settings is now optional
 - Upgrade to Smithy 1.12
 - `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
+- Unions will optionally generate an `Unknown` variant to support parsing variants that don't exist on the client. These variants will fail to serialize if they are ever included in requests.
 - Fix generated docs on unions. (smithy-rs#826)
 
 v0.27 (October 20th, 2021)

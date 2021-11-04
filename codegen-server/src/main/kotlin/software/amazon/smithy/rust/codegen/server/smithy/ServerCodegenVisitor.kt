@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
@@ -87,7 +88,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         symbolProvider =
             codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
-        codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings)
+        codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, mode = CodegenMode.Server)
 
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
@@ -208,7 +209,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     override fun unionShape(shape: UnionShape) {
         logger.info("[rust-server-codegen] Generating an union $shape")
         rustCrate.useShapeWriter(shape) {
-            UnionGenerator(model, symbolProvider, it, shape).render()
+            UnionGenerator(model, symbolProvider, it, shape, renderUnknownVariant = false).render()
         }
     }
 
@@ -257,6 +258,12 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             impl From<aws_smithy_json::deserialize::Error> for Error {
                 fn from(err: aws_smithy_json::deserialize::Error) -> Self {
                     Self::DeserializeJson(err)
+                }
+            }
+
+            impl From<aws_smithy_http::operation::SerializationError> for Error {
+                fn from(err: aws_smithy_http::operation::SerializationError) -> Self {
+                    Self::BuildInput(err.into())
                 }
             }
 

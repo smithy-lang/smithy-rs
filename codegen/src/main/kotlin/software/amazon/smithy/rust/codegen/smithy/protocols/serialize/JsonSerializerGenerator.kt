@@ -35,6 +35,9 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
+import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -45,7 +48,6 @@ import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
-import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 class JsonSerializerGenerator(
     codegenContext: CodegenContext,
@@ -56,6 +58,7 @@ class JsonSerializerGenerator(
         val writerExpression: String,
         /** Expression representing the value to write to the JsonValueWriter */
         val valueExpression: ValueExpression,
+        /** Path in the JSON to get here, used for errors */
         val shape: T,
     )
 
@@ -126,13 +129,13 @@ class JsonSerializerGenerator(
 
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
+    private val mode = codegenContext.mode
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
-    private val serializerError = smithyTypes.member("Error")
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
-        "Error" to serializerError,
+        "Error" to runtimeConfig.serializationError(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "JsonObjectWriter" to smithyJson.member("serialize::JsonObjectWriter"),
         "JsonValueWriter" to smithyJson.member("serialize::JsonValueWriter"),
@@ -147,7 +150,11 @@ class JsonSerializerGenerator(
      * We still generate the serializer symbol even if there are no included members because the server
      * generation requires serializers for all output/error structures.
      */
-    private fun structureSerializer(fnName: String, structureShape: StructureShape, includedMembers: List<MemberShape>): RuntimeType {
+    private fun structureSerializer(
+        fnName: String,
+        structureShape: StructureShape,
+        includedMembers: List<MemberShape>
+    ): RuntimeType {
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             it.rustBlockTemplate(
                 "pub fn $fnName(value: &#{target}) -> Result<String, #{Error}>",
@@ -244,7 +251,9 @@ class JsonSerializerGenerator(
 
     override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
         val errorShape = model.expectShape(shape, StructureShape::class.java)
-        val includedMembers = httpBindingResolver.errorResponseBindings(shape).filter { it.location == HttpLocation.DOCUMENT }.map { it.member }
+        val includedMembers =
+            httpBindingResolver.errorResponseBindings(shape).filter { it.location == HttpLocation.DOCUMENT }
+                .map { it.member }
         val fnName = symbolProvider.serializeFunctionName(errorShape)
         return structureSerializer(fnName, errorShape, includedMembers)
     }
@@ -257,7 +266,7 @@ class JsonSerializerGenerator(
         val structureSymbol = symbolProvider.toSymbol(context.shape)
         val structureSerializer = RuntimeType.forInlineFun(fnName, jsonSerModule) { writer ->
             writer.rustBlockTemplate(
-                "pub fn $fnName(object: &mut #{JsonObjectWriter}, input: &#{Input})",
+                "pub fn $fnName(object: &mut #{JsonObjectWriter}, input: &#{Input}) -> Result<(), #{Error}>",
                 "Input" to structureSymbol,
                 *codegenScope,
             ) {
@@ -270,9 +279,10 @@ class JsonSerializerGenerator(
                         serializeMember(MemberContext.structMember(inner, member, symbolProvider))
                     }
                 }
+                rust("Ok(())")
             }
         }
-        rust("#T(&mut ${context.objectName}, ${context.localName});", structureSerializer)
+        rust("#T(&mut ${context.objectName}, ${context.localName})?;", structureSerializer)
     }
 
     private fun RustWriter.serializeMember(context: MemberContext) {
@@ -387,20 +397,28 @@ class JsonSerializerGenerator(
         val unionSymbol = symbolProvider.toSymbol(context.shape)
         val unionSerializer = RuntimeType.forInlineFun(fnName, jsonSerModule) { writer ->
             writer.rustBlockTemplate(
-                "pub fn $fnName(${context.writerExpression}: &mut #{JsonObjectWriter}, input: &#{Input})",
+                "pub fn $fnName(${context.writerExpression}: &mut #{JsonObjectWriter}, input: &#{Input}) -> Result<(), #{Error}>",
                 "Input" to unionSymbol,
                 *codegenScope,
             ) {
                 rustBlock("match input") {
                     for (member in context.shape.members()) {
-                        val variantName = member.memberName.toPascalCase()
+                        val variantName = symbolProvider.toMemberName(member)
                         withBlock("#T::$variantName(inner) => {", "},", unionSymbol) {
                             serializeMember(MemberContext.unionMember(context, "inner", member))
                         }
                     }
+                    if (mode.renderUnknownVariant()) {
+                        rustTemplate(
+                            "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
+                            "Union" to unionSymbol,
+                            *codegenScope
+                        )
+                    }
                 }
+                rust("Ok(())")
             }
         }
-        rust("#T(&mut ${context.writerExpression}, ${context.valueExpression.asRef()});", unionSerializer)
+        rust("#T(&mut ${context.writerExpression}, ${context.valueExpression.asRef()})?;", unionSerializer)
     }
 }

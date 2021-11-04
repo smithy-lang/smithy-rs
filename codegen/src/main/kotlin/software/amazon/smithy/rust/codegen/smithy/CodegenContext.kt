@@ -9,6 +9,11 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 
+sealed class CodegenMode {
+    object Server : CodegenMode()
+    object Client : CodegenMode()
+}
+
 /**
  * Configuration needed to generate the client for a given Service<->Protocol pair
  */
@@ -44,6 +49,12 @@ data class CodegenContext(
      * Settings loaded from smithy-build.json
      */
     val settings: RustSettings,
+    /**
+     * Server vs. Client codegen
+     *
+     * Some settings are dependent on whether server vs. client codegen is being invoked.
+     */
+    val mode: CodegenMode,
 ) {
     constructor(
         model: Model,
@@ -51,5 +62,6 @@ data class CodegenContext(
         serviceShape: ServiceShape,
         protocol: ShapeId,
         settings: RustSettings,
-    ) : this(model, symbolProvider, settings.runtimeConfig, serviceShape, protocol, settings.moduleName, settings)
+        mode: CodegenMode,
+    ) : this(model, symbolProvider, settings.runtimeConfig, serviceShape, protocol, settings.moduleName, settings, mode)
 }

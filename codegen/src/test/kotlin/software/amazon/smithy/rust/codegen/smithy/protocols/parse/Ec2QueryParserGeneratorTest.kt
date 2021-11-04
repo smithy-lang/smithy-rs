@@ -53,16 +53,16 @@ class Ec2QueryParserGeneratorTest {
 
         project.lib { writer ->
             writer.unitTest(
-                name = "valid_input",
-                test = """
-                    let xml = br#"
-                    <SomeOperationResponse someAttribute="5">
-                        <someVal>Some value</someVal>
-                    </someOperationResponse>
-                    "#;
-                    let output = ${writer.format(operationParser)}(xml, output::some_operation_output::Builder::default()).unwrap().build();
-                    assert_eq!(output.some_attribute, Some(5));
-                    assert_eq!(output.some_val, Some("Some value".to_string()));
+                "valid_input",
+                """
+                let xml = br#"
+                <SomeOperationResponse someAttribute="5">
+                    <someVal>Some value</someVal>
+                </someOperationResponse>
+                "#;
+                let output = ${writer.format(operationParser)}(xml, output::some_operation_output::Builder::default()).unwrap().build();
+                assert_eq!(output.some_attribute, Some(5));
+                assert_eq!(output.some_val, Some("Some value".to_string()));
                 """
             )
         }
