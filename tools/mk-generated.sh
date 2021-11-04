@@ -26,16 +26,23 @@ set -e
 	echo "Current branch resolved to: $current_branch"
 	gen_branch="__generated-$current_branch"
 	repo_root=$(git rev-parse --show-toplevel)
-	cd "$repo_root" && ./gradlew :aws:sdk:assemble
 	target="$(mktemp -d)"
+  # Generate and copy AWS SDK models
+	cd "$repo_root" && ./gradlew :aws:sdk:assemble
 	mv "$repo_root"/aws/sdk/build/aws-sdk "$target"
+  # Generate and copy codegen-server-test models
+	cd "$repo_root" && ./gradlew :codegen-server-test:test
+	mv "$repo_root"/codegen-server-test/build/smithyprojections/codegen-server-test "$target"/server-test
 	# checkout and reset $gen_branch to be based on the __generated__ history
 	git fetch origin "$base_branch"
 	git checkout -B "$gen_branch" origin/"$base_branch"
 	cd "$repo_root" && git rm -rf .
 	rm -rf "$repo_root/aws-sdk"
+	rm -rf "$repo_root/server-test"
 	mv "$target"/aws-sdk "$repo_root"/.
+	mv "$target"/server-test "$repo_root"/.
 	git add "$repo_root"/aws-sdk
+	git add "$repo_root"/server-test
 	PRE_COMMIT_ALLOW_NO_CONFIG=1 git \
   	-c "user.name=GitHub Action (generated code preview)" \
 	  -c "user.email=generated-code-action@github.com" \
