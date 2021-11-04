@@ -110,7 +110,7 @@
                     "min": 1,
                     "max": 64
                 },
-                "smithy.api#pattern": "[a-zA-Z]+"
+                "smithy.api#pattern": "^[a-zA-Z]+$"
             }
         },
         "com.amazonaws.workmail#AccessControlRuleDescription": {
@@ -120,7 +120,7 @@
                     "min": 0,
                     "max": 255
                 },
-                "smithy.api#pattern": "[\\u0020-\\u00FF]+"
+                "smithy.api#pattern": "^[\\u0020-\\u00FF]+$"
             }
         },
         "com.amazonaws.workmail#AccessControlRuleEffect": {
@@ -145,7 +145,7 @@
                     "min": 1,
                     "max": 64
                 },
-                "smithy.api#pattern": "[a-zA-Z0-9_-]+"
+                "smithy.api#pattern": "^[a-zA-Z0-9_-]+$"
             }
         },
         "com.amazonaws.workmail#AccessControlRuleNameList": {
@@ -356,6 +356,12 @@
         },
         "com.amazonaws.workmail#Boolean": {
             "type": "boolean"
+        },
+        "com.amazonaws.workmail#BooleanObject": {
+            "type": "boolean",
+            "traits": {
+                "smithy.api#box": {}
+            }
         },
         "com.amazonaws.workmail#CancelMailboxExportJob": {
             "type": "operation",
@@ -962,7 +968,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Deletes an access control rule for the specified WorkMail organization.</p>"
+                "smithy.api#documentation": "<p>Deletes an access control rule for the specified WorkMail organization.</p>\n         <note>\n            <p>Deleting already deleted and non-existing rules does not produce an error. In those cases, the service sends back an HTTP 200 response with an empty HTTP body.</p>\n         </note>"
             }
         },
         "com.amazonaws.workmail#DeleteAccessControlRuleRequest": {
@@ -1167,6 +1173,62 @@
             "type": "structure",
             "members": {}
         },
+        "com.amazonaws.workmail#DeleteMobileDeviceAccessOverride": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.workmail#DeleteMobileDeviceAccessOverrideRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.workmail#DeleteMobileDeviceAccessOverrideResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.workmail#EntityNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#InvalidParameterException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationStateException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Deletes the mobile device access override for the given WorkMail organization, user, and device.</p>\n         <note>\n            <p>Deleting already deleted and non-existing overrides does not produce an error. In those cases, the service sends back an HTTP 200 response with an empty HTTP body.</p>\n         </note>"
+            }
+        },
+        "com.amazonaws.workmail#DeleteMobileDeviceAccessOverrideRequest": {
+            "type": "structure",
+            "members": {
+                "OrganizationId": {
+                    "target": "com.amazonaws.workmail#OrganizationId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The Amazon WorkMail organization for which the access override will be deleted.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "UserId": {
+                    "target": "com.amazonaws.workmail#EntityIdentifier",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The WorkMail user for which you want to delete the override. Accepts the following types of user identities:</p>\n         <ul>\n            <li>\n               <p>User ID:  <code>12345678-1234-1234-1234-123456789012</code> or <code>S-1-1-12-1234567890-123456789-123456789-1234</code> \n               </p>\n            </li>\n            <li>\n               <p>Email address: <code>user@domain.tld</code>\n               </p>\n            </li>\n            <li>\n               <p>User name: <code>user</code>\n               </p>\n            </li>\n         </ul>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "DeviceId": {
+                    "target": "com.amazonaws.workmail#DeviceId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The mobile device for which you delete the override. <code>DeviceId</code> is case insensitive.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.workmail#DeleteMobileDeviceAccessOverrideResponse": {
+            "type": "structure",
+            "members": {}
+        },
         "com.amazonaws.workmail#DeleteMobileDeviceAccessRule": {
             "type": "operation",
             "input": {
@@ -1187,7 +1249,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Deletes a mobile device access rule for the specified Amazon WorkMail organization.</p>"
+                "smithy.api#documentation": "<p>Deletes a mobile device access rule for the specified Amazon WorkMail organization.</p>\n         <note>\n            <p>Deleting already deleted and non-existing rules does not produce an error. In those cases, the service sends back an HTTP 200 response with an empty HTTP body.</p>\n         </note>"
             }
         },
         "com.amazonaws.workmail#DeleteMobileDeviceAccessRuleRequest": {
@@ -1489,6 +1551,59 @@
             "type": "structure",
             "members": {}
         },
+        "com.amazonaws.workmail#DeregisterMailDomain": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.workmail#DeregisterMailDomainRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.workmail#DeregisterMailDomainResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.workmail#InvalidCustomSesConfigurationException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#InvalidParameterException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#MailDomainInUseException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationStateException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Removes a domain from Amazon WorkMail, stops email routing to WorkMail, and removes the authorization allowing WorkMail use. SES keeps the domain because other applications may use it. You must first \n         remove any email address used by WorkMail entities before you remove the domain.</p>",
+                "smithy.api#idempotent": {}
+            }
+        },
+        "com.amazonaws.workmail#DeregisterMailDomainRequest": {
+            "type": "structure",
+            "members": {
+                "OrganizationId": {
+                    "target": "com.amazonaws.workmail#OrganizationId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The Amazon WorkMail organization for which the domain will be deregistered.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "DomainName": {
+                    "target": "com.amazonaws.workmail#WorkMailDomainName",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The domain to deregister in WorkMail and SES. </p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.workmail#DeregisterMailDomainResponse": {
+            "type": "structure",
+            "members": {}
+        },
         "com.amazonaws.workmail#DescribeGroup": {
             "type": "operation",
             "input": {
@@ -1572,6 +1687,50 @@
                     "target": "com.amazonaws.workmail#Timestamp",
                     "traits": {
                         "smithy.api#documentation": "<p>The date and time when a user was deregistered from WorkMail, in UNIX epoch time\n         format.</p>"
+                    }
+                }
+            }
+        },
+        "com.amazonaws.workmail#DescribeInboundDmarcSettings": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.workmail#DescribeInboundDmarcSettingsRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.workmail#DescribeInboundDmarcSettingsResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.workmail#OrganizationNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationStateException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Lists the settings in a DMARC policy for a specified organization.</p>",
+                "smithy.api#idempotent": {}
+            }
+        },
+        "com.amazonaws.workmail#DescribeInboundDmarcSettingsRequest": {
+            "type": "structure",
+            "members": {
+                "OrganizationId": {
+                    "target": "com.amazonaws.workmail#OrganizationId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Lists the ID of the given organization.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.workmail#DescribeInboundDmarcSettingsResponse": {
+            "type": "structure",
+            "members": {
+                "Enforced": {
+                    "target": "com.amazonaws.workmail#Boolean",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Lists the enforcement setting of the applied policy.</p>"
                     }
                 }
             }
@@ -1996,7 +2155,17 @@
                     "min": 0,
                     "max": 1023
                 },
-                "smithy.api#pattern": "[\\S\\s]*"
+                "smithy.api#pattern": "^[\\S\\s]*$"
+            }
+        },
+        "com.amazonaws.workmail#DeviceId": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 1,
+                    "max": 32
+                },
+                "smithy.api#pattern": "^[A-Za-z0-9]+$"
             }
         },
         "com.amazonaws.workmail#DeviceModel": {
@@ -2006,7 +2175,7 @@
                     "min": 1,
                     "max": 256
                 },
-                "smithy.api#pattern": "[\\u0020-\\u00FF]+"
+                "smithy.api#pattern": "^[\\u0020-\\u00FF]+$"
             }
         },
         "com.amazonaws.workmail#DeviceModelList": {
@@ -2028,7 +2197,7 @@
                     "min": 1,
                     "max": 256
                 },
-                "smithy.api#pattern": "[\\u0020-\\u00FF]+"
+                "smithy.api#pattern": "^[\\u0020-\\u00FF]+$"
             }
         },
         "com.amazonaws.workmail#DeviceOperatingSystemList": {
@@ -2050,7 +2219,7 @@
                     "min": 1,
                     "max": 256
                 },
-                "smithy.api#pattern": "[\\u0020-\\u00FF]+"
+                "smithy.api#pattern": "^[\\u0020-\\u00FF]+$"
             }
         },
         "com.amazonaws.workmail#DeviceTypeList": {
@@ -2072,7 +2241,7 @@
                     "min": 1,
                     "max": 256
                 },
-                "smithy.api#pattern": "[\\u0020-\\u00FF]+"
+                "smithy.api#pattern": "^[\\u0020-\\u00FF]+$"
             }
         },
         "com.amazonaws.workmail#DeviceUserAgentList": {
@@ -2262,6 +2431,57 @@
             "type": "structure",
             "members": {}
         },
+        "com.amazonaws.workmail#DnsRecord": {
+            "type": "structure",
+            "members": {
+                "Type": {
+                    "target": "com.amazonaws.workmail#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The RFC 1035 record type. Possible values: <code>CNAME</code>, <code>A</code>, <code>MX</code>.</p>"
+                    }
+                },
+                "Hostname": {
+                    "target": "com.amazonaws.workmail#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The DNS hostname.- For example, <code>domain.example.com</code>.</p>"
+                    }
+                },
+                "Value": {
+                    "target": "com.amazonaws.workmail#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The value returned by the DNS for a query to that hostname and record type.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>A DNS record uploaded to your DNS provider.</p>"
+            }
+        },
+        "com.amazonaws.workmail#DnsRecordVerificationStatus": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "PENDING",
+                        "name": "PENDING"
+                    },
+                    {
+                        "value": "VERIFIED",
+                        "name": "VERIFIED"
+                    },
+                    {
+                        "value": "FAILED",
+                        "name": "FAILED"
+                    }
+                ]
+            }
+        },
+        "com.amazonaws.workmail#DnsRecords": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.workmail#DnsRecord"
+            }
+        },
         "com.amazonaws.workmail#Domain": {
             "type": "structure",
             "members": {
@@ -2289,7 +2509,7 @@
                     "min": 3,
                     "max": 255
                 },
-                "smithy.api#pattern": "[a-zA-Z0-9.-]+\\.[a-zA-Z-]{2,}"
+                "smithy.api#pattern": "^[a-zA-Z0-9.-]+\\.[a-zA-Z-]{2,}$"
             }
         },
         "com.amazonaws.workmail#Domains": {
@@ -2311,7 +2531,7 @@
                     "min": 1,
                     "max": 254
                 },
-                "smithy.api#pattern": "[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9.-]+\\.[a-zA-Z-]{2,}"
+                "smithy.api#pattern": "^[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9.-]+\\.[a-zA-Z-]{2,}$"
             }
         },
         "com.amazonaws.workmail#EmailAddressInUseException": {
@@ -2336,6 +2556,16 @@
             "traits": {
                 "smithy.api#documentation": "<p>The user, group, or resource that you're trying to register is already\n         registered.</p>",
                 "smithy.api#error": "client"
+            }
+        },
+        "com.amazonaws.workmail#EntityIdentifier": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 1,
+                    "max": 256
+                },
+                "smithy.api#pattern": "^[a-zA-Z0-9._%+@-]+$"
             }
         },
         "com.amazonaws.workmail#EntityNotFoundException": {
@@ -2401,7 +2631,7 @@
                 "Period": {
                     "target": "com.amazonaws.workmail#RetentionPeriod",
                     "traits": {
-                        "smithy.api#documentation": "<p>The period of time at which the folder configuration action is applied.</p>"
+                        "smithy.api#documentation": "<p>The number of days for which the folder-configuration action applies.</p>"
                     }
                 }
             },
@@ -2586,6 +2816,87 @@
                 }
             }
         },
+        "com.amazonaws.workmail#GetMailDomain": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.workmail#GetMailDomainRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.workmail#GetMailDomainResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.workmail#InvalidParameterException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#MailDomainNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationStateException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Gets details for a mail domain, including domain records required to configure your domain with recommended security.</p>",
+                "smithy.api#idempotent": {}
+            }
+        },
+        "com.amazonaws.workmail#GetMailDomainRequest": {
+            "type": "structure",
+            "members": {
+                "OrganizationId": {
+                    "target": "com.amazonaws.workmail#OrganizationId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The Amazon WorkMail organization for which the domain is retrieved.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "DomainName": {
+                    "target": "com.amazonaws.workmail#WorkMailDomainName",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The domain from which you want to retrieve details.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.workmail#GetMailDomainResponse": {
+            "type": "structure",
+            "members": {
+                "Records": {
+                    "target": "com.amazonaws.workmail#DnsRecords",
+                    "traits": {
+                        "smithy.api#documentation": "<p>A list of the DNS records that Amazon WorkMail recommends adding in your DNS provider for the best user experience. The records configure your domain with DMARC, SPF, DKIM, and direct incoming \n         email traffic to SES. See admin guide for more details.</p>"
+                    }
+                },
+                "IsTestDomain": {
+                    "target": "com.amazonaws.workmail#Boolean",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Specifies whether the domain is a test domain provided by WorkMail, or a custom domain.</p>"
+                    }
+                },
+                "IsDefault": {
+                    "target": "com.amazonaws.workmail#Boolean",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Specifies whether the domain is the default domain for your organization.</p>"
+                    }
+                },
+                "OwnershipVerificationStatus": {
+                    "target": "com.amazonaws.workmail#DnsRecordVerificationStatus",
+                    "traits": {
+                        "smithy.api#documentation": "<p> Indicates the status of the domain ownership verification.</p>"
+                    }
+                },
+                "DkimVerificationStatus": {
+                    "target": "com.amazonaws.workmail#DnsRecordVerificationStatus",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Indicates the status of a DKIM verification.</p>"
+                    }
+                }
+            }
+        },
         "com.amazonaws.workmail#GetMailboxDetails": {
             "type": "operation",
             "input": {
@@ -2722,6 +3033,102 @@
                 }
             }
         },
+        "com.amazonaws.workmail#GetMobileDeviceAccessOverride": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.workmail#GetMobileDeviceAccessOverrideRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.workmail#GetMobileDeviceAccessOverrideResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.workmail#EntityNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#InvalidParameterException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationStateException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#ResourceNotFoundException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Gets the mobile device access override for the given WorkMail organization, user, and device.</p>"
+            }
+        },
+        "com.amazonaws.workmail#GetMobileDeviceAccessOverrideRequest": {
+            "type": "structure",
+            "members": {
+                "OrganizationId": {
+                    "target": "com.amazonaws.workmail#OrganizationId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The Amazon WorkMail organization to which you want to apply the override.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "UserId": {
+                    "target": "com.amazonaws.workmail#EntityIdentifier",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Identifies the WorkMail user for the override. Accepts the following types of user identities: </p>\n         <ul>\n            <li>\n               <p>User ID: <code>12345678-1234-1234-1234-123456789012</code> or <code>S-1-1-12-1234567890-123456789-123456789-1234</code> \n               </p>\n            </li>\n            <li>\n               <p>Email address: <code>user@domain.tld</code>\n               </p>\n            </li>\n            <li>\n               <p>User name: <code>user</code>\n               </p>\n            </li>\n         </ul>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "DeviceId": {
+                    "target": "com.amazonaws.workmail#DeviceId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The mobile device to which the override applies. <code>DeviceId</code> is case insensitive.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.workmail#GetMobileDeviceAccessOverrideResponse": {
+            "type": "structure",
+            "members": {
+                "UserId": {
+                    "target": "com.amazonaws.workmail#WorkMailIdentifier",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The WorkMail user to which the access override applies.</p>"
+                    }
+                },
+                "DeviceId": {
+                    "target": "com.amazonaws.workmail#DeviceId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The device to which the access override applies.</p>"
+                    }
+                },
+                "Effect": {
+                    "target": "com.amazonaws.workmail#MobileDeviceAccessRuleEffect",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The effect of the override, <code>ALLOW</code> or <code>DENY</code>.</p>"
+                    }
+                },
+                "Description": {
+                    "target": "com.amazonaws.workmail#MobileDeviceAccessRuleDescription",
+                    "traits": {
+                        "smithy.api#documentation": "<p>A description of the override.</p>"
+                    }
+                },
+                "DateCreated": {
+                    "target": "com.amazonaws.workmail#Timestamp",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The date the override was first created.</p>"
+                    }
+                },
+                "DateModified": {
+                    "target": "com.amazonaws.workmail#Timestamp",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The date the description was last modified.</p>"
+                    }
+                }
+            }
+        },
         "com.amazonaws.workmail#Group": {
             "type": "structure",
             "members": {
@@ -2773,7 +3180,7 @@
                     "min": 1,
                     "max": 256
                 },
-                "smithy.api#pattern": "[\\u0020-\\u00FF]+"
+                "smithy.api#pattern": "^[\\u0020-\\u00FF]+$"
             }
         },
         "com.amazonaws.workmail#Groups": {
@@ -2789,7 +3196,7 @@
                     "min": 1,
                     "max": 32
                 },
-                "smithy.api#pattern": "[\\S\\s]*"
+                "smithy.api#pattern": "^[\\S\\s]*$"
             }
         },
         "com.amazonaws.workmail#IdempotencyClientToken": {
@@ -2799,7 +3206,7 @@
                     "min": 1,
                     "max": 128
                 },
-                "smithy.api#pattern": "[\\x21-\\x7e]+"
+                "smithy.api#pattern": "^[\\x21-\\x7e]+$"
             }
         },
         "com.amazonaws.workmail#InvalidConfigurationException": {
@@ -2811,6 +3218,18 @@
             },
             "traits": {
                 "smithy.api#documentation": "<p>The configuration for a resource isn't valid. A resource must either be able to\n         auto-respond to requests or have at least one delegate associated that can do so on its\n         behalf.</p>",
+                "smithy.api#error": "client"
+            }
+        },
+        "com.amazonaws.workmail#InvalidCustomSesConfigurationException": {
+            "type": "structure",
+            "members": {
+                "Message": {
+                    "target": "com.amazonaws.workmail#String"
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>You SES configuration has customizations that Amazon WorkMail cannot save. The error message lists the invalid setting. For examples of invalid settings, refer to \n         <a href=\"https://docs.aws.amazon.com/ses/latest/APIReference/API_CreateReceiptRule.html\">CreateReceiptRule</a>.</p>",
                 "smithy.api#error": "client"
             }
         },
@@ -2883,7 +3302,7 @@
                     "min": 20,
                     "max": 2048
                 },
-                "smithy.api#pattern": "arn:aws:kms:[a-z0-9-]*:[a-z0-9-]+:[A-Za-z0-9][A-Za-z0-9:_/+=,@.-]{0,1023}"
+                "smithy.api#pattern": "^arn:aws:kms:[a-z0-9-]*:[a-z0-9-]+:[A-Za-z0-9][A-Za-z0-9:_/+=,@.-]{0,1023}$"
             }
         },
         "com.amazonaws.workmail#LimitExceededException": {
@@ -3180,6 +3599,76 @@
                 }
             }
         },
+        "com.amazonaws.workmail#ListMailDomains": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.workmail#ListMailDomainsRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.workmail#ListMailDomainsResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.workmail#InvalidParameterException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationStateException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Lists the mail domains in a given Amazon WorkMail organization.</p>",
+                "smithy.api#idempotent": {},
+                "smithy.api#paginated": {
+                    "inputToken": "NextToken",
+                    "outputToken": "NextToken",
+                    "pageSize": "MaxResults"
+                }
+            }
+        },
+        "com.amazonaws.workmail#ListMailDomainsRequest": {
+            "type": "structure",
+            "members": {
+                "OrganizationId": {
+                    "target": "com.amazonaws.workmail#OrganizationId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The Amazon WorkMail organization for which to list domains.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "MaxResults": {
+                    "target": "com.amazonaws.workmail#MaxResults",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The maximum number of results to return in a single call.</p>"
+                    }
+                },
+                "NextToken": {
+                    "target": "com.amazonaws.workmail#NextToken",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The token to use to retrieve the next page of results. The first call does not require a token.</p>"
+                    }
+                }
+            }
+        },
+        "com.amazonaws.workmail#ListMailDomainsResponse": {
+            "type": "structure",
+            "members": {
+                "MailDomains": {
+                    "target": "com.amazonaws.workmail#MailDomains",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The list of mail domain summaries, specifying domains that exist in the specified Amazon WorkMail  organization, along with the information about whether the domain is or isn't the default.</p>"
+                    }
+                },
+                "NextToken": {
+                    "target": "com.amazonaws.workmail#NextToken",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The token to use to retrieve the next page of results. The value becomes <code>null</code> when there are no more results to return.</p>"
+                    }
+                }
+            }
+        },
         "com.amazonaws.workmail#ListMailboxExportJobs": {
             "type": "operation",
             "input": {
@@ -3326,6 +3815,90 @@
                     "target": "com.amazonaws.workmail#NextToken",
                     "traits": {
                         "smithy.api#documentation": "<p>The token to use to retrieve the next page of results. The value is \"null\" when there\n         are no more results to return.</p>"
+                    }
+                }
+            }
+        },
+        "com.amazonaws.workmail#ListMobileDeviceAccessOverrides": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.workmail#ListMobileDeviceAccessOverridesRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.workmail#ListMobileDeviceAccessOverridesResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.workmail#EntityNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#InvalidParameterException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationStateException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Lists all the mobile device access overrides for any given combination of WorkMail organization, user, or device.</p>",
+                "smithy.api#paginated": {
+                    "inputToken": "NextToken",
+                    "outputToken": "NextToken",
+                    "pageSize": "MaxResults"
+                }
+            }
+        },
+        "com.amazonaws.workmail#ListMobileDeviceAccessOverridesRequest": {
+            "type": "structure",
+            "members": {
+                "OrganizationId": {
+                    "target": "com.amazonaws.workmail#OrganizationId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The Amazon WorkMail organization under which to list mobile device access overrides.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "UserId": {
+                    "target": "com.amazonaws.workmail#EntityIdentifier",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The WorkMail user under which you list the mobile device access overrides. Accepts the following types of user identities:</p>\n         <ul>\n            <li>\n               <p>User ID: <code>12345678-1234-1234-1234-123456789012</code> or <code>S-1-1-12-1234567890-123456789-123456789-1234</code> \n               </p>\n            </li>\n            <li>\n               <p>Email address: <code>user@domain.tld</code>\n               </p>\n            </li>\n            <li>\n               <p>User name: <code>user</code>\n               </p>\n            </li>\n         </ul>"
+                    }
+                },
+                "DeviceId": {
+                    "target": "com.amazonaws.workmail#DeviceId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The mobile device to which the access override applies.</p>"
+                    }
+                },
+                "NextToken": {
+                    "target": "com.amazonaws.workmail#NextToken",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The token to use to retrieve the next page of results. The first call does not require a token.</p>"
+                    }
+                },
+                "MaxResults": {
+                    "target": "com.amazonaws.workmail#MaxResults",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The maximum number of results to return in a single call.</p>"
+                    }
+                }
+            }
+        },
+        "com.amazonaws.workmail#ListMobileDeviceAccessOverridesResponse": {
+            "type": "structure",
+            "members": {
+                "Overrides": {
+                    "target": "com.amazonaws.workmail#MobileDeviceAccessOverridesList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The list of mobile device access overrides that exist for the specified Amazon WorkMail organization and user.</p>"
+                    }
+                },
+                "NextToken": {
+                    "target": "com.amazonaws.workmail#NextToken",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The token to use to retrieve the next page of results. The value is “null” when there are no more results to return.</p>"
                     }
                 }
             }
@@ -3696,6 +4269,18 @@
                 }
             }
         },
+        "com.amazonaws.workmail#MailDomainInUseException": {
+            "type": "structure",
+            "members": {
+                "Message": {
+                    "target": "com.amazonaws.workmail#String"
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>The domain you're trying to change is in use by another user or organization in your account. See the error message for details.</p>",
+                "smithy.api#error": "client"
+            }
+        },
         "com.amazonaws.workmail#MailDomainNotFoundException": {
             "type": "structure",
             "members": {
@@ -3704,7 +4289,7 @@
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>For an email or alias to be created in Amazon WorkMail, the included domain must be defined\n         in the organization.</p>",
+                "smithy.api#documentation": "<p>The domain specified is not found in your organization.</p>",
                 "smithy.api#error": "client"
             }
         },
@@ -3720,6 +4305,32 @@
                 "smithy.api#error": "client"
             }
         },
+        "com.amazonaws.workmail#MailDomainSummary": {
+            "type": "structure",
+            "members": {
+                "DomainName": {
+                    "target": "com.amazonaws.workmail#DomainName",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The domain name.</p>"
+                    }
+                },
+                "DefaultDomain": {
+                    "target": "com.amazonaws.workmail#Boolean",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Whether the domain is default or not.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>The data for a given domain.</p>"
+            }
+        },
+        "com.amazonaws.workmail#MailDomains": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.workmail#MailDomainSummary"
+            }
+        },
         "com.amazonaws.workmail#MailboxExportErrorInfo": {
             "type": "string",
             "traits": {
@@ -3727,7 +4338,7 @@
                     "min": 1,
                     "max": 1024
                 },
-                "smithy.api#pattern": "[\\S\\s]*"
+                "smithy.api#pattern": "^[\\S\\s]*$"
             }
         },
         "com.amazonaws.workmail#MailboxExportJob": {
@@ -3799,7 +4410,7 @@
                     "min": 1,
                     "max": 63
                 },
-                "smithy.api#pattern": "[A-Za-z0-9-]+"
+                "smithy.api#pattern": "^[A-Za-z0-9-]+$"
             }
         },
         "com.amazonaws.workmail#MailboxExportJobState": {
@@ -3949,6 +4560,56 @@
                 }
             }
         },
+        "com.amazonaws.workmail#MobileDeviceAccessOverride": {
+            "type": "structure",
+            "members": {
+                "UserId": {
+                    "target": "com.amazonaws.workmail#WorkMailIdentifier",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The WorkMail user to which the access override applies.</p>"
+                    }
+                },
+                "DeviceId": {
+                    "target": "com.amazonaws.workmail#DeviceId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The device to which the override applies.</p>"
+                    }
+                },
+                "Effect": {
+                    "target": "com.amazonaws.workmail#MobileDeviceAccessRuleEffect",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The effect of the override, <code>ALLOW</code> or <code>DENY</code>.</p>"
+                    }
+                },
+                "Description": {
+                    "target": "com.amazonaws.workmail#MobileDeviceAccessRuleDescription",
+                    "traits": {
+                        "smithy.api#documentation": "<p>A description of the override.</p>"
+                    }
+                },
+                "DateCreated": {
+                    "target": "com.amazonaws.workmail#Timestamp",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The date the override was first created.</p>"
+                    }
+                },
+                "DateModified": {
+                    "target": "com.amazonaws.workmail#Timestamp",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The date the override was last modified.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>The override object.</p>"
+            }
+        },
+        "com.amazonaws.workmail#MobileDeviceAccessOverridesList": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.workmail#MobileDeviceAccessOverride"
+            }
+        },
         "com.amazonaws.workmail#MobileDeviceAccessRule": {
             "type": "structure",
             "members": {
@@ -4048,7 +4709,7 @@
                     "min": 1,
                     "max": 256
                 },
-                "smithy.api#pattern": "[\\S\\s]+"
+                "smithy.api#pattern": "^[\\S\\s]+$"
             }
         },
         "com.amazonaws.workmail#MobileDeviceAccessRuleEffect": {
@@ -4073,7 +4734,7 @@
                     "min": 1,
                     "max": 64
                 },
-                "smithy.api#pattern": "[a-zA-Z0-9_-]+"
+                "smithy.api#pattern": "^[a-zA-Z0-9_-]+$"
             }
         },
         "com.amazonaws.workmail#MobileDeviceAccessRuleName": {
@@ -4083,7 +4744,7 @@
                     "min": 1,
                     "max": 64
                 },
-                "smithy.api#pattern": "[\\S\\s]+"
+                "smithy.api#pattern": "^[\\S\\s]+$"
             }
         },
         "com.amazonaws.workmail#MobileDeviceAccessRulesList": {
@@ -4117,7 +4778,7 @@
                     "min": 1,
                     "max": 1024
                 },
-                "smithy.api#pattern": "[\\S\\s]*|[a-zA-Z0-9/+=]{1,1024}"
+                "smithy.api#pattern": "^[\\S\\s]*|[a-zA-Z0-9/+=]{1,1024}$"
             }
         },
         "com.amazonaws.workmail#OrganizationId": {
@@ -4137,7 +4798,7 @@
                     "min": 1,
                     "max": 62
                 },
-                "smithy.api#pattern": "^(?!d-)([\\da-zA-Z]+)([-][\\da-zA-Z]+)*"
+                "smithy.api#pattern": "^(?!d-)([\\da-zA-Z]+)([-][\\da-zA-Z]+)*$"
             }
         },
         "com.amazonaws.workmail#OrganizationNotFoundException": {
@@ -4215,7 +4876,7 @@
                     "min": 0,
                     "max": 256
                 },
-                "smithy.api#pattern": "[\\u0020-\\u00FF]+",
+                "smithy.api#pattern": "^[\\u0020-\\u00FF]+$",
                 "smithy.api#sensitive": {}
             }
         },
@@ -4295,7 +4956,7 @@
                     "min": 0,
                     "max": 256
                 },
-                "smithy.api#pattern": "[\\w\\d\\s\\S\\-!?=,.;:'_]+",
+                "smithy.api#pattern": "^[\\w\\d\\s\\S\\-!?=,.;:'_]+$",
                 "smithy.api#sensitive": {}
             }
         },
@@ -4401,6 +5062,50 @@
             "type": "structure",
             "members": {}
         },
+        "com.amazonaws.workmail#PutInboundDmarcSettings": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.workmail#PutInboundDmarcSettingsRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.workmail#PutInboundDmarcSettingsResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.workmail#OrganizationNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationStateException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Enables or disables a DMARC policy for a given organization.</p>",
+                "smithy.api#idempotent": {}
+            }
+        },
+        "com.amazonaws.workmail#PutInboundDmarcSettingsRequest": {
+            "type": "structure",
+            "members": {
+                "OrganizationId": {
+                    "target": "com.amazonaws.workmail#OrganizationId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The ID of the organization that you are applying the DMARC policy to. </p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "Enforced": {
+                    "target": "com.amazonaws.workmail#BooleanObject",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Enforces or suspends a policy after it's applied.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.workmail#PutInboundDmarcSettingsResponse": {
+            "type": "structure",
+            "members": {}
+        },
         "com.amazonaws.workmail#PutMailboxPermissions": {
             "type": "operation",
             "input": {
@@ -4465,6 +5170,78 @@
             }
         },
         "com.amazonaws.workmail#PutMailboxPermissionsResponse": {
+            "type": "structure",
+            "members": {}
+        },
+        "com.amazonaws.workmail#PutMobileDeviceAccessOverride": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.workmail#PutMobileDeviceAccessOverrideRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.workmail#PutMobileDeviceAccessOverrideResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.workmail#EntityNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#EntityStateException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#InvalidParameterException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationStateException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Creates or updates a mobile device access override for the given WorkMail organization, user, and device.</p>"
+            }
+        },
+        "com.amazonaws.workmail#PutMobileDeviceAccessOverrideRequest": {
+            "type": "structure",
+            "members": {
+                "OrganizationId": {
+                    "target": "com.amazonaws.workmail#OrganizationId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Identifies the Amazon WorkMail organization for which you create the override.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "UserId": {
+                    "target": "com.amazonaws.workmail#EntityIdentifier",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The WorkMail user for which you create the override. Accepts the following types of user identities:</p>\n         <ul>\n            <li>\n               <p>User ID: <code>12345678-1234-1234-1234-123456789012</code> or <code>S-1-1-12-1234567890-123456789-123456789-1234</code> \n               </p>\n            </li>\n            <li>\n               <p>Email address: <code>user@domain.tld</code>\n               </p>\n            </li>\n            <li>\n               <p>User name: <code>user</code>\n               </p>\n            </li>\n         </ul>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "DeviceId": {
+                    "target": "com.amazonaws.workmail#DeviceId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The mobile device for which you create the override. <code>DeviceId</code> is case insensitive.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "Effect": {
+                    "target": "com.amazonaws.workmail#MobileDeviceAccessRuleEffect",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The effect of the override, <code>ALLOW</code> or <code>DENY</code>.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "Description": {
+                    "target": "com.amazonaws.workmail#MobileDeviceAccessRuleDescription",
+                    "traits": {
+                        "smithy.api#documentation": "<p>A description of the override.</p>"
+                    }
+                }
+            }
+        },
+        "com.amazonaws.workmail#PutMobileDeviceAccessOverrideResponse": {
             "type": "structure",
             "members": {}
         },
@@ -4534,6 +5311,66 @@
             }
         },
         "com.amazonaws.workmail#PutRetentionPolicyResponse": {
+            "type": "structure",
+            "members": {}
+        },
+        "com.amazonaws.workmail#RegisterMailDomain": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.workmail#RegisterMailDomainRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.workmail#RegisterMailDomainResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.workmail#InvalidParameterException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#LimitExceededException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#MailDomainInUseException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationStateException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Registers a new domain in Amazon WorkMail and SES, and configures it for use by WorkMail. Emails received by SES for this domain are routed to the specified WorkMail organization, and WorkMail has \n         permanent permission to use the specified domain for sending your users' emails.</p>",
+                "smithy.api#idempotent": {}
+            }
+        },
+        "com.amazonaws.workmail#RegisterMailDomainRequest": {
+            "type": "structure",
+            "members": {
+                "ClientToken": {
+                    "target": "com.amazonaws.workmail#IdempotencyClientToken",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Idempotency token used when retrying requests.</p>",
+                        "smithy.api#idempotencyToken": {}
+                    }
+                },
+                "OrganizationId": {
+                    "target": "com.amazonaws.workmail#OrganizationId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The Amazon WorkMail organization under which you're creating the domain.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "DomainName": {
+                    "target": "com.amazonaws.workmail#WorkMailDomainName",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The name of the mail domain to create in Amazon WorkMail and SES.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.workmail#RegisterMailDomainResponse": {
             "type": "structure",
             "members": {}
         },
@@ -4772,7 +5609,7 @@
                     "min": 1,
                     "max": 20
                 },
-                "smithy.api#pattern": "[\\w\\-.]+(@[a-zA-Z0-9.\\-]+\\.[a-zA-Z0-9-]{2,})?"
+                "smithy.api#pattern": "^[\\w\\-.]+(@[a-zA-Z0-9.\\-]+\\.[a-zA-Z0-9-]{2,})?$"
             }
         },
         "com.amazonaws.workmail#ResourceNotFoundException": {
@@ -4854,7 +5691,7 @@
                     "min": 1,
                     "max": 63
                 },
-                "smithy.api#pattern": "[A-Za-z0-9.-]+"
+                "smithy.api#pattern": "^[A-Za-z0-9.-]+$"
             }
         },
         "com.amazonaws.workmail#S3ObjectKey": {
@@ -4864,7 +5701,7 @@
                     "min": 1,
                     "max": 1023
                 },
-                "smithy.api#pattern": "[A-Za-z0-9!_.*'()/-]+"
+                "smithy.api#pattern": "^[A-Za-z0-9!_.*'()/-]+$"
             }
         },
         "com.amazonaws.workmail#ShortString": {
@@ -4874,7 +5711,7 @@
                     "min": 1,
                     "max": 64
                 },
-                "smithy.api#pattern": "[a-zA-Z0-9_-]+"
+                "smithy.api#pattern": "^[a-zA-Z0-9_-]+$"
             }
         },
         "com.amazonaws.workmail#StartMailboxExportJob": {
@@ -5163,6 +6000,59 @@
             }
         },
         "com.amazonaws.workmail#UntagResourceResponse": {
+            "type": "structure",
+            "members": {}
+        },
+        "com.amazonaws.workmail#UpdateDefaultMailDomain": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.workmail#UpdateDefaultMailDomainRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.workmail#UpdateDefaultMailDomainResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.workmail#InvalidParameterException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#MailDomainNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#MailDomainStateException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.workmail#OrganizationStateException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Updates the default mail domain for an organization. The default mail domain is used by the WorkMail AWS Console to suggest an email address when enabling a mail user. You can only have one default domain.</p>",
+                "smithy.api#idempotent": {}
+            }
+        },
+        "com.amazonaws.workmail#UpdateDefaultMailDomainRequest": {
+            "type": "structure",
+            "members": {
+                "OrganizationId": {
+                    "target": "com.amazonaws.workmail#OrganizationId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The Amazon WorkMail organization for which to list domains.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "DomainName": {
+                    "target": "com.amazonaws.workmail#WorkMailDomainName",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The domain name that will become the default domain.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.workmail#UpdateDefaultMailDomainResponse": {
             "type": "structure",
             "members": {}
         },
@@ -5576,7 +6466,7 @@
                     "min": 1,
                     "max": 64
                 },
-                "smithy.api#pattern": "[\\w\\-.]+(@[a-zA-Z0-9.\\-]+\\.[a-zA-Z0-9-]{2,})?"
+                "smithy.api#pattern": "^[\\w\\-.]+(@[a-zA-Z0-9.\\-]+\\.[a-zA-Z0-9-]{2,})?$"
             }
         },
         "com.amazonaws.workmail#UserRole": {
@@ -5602,6 +6492,16 @@
             "type": "list",
             "member": {
                 "target": "com.amazonaws.workmail#User"
+            }
+        },
+        "com.amazonaws.workmail#WorkMailDomainName": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 3,
+                    "max": 209
+                },
+                "smithy.api#pattern": "^[a-zA-Z0-9.-]+\\.[a-zA-Z-]{2,}$"
             }
         },
         "com.amazonaws.workmail#WorkMailIdentifier": {
@@ -5657,6 +6557,9 @@
                     "target": "com.amazonaws.workmail#DeleteMailboxPermissions"
                 },
                 {
+                    "target": "com.amazonaws.workmail#DeleteMobileDeviceAccessOverride"
+                },
+                {
                     "target": "com.amazonaws.workmail#DeleteMobileDeviceAccessRule"
                 },
                 {
@@ -5675,7 +6578,13 @@
                     "target": "com.amazonaws.workmail#DeregisterFromWorkMail"
                 },
                 {
+                    "target": "com.amazonaws.workmail#DeregisterMailDomain"
+                },
+                {
                     "target": "com.amazonaws.workmail#DescribeGroup"
+                },
+                {
+                    "target": "com.amazonaws.workmail#DescribeInboundDmarcSettings"
                 },
                 {
                     "target": "com.amazonaws.workmail#DescribeMailboxExportJob"
@@ -5705,7 +6614,13 @@
                     "target": "com.amazonaws.workmail#GetMailboxDetails"
                 },
                 {
+                    "target": "com.amazonaws.workmail#GetMailDomain"
+                },
+                {
                     "target": "com.amazonaws.workmail#GetMobileDeviceAccessEffect"
+                },
+                {
+                    "target": "com.amazonaws.workmail#GetMobileDeviceAccessOverride"
                 },
                 {
                     "target": "com.amazonaws.workmail#ListAccessControlRules"
@@ -5724,6 +6639,12 @@
                 },
                 {
                     "target": "com.amazonaws.workmail#ListMailboxPermissions"
+                },
+                {
+                    "target": "com.amazonaws.workmail#ListMailDomains"
+                },
+                {
+                    "target": "com.amazonaws.workmail#ListMobileDeviceAccessOverrides"
                 },
                 {
                     "target": "com.amazonaws.workmail#ListMobileDeviceAccessRules"
@@ -5747,10 +6668,19 @@
                     "target": "com.amazonaws.workmail#PutAccessControlRule"
                 },
                 {
+                    "target": "com.amazonaws.workmail#PutInboundDmarcSettings"
+                },
+                {
                     "target": "com.amazonaws.workmail#PutMailboxPermissions"
                 },
                 {
+                    "target": "com.amazonaws.workmail#PutMobileDeviceAccessOverride"
+                },
+                {
                     "target": "com.amazonaws.workmail#PutRetentionPolicy"
+                },
+                {
+                    "target": "com.amazonaws.workmail#RegisterMailDomain"
                 },
                 {
                     "target": "com.amazonaws.workmail#RegisterToWorkMail"
@@ -5766,6 +6696,9 @@
                 },
                 {
                     "target": "com.amazonaws.workmail#UntagResource"
+                },
+                {
+                    "target": "com.amazonaws.workmail#UpdateDefaultMailDomain"
                 },
                 {
                     "target": "com.amazonaws.workmail#UpdateMailboxQuota"

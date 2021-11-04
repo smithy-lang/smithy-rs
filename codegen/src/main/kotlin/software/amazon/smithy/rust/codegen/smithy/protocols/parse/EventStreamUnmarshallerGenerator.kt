@@ -23,7 +23,9 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EventHeaderTrait
 import software.amazon.smithy.model.traits.EventPayloadTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -51,22 +53,24 @@ class EventStreamUnmarshallerGenerator(
     private val unionSymbol = symbolProvider.toSymbol(unionShape)
     private val operationErrorSymbol = operationShape.errorSymbol(symbolProvider)
     private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
+    private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
-        "Blob" to RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "smithy_types"),
-        "Error" to RuntimeType("Error", smithyEventStream, "smithy_eventstream::error"),
-        "expect_fns" to RuntimeType("smithy", smithyEventStream, "smithy_eventstream"),
-        "Header" to RuntimeType("Header", smithyEventStream, "smithy_eventstream::frame"),
-        "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "smithy_eventstream::frame"),
-        "Message" to RuntimeType("Message", smithyEventStream, "smithy_eventstream::frame"),
+        "Blob" to RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "aws_smithy_types"),
+        "Error" to RuntimeType("Error", smithyEventStream, "aws_smithy_eventstream::error"),
+        "expect_fns" to RuntimeType("smithy", smithyEventStream, "aws_smithy_eventstream"),
+        "Header" to RuntimeType("Header", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "Message" to RuntimeType("Message", smithyEventStream, "aws_smithy_eventstream::frame"),
         "OpError" to operationErrorSymbol,
-        "SmithyError" to RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "smithy_types"),
-        "UnmarshalledMessage" to RuntimeType("UnmarshalledMessage", smithyEventStream, "smithy_eventstream::frame"),
-        "UnmarshallMessage" to RuntimeType("UnmarshallMessage", smithyEventStream, "smithy_eventstream::frame"),
+        "SmithyError" to RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "aws_smithy_types"),
+        "tracing" to CargoDependency.Tracing.asType(),
+        "UnmarshalledMessage" to RuntimeType("UnmarshalledMessage", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "UnmarshallMessage" to RuntimeType("UnmarshallMessage", smithyEventStream, "aws_smithy_eventstream::frame"),
     )
 
     fun render(): RuntimeType {
         val unmarshallerType = unionShape.eventStreamUnmarshallerType()
-        return RuntimeType.forInlineFun("${unmarshallerType.name}::new", "event_stream_serde") { inlineWriter ->
+        return RuntimeType.forInlineFun("${unmarshallerType.name}::new", eventStreamSerdeModule) { inlineWriter ->
             inlineWriter.renderUnmarshaller(unmarshallerType, unionSymbol)
         }
     }
@@ -147,41 +151,61 @@ class EventStreamUnmarshallerGenerator(
 
     private fun RustWriter.renderUnmarshallUnionMember(unionMember: MemberShape, unionStruct: StructureShape) {
         val unionMemberName = unionMember.memberName.toPascalCase()
+        val empty = unionStruct.members().isEmpty()
         val payloadOnly =
             unionStruct.members().none { it.hasTrait<EventPayloadTrait>() || it.hasTrait<EventHeaderTrait>() }
-        if (payloadOnly) {
-            withBlock("let parsed = ", ";") {
-                renderParseProtocolPayload(unionMember)
+        when {
+            // Don't attempt to parse the payload for an empty struct. The payload can be empty, or if the model was
+            // updated since the code was generated, it can have content that would not be understood.
+            empty -> {
+                rustTemplate(
+                    "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(#{UnionStruct}::builder().build())))",
+                    "Output" to unionSymbol,
+                    "UnionStruct" to symbolProvider.toSymbol(unionStruct),
+                    *codegenScope
+                )
             }
-            rustTemplate(
-                "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(parsed)))",
-                "Output" to unionSymbol,
-                *codegenScope
-            )
-        } else {
-            rust("let mut builder = #T::builder();", symbolProvider.toSymbol(unionStruct))
-            val payloadMember = unionStruct.members().firstOrNull { it.hasTrait<EventPayloadTrait>() }
-            if (payloadMember != null) {
-                renderUnmarshallEventPayload(payloadMember)
+            payloadOnly -> {
+                withBlock("let parsed = ", ";") {
+                    renderParseProtocolPayload(unionMember)
+                }
+                rustTemplate(
+                    "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(parsed)))",
+                    "Output" to unionSymbol,
+                    *codegenScope
+                )
             }
-            val headerMembers = unionStruct.members().filter { it.hasTrait<EventHeaderTrait>() }
-            if (headerMembers.isNotEmpty()) {
-                rustBlock("for header in message.headers()") {
-                    rustBlock("match header.name().as_str()") {
-                        for (member in headerMembers) {
-                            rustBlock("${member.memberName.dq()} => ") {
-                                renderUnmarshallEventHeader(member)
+            else -> {
+                rust("let mut builder = #T::builder();", symbolProvider.toSymbol(unionStruct))
+                val payloadMember = unionStruct.members().firstOrNull { it.hasTrait<EventPayloadTrait>() }
+                if (payloadMember != null) {
+                    renderUnmarshallEventPayload(payloadMember)
+                }
+                val headerMembers = unionStruct.members().filter { it.hasTrait<EventHeaderTrait>() }
+                if (headerMembers.isNotEmpty()) {
+                    rustBlock("for header in message.headers()") {
+                        rustBlock("match header.name().as_str()") {
+                            for (member in headerMembers) {
+                                rustBlock("${member.memberName.dq()} => ") {
+                                    renderUnmarshallEventHeader(member)
+                                }
+                            }
+                            rust("// Event stream protocol headers start with ':'")
+                            rustBlock("name => if !name.starts_with(':')") {
+                                rustTemplate(
+                                    "#{tracing}::trace!(\"Unrecognized event stream message header: {}\", name);",
+                                    *codegenScope
+                                )
                             }
                         }
-                        rust("_ => {}")
                     }
                 }
+                rustTemplate(
+                    "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(builder.build())))",
+                    "Output" to unionSymbol,
+                    *codegenScope
+                )
             }
-            rustTemplate(
-                "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(builder.build())))",
-                "Output" to unionSymbol,
-                *codegenScope
-            )
         }
     }
 
@@ -209,10 +233,11 @@ class EventStreamUnmarshallerGenerator(
         expectedContentType(target)?.also { contentType ->
             rustTemplate(
                 """
-                if response_headers.content_type.as_str() != ${contentType.dq()} {
+                let content_type = response_headers.content_type().unwrap_or_default();
+                if content_type != ${contentType.dq()} {
                     return Err(#{Error}::Unmarshalling(format!(
                         "expected :content-type to be '$contentType', but was '{}'",
-                        response_headers.content_type.as_str()
+                        content_type
                     )))
                 }
                 """,

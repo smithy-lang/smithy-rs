@@ -7,12 +7,15 @@ package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
 
 import software.amazon.smithy.aws.traits.protocols.Ec2QueryNameTrait
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.XmlNameTrait
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.utils.StringUtils
 
-class Ec2QuerySerializerGenerator(protocolConfig: ProtocolConfig) : QuerySerializerGenerator(protocolConfig) {
+class Ec2QuerySerializerGenerator(codegenContext: CodegenContext) : QuerySerializerGenerator(codegenContext) {
     override val protocolName: String get() = "EC2 Query"
 
     override fun MemberShape.queryKeyName(prioritizedFallback: String?): String =
@@ -21,4 +24,12 @@ class Ec2QuerySerializerGenerator(protocolConfig: ProtocolConfig) : QuerySeriali
             ?: StringUtils.capitalize(memberName)
 
     override fun MemberShape.isFlattened(): Boolean = true
+
+    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType {
+        TODO("Not yet implemented")
+    }
+
+    override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
+        TODO("Not yet implemented")
+    }
 }

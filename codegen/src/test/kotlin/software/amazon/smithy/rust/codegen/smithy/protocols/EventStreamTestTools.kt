@@ -18,9 +18,9 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.CombinedErrorGenerator
@@ -123,7 +123,7 @@ object EventStreamTestModels {
         val validTestUnion: String,
         val validSomeError: String,
         val validUnmodeledError: String,
-        val protocolBuilder: (ProtocolConfig) -> Protocol,
+        val protocolBuilder: (CodegenContext) -> Protocol,
     ) {
         override fun toString(): String = protocolShapeId
     }
@@ -168,35 +168,35 @@ object EventStreamTestModels {
             requestContentType = "application/xml",
             responseContentType = "application/xml",
             validTestStruct = """
-                        <TestStruct>
-                            <someString>hello</someString>
-                            <someInt>5</someInt>
-                        </TestStruct>
+                <TestStruct>
+                    <someString>hello</someString>
+                    <someInt>5</someInt>
+                </TestStruct>
             """.trimIndent(),
             validMessageWithNoHeaderPayloadTraits = """
-                        <MessageWithNoHeaderPayloadTraits>
-                            <someString>hello</someString>
-                            <someInt>5</someInt>
-                        </MessageWithNoHeaderPayloadTraits>
+                <MessageWithNoHeaderPayloadTraits>
+                    <someString>hello</someString>
+                    <someInt>5</someInt>
+                </MessageWithNoHeaderPayloadTraits>
             """.trimIndent(),
             validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
             validSomeError = """
-                        <ErrorResponse>
-                            <Error>
-                                <Type>SomeError</Type>
-                                <Code>SomeError</Code>
-                                <Message>some error</Message>
-                            </Error>
-                        </ErrorResponse>
+                <ErrorResponse>
+                    <Error>
+                        <Type>SomeError</Type>
+                        <Code>SomeError</Code>
+                        <Message>some error</Message>
+                    </Error>
+                </ErrorResponse>
             """.trimIndent(),
             validUnmodeledError = """
-                        <ErrorResponse>
-                            <Error>
-                                <Type>UnmodeledError</Type>
-                                <Code>UnmodeledError</Code>
-                                <Message>unmodeled error</Message>
-                            </Error>
-                        </ErrorResponse>
+                <ErrorResponse>
+                    <Error>
+                        <Type>UnmodeledError</Type>
+                        <Code>UnmodeledError</Code>
+                        <Message>unmodeled error</Message>
+                    </Error>
+                </ErrorResponse>
             """.trimIndent(),
         ) { RestXml(it) },
 
@@ -209,35 +209,35 @@ object EventStreamTestModels {
             requestContentType = "application/x-www-form-urlencoded",
             responseContentType = "text/xml",
             validTestStruct = """
-                        <TestStruct>
-                            <someString>hello</someString>
-                            <someInt>5</someInt>
-                        </TestStruct>
+                <TestStruct>
+                    <someString>hello</someString>
+                    <someInt>5</someInt>
+                </TestStruct>
             """.trimIndent(),
             validMessageWithNoHeaderPayloadTraits = """
-                        <MessageWithNoHeaderPayloadTraits>
-                            <someString>hello</someString>
-                            <someInt>5</someInt>
-                        </MessageWithNoHeaderPayloadTraits>
+                <MessageWithNoHeaderPayloadTraits>
+                    <someString>hello</someString>
+                    <someInt>5</someInt>
+                </MessageWithNoHeaderPayloadTraits>
             """.trimIndent(),
             validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
             validSomeError = """
-                        <ErrorResponse>
-                            <Error>
-                                <Type>SomeError</Type>
-                                <Code>SomeError</Code>
-                                <Message>some error</Message>
-                            </Error>
-                        </ErrorResponse>
+                <ErrorResponse>
+                    <Error>
+                        <Type>SomeError</Type>
+                        <Code>SomeError</Code>
+                        <Message>some error</Message>
+                    </Error>
+                </ErrorResponse>
             """.trimIndent(),
             validUnmodeledError = """
-                        <ErrorResponse>
-                            <Error>
-                                <Type>UnmodeledError</Type>
-                                <Code>UnmodeledError</Code>
-                                <Message>unmodeled error</Message>
-                            </Error>
-                        </ErrorResponse>
+                <ErrorResponse>
+                    <Error>
+                        <Type>UnmodeledError</Type>
+                        <Code>UnmodeledError</Code>
+                        <Message>unmodeled error</Message>
+                    </Error>
+                </ErrorResponse>
             """.trimIndent(),
         ) { AwsQueryProtocol(it) },
 
@@ -250,39 +250,39 @@ object EventStreamTestModels {
             requestContentType = "application/x-www-form-urlencoded",
             responseContentType = "text/xml",
             validTestStruct = """
-                        <TestStruct>
-                            <someString>hello</someString>
-                            <someInt>5</someInt>
-                        </TestStruct>
+                <TestStruct>
+                    <someString>hello</someString>
+                    <someInt>5</someInt>
+                </TestStruct>
             """.trimIndent(),
             validMessageWithNoHeaderPayloadTraits = """
-                        <MessageWithNoHeaderPayloadTraits>
-                            <someString>hello</someString>
-                            <someInt>5</someInt>
-                        </MessageWithNoHeaderPayloadTraits>
+                <MessageWithNoHeaderPayloadTraits>
+                    <someString>hello</someString>
+                    <someInt>5</someInt>
+                </MessageWithNoHeaderPayloadTraits>
             """.trimIndent(),
             validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
             validSomeError = """
-                        <Response>
-                            <Errors>
-                                <Error>
-                                    <Type>SomeError</Type>
-                                    <Code>SomeError</Code>
-                                    <Message>some error</Message>
-                                </Error>
-                            </Errors>
-                        </Response>
+                <Response>
+                    <Errors>
+                        <Error>
+                            <Type>SomeError</Type>
+                            <Code>SomeError</Code>
+                            <Message>some error</Message>
+                        </Error>
+                    </Errors>
+                </Response>
             """.trimIndent(),
             validUnmodeledError = """
-                        <Response>
-                            <Errors>
-                                <Error>
-                                    <Type>UnmodeledError</Type>
-                                    <Code>UnmodeledError</Code>
-                                    <Message>unmodeled error</Message>
-                                </Error>
-                            </Errors>
-                        </Response>
+                <Response>
+                    <Errors>
+                        <Error>
+                            <Type>UnmodeledError</Type>
+                            <Code>UnmodeledError</Code>
+                            <Message>unmodeled error</Message>
+                        </Error>
+                    </Errors>
+                </Response>
             """.trimIndent(),
         ) { Ec2QueryProtocol(it) },
     )
@@ -319,7 +319,7 @@ object EventStreamTestTools {
 
         val symbolProvider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(symbolProvider)
-        project.withModule(RustModule.default("error", public = true)) {
+        project.withModule(RustModule.public("error")) {
             CombinedErrorGenerator(model, symbolProvider, operationShape).render(it)
             for (shape in model.shapes().filter { shape -> shape.isStructureShape && shape.hasTrait<ErrorTrait>() }) {
                 StructureGenerator(model, symbolProvider, it, shape as StructureShape).render()
@@ -330,11 +330,11 @@ object EventStreamTestTools {
                 }
             }
         }
-        project.withModule(RustModule.default("model", public = true)) {
+        project.withModule(RustModule.public("model")) {
             val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")
             recursivelyGenerateModels(model, symbolProvider, inputOutput, it)
         }
-        project.withModule(RustModule.default("output", public = true)) {
+        project.withModule(RustModule.public("output")) {
             operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
         println("file:///${project.baseDir}/src/error.rs")

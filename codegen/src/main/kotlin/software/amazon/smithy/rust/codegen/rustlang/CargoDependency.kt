@@ -9,7 +9,6 @@ import software.amazon.smithy.codegen.core.SymbolDependency
 import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.crateLocation
 import software.amazon.smithy.rust.codegen.util.dq
 
 sealed class DependencyScope {
@@ -19,7 +18,7 @@ sealed class DependencyScope {
 
 sealed class DependencyLocation
 data class CratesIo(val version: String) : DependencyLocation()
-data class Local(val basePath: String) : DependencyLocation()
+data class Local(val basePath: String, val version: String? = null) : DependencyLocation()
 
 sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
     abstract fun version(): String
@@ -54,7 +53,7 @@ sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
  */
 class InlineDependency(
     name: String,
-    val module: String,
+    val module: RustModule,
     val extraDependencies: List<RustDependency> = listOf(),
     val renderer: (RustWriter) -> Unit
 ) : RustDependency(name) {
@@ -67,15 +66,22 @@ class InlineDependency(
         return extraDependencies
     }
 
-    fun key() = "$module::$name"
+    fun key() = "${module.name}::$name"
 
     companion object {
         fun forRustFile(
             name: String,
             baseDir: String,
             vararg additionalDependencies: RustDependency
+        ): InlineDependency = forRustFile(name, baseDir, public = false, *additionalDependencies)
+
+        fun forRustFile(
+            name: String,
+            baseDir: String,
+            public: Boolean,
+            vararg additionalDependencies: RustDependency
         ): InlineDependency {
-            val module = name
+            val module = RustModule.default(name, public)
             val filename = "$name.rs"
             // The inline crate is loaded as a dependency on the runtime classpath
             val rustFile = this::class.java.getResource("/$baseDir/src/$filename")
@@ -136,6 +142,8 @@ data class CargoDependency(
         is Local -> "local"
     }
 
+    fun rustName(name: String): RuntimeType = RuntimeType(name, this, this.name.replace("-", "_"))
+
     fun toMap(): Map<String, Any> {
         val attribs = mutableMapOf<String, Any>()
         with(location) {
@@ -144,6 +152,7 @@ data class CargoDependency(
                 is Local -> {
                     val fullPath = "$basePath/$name"
                     attribs["path"] = fullPath
+                    version?.also { attribs["version"] = version }
                 }
             }
         }
@@ -186,21 +195,27 @@ data class CargoDependency(
         val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14"))
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
         val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"), optional = true)
+        val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
         fun SmithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("types")
 
         fun SmithyClient(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("client")
         fun SmithyEventStream(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("eventstream")
         fun SmithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http")
+        fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server")
         fun SmithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-tower")
 
-        fun ProtocolTestHelpers(runtimeConfig: RuntimeConfig) = CargoDependency(
-            "protocol-test-helpers", runtimeConfig.runtimeCrateLocation.crateLocation(), scope = DependencyScope.Dev
-        )
+        fun SmithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
+            runtimeConfig.runtimeCrate("protocol-test").copy(scope = DependencyScope.Dev)
 
         fun smithyJson(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("json")
         fun smithyQuery(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("query")
         fun smithyXml(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("xml")
 
         val Bytes: RustDependency = CargoDependency("bytes", CratesIo("1"))
+        val TokioStream = CargoDependency("tokio-stream", CratesIo("0.1.7"))
+        val BytesUtils = CargoDependency("bytes-utils", CratesIo("0.1.1"))
+        val Hex = CargoDependency("hex", CratesIo("0.4.3"))
+        val TempFile = CargoDependency("temp-file", CratesIo("0.1.6"), scope = DependencyScope.Dev)
+        val Ring = CargoDependency("ring", CratesIo("0.16"))
     }
 }

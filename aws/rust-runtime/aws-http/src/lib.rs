@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+pub mod auth;
 pub mod user_agent;
 
-use smithy_http::result::SdkError;
-use smithy_http::retry::ClassifyResponse;
-use smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
+use aws_smithy_http::result::SdkError;
+use aws_smithy_http::retry::ClassifyResponse;
+use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
 use std::time::Duration;
 
 /// A retry policy that models AWS error codes as outlined in the SEP
@@ -61,6 +62,15 @@ where
         let (err, response) = match err {
             Ok(_) => return RetryKind::NotRetryable,
             Err(SdkError::ServiceError { err, raw }) => (err, raw),
+            Err(SdkError::DispatchFailure(err)) => {
+                return if err.is_timeout() || err.is_io() {
+                    RetryKind::Error(ErrorKind::TransientError)
+                } else if let Some(ek) = err.is_other() {
+                    RetryKind::Error(ek)
+                } else {
+                    RetryKind::NotRetryable
+                }
+            }
             Err(_) => return RetryKind::NotRetryable,
         };
         if let Some(retry_after_delay) = response
@@ -94,11 +104,11 @@ where
 #[cfg(test)]
 mod test {
     use crate::AwsErrorRetryPolicy;
-    use smithy_http::body::SdkBody;
-    use smithy_http::operation;
-    use smithy_http::result::{SdkError, SdkSuccess};
-    use smithy_http::retry::ClassifyResponse;
-    use smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
+    use aws_smithy_http::body::SdkBody;
+    use aws_smithy_http::operation;
+    use aws_smithy_http::result::{SdkError, SdkSuccess};
+    use aws_smithy_http::retry::ClassifyResponse;
+    use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
     use std::time::Duration;
 
     struct UnmodeledError;
@@ -200,7 +210,7 @@ mod test {
 
     #[test]
     fn classify_generic() {
-        let err = smithy_types::Error::builder().code("SlowDown").build();
+        let err = aws_smithy_types::Error::builder().code("SlowDown").build();
         let test_response = http::Response::new("OK");
         let policy = AwsErrorRetryPolicy::new();
         assert_eq!(

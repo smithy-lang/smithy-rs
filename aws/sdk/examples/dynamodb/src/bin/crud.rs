@@ -16,11 +16,11 @@ use aws_sdk_dynamodb::operation::DescribeTable;
 use aws_sdk_dynamodb::output::DescribeTableOutput;
 use aws_sdk_dynamodb::{Client, Config, Error, Region, PKG_VERSION};
 
+use aws_smithy_http::operation::Operation;
+use aws_smithy_http::retry::ClassifyResponse;
+use aws_smithy_types::retry::RetryKind;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
-use smithy_http::operation::Operation;
-use smithy_http::retry::ClassifyResponse;
-use smithy_types::retry::RetryKind;
 use std::io::{stdin, Read};
 use std::time::Duration;
 use std::{iter, process};
@@ -285,7 +285,7 @@ async fn main() -> Result<(), Error> {
     let raw_client = aws_hyper::Client::https();
 
     raw_client
-        .call(wait_for_ready_table(&table, client.conf()))
+        .call(wait_for_ready_table(&table, client.conf()).await)
         .await
         .expect("table should become ready.");
 
@@ -363,7 +363,7 @@ async fn main() -> Result<(), Error> {
 
 /// Construct a `DescribeTable` request with a policy to retry every second until the table
 /// is ready
-fn wait_for_ready_table(
+async fn wait_for_ready_table(
     table_name: &str,
     conf: &Config,
 ) -> Operation<DescribeTable, WaitForReadyTable<AwsErrorRetryPolicy>> {
@@ -372,6 +372,7 @@ fn wait_for_ready_table(
         .build()
         .expect("valid input")
         .make_operation(&conf)
+        .await
         .expect("valid operation");
     let waiting_policy = WaitForReadyTable {
         inner: operation.retry_policy().clone(),

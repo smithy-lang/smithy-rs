@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
@@ -22,6 +23,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait.Format.EPOCH_SECONDS
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -30,9 +32,9 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -42,10 +44,11 @@ import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 class JsonSerializerGenerator(
-    protocolConfig: ProtocolConfig,
+    codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
 ) : StructuredDataSerializerGenerator {
     private data class Context<T : Shape>(
@@ -121,9 +124,9 @@ class JsonSerializerGenerator(
         val shape: StructureShape,
     )
 
-    private val model = protocolConfig.model
-    private val symbolProvider = protocolConfig.symbolProvider
-    private val runtimeConfig = protocolConfig.runtimeConfig
+    private val model = codegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val serializerError = smithyTypes.member("Error")
@@ -135,11 +138,34 @@ class JsonSerializerGenerator(
         "JsonValueWriter" to smithyJson.member("serialize::JsonValueWriter"),
     )
     private val serializerUtil = SerializerUtil(model)
+    private val operationSerModule = RustModule.private("operation_ser")
+    private val jsonSerModule = RustModule.private("json_ser")
+
+    /**
+     * Reusable structure serializer implementation that can be used to generate serializing code for
+     * operation, error and structure shapes.
+     * We still generate the serializer symbol even if there are no included members because the server
+     * generation requires serializers for all output/error structures.
+     */
+    private fun structureSerializer(fnName: String, structureShape: StructureShape, includedMembers: List<MemberShape>): RuntimeType {
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
+            it.rustBlockTemplate(
+                "pub fn $fnName(value: &#{target}) -> Result<String, #{Error}>",
+                *codegenScope, "target" to symbolProvider.toSymbol(structureShape)
+            ) {
+                rust("let mut out = String::new();")
+                rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
+                serializeStructure(StructContext("object", "value", structureShape), includedMembers)
+                rust("object.finish();")
+                rustTemplate("Ok(out)", *codegenScope)
+            }
+        }
+    }
 
     override fun payloadSerializer(member: MemberShape): RuntimeType {
         val fnName = symbolProvider.serializeFunctionName(member)
         val target = model.expectShape(member.target)
-        return RuntimeType.forInlineFun(fnName, "operation_ser") { writer ->
+        return RuntimeType.forInlineFun(fnName, operationSerModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> std::result::Result<std::vec::Vec<u8>, #{Error}>",
                 *codegenScope,
@@ -158,6 +184,18 @@ class JsonSerializerGenerator(
         }
     }
 
+    override fun unsetStructure(structure: StructureShape): RuntimeType {
+        return RuntimeType.forInlineFun("rest_json_unsetpayload", operationSerModule) { writer ->
+            writer.rustTemplate(
+                """
+                pub fn rest_json_unsetpayload() -> std::vec::Vec<u8> {
+                    b"{}"[..].into()
+                }
+                """
+            )
+        }
+    }
+
     override fun operationSerializer(operationShape: OperationShape): RuntimeType? {
         // Don't generate an operation JSON serializer if there is no JSON body
         val httpDocumentMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
@@ -167,7 +205,7 @@ class JsonSerializerGenerator(
 
         val inputShape = operationShape.inputShape(model)
         val fnName = symbolProvider.serializeFunctionName(operationShape)
-        return RuntimeType.forInlineFun(fnName, "operation_ser") {
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
             it.rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(inputShape)
@@ -183,7 +221,7 @@ class JsonSerializerGenerator(
 
     override fun documentSerializer(): RuntimeType {
         val fnName = "serialize_document"
-        return RuntimeType.forInlineFun(fnName, "operation_ser") {
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
             it.rustTemplate(
                 """
                 pub fn $fnName(input: &#{Document}) -> Result<#{SdkBody}, #{Error}> {
@@ -197,13 +235,27 @@ class JsonSerializerGenerator(
         }
     }
 
+    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType {
+        val outputShape = operationShape.outputShape(model)
+        val includedMembers = httpBindingResolver.responseMembers(operationShape, HttpLocation.DOCUMENT)
+        val fnName = symbolProvider.serializeFunctionName(outputShape)
+        return structureSerializer(fnName, outputShape, includedMembers)
+    }
+
+    override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
+        val errorShape = model.expectShape(shape, StructureShape::class.java)
+        val includedMembers = httpBindingResolver.errorResponseBindings(shape).filter { it.location == HttpLocation.DOCUMENT }.map { it.member }
+        val fnName = symbolProvider.serializeFunctionName(errorShape)
+        return structureSerializer(fnName, errorShape, includedMembers)
+    }
+
     private fun RustWriter.serializeStructure(
         context: StructContext,
         includedMembers: List<MemberShape>? = null,
     ) {
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val structureSymbol = symbolProvider.toSymbol(context.shape)
-        val structureSerializer = RuntimeType.forInlineFun(fnName, "json_ser") { writer ->
+        val structureSerializer = RuntimeType.forInlineFun(fnName, jsonSerModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(object: &mut #{JsonObjectWriter}, input: &#{Input})",
                 "Input" to structureSymbol,
@@ -333,7 +385,7 @@ class JsonSerializerGenerator(
     private fun RustWriter.serializeUnion(context: Context<UnionShape>) {
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val unionSymbol = symbolProvider.toSymbol(context.shape)
-        val unionSerializer = RuntimeType.forInlineFun(fnName, "json_ser") { writer ->
+        val unionSerializer = RuntimeType.forInlineFun(fnName, jsonSerModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(${context.writerExpression}: &mut #{JsonObjectWriter}, input: &#{Input})",
                 "Input" to unionSymbol,

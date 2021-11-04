@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.customize
 
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.writable
 
@@ -15,7 +16,7 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
  *      // Sections can be state-carrying to allow implementations to make different choices based on
  *      // different operations
  *      data class RequestCreation(protocolConfig: ProtocolConfig, operation: OperationShape) : Section("RequestCreation")
- *      // Sections can be stateless, eg. this section that could write code into the
+ *      // Sections can be stateless, e.g. this section that could write code into the
  *      // top level operation module
  *      object OperationModule : ServiceConfig("OperationTopLevel")
  * }
@@ -40,4 +41,11 @@ abstract class Section(val name: String)
 abstract class NamedSectionGenerator<T : Section> {
     abstract fun section(section: T): Writable
     protected val emptySection = writable { }
+}
+
+/** Convenience for rendering a list of customizations for a given section */
+fun <T : Section> RustWriter.writeCustomizations(customizations: List<NamedSectionGenerator<T>>, section: T) {
+    for (customization in customizations) {
+        customization.section(section)(this)
+    }
 }

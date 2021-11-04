@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
 
 import org.junit.jupiter.api.Test
@@ -13,7 +18,7 @@ import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.renderWithModelBuilder
-import software.amazon.smithy.rust.codegen.testutil.testProtocolConfig
+import software.amazon.smithy.rust.codegen.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.expectTrait
@@ -82,7 +87,7 @@ class Ec2QuerySerializerGeneratorTest {
     fun `generates valid serializers`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
-        val parserGenerator = Ec2QuerySerializerGenerator(testProtocolConfig(model))
+        val parserGenerator = Ec2QuerySerializerGenerator(testCodegenContext(model))
         val operationGenerator = parserGenerator.operationSerializer(model.lookup("test#Op"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
@@ -118,14 +123,14 @@ class Ec2QuerySerializerGeneratorTest {
                 """
             )
         }
-        project.withModule(RustModule.default("model", public = true)) {
+        project.withModule(RustModule.public("model")) {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
             UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice")).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
             EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
         }
 
-        project.withModule(RustModule.default("input", public = true)) {
+        project.withModule(RustModule.public("input")) {
             model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
         println("file:///${project.baseDir}/src/lib.rs")

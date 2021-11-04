@@ -12,6 +12,8 @@ use aws_types::credentials::{
 };
 use aws_types::region::Region;
 
+use crate::provider_config::HttpSettings;
+use aws_smithy_async::rt::sleep::default_async_sleep;
 use tracing::Instrument;
 
 /// Credentials provider that uses credentials provided by another provider to assume a role
@@ -22,7 +24,7 @@ use tracing::Instrument;
 /// the desired role.
 ///
 /// # Examples
-/// ```rust
+/// ```no_run
 /// use aws_config::sts::{AssumeRoleProvider};
 /// use aws_types::{Credentials, region::Region};
 /// use aws_config::environment;
@@ -62,7 +64,7 @@ pub struct AssumeRoleProviderBuilder {
     external_id: Option<String>,
     session_name: Option<String>,
     region: Option<Region>,
-    connection: Option<smithy_client::erase::DynConnector>,
+    connection: Option<aws_smithy_client::erase::DynConnector>,
 }
 
 impl AssumeRoleProviderBuilder {
@@ -116,8 +118,8 @@ impl AssumeRoleProviderBuilder {
     ///
     /// If the `rustls` or `nativetls` features are enabled, this field is optional and a default
     /// backing connection will be provided.
-    pub fn connection(mut self, conn: impl smithy_client::bounds::SmithyConnector) -> Self {
-        self.connection = Some(smithy_client::erase::DynConnector::new(conn));
+    pub fn connection(mut self, conn: impl aws_smithy_client::bounds::SmithyConnector) -> Self {
+        self.connection = Some(aws_smithy_client::erase::DynConnector::new(conn));
         self
     }
 
@@ -129,7 +131,10 @@ impl AssumeRoleProviderBuilder {
             .build();
 
         let conn = self.connection.unwrap_or_else(|| {
-            crate::connector::expect_connector(crate::connector::default_connector())
+            crate::connector::expect_connector(crate::connector::default_connector(
+                &HttpSettings::default(),
+                default_async_sleep(),
+            ))
         });
         let client = aws_hyper::Client::new(conn);
 
@@ -167,6 +172,7 @@ impl AssumeRoleProvider {
             .op
             .clone()
             .make_operation(&self.conf)
+            .await
             .expect("valid operation");
 
         let assumed = self.sts.call(op).in_current_span().await;
@@ -182,18 +188,18 @@ impl AssumeRoleProvider {
                 match err.kind {
                     AssumeRoleErrorKind::RegionDisabledException(_)
                     | AssumeRoleErrorKind::MalformedPolicyDocumentException(_) => {
-                        return Err(CredentialsError::InvalidConfiguration(
-                            aws_hyper::SdkError::ServiceError { err, raw }.into(),
+                        return Err(CredentialsError::invalid_configuration(
+                            aws_hyper::SdkError::ServiceError { err, raw },
                         ))
                     }
                     _ => {}
                 }
                 tracing::warn!(error = ?err.message(), "sts refused to grant assume role");
-                Err(CredentialsError::ProviderError(
-                    aws_hyper::SdkError::ServiceError { err, raw }.into(),
+                Err(CredentialsError::provider_error(
+                    aws_hyper::SdkError::ServiceError { err, raw },
                 ))
             }
-            Err(err) => Err(CredentialsError::ProviderError(err.into())),
+            Err(err) => Err(CredentialsError::provider_error(err)),
         }
     }
 }

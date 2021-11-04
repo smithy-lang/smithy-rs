@@ -1,13 +1,116 @@
 vNext (Month Day, Year)
 =======================
+
+v0.27.0-alpha.1 (November 3rd, 2021)
+====================================
+**Breaking Changes**
+- `<operation>.make_operation(&config)` is now an `async` function for all operations. Code should be updated to call `.await`. This will only impact users using the low-level API. (smithy-rs#797)
+
+**New this week**
+- SDK code generation now includes a version in addition to path parameters when the `version` parameter is included in smithy-build.json
+- `moduleDescription` in `smithy-build.json` settings is now optional
+- Upgrade to Smithy 1.12
+- `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
+- Fix generated docs on unions. (smithy-rs#826)
+
+v0.27 (October 20th, 2021)
+==========================
+
+**Breaking Changes**
+
+- :warning: All Smithy runtime crates have been renamed to have an `aws-` prefix. This may require code changes:
+  - _Cargo.toml_ changes:
+    - `smithy-async` -> `aws-smithy-async`
+    - `smithy-client` -> `aws-smithy-client`
+    - `smithy-eventstream` -> `aws-smithy-eventstream`
+    - `smithy-http` -> `aws-smithy-http`
+    - `smithy-http-tower` -> `aws-smithy-http-tower`
+    - `smithy-json` -> `aws-smithy-json`
+    - `smithy-protocol-test` -> `aws-smithy-protocol-test`
+    - `smithy-query` -> `aws-smithy-query`
+    - `smithy-types` -> `aws-smithy-types`
+    - `smithy-xml` -> `aws-smithy-xml`
+  - Rust `use` statement changes:
+    - `smithy_async` -> `aws_smithy_async`
+    - `smithy_client` -> `aws_smithy_client`
+    - `smithy_eventstream` -> `aws_smithy_eventstream`
+    - `smithy_http` -> `aws_smithy_http`
+    - `smithy_http_tower` -> `aws_smithy_http_tower`
+    - `smithy_json` -> `aws_smithy_json`
+    - `smithy_protocol_test` -> `aws_smithy_protocol_test`
+    - `smithy_query` -> `aws_smithy_query`
+    - `smithy_types` -> `aws_smithy_types`
+    - `smithy_xml` -> `aws_smithy_xml`
+
+**New this week**
+
+- Filled in missing docs for services in the rustdoc documentation (smithy-rs#779)
+
+v0.26 (October 15th, 2021)
+=======================
+
+**Breaking Changes**
+
+- :warning: The `rust-codegen` plugin now requires a `moduleDescription` in the *smithy-build.json* file. This
+  property goes into the generated *Cargo.toml* file as the package description. (smithy-rs#766)
+
+**New this week**
+
+- Add `RustSettings` to `CodegenContext` (smithy-rs#616, smithy-rs#752)
+- Prepare crate manifests for publishing to crates.io (smithy-rs#755)
+- Generated *Cargo.toml* files can now be customized (smithy-rs#766)
+
+v0.25.1 (October 11th, 2021)
+=========================
+**New this week**
+- :bug: Re-add missing deserialization operations that were missing because of a typo in `HttpBoundProtocolGenerator.kt`
+
+v0.25 (October 7th, 2021)
+=========================
+**Breaking changes**
+- :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
+- :warning: `smithy_client::retry::Config` field `max_retries` is renamed to `max_attempts`
+  - This also brings a change to the semantics of the field. In the old version, setting `max_retries` to 3 would mean
+    that up to 4 requests could occur (1 initial request and 3 retries). In the new version, setting `max_attempts` to 3
+    would mean that up to 3 requests could occur (1 initial request and 2 retries).
+- :warning: `smithy_client::retry::Config::with_max_retries` method is renamed to `with_max_attempts`
+- :warning: Several classes in the codegen module were renamed and/or refactored (smithy-rs#735):
+  - `ProtocolConfig` became `CodegenContext` and moved to `software.amazon.smithy.rust.codegen.smithy`
+  - `HttpProtocolGenerator` became `ProtocolGenerator` and was refactored
+    to rely on composition instead of inheritance
+  - `HttpProtocolTestGenerator` became `ProtocolTestGenerator`
+  - `Protocol` moved into `software.amazon.smithy.rust.codegen.smithy.protocols`
+- `SmithyConnector` and `DynConnector` now return `ConnectorError` instead of `Box<dyn Error>`. If you have written a custom connector, it will need to be updated to return the new error type. (#744)
+- The `DispatchError` variant of `SdkError` now contains `ConnectorError` instead of `Box<dyn Error>` (#744).
+
+**New this week**
+
+- :bug: Fix an issue where `smithy-xml` may have generated invalid XML (smithy-rs#719)
+- Add `RetryConfig` struct for configuring retry behavior (smithy-rs#725)
+- :bug: Fix error when receiving empty event stream messages (smithy-rs#736)
+- :bug: Fix bug in event stream receiver that could cause the last events in the response stream to be lost (smithy-rs#736)
+- Add connect & HTTP read timeouts to IMDS, defaulting to 1 second
+- IO and timeout errors from Hyper can now be retried (#744)
+
+**Contributors**
+
+Thank you for your contributions! :heart:
+* @obi1kenobi (smithy-rs#719)
+* @guyilin-amazon (smithy-rs#750)
+
+v0.24 (September 24th, 2021)
+============================
+
 **New This Week**
-- Add IMDS credential provider to `aws-config` (#709)
-- Add IMDS client to `aws-config` (#701)
-- Add `TimeSource` to `aws_types::os_shim_internal` (#701)
-- User agent construction is now `const fn` (#701)
-- Update event stream `Receiver`s to be `Send` (#702, #aws-sdk-rust#224)
-- Add `sts::AssumeRoleProvider` to `aws-config` (#703, aws-sdk-rust#3)
-- Add query param signing to the `aws-sigv4` crate (#707)
+
+- Add IMDS credential provider to `aws-config` (smithy-rs#709)
+- Add IMDS client to `aws-config` (smithy-rs#701)
+- Add `TimeSource` to `aws_types::os_shim_internal` (smithy-rs#701)
+- User agent construction is now `const fn` (smithy-rs#701)
+- Add `sts::AssumeRoleProvider` to `aws-config` (smithy-rs#703, aws-sdk-rust#3)
+- Add IMDS region provider to `aws-config` (smithy-rs#715)
+- Add query param signing to the `aws-sigv4` crate (smithy-rs#707)
+- :bug: Update event stream `Receiver`s to be `Send` (smithy-rs#702, #aws-sdk-rust#224)
 
 v0.23 (September 14th, 2021)
 =======================

@@ -42,7 +42,7 @@ open class WrappingSymbolProvider(private val base: RustSymbolProvider) : RustSy
 }
 
 /**
- * Attach `meta` to symbols. `meta` is used by the generators (eg. StructureGenerator) to configure the generated models.
+ * Attach `meta` to symbols. `meta` is used by the generators (e.g. StructureGenerator) to configure the generated models.
  *
  * Protocols may inherit from this class and override the `xyzMeta` methods to modify structure generation.
  */

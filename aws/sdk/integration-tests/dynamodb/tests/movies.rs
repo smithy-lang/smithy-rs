@@ -8,6 +8,11 @@ use aws_sdk_dynamodb as dynamodb;
 use aws_http::AwsErrorRetryPolicy;
 use aws_hyper::{SdkError, SdkSuccess};
 use aws_sdk_dynamodb::input::CreateTableInput;
+use aws_smithy_client::test_connection::TestConnection;
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::operation::Operation;
+use aws_smithy_http::retry::ClassifyResponse;
+use aws_smithy_types::retry::RetryKind;
 use dynamodb::error::DescribeTableError;
 use dynamodb::input::{DescribeTableInput, PutItemInput, QueryInput};
 use dynamodb::model::{
@@ -20,11 +25,6 @@ use dynamodb::{Config, Credentials, Region};
 use http::header::{HeaderName, AUTHORIZATION};
 use http::Uri;
 use serde_json::Value;
-use smithy_client::test_connection::TestConnection;
-use smithy_http::body::SdkBody;
-use smithy_http::operation::Operation;
-use smithy_http::retry::ClassifyResponse;
-use smithy_types::retry::RetryKind;
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::Instant;
@@ -148,7 +148,7 @@ where
 
 /// Construct a `DescribeTable` request with a policy to retry every second until the table
 /// is ready
-fn wait_for_ready_table(
+async fn wait_for_ready_table(
     table_name: &str,
     conf: &Config,
 ) -> Operation<DescribeTable, WaitForReadyTable<AwsErrorRetryPolicy>> {
@@ -157,6 +157,7 @@ fn wait_for_ready_table(
         .build()
         .unwrap()
         .make_operation(&conf)
+        .await
         .expect("valid operation");
     let waiting_policy = WaitForReadyTable {
         inner: operation.retry_policy().clone(),
@@ -197,6 +198,7 @@ async fn movies_it() {
         .call(
             create_table(table_name)
                 .make_operation(&conf)
+                .await
                 .expect("valid request"),
         )
         .await
@@ -204,7 +206,7 @@ async fn movies_it() {
 
     let waiter_start = tokio::time::Instant::now();
     client
-        .call(wait_for_ready_table(table_name, &conf))
+        .call(wait_for_ready_table(table_name, &conf).await)
         .await
         .expect("table should become ready");
 
@@ -220,6 +222,7 @@ async fn movies_it() {
             .call(
                 add_item(table_name, item.clone())
                     .make_operation(&conf)
+                    .await
                     .expect("valid request"),
             )
             .await
@@ -229,6 +232,7 @@ async fn movies_it() {
         .call(
             movies_in_year(table_name, 2222)
                 .make_operation(&conf)
+                .await
                 .expect("valid request"),
         )
         .await
@@ -240,6 +244,7 @@ async fn movies_it() {
         .call(
             movies_in_year(table_name, 2013)
                 .make_operation(&conf)
+                .await
                 .expect("valid request"),
         )
         .await

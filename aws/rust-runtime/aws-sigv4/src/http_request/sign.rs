@@ -4,9 +4,8 @@
  */
 
 use super::{PayloadChecksumKind, SignatureLocation};
-use crate::http_request::canonical_request::header::{
-    X_AMZ_CONTENT_SHA_256, X_AMZ_DATE, X_AMZ_SECURITY_TOKEN,
-};
+use crate::http_request::canonical_request::header;
+use crate::http_request::canonical_request::param;
 use crate::http_request::canonical_request::{CanonicalRequest, StringToSign, HMAC_256};
 use crate::http_request::query_writer::QueryWriter;
 use crate::http_request::SigningParams;
@@ -199,18 +198,21 @@ fn calculate_signing_params<'a>(
 
     let values = creq.values.into_query_params().expect("signing with query");
     let mut signing_params = vec![
-        ("X-Amz-Algorithm", Cow::Borrowed(values.algorithm)),
-        ("X-Amz-Credential", Cow::Owned(values.credential)),
-        ("X-Amz-Date", Cow::Owned(values.date_time)),
-        ("X-Amz-Expires", Cow::Owned(values.expires)),
+        (param::X_AMZ_ALGORITHM, Cow::Borrowed(values.algorithm)),
+        (param::X_AMZ_CREDENTIAL, Cow::Owned(values.credential)),
+        (param::X_AMZ_DATE, Cow::Owned(values.date_time)),
+        (param::X_AMZ_EXPIRES, Cow::Owned(values.expires)),
         (
-            "X-Amz-SignedHeaders",
+            param::X_AMZ_SIGNED_HEADERS,
             Cow::Owned(values.signed_headers.as_str().into()),
         ),
-        ("X-Amz-Signature", Cow::Owned(signature.clone())),
+        (param::X_AMZ_SIGNATURE, Cow::Owned(signature.clone())),
     ];
     if let Some(security_token) = params.security_token {
-        signing_params.push((X_AMZ_SECURITY_TOKEN, Cow::Owned(security_token.to_string())));
+        signing_params.push((
+            param::X_AMZ_SECURITY_TOKEN,
+            Cow::Owned(security_token.to_string()),
+        ));
     }
     Ok((signing_params, signature))
 }
@@ -250,16 +252,20 @@ fn calculate_signing_headers<'a>(
     // Step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
     let values = creq.values.as_headers().expect("signing with headers");
     let mut headers = HeaderMap::new();
-    add_header(&mut headers, X_AMZ_DATE, &values.date_time);
+    add_header(&mut headers, header::X_AMZ_DATE, &values.date_time);
     headers.insert(
         "authorization",
         build_authorization_header(params.access_key, &creq, sts, &signature),
     );
     if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
-        add_header(&mut headers, X_AMZ_CONTENT_SHA_256, &values.content_sha256);
+        add_header(
+            &mut headers,
+            header::X_AMZ_CONTENT_SHA_256,
+            &values.content_sha256,
+        );
     }
     if let Some(security_token) = values.security_token {
-        add_header(&mut headers, X_AMZ_SECURITY_TOKEN, security_token);
+        add_header(&mut headers, header::X_AMZ_SECURITY_TOKEN, security_token);
     }
     Ok(SigningOutput::new(headers, signature))
 }
@@ -412,6 +418,62 @@ mod tests {
                         Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request, \
                         SignedHeaders=host;some-header;x-amz-date, \
                         Signature=4596b207a7fc6bdf18725369bc0cd7022cf20efbd2c19730549f42d1a403648e",
+                )
+                .unwrap(),
+            )
+            .body("")
+            .unwrap();
+        assert_req_eq!(expected, signed);
+    }
+
+    #[test]
+    fn test_sign_headers_space_trimming() {
+        let settings = SigningSettings::default();
+        let params = SigningParams {
+            access_key: "AKIDEXAMPLE",
+            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+            security_token: None,
+            region: "us-east-1",
+            service_name: "service",
+            date_time: parse_date_time("20150830T123600Z").unwrap(),
+            settings,
+        };
+
+        let original = http::Request::builder()
+            .uri("https://some-endpoint.some-region.amazonaws.com")
+            .header(
+                "some-header",
+                HeaderValue::from_str("  test  test   ").unwrap(),
+            )
+            .body("")
+            .unwrap();
+        let signable = SignableRequest::from(&original);
+        let out = sign(signable, &params).unwrap();
+        assert_eq!(
+            "0bd74dbf6f21161f61a1a3a1c313b6a4bc67ec57bf5ea9ae956a63753ca1d7f7",
+            out.signature
+        );
+
+        let mut signed = original;
+        out.output.apply_to_request(&mut signed);
+
+        let mut expected = http::Request::builder()
+            .uri("https://some-endpoint.some-region.amazonaws.com")
+            .header(
+                "some-header",
+                HeaderValue::from_str("  test  test   ").unwrap(),
+            )
+            .header(
+                "x-amz-date",
+                HeaderValue::from_str("20150830T123600Z").unwrap(),
+            )
+            .header(
+                "authorization",
+                HeaderValue::from_str(
+                    "AWS4-HMAC-SHA256 \
+                        Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request, \
+                        SignedHeaders=host;some-header;x-amz-date, \
+                        Signature=0bd74dbf6f21161f61a1a3a1c313b6a4bc67ec57bf5ea9ae956a63753ca1d7f7",
                 )
                 .unwrap(),
             )

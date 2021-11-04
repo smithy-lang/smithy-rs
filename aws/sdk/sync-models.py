@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0.
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#  SPDX-License-Identifier: Apache-2.0.
 
 import sys
 import os
@@ -28,16 +28,6 @@ def discover_new_models(aws_models_repo, known_models):
             new_models.append(model)
     return new_models
 
-# HACK: Modify the S3 model directly to change the type of `Size` until Smithy
-# allows this transformation directly (https://github.com/awslabs/smithy/pull/900).
-def hack_s3_model(model_path):
-    result = subprocess.run(["jq", "-M", ".shapes[\"com.amazonaws.s3#Size\"].type = \"long\"", str(model_path)], capture_output = True, check = True)
-    hacked = result.stdout.decode("utf-8")
-    with open(model_path, "w") as file:
-        file.write(hacked)
-        if not hacked.endswith("\n"):
-            file.write("\n")
-
 def copy_model(source_path, model_path, model_name):
     dest_path = Path("aws-models") / model_path
     source = source_path.read_text()
@@ -46,8 +36,6 @@ def copy_model(source_path, model_path, model_name):
         file.write(source)
         if not source.endswith("\n"):
             file.write("\n")
-    if model_name == "s3":
-        hack_s3_model(dest_path)
 
 def copy_known_models(aws_models_repo):
     known_models = set()

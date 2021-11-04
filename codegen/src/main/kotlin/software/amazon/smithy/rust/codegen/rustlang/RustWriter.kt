@@ -67,7 +67,7 @@ private fun <T : CodeWriter, U> T.withTemplate(
  * Write a block to the writer.
  * If [conditional] is true, the [textBeforeNewLine], followed by [block], followed by [textAfterNewLine]
  * If [conditional] is false, only [block] is written.
- * This enables conditionally wrapping a block in a prefix/suffix, eg.
+ * This enables conditionally wrapping a block in a prefix/suffix, e.g.
  *
  * ```
  * writer.withBlock("Some(", ")", conditional = symbol.isOptional()) {
@@ -97,12 +97,13 @@ fun <T : CodeWriter> T.conditionalBlock(
  * Convenience wrapper that tells Intellij that the contents of this block are Rust
  */
 fun <T : CodeWriter> T.rust(
-    @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{\n", suffix = "\n}}}") contents: String,
     vararg args: Any
 ) {
     this.write(contents.trim(), *args)
 }
 
+// `RuntimeType`: `#D` => [`NameOfType`](link_to_type)
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>): String {
     check(scope.distinctBy { it.first.toLowerCase() }.size == scope.size) { "Duplicate cased keys not supported" }
     return template.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult ->
@@ -177,12 +178,18 @@ fun <T : CodeWriter> T.rustBlock(
 /**
  * Generate a RustDoc comment for [shape]
  */
-fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model): T {
+fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model, autoSuppressMissingDocs: Boolean = true): T {
     // TODO: support additional Smithy documentation traits like @example
     val docTrait = shape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
 
-    docTrait?.value?.also {
-        this.docs(escape(it))
+    when (docTrait?.value?.isNotBlank()) {
+        // If docs are modeled, then place them on the code generated shape
+        true -> this.docs(escape(docTrait.value))
+        // Otherwise, suppress the missing docs lint for this shape since
+        // the lack of documentation is a modeling issue rather than a codegen issue.
+        else -> if (autoSuppressMissingDocs) {
+            rust("##[allow(missing_docs)] // documentation missing in model")
+        }
     }
 
     return this
@@ -201,9 +208,6 @@ fun <T : CodeWriter> T.docs(text: String, vararg args: Any, newlinePrefix: Strin
     setNewlinePrefix(newlinePrefix)
     // TODO: Smithy updates should remove the need for a number of these changes
     val cleaned = text.lines()
-        // We need to filter out blank lines—an empty line causes the markdown parser to interpret the subsequent
-        // docs as a code block because they are indented.
-        .filter { it.isNotBlank() }
         .joinToString("\n") {
             // Rustdoc warns on tabs in documentation
             it.trimStart().replace("\t", "  ")
@@ -246,18 +250,17 @@ class RustWriter private constructor(
         }
 
         val Factory: CodegenWriterFactory<RustWriter> =
-            CodegenWriterFactory<RustWriter> { filename, namespace ->
+            CodegenWriterFactory<RustWriter> { fileName, namespace ->
                 when {
-                    filename.endsWith(".toml") -> RustWriter(filename, namespace, "#")
-                    filename == "LICENSE" -> RustWriter(
-                        filename,
-                        namespace = "ignore",
-                        commentCharacter = "ignore",
-                        printWarning = false
-                    )
-                    else -> RustWriter(filename, namespace)
+                    fileName.endsWith(".toml") -> RustWriter(fileName, namespace, "#")
+                    fileName.endsWith(".md") -> rawWriter(fileName)
+                    fileName == "LICENSE" -> rawWriter(fileName)
+                    else -> RustWriter(fileName, namespace)
                 }
             }
+
+        private fun rawWriter(fileName: String): RustWriter =
+            RustWriter(fileName, namespace = "ignore", commentCharacter = "ignore", printWarning = false)
     }
 
     private val preamble = mutableListOf<Writable>()
@@ -267,13 +270,13 @@ class RustWriter private constructor(
     init {
         expressionStart = '#'
         if (filename.endsWith(".rs")) {
-            require(namespace.startsWith("crate")) { "We can only write into files in the crate (got $namespace)" }
+            require(namespace.startsWith("crate") || filename.startsWith("tests/")) { "We can only write into files in the crate (got $namespace)" }
         }
         putFormatter('T', formatter)
         putFormatter('D', RustDocLinker())
     }
 
-    fun module(): String? = if (filename.endsWith(".rs")) {
+    fun module(): String? = if (filename.startsWith("src") && filename.endsWith(".rs")) {
         filename.removeSuffix(".rs").split('/').last()
     } else null
 
@@ -389,12 +392,12 @@ class RustWriter private constructor(
     }
 
     /**
-     * Generate RustDoc links, eg. [`Abc`](crate::module::Abc)
+     * Generate RustDoc links, e.g. [`Abc`](crate::module::Abc)
      */
     inner class RustDocLinker : BiFunction<Any, String, String> {
         override fun apply(t: Any, u: String): String {
             return when (t) {
-                is Symbol -> "[`${t.name}`](${t.fullName})"
+                is Symbol -> "[`${t.name}`](${t.rustType().qualifiedName()})"
                 else -> throw CodegenException("Invalid type provided to RustDocLinker ($t) expected Symbol")
             }
         }

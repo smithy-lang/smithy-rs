@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -18,7 +19,6 @@ import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 
@@ -27,25 +27,25 @@ class CredentialsProviderDecorator : RustCodegenDecorator {
     override val order: Byte = 0
 
     override fun configCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + CredentialProviderConfig(protocolConfig.runtimeConfig)
+        return baseCustomizations + CredentialProviderConfig(codegenContext.runtimeConfig)
     }
 
     override fun operationCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations + CredentialsProviderFeature(protocolConfig.runtimeConfig)
+        return baseCustomizations + CredentialsProviderFeature(codegenContext.runtimeConfig)
     }
 
     override fun libRsCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
-        return baseCustomizations + PubUseCredentials(protocolConfig.runtimeConfig)
+        return baseCustomizations + PubUseCredentials(codegenContext.runtimeConfig)
     }
 }
 
@@ -71,12 +71,13 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
             ServiceConfig.BuilderImpl -> {
                 rustTemplate(
                     """
-                    /// Set the credentials provider for this service
+                    /// Sets the credentials provider for this service
                     pub fn credentials_provider(mut self, credentials_provider: impl #{credentials}::ProvideCredentials + 'static) -> Self {
                         self.credentials_provider = Some(#{credentials}::SharedCredentialsProvider::new(credentials_provider));
                         self
                     }
 
+                    /// Sets the credentials provider for this service
                     pub fn set_credentials_provider(&mut self, credentials_provider: Option<#{credentials}::SharedCredentialsProvider>) -> &mut Self {
                         self.credentials_provider = credentials_provider;
                         self
@@ -118,10 +119,10 @@ class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
     }
 }
 
-fun awsAuth(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-auth")
+fun awsHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-http")
 
 fun defaultProvider() =
     RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("no_credentials")).member("NoCredentials")
 
 fun setProvider(runtimeConfig: RuntimeConfig) =
-    RuntimeType("set_provider", awsAuth(runtimeConfig), "aws_auth")
+    RuntimeType("set_provider", awsHttp(runtimeConfig), "aws_http::auth")

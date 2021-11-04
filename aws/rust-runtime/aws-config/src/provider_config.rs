@@ -6,13 +6,16 @@
 //! Configuration Options for Credential Providers
 
 use crate::connector::default_connector;
+use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
+use aws_smithy_client::erase::DynConnector;
+use aws_smithy_client::timeout;
 use aws_types::os_shim_internal::{Env, Fs, TimeSource};
 use aws_types::region::Region;
-use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
-use smithy_client::erase::DynConnector;
-
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+
+#[cfg(feature = "tcp-connector")]
+use aws_smithy_client::erase::boxclone::BoxCloneService;
 
 /// Configuration options for Credential Providers
 ///
@@ -27,9 +30,50 @@ pub struct ProviderConfig {
     env: Env,
     fs: Fs,
     time_source: TimeSource,
-    connector: Option<DynConnector>,
+    connector: HttpConnector,
     sleep: Option<Arc<dyn AsyncSleep>>,
     region: Option<Region>,
+}
+
+pub(crate) type MakeConnectorFn =
+    dyn Fn(&HttpSettings, Option<Arc<dyn AsyncSleep>>) -> Option<DynConnector> + Send + Sync;
+
+#[derive(Clone)]
+pub(crate) enum HttpConnector {
+    Prebuilt(Option<DynConnector>),
+    ConnectorFn(Arc<MakeConnectorFn>),
+    #[cfg(feature = "tcp-connector")]
+    TcpConnector(BoxCloneService<http::Uri, tokio::net::TcpStream, tower::BoxError>),
+}
+
+impl Default for HttpConnector {
+    fn default() -> Self {
+        Self::ConnectorFn(Arc::new(
+            |settings: &HttpSettings, sleep: Option<Arc<dyn AsyncSleep>>| {
+                default_connector(&settings, sleep)
+            },
+        ))
+    }
+}
+
+impl HttpConnector {
+    fn make_connector(
+        &self,
+        settings: &HttpSettings,
+        sleep: Option<Arc<dyn AsyncSleep>>,
+    ) -> Option<DynConnector> {
+        match self {
+            HttpConnector::Prebuilt(conn) => conn.clone(),
+            HttpConnector::ConnectorFn(func) => func(&settings, sleep),
+            #[cfg(feature = "tcp-connector")]
+            HttpConnector::TcpConnector(connection) => Some(DynConnector::new(
+                aws_smithy_client::hyper_ext::Adapter::builder()
+                    .timeout(&settings.timeout_settings)
+                    .sleep_impl(sleep.unwrap())
+                    .build(connection.clone()),
+            )),
+        }
+    }
 }
 
 impl Debug for ProviderConfig {
@@ -49,7 +93,7 @@ impl Default for ProviderConfig {
             env: Env::default(),
             fs: Fs::default(),
             time_source: TimeSource::default(),
-            connector: default_connector(),
+            connector: HttpConnector::default(),
             sleep: default_async_sleep(),
             region: None,
         }
@@ -70,11 +114,23 @@ impl ProviderConfig {
             env: Env::from_slice(&[]),
             fs: Fs::from_raw_map(HashMap::new()),
             time_source: TimeSource::manual(&ManualTimeSource::new(UNIX_EPOCH)),
-            connector: None,
+            connector: HttpConnector::Prebuilt(None),
             sleep: None,
             region: None,
         }
     }
+}
+
+/// HttpSettings for HTTP connectors
+///
+/// # Stability
+/// As HTTP settings stabilize, they will move to `aws-types::config::Config` so that they
+/// can be used to configure HTTP connectors for service clients.
+#[non_exhaustive]
+#[derive(Default)]
+pub(crate) struct HttpSettings {
+    #[allow(dead_code)] // Always set, but only referenced in certain feature configurations
+    pub(crate) timeout_settings: timeout::Settings,
 }
 
 impl ProviderConfig {
@@ -108,7 +164,7 @@ impl ProviderConfig {
             env: Env::default(),
             fs: Fs::default(),
             time_source: TimeSource::default(),
-            connector: None,
+            connector: HttpConnector::Prebuilt(None),
             sleep: None,
             region: None,
         }
@@ -149,8 +205,14 @@ impl ProviderConfig {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn connector(&self) -> Option<&DynConnector> {
-        self.connector.as_ref()
+    pub(crate) fn default_connector(&self) -> Option<DynConnector> {
+        self.connector
+            .make_connector(&HttpSettings::default(), self.sleep.clone())
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn connector(&self, settings: &HttpSettings) -> Option<DynConnector> {
+        self.connector.make_connector(settings, self.sleep.clone())
     }
 
     #[allow(dead_code)]
@@ -202,11 +264,29 @@ impl ProviderConfig {
 
     /// Override the HTTPS connector for this configuration
     ///
-    /// ## Note: Stability
+    /// **Warning**: Use of this method will prevent you from taking advantage of the timeout machinery.
+    /// Consider `with_tcp_connector`.
+    ///
+    /// # Stability
     /// This method is expected to change to support HTTP configuration
-    pub fn with_connector(self, connector: DynConnector) -> Self {
+    pub fn with_http_connector(self, connector: DynConnector) -> Self {
         ProviderConfig {
-            connector: Some(connector),
+            connector: HttpConnector::Prebuilt(Some(connector)),
+            ..self
+        }
+    }
+
+    /// Override the TCP connector for this configuration
+    ///
+    /// # Stability
+    /// This method is may to change to support HTTP configuration.
+    #[cfg(feature = "tcp-connector")]
+    pub fn with_tcp_connector(
+        self,
+        connector: BoxCloneService<http::Uri, tokio::net::TcpStream, tower::BoxError>,
+    ) -> Self {
+        ProviderConfig {
+            connector: HttpConnector::TcpConnector(connector),
             ..self
         }
     }

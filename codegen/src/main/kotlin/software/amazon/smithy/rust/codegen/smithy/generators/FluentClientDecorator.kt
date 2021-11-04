@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Feature
@@ -17,6 +18,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -25,8 +27,14 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.inputShape
@@ -37,29 +45,35 @@ class FluentClientDecorator : RustCodegenDecorator {
     override val name: String = "FluentClient"
     override val order: Byte = 0
 
-    private fun applies(protocolConfig: ProtocolConfig): Boolean =
-        protocolConfig.symbolProvider.config().codegenConfig.includeFluentClient
+    private fun applies(codegenContext: CodegenContext): Boolean =
+        codegenContext.symbolProvider.config().codegenConfig.includeFluentClient
 
-    override fun extras(protocolConfig: ProtocolConfig, rustCrate: RustCrate) {
-        if (!applies(protocolConfig)) {
+    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+        if (!applies(codegenContext)) {
             return
         }
 
         val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("client")), public = true)
-        rustCrate.withModule(RustModule("client", module)) { writer ->
-            FluentClientGenerator(protocolConfig, includeSmithyGenericClientDocs = true).render(writer)
+        rustCrate.withModule(
+            RustModule(
+                "client",
+                module,
+                documentation = "Client and fluent builders for calling the service."
+            )
+        ) { writer ->
+            FluentClientGenerator(codegenContext, includeSmithyGenericClientDocs = true).render(writer)
         }
-        val smithyClient = CargoDependency.SmithyClient(protocolConfig.runtimeConfig)
-        rustCrate.addFeature(Feature("client", true, listOf(smithyClient.name)))
-        rustCrate.addFeature(Feature("rustls", default = true, listOf("smithy-client/rustls")))
-        rustCrate.addFeature(Feature("native-tls", default = false, listOf("smithy-client/native-tls")))
+        val smithyClient = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
+        rustCrate.mergeFeature(Feature("client", true, listOf(smithyClient.name)))
+        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-client/rustls")))
+        rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("aws-smithy-client/native-tls")))
     }
 
     override fun libRsCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
-        if (!applies(protocolConfig)) {
+        if (!applies(codegenContext)) {
             return baseCustomizations
         }
 
@@ -74,6 +88,16 @@ class FluentClientDecorator : RustCodegenDecorator {
         }
     }
 }
+
+sealed class FluentClientSection(name: String) : Section(name) {
+    /** Write custom code into an operation fluent builder's impl block */
+    data class FluentBuilderImpl(
+        val operationShape: OperationShape,
+        val operationErrorType: RuntimeType
+    ) : FluentClientSection("FluentBuilderImpl")
+}
+
+abstract class FluentClientCustomization : NamedSectionGenerator<FluentClientSection>()
 
 data class ClientGenerics(
     val connectorDefault: String? = null,
@@ -105,20 +129,26 @@ data class ClientGenerics(
 }
 
 class FluentClientGenerator(
-    protocolConfig: ProtocolConfig,
+    codegenContext: CodegenContext,
     // Whether to include Client construction details that are relevant to generic Smithy generated clients,
     // but not necessarily relevant to customized clients, such as the ones with the AWS SDK.
     private val includeSmithyGenericClientDocs: Boolean,
-    private val generics: ClientGenerics = ClientGenerics()
+    private val generics: ClientGenerics = ClientGenerics(),
+    private val customizations: List<FluentClientCustomization> = emptyList(),
 ) {
-    private val serviceShape = protocolConfig.serviceShape
+    companion object {
+        fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
+            RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operationShape).name.toSnakeCase())
+    }
+
+    private val serviceShape = codegenContext.serviceShape
     private val operations =
-        TopDownIndex.of(protocolConfig.model).getContainedOperations(serviceShape).sortedBy { it.id }
-    private val symbolProvider = protocolConfig.symbolProvider
-    private val model = protocolConfig.model
-    private val clientDep = CargoDependency.SmithyClient(protocolConfig.runtimeConfig).copy(optional = true)
-    private val runtimeConfig = protocolConfig.runtimeConfig
-    private val moduleName = protocolConfig.moduleName
+        TopDownIndex.of(codegenContext.model).getContainedOperations(serviceShape).sortedBy { it.id }
+    private val symbolProvider = codegenContext.symbolProvider
+    private val model = codegenContext.model
+    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig).copy(optional = true)
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val moduleName = codegenContext.moduleName
     private val moduleUseName = moduleName.replace("-", "_")
     private val humanName = serviceShape.id.name
     private val core = FluentClientCore(model)
@@ -154,6 +184,7 @@ class FluentClientGenerator(
             }
 
             impl${generics.inst} Client${generics.inst} {
+                /// Creates a client with the given service configuration.
                 pub fn with_config(client: #{client}::Client${generics.inst}, conf: crate::Config) -> Self {
                     Self {
                         handle: std::sync::Arc::new(Handle {
@@ -163,6 +194,7 @@ class FluentClientGenerator(
                     }
                 }
 
+                /// Returns the client's configuration.
                 pub fn conf(&self) -> &crate::Config {
                     &self.handle.conf
                 }
@@ -179,7 +211,11 @@ class FluentClientGenerator(
                 val name = symbolProvider.toSymbol(operation).name
                 rust(
                     """
-                    pub fn ${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}(&self) -> fluent_builders::$name${generics.inst} {
+                    /// Constructs a fluent builder for the `$name` operation.
+                    ///
+                    /// See [`$name`](crate::client::fluent_builders::$name) for more information about the
+                    /// operation and its arguments.
+                    pub fn ${clientOperationFnName(operation, symbolProvider)}(&self) -> fluent_builders::$name${generics.inst} {
                         fluent_builders::$name::new(self.handle.clone())
                     }
                     """
@@ -187,15 +223,32 @@ class FluentClientGenerator(
             }
         }
         writer.withModule("fluent_builders") {
+            docs(
+                """
+                Utilities to ergonomically construct a request to the service.
+
+                Fluent builders are created through the [`Client`](crate::client::Client) by calling
+                one if its operation methods. After parameters are set using the builder methods,
+                the `send` method can be called to initiate the request.
+                """,
+                newlinePrefix = "//! "
+            )
             operations.forEach { operation ->
-                val name = symbolProvider.toSymbol(operation).name
+                val operationSymbol = symbolProvider.toSymbol(operation)
                 val input = operation.inputShape(model)
                 val members: List<MemberShape> = input.allMembers.values.toList()
 
+                rust(
+                    """
+                    /// Fluent builder constructing a request to `${operationSymbol.name}`.
+                    ///
+                    """
+                )
+                documentShape(operation, model, autoSuppressMissingDocs = false)
                 rustTemplate(
                     """
                     ##[derive(std::fmt::Debug)]
-                    pub struct $name${generics.decl} {
+                    pub struct ${operationSymbol.name}${generics.decl} {
                         handle: std::sync::Arc<super::Handle${generics.inst}>,
                         inner: #{Inner}
                     }
@@ -203,17 +256,28 @@ class FluentClientGenerator(
                     "Inner" to input.builderSymbol(symbolProvider),
                     *generics.codegenScope.toTypedArray(),
                     "client" to clientDep.asType(),
+                    "operation" to operationSymbol
                 )
 
                 rustBlockTemplate(
-                    "impl${generics.inst} $name${generics.inst} where ${generics.bounds}",
+                    "impl${generics.inst} ${operationSymbol.name}${generics.inst} where ${generics.bounds}",
                     "client" to clientDep.asType(),
                 ) {
                     rustTemplate(
                         """
+                        /// Creates a new `${operationSymbol.name}`.
                         pub(crate) fn new(handle: std::sync::Arc<super::Handle${generics.inst}>) -> Self {
                             Self { handle, inner: Default::default() }
                         }
+
+                        /// Sends the request and returns the response.
+                        ///
+                        /// If an error occurs, an `SdkError` will be returned with additional details that
+                        /// can be matched against.
+                        ///
+                        /// By default, any retryable failures will be retried twice. Retry behavior
+                        /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
+                        /// set when configuring the client.
                         pub async fn send(self) -> std::result::Result<#{ok}, #{sdk_err}<#{operation_err}>>
                         where
                             R::Policy: #{client}::bounds::SmithyRetryPolicy<#{input}OperationOutputAlias,
@@ -223,6 +287,7 @@ class FluentClientGenerator(
                         {
                             let input = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
                             let op = input.make_operation(&self.handle.conf)
+                                .await
                                 .map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
                             self.handle.client.call(op).await
                         }
@@ -232,6 +297,13 @@ class FluentClientGenerator(
                         "operation_err" to operation.errorSymbol(symbolProvider),
                         "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType().copy(name = "result::SdkError"),
                         "client" to clientDep.asType(),
+                    )
+                    writeCustomizations(
+                        customizations,
+                        FluentClientSection.FluentBuilderImpl(
+                            operation,
+                            operation.errorSymbol(symbolProvider)
+                        )
                     )
                     members.forEach { member ->
                         val memberName = symbolProvider.toMemberName(member)
@@ -256,6 +328,7 @@ class FluentClientGenerator(
                         }
                         // pure setter
                         val inputType = outerType.asOptional()
+                        documentShape(member, model)
                         rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
                             rust(
                                 """
@@ -344,7 +417,7 @@ class FluentClientGenerator(
                 /// use aws_http::user_agent::UserAgentStage;
                 /// use aws_sig_auth::middleware::SigV4SigningStage;
                 /// use aws_sig_auth::signer::SigV4Signer;
-                /// use smithy_http_tower::map_request::MapRequestLayer;
+                /// use aws_smithy_http_tower::map_request::MapRequestLayer;
                 /// use tower::layer::util::Stack;
                 /// use tower::ServiceBuilder;
                 ///

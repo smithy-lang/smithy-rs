@@ -26,12 +26,13 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationBuildError
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
 import software.amazon.smithy.rust.codegen.smithy.isOptional
@@ -74,19 +75,24 @@ class RequestBindingGenerator(
     private val httpTrait: HttpTrait,
 ) {
     private val index = HttpBindingIndex.of(model)
-    private val buildError = runtimeConfig.operationBuildError()
     private val Encoder = CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
 
+    private val codegenScope = arrayOf(
+        "BuildError" to runtimeConfig.operationBuildError(),
+        "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
+        "Input" to symbolProvider.toSymbol(inputShape),
+    )
+
     constructor(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         defaultTimestampFormat: TimestampFormatTrait.Format,
         httpBindingResolver: HttpBindingResolver,
         shape: OperationShape,
         inputShape: StructureShape,
     ) : this(
-        protocolConfig.model,
-        protocolConfig.symbolProvider,
-        protocolConfig.runtimeConfig,
+        codegenContext.model,
+        codegenContext.symbolProvider,
+        codegenContext.runtimeConfig,
         defaultTimestampFormat,
         shape,
         inputShape,
@@ -102,18 +108,22 @@ class RequestBindingGenerator(
         val hasHeaders = addHeaders(implBlockWriter)
         val hasQuery = uriQuery(implBlockWriter)
         Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
-        implBlockWriter.rustBlock(
-            "fn update_http_builder(&self, builder: #1T) -> std::result::Result<#1T, #2T>",
-            RuntimeType.HttpRequestBuilder,
-            buildError
+        implBlockWriter.rustBlockTemplate(
+            """
+            fn update_http_builder(
+                input: &#{Input},
+                builder: #{HttpRequestBuilder}
+            ) -> std::result::Result<#{HttpRequestBuilder}, #{BuildError}>
+            """,
+            *codegenScope
         ) {
             write("let mut uri = String::new();")
-            write("self.uri_base(&mut uri)?;")
+            write("uri_base(input, &mut uri)?;")
             if (hasQuery) {
-                write("self.uri_query(&mut uri);")
+                write("uri_query(input, &mut uri);")
             }
             if (hasHeaders) {
-                write("let builder = self.add_headers(builder)?;")
+                write("let builder = add_headers(input, builder)?;")
             }
             write("Ok(builder.method(${httpTrait.method.dq()}).uri(uri))")
         }
@@ -131,15 +141,18 @@ class RequestBindingGenerator(
             shape,
             HttpBinding.Location.PREFIX_HEADERS
         )
-        val buildErrorT = runtimeConfig.operationBuildError()
 
         if (headers.isEmpty() && prefixHeaders.isEmpty()) {
             return false
         }
-        writer.rustBlock(
-            "fn add_headers(&self, mut builder: #1T) -> std::result::Result<#1T, #2T>",
-            RuntimeType.HttpRequestBuilder,
-            buildErrorT
+        writer.rustBlockTemplate(
+            """
+            fn add_headers(
+                _input: &#{Input},
+                mut builder: #{HttpRequestBuilder}
+            ) -> std::result::Result<#{HttpRequestBuilder}, #{BuildError}>
+            """,
+            *codegenScope,
         ) {
             headers.forEach { httpBinding -> renderHeaders(httpBinding) }
             prefixHeaders.forEach { httpBinding ->
@@ -160,7 +173,7 @@ class RequestBindingGenerator(
             is MapShape -> model.expectShape(memberType.value.target)
             else -> TODO("unexpected member for prefix headers: $memberType")
         }
-        ifSet(memberType, memberSymbol, "&self.$memberName") { field ->
+        ifSet(memberType, memberSymbol, "&_input.$memberName") { field ->
             rustTemplate(
                 """
                 for (k, v) in $field {
@@ -184,7 +197,7 @@ class RequestBindingGenerator(
                     builder = builder.header(header_name, header_value);
                 }
 
-            """,
+                """,
                 "build_error" to runtimeConfig.operationBuildError()
             )
         }
@@ -195,7 +208,7 @@ class RequestBindingGenerator(
         val memberType = model.expectShape(memberShape.target)
         val memberSymbol = symbolProvider.toSymbol(memberShape)
         val memberName = symbolProvider.toMemberName(memberShape)
-        ifSet(memberType, memberSymbol, "&self.$memberName") { field ->
+        ifSet(memberType, memberSymbol, "&_input.$memberName") { field ->
             listForEach(memberType, field) { innerField, targetId ->
                 val innerMemberType = model.expectShape(targetId)
                 if (innerMemberType.isPrimitive()) {
@@ -219,7 +232,7 @@ class RequestBindingGenerator(
                         }, err)}
                         })?;
                         builder = builder.header(${httpBinding.locationName.dq()}, header_value);
-                    """,
+                        """,
                         "build_error" to runtimeConfig.operationBuildError()
                     )
                 }
@@ -271,9 +284,9 @@ class RequestBindingGenerator(
         }
         val combinedArgs = listOf(formatString, *args.toTypedArray())
         writer.addImport(RuntimeType.stdfmt.member("Write").toSymbol(), null)
-        writer.rustBlock(
-            "fn uri_base(&self, output: &mut String) -> Result<(), #T>",
-            runtimeConfig.operationBuildError()
+        writer.rustBlockTemplate(
+            "fn uri_base(_input: &#{Input}, output: &mut String) -> Result<(), #{BuildError}>",
+            *codegenScope
         ) {
             httpTrait.uri.labels.map { label ->
                 val member = inputShape.expectMember(label.content)
@@ -287,15 +300,15 @@ class RequestBindingGenerator(
     /**
      * When needed, generate a function to build a query string
      *
-     * This function uses smithy_http::query::Query to append params to a query string:
+     * This function uses aws_smithy_http::query::Query to append params to a query string:
      * ```rust
-     *    fn uri_query(&self, mut output: &mut String) {
-     *      let mut query = smithy_http::query::Query::new(&mut output);
-     *      if let Some(inner_89) = &self.null_value {
-     *          query.push_kv("Null", &smithy_http::query::fmt_string(&inner_89));
+     *    fn uri_query(input: &Input, mut output: &mut String) {
+     *      let mut query = aws_smithy_http::query::Query::new(&mut output);
+     *      if let Some(inner_89) = &input.null_value {
+     *          query.push_kv("Null", &aws_smithy_http::query::fmt_string(&inner_89));
      *      }
-     *      if let Some(inner_90) = &self.empty_string {
-     *          query.push_kv("Empty", &smithy_http::query::fmt_string(&inner_90));
+     *      if let Some(inner_90) = &input.empty_string {
+     *          query.push_kv("Empty", &aws_smithy_http::query::fmt_string(&inner_90));
      *      }
      *    }
      *  ```
@@ -309,7 +322,7 @@ class RequestBindingGenerator(
             return false
         }
         val preloadedParams = literalParams.keys + dynamicParams.map { it.locationName }
-        writer.rustBlock("fn uri_query(&self, mut output: &mut String)") {
+        writer.rustBlockTemplate("fn uri_query(_input: &#{Input}, mut output: &mut String)", *codegenScope) {
             write("let mut query = #T::new(&mut output);", RuntimeType.QueryFormat(runtimeConfig, "Writer"))
             literalParams.forEach { (k, v) ->
                 // When `v` is an empty string, no value should be set.
@@ -330,7 +343,7 @@ class RequestBindingGenerator(
                 val memberName = symbolProvider.toMemberName(memberShape)
                 val targetShape = model.expectShape(memberShape.target, MapShape::class.java)
                 val stringFormatter = RuntimeType.QueryFormat(runtimeConfig, "fmt_string")
-                ifSet(model.expectShape(param.member.target), memberSymbol, "&self.$memberName") { field ->
+                ifSet(model.expectShape(param.member.target), memberSymbol, "&_input.$memberName") { field ->
                     rustBlock("for (k, v) in $field") {
                         // if v is a list, generate another level of iteration
                         listForEach(model.expectShape(targetShape.value.target), "v") { innerField, _ ->
@@ -347,7 +360,7 @@ class RequestBindingGenerator(
                 val memberSymbol = symbolProvider.toSymbol(memberShape)
                 val memberName = symbolProvider.toMemberName(memberShape)
                 val outerTarget = model.expectShape(memberShape.target)
-                ifSet(outerTarget, memberSymbol, "&self.$memberName") { field ->
+                ifSet(outerTarget, memberSymbol, "&_input.$memberName") { field ->
                     // if `param` is a list, generate another level of iteration
                     listForEach(outerTarget, field) { innerField, targetId ->
                         val target = model.expectShape(targetId)
@@ -399,7 +412,7 @@ class RequestBindingGenerator(
             )
         }
         val input = safeName("input")
-        rust("let $input = &self.${symbolProvider.toMemberName(member)};")
+        rust("let $input = &_input.${symbolProvider.toMemberName(member)};")
         if (symbol.isOptional()) {
             rust("let $input = $input.as_ref().ok_or(${buildError()})?;")
         }
@@ -424,9 +437,9 @@ class RequestBindingGenerator(
         }
         rust(
             """
-                if $outputVar.is_empty() {
-                    return Err(${buildError()})
-                }
+            if $outputVar.is_empty() {
+                return Err(${buildError()})
+            }
             """
         )
     }

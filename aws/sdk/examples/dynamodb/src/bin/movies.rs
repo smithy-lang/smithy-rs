@@ -17,10 +17,10 @@ use aws_sdk_dynamodb::operation::DescribeTable;
 use aws_sdk_dynamodb::output::DescribeTableOutput;
 use aws_sdk_dynamodb::{Client, Config, Error, Region, PKG_VERSION};
 
+use aws_smithy_http::operation::Operation;
+use aws_smithy_http::retry::ClassifyResponse;
+use aws_smithy_types::retry::RetryKind;
 use serde_json::Value;
-use smithy_http::operation::Operation;
-use smithy_http::retry::ClassifyResponse;
-use smithy_types::retry::RetryKind;
 use std::collections::HashMap;
 use std::time::Duration;
 use structopt::StructOpt;
@@ -40,7 +40,8 @@ struct Opt {
     verbose: bool,
 }
 
-/// A partial reimplementation of https://docs.amazonaws.cn/en_us/amazondynamodb/latest/developerguide/GettingStarted.Ruby.html
+/// A partial reimplementation of
+/// <https://docs.amazonaws.cn/en_us/amazondynamodb/latest/developerguide/GettingStarted.Ruby.html>
 /// in Rust
 ///
 /// - Create table
@@ -96,7 +97,7 @@ async fn main() -> Result<(), Error> {
     }
 
     raw_client
-        .call(wait_for_ready_table(&table.to_string(), client.conf()))
+        .call(wait_for_ready_table(&table.to_string(), client.conf()).await)
         .await
         .expect("table should become ready");
 
@@ -254,7 +255,7 @@ where
 
 /// Construct a `DescribeTable` request with a policy to retry every second until the table
 /// is ready
-fn wait_for_ready_table(
+async fn wait_for_ready_table(
     table_name: &str,
     conf: &Config,
 ) -> Operation<DescribeTable, WaitForReadyTable<AwsErrorRetryPolicy>> {
@@ -263,6 +264,7 @@ fn wait_for_ready_table(
         .build()
         .expect("valid input")
         .make_operation(&conf)
+        .await
         .expect("valid operation");
     let waiting_policy = WaitForReadyTable {
         inner: operation.retry_policy().clone(),

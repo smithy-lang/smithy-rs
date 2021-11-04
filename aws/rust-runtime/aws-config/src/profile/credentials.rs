@@ -38,7 +38,7 @@ use crate::profile::credentials::exec::named::NamedProviderFactory;
 use crate::profile::credentials::exec::{ClientConfiguration, ProviderChain};
 use crate::profile::parser::ProfileParseError;
 use crate::provider_config::ProviderConfig;
-use smithy_client::erase::DynConnector;
+use aws_smithy_client::erase::DynConnector;
 
 mod exec;
 mod repr;
@@ -67,9 +67,9 @@ impl ProvideCredentials for ProfileFileCredentialsProvider {
 /// let provider = ProfileFileCredentialsProvider::builder().build();
 /// ```
 ///
-/// **Note:** Profile providers to not implement any caching. They will reload and reparse the profile
+/// _Note: Profile providers to not implement any caching. They will reload and reparse the profile
 /// from the file system when called. See [lazy_caching](crate::meta::credentials::LazyCachingCredentialsProvider) for
-/// more information about caching.
+/// more information about caching._
 ///
 /// This provider supports several different credentials formats:
 /// ### Credentials defined explicitly within the file
@@ -156,10 +156,14 @@ impl ProfileFileCredentialsProvider {
         )
         .await;
         let inner_provider = profile.map_err(|err| match err {
-            ProfileFileError::NoProfilesDefined => CredentialsError::CredentialsNotLoaded,
-            _ => CredentialsError::InvalidConfiguration(
-                format!("ProfileFile provider could not be built: {}", &err).into(),
-            ),
+            ProfileFileError::NoProfilesDefined
+            | ProfileFileError::ProfileDidNotContainCredentials { .. } => {
+                CredentialsError::not_loaded(err)
+            }
+            _ => CredentialsError::invalid_configuration(format!(
+                "ProfileFile provider could not be built: {}",
+                &err
+            )),
         })?;
         let mut creds = match inner_provider
             .base()
@@ -173,7 +177,7 @@ impl ProfileFileCredentialsProvider {
             }
             Err(e) => {
                 tracing::warn!(error = %e, "failed to load base credentials");
-                return Err(CredentialsError::ProviderError(e.into()));
+                return Err(CredentialsError::provider_error(e));
             }
         };
         for provider in inner_provider.chain().iter() {
@@ -188,7 +192,7 @@ impl ProfileFileCredentialsProvider {
                 }
                 Err(e) => {
                     tracing::warn!(provider = ?provider, "failed to load assume role credentials");
-                    return Err(CredentialsError::ProviderError(e.into()));
+                    return Err(CredentialsError::provider_error(e));
                 }
             }
         }
@@ -201,12 +205,22 @@ impl ProfileFileCredentialsProvider {
 #[non_exhaustive]
 pub enum ProfileFileError {
     /// The profile was not a valid AWS profile
+    #[non_exhaustive]
     CouldNotParseProfile(ProfileParseError),
 
     /// No profiles existed (the profile was empty)
+    #[non_exhaustive]
     NoProfilesDefined,
 
+    /// The profile did not contain any credential information
+    #[non_exhaustive]
+    ProfileDidNotContainCredentials {
+        /// The name of the profile
+        profile: String,
+    },
+
     /// The profile contained an infinite loop of `source_profile` references
+    #[non_exhaustive]
     CredentialLoop {
         /// Vec of profiles leading to the loop
         profiles: Vec<String>,
@@ -215,6 +229,7 @@ pub enum ProfileFileError {
     },
 
     /// The profile was missing a credential source
+    #[non_exhaustive]
     MissingCredentialSource {
         /// The name of the profile
         profile: String,
@@ -222,6 +237,7 @@ pub enum ProfileFileError {
         message: Cow<'static, str>,
     },
     /// The profile contained an invalid credential source
+    #[non_exhaustive]
     InvalidCredentialSource {
         /// The name of the profile
         profile: String,
@@ -229,6 +245,7 @@ pub enum ProfileFileError {
         message: Cow<'static, str>,
     },
     /// The profile referred to a another profile by name that was not defined
+    #[non_exhaustive]
     MissingProfile {
         /// The name of the profile
         profile: String,
@@ -236,6 +253,7 @@ pub enum ProfileFileError {
         message: Cow<'static, str>,
     },
     /// The profile referred to `credential_source` that was not defined
+    #[non_exhaustive]
     UnknownProvider {
         /// The name of the provider
         name: String,
@@ -269,6 +287,11 @@ impl Display for ProfileFileError {
                 name
             ),
             ProfileFileError::NoProfilesDefined => write!(f, "No profiles were defined"),
+            ProfileFileError::ProfileDidNotContainCredentials { profile } => write!(
+                f,
+                "profile `{}` did not contain credential information",
+                profile
+            ),
         }
     }
 }
@@ -374,9 +397,18 @@ impl Builder {
                         .build(),
                 )
             });
-        // TODO: ECS, IMDS, and other named providers
+
+        named_providers
+            .entry("EcsContainer".into())
+            .or_insert_with(|| {
+                Arc::new(
+                    crate::ecs::EcsCredentialsProvider::builder()
+                        .configure(&conf)
+                        .build(),
+                )
+            });
         let factory = exec::named::NamedProviderFactory::new(named_providers);
-        let connector = expect_connector(conf.connector().cloned());
+        let connector = expect_connector(conf.default_connector());
         let core_client = aws_hyper::Client::new(connector.clone());
 
         ProfileFileCredentialsProvider {

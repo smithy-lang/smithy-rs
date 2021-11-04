@@ -13,24 +13,24 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 
 class HttpChecksumRequiredGenerator(
-    private val protocolConfig: ProtocolConfig,
+    private val codegenContext: CodegenContext,
     private val operationShape: OperationShape
 ) : OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         if (!operationShape.hasTrait<HttpChecksumRequiredTrait>()) {
             return emptySection
         }
-        if (operationShape.inputShape(protocolConfig.model).hasStreamingMember(protocolConfig.model)) {
+        if (operationShape.inputShape(codegenContext.model).hasStreamingMember(codegenContext.model)) {
             throw CodegenException("HttpChecksum required cannot be applied to a streaming shape")
         }
         return when (section) {
@@ -51,11 +51,11 @@ class HttpChecksumRequiredGenerator(
                         );
                         Result::<_, #{BuildError}>::Ok(req)
                     })?;
-                """,
+                    """,
                     "md5" to CargoDependency.Md5.asType(),
                     "http" to CargoDependency.Http.asType(),
-                    "base64_encode" to RuntimeType.Base64Encode(protocolConfig.runtimeConfig),
-                    "BuildError" to protocolConfig.runtimeConfig.operationBuildError()
+                    "base64_encode" to RuntimeType.Base64Encode(codegenContext.runtimeConfig),
+                    "BuildError" to codegenContext.runtimeConfig.operationBuildError()
                 )
             }
             else -> emptySection

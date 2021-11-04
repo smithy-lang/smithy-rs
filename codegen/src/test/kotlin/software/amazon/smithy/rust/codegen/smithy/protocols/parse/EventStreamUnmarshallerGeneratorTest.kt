@@ -9,11 +9,12 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.testutil.testRustSettings
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 
 class EventStreamUnmarshallerGeneratorTest {
@@ -22,15 +23,16 @@ class EventStreamUnmarshallerGeneratorTest {
     fun test(testCase: EventStreamTestModels.TestCase) {
         val test = EventStreamTestTools.generateTestProject(testCase.model)
 
-        val protocolConfig = ProtocolConfig(
+        val codegenContext = CodegenContext(
             test.model,
             test.symbolProvider,
             TestRuntimeConfig,
             test.serviceShape,
             ShapeId.from(testCase.protocolShapeId),
-            "test"
+            "test",
+            testRustSettings(test.model)
         )
-        val protocol = testCase.protocolBuilder(protocolConfig)
+        val protocol = testCase.protocolBuilder(codegenContext)
         val generator = EventStreamUnmarshallerGenerator(
             protocol,
             test.model,
@@ -43,8 +45,8 @@ class EventStreamUnmarshallerGeneratorTest {
         test.project.lib { writer ->
             writer.rust(
                 """
-                use smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
-                use smithy_types::{Blob, Instant};
+                use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
+                use aws_smithy_types::{Blob, Instant};
                 use crate::error::*;
                 use crate::model::*;
 

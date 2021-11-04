@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.renderWithModelBuilder
-import software.amazon.smithy.rust.codegen.testutil.testProtocolConfig
+import software.amazon.smithy.rust.codegen.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.lookup
@@ -45,7 +45,7 @@ class Ec2QueryParserGeneratorTest {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = Ec2QueryParserGenerator(
-            testProtocolConfig(model),
+            testCodegenContext(model),
             RuntimeType.wrappedXmlErrors(TestRuntimeConfig)
         )
         val operationParser = parserGenerator.operationParser(model.lookup("test#SomeOperation"))!!
@@ -55,23 +55,23 @@ class Ec2QueryParserGeneratorTest {
             writer.unitTest(
                 name = "valid_input",
                 test = """
-                let xml = br#"
-                <SomeOperationResponse someAttribute="5">
-                    <someVal>Some value</someVal>
-                </someOperationResponse>
-                "#;
-                let output = ${writer.format(operationParser)}(xml, output::some_operation_output::Builder::default()).unwrap().build();
-                assert_eq!(output.some_attribute, Some(5));
-                assert_eq!(output.some_val, Some("Some value".to_string()));
+                    let xml = br#"
+                    <SomeOperationResponse someAttribute="5">
+                        <someVal>Some value</someVal>
+                    </someOperationResponse>
+                    "#;
+                    let output = ${writer.format(operationParser)}(xml, output::some_operation_output::Builder::default()).unwrap().build();
+                    assert_eq!(output.some_attribute, Some(5));
+                    assert_eq!(output.some_val, Some("Some value".to_string()));
                 """
             )
         }
 
-        project.withModule(RustModule.default("model", public = true)) {
+        project.withModule(RustModule.public("model")) {
             model.lookup<StructureShape>("test#SomeOutput").renderWithModelBuilder(model, symbolProvider, it)
         }
 
-        project.withModule(RustModule.default("output", public = true)) {
+        project.withModule(RustModule.public("output")) {
             model.lookup<OperationShape>("test#SomeOperation").outputShape(model)
                 .renderWithModelBuilder(model, symbolProvider, it)
         }

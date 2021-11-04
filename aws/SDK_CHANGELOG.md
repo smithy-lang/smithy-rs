@@ -1,19 +1,143 @@
 vNext (Month Day, Year)
 =======================
+
+v0.0.23-alpha (November 3rd, 2021)
+==================================
+**New this week**
+- :tada: Add support for AWS Glacier (smithy-rs#801)
+- :tada: Add support for AWS Panorama
+- :bug: Fix `native-tls` feature in `aws-config` (aws-sdk-rust#265, smithy-rs#803)
+- Add example to aws-sig-auth for generating an IAM Token for RDS (smithy-rs#811, aws-sdk-rust#147)
+- :bug: `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
+- :bug: Fix generated docs on unions like `dynamodb::AttributeValue`. (smithy-rs#826)
+
+**Breaking Changes**
+- `<operation>.make_operation(&config)` is now an `async` function for all operations. Code should be updated to call `.await`. This will only impact users using the low-level API. (smithy-rs#797)
+- :bug: S3 request metadata signing now correctly trims headers fixing [problems like this](https://github.com/awslabs/aws-sdk-rust/issues/248) (smithy-rs#761)
+
+v0.0.22-alpha (October 20th, 2021)
+==================================
+
+**Breaking Changes**
+
+- `CredentialsError` variants became non-exhaustive. This makes them impossible to construct directly outside of the `aws_types` crate. In order to construct credentials errors, new methods have been added for each variant. Instead of `CredentialsError::Unhandled(...)`, you should instead use `CredentialsError::unhandled`. Matching methods exist for all variants. (#781)
+- The default credentials chain now returns `CredentialsError::CredentialsNotLoaded` instead of `ProviderError` when no credentials providers are configured.
+- :warning: All Smithy runtime crates have been renamed to have an `aws-` prefix. This may require code changes:
+  - _Cargo.toml_ changes:
+    - `smithy-async` -> `aws-smithy-async`
+    - `smithy-client` -> `aws-smithy-client`
+    - `smithy-eventstream` -> `aws-smithy-eventstream`
+    - `smithy-http` -> `aws-smithy-http`
+    - `smithy-http-tower` -> `aws-smithy-http-tower`
+    - `smithy-json` -> `aws-smithy-json`
+    - `smithy-protocol-test` -> `aws-smithy-protocol-test`
+    - `smithy-query` -> `aws-smithy-query`
+    - `smithy-types` -> `aws-smithy-types`
+    - `smithy-xml` -> `aws-smithy-xml`
+  - Rust `use` statement changes:
+    - `smithy_async` -> `aws_smithy_async`
+    - `smithy_client` -> `aws_smithy_client`
+    - `smithy_eventstream` -> `aws_smithy_eventstream`
+    - `smithy_http` -> `aws_smithy_http`
+    - `smithy_http_tower` -> `aws_smithy_http_tower`
+    - `smithy_json` -> `aws_smithy_json`
+    - `smithy_protocol_test` -> `aws_smithy_protocol_test`
+    - `smithy_query` -> `aws_smithy_query`
+    - `smithy_types` -> `aws_smithy_types`
+    - `smithy_xml` -> `aws_smithy_xml`
+
+**New this week**
+
+- Moved the contents of `aws-auth` into the `aws-http` runtime crate (smithy-rs#783)
+- Fix instances where docs were missing in generated services and add `#[warn_missing_docs]` (smithy-rs#779)
+- Add tracing output for resolved AWS endpoint (smithy-rs#784)
+- Update AWS service models (smithy-rs#790)
+- Add support for the following Glacier customizations:
+  - Set the ApiVersion header (smithy-rs#138, #787)
+
+v0.0.21-alpha (October 15th, 2021)
+==================================
+
+**New this week**
+
+- Prepare crate manifests for publishing to crates.io (smithy-rs#755)
+- Add support for IAM Roles for tasks credential provider (smithy-rs#765, aws-sdk-rust#123)
+- All service crates now have generated README files (smithy-rs#766)
+- Update AWS service models (smithy-rs#772)
+- :tada: Add support for Amazon Managed Grafana (smithy-rs#772)
+
+v0.0.20-alpha (October 7, 2021)
+===============================
+
+**Breaking changes**
+
+- :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
+- `SmithyConnector` and `DynConnector` now return `ConnectorError` instead of `Box<dyn Error>`. If you have written a custom connector, it will need to be updated to return the new error type. (#744)
+- The `DispatchError` variant of `SdkError` now contains `ConnectorError` instead of `Box<dyn Error>` (#744).
+
 **New This Week**
-- Add IMDS client to `aws-config`
+
+- :tada: Make retry behavior configurable
+    - With env vars `AWS_MAX_ATTEMPTS` and `AWS_RETRY_MODE`
+    - With `~/.aws/config` settings `max_attempts` and `retry_mode`
+    - By calling the `with_retry_config` method on a `Config` and passing in a `RetryConfig`
+    - Only the `Standard` retry mode is currently implemented. `Adaptive` retry mode will be implemented at a later
+      date.
+    - For more info, see the AWS Reference pages on configuring these settings:
+        - [Setting global max attempts](https://docs.aws.amazon.com/sdkref/latest/guide/setting-global-max_attempts.html)
+        - [Setting global retry mode](https://docs.aws.amazon.com/sdkref/latest/guide/setting-global-retry_mode.html)
+- :tada: Add presigned request support and examples for S3 GetObject and PutObject (smithy-rs#731, aws-sdk-rust#139)
+- :tada: Add presigned request support and example for Polly SynthesizeSpeech (smithy-rs#735, aws-sdk-rust#139)
+- Add connect & HTTP read timeouts to IMDS, defaulting to 1 second
+- IO and timeout errors from Hyper can now be retried (#744)
+- :bug: Fix error when receiving `Cont` event from S3 SelectObjectContent (smithy-rs#736)
+- :bug: Fix bug in event stream receiver that could cause the last events in the response stream to be lost when using S3 SelectObjectContent (smithy-rs#736)
+- Updated EC2 code examples to include readme; refactored operations from main into separate functions.
+- Updated Transcribe code example to take an audio file as a command-line option and added readme.
+- Refactored API Gateway code example by moving operation out of main and into a separate function; added readme.
+- Updated Auto Scaling code example to move operation from main to separate function; added readme.
+- Updated AWS Config code examples to include a readme; added command-line options; added DeleteConfigurationRecorder, DeleteDeliveryChannel, ListConfigurationRecorders, ListDeliveryChannels, ListResources, ShowResourceHistory, and EnableConfig code examples.
+- :tada: Add support for 6 new AWS services:
+    - Wisdom
+    - VoiceId
+    - Account
+    - KafkaConnect
+    - OpenSearch
+    - CloudControl
+
+v0.0.19-alpha (September 24th, 2021)
+====================================
+
+**New This Week**
+
+- :tada: IMDS support in the default credential provider chain (aws-sdk-rust#97)
+- :tada: Add `sts::AssumeRoleProvider` to `aws-config`. This enables customers to invoke STS directly,
+  instead of using it via `~/.aws/config`. (smithy-rs#703, aws-sdk-rust#3)
+- Add IMDS client to `aws-config` (smithy-rs#701)
 - Add IMDS credential provider to `aws-config` (smithy-rs#709)
+- Add IMDS region provider to `aws-config` (smithy-rs#715, aws-sdk-rust#97)
 - Update event stream `Receiver`s to be `Send` (aws-sdk-rust#224)
-- Add `sts::AssumeRoleProvider` to `aws-config` (#703, aws-sdk-rust#3)
+- Add query param signing to the `aws-sigv4` crate (smithy-rs#707)
+- :bug: Update event stream `Receiver`s to be `Send` (smithy-rs#702, #aws-sdk-rust#224)
 - :bug: Fix panic when signing non-ASCII header values (smithy-rs#708, aws-sdk-rust#226)
+- Add an example that uses Polly, Transcribe, and S3 called [telephone-game](sdk/examples/telephone-game/src/main.rs)
+
+**Contributions**
+
+Thank you for your contributions! :heart:
+
+- @jonhoo (smithy-rs#703)
 
 v0.0.18-alpha (September 14th, 2021)
 =======================
+
 - :tada: Add support for `OpenSearch` service & bring in other model updates (#todo)
 - Cleanup docs in `aws-config`
 
 **New This Week**
 - :bug: Fixes issue where `Content-Length` header could be duplicated leading to signing failure (aws-sdk-rust#220, smithy-rs#697)
+
+- Updated AutoScaling code examples to use asynchronous config; added readme file; tested on 0.0.17 bits
 
 v0.0.17-alpha (September 2nd, 2021)
 ===================================
@@ -241,7 +365,7 @@ This week also sees the addition of a robust async caching credentials provider.
 To upgrade to the new release, update `tag` to `v0.0.14-alpha`:
 ```
 [dependencies]
-# eg. S3:
+# e.g. S3:
 aws-sdk-s3 = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.14-alpha" }
 ```
 
@@ -334,7 +458,7 @@ To update to the new release, change your tag to `v0.0.10-alpha`.
 - :tada: Add support for EKS (smithy-rs#553)
 - :warning: **Breaking Change:** httpLabel no longer causes fields to be non-optional. You may need to adapt code that uses models. (#537)
 - :warning: **Breaking Change:** `Exception` is **not** renamed to `Error`. Code may need to be updated to replace `Error` with `Exception` when naming error shapes.
-- :warning: **Breaking Change:** Models are now in strict pascal case including acronyms (eg. `dynamodb::model::{SSESpecification => SseSpecification}`)
+- :warning: **Breaking Change:** Models are now in strict pascal case including acronyms (e.g. `dynamodb::model::{SSESpecification => SseSpecification}`)
 - Add more SES examples, and improve examples for Batch.
 - Improved error handling ergonomics: Errors now provide `is_<variantname>()` methods to simplify error handling
 - :bug: Bugfix: Fix bug in `create_multipart_upload`: #127 (smithy-rs#531, @eagletmt)
@@ -356,7 +480,7 @@ To upgrade to the new release, update `tag` to `v0.0.9-alpha`:
 
 ```toml
 [dependencies]
-# eg. Cloudwatch Logs:
+# e.g. Cloudwatch Logs:
 aws-sdk-cloudwatchlogs = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.9-alpha" }
 ```
 
@@ -389,7 +513,7 @@ To upgrade to the new release, update `tag` to `v0.0.8-alpha`:
 
 ```toml
 [dependencies]
-# eg. EC2:
+# e.g. EC2:
 aws-sdk-ec2 = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.8-alpha" }
 ```
 
@@ -420,7 +544,7 @@ This week we’ve added MediaLive, MediaPackage, SNS, Batch, STS, RDS, RDSData, 
 To upgrade to the new release, update `tag` to `v0.0.7-alpha`:
 ```toml
 [dependencies]
-# eg. SNS:
+# e.g. SNS:
 aws-sdk-sns = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.7-alpha" }
 ```
 
@@ -473,7 +597,7 @@ Thanks!
 v0.0.5-alpha (May 25th, 2021)
 =============================
 
-You can install the new release by updating your dependencies to `tag = "v0.0.5-alpha"`, eg.
+You can install the new release by updating your dependencies to `tag = "v0.0.5-alpha"`, e.g.
 ```toml
 [dependencies]
 aws-sdk-s3 = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.5-alpha" }
@@ -501,7 +625,7 @@ Thanks!
 v0.0.4-alpha (May 18th, 2021)
 =============================
 
-You can install the new release by updating your dependencies to `tag = "v0.0.4-alpha"`, eg.
+You can install the new release by updating your dependencies to `tag = "v0.0.4-alpha"`, e.g.
 ```toml
 [dependencies]
 aws-sdk-lambda = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.4-alpha" }
@@ -515,7 +639,7 @@ aws-sdk-lambda = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.
 - Types represented by the Smithy `Set` type now generate `Vec<T>` in all cases. This is also technically breaking but not currently exposed. (smithy-rs#270)
 - Bugfix: The `.message()`field of errors will now look for both `message` and `Message` in the model (smithy-rs#374)
 - Add support for the `AWS_REGION` environment variable. (smithy-rs#362)
-- The request type generated by the fluent builders, eg. `dynamodb.list_tables()` is now `Debug` (smithy-rs#377, @declanvk)
+- The request type generated by the fluent builders, e.g. `dynamodb.list_tables()` is now `Debug` (smithy-rs#377, @declanvk)
 
 And more: See the corresponding [smithy-rs release](https://github.com/awslabs/smithy-rs/releases/tag/v0.9).
 

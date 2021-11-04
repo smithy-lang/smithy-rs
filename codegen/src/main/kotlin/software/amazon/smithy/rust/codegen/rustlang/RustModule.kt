@@ -5,24 +5,25 @@
 
 package software.amazon.smithy.rust.codegen.rustlang
 
-data class RustModule(val name: String, val rustMetadata: RustMetadata) {
+data class RustModule(val name: String, val rustMetadata: RustMetadata, val documentation: String?) {
     fun render(writer: RustWriter) {
+        documentation?.let { docs -> writer.docs(docs) }
         rustMetadata.render(writer)
         writer.write("mod $name;")
     }
 
     companion object {
-        fun default(name: String, public: Boolean): RustModule {
-            // TODO: figure out how to enable this, but only for real services (protocol tests don't have documentation)
-            /*val attributes = if (public) {
-                listOf(Custom("deny(missing_docs)"))
-            } else {
-                listOf()
-            }*/
-            return RustModule(name, RustMetadata(public = public))
+        fun default(name: String, public: Boolean, documentation: String? = null): RustModule {
+            return RustModule(name, RustMetadata(public = public), documentation)
         }
 
-        val Config = default("config", public = true)
-        val Error = default("error", public = true)
+        fun public(name: String, documentation: String? = null): RustModule =
+            default(name, public = true, documentation = documentation)
+
+        fun private(name: String, documentation: String? = null): RustModule =
+            default(name, public = false, documentation = documentation)
+
+        val Config = public("config", documentation = "Configuration for the service.")
+        val Error = public("error", documentation = "Errors that can occur when calling the service.")
     }
 }

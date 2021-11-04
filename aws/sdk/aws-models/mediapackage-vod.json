@@ -1326,6 +1326,13 @@
                         "smithy.api#jsonName": "packagingConfigurationId"
                     }
                 },
+                "Status": {
+                    "target": "com.amazonaws.mediapackagevod#__string",
+                    "traits": {
+                        "smithy.api#documentation": "The current processing status of the asset used for the packaging configuration. The status can be either QUEUED, PROCESSING, PLAYABLE, or FAILED. Status information won't be available for most assets ingested before 2021-09-30.",
+                        "smithy.api#jsonName": "status"
+                    }
+                },
                 "Url": {
                     "target": "com.amazonaws.mediapackagevod#__string",
                     "traits": {
@@ -1462,6 +1469,13 @@
                         "smithy.api#documentation": "A list of HLS manifest configurations.",
                         "smithy.api#jsonName": "hlsManifests",
                         "smithy.api#required": {}
+                    }
+                },
+                "IncludeDvbSubtitles": {
+                    "target": "com.amazonaws.mediapackagevod#__boolean",
+                    "traits": {
+                        "smithy.api#documentation": "When enabled, MediaPackage passes through digital video broadcasting (DVB) subtitles into the output.",
+                        "smithy.api#jsonName": "includeDvbSubtitles"
                     }
                 },
                 "SegmentDurationSeconds": {

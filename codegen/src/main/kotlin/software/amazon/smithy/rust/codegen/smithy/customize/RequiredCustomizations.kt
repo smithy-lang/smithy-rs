@@ -6,14 +6,14 @@
 package software.amazon.smithy.rust.codegen.smithy.customize
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.smithy.customizations.AllowClippyLints
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.CrateVersionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.EndpointPrefixGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.HttpChecksumRequiredGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.IdempotencyTokenGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.SmithyTypesPubUseGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 
 /** A set of customizations that are included in all protocols.
  *
@@ -24,20 +24,20 @@ class RequiredCustomizations : RustCodegenDecorator {
     override val order: Byte = -1
 
     override fun operationCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations + IdempotencyTokenGenerator(protocolConfig, operation) + EndpointPrefixGenerator(
-            protocolConfig,
+        return baseCustomizations + IdempotencyTokenGenerator(codegenContext, operation) + EndpointPrefixGenerator(
+            codegenContext,
             operation
-        ) + HttpChecksumRequiredGenerator(protocolConfig, operation)
+        ) + HttpChecksumRequiredGenerator(codegenContext, operation)
     }
 
     override fun libRsCustomizations(
-        protocolConfig: ProtocolConfig,
+        codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
-        return baseCustomizations + CrateVersionGenerator() + SmithyTypesPubUseGenerator(protocolConfig.runtimeConfig) + AllowClippyLints()
+        return baseCustomizations + CrateVersionGenerator() + SmithyTypesPubUseGenerator(codegenContext.runtimeConfig) + AllowLintsGenerator()
     }
 }

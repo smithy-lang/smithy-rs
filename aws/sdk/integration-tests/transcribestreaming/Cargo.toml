@@ -1,0 +1,21 @@
+[package]
+name = "transcribestreaming"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "John DiSanti <jdisanti@amazon.com>"]
+edition = "2018"
+
+[dependencies]
+async-stream = "0.3"
+aws-http = { path = "../../build/aws-sdk/aws-http"}
+aws-hyper = { path = "../../build/aws-sdk/aws-hyper"}
+aws-sdk-transcribestreaming = { path = "../../build/aws-sdk/transcribestreaming" }
+aws-smithy-client = { path = "../../build/aws-sdk/aws-smithy-client", features = ["test-util"] }
+aws-smithy-eventstream = { path = "../../build/aws-sdk/aws-smithy-eventstream" }
+aws-smithy-http = { path = "../../build/aws-sdk/aws-smithy-http" }
+bytes = "1"
+futures-core = "0.3"
+hound = "3.4"
+http = "0.2.3"
+serde_json = "1"
+tokio  = { version = "1", features = ["full"]}
+tracing-subscriber = "0.2.18"

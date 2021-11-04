@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.renderWithModelBuilder
-import software.amazon.smithy.rust.codegen.testutil.testProtocolConfig
+import software.amazon.smithy.rust.codegen.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.expectTrait
@@ -107,7 +107,7 @@ internal class XmlBindingTraitSerializerGeneratorTest {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = XmlBindingTraitSerializerGenerator(
-            testProtocolConfig(model),
+            testCodegenContext(model),
             HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/xml"))
         )
         val operationParser = parserGenerator.payloadSerializer(model.lookup("test#OpInput\$payload"))
@@ -116,28 +116,28 @@ internal class XmlBindingTraitSerializerGeneratorTest {
         project.lib { writer ->
             writer.unitTest(
                 """
-                 use model::Top;
+                use model::Top;
                 let inp = crate::input::OpInput::builder().payload(
-                    Top::builder()
-                        .field("hello!")
-                        .extra(45)
-                        .recursive(Top::builder().extra(55).build())
-                        .build()
+                   Top::builder()
+                       .field("hello!")
+                       .extra(45)
+                       .recursive(Top::builder().extra(55).build())
+                       .build()
                 ).build().unwrap();
                 let serialized = ${writer.format(operationParser)}(&inp.payload.unwrap()).unwrap();
                 let output = std::str::from_utf8(&serialized).unwrap();
                 assert_eq!(output, "<Top extra=\"45\"><field>hello!</field><recursive extra=\"55\"></recursive></Top>");
-            """
+                """
             )
         }
-        project.withModule(RustModule.default("model", public = true)) {
+        project.withModule(RustModule.public("model")) {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
             UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice")).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
             EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
         }
 
-        project.withModule(RustModule.default("input", public = true)) {
+        project.withModule(RustModule.public("input")) {
             model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
         println("file:///${project.baseDir}/src/xml_ser.rs")

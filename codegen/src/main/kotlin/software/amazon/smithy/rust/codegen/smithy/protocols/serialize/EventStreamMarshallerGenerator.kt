@@ -22,6 +22,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EventHeaderTrait
 import software.amazon.smithy.model.traits.EventPayloadTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -47,19 +48,20 @@ class EventStreamMarshallerGenerator(
     private val payloadContentType: String,
 ) {
     private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
+    private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
-        "MarshallMessage" to RuntimeType("MarshallMessage", smithyEventStream, "smithy_eventstream::frame"),
-        "Message" to RuntimeType("Message", smithyEventStream, "smithy_eventstream::frame"),
-        "Header" to RuntimeType("Header", smithyEventStream, "smithy_eventstream::frame"),
-        "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "smithy_eventstream::frame"),
-        "Error" to RuntimeType("Error", smithyEventStream, "smithy_eventstream::error"),
+        "MarshallMessage" to RuntimeType("MarshallMessage", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "Message" to RuntimeType("Message", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "Header" to RuntimeType("Header", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "Error" to RuntimeType("Error", smithyEventStream, "aws_smithy_eventstream::error"),
     )
 
     fun render(): RuntimeType {
         val marshallerType = unionShape.eventStreamMarshallerType()
         val unionSymbol = symbolProvider.toSymbol(unionShape)
 
-        return RuntimeType.forInlineFun("${marshallerType.name}::new", "event_stream_serde") { inlineWriter ->
+        return RuntimeType.forInlineFun("${marshallerType.name}::new", eventStreamSerdeModule) { inlineWriter ->
             inlineWriter.renderMarshaller(marshallerType, unionSymbol)
         }
     }

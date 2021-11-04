@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.renderWithModelBuilder
-import software.amazon.smithy.rust.codegen.testutil.testProtocolConfig
+import software.amazon.smithy.rust.codegen.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.expectTrait
@@ -114,7 +114,7 @@ class JsonParserGeneratorTest {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = JsonParserGenerator(
-            testProtocolConfig(model),
+            testCodegenContext(model),
             HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json"))
         )
         val operationGenerator = parserGenerator.operationParser(model.lookup("test#Op"))
@@ -160,7 +160,7 @@ class JsonParserGeneratorTest {
                 """
             )
         }
-        project.withModule(RustModule.default("model", public = true)) {
+        project.withModule(RustModule.public("model")) {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
             model.lookup<StructureShape>("test#EmptyStruct").renderWithModelBuilder(model, symbolProvider, it)
             UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice")).render()
@@ -168,10 +168,10 @@ class JsonParserGeneratorTest {
             EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
         }
 
-        project.withModule(RustModule.default("output", public = true)) {
+        project.withModule(RustModule.public("output")) {
             model.lookup<OperationShape>("test#Op").outputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
-        project.withModule(RustModule.default("error", public = true)) {
+        project.withModule(RustModule.public("error")) {
             model.lookup<StructureShape>("test#Error").renderWithModelBuilder(model, symbolProvider, it)
         }
         println("file:///${project.baseDir}/src/json_deser.rs")

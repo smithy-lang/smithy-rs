@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
-import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -88,6 +87,7 @@ object TestWorkspace {
         }
     }
 
+    @Suppress("NAME_SHADOWING")
     fun testProject(symbolProvider: RustSymbolProvider? = null): TestWriterDelegator {
         val subprojectDir = subproject()
         val symbolProvider = symbolProvider ?: object : RustSymbolProvider {
@@ -128,12 +128,13 @@ fun generatePluginContext(model: Model): Pair<PluginContext, Path> {
     val settings = Node.objectNodeBuilder()
         .withMember("module", Node.from(moduleName))
         .withMember("moduleVersion", Node.from("1.0.0"))
+        .withMember("moduleDescription", Node.from("test"))
         .withMember("moduleAuthors", Node.fromStrings("testgenerator@smithy.com"))
         .withMember(
             "runtimeConfig",
             Node.objectNodeBuilder().withMember(
                 "relativePath",
-                Node.from((TestRuntimeConfig.runtimeCrateLocation as RuntimeCrateLocation.Path).path)
+                Node.from((TestRuntimeConfig.runtimeCrateLocation).path)
             ).build()
         )
         .build()
@@ -164,22 +165,15 @@ class TestWriterDelegator(fileManifest: FileManifest, symbolProvider: RustSymbol
  */
 fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
     val stubModel = """
-    namespace fake
-    service Fake {
-        version: "123"
-    }
+        namespace fake
+        service Fake {
+            version: "123"
+        }
     """.asSmithyModel()
     this.finalize(
-        RustSettings(
-            ShapeId.from("fake#Fake"),
-            "test_${baseDir.toFile().nameWithoutExtension}",
-            "0.0.1",
-            moduleAuthors = listOf("test@module.com"),
-            runtimeConfig = TestRuntimeConfig,
-            codegenConfig = CodegenConfig(),
-            license = null,
-            model = stubModel
-        ),
+        rustSettings(stubModel),
+        stubModel,
+        manifestCustomizations = emptyMap(),
         libRsCustomizations = listOf(),
     )
     try {
@@ -192,6 +186,20 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
         "cargo clippy".runCommand(baseDir)
     }
 }
+
+fun TestWriterDelegator.rustSettings(stubModel: Model) =
+    RustSettings(
+        ShapeId.from("fake#Fake"),
+        "test_${baseDir.toFile().nameWithoutExtension}",
+        "0.0.1",
+        moduleAuthors = listOf("test@module.com"),
+        moduleDescription = "test",
+        moduleRepository = null,
+        runtimeConfig = TestRuntimeConfig,
+        codegenConfig = CodegenConfig(),
+        license = null,
+        model = stubModel
+    )
 
 // TODO: unify these test helpers a bit
 fun String.shouldParseAsRust() {
@@ -239,6 +247,7 @@ fun RustWriter.compileAndTest(
     }
 }
 
+@JvmOverloads
 private fun String.intoCrate(
     deps: Set<CargoDependency>,
     module: String? = null,
@@ -249,14 +258,14 @@ private fun String.intoCrate(
     val tempDir = TestWorkspace.subproject()
     // TODO: unify this with CargoTomlGenerator
     val cargoToml = """
-    [package]
-    name = ${tempDir.nameWithoutExtension.dq()}
-    version = "0.0.1"
-    authors = ["rcoh@amazon.com"]
-    edition = "2018"
+        [package]
+        name = ${tempDir.nameWithoutExtension.dq()}
+        version = "0.0.1"
+        authors = ["rcoh@amazon.com"]
+        edition = "2018"
 
-    [dependencies]
-    ${deps.joinToString("\n") { it.toString() }}
+        [dependencies]
+        ${deps.joinToString("\n") { it.toString() }}
     """.trimIndent()
     tempDir.resolve("Cargo.toml").writeText(cargoToml)
     tempDir.resolve("src").mkdirs()

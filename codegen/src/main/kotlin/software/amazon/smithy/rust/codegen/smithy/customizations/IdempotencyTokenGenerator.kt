@@ -10,16 +10,16 @@ import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 
-class IdempotencyTokenGenerator(protocolConfig: ProtocolConfig, private val operationShape: OperationShape) :
+class IdempotencyTokenGenerator(codegenContext: CodegenContext, private val operationShape: OperationShape) :
     OperationCustomization() {
-    private val model = protocolConfig.model
-    private val symbolProvider = protocolConfig.symbolProvider
+    private val model = codegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
     private val idempotencyTokenMember = operationShape.inputShape(model).findMemberWithTrait<IdempotencyTokenTrait>(model)
     override fun section(section: OperationSection): Writable {
         if (idempotencyTokenMember == null) {
@@ -30,10 +30,10 @@ class IdempotencyTokenGenerator(protocolConfig: ProtocolConfig, private val oper
             is OperationSection.MutateInput -> writable {
                 rust(
                     """
-                if ${section.input}.$memberName.is_none() {
-                    ${section.input}.$memberName = Some(${section.config}.make_token.make_idempotency_token());
-                }
-                """
+                    if ${section.input}.$memberName.is_none() {
+                        ${section.input}.$memberName = Some(${section.config}.make_token.make_idempotency_token());
+                    }
+                    """
                 )
             }
             else -> emptySection

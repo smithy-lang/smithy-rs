@@ -21,7 +21,7 @@ This document proposes an overhaul to the configuration design to facilitate thr
 
 Using the SDK requires two crates:
 
-1. `aws-sdk-<someservice>`: The service you want to use (eg. `dynamodb`, `s3`, `sesv2`)
+1. `aws-sdk-<someservice>`: The service you want to use (e.g. `dynamodb`, `s3`, `sesv2`)
 2. `aws-config`: AWS metaconfiguration. This crate contains all the of logic to load configuration for the SDK (regions,
    credentials, retry configuration, etc.)
 
@@ -50,7 +50,7 @@ async fn main() -> Result<(), dynamodb::Error> {
 }
 ```
 
-> Tip: Every AWS service exports a top level `Error` type (eg. [aws_sdk_dynamodb::Error](https://awslabs.github.io/aws-sdk-rust/aws_sdk_dynamodb/enum.Error.html)).
+> Tip: Every AWS service exports a top level `Error` type (e.g. [aws_sdk_dynamodb::Error](https://awslabs.github.io/aws-sdk-rust/aws_sdk_dynamodb/enum.Error.html)).
 > Individual operations return specific error types that contain only the [error variants returned by the operation](https://awslabs.github.io/aws-sdk-rust/aws_sdk_dynamodb/error/struct.ListTablesError.html).
 > Because all the individual errors implement `Into<dynamodb::Error>`, you can use `dynamodb::Error` as the return type along with `?`.
 
@@ -278,7 +278,7 @@ even if a dependency mismatch exists, it is still possible for customers to work
 - [x] ProvideCredentials moved into `aws-types`. `Credentials` moved into `aws-types`
 - [x] Create `aws-config`.
 - [x] Profile-file parsing moved into `aws-config`, region chain & region environment loaders moved to `aws-config`.
-- [ ] os_shim_internal moved to ??? `smithy-types`?
+- [ ] os_shim_internal moved to ??? `aws-smithy-types`?
 - [x] Add `Config` to `aws-types`. Ensure that it's set up to add new members while remaining backwards
   compatible.
 - [x] Code generate `From<&SharedConfig> for <everyservice>::Config`

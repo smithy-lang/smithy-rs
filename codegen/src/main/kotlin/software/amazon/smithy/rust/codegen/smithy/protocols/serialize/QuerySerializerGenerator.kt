@@ -22,6 +22,7 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlNameTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -30,9 +31,9 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -43,7 +44,7 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
-abstract class QuerySerializerGenerator(protocolConfig: ProtocolConfig) : StructuredDataSerializerGenerator {
+abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : StructuredDataSerializerGenerator {
     protected data class Context<T : Shape>(
         /** Expression that yields a QueryValueWriter */
         val writerExpression: String,
@@ -76,10 +77,10 @@ abstract class QuerySerializerGenerator(protocolConfig: ProtocolConfig) : Struct
         }
     }
 
-    protected val model = protocolConfig.model
-    protected val symbolProvider = protocolConfig.symbolProvider
-    protected val runtimeConfig = protocolConfig.runtimeConfig
-    private val serviceShape = protocolConfig.serviceShape
+    protected val model = codegenContext.model
+    protected val symbolProvider = codegenContext.symbolProvider
+    protected val runtimeConfig = codegenContext.runtimeConfig
+    private val serviceShape = codegenContext.serviceShape
     private val serializerError = RuntimeType.Infallible
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
     private val smithyQuery = CargoDependency.smithyQuery(runtimeConfig).asType()
@@ -91,6 +92,8 @@ abstract class QuerySerializerGenerator(protocolConfig: ProtocolConfig) : Struct
         "QueryWriter" to smithyQuery.member("QueryWriter"),
         "QueryValueWriter" to smithyQuery.member("QueryValueWriter"),
     )
+    private val operationSerModule = RustModule.private("operation_ser")
+    private val querySerModule = RustModule.private("query_ser")
 
     abstract val protocolName: String
     abstract fun MemberShape.queryKeyName(prioritizedFallback: String? = null): String
@@ -106,10 +109,14 @@ abstract class QuerySerializerGenerator(protocolConfig: ProtocolConfig) : Struct
         TODO("$protocolName doesn't support payload serialization yet")
     }
 
+    override fun unsetStructure(structure: StructureShape): RuntimeType {
+        TODO("AwsQuery doesn't support payload serialization")
+    }
+
     override fun operationSerializer(operationShape: OperationShape): RuntimeType? {
         val fnName = symbolProvider.serializeFunctionName(operationShape)
         val inputShape = operationShape.inputShape(model)
-        return RuntimeType.forInlineFun(fnName, "operation_ser") { writer ->
+        return RuntimeType.forInlineFun(fnName, operationSerModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(inputShape)
@@ -136,7 +143,7 @@ abstract class QuerySerializerGenerator(protocolConfig: ProtocolConfig) : Struct
     private fun RustWriter.serializeStructure(context: Context<StructureShape>) {
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val structureSymbol = symbolProvider.toSymbol(context.shape)
-        val structureSerializer = RuntimeType.forInlineFun(fnName, "query_ser") { writer ->
+        val structureSerializer = RuntimeType.forInlineFun(fnName, querySerModule) { writer ->
             Attribute.AllowUnusedMut.render(writer)
             writer.rustBlockTemplate(
                 "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input})",
@@ -284,7 +291,7 @@ abstract class QuerySerializerGenerator(protocolConfig: ProtocolConfig) : Struct
     private fun RustWriter.serializeUnion(context: Context<UnionShape>) {
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val unionSymbol = symbolProvider.toSymbol(context.shape)
-        val unionSerializer = RuntimeType.forInlineFun(fnName, "query_ser") { writer ->
+        val unionSerializer = RuntimeType.forInlineFun(fnName, querySerModule) { writer ->
             Attribute.AllowUnusedMut.render(writer)
             writer.rustBlockTemplate(
                 "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input})",

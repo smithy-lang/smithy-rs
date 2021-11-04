@@ -12,10 +12,14 @@ import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
+import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
@@ -24,8 +28,6 @@ import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.codegen.util.runCommand
 import kotlin.io.path.ExperimentalPathApi
-import kotlin.io.path.createDirectory
-import kotlin.io.path.writeText
 
 internal class EndpointTraitBindingsTest {
     @Test
@@ -37,17 +39,17 @@ internal class EndpointTraitBindingsTest {
     @Test
     fun `generate endpoint prefixes`() {
         val model = """
-        namespace test
-        @readonly
-        @endpoint(hostPrefix: "{foo}a.data.")
-        operation GetStatus {
-            input: GetStatusInput,
-        }
-        structure GetStatusInput {
-            @required
-            @hostLabel
-            foo: String
-        }
+            namespace test
+            @readonly
+            @endpoint(hostPrefix: "{foo}a.data.")
+            operation GetStatus {
+                input: GetStatusInput,
+            }
+            structure GetStatusInput {
+                @required
+                @hostLabel
+                foo: String
+            }
         """.asSmithyModel()
         val operationShape: OperationShape = model.lookup("test#GetStatus")
         val sym = testSymbolProvider(model)
@@ -65,7 +67,7 @@ internal class EndpointTraitBindingsTest {
                 struct GetStatusInput {
                     foo: Option<String>
                 }
-            """
+                """
             )
             it.implBlock(model.lookup("test#GetStatusInput"), sym) {
                 it.rustBlock(
@@ -82,14 +84,14 @@ internal class EndpointTraitBindingsTest {
                 let inp = GetStatusInput { foo: Some("test_value".to_string()) };
                 let prefix = inp.endpoint_prefix().unwrap();
                 assert_eq!(prefix.as_str(), "test_valuea.data.");
-            """
+                """
             )
             it.unitTest(
                 """
-                    // not a valid URI component
+                // not a valid URI component
                 let inp = GetStatusInput { foo: Some("test value".to_string()) };
                 inp.endpoint_prefix().expect_err("invalid uri component");
-            """
+                """
             )
 
             it.unitTest(
@@ -97,7 +99,7 @@ internal class EndpointTraitBindingsTest {
                 // unset is invalid
                 let inp = GetStatusInput { foo: None };
                 inp.endpoint_prefix().expect_err("invalid uri component");
-            """
+                """
             )
 
             it.unitTest(
@@ -105,7 +107,7 @@ internal class EndpointTraitBindingsTest {
                 // empty is invalid
                 let inp = GetStatusInput { foo: Some("".to_string()) };
                 inp.endpoint_prefix().expect_err("empty label is invalid");
-            """
+                """
             )
         }
 
@@ -116,49 +118,56 @@ internal class EndpointTraitBindingsTest {
     @Test
     fun `endpoint integration test`() {
         val model = """
-        namespace com.example
-        use aws.protocols#awsJson1_0
-        @awsJson1_0
-        @aws.api#service(sdkId: "Test", endpointPrefix: "differentprefix")
-        service TestService {
-            operations: [SayHello],
-            version: "1"
-        }
-        @endpoint(hostPrefix: "test123.{greeting}.")
-        operation SayHello {
-            input: SayHelloInput
-        }
-        structure SayHelloInput {
-            @required
-            @hostLabel
-            greeting: String
-        }
+            namespace com.example
+            use aws.protocols#awsJson1_0
+            @awsJson1_0
+            @aws.api#service(sdkId: "Test", endpointPrefix: "differentprefix")
+            service TestService {
+                operations: [SayHello],
+                version: "1"
+            }
+            @endpoint(hostPrefix: "test123.{greeting}.")
+            operation SayHello {
+                input: SayHelloInput
+            }
+            structure SayHelloInput {
+                @required
+                @hostLabel
+                greeting: String
+            }
         """.asSmithyModel()
         val (ctx, testDir) = generatePluginContext(model)
-        val visitor = CodegenVisitor(ctx, CombinedCodegenDecorator.fromClasspath(ctx))
         val moduleName = ctx.settings.expectStringMember("module").value.replace('-', '_')
-        visitor.execute()
-        testDir.resolve("tests").createDirectory()
-        testDir.resolve("tests/validate_errors.rs").writeText(
-            """
-                #[test]
-                fn test_endpoint_prefix() {
-                    let conf = $moduleName::Config::builder().build();
-                    $moduleName::operation::SayHello::builder()
-                        .greeting("hey there!").build().expect("input is valid")
-                        .make_operation(&conf).expect_err("no spaces or exclamation points in ep prefixes");
-                    let op = $moduleName::operation::SayHello::builder()
-                        .greeting("hello")
-                        .build().expect("valid operation")
-                        .make_operation(&conf).expect("hello is a valid prefix");
-                    let properties = op.properties();
-                    let prefix = properties.get::<smithy_http::endpoint::EndpointPrefix>()
-                        .expect("prefix should be in config")
-                        .as_str();
-                    assert_eq!(prefix, "test123.hello.");
+        val testWriter = object : RustCodegenDecorator {
+            override val name: String = "add tests"
+            override val order: Byte = 0
+            override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+                rustCrate.withFile("tests/validate_errors.rs") {
+                    TokioTest.render(it)
+                    it.rust(
+                        """
+                        async fn test_endpoint_prefix() {
+                            let conf = $moduleName::Config::builder().build();
+                            $moduleName::operation::SayHello::builder()
+                                .greeting("hey there!").build().expect("input is valid")
+                                .make_operation(&conf).await.expect_err("no spaces or exclamation points in ep prefixes");
+                            let op = $moduleName::operation::SayHello::builder()
+                                .greeting("hello")
+                                .build().expect("valid operation")
+                                .make_operation(&conf).await.expect("hello is a valid prefix");
+                            let properties = op.properties();
+                            let prefix = properties.get::<aws_smithy_http::endpoint::EndpointPrefix>()
+                                .expect("prefix should be in config")
+                                .as_str();
+                            assert_eq!(prefix, "test123.hello.");
+                        }
+                        """
+                    )
                 }
-        """
-        )
+            }
+        }
+        val visitor = CodegenVisitor(ctx, CombinedCodegenDecorator.fromClasspath(ctx).withDecorator(testWriter))
+        visitor.execute()
         "cargo test".runCommand(testDir)
     }
 }

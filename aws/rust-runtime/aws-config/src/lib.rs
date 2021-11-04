@@ -1,4 +1,9 @@
-#![deny(missing_docs)]
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
+#![warn(missing_docs)]
 
 //! `aws-config` provides implementations of region, credential resolution.
 //!
@@ -67,11 +72,22 @@ mod test_case;
 #[cfg(feature = "web-identity-token")]
 pub mod web_identity_token;
 
+#[cfg(feature = "http-provider")]
+pub mod ecs;
+
 pub mod provider_config;
 
+#[cfg(any(feature = "meta", feature = "default-provider"))]
 mod cache;
+
 #[cfg(feature = "imds")]
 pub mod imds;
+
+#[cfg(any(feature = "http-provider", feature = "imds"))]
+mod json_credentials;
+
+#[cfg(feature = "http-provider")]
+mod http_provider;
 
 /// Create an environment loader for AWS Configuration
 ///
@@ -101,8 +117,9 @@ pub use loader::ConfigLoader;
 
 #[cfg(feature = "default-provider")]
 mod loader {
-    use crate::default_provider::{credentials, region};
+    use crate::default_provider::{credentials, region, retry_config};
     use crate::meta::region::ProvideRegion;
+    use aws_smithy_types::retry::RetryConfig;
     use aws_types::config::Config;
     use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
 
@@ -115,6 +132,7 @@ mod loader {
     #[derive(Default, Debug)]
     pub struct ConfigLoader {
         region: Option<Box<dyn ProvideRegion>>,
+        retry_config: Option<RetryConfig>,
         credentials_provider: Option<SharedCredentialsProvider>,
     }
 
@@ -132,6 +150,22 @@ mod loader {
         /// ```
         pub fn region(mut self, region: impl ProvideRegion + 'static) -> Self {
             self.region = Some(Box::new(region));
+            self
+        }
+
+        /// Override the retry_config used to build [`Config`](aws_types::config::Config).
+        ///
+        /// # Examples
+        /// ```rust
+        /// # use aws_smithy_types::retry::RetryConfig;
+        /// # async fn create_config() {
+        ///     let config = aws_config::from_env()
+        ///         .retry_config(RetryConfig::new().with_max_attempts(2))
+        ///         .load().await;
+        /// # }
+        /// ```
+        pub fn retry_config(mut self, retry_config: RetryConfig) -> Self {
+            self.retry_config = Some(retry_config);
             self
         }
 
@@ -169,6 +203,13 @@ mod loader {
             } else {
                 region::default_provider().region().await
             };
+
+            let retry_config = if let Some(retry_config) = self.retry_config {
+                retry_config
+            } else {
+                retry_config::default_provider().retry_config().await
+            };
+
             let credentials_provider = if let Some(provider) = self.credentials_provider {
                 provider
             } else {
@@ -176,8 +217,10 @@ mod loader {
                 builder.set_region(region.clone());
                 SharedCredentialsProvider::new(builder.build().await)
             };
+
             Config::builder()
                 .region(region)
+                .retry_config(retry_config)
                 .credentials_provider(credentials_provider)
                 .build()
         }
@@ -194,26 +237,53 @@ mod connector {
     // no      | yes        | native_tls
     // no      | no         | no default
 
-    use smithy_client::erase::DynConnector;
+    use crate::provider_config::HttpSettings;
+    use aws_smithy_async::rt::sleep::AsyncSleep;
+    use aws_smithy_client::erase::DynConnector;
+    use std::sync::Arc;
 
     // unused when all crate features are disabled
     #[allow(dead_code)]
-    pub fn expect_connector(connector: Option<DynConnector>) -> DynConnector {
+    pub(crate) fn expect_connector(connector: Option<DynConnector>) -> DynConnector {
         connector.expect("A connector was not available. Either set a custom connector or enable the `rustls` and `native-tls` crate features.")
     }
 
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    fn base(
+        settings: &HttpSettings,
+        sleep: Option<Arc<dyn AsyncSleep>>,
+    ) -> aws_smithy_client::hyper_ext::Builder {
+        let mut hyper =
+            aws_smithy_client::hyper_ext::Adapter::builder().timeout(&settings.timeout_settings);
+        if let Some(sleep) = sleep {
+            hyper = hyper.sleep_impl(sleep);
+        }
+        hyper
+    }
+
     #[cfg(feature = "rustls")]
-    pub fn default_connector() -> Option<DynConnector> {
-        Some(DynConnector::new(smithy_client::conns::https()))
+    pub(crate) fn default_connector(
+        settings: &HttpSettings,
+        sleep: Option<Arc<dyn AsyncSleep>>,
+    ) -> Option<DynConnector> {
+        let hyper = base(settings, sleep).build(aws_smithy_client::conns::https());
+        Some(DynConnector::new(hyper))
     }
 
     #[cfg(all(not(feature = "rustls"), feature = "native-tls"))]
-    pub fn default_connector() -> Option<DynConnector> {
-        Some(DynConnector::new(smithy_client::conns::native_tls()))
+    pub(crate) fn default_connector(
+        settings: &HttpSettings,
+        sleep: Option<Arc<dyn AsyncSleep>>,
+    ) -> Option<DynConnector> {
+        let hyper = base(settings, sleep).build(aws_smithy_client::conns::native_tls());
+        Some(DynConnector::new(hyper))
     }
 
     #[cfg(not(any(feature = "rustls", feature = "native-tls")))]
-    pub fn default_connector() -> Option<DynConnector> {
+    pub(crate) fn default_connector(
+        _settings: &HttpSettings,
+        _sleep: Option<Arc<dyn AsyncSleep>>,
+    ) -> Option<DynConnector> {
         None
     }
 }

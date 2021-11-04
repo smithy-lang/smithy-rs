@@ -11,12 +11,12 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.ProtocolConfig
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.testutil.testRustSettings
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.dq
 
@@ -26,15 +26,16 @@ class EventStreamMarshallerGeneratorTest {
     fun test(testCase: EventStreamTestModels.TestCase) {
         val test = EventStreamTestTools.generateTestProject(testCase.model)
 
-        val protocolConfig = ProtocolConfig(
+        val codegenContext = CodegenContext(
             test.model,
             test.symbolProvider,
             TestRuntimeConfig,
             test.serviceShape,
             ShapeId.from(testCase.protocolShapeId),
-            "test"
+            "test",
+            testRustSettings(test.model)
         )
-        val protocol = testCase.protocolBuilder(protocolConfig)
+        val protocol = testCase.protocolBuilder(codegenContext)
         val generator = EventStreamMarshallerGenerator(
             test.model,
             TestRuntimeConfig,
@@ -45,13 +46,13 @@ class EventStreamMarshallerGeneratorTest {
         )
 
         test.project.lib { writer ->
-            val protocolTestHelpers = CargoDependency.ProtocolTestHelpers(TestRuntimeConfig)
+            val protocolTestHelpers = CargoDependency.SmithyProtocolTestHelpers(TestRuntimeConfig)
                 .copy(scope = DependencyScope.Compile)
             writer.rustTemplate(
                 """
-                use smithy_eventstream::frame::{Message, Header, HeaderValue, MarshallMessage};
+                use aws_smithy_eventstream::frame::{Message, Header, HeaderValue, MarshallMessage};
                 use std::collections::HashMap;
-                use smithy_types::{Blob, Instant};
+                use aws_smithy_types::{Blob, Instant};
                 use crate::error::*;
                 use crate::model::*;
 
@@ -70,8 +71,8 @@ class EventStreamMarshallerGeneratorTest {
                     HeaderValue::String(value.into())
                 }
                 """,
-                "validate_body" to RuntimeType("validate_body", protocolTestHelpers, "protocol_test_helpers"),
-                "MediaType" to RuntimeType("MediaType", protocolTestHelpers, "protocol_test_helpers"),
+                "validate_body" to protocolTestHelpers.rustName("validate_body"),
+                "MediaType" to protocolTestHelpers.rustName("MediaType"),
             )
 
             writer.unitTest(

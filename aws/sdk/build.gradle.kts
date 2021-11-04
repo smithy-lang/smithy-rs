@@ -2,11 +2,13 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
+
+import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.aws.traits.ServiceTrait
+import software.amazon.smithy.model.traits.TitleTrait
+import java.util.Properties
 import kotlin.streams.toList
-import java.util.*
 
 extra["displayName"] = "Smithy :: Rust :: AWS-SDK"
 extra["moduleName"] = "software.amazon.smithy.rust.awssdk"
@@ -21,19 +23,18 @@ val smithyVersion: String by project
 
 val sdkOutputDir = buildDir.resolve("aws-sdk")
 val runtimeModules = listOf(
-    "protocol-test-helpers",
-    "smithy-async",
-    "smithy-client",
-    "smithy-eventstream",
-    "smithy-http",
-    "smithy-http-tower",
-    "smithy-json",
-    "smithy-query",
-    "smithy-types",
-    "smithy-xml"
+    "aws-smithy-async",
+    "aws-smithy-client",
+    "aws-smithy-eventstream",
+    "aws-smithy-http",
+    "aws-smithy-http-tower",
+    "aws-smithy-json",
+    "aws-smithy-protocol-test",
+    "aws-smithy-query",
+    "aws-smithy-types",
+    "aws-smithy-xml"
 )
 val awsModules = listOf(
-    "aws-auth",
     "aws-config",
     "aws-endpoint",
     "aws-http",
@@ -77,7 +78,6 @@ fun getProperty(name: String): String? {
     return null
 }
 
-
 // Class and functions for service and protocol membership for SDK generation
 data class Membership(val inclusions: Set<String> = emptySet(), val exclusions: Set<String> = emptySet())
 
@@ -109,6 +109,7 @@ fun parseMembership(rawList: String): Membership {
 data class AwsService(
     val service: String,
     val module: String,
+    val moduleDescription: String,
     val modelFile: File,
     val extraConfig: String? = null,
     val extraFiles: List<File>
@@ -152,6 +153,7 @@ fun discoverServices(): List<AwsService> {
                 null
             } else {
                 val service = services[0]
+                val title = service.expectTrait(TitleTrait::class.java).value
                 val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId
                     .toLowerCase()
                     .replace(" ", "")
@@ -165,7 +167,13 @@ fun discoverServices(): List<AwsService> {
                 } else {
                     listOf()
                 }
-                AwsService(service = service.id.toString(), module = sdkId, modelFile = file, extraFiles = extras)
+                AwsService(
+                    service = service.id.toString(),
+                    module = sdkId,
+                    moduleDescription = "AWS SDK for $title",
+                    modelFile = file,
+                    extraFiles = extras
+                )
             }
         }
     val baseModules = baseServices.map { it.module }.toSet()
@@ -174,9 +182,9 @@ fun discoverServices(): List<AwsService> {
     serviceMembership.exclusions.forEach { disabledService ->
         check(baseModules.contains(disabledService)) {
             "Service $disabledService was explicitly disabled but no service was generated with that name. Generated:\n ${
-                baseModules.joinToString(
-                    "\n "
-                )
+            baseModules.joinToString(
+                "\n "
+            )
             }"
         }
     }
@@ -194,9 +202,9 @@ fun eventStreamAllowList(): Set<String> {
     return list.split(",").map { it.trim() }.toSet()
 }
 
-fun generateSmithyBuild(tests: List<AwsService>): String {
-    val projections = tests.joinToString(",\n") {
-        val files = it.files().map { extraFile ->
+fun generateSmithyBuild(services: List<AwsService>): String {
+    val projections = services.joinToString(",\n") { service ->
+        val files = service.files().map { extraFile ->
             software.amazon.smithy.utils.StringUtils.escapeJavaString(
                 extraFile.absolutePath,
                 ""
@@ -204,25 +212,28 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
         }
         val eventStreamAllowListMembers = eventStreamAllowList.joinToString(", ") { "\"$it\"" }
         """
-            "${it.module}": {
+            "${service.module}": {
                 "imports": [${files.joinToString()}],
 
                 "plugins": {
                     "rust-codegen": {
                         "runtimeConfig": {
-                            "relativePath": "../"
+                            "relativePath": "../",
+                            "version": "DEFAULT"
                         },
                         "codegen": {
                             "includeFluentClient": false,
                             "renameErrors": false,
                             "eventStreamAllowList": [$eventStreamAllowListMembers]
                         },
-                        "service": "${it.service}",
-                        "module": "aws-sdk-${it.module}",
+                        "service": "${service.service}",
+                        "module": "aws-sdk-${service.module}",
                         "moduleVersion": "${getProperty("aws.sdk.version")}",
                         "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
+                        "moduleDescription": "${service.moduleDescription}",
+                        "moduleRepository": "https://github.com/awslabs/aws-sdk-rust",
                         "license": "Apache-2.0"
-                        ${it.extraConfig ?: ""}
+                        ${service.extraConfig ?: ""}
                     }
                 }
             }
@@ -235,7 +246,6 @@ fun generateSmithyBuild(tests: List<AwsService>): String {
     }
     """
 }
-
 
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
@@ -289,38 +299,76 @@ task("relocateExamples") {
     outputs.dir(sdkOutputDir)
 }
 
-tasks.register<Copy>("relocateAwsRuntime") {
-    from("$rootDir/aws/rust-runtime")
-    awsModules.forEach {
-        include("$it/**")
-    }
-    exclude("**/target")
-    exclude("**/Cargo.lock")
-    filter { line -> rewritePathDependency(line) }
-    into(sdkOutputDir)
-}
-
 /**
  * The aws/rust-runtime crates depend on local versions of the Smithy core runtime enabling local compilation. However,
  * those paths need to be replaced in the final build. We should probably fix this with some symlinking.
  */
 fun rewritePathDependency(line: String): String {
-
     // some runtime crates are actually dependent on the generated bindings:
     return line.replace("../sdk/build/aws-sdk/", "")
         // others use relative dependencies::
         .replace("../../rust-runtime/", "")
 }
 
-tasks.register<Copy>("relocateRuntime") {
-    from("$rootDir/rust-runtime") {
-        runtimeModules.forEach {
-            include("$it/**")
-        }
-        exclude("**/target")
-        exclude("**/Cargo.lock")
+fun rewriteCrateVersion(line: String, version: String): String = line.replace(
+    """^\s*version\s+=\s+"0.0.0-smithy-rs-head"$""".toRegex(),
+    "version = \"$version\""
+)
+
+/**
+ * AWS runtime crate versions are all `0.0.0-smithy-rs-head`. When copying over to the AWS SDK,
+ * these should be changed to the AWS SDK version.
+ */
+fun rewriteAwsSdkCrateVersion(line: String): String = rewriteCrateVersion(line, getProperty("aws.sdk.version")!!)
+
+/**
+ * Smithy runtime crate versions in smithy-rs are all `0.0.0-smithy-rs-head`. When copying over to the AWS SDK,
+ * these should be changed to the smithy-rs version.
+ */
+fun rewriteSmithyRsCrateVersion(line: String): String =
+    rewriteCrateVersion(line, getProperty("smithy.rs.runtime.crate.version")!!)
+
+/** Patches a file with the result of the given `operation` being run on each line */
+fun patchFile(path: String, operation: (String) -> String) {
+    val patchedContents = File(path).readLines().joinToString("\n", transform = operation)
+    File(path).writeText(patchedContents)
+}
+
+tasks.register<Copy>("copyAllRuntimes") {
+    from("$rootDir/aws/rust-runtime") {
+        awsModules.forEach { include("$it/**") }
     }
+    from("$rootDir/rust-runtime") {
+        runtimeModules.forEach { include("$it/**") }
+    }
+    exclude("**/target")
+    exclude("**/Cargo.lock")
+    exclude("**/node_modules")
     into(sdkOutputDir)
+}
+
+tasks.register("relocateAwsRuntime") {
+    dependsOn("copyAllRuntimes")
+    doLast {
+        // Patch the Cargo.toml files
+        awsModules.forEach { moduleName ->
+            patchFile("$sdkOutputDir/$moduleName/Cargo.toml") { line ->
+                line.let(::rewritePathDependency)
+                    .let(::rewriteAwsSdkCrateVersion)
+            }
+        }
+    }
+}
+tasks.register("relocateRuntime") {
+    dependsOn("copyAllRuntimes")
+    doLast {
+        // Patch the Cargo.toml files
+        runtimeModules.forEach { moduleName ->
+            patchFile("$sdkOutputDir/$moduleName/Cargo.toml") { line ->
+                line.let(::rewriteSmithyRsCrateVersion)
+            }
+        }
+    }
 }
 
 fun generateCargoWorkspace(services: List<AwsService>): String {

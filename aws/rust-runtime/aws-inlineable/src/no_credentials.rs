@@ -6,7 +6,7 @@
 use aws_types::credentials::future;
 use aws_types::credentials::{CredentialsError, ProvideCredentials};
 
-/// Stub Provider for use when no credentials provider is used
+/// Stub credentials provider for use when no credentials provider is used.
 #[non_exhaustive]
 #[derive(Debug)]
 pub struct NoCredentials;
@@ -16,6 +16,9 @@ impl ProvideCredentials for NoCredentials {
     where
         Self: 'a,
     {
-        future::ProvideCredentials::ready(Err(CredentialsError::CredentialsNotLoaded))
+        future::ProvideCredentials::ready(Err(CredentialsError::not_loaded(
+            "No credentials provider was enabled for the service. \
+        hint: use aws-config to provide a credentials chain.",
+        )))
     }
 }

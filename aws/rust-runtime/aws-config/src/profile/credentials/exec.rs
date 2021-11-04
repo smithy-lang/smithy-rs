@@ -15,9 +15,9 @@ use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
+use aws_smithy_client::erase::DynConnector;
 use aws_types::credentials::{self, CredentialsError, ProvideCredentials};
 use aws_types::os_shim_internal::Fs;
-use smithy_client::erase::DynConnector;
 use std::fmt::Debug;
 
 #[derive(Debug)]
@@ -55,12 +55,13 @@ impl AssumeRoleProvider {
             .build()
             .expect("operation is valid")
             .make_operation(&config)
+            .await
             .expect("valid operation");
         let assume_role_creds = client_config
             .core_client
             .call(operation)
             .await
-            .map_err(|err| CredentialsError::ProviderError(err.into()))?
+            .map_err(CredentialsError::provider_error)?
             .credentials;
         sts::util::into_credentials(assume_role_creds, "AssumeRoleProvider")
     }
@@ -105,7 +106,7 @@ impl ProviderChain {
                 session_name,
             } => {
                 let conf = ProviderConfig::empty()
-                    .with_connector(connector.clone())
+                    .with_http_connector(connector.clone())
                     .with_fs(fs)
                     .with_region(region);
                 let provider = WebIdentityTokenCredentialsProvider::builder()
@@ -151,12 +152,10 @@ pub mod named {
     }
 
     fn lower_cow(mut inp: Cow<str>) -> Cow<str> {
-        if inp.chars().all(|c| c.is_ascii_lowercase()) {
-            inp
-        } else {
+        if !inp.chars().all(|c| c.is_ascii_lowercase()) {
             inp.to_mut().make_ascii_lowercase();
-            inp
         }
+        inp
     }
 
     impl NamedProviderFactory {

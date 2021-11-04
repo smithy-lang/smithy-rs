@@ -20,13 +20,14 @@ class FluentClientCore(private val model: Model) {
         docs("Appends an item to `${member.memberName}`.")
         rust("///")
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
+        rust("///")
         documentShape(member, model)
         rustBlock("pub fn $memberName(mut self, inp: impl Into<${coreType.member.render(true)}>) -> Self") {
             rust(
                 """
                 self.inner = self.inner.$memberName(inp);
                 self
-            """
+                """
             )
         }
     }
@@ -35,6 +36,7 @@ class FluentClientCore(private val model: Model) {
         docs("Adds a key-value pair to `${member.memberName}`.")
         rust("///")
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
+        rust("///")
         documentShape(member, model)
         val k = coreType.key
         val v = coreType.member
@@ -44,7 +46,7 @@ class FluentClientCore(private val model: Model) {
                 """
                 self.inner = self.inner.$memberName(k, v);
                 self
-            """
+                """
             )
         }
     }
