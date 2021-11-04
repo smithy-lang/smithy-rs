@@ -398,17 +398,22 @@ mod tests {
     use crate::Instant;
     use lazy_static::lazy_static;
     use proptest::prelude::*;
+    use std::str::FromStr;
 
     #[derive(Debug, serde::Deserialize)]
     struct TestCase {
-        epoch_seconds: i64,
-        epoch_subsecond_nanos: u32,
-        iso: String,
-        formatted: Option<String>,
+        canonical_seconds: String,
+        canonical_nanos: u32,
+        iso8601: String,
+        error: bool,
+        smithy_format_value: Option<String>,
     }
     impl TestCase {
         fn time(&self) -> Instant {
-            Instant::from_secs_and_nanos(self.epoch_seconds, self.epoch_subsecond_nanos)
+            Instant::from_secs_and_nanos(
+                <i64>::from_str(&self.canonical_seconds).unwrap(),
+                self.canonical_nanos,
+            )
         }
     }
 
@@ -436,7 +441,7 @@ mod tests {
         F: Fn(&Instant) -> String,
     {
         for test_case in test_cases {
-            if let Some(expected) = test_case.formatted.as_ref() {
+            if let Some(expected) = test_case.smithy_format_value.as_ref() {
                 let actual = format(&test_case.time());
                 assert_eq!(expected, &actual, "Additional context:\n{:#?}", test_case);
             } else {
@@ -452,7 +457,7 @@ mod tests {
         for test_case in test_cases {
             let expected = test_case.time();
             let to_parse = test_case
-                .formatted
+                .smithy_format_value
                 .as_ref()
                 .expect("parse test cases should always have a formatted value");
             let actual = parse(&to_parse);
