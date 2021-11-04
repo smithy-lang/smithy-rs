@@ -96,6 +96,7 @@ internal class ServiceConfigGeneratorTest {
         project.withModule(RustModule.Config) {
             sut.render(it)
             it.unitTest(
+                "set_config_fields",
                 """
                 let mut builder = Config::builder();
                 builder.config_field = Some(99);

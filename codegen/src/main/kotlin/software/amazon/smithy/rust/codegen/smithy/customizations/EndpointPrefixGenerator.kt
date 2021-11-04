@@ -9,14 +9,12 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.EndpointTraitBindings
-import software.amazon.smithy.rust.codegen.smithy.generators.OperationBuildError
 
 class EndpointPrefixGenerator(private val codegenContext: CodegenContext, private val shape: OperationShape) :
     OperationCustomization() {
@@ -30,14 +28,10 @@ class EndpointPrefixGenerator(private val codegenContext: CodegenContext, privat
                     shape,
                     epTrait
                 )
-                val buildError = OperationBuildError(codegenContext.runtimeConfig)
-                withBlock("let endpoint_prefix = ", ";") {
+                withBlock("let endpoint_prefix = ", "?;") {
                     endpointTraitBindings.render(this, "self")
                 }
-                rustBlock("match endpoint_prefix") {
-                    rust("Ok(prefix) => { request.properties_mut().insert(prefix); },")
-                    rust("Err(err) => return Err(${buildError.serializationError(this, "err")})")
-                }
+                rust("request.properties_mut().insert(endpoint_prefix);")
             }
         }
         else -> emptySection

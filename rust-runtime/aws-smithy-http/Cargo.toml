@@ -21,7 +21,6 @@ http = "0.2.3"
 http-body = "0.4.0"
 percent-encoding = "2.1.0"
 pin-project = "1"
-thiserror = "1"
 tracing = "0.1"
 
 # We are using hyper for our streaming body implementation, but this is an internal detail.

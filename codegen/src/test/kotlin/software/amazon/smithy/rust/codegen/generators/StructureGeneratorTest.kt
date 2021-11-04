@@ -78,6 +78,7 @@ class StructureGeneratorTest {
             StructureGenerator(model, provider, writer, inner).render()
             StructureGenerator(model, provider, writer, struct).render()
             writer.unitTest(
+                "struct_fields_optional",
                 """
                 let s: Option<MyStruct> = None;
                 s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
@@ -139,6 +140,7 @@ class StructureGeneratorTest {
         val generator = StructureGenerator(model, provider, writer, credentials)
         generator.render()
         writer.unitTest(
+            "sensitive_fields_redacted",
             """
             let creds = Credentials {
                 username: Some("not_redacted".to_owned()),

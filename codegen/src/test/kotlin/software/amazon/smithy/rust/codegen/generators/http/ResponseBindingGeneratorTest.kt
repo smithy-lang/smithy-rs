@@ -96,6 +96,7 @@ class ResponseBindingGeneratorTest {
         testProject.withModule(RustModule.public("output")) {
             it.renderOperation()
             it.unitTest(
+                "http_header_deser",
                 """
                 use crate::http_serde;
                 let resp = http::Response::builder()

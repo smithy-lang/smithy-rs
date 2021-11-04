@@ -76,10 +76,10 @@ internal class EndpointTraitBindingsTest {
                     TestRuntimeConfig.operationBuildError()
                 ) {
                     endpointBindingGenerator.render(this, "self")
-                    rust(".map_err(|e|#T::SerializationError(e.into()))", TestRuntimeConfig.operationBuildError())
                 }
             }
             it.unitTest(
+                "valid_prefix",
                 """
                 let inp = GetStatusInput { foo: Some("test_value".to_string()) };
                 let prefix = inp.endpoint_prefix().unwrap();
@@ -87,6 +87,7 @@ internal class EndpointTraitBindingsTest {
                 """
             )
             it.unitTest(
+                "invalid_prefix",
                 """
                 // not a valid URI component
                 let inp = GetStatusInput { foo: Some("test value".to_string()) };
@@ -95,6 +96,7 @@ internal class EndpointTraitBindingsTest {
             )
 
             it.unitTest(
+                "unset_prefix",
                 """
                 // unset is invalid
                 let inp = GetStatusInput { foo: None };
@@ -103,6 +105,7 @@ internal class EndpointTraitBindingsTest {
             )
 
             it.unitTest(
+                "empty_prefix",
                 """
                 // empty is invalid
                 let inp = GetStatusInput { foo: Some("".to_string()) };
