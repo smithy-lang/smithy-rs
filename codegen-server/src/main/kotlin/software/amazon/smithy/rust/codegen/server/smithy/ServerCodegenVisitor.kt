@@ -16,9 +16,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
@@ -132,14 +129,6 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
         codegenDecorator.extras(codegenContext, rustCrate)
-        val module = RustMetadata(public = true)
-        rustCrate.withModule(
-            RustModule(
-                "error",
-                module,
-                documentation = "All error types that operations can respond with."
-            )
-        ) { writer -> renderSerdeError(writer) }
         rustCrate.finalize(
             settings,
             model,
@@ -232,75 +221,5 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             codegenDecorator
         )
             .render()
-    }
-
-    private fun renderSerdeError(writer: RustWriter) {
-        writer.rust(
-            """
-            ##[derive(Debug)]
-            pub enum Error {
-                Generic(std::borrow::Cow<'static, str>),
-                DeserializeJson(aws_smithy_json::deserialize::Error),
-                DeserializeHeader(aws_smithy_http::header::ParseError),
-                DeserializeLabel(std::string::String),
-                BuildInput(aws_smithy_http::operation::BuildError),
-                BuildResponse(http::Error),
-                SmithyType(aws_smithy_types::Error),
-            }
-
-            impl Error {
-                ##[allow(dead_code)]
-                pub fn generic(msg: &'static str) -> Self {
-                    Self::Generic(msg.into())
-                }
-            }
-
-            impl From<aws_smithy_json::deserialize::Error> for Error {
-                fn from(err: aws_smithy_json::deserialize::Error) -> Self {
-                    Self::DeserializeJson(err)
-                }
-            }
-
-            impl From<aws_smithy_http::operation::SerializationError> for Error {
-                fn from(err: aws_smithy_http::operation::SerializationError) -> Self {
-                    Self::BuildInput(err.into())
-                }
-            }
-
-            impl From<aws_smithy_http::header::ParseError> for Error {
-                fn from(err: aws_smithy_http::header::ParseError) -> Self {
-                    Self::DeserializeHeader(err)
-                }
-            }
-
-            impl From<aws_smithy_http::operation::BuildError> for Error {
-                fn from(err: aws_smithy_http::operation::BuildError) -> Self {
-                    Self::BuildInput(err)
-                }
-            }
-
-            impl From<aws_smithy_types::Error> for Error {
-                fn from(err: aws_smithy_types::Error) -> Self {
-                    Self::SmithyType(err)
-                }
-            }
-
-            impl std::fmt::Display for Error {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    match *self {
-                        Self::Generic(ref msg) => write!(f, "serde error: {}", msg),
-                        Self::DeserializeJson(ref err) => write!(f, "json parse error: {}", err),
-                        Self::DeserializeHeader(ref err) => write!(f, "header parse error: {}", err),
-                        Self::DeserializeLabel(ref msg) => write!(f, "label parse error: {}", msg),
-                        Self::BuildInput(ref err) => write!(f, "json payload error: {}", err),
-                        Self::BuildResponse(ref err) => write!(f, "http response error: {}", err),
-                        Self::SmithyType(ref err) => write!(f, "type error: {}", err),
-                    }
-                }
-            }
-
-            impl std::error::Error for Error {}
-            """.trimIndent()
-        )
     }
 }
