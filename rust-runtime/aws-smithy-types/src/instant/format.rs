@@ -44,10 +44,29 @@ pub(crate) mod epoch_seconds {
 
     /// Parses the Smithy epoch seconds date-time format into an `Instant`.
     pub(crate) fn parse(value: &str) -> Result<Instant, DateParseError> {
-        <f64>::from_str(value)
-            // TODO: Parse base & fraction separately to achieve higher precision
-            .map(Instant::from_f64)
-            .map_err(|_| DateParseError::Invalid("expected float"))
+        let mut parts = value.split('.');
+        let (mut whole, mut decimal) = (0i64, 0u32);
+        if let Some(whole_str) = parts.next() {
+            whole = <i64>::from_str(whole_str).map_err(|_| DateParseError::IntParseError)?;
+        }
+        if let Some(decimal_str) = parts.next() {
+            // Pad the decimal str component out to 9 characters on the stack
+            let mut decimal_buf = [b'0'; 9];
+            for (i, b) in decimal_str.as_bytes().iter().enumerate() {
+                if i >= 9 {
+                    return Err(DateParseError::Invalid("decimal is too long"));
+                }
+                if *b < b'0' || *b > b'9' {
+                    return Err(DateParseError::Invalid("decimal must be alphanumeric"));
+                }
+                decimal_buf[i] = *b;
+            }
+            // Unsafe: the decimal_buf is only populated with ASCII numeric characters above
+            debug_assert!(std::str::from_utf8(&decimal_buf).is_ok());
+            let decimal_str = unsafe { std::str::from_utf8_unchecked(&decimal_buf) };
+            decimal = <u32>::from_str(decimal_str).map_err(|_| DateParseError::IntParseError)?;
+        }
+        Ok(Instant::from_secs_and_nanos(whole, decimal))
     }
 }
 
