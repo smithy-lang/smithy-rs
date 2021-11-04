@@ -31,7 +31,7 @@ set -e
 	cd "$repo_root" && ./gradlew :aws:sdk:assemble
 	mv "$repo_root"/aws/sdk/build/aws-sdk "$target"
   # Generate and copy codegen-server-test models
-	cd "$repo_root" && ./gradlew :codegen-server-test:test
+	cd "$repo_root" && ./gradlew :codegen-server-test:assemble
 	mv "$repo_root"/codegen-server-test/build/smithyprojections/codegen-server-test "$target"/server-test
 	# checkout and reset $gen_branch to be based on the __generated__ history
 	git fetch origin "$base_branch"
