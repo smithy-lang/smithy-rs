@@ -157,6 +157,9 @@ pub(crate) mod http_date {
             push_digit(&mut out, (nanos / (NANOS_PER_SECOND / 10)) as u8);
             push_digit(&mut out, (nanos / (NANOS_PER_SECOND / 100) % 10) as u8);
             push_digit(&mut out, (nanos / (NANOS_PER_SECOND / 1000) % 10) as u8);
+            while let Some(b'0') = out.as_bytes().last() {
+                out.pop();
+            }
         }
 
         out.push_str(" GMT");

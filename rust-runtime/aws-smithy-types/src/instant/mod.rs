@@ -286,7 +286,7 @@ mod test {
         assert_eq!(instant.fmt(Format::EpochSeconds), "1576540098.52");
         assert_eq!(
             instant.fmt(Format::HttpDate),
-            "Mon, 16 Dec 2019 23:48:18.520 GMT"
+            "Mon, 16 Dec 2019 23:48:18.52 GMT"
         );
     }
 
