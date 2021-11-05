@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 
@@ -32,7 +33,6 @@ class ServerServiceGenerator(
     /**
      * Render Service Specific code. Code will end up in different files via [useShapeWriter]. See `SymbolVisitor.kt`
      * which assigns a symbol location to each shape.
-     *
      */
     fun render() {
         val operations = index.getContainedOperations(context.serviceShape).sortedBy { it.id }
@@ -46,9 +46,12 @@ class ServerServiceGenerator(
                 ServerProtocolTestGenerator(context, protocolSupport, operation, operationWriter)
                     .render()
             }
-            rustCrate.withModule(RustModule.Error) { writer ->
-                ServerCombinedErrorGenerator(context.model, context.symbolProvider, operation)
-                    .render(writer)
+
+            if (operation.errors.isNotEmpty()) {
+                rustCrate.withModule(RustModule.Error) { writer ->
+                    ServerCombinedErrorGenerator(context.model, context.symbolProvider, operation)
+                        .render(writer)
+                }
             }
         }
     }

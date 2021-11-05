@@ -93,7 +93,7 @@ class ServerProtocolTestGenerator(
             val testCases = error.getTrait<HttpResponseTestsTrait>()?.testCases.orEmpty()
             testCases.map { TestCase.ResponseTest(it, error) }
         }
-        val allTests: List<TestCase> = (requestTests + responseTests + errorTests).filterMatching()
+        val allTests: List<TestCase> = (requestTests + errorTests).filterMatching()
         if (allTests.isNotEmpty()) {
             val operationName = operationSymbol.name
             val testModuleName = "server_${operationName.toSnakeCase()}_test"

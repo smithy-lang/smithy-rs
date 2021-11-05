@@ -37,7 +37,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTr
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
@@ -121,7 +120,6 @@ private class ServerHttpProtocolImplGenerator(
         "PercentEncoding" to CargoDependency("percent-encoding", CratesIo("2.1.0")).asType(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig)
     )
-    private val httpBoundProtocolGenerator = HttpBoundProtocolTraitImplGenerator(codegenContext, protocol)
 
     override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
         val inputSymbol = symbolProvider.toSymbol(operationShape.inputShape(model))
@@ -155,26 +153,6 @@ private class ServerHttpProtocolImplGenerator(
         operationShape: OperationShape
     ) {
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
-        val successCode = httpBindingResolver.httpTrait(operationShape).code
-        /* Implement `ParseStrictResponse` from client codegen to be used inside tests */
-        rustTemplate(
-            """
-            impl #{ParseStrictResponse} for $operationName {
-                type Output = std::result::Result<#{O}, #{E}>;
-                fn parse(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
-                     if !response.status().is_success() && response.status().as_u16() != $successCode {
-                        #{parse_error}(response)
-                     } else {
-                        #{parse_response}(response)
-                     }
-                }
-            }""",
-            *codegenScope,
-            "O" to outputSymbol,
-            "E" to operationShape.errorSymbol(symbolProvider),
-            "parse_error" to httpBoundProtocolGenerator.parseError(operationShape),
-            "parse_response" to httpBoundProtocolGenerator.parseResponse(operationShape)
-        )
         /* Implement `ParseHttpRequest` for non streaming types. This is done by only implementing `parse_loaded` */
         rustTemplate(
             """
@@ -206,19 +184,21 @@ private class ServerHttpProtocolImplGenerator(
             "serialize_response" to serverSerializeResponse(operationShape)
         )
         /* Implement `SerializeHttpError` for non streaming types. This is done by only implementing `serialize` */
-        rustTemplate(
-            """
+        if (operationShape.errors.isNotEmpty()) {
+            rustTemplate(
+                """
             impl #{SerializeHttpError} for $operationName {
                 type Output = std::result::Result<#{http}::Response<#{Bytes}>, #{Error}>;
-                type Struct = #{E}Kind;
+                type Struct = #{E};
                 fn serialize(&self, error: &Self::Struct) -> Self::Output {
                     #{serialize_error}(error)
                 }
             }""",
-            *codegenScope,
-            "E" to errorSymbol,
-            "serialize_error" to serverSerializeError(operationShape)
-        )
+                *codegenScope,
+                "E" to errorSymbol,
+                "serialize_error" to serverSerializeError(operationShape)
+            )
+        }
     }
 
     /*
@@ -281,7 +261,7 @@ private class ServerHttpProtocolImplGenerator(
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(error: &#{E}Kind) -> std::result::Result<#{http}::Response<#{Bytes}>, #{Error}>",
+                "pub fn $fnName(error: &#{E}) -> std::result::Result<#{http}::Response<#{Bytes}>, #{Error}>",
                 *codegenScope,
                 "E" to errorSymbol
             ) {
@@ -309,10 +289,10 @@ private class ServerHttpProtocolImplGenerator(
                 val variantSymbol = symbolProvider.toSymbol(variantShape)
                 val data = safeName("var")
                 val serializerSymbol = structuredDataSerializer.serverErrorSerializer(it)
-                rustBlock("#TKind::${variantSymbol.name}($data) =>", errorSymbol) {
+                rustBlock("#T::${variantSymbol.name}($data) =>", errorSymbol) {
                     rust(
                         """
-                        #T(&$data)?;
+                        #T($data)?;
                         object.key(${"code".dq()}).string(${httpBindingResolver.errorCode(variantShape).dq()});
                         """.trimIndent(),
                         serializerSymbol
@@ -341,15 +321,6 @@ private class ServerHttpProtocolImplGenerator(
                     rust("response = response.status($status);")
                 }
             }
-            rust(
-                """
-                #TKind::Unhandled(_) => {
-                    object.key(${"code".dq()}).string(${"Unhandled".dq()});
-                    response = response.status(500);
-                }
-                """.trimIndent(),
-                errorSymbol
-            )
         }
         rust("object.finish();")
         rustTemplate(
