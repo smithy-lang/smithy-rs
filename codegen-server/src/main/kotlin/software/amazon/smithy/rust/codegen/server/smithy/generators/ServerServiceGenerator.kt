@@ -11,8 +11,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.error.CombinedErrorGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.error.TopLevelErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 
@@ -49,7 +47,7 @@ class ServerServiceGenerator(
                     .render()
             }
             rustCrate.withModule(RustModule.Error) { writer ->
-                CombinedErrorGenerator(context.model, context.symbolProvider, operation)
+                ServerCombinedErrorGenerator(context.model, context.symbolProvider, operation)
                     .render(writer)
             }
         }

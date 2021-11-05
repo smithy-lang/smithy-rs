@@ -43,7 +43,7 @@ fun OperationShape.errorSymbol(symbolProvider: SymbolProvider): RuntimeType {
  * Generates a unified error enum for [operation]. [ErrorGenerator] handles generating the individual variants,
  * but we must still combine those variants into an enum covering all possible errors for a given operation.
  */
-class CombinedErrorGenerator(
+class ServerCombinedErrorGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val operation: OperationShape
@@ -51,6 +51,7 @@ class CombinedErrorGenerator(
     private val operationIndex = OperationIndex.of(model)
 
     fun render(writer: RustWriter) {
+        // TODO Don't generate an enum error if the operation does not have any errors registered (Healthcheck).
         val errors = operationIndex.getErrors(operation)
         val operationSymbol = symbolProvider.toSymbol(operation)
         val symbol = operation.errorSymbol(symbolProvider)
@@ -62,7 +63,7 @@ class CombinedErrorGenerator(
         writer.rust("/// Error type for the `${operationSymbol.name}` operation.")
         writer.rust("/// Each variant represents an error that can occur for the `${operationSymbol.name}` operation.")
         meta.render(writer)
-        writer.rustBlock("enum ${symbol.name}") {
+        writer.rustBlock("enum ${symbol.name}Kind") {
             errors.forEach { errorVariant ->
                 documentShape(errorVariant, model)
                 val errorVariantSymbol = symbolProvider.toSymbol(errorVariant)
@@ -70,7 +71,7 @@ class CombinedErrorGenerator(
             }
         }
 
-        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.stdfmt.member("Display")) {
+        writer.rustBlock("impl #T for ${symbol.name}Kind", RuntimeType.stdfmt.member("Display")) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 delegateToVariants {
                     writable { rust("_inner.fmt(f)") }
@@ -78,7 +79,8 @@ class CombinedErrorGenerator(
             }
         }
 
-        writer.rustBlock("impl ${symbol.name}") {
+        writer.rustBlock("impl ${symbol.name}Kind") {
+            // TODO This generates empty impl block if errors is empty
             errors.forEach { error ->
                 val errorSymbol = symbolProvider.toSymbol(error)
                 val fnName = errorSymbol.name.toSnakeCase()
@@ -89,7 +91,7 @@ class CombinedErrorGenerator(
             }
         }
 
-        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.StdError) {
+        writer.rustBlock("impl #T for ${symbol.name}Kind", RuntimeType.StdError) {
             rustBlock("fn source(&self) -> Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
                 delegateToVariants {
                     writable {
@@ -131,7 +133,7 @@ class CombinedErrorGenerator(
         rustBlock("match &self") {
             errors.forEach {
                 val errorSymbol = symbolProvider.toSymbol(it)
-                rust("""${symbol.name}::${errorSymbol.name}(_inner) => """)
+                rust("""${symbol.name}Kind::${errorSymbol.name}(_inner) => """)
                 handler(VariantMatch.Modeled(errorSymbol, it))(this)
                 write(",")
             }
