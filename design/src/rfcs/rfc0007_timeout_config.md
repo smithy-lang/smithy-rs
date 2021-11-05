@@ -68,10 +68,10 @@ Configuring timeouts
 Just like with [Retry Behavior Configuration], these settings can be configured in several places and have the same
 precedence rules _(paraphrased here for clarity)_.
 
-- By calling timeout configuration methods when building a service-specific config
-- By calling the timeout configuration methods when building a shared config
-- By setting timeout configuration environment variables
-- By setting timeout configuration variables in the AWS config of the active profile
+1. Service-specific config builders
+2. Shared config builders
+3. Environment variables
+4. Profile config file (e.g., `~/.aws/credentials`)
 
 The above list is in order of decreasing precedence e.g. configuration set in an app will override values from
 environment variables.
