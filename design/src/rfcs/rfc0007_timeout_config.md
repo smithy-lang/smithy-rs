@@ -13,7 +13,7 @@ crate.
 Terminology
 -----------
 
-There's a lot of terminology to define so I've broken it up into two sections
+There's a lot of terminology to define so I've broken it up into three sections.
 
 ### General terms
 
