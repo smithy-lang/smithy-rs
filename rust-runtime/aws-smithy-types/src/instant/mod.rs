@@ -32,6 +32,18 @@ const NANOS_PER_SECOND_U32: u32 = 1_000_000_000;
 ///
 /// Instant in time represented as seconds and sub-second nanos since
 /// the Unix epoch (January 1, 1970 at midnight UTC/GMT).
+///
+/// This type can be converted to/from the standard library's [`SystemTime`](std::time::SystemTime):
+/// ```rust
+/// ## use aws_smithy_types::instant::Instant;
+/// ## use std::time::SystemTime;
+/// let the_millennium_as_system_time = SystemTime::from(Instant::from_secs(946_713_600));
+/// let now_as_instant = Instant::from(SystemTime::now());
+/// ```
+///
+/// The [`aws-smithy-types-convert`](https://crates.io/crates/aws-smithy-types-convert) crate
+/// can be used for conversions to/from other libraries, such as
+/// [`time`](https://crates.io/crates/time) or [`chrono`](https://crates.io/crates/chrono).
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Instant {
     seconds: i64,
