@@ -6,16 +6,16 @@ edition = "2018"
 
 [dependencies]
 async-stream = "0.3"
-aws-http = { path = "../../build/aws-sdk/aws-http"}
-aws-hyper = { path = "../../build/aws-sdk/aws-hyper"}
-aws-sdk-lambda = { path = "../../build/aws-sdk/lambda" }
+aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
+aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper"}
+aws-sdk-lambda = { path = "../../build/aws-sdk/sdk/lambda" }
 base64 = "0.13"
 bytes = "1"
 futures-core = "0.3"
 http = "0.2.3"
 serde_json = "1"
-smithy-client = { path = "../../build/aws-sdk/smithy-client", features = ["test-util"] }
-smithy-eventstream = { path = "../../build/aws-sdk/smithy-eventstream" }
-smithy-http = { path = "../../build/aws-sdk/smithy-http" }
+smithy-client = { path = "../../build/aws-sdk/sdk/smithy-client", features = ["test-util"] }
+smithy-eventstream = { path = "../../build/aws-sdk/sdk/smithy-eventstream" }
+smithy-http = { path = "../../build/aws-sdk/sdk/smithy-http" }
 tokio  = { version = "1", features = ["full"]}
 tracing-subscriber = "0.2.18"
