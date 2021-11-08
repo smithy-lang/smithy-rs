@@ -5,6 +5,7 @@ vNext (Month Day, Year)
 
 - Fix epoch seconds date-time parsing bug in `aws-smithy-types` (smithy-rs#834)
 - Omit trailing zeros from fraction when formatting HTTP dates in `aws-smithy-types` (smithy-rs#834)
+- Model structs now have accessor methods for their members (smithy-rs#842)
 
 v0.0.23-alpha (November 3rd, 2021)
 ==================================
