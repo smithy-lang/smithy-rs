@@ -13,8 +13,10 @@ import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.raw
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
@@ -24,7 +26,8 @@ import software.amazon.smithy.rust.codegen.util.lookup
 
 class StructureGeneratorTest {
     companion object {
-        val model = """
+        val model =
+            """
             namespace com.test
             @documentation("this documents the shape")
             structure MyStruct {
@@ -34,7 +37,7 @@ class StructureGeneratorTest {
                baz: Integer,
                ts: Timestamp,
                inner: Inner,
-               byteValue: Byte
+               byteValue: Byte,
             }
 
             // Intentionally empty
@@ -62,7 +65,7 @@ class StructureGeneratorTest {
             structure StructWithDoc {
                 doc: Document
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
         val structWithDoc = model.lookup<StructureShape>("com.test#StructWithDoc")
         val inner = model.lookup<StructureShape>("com.test#Inner")
@@ -200,5 +203,92 @@ class StructureGeneratorTest {
             };
             """
         )
+    }
+
+    @Test
+    fun `it generates accessor methods`() {
+        val testModel =
+            RecursiveShapeBoxer.transform(
+                """
+                namespace test
+
+                structure One {
+                    fieldString: String,
+                    fieldBlob: Blob,
+                    fieldTimestamp: Timestamp,
+                    fieldDocument: Document,
+                    fieldBoolean: Boolean,
+                    fieldPrimitiveBoolean: PrimitiveBoolean,
+                    fieldByte: Byte,
+                    fieldPrimitiveByte: PrimitiveByte,
+                    fieldShort: Short,
+                    fieldPrimitiveShort: PrimitiveShort,
+                    fieldInteger: Integer,
+                    fieldPrimitiveInteger: PrimitiveInteger,
+                    fieldLong: Long,
+                    fieldPrimitiveLong: PrimitiveLong,
+                    fieldFloat: Float,
+                    fieldPrimitiveFloat: PrimitiveFloat,
+                    fieldDouble: Double,
+                    fieldPrimitiveDouble: PrimitiveDouble,
+                    two: Two,
+                    build: Integer,
+                    builder: Integer,
+                    default: Integer,
+                }
+
+                structure Two {
+                    one: One,
+                }
+                """.asSmithyModel()
+            )
+        val provider = testSymbolProvider(testModel)
+        val project = TestWorkspace.testProject(provider)
+        println("file:///" + project.baseDir + "/src/lib.rs")
+        println("file:///" + project.baseDir + "/src/model.rs")
+
+        project.useShapeWriter(inner) { writer ->
+            writer.withModule("model") {
+                StructureGenerator(testModel, provider, writer, testModel.lookup("test#One")).render()
+                StructureGenerator(testModel, provider, writer, testModel.lookup("test#Two")).render()
+            }
+
+            writer.rustBlock("fn compile_test_one(one: &crate::model::One)") {
+                rust(
+                    """
+                    let _: Option<&str> = one.field_string();
+                    let _: Option<&aws_smithy_types::Blob> = one.field_blob();
+                    let _: Option<&aws_smithy_types::instant::Instant> = one.field_timestamp();
+                    let _: Option<&aws_smithy_types::Document> = one.field_document();
+                    let _: Option<bool> = one.field_boolean();
+                    let _: bool = one.field_primitive_boolean();
+                    let _: Option<i8> = one.field_byte();
+                    let _: i8 = one.field_primitive_byte();
+                    let _: Option<i16> = one.field_short();
+                    let _: i16 = one.field_primitive_short();
+                    let _: Option<i32> = one.field_integer();
+                    let _: i32 = one.field_primitive_integer();
+                    let _: Option<i64> = one.field_long();
+                    let _: i64 = one.field_primitive_long();
+                    let _: Option<f32> = one.field_float();
+                    let _: f32 = one.field_primitive_float();
+                    let _: Option<f64> = one.field_double();
+                    let _: f64 = one.field_primitive_double();
+                    let _: Option<&crate::model::Two> = one.two();
+                    let _: Option<i32> = one.build_value();
+                    let _: Option<i32> = one.builder_value();
+                    let _: Option<i32> = one.default_value();
+                    """
+                )
+            }
+            writer.rustBlock("fn compile_test_two(two: &crate::model::Two)") {
+                rust(
+                    """
+                    let _: Option<&crate::model::One> = two.one();
+                    """
+                )
+            }
+        }
+        project.compileAndTest()
     }
 }

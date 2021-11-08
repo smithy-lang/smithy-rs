@@ -173,6 +173,58 @@ fun RustType.asOptional(): RustType = when (this) {
 }
 
 /**
+ * Converts type to a reference
+ *
+ * For example:
+ * - `String` -> `&String`
+ * - `Option<T>` -> `Option<&T>`
+ */
+fun RustType.asRef(): RustType = when (this) {
+    is RustType.Reference -> this
+    is RustType.Option -> RustType.Option(member.asRef())
+    else -> RustType.Reference(null, this)
+}
+
+/**
+ * Converts type to its Deref target
+ *
+ * For example:
+ * - `String` -> `str`
+ * - `Option<String>` -> `Option<&str>`
+ * - `Box<Something>` -> `&Something`
+ */
+fun RustType.asDeref(): RustType = when (this) {
+    is RustType.Option -> if (member.isDeref()) {
+        RustType.Option(member.asDeref().asRef())
+    } else {
+        this
+    }
+    is RustType.Box -> RustType.Reference(null, member)
+    is RustType.String -> RustType.Opaque("str")
+    is RustType.Vec -> RustType.Slice(member)
+    else -> this
+}
+
+/** Returns true if the type implements Deref */
+fun RustType.isDeref(): Boolean = when (this) {
+    is RustType.Box -> true
+    is RustType.String -> true
+    is RustType.Vec -> true
+    else -> false
+}
+
+/** Returns true if the type implements Copy */
+fun RustType.isCopy(): Boolean = when (this) {
+    is RustType.Float -> true
+    is RustType.Integer -> true
+    is RustType.Reference -> true
+    is RustType.Bool -> true
+    is RustType.Slice -> true
+    is RustType.Option -> this.member.isCopy()
+    else -> false
+}
+
+/**
  * Meta information about a Rust construction (field, struct, or enum)
  */
 data class RustMetadata(
