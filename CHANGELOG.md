@@ -1,6 +1,10 @@
 vNext (Month Day, Year)
 =======================
 
+**Breaking Changes**
+
+- Members named `builder` on model structs were renamed to `builder_value` so that their accessors don't conflict with the existing `builder()` methods (smithy-rs#842)
+
 **New this week**
 
 - Fix epoch seconds date-time parsing bug in `aws-smithy-types` (smithy-rs#834)

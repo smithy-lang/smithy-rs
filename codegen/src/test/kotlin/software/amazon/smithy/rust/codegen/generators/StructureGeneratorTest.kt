@@ -232,6 +232,9 @@ class StructureGeneratorTest {
                     fieldDouble: Double,
                     fieldPrimitiveDouble: PrimitiveDouble,
                     two: Two,
+                    build: Integer,
+                    builder: Integer,
+                    default: Integer,
                 }
 
                 structure Two {
@@ -269,6 +272,9 @@ class StructureGeneratorTest {
                     let _: Option<f64> = one.field_double();
                     let _: f64 = one.field_primitive_double();
                     let _: Option<&crate::model::Two> = one.two();
+                    let _: Option<i32> = one.build_value();
+                    let _: Option<i32> = one.builder_value();
+                    let _: Option<i32> = one.default_value();
                     """
                 )
             }
