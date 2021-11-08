@@ -169,7 +169,25 @@ internal class XmlBindingTraitParserGeneratorTest {
                         </choice>
                     </Top>
                     "#;
-                    ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).expect_err("invalid input");
+                    ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).expect("unknown union variant does not cause failure");
+                """
+            )
+            writer.unitTest(
+                name = "unknown_union_variant",
+                test = """
+                    let xml = br#"<Top>
+                        <choice>
+                            <NewVariantName>
+                                <Name>some key</Name>
+                                <Setting>
+                                    <s>hello</s>
+                                </Setting>
+                            </NewVariantName>
+                        </choice>
+                    </Top>
+                    "#;
+                    let output = ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
+                    assert!(output.choice.unwrap().is_unknown());
                 """
             )
         }

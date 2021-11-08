@@ -77,11 +77,29 @@ class UnionGeneratorTest {
         )
     }
 
-    private fun generateUnion(modelSmithy: String, unionName: String = "MyUnion"): RustWriter {
+    @Test
+    fun `render a union without an unknown variant`() {
+        val writer = generateUnion("union MyUnion { a: String, b: String }", unknownVariant = false)
+        writer.compileAndTest()
+    }
+
+    @Test
+    fun `render an unknown variant`() {
+        val writer = generateUnion("union MyUnion { a: String, b: String }", unknownVariant = true)
+        writer.compileAndTest(
+            """
+            let union = MyUnion::Unknown;
+            assert!(union.is_unknown());
+
+        """
+        )
+    }
+
+    private fun generateUnion(modelSmithy: String, unionName: String = "MyUnion", unknownVariant: Boolean = true): RustWriter {
         val model = "namespace test\n$modelSmithy".asSmithyModel()
         val provider: SymbolProvider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")
-        UnionGenerator(model, provider, writer, model.lookup("test#$unionName")).render()
+        UnionGenerator(model, provider, writer, model.lookup("test#$unionName"), renderUnknownVariant = unknownVariant).render()
         return writer
     }
 }

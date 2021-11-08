@@ -413,6 +413,7 @@ class HttpBoundProtocolBodyGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val mode = codegenContext.mode
     private val httpBindingResolver = protocol.httpBindingResolver
 
     private val operationSerModule = RustModule.private("operation_ser")
@@ -458,9 +459,8 @@ class HttpBoundProtocolBodyGenerator(
         if (payloadMemberName == null) {
             serializerGenerator.operationSerializer(operationShape)?.let { serializer ->
                 writer.rust(
-                    "#T(&self).map_err(|err|#T::SerializationError(err.into()))?",
+                    "#T(&self)?",
                     serializer,
-                    runtimeConfig.operationBuildError()
                 )
             } ?: writer.rustTemplate("#{SdkBody}::from(\"\")", *codegenScope)
         } else {
@@ -483,11 +483,13 @@ class HttpBoundProtocolBodyGenerator(
 
         val marshallerConstructorFn = EventStreamMarshallerGenerator(
             model,
+            mode,
             runtimeConfig,
             symbolProvider,
             unionShape,
             serializerGenerator,
-            httpBindingResolver.requestContentType(operationShape) ?: throw CodegenException("event streams must set a content type"),
+            httpBindingResolver.requestContentType(operationShape)
+                ?: throw CodegenException("event streams must set a content type"),
         ).render()
 
         // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the
@@ -585,15 +587,14 @@ class HttpBoundProtocolBodyGenerator(
 
                 // JSON serialize the structure or union targeted
                 rust(
-                    """#T(&$payloadName).map_err(|err|#T::SerializationError(err.into()))?""",
-                    serializer.payloadSerializer(member), runtimeConfig.operationBuildError()
+                    "#T(&$payloadName)?",
+                    serializer.payloadSerializer(member)
                 )
             }
             is DocumentShape -> {
                 rust(
-                    "#T(&$payloadName).map_err(|err|#T::SerializationError(err.into()))?",
+                    "#T(&$payloadName)?",
                     serializer.documentSerializer(),
-                    runtimeConfig.operationBuildError()
                 )
             }
             else -> TODO("Unexpected payload target type")

@@ -93,6 +93,7 @@ class Ec2QuerySerializerGeneratorTest {
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
             writer.unitTest(
+                "ec2query_serializer",
                 """
                 use model::Top;
 

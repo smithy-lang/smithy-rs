@@ -153,7 +153,11 @@ class SymbolVisitor(
         return MaybeRenamed(baseName, null)
     }
 
-    override fun toMemberName(shape: MemberShape): String = shape.memberName.toSnakeCase()
+    override fun toMemberName(shape: MemberShape): String = when (val container = model.expectShape(shape.container)) {
+        is StructureShape -> shape.memberName.toSnakeCase()
+        is UnionShape -> shape.memberName.toPascalCase()
+        else -> error("unexpected container shape: $container")
+    }
 
     override fun blobShape(shape: BlobShape?): Symbol {
         return RuntimeType.Blob(config.runtimeConfig).toSymbol()
@@ -299,10 +303,17 @@ class SymbolVisitor(
 private const val RUST_TYPE_KEY = "rusttype"
 private const val SHAPE_KEY = "shape"
 private const val SYMBOL_DEFAULT = "symboldefault"
+private const val RENAMED_FROM_KEY = "renamedfrom"
 
 fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder {
     return this.putProperty(RUST_TYPE_KEY, rustType)
 }
+
+fun Symbol.Builder.renamedFrom(name: String): Symbol.Builder {
+    return this.putProperty(RENAMED_FROM_KEY, name)
+}
+
+fun Symbol.renamedFrom(): String? = this.getProperty(RENAMED_FROM_KEY, String::class.java).orNull()
 
 fun Symbol.defaultValue(): Default = this.getProperty(SYMBOL_DEFAULT, Default::class.java).orElse(Default.NoDefault)
 fun Symbol.Builder.setDefault(default: Default): Symbol.Builder {

@@ -41,6 +41,7 @@ fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): RuntimeTyp
 }
 
 fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).member("BuildError")
+fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).member("SerializationError")
 
 class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
     fun missingField(w: RustWriter, field: String, details: String) = "${w.format(runtimeConfig.operationBuildError())}::MissingField { field: ${field.dq()}, details: ${details.dq()} }"

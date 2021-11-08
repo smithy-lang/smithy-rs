@@ -52,6 +52,7 @@ class ResponseBindingGenerator(
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val symbolProvider = codegenContext.symbolProvider
+    private val mode = codegenContext.mode
     private val model = codegenContext.model
     private val service = codegenContext.serviceShape
     private val index = HttpBindingIndex.of(model)
@@ -179,7 +180,8 @@ class ResponseBindingGenerator(
             runtimeConfig,
             symbolProvider,
             operationShape,
-            target
+            target,
+            mode
         ).render()
         rustTemplate(
             """

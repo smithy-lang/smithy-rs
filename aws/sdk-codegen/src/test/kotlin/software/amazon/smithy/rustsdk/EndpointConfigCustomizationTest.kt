@@ -124,6 +124,7 @@ internal class EndpointConfigCustomizationTest {
             it.addDependency(awsTypes(AwsTestRuntimeConfig))
             it.addDependency(CargoDependency.Http)
             it.unitTest(
+                "region_override",
                 """
                 use aws_types::region::Region;
                 use http::Uri;
@@ -147,6 +148,7 @@ internal class EndpointConfigCustomizationTest {
             it.addDependency(awsTypes(AwsTestRuntimeConfig))
             it.addDependency(CargoDependency.Http)
             it.unitTest(
+                "global_services",
                 """
                 use aws_types::region::Region;
                 use http::Uri;
