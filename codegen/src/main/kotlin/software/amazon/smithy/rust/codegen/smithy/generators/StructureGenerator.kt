@@ -131,24 +131,18 @@ class StructureGenerator(
                 if (errorTrait == null || memberName != "message") {
                     renderMemberDoc(member, memberSymbol)
                     val memberType = memberSymbol.rustType()
-                    val returnType = if (memberType.isCopy()) {
-                        memberType
-                    } else if (memberType is RustType.Option && memberType.member.isDeref()) {
-                        memberType.asDeref()
-                    } else {
-                        memberType.asRef()
+                    val returnType = when {
+                        memberType.isCopy() -> memberType
+                        memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
+                        else -> memberType.asRef()
                     }
                     rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
-                        if (memberType.isCopy()) {
-                            rust("self.$memberName")
-                        } else if (memberType is RustType.Option && memberType.member.isDeref()) {
-                            rust("self.$memberName.as_deref()")
-                        } else if (memberType is RustType.Option) {
-                            rust("self.$memberName.as_ref()")
-                        } else if (memberType.isDeref()) {
-                            rust("self.$memberName.deref()")
-                        } else {
-                            rust("&self.$memberName")
+                        when {
+                            memberType.isCopy() -> rust("self.$memberName")
+                            memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")
+                            memberType is RustType.Option -> rust("self.$memberName.as_ref()")
+                            memberType.isDeref() -> rust("self.$memberName.deref()")
+                            else -> rust("&self.$memberName")
                         }
                     }
                 }

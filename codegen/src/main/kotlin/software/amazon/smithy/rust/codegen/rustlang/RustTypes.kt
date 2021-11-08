@@ -172,14 +172,27 @@ fun RustType.asOptional(): RustType = when (this) {
     else -> RustType.Option(this)
 }
 
-/** Converts type to a reference */
+/**
+ * Converts type to a reference
+ *
+ * For example:
+ * - `String` -> `&String`
+ * - `Option<T>` -> `Option<&T>`
+ */
 fun RustType.asRef(): RustType = when (this) {
     is RustType.Reference -> this
     is RustType.Option -> RustType.Option(member.asRef())
     else -> RustType.Reference(null, this)
 }
 
-/** Converts type to its Deref target */
+/**
+ * Converts type to its Deref target
+ *
+ * For example:
+ * - `String` -> `str`
+ * - `Option<String>` -> `Option<&str>`
+ * - `Box<Something>` -> `&Something`
+ */
 fun RustType.asDeref(): RustType = when (this) {
     is RustType.Option -> if (member.isDeref()) {
         RustType.Option(member.asDeref().asRef())
