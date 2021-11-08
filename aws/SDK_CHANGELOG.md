@@ -5,6 +5,7 @@ vNext (Month Day, Year)
 
 - Fix epoch seconds date-time parsing bug in `aws-smithy-types` (smithy-rs#834)
 - Omit trailing zeros from fraction when formatting HTTP dates in `aws-smithy-types` (smithy-rs#834)
+- Moved examples into repository root (aws-sdk-rust#181, smithy-rs#843)
 
 v0.0.23-alpha (November 3rd, 2021)
 ==================================
