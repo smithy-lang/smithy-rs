@@ -246,59 +246,30 @@ class ServerProtocolTestGenerator(
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
         }
-        writeInline("let expected_output =")
+        writeInline("let output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
         rustTemplate(
             """
-            use #{ParseStrictResponse};
             use #{SerializeHttpResponse};
             let op = #{op}::new();
-            let http_response = op.serialize(&expected_output).expect("unable to serialize response body");
-            let parsed = op.parse(&http_response);
+            let http_response = op.serialize(&output).expect("unable to serialize `#{op}` into HTTP response body");
             """,
             *codegenScope,
             "op" to operationSymbol,
         )
-        if (expectedShape.hasTrait<ErrorTrait>()) {
-            val errorSymbol = operationShape.errorSymbol(codegenContext.symbolProvider)
-            val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name
-            rust("""let parsed = parsed.expect_err("should be error response");""")
-            rustBlock("if let #TKind::$errorVariant(actual_error) = parsed.kind", errorSymbol) {
-                rust("assert_eq!(expected_output, actual_error);")
-            }
-            rustBlock("else") {
-                rust("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
-            }
-        } else {
-            rust("let parsed = parsed.expect(\"unable to parse response\");")
-            outputShape.members().forEach { member ->
-                val memberName = codegenContext.symbolProvider.toMemberName(member)
-                if (member.isStreaming(codegenContext.model)) {
-                    rust(
-                        """assert_eq!(
-                        parsed.$memberName.collect().await.unwrap().into_bytes(),
-                        expected_output.$memberName.collect().await.unwrap().into_bytes()
-                                    );"""
-                    )
-                } else {
-                    when (codegenContext.model.expectShape(member.target)) {
-                        is DoubleShape, is FloatShape -> {
-                            addUseImports(
-                                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "FloatEquals").toSymbol()
-                            )
-                            rust(
-                                """
-                                assert!(parsed.$memberName.float_equals(&expected_output.$memberName),
-                                    "Unexpected value for `$memberName` {:?} vs. {:?}", expected_output.$memberName, parsed.$memberName);
-                                """
-                            )
-                        }
-                        else ->
-                            rust("""assert_eq!(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""")
-                    }
-                }
-            }
+        rust("""
+            assert_eq!(
+                http::StatusCode::from_u16(${testCase.code}).expect("invalid expected HTTP status code"),
+                http_response.status()
+            );
+        """)
+        if (testCase.body != null) {
+            rust("""
+                let body = std::str::from_utf8(http_response.body())
+                    .expect("serialized response body does not contain valid UTF-8");
+                assert_eq!("${testCase.body.get().replace("\"", "\\\"")}", body);
+            """)
         }
     }
 
