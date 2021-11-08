@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
@@ -14,7 +15,12 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asDeref
+import software.amazon.smithy.rust.codegen.rustlang.asRef
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.rustlang.isCopy
+import software.amazon.smithy.rust.codegen.rustlang.isDeref
+import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -50,12 +56,18 @@ class StructureGenerator(
     private val writer: RustWriter,
     private val shape: StructureShape
 ) {
+    private val errorTrait = shape.getTrait<ErrorTrait>()
     private val members: List<MemberShape> = shape.allMembers.values.toList()
+    private val accessorMembers: List<MemberShape> = when (errorTrait) {
+        null -> members
+        // Let the ErrorGenerator render the error message accessor if this is an error struct
+        else -> members.filter { "message" != symbolProvider.toMemberName(it) }
+    }
     private val name = symbolProvider.toSymbol(shape).name
 
     fun render() {
         renderStructure()
-        shape.getTrait<ErrorTrait>()?.also { errorTrait ->
+        errorTrait?.also { errorTrait ->
             ErrorGenerator(symbolProvider, writer, shape, errorTrait).render()
         }
     }
@@ -113,6 +125,33 @@ class StructureGenerator(
         }
     }
 
+    private fun renderStructureImpl() {
+        if (accessorMembers.isEmpty()) {
+            return
+        }
+        writer.rustBlock("impl $name") {
+            // Render field accessor methods
+            forEachMember(accessorMembers) { member, memberName, memberSymbol ->
+                renderMemberDoc(member, memberSymbol)
+                val memberType = memberSymbol.rustType()
+                val returnType = when {
+                    memberType.isCopy() -> memberType
+                    memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
+                    else -> memberType.asRef()
+                }
+                rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
+                    when {
+                        memberType.isCopy() -> rust("self.$memberName")
+                        memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")
+                        memberType is RustType.Option -> rust("self.$memberName.as_ref()")
+                        memberType.isDeref() -> rust("self.$memberName.deref()")
+                        else -> rust("&self.$memberName")
+                    }
+                }
+            }
+        }
+    }
+
     private fun renderStructure() {
         val symbol = symbolProvider.toSymbol(shape)
         val containerMeta = symbol.expectRustMetadata()
@@ -121,20 +160,34 @@ class StructureGenerator(
         containerMeta.copy(derives = withoutDebug).render(writer)
 
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
-            members.forEach { member ->
-                val memberName = symbolProvider.toMemberName(member)
-                val memberSymbol = symbolProvider.toSymbol(member)
-                writer.documentShape(
-                    member,
-                    model,
-                    note = memberSymbol.renamedFrom()
-                        ?.let { oldName -> "This member has been renamed from `$oldName`." }
-                )
+            forEachMember(members) { member, memberName, memberSymbol ->
+                renderMemberDoc(member, memberSymbol)
                 memberSymbol.expectRustMetadata().render(this)
                 write("$memberName: #T,", symbolProvider.toSymbol(member))
             }
         }
 
+        renderStructureImpl()
         renderDebugImpl()
+    }
+
+    private fun RustWriter.forEachMember(
+        toIterate: List<MemberShape>,
+        block: RustWriter.(MemberShape, String, Symbol) -> Unit
+    ) {
+        toIterate.forEach { member ->
+            val memberName = symbolProvider.toMemberName(member)
+            val memberSymbol = symbolProvider.toSymbol(member)
+            block(member, memberName, memberSymbol)
+        }
+    }
+
+    private fun RustWriter.renderMemberDoc(member: MemberShape, memberSymbol: Symbol) {
+        documentShape(
+            member,
+            model,
+            note = memberSymbol.renamedFrom()
+                ?.let { oldName -> "This member has been renamed from `$oldName`." }
+        )
     }
 }
