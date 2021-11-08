@@ -7,8 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.knowledge.OperationIndex
-import software.amazon.smithy.model.shapes.DoubleShape
-import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
@@ -33,13 +31,10 @@ import software.amazon.smithy.rust.codegen.server.smithy.protocols.HttpServerTra
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
-import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
-import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
-import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -93,7 +88,7 @@ class ServerProtocolTestGenerator(
             val testCases = error.getTrait<HttpResponseTestsTrait>()?.testCases.orEmpty()
             testCases.map { TestCase.ResponseTest(it, error) }
         }
-        val allTests: List<TestCase> = (requestTests + errorTests).filterMatching()
+        val allTests: List<TestCase> = (requestTests + responseTests + errorTests).filterMatching()
         if (allTests.isNotEmpty()) {
             val operationName = operationSymbol.name
             val testModuleName = "server_${operationName.toSnakeCase()}_test"
