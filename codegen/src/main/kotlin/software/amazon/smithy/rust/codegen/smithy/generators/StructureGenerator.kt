@@ -56,7 +56,7 @@ class StructureGenerator(
     fun render() {
         renderStructure()
         shape.getTrait<ErrorTrait>()?.also { errorTrait ->
-            ErrorGenerator(model, symbolProvider, writer, shape, errorTrait).render()
+            ErrorGenerator(symbolProvider, writer, shape, errorTrait).render()
         }
     }
 
