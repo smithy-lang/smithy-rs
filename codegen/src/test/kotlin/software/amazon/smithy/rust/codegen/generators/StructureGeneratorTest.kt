@@ -244,6 +244,9 @@ class StructureGeneratorTest {
             )
         val provider = testSymbolProvider(testModel)
         val project = TestWorkspace.testProject(provider)
+        println("file:///" + project.baseDir + "/src/lib.rs")
+        println("file:///" + project.baseDir + "/src/model.rs")
+
         project.useShapeWriter(inner) { writer ->
             writer.withModule("model") {
                 StructureGenerator(testModel, provider, writer, testModel.lookup("test#One")).render()

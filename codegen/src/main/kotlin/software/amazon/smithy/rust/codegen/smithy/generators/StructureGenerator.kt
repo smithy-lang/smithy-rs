@@ -56,9 +56,14 @@ class StructureGenerator(
     private val writer: RustWriter,
     private val shape: StructureShape
 ) {
-    private val members: List<MemberShape> = shape.allMembers.values.toList()
-    private val name = symbolProvider.toSymbol(shape).name
     private val errorTrait = shape.getTrait<ErrorTrait>()
+    private val members: List<MemberShape> = shape.allMembers.values.toList()
+    private val accessorMembers: List<MemberShape> = when (errorTrait) {
+        null -> members
+        // Let the ErrorGenerator render the error message accessor if this is an error struct
+        else -> members.filter { "message" != symbolProvider.toMemberName(it) }
+    }
+    private val name = symbolProvider.toSymbol(shape).name
 
     fun render() {
         renderStructure()
@@ -121,29 +126,26 @@ class StructureGenerator(
     }
 
     private fun renderStructureImpl() {
-        if (members.isEmpty()) {
+        if (accessorMembers.isEmpty()) {
             return
         }
         writer.rustBlock("impl $name") {
             // Render field accessor methods
-            forEachMember { member, memberName, memberSymbol ->
-                // Let the ErrorGenerator render the error message accessor if this is an error struct
-                if (errorTrait == null || memberName != "message") {
-                    renderMemberDoc(member, memberSymbol)
-                    val memberType = memberSymbol.rustType()
-                    val returnType = when {
-                        memberType.isCopy() -> memberType
-                        memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
-                        else -> memberType.asRef()
-                    }
-                    rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
-                        when {
-                            memberType.isCopy() -> rust("self.$memberName")
-                            memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")
-                            memberType is RustType.Option -> rust("self.$memberName.as_ref()")
-                            memberType.isDeref() -> rust("self.$memberName.deref()")
-                            else -> rust("&self.$memberName")
-                        }
+            forEachMember(accessorMembers) { member, memberName, memberSymbol ->
+                renderMemberDoc(member, memberSymbol)
+                val memberType = memberSymbol.rustType()
+                val returnType = when {
+                    memberType.isCopy() -> memberType
+                    memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
+                    else -> memberType.asRef()
+                }
+                rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
+                    when {
+                        memberType.isCopy() -> rust("self.$memberName")
+                        memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")
+                        memberType is RustType.Option -> rust("self.$memberName.as_ref()")
+                        memberType.isDeref() -> rust("self.$memberName.deref()")
+                        else -> rust("&self.$memberName")
                     }
                 }
             }
@@ -158,7 +160,7 @@ class StructureGenerator(
         containerMeta.copy(derives = withoutDebug).render(writer)
 
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
-            forEachMember { member, memberName, memberSymbol ->
+            forEachMember(members) { member, memberName, memberSymbol ->
                 renderMemberDoc(member, memberSymbol)
                 memberSymbol.expectRustMetadata().render(this)
                 write("$memberName: #T,", symbolProvider.toSymbol(member))
@@ -169,8 +171,11 @@ class StructureGenerator(
         renderDebugImpl()
     }
 
-    private fun RustWriter.forEachMember(block: RustWriter.(MemberShape, String, Symbol) -> Unit) {
-        members.forEach { member ->
+    private fun RustWriter.forEachMember(
+        toIterate: List<MemberShape>,
+        block: RustWriter.(MemberShape, String, Symbol) -> Unit
+    ) {
+        toIterate.forEach { member ->
             val memberName = symbolProvider.toMemberName(member)
             val memberSymbol = symbolProvider.toSymbol(member)
             block(member, memberName, memberSymbol)
