@@ -121,6 +121,9 @@ class StructureGenerator(
     }
 
     private fun renderStructureImpl() {
+        if (members.isEmpty()) {
+            return
+        }
         writer.rustBlock("impl $name") {
             // Render field accessor methods
             forEachMember { member, memberName, memberSymbol ->
