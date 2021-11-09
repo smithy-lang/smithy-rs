@@ -164,7 +164,7 @@ class RequestBindingGeneratorTest {
         renderOperation(writer)
         writer.compileAndTest(
             """
-            let ts = aws_smithy_types::Instant::from_secs(10123125);
+            let ts = aws_smithy_types::DateTime::from_secs(10123125);
             let inp = PutObjectInput::builder()
                 .bucket_name("somebucket/ok")
                 .key(ts.clone())
@@ -188,7 +188,7 @@ class RequestBindingGeneratorTest {
         renderOperation(writer)
         writer.compileAndTest(
             """
-            let ts = aws_smithy_types::Instant::from_secs(10123125);
+            let ts = aws_smithy_types::DateTime::from_secs(10123125);
             let inp = PutObjectInput::builder()
                 .bucket_name("somebucket/ok")
                 .key(ts.clone())
@@ -210,7 +210,7 @@ class RequestBindingGeneratorTest {
         writer.compileAndTest(
             """
             use std::collections::HashMap;
-            let ts = aws_smithy_types::Instant::from_secs(10123125);
+            let ts = aws_smithy_types::DateTime::from_secs(10123125);
             let inp = PutObjectInput::builder()
                 .bucket_name("buk")
                 .set_date_header_list(Some(vec![ts.clone()]))
@@ -247,7 +247,7 @@ class RequestBindingGeneratorTest {
         writer.compileAndTest(
             """
             use std::collections::HashMap;
-            let ts = aws_smithy_types::Instant::from_secs(10123125);
+            let ts = aws_smithy_types::DateTime::from_secs(10123125);
             let inp = PutObjectInput::builder()
                 .bucket_name("buk")
                 .key(ts.clone())
@@ -266,7 +266,7 @@ class RequestBindingGeneratorTest {
         writer.compileAndTest(
             """
             use std::collections::HashMap;
-            let ts = aws_smithy_types::Instant::from_secs(10123125);
+            let ts = aws_smithy_types::DateTime::from_secs(10123125);
             let inp = PutObjectInput::builder()
                 .bucket_name("buk")
                 .key(ts.clone())
@@ -284,7 +284,7 @@ class RequestBindingGeneratorTest {
         renderOperation(writer)
         writer.compileAndTest(
             """
-            let ts = aws_smithy_types::Instant::from_secs(10123125);
+            let ts = aws_smithy_types::DateTime::from_secs(10123125);
             let inp = PutObjectInput::builder()
                 .bucket_name("buk")
                 .key(ts.clone())
@@ -303,7 +303,7 @@ class RequestBindingGeneratorTest {
         renderOperation(writer)
         writer.compileAndTest(
             """
-            let ts = aws_smithy_types::Instant::from_secs(10123125);
+            let ts = aws_smithy_types::DateTime::from_secs(10123125);
             let inp = PutObjectInput::builder()
                 // don't set bucket
                 // .bucket_name("buk")
@@ -321,7 +321,7 @@ class RequestBindingGeneratorTest {
         renderOperation(writer)
         writer.compileAndTest(
             """
-            let ts = aws_smithy_types::Instant::from_secs(10123125);
+            let ts = aws_smithy_types::DateTime::from_secs(10123125);
             let inp = PutObjectInput::builder()
                 .bucket_name("buk")
                 // don't set key
@@ -339,7 +339,7 @@ class RequestBindingGeneratorTest {
         renderOperation(writer)
         writer.compileAndTest(
             """
-            let ts = aws_smithy_types::Instant::from_secs(10123125);
+            let ts = aws_smithy_types::DateTime::from_secs(10123125);
             let inp = PutObjectInput::builder()
                 .bucket_name("")
                 .key(ts.clone())

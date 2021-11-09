@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 
 fun pubUseTypes(runtimeConfig: RuntimeConfig) = listOf(
     RuntimeType.Blob(runtimeConfig),
-    RuntimeType.Instant(runtimeConfig),
+    RuntimeType.DateTime(runtimeConfig),
     CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::SdkError"),
     CargoDependency.SmithyHttp(runtimeConfig).asType().member("byte_stream::ByteStream"),
 )

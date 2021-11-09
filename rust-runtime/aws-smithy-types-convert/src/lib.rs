@@ -14,4 +14,4 @@
 )]
 
 #[cfg(any(feature = "convert-time", feature = "convert-chrono"))]
-pub mod instant;
+pub mod date_time;

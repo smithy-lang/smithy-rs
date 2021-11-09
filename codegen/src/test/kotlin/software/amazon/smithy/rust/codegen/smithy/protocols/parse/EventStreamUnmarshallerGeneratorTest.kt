@@ -49,7 +49,7 @@ class EventStreamUnmarshallerGeneratorTest {
             writer.rust(
                 """
                 use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
-                use aws_smithy_types::{Blob, Instant};
+                use aws_smithy_types::{Blob, DateTime};
                 use crate::error::*;
                 use crate::model::*;
 
@@ -180,7 +180,7 @@ class EventStreamUnmarshallerGeneratorTest {
                     .add_header(Header::new("long", HeaderValue::Int64(9_000_000_000i64)))
                     .add_header(Header::new("short", HeaderValue::Int16(16_000i16)))
                     .add_header(Header::new("string", HeaderValue::String("test".into())))
-                    .add_header(Header::new("timestamp", HeaderValue::Timestamp(Instant::from_secs(5))));
+                    .add_header(Header::new("timestamp", HeaderValue::Timestamp(DateTime::from_secs(5))));
                 let result = ${writer.format(generator.render())}().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
@@ -192,7 +192,7 @@ class EventStreamUnmarshallerGeneratorTest {
                         .long(9_000_000_000i64)
                         .short(16_000i16)
                         .string("test")
-                        .timestamp(Instant::from_secs(5))
+                        .timestamp(DateTime::from_secs(5))
                         .build()
                     ),
                     expect_event(result.unwrap())

@@ -605,7 +605,7 @@ class XmlBindingTraitParserGenerator(
                         TimestampFormatTrait.Format.DATE_TIME
                     )
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                withBlock("#T::from_str(", ")", RuntimeType.Instant(runtimeConfig)) {
+                withBlock("#T::from_str(", ")", RuntimeType.DateTime(runtimeConfig)) {
                     provider()
                     rust(", #T", timestampFormatType)
                 }

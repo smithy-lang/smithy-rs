@@ -4,9 +4,9 @@
  */
 
 use crate::escape::escape_string;
-use aws_smithy_types::instant::Format;
+use aws_smithy_types::date_time::Format;
 use aws_smithy_types::primitive::Encoder;
-use aws_smithy_types::{Document, Instant, Number};
+use aws_smithy_types::{DateTime, Document, Number};
 use std::borrow::Cow;
 
 pub struct JsonValueWriter<'a> {
@@ -94,9 +94,9 @@ impl<'a> JsonValueWriter<'a> {
         }
     }
 
-    /// Writes an Instant `value` with the given `format`.
-    pub fn instant(self, instant: &Instant, format: Format) {
-        let formatted = instant.fmt(format);
+    /// Writes a date-time `value` with the given `format`.
+    pub fn date_time(self, date_time: &DateTime, format: Format) {
+        let formatted = date_time.fmt(format);
         match format {
             Format::EpochSeconds => self.output.push_str(&formatted),
             _ => self.string(&formatted),
@@ -185,8 +185,8 @@ impl<'a> JsonArrayWriter<'a> {
 mod tests {
     use super::{JsonArrayWriter, JsonObjectWriter};
     use crate::serialize::JsonValueWriter;
-    use aws_smithy_types::instant::Format;
-    use aws_smithy_types::{Document, Instant, Number};
+    use aws_smithy_types::date_time::Format;
+    use aws_smithy_types::{DateTime, Document, Number};
     use proptest::proptest;
 
     #[test]
@@ -279,19 +279,19 @@ mod tests {
     }
 
     #[test]
-    fn object_instants() {
+    fn object_date_times() {
         let mut output = String::new();
 
         let mut object = JsonObjectWriter::new(&mut output);
         object
             .key("epoch_seconds")
-            .instant(&Instant::from_secs_f64(5.2), Format::EpochSeconds);
-        object.key("date_time").instant(
-            &Instant::from_str("2021-05-24T15:34:50.123Z", Format::DateTime).unwrap(),
+            .date_time(&DateTime::from_secs_f64(5.2), Format::EpochSeconds);
+        object.key("date_time").date_time(
+            &DateTime::from_str("2021-05-24T15:34:50.123Z", Format::DateTime).unwrap(),
             Format::DateTime,
         );
-        object.key("http_date").instant(
-            &Instant::from_str("Wed, 21 Oct 2015 07:28:00 GMT", Format::HttpDate).unwrap(),
+        object.key("http_date").date_time(
+            &DateTime::from_str("Wed, 21 Oct 2015 07:28:00 GMT", Format::HttpDate).unwrap(),
             Format::HttpDate,
         );
         object.finish();
@@ -303,19 +303,19 @@ mod tests {
     }
 
     #[test]
-    fn array_instants() {
+    fn array_date_times() {
         let mut output = String::new();
 
         let mut array = JsonArrayWriter::new(&mut output);
         array
             .value()
-            .instant(&Instant::from_secs_f64(5.2), Format::EpochSeconds);
-        array.value().instant(
-            &Instant::from_str("2021-05-24T15:34:50.123Z", Format::DateTime).unwrap(),
+            .date_time(&DateTime::from_secs_f64(5.2), Format::EpochSeconds);
+        array.value().date_time(
+            &DateTime::from_str("2021-05-24T15:34:50.123Z", Format::DateTime).unwrap(),
             Format::DateTime,
         );
-        array.value().instant(
-            &Instant::from_str("Wed, 21 Oct 2015 07:28:00 GMT", Format::HttpDate).unwrap(),
+        array.value().date_time(
+            &DateTime::from_str("Wed, 21 Oct 2015 07:28:00 GMT", Format::HttpDate).unwrap(),
             Format::HttpDate,
         );
         array.finish();

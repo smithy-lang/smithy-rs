@@ -3,16 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-//! Conversions from [`Instant`] to the types in the
+//! Conversions from [`DateTime`] to the types in the
 //! [`time`](https://crates.io/crates/time) or
 //! [`chrono`](https://crates.io/crates/chrono)
 //! crates.
 
-use aws_smithy_types::instant::Instant;
+use aws_smithy_types::DateTime;
 use std::error::Error as StdError;
 use std::fmt;
 
-/// Conversion error
+/// Conversion erro/Insta
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum Error {
@@ -37,7 +37,7 @@ impl fmt::Display for Error {
     }
 }
 
-/// Adds functions to [`Instant`] to convert it to `time` or `chrono` types.
+/// Adds functions to [`DateTime`] to convert it to `time` or `chrono` types.
 ///
 #[cfg_attr(
     feature = "convert-time",
@@ -50,15 +50,15 @@ Make sure your *Cargo.toml* enables the `convert-time` feature:
 aws-smithy-types-convert = { version = "VERSION", features = ["convert-time"] }
 ```
 
-Then import [`InstantExt`] to use the conversions:
+Then import [`DateTimeExt`] to use the conversions:
 ```rust
-# fn test_fn() -> Result<(), aws_smithy_types_convert::instant::Error> {
-# use aws_smithy_types::instant::Instant;
-use aws_smithy_types_convert::instant::InstantExt;
+# fn test_fn() -> Result<(), aws_smithy_types_convert::date_time::Error> {
+# use aws_smithy_types::DateTime;
+use aws_smithy_types_convert::date_time::DateTimeExt;
 use time::OffsetDateTime;
 
-let date_time: OffsetDateTime = Instant::from_secs(5).to_time()?;
-let instant: Instant  = Instant::from_time(date_time);
+let offset_date_time: OffsetDateTime = DateTime::from_secs(5).to_time()?;
+let date_time: DateTime  = DateTime::from_time(offset_date_time);
 # Ok(())
 # }
 ```
@@ -75,43 +75,43 @@ Make sure your *Cargo.toml* enables the `convert-chrono` feature:
 aws-smithy-types-convert = { version = "VERSION", features = ["convert-chrono"] }
 ```
 
-Then import [`InstantExt`] to use the conversions:
+Then import [`DateTimeExt`] to use the conversions:
 ```rust
-# use aws_smithy_types::instant::Instant;
-use aws_smithy_types_convert::instant::InstantExt;
-use chrono::{DateTime, Utc};
+# use aws_smithy_types::DateTime;
+use aws_smithy_types_convert::date_time::DateTimeExt;
+use chrono::{Utc};
 
-let date_time: DateTime<Utc> = Instant::from_secs(5).to_chrono_utc();
-let instant: Instant = Instant::from_chrono_utc(date_time);
+let chrono_date_time: chrono::DateTime<Utc> = DateTime::from_secs(5).to_chrono_utc();
+let date_time: DateTime = DateTime::from_chrono_utc(chrono_date_time);
 ```
 "##
 )]
-pub trait InstantExt {
-    /// Converts an [`Instant`] to a [`chrono::DateTime`] with timezone UTC.
+pub trait DateTimeExt {
+    /// Converts an [`DateTime`] to a [`chrono::DateTime`] with timezone UTC.
     #[cfg(feature = "convert-chrono")]
     fn to_chrono_utc(&self) -> chrono::DateTime<chrono::Utc>;
 
-    /// Converts a [`chrono::DateTime`] with timezone UTC to an [`Instant`].
+    /// Converts a [`chrono::DateTime`] with timezone UTC to an [`DateTime`].
     #[cfg(feature = "convert-chrono")]
-    fn from_chrono_utc(time: chrono::DateTime<chrono::Utc>) -> Instant;
+    fn from_chrono_utc(time: chrono::DateTime<chrono::Utc>) -> DateTime;
 
-    /// Converts a [`chrono::DateTime`] with an offset timezone to an [`Instant`].
+    /// Converts a [`chrono::DateTime`] with an offset timezone to an [`DateTime`].
     #[cfg(feature = "convert-chrono")]
-    fn from_chrono_fixed(time: chrono::DateTime<chrono::FixedOffset>) -> Instant;
+    fn from_chrono_fixed(time: chrono::DateTime<chrono::FixedOffset>) -> DateTime;
 
-    /// Converts an [`Instant`] to a [`time::OffsetDateTime`].
+    /// Converts an [`DateTime`] to a [`time::OffsetDateTime`].
     ///
     /// Returns an [`Error::OutOfRange`] if the time is after
     /// `9999-12-31T23:59:59.999Z` or before `-9999-01-01T00:00:00.000Z`.
     #[cfg(feature = "convert-time")]
     fn to_time(&self) -> Result<time::OffsetDateTime, Error>;
 
-    /// Converts a [`time::OffsetDateTime`] to an [`Instant`].
+    /// Converts a [`time::OffsetDateTime`] to an [`DateTime`].
     #[cfg(feature = "convert-time")]
-    fn from_time(time: time::OffsetDateTime) -> Instant;
+    fn from_time(time: time::OffsetDateTime) -> DateTime;
 }
 
-impl InstantExt for Instant {
+impl DateTimeExt for DateTime {
     #[cfg(feature = "convert-chrono")]
     fn to_chrono_utc(&self) -> chrono::DateTime<chrono::Utc> {
         chrono::DateTime::<chrono::Utc>::from_utc(
@@ -121,12 +121,12 @@ impl InstantExt for Instant {
     }
 
     #[cfg(feature = "convert-chrono")]
-    fn from_chrono_utc(value: chrono::DateTime<chrono::Utc>) -> Instant {
-        Instant::from_secs_and_nanos(value.timestamp(), value.timestamp_subsec_nanos())
+    fn from_chrono_utc(value: chrono::DateTime<chrono::Utc>) -> DateTime {
+        DateTime::from_secs_and_nanos(value.timestamp(), value.timestamp_subsec_nanos())
     }
 
     #[cfg(feature = "convert-chrono")]
-    fn from_chrono_fixed(value: chrono::DateTime<chrono::FixedOffset>) -> Instant {
+    fn from_chrono_fixed(value: chrono::DateTime<chrono::FixedOffset>) -> DateTime {
         Self::from_chrono_utc(value.with_timezone(&chrono::Utc))
     }
 
@@ -137,50 +137,50 @@ impl InstantExt for Instant {
     }
 
     #[cfg(feature = "convert-time")]
-    fn from_time(time: time::OffsetDateTime) -> Instant {
-        Instant::from_nanos(time.unix_timestamp_nanos())
-            .expect("Instant supports a greater range than OffsetDateTime")
+    fn from_time(time: time::OffsetDateTime) -> DateTime {
+        DateTime::from_nanos(time.unix_timestamp_nanos())
+            .expect("DateTime supports a greater range than OffsetDateTime")
     }
 }
 
 #[cfg(all(test, any(feature = "convert-chrono", feature = "convert-time")))]
 mod test {
-    use super::{Error, InstantExt};
-    use aws_smithy_types::instant::{Format, Instant};
+    use super::{DateTimeExt, Error};
+    use aws_smithy_types::date_time::{DateTime, Format};
 
     #[test]
     #[cfg(feature = "convert-chrono")]
     fn from_chrono() {
-        use chrono::prelude::*;
+        use chrono::{FixedOffset, TimeZone, Utc};
 
         let chrono = Utc.ymd(2039, 7, 8).and_hms_nano(9, 3, 11, 123_000_000);
-        let expected = Instant::from_str("2039-07-08T09:03:11.123Z", Format::DateTime).unwrap();
-        assert_eq!(expected, Instant::from_chrono_utc(chrono));
+        let expected = DateTime::from_str("2039-07-08T09:03:11.123Z", Format::DateTime).unwrap();
+        assert_eq!(expected, DateTime::from_chrono_utc(chrono));
 
         let chrono = Utc.ymd(1000, 7, 8).and_hms_nano(9, 3, 11, 456_000_000);
-        let expected = Instant::from_str("1000-07-08T09:03:11.456Z", Format::DateTime).unwrap();
-        assert_eq!(expected, Instant::from_chrono_utc(chrono));
+        let expected = DateTime::from_str("1000-07-08T09:03:11.456Z", Format::DateTime).unwrap();
+        assert_eq!(expected, DateTime::from_chrono_utc(chrono));
 
         let chrono =
             FixedOffset::west(2 * 3600)
                 .ymd(2039, 7, 8)
                 .and_hms_nano(9, 3, 11, 123_000_000);
-        let expected = Instant::from_str("2039-07-08T11:03:11.123Z", Format::DateTime).unwrap();
-        assert_eq!(expected, Instant::from_chrono_fixed(chrono));
+        let expected = DateTime::from_str("2039-07-08T11:03:11.123Z", Format::DateTime).unwrap();
+        assert_eq!(expected, DateTime::from_chrono_fixed(chrono));
     }
 
     #[test]
     #[cfg(feature = "convert-chrono")]
     fn to_chrono() {
-        use chrono::prelude::*;
+        use chrono::{TimeZone, Utc};
 
-        let instant = Instant::from_str("2039-07-08T09:03:11.123Z", Format::DateTime).unwrap();
+        let date_time = DateTime::from_str("2039-07-08T09:03:11.123Z", Format::DateTime).unwrap();
         let expected = Utc.ymd(2039, 7, 8).and_hms_nano(9, 3, 11, 123_000_000);
-        assert_eq!(expected, instant.to_chrono_utc());
+        assert_eq!(expected, date_time.to_chrono_utc());
 
-        let instant = Instant::from_str("1000-07-08T09:03:11.456Z", Format::DateTime).unwrap();
+        let date_time = DateTime::from_str("1000-07-08T09:03:11.456Z", Format::DateTime).unwrap();
         let expected = Utc.ymd(1000, 7, 8).and_hms_nano(9, 3, 11, 456_000_000);
-        assert_eq!(expected, instant.to_chrono_utc());
+        assert_eq!(expected, date_time.to_chrono_utc());
     }
 
     #[test]
@@ -193,16 +193,16 @@ mod test {
             Time::from_hms_milli(9, 3, 11, 123).unwrap(),
         )
         .assume_utc();
-        let expected = Instant::from_str("2039-07-08T09:03:11.123Z", Format::DateTime).unwrap();
-        assert_eq!(expected, Instant::from_time(time));
+        let expected = DateTime::from_str("2039-07-08T09:03:11.123Z", Format::DateTime).unwrap();
+        assert_eq!(expected, DateTime::from_time(time));
 
         let time = PrimitiveDateTime::new(
             Date::from_calendar_date(1000, Month::July, 8).unwrap(),
             Time::from_hms_milli(9, 3, 11, 456).unwrap(),
         )
         .assume_utc();
-        let expected = Instant::from_str("1000-07-08T09:03:11.456Z", Format::DateTime).unwrap();
-        assert_eq!(expected, Instant::from_time(time));
+        let expected = DateTime::from_str("1000-07-08T09:03:11.456Z", Format::DateTime).unwrap();
+        assert_eq!(expected, DateTime::from_time(time));
     }
 
     #[test]
@@ -210,25 +210,25 @@ mod test {
     fn to_time() {
         use time::{Date, Month, PrimitiveDateTime, Time};
 
-        let instant = Instant::from_str("2039-07-08T09:03:11.123Z", Format::DateTime).unwrap();
+        let date_time = DateTime::from_str("2039-07-08T09:03:11.123Z", Format::DateTime).unwrap();
         let expected = PrimitiveDateTime::new(
             Date::from_calendar_date(2039, Month::July, 8).unwrap(),
             Time::from_hms_milli(9, 3, 11, 123).unwrap(),
         )
         .assume_utc();
-        assert_eq!(expected, instant.to_time().unwrap());
+        assert_eq!(expected, date_time.to_time().unwrap());
 
-        let instant = Instant::from_str("1000-07-08T09:03:11.456Z", Format::DateTime).unwrap();
+        let date_time = DateTime::from_str("1000-07-08T09:03:11.456Z", Format::DateTime).unwrap();
         let expected = PrimitiveDateTime::new(
             Date::from_calendar_date(1000, Month::July, 8).unwrap(),
             Time::from_hms_milli(9, 3, 11, 456).unwrap(),
         )
         .assume_utc();
-        assert_eq!(expected, instant.to_time().unwrap());
+        assert_eq!(expected, date_time.to_time().unwrap());
 
-        let instant = Instant::from_secs_and_nanos(i64::MAX, 0);
-        assert!(matches!(instant.to_time(), Err(Error::OutOfRange(_))));
-        let instant = Instant::from_secs_and_nanos(i64::MIN, 0);
-        assert!(matches!(instant.to_time(), Err(Error::OutOfRange(_))));
+        let date_time = DateTime::from_secs_and_nanos(i64::MAX, 0);
+        assert!(matches!(date_time.to_time(), Err(Error::OutOfRange(_))));
+        let date_time = DateTime::from_secs_and_nanos(i64::MIN, 0);
+        assert!(matches!(date_time.to_time(), Err(Error::OutOfRange(_))));
     }
 }

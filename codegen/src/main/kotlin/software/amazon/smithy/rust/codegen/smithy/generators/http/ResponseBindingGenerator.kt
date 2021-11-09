@@ -58,7 +58,7 @@ class ResponseBindingGenerator(
     private val index = HttpBindingIndex.of(model)
     private val headerUtil = CargoDependency.SmithyHttp(runtimeConfig).asType().member("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
-    private val instant = RuntimeType.Instant(runtimeConfig).toSymbol().rustType()
+    private val dateTime = RuntimeType.DateTime(runtimeConfig).toSymbol().rustType()
     private val httpSerdeModule = RustModule.private("http_serde")
 
     /**
@@ -264,7 +264,7 @@ class ResponseBindingGenerator(
             rustType to targetType
         }
         val parsedValue = safeName()
-        if (coreType == instant) {
+        if (coreType == dateTime) {
             val timestampFormat =
                 index.determineTimestampFormat(
                     memberShape,

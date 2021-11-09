@@ -1,7 +1,7 @@
 use aws_smithy_json::deserialize::token::skip_value;
 use aws_smithy_json::deserialize::{json_token_iter, EscapeError, Token};
-use aws_smithy_types::instant::Format;
-use aws_smithy_types::Instant;
+use aws_smithy_types::date_time::Format;
+use aws_smithy_types::DateTime;
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
@@ -168,7 +168,7 @@ pub(crate) fn parse_json_credentials(
             let expiration =
                 expiration.ok_or(InvalidJsonCredentials::MissingField("Expiration"))?;
             let expiration = SystemTime::from(
-                Instant::from_str(expiration.as_ref(), Format::DateTime).map_err(|err| {
+                DateTime::from_str(expiration.as_ref(), Format::DateTime).map_err(|err| {
                     InvalidJsonCredentials::Other(format!("invalid date: {}", err).into())
                 })?,
             );
