@@ -1,10 +1,17 @@
 vNext (Month Day, Year)
 =======================
 
+**Breaking Changes**
+
+- Members named `builder` on model structs were renamed to `builder_value` so that their accessors don't conflict with the existing `builder()` methods (smithy-rs#842)
+
 **New this week**
 
 - Fix epoch seconds date-time parsing bug in `aws-smithy-types` (smithy-rs#834)
 - Omit trailing zeros from fraction when formatting HTTP dates in `aws-smithy-types` (smithy-rs#834)
+- Model structs now have accessor methods for their members (smithy-rs#842)
+- Moved examples into repository root (aws-sdk-rust#181, smithy-rs#843)
+- :bug: Fix bug that caused signing to fail for requests where the body length was <=9. (smithy-rs#845)
 
 v0.0.23-alpha (November 3rd, 2021)
 ==================================

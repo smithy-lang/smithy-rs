@@ -33,6 +33,7 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider, priva
         return when (val container = model.expectShape(shape.container)) {
             is StructureShape -> when (baseName) {
                 "build" -> "build_value"
+                "builder" -> "builder_value"
                 "default" -> "default_value"
                 "send" -> "send_value"
                 // To avoid conflicts with the `make_operation` and `presigned` functions on generated inputs
