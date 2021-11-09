@@ -4,7 +4,7 @@
  */
 
 use crate::escape::escape_string;
-use aws_smithy_types::date_time::Format;
+use aws_smithy_types::date_time::{DateTimeFormatError, Format};
 use aws_smithy_types::primitive::Encoder;
 use aws_smithy_types::{DateTime, Document, Number};
 use std::borrow::Cow;
@@ -95,12 +95,17 @@ impl<'a> JsonValueWriter<'a> {
     }
 
     /// Writes a date-time `value` with the given `format`.
-    pub fn date_time(self, date_time: &DateTime, format: Format) {
-        let formatted = date_time.fmt(format);
+    pub fn date_time(
+        self,
+        date_time: &DateTime,
+        format: Format,
+    ) -> Result<(), DateTimeFormatError> {
+        let formatted = date_time.fmt(format)?;
         match format {
             Format::EpochSeconds => self.output.push_str(&formatted),
             _ => self.string(&formatted),
         }
+        Ok(())
     }
 
     /// Starts an array.
@@ -285,15 +290,22 @@ mod tests {
         let mut object = JsonObjectWriter::new(&mut output);
         object
             .key("epoch_seconds")
-            .date_time(&DateTime::from_secs_f64(5.2), Format::EpochSeconds);
-        object.key("date_time").date_time(
-            &DateTime::from_str("2021-05-24T15:34:50.123Z", Format::DateTime).unwrap(),
-            Format::DateTime,
-        );
-        object.key("http_date").date_time(
-            &DateTime::from_str("Wed, 21 Oct 2015 07:28:00 GMT", Format::HttpDate).unwrap(),
-            Format::HttpDate,
-        );
+            .date_time(&DateTime::from_secs_f64(5.2), Format::EpochSeconds)
+            .unwrap();
+        object
+            .key("date_time")
+            .date_time(
+                &DateTime::from_str("2021-05-24T15:34:50.123Z", Format::DateTime).unwrap(),
+                Format::DateTime,
+            )
+            .unwrap();
+        object
+            .key("http_date")
+            .date_time(
+                &DateTime::from_str("Wed, 21 Oct 2015 07:28:00 GMT", Format::HttpDate).unwrap(),
+                Format::HttpDate,
+            )
+            .unwrap();
         object.finish();
 
         assert_eq!(
@@ -309,15 +321,22 @@ mod tests {
         let mut array = JsonArrayWriter::new(&mut output);
         array
             .value()
-            .date_time(&DateTime::from_secs_f64(5.2), Format::EpochSeconds);
-        array.value().date_time(
-            &DateTime::from_str("2021-05-24T15:34:50.123Z", Format::DateTime).unwrap(),
-            Format::DateTime,
-        );
-        array.value().date_time(
-            &DateTime::from_str("Wed, 21 Oct 2015 07:28:00 GMT", Format::HttpDate).unwrap(),
-            Format::HttpDate,
-        );
+            .date_time(&DateTime::from_secs_f64(5.2), Format::EpochSeconds)
+            .unwrap();
+        array
+            .value()
+            .date_time(
+                &DateTime::from_str("2021-05-24T15:34:50.123Z", Format::DateTime).unwrap(),
+                Format::DateTime,
+            )
+            .unwrap();
+        array
+            .value()
+            .date_time(
+                &DateTime::from_str("Wed, 21 Oct 2015 07:28:00 GMT", Format::HttpDate).unwrap(),
+                Format::HttpDate,
+            )
+            .unwrap();
         array.finish();
 
         assert_eq!(

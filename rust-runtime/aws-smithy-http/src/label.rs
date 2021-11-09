@@ -7,7 +7,7 @@
 //! [httpLabel](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httplabel-trait)
 
 use crate::urlencode::BASE_SET;
-use aws_smithy_types::date_time::Format;
+use aws_smithy_types::date_time::{DateTimeFormatError, Format};
 use aws_smithy_types::DateTime;
 use percent_encoding::AsciiSet;
 
@@ -18,8 +18,8 @@ pub fn fmt_string<T: AsRef<str>>(t: T, greedy: bool) -> String {
     percent_encoding::utf8_percent_encode(t.as_ref(), &uri_set).to_string()
 }
 
-pub fn fmt_timestamp(t: &DateTime, format: Format) -> String {
-    crate::query::fmt_string(t.fmt(format))
+pub fn fmt_timestamp(t: &DateTime, format: Format) -> Result<String, DateTimeFormatError> {
+    Ok(crate::query::fmt_string(t.fmt(format)?))
 }
 
 #[cfg(test)]

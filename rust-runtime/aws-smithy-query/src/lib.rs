@@ -5,7 +5,7 @@
 
 //! Abstractions for the Smithy AWS Query protocol
 
-use aws_smithy_types::date_time::Format;
+use aws_smithy_types::date_time::{DateTimeFormatError, Format};
 use aws_smithy_types::primitive::Encoder;
 use aws_smithy_types::{DateTime, Number};
 use std::borrow::Cow;
@@ -179,8 +179,13 @@ impl<'a> QueryValueWriter<'a> {
     }
 
     /// Writes a date-time `value` with the given `format`.
-    pub fn date_time(self, date_time: &DateTime, format: Format) {
-        self.string(&date_time.fmt(format));
+    pub fn date_time(
+        self,
+        date_time: &DateTime,
+        format: Format,
+    ) -> Result<(), DateTimeFormatError> {
+        self.string(&date_time.fmt(format)?);
+        Ok(())
     }
 
     /// Starts a map.
@@ -327,15 +332,22 @@ mod tests {
 
         writer
             .prefix("epoch_seconds")
-            .date_time(&DateTime::from_secs_f64(5.2), Format::EpochSeconds);
-        writer.prefix("date_time").date_time(
-            &DateTime::from_str("2021-05-24T15:34:50.123Z", Format::DateTime).unwrap(),
-            Format::DateTime,
-        );
-        writer.prefix("http_date").date_time(
-            &DateTime::from_str("Wed, 21 Oct 2015 07:28:00 GMT", Format::HttpDate).unwrap(),
-            Format::HttpDate,
-        );
+            .date_time(&DateTime::from_secs_f64(5.2), Format::EpochSeconds)
+            .unwrap();
+        writer
+            .prefix("date_time")
+            .date_time(
+                &DateTime::from_str("2021-05-24T15:34:50.123Z", Format::DateTime).unwrap(),
+                Format::DateTime,
+            )
+            .unwrap();
+        writer
+            .prefix("http_date")
+            .date_time(
+                &DateTime::from_str("Wed, 21 Oct 2015 07:28:00 GMT", Format::HttpDate).unwrap(),
+                Format::HttpDate,
+            )
+            .unwrap();
         writer.finish();
 
         assert_eq!(

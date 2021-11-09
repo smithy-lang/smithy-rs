@@ -9,10 +9,15 @@ use std::fmt;
 
 const NANOS_PER_SECOND: u32 = 1_000_000_000;
 
+/// Error returned when date-time parsing fails.
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum DateTimeParseError {
+    /// The given date-time string was invalid.
+    #[non_exhaustive]
     Invalid(Cow<'static, str>),
+    /// Failed to parse an integer inside the given date-time string.
+    #[non_exhaustive]
     IntParseError,
 }
 
@@ -24,6 +29,29 @@ impl fmt::Display for DateTimeParseError {
         match self {
             Invalid(msg) => write!(f, "invalid date-time: {}", msg),
             IntParseError => write!(f, "failed to parse int"),
+        }
+    }
+}
+
+/// Error returned when date-time formatting fails.
+#[non_exhaustive]
+#[derive(Debug)]
+pub enum DateTimeFormatError {
+    /// The given date-time cannot be represented in the requested date format.
+    #[non_exhaustive]
+    OutOfRange(Cow<'static, str>),
+}
+
+impl Error for DateTimeFormatError {}
+
+impl fmt::Display for DateTimeFormatError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::OutOfRange(msg) => write!(
+                f,
+                "date-time cannot be formatted since it is out of range: {}",
+                msg
+            ),
         }
     }
 }
@@ -82,7 +110,7 @@ pub(crate) mod epoch_seconds {
 
 pub(crate) mod http_date {
     use super::remove_trailing_zeros;
-    use crate::date_time::format::{DateTimeParseError, NANOS_PER_SECOND};
+    use crate::date_time::format::{DateTimeFormatError, DateTimeParseError, NANOS_PER_SECOND};
     use crate::DateTime;
     use std::str::FromStr;
     use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time, UtcOffset, Weekday};
@@ -97,14 +125,24 @@ pub(crate) mod http_date {
     /// Example: "Mon, 16 Dec 2019 23:48:18 GMT"
     ///
     /// Some notes:
-    /// - HTTP date does not support years before `0000`—this will cause a panic.
+    /// - HTTP date does not support years before `0001`—this will cause a panic.
     /// - If you _don't_ want subsecond precision (e.g. if you want strict adherence to the spec),
     ///   you need to zero-out the date-time before formatting
     /// - If subsecond nanos are 0, no fractional seconds are added
     /// - If subsecond nanos are nonzero, 3 digits of fractional seconds are added
-    pub(crate) fn format(date_time: &DateTime) -> String {
+    pub(crate) fn format(date_time: &DateTime) -> Result<String, DateTimeFormatError> {
+        fn out_of_range<E: std::fmt::Display>(cause: E) -> DateTimeFormatError {
+            DateTimeFormatError::OutOfRange(
+                format!(
+                    "HTTP dates support dates between Mon, 01 Jan 0001 00:00:00 GMT \
+                            and Fri, 31 Dec 9999 23:59:59.999 GMT. {}",
+                    cause
+                )
+                .into(),
+            )
+        }
         let structured = OffsetDateTime::from_unix_timestamp_nanos(date_time.as_nanos())
-            .expect("i64 -> i128 -> OffsetDateTime should always succeed");
+            .map_err(out_of_range)?;
         let weekday = match structured.weekday() {
             Weekday::Monday => "Mon",
             Weekday::Tuesday => "Tue",
@@ -146,10 +184,9 @@ pub(crate) mod http_date {
         out.push(' ');
 
         let year = structured.year();
-        // Although chrono can handle extremely early years, HTTP date does not support
-        // years before 0000
-        let year = if year < 0 {
-            panic!("negative years not supported")
+        // HTTP date does not support years before 0001
+        let year = if year < 1 {
+            return Err(out_of_range("HTTP dates cannot be before the year 0001"));
         } else {
             year as u32
         };
@@ -192,8 +229,7 @@ pub(crate) mod http_date {
         }
 
         out.push_str(" GMT");
-
-        out
+        Ok(out)
     }
 
     /// Parse an IMF-fixdate formatted date into an DateTime
@@ -330,7 +366,7 @@ pub(crate) mod http_date {
 }
 
 pub(crate) mod rfc3339 {
-    use crate::date_time::format::DateTimeParseError;
+    use crate::date_time::format::{DateTimeFormatError, DateTimeParseError};
     use crate::DateTime;
     use time::format_description::well_known::Rfc3339;
     use time::OffsetDateTime;
@@ -356,12 +392,21 @@ pub(crate) mod rfc3339 {
     }
 
     /// Format an [DateTime] in the RFC-3339 date format
-    pub(crate) fn format(date_time: &DateTime) -> String {
+    pub(crate) fn format(date_time: &DateTime) -> Result<String, DateTimeFormatError> {
         use std::fmt::Write;
+        fn out_of_range<E: std::fmt::Display>(cause: E) -> DateTimeFormatError {
+            DateTimeFormatError::OutOfRange(
+                format!(
+                    "RFC-3339 timestamps support dates between 0001-01-01T00:00:00.000Z \
+                            and 9999-12-31T23:59:59.999Z. {}",
+                    cause
+                )
+                .into(),
+            )
+        }
         let (year, month, day, hour, minute, second, micros) = {
-            // TODO(time): make format() fallible, and error below
             let s = OffsetDateTime::from_unix_timestamp_nanos(date_time.as_nanos())
-                .expect("i64 -> i128 -> OffsetDateTime should always succeed");
+                .map_err(out_of_range)?;
             (
                 s.year(),
                 u8::from(s.month()),
@@ -375,11 +420,9 @@ pub(crate) mod rfc3339 {
 
         // This is stated in the assumptions for RFC-3339. ISO-8601 allows for years
         // between -99,999 and 99,999 inclusive, but RFC-3339 is bound between 0 and 9,999.
-        // TODO(time): make format() fallible, and error rather than asserting
-        assert!(
-            (0..=9_999).contains(&year),
-            "years must be between 0 and 9,999 in RFC-3339"
-        );
+        if !(1..=9_999).contains(&year) {
+            return Err(out_of_range(""));
+        }
 
         let mut out = String::with_capacity(33);
         write!(
@@ -390,7 +433,7 @@ pub(crate) mod rfc3339 {
         .unwrap();
         format_subsecond_fraction(&mut out, micros);
         out.push('Z');
-        out
+        Ok(out)
     }
 
     /// Formats sub-second fraction for RFC-3339 (including the '.').
@@ -512,7 +555,10 @@ mod tests {
 
     #[test]
     fn format_http_date() {
-        format_test(&TEST_CASES.format_http_date, http_date::format);
+        fn do_format(date_time: &DateTime) -> String {
+            http_date::format(date_time).unwrap()
+        }
+        format_test(&TEST_CASES.format_http_date, do_format);
     }
 
     #[test]
@@ -521,8 +567,32 @@ mod tests {
     }
 
     #[test]
+    fn date_time_out_of_range() {
+        assert_eq!(
+            "0001-01-01T00:00:00Z",
+            rfc3339::format(&DateTime::from_secs(-62_135_596_800)).unwrap()
+        );
+        assert_eq!(
+            "9999-12-31T23:59:59.999999Z",
+            rfc3339::format(&DateTime::from_secs_and_nanos(253402300799, 999_999_999)).unwrap()
+        );
+
+        assert!(matches!(
+            rfc3339::format(&DateTime::from_secs(-62_135_596_800 - 1)),
+            Err(DateTimeFormatError::OutOfRange(_))
+        ));
+        assert!(matches!(
+            rfc3339::format(&DateTime::from_secs(253402300799 + 1)),
+            Err(DateTimeFormatError::OutOfRange(_))
+        ));
+    }
+
+    #[test]
     fn format_date_time() {
-        format_test(&TEST_CASES.format_date_time, rfc3339::format);
+        fn do_format(date_time: &DateTime) -> String {
+            rfc3339::format(date_time).unwrap()
+        }
+        format_test(&TEST_CASES.format_date_time, do_format);
     }
 
     #[test]
@@ -559,6 +629,27 @@ mod tests {
     }
 
     #[test]
+    fn http_date_out_of_range() {
+        assert_eq!(
+            "Mon, 01 Jan 0001 00:00:00 GMT",
+            http_date::format(&DateTime::from_secs(-62_135_596_800)).unwrap()
+        );
+        assert_eq!(
+            "Fri, 31 Dec 9999 23:59:59.999 GMT",
+            http_date::format(&DateTime::from_secs_and_nanos(253402300799, 999_999_999)).unwrap()
+        );
+
+        assert!(matches!(
+            http_date::format(&DateTime::from_secs(-62_135_596_800 - 1)),
+            Err(DateTimeFormatError::OutOfRange(_))
+        ));
+        assert!(matches!(
+            http_date::format(&DateTime::from_secs(253402300799 + 1)),
+            Err(DateTimeFormatError::OutOfRange(_))
+        ));
+    }
+
+    #[test]
     fn http_date_too_much_fraction() {
         let fractional = "Mon, 16 Dec 2019 23:48:18.1212 GMT";
         assert!(matches!(
@@ -590,7 +681,7 @@ mod tests {
     #[track_caller]
     fn http_date_check_roundtrip(epoch_secs: i64, subsecond_nanos: u32) {
         let date_time = DateTime::from_secs_and_nanos(epoch_secs, subsecond_nanos);
-        let formatted = http_date::format(&date_time);
+        let formatted = http_date::format(&date_time).unwrap();
         let parsed = http_date::parse(&formatted);
         let read = http_date::read(&formatted);
         match parsed {
@@ -598,7 +689,7 @@ mod tests {
             Ok(date) => {
                 assert!(read.is_ok());
                 if date.subsecond_nanos != subsecond_nanos {
-                    assert_eq!(http_date::format(&date_time), formatted);
+                    assert_eq!(http_date::format(&date_time).unwrap(), formatted);
                 } else {
                     assert_eq!(date, date_time)
                 }

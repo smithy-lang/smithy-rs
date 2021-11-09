@@ -5,7 +5,6 @@
 
 //! DateTime value for representing Smithy timestamps.
 
-use self::format::DateTimeParseError;
 use num_integer::div_mod_floor;
 use num_integer::Integer;
 use std::convert::TryFrom;
@@ -16,6 +15,8 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 mod format;
+pub use self::format::DateTimeFormatError;
+pub use self::format::DateTimeParseError;
 
 const MILLIS_PER_SECOND: i64 = 1000;
 const NANOS_PER_MILLI: u32 = 1_000_000;
@@ -220,10 +221,12 @@ impl DateTime {
     }
 
     /// Formats the `DateTime` to a string using the given `format`.
-    pub fn fmt(&self, format: Format) -> String {
+    ///
+    /// Returns an error if the given `DateTime` cannot be represented by the desired format.
+    pub fn fmt(&self, format: Format) -> Result<String, DateTimeFormatError> {
         match format {
             Format::DateTime => format::rfc3339::format(&self),
-            Format::EpochSeconds => format::epoch_seconds::format(&self),
+            Format::EpochSeconds => Ok(format::epoch_seconds::format(&self)),
             Format::HttpDate => format::http_date::format(&self),
         }
     }
@@ -306,18 +309,27 @@ mod test {
     #[test]
     fn test_fmt() {
         let date_time = DateTime::from_secs(1576540098);
-        assert_eq!(date_time.fmt(Format::DateTime), "2019-12-16T23:48:18Z");
-        assert_eq!(date_time.fmt(Format::EpochSeconds), "1576540098");
         assert_eq!(
-            date_time.fmt(Format::HttpDate),
+            date_time.fmt(Format::DateTime).unwrap(),
+            "2019-12-16T23:48:18Z"
+        );
+        assert_eq!(date_time.fmt(Format::EpochSeconds).unwrap(), "1576540098");
+        assert_eq!(
+            date_time.fmt(Format::HttpDate).unwrap(),
             "Mon, 16 Dec 2019 23:48:18 GMT"
         );
 
         let date_time = DateTime::from_fractional_secs(1576540098, 0.52);
-        assert_eq!(date_time.fmt(Format::DateTime), "2019-12-16T23:48:18.52Z");
-        assert_eq!(date_time.fmt(Format::EpochSeconds), "1576540098.52");
         assert_eq!(
-            date_time.fmt(Format::HttpDate),
+            date_time.fmt(Format::DateTime).unwrap(),
+            "2019-12-16T23:48:18.52Z"
+        );
+        assert_eq!(
+            date_time.fmt(Format::EpochSeconds).unwrap(),
+            "1576540098.52"
+        );
+        assert_eq!(
+            date_time.fmt(Format::HttpDate).unwrap(),
             "Mon, 16 Dec 2019 23:48:18.52 GMT"
         );
     }
@@ -325,10 +337,13 @@ mod test {
     #[test]
     fn test_fmt_zero_seconds() {
         let date_time = DateTime::from_secs(1576540080);
-        assert_eq!(date_time.fmt(Format::DateTime), "2019-12-16T23:48:00Z");
-        assert_eq!(date_time.fmt(Format::EpochSeconds), "1576540080");
         assert_eq!(
-            date_time.fmt(Format::HttpDate),
+            date_time.fmt(Format::DateTime).unwrap(),
+            "2019-12-16T23:48:00Z"
+        );
+        assert_eq!(date_time.fmt(Format::EpochSeconds).unwrap(), "1576540080");
+        assert_eq!(
+            date_time.fmt(Format::HttpDate).unwrap(),
             "Mon, 16 Dec 2019 23:48:00 GMT"
         );
     }
