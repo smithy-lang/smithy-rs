@@ -7,9 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-aws-config = { path = "../../build/aws-sdk/aws-config" }
-autoscalingplans = { package = "aws-sdk-autoscalingplans", path = "../../build/aws-sdk/autoscalingplans" }
-aws-types = { path = "../../build/aws-sdk/aws-types" }
+aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
+autoscalingplans = { package = "aws-sdk-autoscalingplans", path = "../../build/aws-sdk/sdk/autoscalingplans" }
+aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 tokio = { version = "1", features = ["full"] }
 structopt = { version = "0.3", default-features = false }
 tracing-subscriber = "0.2.18"
