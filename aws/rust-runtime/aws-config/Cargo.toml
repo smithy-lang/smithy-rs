@@ -32,22 +32,22 @@ dns = ["tokio/rt"]
 default = ["default-provider", "rustls", "rt-tokio", "dns", "tcp-connector"]
 
 [dependencies]
-aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sts", optional = true }
-aws-smithy-async = { path = "../../sdk/build/aws-sdk/aws-smithy-async" }
-aws-smithy-client = { path = "../../sdk/build/aws-sdk/aws-smithy-client" }
-aws-smithy-types = { path = "../../sdk/build/aws-sdk/aws-smithy-types" }
-aws-types = { path = "../../sdk/build/aws-sdk/aws-types" }
+aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", optional = true }
+aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async" }
+aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client" }
+aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
+aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
 tokio = { version = "1", features = ["sync"], optional = true }
 tracing = { version = "0.1" }
 
 # TODO: remove when middleware stacks are moved inside of clients directly
-aws-hyper = { path = "../../sdk/build/aws-sdk/aws-hyper", optional = true }
+aws-hyper = { path = "../../sdk/build/aws-sdk/sdk/aws-hyper", optional = true }
 
 # imds
-aws-http = { path = "../../sdk/build/aws-sdk/aws-http", optional = true }
-aws-smithy-http = { path = "../../sdk/build/aws-sdk/aws-smithy-http", optional = true }
-aws-smithy-http-tower = { path = "../../sdk/build/aws-sdk/aws-smithy-http-tower", optional = true }
-aws-smithy-json = { path = "../../sdk/build/aws-sdk/aws-smithy-json", optional = true }
+aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http", optional = true }
+aws-smithy-http = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http", optional = true }
+aws-smithy-http-tower = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-tower", optional = true }
+aws-smithy-json = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-json", optional = true }
 bytes = "1.1.0"
 http = "0.2.4"
 tower = { version = "0.4.8", optional = true }
@@ -68,4 +68,4 @@ arbitrary = "1.0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-aws-smithy-client = { path = "../../sdk/build/aws-sdk/aws-smithy-client", features = ["test-util"] }
+aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"] }

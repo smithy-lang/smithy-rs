@@ -6,10 +6,10 @@ edition = "2018"
 description = "Example usage of the SecretManager service"
 
 [dependencies]
-aws-config = { path = "../../build/aws-sdk/aws-config" }
-secretsmanager = { package = "aws-sdk-secretsmanager", path = "../../build/aws-sdk/secretsmanager" }
-aws-hyper = { path = "../../build/aws-sdk/aws-hyper" }
-aws-types = { path = "../../build/aws-sdk/aws-types" }
+aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
+secretsmanager = { package = "aws-sdk-secretsmanager", path = "../../build/aws-sdk/sdk/secretsmanager" }
+aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper" }
+aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 
 tokio = { version = "1", features = ["full"]}
 
