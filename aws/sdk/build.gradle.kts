@@ -295,7 +295,7 @@ task("relocateExamples") {
             include("examples/**")
             into(outputDir)
             exclude("**/target")
-            filter { line -> line.replace("build/aws-sdk/", "sdk/") }
+            filter { line -> line.replace("build/aws-sdk/sdk/", "sdk/") }
         }
     }
     inputs.dir(projectDir.resolve("examples"))
@@ -308,7 +308,7 @@ task("relocateExamples") {
  */
 fun rewritePathDependency(line: String): String {
     // some runtime crates are actually dependent on the generated bindings:
-    return line.replace("../sdk/build/aws-sdk/", "")
+    return line.replace("../sdk/build/aws-sdk/sdk/", "")
         // others use relative dependencies::
         .replace("../../rust-runtime/", "")
 }
