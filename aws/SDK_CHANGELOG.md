@@ -7,6 +7,7 @@ vNext (Month Day, Year)
 
 **New this week**
 
+- Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
 - Fix epoch seconds date-time parsing bug in `aws-smithy-types` (smithy-rs#834)
 - Omit trailing zeros from fraction when formatting HTTP dates in `aws-smithy-types` (smithy-rs#834)
 - Model structs now have accessor methods for their members (smithy-rs#842)

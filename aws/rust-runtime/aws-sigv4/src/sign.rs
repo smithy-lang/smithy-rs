@@ -40,7 +40,7 @@ pub fn generate_signing_key(
     // kSigning = HMAC(kService, "aws4_request")
 
     let secret = format!("AWS4{}", secret);
-    let secret = hmac::Key::new(hmac::HMAC_SHA256, &secret.as_bytes());
+    let secret = hmac::Key::new(hmac::HMAC_SHA256, secret.as_bytes());
     let tag = hmac::sign(&secret, format_date(&date).as_bytes());
 
     // sign region

@@ -69,7 +69,7 @@ open class MakeOperationGenerator(
         val takesOwnership = bodyGenerator.bodyMetadata(shape).takesOwnership
         val mut = customizations.any { it.mutSelf() }
         val consumes = customizations.any { it.consumesSelf() } || takesOwnership
-        val self = "self".letIf(mut) { "mut $it" }.letIf(!consumes) { "&$it" }
+        val self = "self".letIf(mut) { "mut $it" }.letIf(!consumes) { "$it" }
         val fnType = if (public) "pub async fn" else "async fn"
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)

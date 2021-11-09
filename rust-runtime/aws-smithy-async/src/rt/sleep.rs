@@ -24,7 +24,7 @@ where
     T: ?Sized,
 {
     fn sleep(&self, duration: Duration) -> Sleep {
-        T::sleep(&self, duration)
+        T::sleep(self, duration)
     }
 }
 
@@ -34,7 +34,7 @@ where
     T: ?Sized,
 {
     fn sleep(&self, duration: Duration) -> Sleep {
-        T::sleep(&self, duration)
+        T::sleep(self, duration)
     }
 }
 
