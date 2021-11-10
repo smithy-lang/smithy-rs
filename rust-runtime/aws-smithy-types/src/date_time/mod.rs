@@ -32,10 +32,15 @@ const NANOS_PER_SECOND_U32: u32 = 1_000_000_000;
 ///
 /// This type can be converted to/from the standard library's [`SystemTime`](std::time::SystemTime):
 /// ```rust
+/// # fn doc_fn() -> Result<(), aws_smithy_types::date_time::ConversionError> {
 /// # use aws_smithy_types::date_time::DateTime;
 /// # use std::time::SystemTime;
-/// let the_millennium_as_system_time = SystemTime::from(DateTime::from_secs(946_713_600));
+/// use std::convert::TryFrom;
+///
+/// let the_millennium_as_system_time = SystemTime::try_from(DateTime::from_secs(946_713_600))?;
 /// let now_as_date_time = DateTime::from(SystemTime::now());
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// The [`aws-smithy-types-convert`](https://crates.io/crates/aws-smithy-types-convert) crate
@@ -232,8 +237,18 @@ impl DateTime {
     }
 }
 
-impl From<DateTime> for SystemTime {
-    fn from(date_time: DateTime) -> Self {
+/// Tries to convert a [`DateTime`] into a [`SystemTime`].
+///
+/// This can fail if the the `DateTime` value is larger or smaller than what the `SystemTime`
+/// can represent on the operating system it's compiled for. On Linux, for example, it will only
+/// fail on `Instant::from_secs(i64::MIN)` (with any nanoseconds value). On Windows, however,
+/// Rust's standard library uses a smaller precision type for `SystemTime`, and it will fail
+/// conversion for a much larger range of date-times. This is only an issue if dealing with
+/// date-times beyond several thousands of years from now.
+impl TryFrom<DateTime> for SystemTime {
+    type Error = ConversionError;
+
+    fn try_from(date_time: DateTime) -> Result<Self, Self::Error> {
         if date_time.secs() < 0 {
             let mut secs = date_time.secs().unsigned_abs();
             let mut nanos = date_time.subsec_nanos();
@@ -243,10 +258,20 @@ impl From<DateTime> for SystemTime {
                 // This is safe because nanos are < 999,999,999
                 nanos = NANOS_PER_SECOND_U32 - nanos;
             }
-            // This will panic if secs == i64::MIN
-            UNIX_EPOCH - Duration::new(secs, nanos)
+            UNIX_EPOCH
+                .checked_sub(Duration::new(secs, nanos))
+                .ok_or(ConversionError(
+                    "overflow occurred when subtracting duration from UNIX_EPOCH",
+                ))
         } else {
-            UNIX_EPOCH + Duration::new(date_time.secs().unsigned_abs(), date_time.subsec_nanos())
+            UNIX_EPOCH
+                .checked_add(Duration::new(
+                    date_time.secs().unsigned_abs(),
+                    date_time.subsec_nanos(),
+                ))
+                .ok_or(ConversionError(
+                    "overflow occurred when adding duration to UNIX_EPOCH",
+                ))
         }
     }
 }
@@ -302,7 +327,8 @@ pub enum Format {
 mod test {
     use crate::date_time::Format;
     use crate::DateTime;
-    use std::time::SystemTime;
+    use std::convert::TryFrom;
+    use std::time::{SystemTime, UNIX_EPOCH};
     use time::format_description::well_known::Rfc3339;
     use time::OffsetDateTime;
 
@@ -505,25 +531,16 @@ mod test {
         // Check agreement
         let date_time = DateTime::from_str("1000-01-02T01:23:10.123Z", Format::DateTime).unwrap();
         let off_date_time = OffsetDateTime::parse("1000-01-02T01:23:10.123Z", &Rfc3339).unwrap();
-        assert_eq!(SystemTime::from(off_date_time), SystemTime::from(date_time));
+        assert_eq!(
+            SystemTime::from(off_date_time),
+            SystemTime::try_from(date_time).unwrap()
+        );
 
         let date_time = DateTime::from_str("2039-10-31T23:23:10.456Z", Format::DateTime).unwrap();
         let off_date_time = OffsetDateTime::parse("2039-10-31T23:23:10.456Z", &Rfc3339).unwrap();
-        assert_eq!(SystemTime::from(off_date_time), SystemTime::from(date_time));
-
-        // Check boundaries and round-tripping
-        let result = DateTime::from(SystemTime::from(DateTime::from_secs_and_nanos(
-            i64::MAX,
-            999_999_999,
-        )));
-        assert_eq!(i64::MAX, result.secs());
-        assert_eq!(999_999_999, result.subsec_nanos());
-
-        let result = DateTime::from(SystemTime::from(DateTime::from_secs_and_nanos(
-            i64::MIN + 1,
-            999_999_999,
-        )));
-        assert_eq!(i64::MIN + 1, result.secs());
-        assert_eq!(999_999_999, result.subsec_nanos());
+        assert_eq!(
+            SystemTime::from(off_date_time),
+            SystemTime::try_from(date_time).unwrap()
+        );
     }
 }
