@@ -149,6 +149,10 @@ impl<C, M> Client<C, M> {
     }
 }
 
+fn check_send_sync<T: Send + Sync>(t: T) -> T {
+    t
+}
+
 impl<C, M, R> Client<C, M, R>
 where
     C: bounds::SmithyConnector,
@@ -161,6 +165,8 @@ where
     /// access the raw response use `call_raw`.
     pub async fn call<O, T, E, Retry>(&self, input: Operation<O, Retry>) -> Result<T, SdkError<E>>
     where
+        O: Send + Sync,
+        Retry: Send + Sync,
         R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
         bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
             Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
@@ -177,6 +183,9 @@ where
         input: Operation<O, Retry>,
     ) -> Result<SdkSuccess<T>, SdkError<E>>
     where
+        O: Send + Sync,
+        // E: Send + Sync,
+        Retry: Send + Sync,
         R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
         // This bound is not _technically_ inferred by all the previous bounds, but in practice it
         // is because _we_ know that there is only implementation of Service for Parsed
@@ -188,16 +197,17 @@ where
             Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
     {
         let connector = self.connector.clone();
-        let mut svc = ServiceBuilder::new()
+        let svc = ServiceBuilder::new()
             // Create a new request-scoped policy
             .retry(self.retry_policy.new_request_policy())
             .layer(ParseResponseLayer::<O, Retry>::new())
-            // These layers can be considered as occuring in order. That is, first invoke the
+            // These layers can be considered as occurring in order. That is, first invoke the
             // customer-provided middleware, then dispatch dispatch over the wire.
             .layer(&self.middleware)
             .layer(DispatchLayer::new())
             .service(connector);
-        svc.ready().await?.call(input).await
+
+        check_send_sync(svc).ready().await?.call(input).await
     }
 
     /// Statically check the validity of a `Client` without a request to send.
