@@ -56,6 +56,7 @@ where
             connector: self.connector,
             middleware: DynMiddleware::new(self.middleware),
             retry_policy: self.retry_policy,
+            timeout_config: self.timeout_config,
         }
     }
 }
@@ -94,6 +95,7 @@ where
             connector: DynConnector::new(self.connector),
             middleware: self.middleware,
             retry_policy: self.retry_policy,
+            timeout_config: self.timeout_config,
         }
     }
 

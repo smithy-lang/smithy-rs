@@ -10,6 +10,9 @@
     rust_2018_idioms
 )]
 
+use aws_smithy_types::timeout::TimeoutConfig;
+use tower::ServiceExt;
+
 pub mod bounds;
 pub mod erase;
 pub mod retry;
@@ -42,6 +45,7 @@ pub mod static_tests;
 
 pub mod never;
 pub mod timeout;
+pub use timeout::TimeoutLayer;
 
 /// Type aliases for standard connection types.
 #[cfg(feature = "hyper")]
@@ -88,8 +92,7 @@ use aws_smithy_http_tower::dispatch::DispatchLayer;
 use aws_smithy_http_tower::parse_response::ParseResponseLayer;
 use aws_smithy_types::retry::ProvideErrorKind;
 use std::error::Error;
-
-use tower::{Layer, Service, ServiceBuilder, ServiceExt};
+use tower::{Layer, Service, ServiceBuilder};
 
 /// Smithy service client.
 ///
@@ -119,6 +122,7 @@ pub struct Client<
     connector: Connector,
     middleware: Middleware,
     retry_policy: RetryPolicy,
+    timeout_config: TimeoutConfig,
 }
 
 // Quick-create for people who just want "the default".
@@ -145,6 +149,17 @@ impl<C, M> Client<C, M> {
     /// Adjust a standard retry client with the given policy configuration.
     pub fn with_retry_config(mut self, config: retry::Config) -> Self {
         self.set_retry_config(config);
+        self
+    }
+
+    /// Set the client's timeout configuration.
+    pub fn set_timeout_config(&mut self, config: TimeoutConfig) {
+        self.timeout_config = config;
+    }
+
+    /// Set the client's timeout configuration.
+    pub fn with_timeout_config(mut self, config: TimeoutConfig) -> Self {
+        self.set_timeout_config(config);
         self
     }
 }
@@ -188,15 +203,20 @@ where
             Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
     {
         let connector = self.connector.clone();
+        let sleep_fn = aws_smithy_async::rt::sleep::default_async_sleep();
         let mut svc = ServiceBuilder::new()
-            // Create a new request-scoped policy
+            .layer(TimeoutLayer::new(
+                sleep_fn,
+                self.timeout_config.api_call_timeout().clone(),
+            ))
             .retry(self.retry_policy.new_request_policy())
             .layer(ParseResponseLayer::<O, Retry>::new())
-            // These layers can be considered as occuring in order. That is, first invoke the
+            // These layers can be considered as occurring in order. That is, first invoke the
             // customer-provided middleware, then dispatch dispatch over the wire.
             .layer(&self.middleware)
             .layer(DispatchLayer::new())
             .service(connector);
+
         svc.ready().await?.call(input).await
     }
 

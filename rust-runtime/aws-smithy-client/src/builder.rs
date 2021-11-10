@@ -6,6 +6,7 @@
 use crate::{bounds, erase, retry, Client};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
+use aws_smithy_types::timeout::TimeoutConfig;
 
 /// A builder that provides more customization options when constructing a [`Client`].
 ///
@@ -17,6 +18,7 @@ pub struct Builder<C = (), M = (), R = retry::Standard> {
     connector: C,
     middleware: M,
     retry_policy: R,
+    timeout_config: TimeoutConfig,
 }
 
 // It'd be nice to include R where R: Default here, but then the caller ends up always having to
@@ -58,6 +60,7 @@ impl<M, R> Builder<(), M, R> {
             connector,
             retry_policy: self.retry_policy,
             middleware: self.middleware,
+            timeout_config: self.timeout_config,
         }
     }
 
@@ -111,6 +114,7 @@ impl<C, R> Builder<C, (), R> {
         Builder {
             connector: self.connector,
             retry_policy: self.retry_policy,
+            timeout_config: self.timeout_config,
             middleware,
         }
     }
@@ -154,6 +158,7 @@ impl<C, M> Builder<C, M, retry::Standard> {
         Builder {
             connector: self.connector,
             retry_policy,
+            timeout_config: self.timeout_config,
             middleware: self.middleware,
         }
     }
@@ -163,6 +168,11 @@ impl<C, M> Builder<C, M> {
     /// Set the standard retry policy's configuration.
     pub fn set_retry_config(&mut self, config: retry::Config) {
         self.retry_policy.with_config(config);
+    }
+
+    /// Set a timeout config for the builder
+    pub fn set_timeout_config(&mut self, timeout_config: TimeoutConfig) {
+        self.timeout_config = timeout_config;
     }
 }
 
@@ -176,6 +186,7 @@ impl<C, M, R> Builder<C, M, R> {
             connector: map(self.connector),
             middleware: self.middleware,
             retry_policy: self.retry_policy,
+            timeout_config: self.timeout_config,
         }
     }
 
@@ -188,6 +199,7 @@ impl<C, M, R> Builder<C, M, R> {
             connector: self.connector,
             middleware: map(self.middleware),
             retry_policy: self.retry_policy,
+            timeout_config: self.timeout_config,
         }
     }
 
@@ -197,6 +209,7 @@ impl<C, M, R> Builder<C, M, R> {
             connector: self.connector,
             retry_policy: self.retry_policy,
             middleware: self.middleware,
+            timeout_config: self.timeout_config,
         }
     }
 }

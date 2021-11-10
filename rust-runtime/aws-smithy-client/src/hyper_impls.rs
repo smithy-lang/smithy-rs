@@ -249,23 +249,21 @@ impl<M, R> ClientBuilder<(), M, R> {
     }
 }
 
-mod timeout_middleware {
+pub mod timeout_middleware {
+    use std::error::Error;
+    use std::fmt::Formatter;
     use std::future::Future;
     use std::pin::Pin;
     use std::sync::Arc;
     use std::task::{Context, Poll};
     use std::time::Duration;
 
-    use http::Uri;
-
-    use pin_project_lite::pin_project;
-
     use aws_smithy_async::future;
     use aws_smithy_async::future::timeout::{TimedOutError, Timeout};
     use aws_smithy_async::rt::sleep::AsyncSleep;
     use aws_smithy_async::rt::sleep::Sleep;
-    use std::error::Error;
-    use std::fmt::Formatter;
+    use http::Uri;
+    use pin_project_lite::pin_project;
     use tower::BoxError;
 
     #[derive(Debug)]

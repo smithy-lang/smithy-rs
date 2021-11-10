@@ -14,17 +14,18 @@
 //!   Its sole purpose in life is to create a [`RetryHandler`] for individual requests.
 //! - [`RetryHandler`]: A request-scoped retry policy, backed by request-local state and shared
 //!   state contained within [`Standard`].
-//! - [`Config`]: Static configuration (max retries, max backoff etc.)
+//! - [`Config`]: Static configuration (max attempts, max backoff etc.)
+
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use crate::{SdkError, SdkSuccess};
 use aws_smithy_http::operation;
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::retry::ClassifyResponse;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use tracing::Instrument;
 
 /// A policy instantiator.
@@ -321,6 +322,7 @@ where
     }
 }
 
+// TODO shouldn't this check for Sync?
 fn check_send_sync<T: Send>(t: T) -> T {
     t
 }
@@ -331,15 +333,15 @@ mod test {
     use aws_smithy_types::retry::ErrorKind;
     use std::time::Duration;
 
-    fn assert_send_sync<T: Send + Sync>() {}
-
     fn test_config() -> Config {
         Config::default().with_base(|| 1_f64)
     }
 
     #[test]
     fn retry_handler_send_sync() {
-        assert_send_sync::<RetryHandler>()
+        fn must_be_send_sync<T: Send + Sync>() {};
+
+        must_be_send_sync::<RetryHandler>()
     }
 
     #[test]

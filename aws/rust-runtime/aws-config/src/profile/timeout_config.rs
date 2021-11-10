@@ -9,6 +9,7 @@ use crate::profile::Profile;
 use crate::provider_config::ProviderConfig;
 use aws_smithy_types::timeout::{TimeoutConfigBuilder, TimeoutConfigError};
 use aws_types::os_shim_internal::{Env, Fs};
+use std::time::Duration;
 
 const PROFILE_VAR_CONNECT_TIMEOUT: &str = "connect_timeout";
 const PROFILE_VAR_TLS_NEGOTIATION_TIMEOUT: &str = "tls_negotiation_timeout";
@@ -135,7 +136,7 @@ impl ProfileFileTimeoutConfigProvider {
         timeout_config_builder
             .set_connect_timeout(connect_timeout)
             .set_tls_negotiation_timeout(tls_negotiation_timeout)
-            .set_read_timeout(read_timeout)
+            .set_http_read_timeout(http_read_timeout)
             .set_api_call_attempt_timeout(api_call_attempt_timeout)
             .set_api_call_timeout(api_call_timeout);
 
@@ -148,7 +149,7 @@ const SET_BY: &str = "aws profile";
 fn construct_timeout_from_profile_var(
     profile: &Profile,
     var: &str,
-) -> Result<Option<f32>, TimeoutConfigError> {
+) -> Result<Option<Duration>, TimeoutConfigError> {
     // TODO do I really need to clone this?
     let var = var.to_owned();
     match profile.get(&var) {
@@ -163,7 +164,12 @@ fn construct_timeout_from_profile_var(
                 name: var.into(),
                 reason: "timeout must not be NaN".into(),
             }),
-            Ok(timeout) => Ok(Some(timeout)),
+            Ok(timeout) if timeout.is_infinite() => Err(TimeoutConfigError::InvalidTimeout {
+                set_by: SET_BY.into(),
+                name: var.into(),
+                reason: "timeout must not be infinite".into(),
+            }),
+            Ok(timeout) => Ok(Some(Duration::from_secs_f32(timeout))),
             Err(_) => Err(TimeoutConfigError::CouldntParseTimeout {
                 set_by: SET_BY.into(),
                 name: var.into(),

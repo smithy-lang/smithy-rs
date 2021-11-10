@@ -216,7 +216,7 @@ impl Config {
     }
 
     /// Configured timeout config
-    pub fn timeout_config_config(&self) -> Option<&TimeoutConfig> {
+    pub fn timeout_config(&self) -> Option<&TimeoutConfig> {
         self.timeout_config.as_ref()
     }
 
