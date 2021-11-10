@@ -1,6 +1,8 @@
 vNext (Month Day, Year)
 =======================
 
+v0.27.0-alpha.2 (November 9th, 2021)
+=======================
 **Breaking Changes**
 
 - Members named `builder` on model structs were renamed to `builder_value` so that their accessors don't conflict with the existing `builder()` methods (smithy-rs#842)
