@@ -184,7 +184,6 @@ where
     ) -> Result<SdkSuccess<T>, SdkError<E>>
     where
         O: Send + Sync,
-        // E: Send + Sync,
         Retry: Send + Sync,
         R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
         // This bound is not _technically_ inferred by all the previous bounds, but in practice it
