@@ -221,9 +221,9 @@ impl Instant {
     /// Formats the `Instant` to a string using the given `format`.
     pub fn fmt(&self, format: Format) -> String {
         match format {
-            Format::DateTime => format::rfc3339::format(&self),
-            Format::EpochSeconds => format::epoch_seconds::format(&self),
-            Format::HttpDate => format::http_date::format(&self),
+            Format::DateTime => format::rfc3339::format(self),
+            Format::EpochSeconds => format::epoch_seconds::format(self),
+            Format::HttpDate => format::http_date::format(self),
         }
     }
 }

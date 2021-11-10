@@ -110,7 +110,7 @@ class EventStreamUnmarshallerGenerator(
                 """,
                 *codegenScope
             ) {
-                rustTemplate("let response_headers = #{expect_fns}::parse_response_headers(&message)?;", *codegenScope)
+                rustTemplate("let response_headers = #{expect_fns}::parse_response_headers(message)?;", *codegenScope)
                 rustBlock("match response_headers.message_type.as_str()") {
                     rustBlock("\"event\" => ") {
                         renderUnmarshallEvent()

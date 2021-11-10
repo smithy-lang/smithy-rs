@@ -51,7 +51,7 @@ impl<'a> JsonValueWriter<'a> {
                 }
                 object.finish();
             }
-            Document::String(value) => self.string(&value),
+            Document::String(value) => self.string(value),
         }
     }
 

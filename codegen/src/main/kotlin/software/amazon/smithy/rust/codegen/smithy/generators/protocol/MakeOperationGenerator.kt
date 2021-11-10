@@ -73,7 +73,8 @@ open class MakeOperationGenerator(
         val fnType = if (public) "pub async fn" else "async fn"
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
-        implBlockWriter.rust("##[allow(clippy::let_and_return)]") // For codegen simplicity, allow `let x = ...; x`
+        Attribute.Custom("allow(clippy::let_and_return)").render(implBlockWriter) // For codegen simplicity, allow `let x = ...; x`
+        Attribute.Custom("allow(clippy::needless_borrow)").render(implBlockWriter) // Allows builders that don’t consume the input borrow
         implBlockWriter.rustBlockTemplate(
             "$fnType $functionName($self, _config: &#{config}::Config) -> $returnType",
             *codegenScope
