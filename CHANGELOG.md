@@ -1,6 +1,13 @@
 vNext (Month Day, Year)
 =======================
 
+v0.28.0-alpha (November 11th, 2021)
+===================================
+
+No changes since last release except for version bumping since older versions
+of the AWS SDK were failing to compile with the `0.27.0-alpha.2` version chosen
+for the previous release.
+
 v0.27.0-alpha.2 (November 9th, 2021)
 =======================
 **Breaking Changes**
