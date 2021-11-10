@@ -53,8 +53,8 @@ class Ec2QueryParserGeneratorTest {
 
         project.lib { writer ->
             writer.unitTest(
-                name = "valid_input",
-                test = """
+                "valid_input",
+                """
                 let xml = br#"
                 <SomeOperationResponse someAttribute="5">
                     <someVal>Some value</someVal>

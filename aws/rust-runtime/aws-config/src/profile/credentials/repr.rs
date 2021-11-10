@@ -35,7 +35,7 @@ impl<'a> ProfileChain<'a> {
     }
 
     pub fn chain(&self) -> &[RoleArn<'a>] {
-        &self.chain.as_slice()
+        self.chain.as_slice()
     }
 }
 
@@ -133,15 +133,15 @@ pub fn resolve_chain<'a>(
                 next: source_profile_name.to_string(),
             });
         }
-        visited_profiles.push(&source_profile_name);
+        visited_profiles.push(source_profile_name);
         // After the first item in the chain, we will prioritize static credentials if they exist
         if visited_profiles.len() > 1 {
-            let try_static = static_creds_from_profile(&profile);
+            let try_static = static_creds_from_profile(profile);
             if let Ok(static_credentials) = try_static {
                 break BaseProvider::AccessKey(static_credentials);
             }
         }
-        let next_profile = match chain_provider(&profile) {
+        let next_profile = match chain_provider(profile) {
             // this provider wasn't a chain provider, reload it as a base provider
             None => {
                 break base_provider(profile).map_err(|err| {
@@ -206,7 +206,7 @@ enum NextProfile<'a> {
 }
 
 fn chain_provider(profile: &Profile) -> Option<Result<(RoleArn, NextProfile), ProfileFileError>> {
-    let role_provider = role_arn_from_profile(&profile)?;
+    let role_provider = role_arn_from_profile(profile)?;
     let (source_profile, credential_source) = (
         profile.get(role::SOURCE_PROFILE),
         profile.get(role::CREDENTIAL_SOURCE),

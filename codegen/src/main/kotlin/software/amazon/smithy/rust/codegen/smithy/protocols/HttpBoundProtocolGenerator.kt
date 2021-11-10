@@ -69,7 +69,7 @@ class HttpBoundProtocolGenerator(
     HttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
 )
 
-private class HttpBoundProtocolTraitImplGenerator(
+class HttpBoundProtocolTraitImplGenerator(
     private val codegenContext: CodegenContext,
     private val protocol: Protocol,
 ) : ProtocolTraitImplGenerator {
@@ -80,7 +80,7 @@ private class HttpBoundProtocolTraitImplGenerator(
     private val operationDeserModule = RustModule.private("operation_deser")
 
     private val codegenScope = arrayOf(
-        "ParseStrict" to RuntimeType.parseStrict(runtimeConfig),
+        "ParseStrict" to RuntimeType.parseStrictResponse(runtimeConfig),
         "ParseResponse" to RuntimeType.parseResponse(runtimeConfig),
         "http" to RuntimeType.http,
         "operation" to RuntimeType.operationModule(runtimeConfig),
@@ -139,20 +139,20 @@ private class HttpBoundProtocolTraitImplGenerator(
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
-                impl #{ParseResponse} for $operationName {
-                    type Output = std::result::Result<#{O}, #{E}>;
-                    fn parse_unloaded(&self, response: &mut #{operation}::Response) -> Option<Self::Output> {
-                        // This is an error, defer to the non-streaming parser
-                        if !response.http().status().is_success() && response.http().status().as_u16() != $successCode {
-                            return None;
-                        }
-                        Some(#{parse_streaming_response}(response))
+            impl #{ParseResponse} for $operationName {
+                type Output = std::result::Result<#{O}, #{E}>;
+                fn parse_unloaded(&self, response: &mut #{operation}::Response) -> Option<Self::Output> {
+                    // This is an error, defer to the non-streaming parser
+                    if !response.http().status().is_success() && response.http().status().as_u16() != $successCode {
+                        return None;
                     }
-                    fn parse_loaded(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
-                        // if streaming, we only hit this case if its an error
-                        #{parse_error}(response)
-                    }
+                    Some(#{parse_streaming_response}(response))
                 }
+                fn parse_loaded(&self, response: &#{http}::Response<#{Bytes}>) -> Self::Output {
+                    // if streaming, we only hit this case if its an error
+                    #{parse_error}(response)
+                }
+            }
             """,
             "O" to outputSymbol,
             "E" to operationShape.errorSymbol(symbolProvider),
@@ -162,7 +162,7 @@ private class HttpBoundProtocolTraitImplGenerator(
         )
     }
 
-    private fun parseError(operationShape: OperationShape): RuntimeType {
+    fun parseError(operationShape: OperationShape): RuntimeType {
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_error"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
@@ -260,7 +260,7 @@ private class HttpBoundProtocolTraitImplGenerator(
         }
     }
 
-    private fun parseResponse(operationShape: OperationShape): RuntimeType {
+    fun parseResponse(operationShape: OperationShape): RuntimeType {
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_response"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
@@ -348,8 +348,8 @@ private class HttpBoundProtocolTraitImplGenerator(
                 val fnName = httpBindingGenerator.generateDeserializeHeaderFn(binding)
                 rust(
                     """
-                        #T(response.headers())
-                            .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
+                    #T(response.headers())
+                        .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
                     """,
                     fnName, errorSymbol
                 )
@@ -413,12 +413,13 @@ class HttpBoundProtocolBodyGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val mode = codegenContext.mode
     private val httpBindingResolver = protocol.httpBindingResolver
 
     private val operationSerModule = RustModule.private("operation_ser")
 
     private val codegenScope = arrayOf(
-        "ParseStrict" to RuntimeType.parseStrict(runtimeConfig),
+        "ParseStrict" to RuntimeType.parseStrictResponse(runtimeConfig),
         "ParseResponse" to RuntimeType.parseResponse(runtimeConfig),
         "http" to RuntimeType.http,
         "hyper" to CargoDependency.HyperWithStream.asType(),
@@ -458,9 +459,8 @@ class HttpBoundProtocolBodyGenerator(
         if (payloadMemberName == null) {
             serializerGenerator.operationSerializer(operationShape)?.let { serializer ->
                 writer.rust(
-                    "#T(&self).map_err(|err|#T::SerializationError(err.into()))?",
+                    "#T(&self)?",
                     serializer,
-                    runtimeConfig.operationBuildError()
                 )
             } ?: writer.rustTemplate("#{SdkBody}::from(\"\")", *codegenScope)
         } else {
@@ -483,11 +483,13 @@ class HttpBoundProtocolBodyGenerator(
 
         val marshallerConstructorFn = EventStreamMarshallerGenerator(
             model,
+            mode,
             runtimeConfig,
             symbolProvider,
             unionShape,
             serializerGenerator,
-            httpBindingResolver.requestContentType(operationShape) ?: throw CodegenException("event streams must set a content type"),
+            httpBindingResolver.requestContentType(operationShape)
+                ?: throw CodegenException("event streams must set a content type"),
         ).render()
 
         // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the
@@ -585,15 +587,14 @@ class HttpBoundProtocolBodyGenerator(
 
                 // JSON serialize the structure or union targeted
                 rust(
-                    """#T(&$payloadName).map_err(|err|#T::SerializationError(err.into()))?""",
-                    serializer.payloadSerializer(member), runtimeConfig.operationBuildError()
+                    "#T($payloadName)?",
+                    serializer.payloadSerializer(member)
                 )
             }
             is DocumentShape -> {
                 rust(
-                    "#T(&$payloadName).map_err(|err|#T::SerializationError(err.into()))?",
+                    "#T($payloadName)?",
                     serializer.documentSerializer(),
-                    runtimeConfig.operationBuildError()
                 )
             }
             else -> TODO("Unexpected payload target type")

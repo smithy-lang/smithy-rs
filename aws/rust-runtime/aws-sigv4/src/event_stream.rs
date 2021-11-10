@@ -56,7 +56,7 @@ fn calculate_string_to_sign(
 ) -> Vec<u8> {
     // Event Stream string to sign format is documented here:
     // https://docs.aws.amazon.com/transcribe/latest/dg/how-streaming.html
-    let date_time_str = format_date_time(&date_time);
+    let date_time_str = format_date_time(date_time);
     let date_str = format_date(&date_time.date());
 
     let mut sts: Vec<u8> = Vec::new();

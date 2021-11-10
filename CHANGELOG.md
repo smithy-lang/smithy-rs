@@ -1,5 +1,22 @@
 vNext (Month Day, Year)
 =======================
+- Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
+- Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request.
+
+v0.27.0-alpha.2 (November 9th, 2021)
+=======================
+**Breaking Changes**
+
+- Members named `builder` on model structs were renamed to `builder_value` so that their accessors don't conflict with the existing `builder()` methods (smithy-rs#842)
+
+**New this week**
+
+- Fix epoch seconds date-time parsing bug in `aws-smithy-types` (smithy-rs#834)
+- Omit trailing zeros from fraction when formatting HTTP dates in `aws-smithy-types` (smithy-rs#834)
+- Generated structs now have accessor methods for their members (smithy-rs#842)
+
+v0.27.0-alpha.1 (November 3rd, 2021)
+====================================
 **Breaking Changes**
 - `<operation>.make_operation(&config)` is now an `async` function for all operations. Code should be updated to call `.await`. This will only impact users using the low-level API. (smithy-rs#797)
 
@@ -8,7 +25,8 @@ vNext (Month Day, Year)
 - `moduleDescription` in `smithy-build.json` settings is now optional
 - Upgrade to Smithy 1.12
 - `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
-- Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request.
+- Unions will optionally generate an `Unknown` variant to support parsing variants that don't exist on the client. These variants will fail to serialize if they are ever included in requests.
+- Fix generated docs on unions. (smithy-rs#826)
 
 v0.27 (October 20th, 2021)
 ==========================

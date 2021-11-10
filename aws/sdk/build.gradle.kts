@@ -21,7 +21,10 @@ plugins {
 
 val smithyVersion: String by project
 
-val sdkOutputDir = buildDir.resolve("aws-sdk")
+val outputDir = buildDir.resolve("aws-sdk")
+val sdkOutputDir = outputDir.resolve("sdk")
+val examplesOutputDir = outputDir.resolve("examples")
+
 val runtimeModules = listOf(
     "aws-smithy-async",
     "aws-smithy-client",
@@ -290,13 +293,13 @@ task("relocateExamples") {
         copy {
             from(projectDir)
             include("examples/**")
-            into(sdkOutputDir)
+            into(outputDir)
             exclude("**/target")
-            filter { line -> line.replace("build/aws-sdk/", "") }
+            filter { line -> line.replace("build/aws-sdk/sdk/", "sdk/") }
         }
     }
     inputs.dir(projectDir.resolve("examples"))
-    outputs.dir(sdkOutputDir)
+    outputs.dir(outputDir)
 }
 
 /**
@@ -305,7 +308,7 @@ task("relocateExamples") {
  */
 fun rewritePathDependency(line: String): String {
     // some runtime crates are actually dependent on the generated bindings:
-    return line.replace("../sdk/build/aws-sdk/", "")
+    return line.replace("../sdk/build/aws-sdk/sdk/", "")
         // others use relative dependencies::
         .replace("../../rust-runtime/", "")
 }
@@ -329,9 +332,9 @@ fun rewriteSmithyRsCrateVersion(line: String): String =
     rewriteCrateVersion(line, getProperty("smithy.rs.runtime.crate.version")!!)
 
 /** Patches a file with the result of the given `operation` being run on each line */
-fun patchFile(path: String, operation: (String) -> String) {
-    val patchedContents = File(path).readLines().joinToString("\n", transform = operation)
-    File(path).writeText(patchedContents)
+fun patchFile(path: File, operation: (String) -> String) {
+    val patchedContents = path.readLines().joinToString("\n", transform = operation)
+    path.writeText(patchedContents)
 }
 
 tasks.register<Copy>("copyAllRuntimes") {
@@ -352,7 +355,7 @@ tasks.register("relocateAwsRuntime") {
     doLast {
         // Patch the Cargo.toml files
         awsModules.forEach { moduleName ->
-            patchFile("$sdkOutputDir/$moduleName/Cargo.toml") { line ->
+            patchFile(sdkOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
                 line.let(::rewritePathDependency)
                     .let(::rewriteAwsSdkCrateVersion)
             }
@@ -364,7 +367,7 @@ tasks.register("relocateRuntime") {
     doLast {
         // Patch the Cargo.toml files
         runtimeModules.forEach { moduleName ->
-            patchFile("$sdkOutputDir/$moduleName/Cargo.toml") { line ->
+            patchFile(sdkOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
                 line.let(::rewriteSmithyRsCrateVersion)
             }
         }
@@ -378,23 +381,27 @@ fun generateCargoWorkspace(services: List<AwsService>): String {
         .filter { generatedModules.contains(it.name) }
         .map { "examples/${it.name}" }
 
-    val modules = services.map(AwsService::module) + runtimeModules + awsModules + examples.toList()
+    val modules = (
+        services.map(AwsService::module).map { "sdk/$it" } +
+        runtimeModules.map { "sdk/$it" } +
+        awsModules.map { "sdk/$it" } +
+        examples.toList()
+    ).sorted()
     return """
-    [workspace]
-    members = [
-        ${modules.joinToString(",") { "\"$it\"" }}
-    ]
-    """.trimIndent()
+    |[workspace]
+    |members = [${"\n"}${modules.joinToString(",\n") { "|    \"$it\"" }}
+    |]
+    """.trimMargin()
 }
 task("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
-        sdkOutputDir.mkdirs()
-        sdkOutputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices))
+        outputDir.mkdirs()
+        outputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices))
     }
     inputs.property("servicelist", awsServices.sortedBy { it.module }.toString())
     inputs.dir(projectDir.resolve("examples"))
-    outputs.file(sdkOutputDir.resolve("Cargo.toml"))
+    outputs.file(outputDir.resolve("Cargo.toml"))
     outputs.upToDateWhen { false }
 }
 
@@ -418,7 +425,7 @@ tasks["assemble"].dependsOn("smithyBuildJar")
 tasks["assemble"].finalizedBy("finalizeSdk")
 
 tasks.register<Exec>("cargoCheck") {
-    workingDir(sdkOutputDir)
+    workingDir(outputDir)
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "check", "--lib", "--tests", "--benches")
@@ -426,7 +433,7 @@ tasks.register<Exec>("cargoCheck") {
 }
 
 tasks.register<Exec>("cargoTest") {
-    workingDir(sdkOutputDir)
+    workingDir(outputDir)
     // disallow warnings
     environment("RUSTFLAGS", "-D warnings")
     commandLine("cargo", "test")
@@ -434,7 +441,7 @@ tasks.register<Exec>("cargoTest") {
 }
 
 tasks.register<Exec>("cargoDocs") {
-    workingDir(sdkOutputDir)
+    workingDir(outputDir)
     // disallow warnings
     environment("RUSTDOCFLAGS", "-D warnings")
     commandLine("cargo", "doc", "--no-deps", "--document-private-items")
@@ -442,7 +449,7 @@ tasks.register<Exec>("cargoDocs") {
 }
 
 tasks.register<Exec>("cargoClippy") {
-    workingDir(sdkOutputDir)
+    workingDir(outputDir)
     // disallow warnings
     commandLine("cargo", "clippy", "--", "-D", "warnings")
     dependsOn("assemble")
@@ -450,10 +457,10 @@ tasks.register<Exec>("cargoClippy") {
 
 tasks.register<RunExampleTask>("runExample") {
     dependsOn("assemble")
-    outputDir = sdkOutputDir
+    outputDir = outputDir
 }
 
-// TODO: validate that the example exists. Otherwise this fails with a hiden error.
+// TODO: validate that the example exists. Otherwise this fails with a hidden error.
 open class RunExampleTask @javax.inject.Inject constructor() : Exec() {
     @Option(option = "example", description = "Example to run")
     var example: String? = null

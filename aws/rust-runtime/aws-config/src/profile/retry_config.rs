@@ -131,7 +131,7 @@ impl ProfileFileRetryConfigProvider {
         };
 
         let retry_mode = match selected_profile.get("retry_mode") {
-            Some(retry_mode) => match RetryMode::from_str(&retry_mode) {
+            Some(retry_mode) => match RetryMode::from_str(retry_mode) {
                 Ok(retry_mode) => Some(retry_mode),
                 Err(retry_mode_err) => {
                     return Err(RetryConfigErr::InvalidRetryMode {

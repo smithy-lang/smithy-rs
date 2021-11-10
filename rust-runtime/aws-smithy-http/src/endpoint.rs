@@ -3,9 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use http::uri::{Authority, InvalidUri, Uri};
 use std::borrow::Cow;
 use std::str::FromStr;
+
+use http::uri::{Authority, Uri};
+
+use crate::operation::BuildError;
 
 /// API Endpoint
 ///
@@ -22,10 +25,16 @@ pub struct Endpoint {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EndpointPrefix(String);
 impl EndpointPrefix {
-    pub fn new(prefix: impl Into<String>) -> Result<Self, InvalidUri> {
+    pub fn new(prefix: impl Into<String>) -> Result<Self, BuildError> {
         let prefix = prefix.into();
-        let _ = Authority::from_str(&prefix)?;
-        Ok(EndpointPrefix(prefix))
+        match Authority::from_str(&prefix) {
+            Ok(_) => Ok(EndpointPrefix(prefix)),
+            Err(err) => Err(BuildError::InvalidUri {
+                uri: prefix,
+                err,
+                message: "invalid prefix".into(),
+            }),
+        }
     }
 
     pub fn as_str(&self) -> &str {
@@ -83,7 +92,7 @@ impl Endpoint {
         let new_uri = Uri::builder()
             .authority(authority)
             .scheme(scheme.clone())
-            .path_and_query(Self::merge_paths(&self.uri, &uri).as_ref())
+            .path_and_query(Self::merge_paths(&self.uri, uri).as_ref())
             .build()
             .expect("valid uri");
         *uri = new_uri;
@@ -98,9 +107,9 @@ impl Endpoint {
         if endpoint_path.is_empty() {
             Cow::Borrowed(uri_path_and_query)
         } else {
-            let ep_no_slash = endpoint_path.strip_suffix("/").unwrap_or(endpoint_path);
+            let ep_no_slash = endpoint_path.strip_suffix('/').unwrap_or(endpoint_path);
             let uri_path_no_slash = uri_path_and_query
-                .strip_prefix("/")
+                .strip_prefix('/')
                 .unwrap_or(uri_path_and_query);
             Cow::Owned(format!("{}/{}", ep_no_slash, uri_path_no_slash))
         }
@@ -109,8 +118,9 @@ impl Endpoint {
 
 #[cfg(test)]
 mod test {
-    use crate::endpoint::{Endpoint, EndpointPrefix};
     use http::Uri;
+
+    use crate::endpoint::{Endpoint, EndpointPrefix};
 
     #[test]
     fn prefix_endpoint() {

@@ -52,6 +52,7 @@ class ResponseBindingGenerator(
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val symbolProvider = codegenContext.symbolProvider
+    private val mode = codegenContext.mode
     private val model = codegenContext.model
     private val service = codegenContext.serviceShape
     private val index = HttpBindingIndex.of(model)
@@ -115,7 +116,7 @@ class ResponseBindingGenerator(
             ) {
                 rust(
                     """
-                    let headers = #T::headers_for_prefix(&header_map, ${binding.locationName.dq()});
+                    let headers = #T::headers_for_prefix(header_map, ${binding.locationName.dq()});
                     let out: std::result::Result<_, _> = headers.map(|(key, header_name)| {
                         let values = header_map.get_all(header_name);
                         #T(values.iter()).map(|v| (key.to_string(), v.unwrap()))
@@ -179,7 +180,8 @@ class ResponseBindingGenerator(
             runtimeConfig,
             symbolProvider,
             operationShape,
-            target
+            target,
+            mode
         ).render()
         rustTemplate(
             """
@@ -222,7 +224,7 @@ class ResponseBindingGenerator(
                 is StructureShape, is UnionShape -> this.structuredHandler("body")
                 is StringShape -> {
                     rustTemplate(
-                        "let body_str = std::str::from_utf8(&body).map_err(#{error_symbol}::unhandled)?;",
+                        "let body_str = std::str::from_utf8(body).map_err(#{error_symbol}::unhandled)?;",
                         "error_symbol" to errorSymbol
                     )
                     if (targetShape.hasTrait<EnumTrait>()) {
@@ -287,11 +289,13 @@ class ResponseBindingGenerator(
             )
             if (coreShape.hasTrait<MediaTypeTrait>()) {
                 rustTemplate(
-                    """let $parsedValue: std::result::Result<Vec<_>, _> = $parsedValue
+                    """
+                    let $parsedValue: std::result::Result<Vec<_>, _> = $parsedValue
                         .iter().map(|s|
                             #{base_64_decode}(s).map_err(|_|#{header}::ParseError::new_with_message("failed to decode base64"))
                             .and_then(|bytes|String::from_utf8(bytes).map_err(|_|#{header}::ParseError::new_with_message("base64 encoded data was not valid utf-8")))
-                        ).collect();""",
+                        ).collect();
+                    """,
                     "base_64_decode" to RuntimeType.Base64Decode(runtimeConfig),
                     "header" to headerUtil
                 )

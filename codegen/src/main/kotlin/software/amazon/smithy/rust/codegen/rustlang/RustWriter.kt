@@ -178,13 +178,20 @@ fun <T : CodeWriter> T.rustBlock(
 /**
  * Generate a RustDoc comment for [shape]
  */
-fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model, autoSuppressMissingDocs: Boolean = true): T {
+fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model, autoSuppressMissingDocs: Boolean = true, note: String? = null): T {
     // TODO: support additional Smithy documentation traits like @example
     val docTrait = shape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
 
     when (docTrait?.value?.isNotBlank()) {
         // If docs are modeled, then place them on the code generated shape
-        true -> this.docs(escape(docTrait.value))
+        true -> {
+            this.docs(escape(docTrait.value))
+            note?.also {
+                // Add a blank line between the docs and the note to visually differentiate
+                write("///")
+                docs("_Note: ${it}_")
+            }
+        }
         // Otherwise, suppress the missing docs lint for this shape since
         // the lack of documentation is a modeling issue rather than a codegen issue.
         else -> if (autoSuppressMissingDocs) {
@@ -397,7 +404,7 @@ class RustWriter private constructor(
     inner class RustDocLinker : BiFunction<Any, String, String> {
         override fun apply(t: Any, u: String): String {
             return when (t) {
-                is Symbol -> "[`${t.name}`](${t.fullName})"
+                is Symbol -> "[`${t.name}`](${t.rustType().qualifiedName()})"
                 else -> throw CodegenException("Invalid type provided to RustDocLinker ($t) expected Symbol")
             }
         }

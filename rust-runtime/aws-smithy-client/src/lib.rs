@@ -96,7 +96,7 @@ use tower::{Layer, Service, ServiceBuilder};
 
 /// Smithy service client.
 ///
-/// The service client is customizeable in a number of ways (see [`Builder`]), but most customers
+/// The service client is customizable in a number of ways (see [`Builder`]), but most customers
 /// can stick with the standard constructor provided by [`Client::new`]. It takes only a single
 /// argument, which is the middleware that fills out the [`http::Request`] for each higher-level
 /// operation so that it can ultimately be sent to the remote host. The middleware is responsible
@@ -164,6 +164,10 @@ impl<C, M> Client<C, M> {
     }
 }
 
+fn check_send_sync<T: Send + Sync>(t: T) -> T {
+    t
+}
+
 impl<C, M, R> Client<C, M, R>
 where
     C: bounds::SmithyConnector,
@@ -176,6 +180,8 @@ where
     /// access the raw response use `call_raw`.
     pub async fn call<O, T, E, Retry>(&self, input: Operation<O, Retry>) -> Result<T, SdkError<E>>
     where
+        O: Send + Sync,
+        Retry: Send + Sync,
         R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
         bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
             Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
@@ -192,6 +198,8 @@ where
         input: Operation<O, Retry>,
     ) -> Result<SdkSuccess<T>, SdkError<E>>
     where
+        O: Send + Sync,
+        Retry: Send + Sync,
         R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
         // This bound is not _technically_ inferred by all the previous bounds, but in practice it
         // is because _we_ know that there is only implementation of Service for Parsed
@@ -204,6 +212,7 @@ where
     {
         let connector = self.connector.clone();
         let sleep_fn = aws_smithy_async::rt::sleep::default_async_sleep();
+
         let mut svc = ServiceBuilder::new()
             .layer(TimeoutLayer::new(
                 sleep_fn,
@@ -217,7 +226,7 @@ where
             .layer(DispatchLayer::new())
             .service(connector);
 
-        svc.ready().await?.call(input).await
+        check_send_sync(svc).ready().await?.call(input).await
     }
 
     /// Statically check the validity of a `Client` without a request to send.

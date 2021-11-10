@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
@@ -48,10 +49,16 @@ class AwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFac
     override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport = ProtocolSupport(
+        /* Client support */
         requestSerialization = true,
         requestBodySerialization = true,
         responseDeserialization = true,
-        errorDeserialization = true
+        errorDeserialization = true,
+        /* Server support */
+        requestDeserialization = false,
+        requestBodyDeserialization = false,
+        responseSerialization = false,
+        errorSerialization = false
     )
 }
 
@@ -100,7 +107,7 @@ class AwsJsonSerializerGenerator(
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
-        "Error" to CargoDependency.SmithyTypes(runtimeConfig).asType().member("Error"),
+        "Error" to runtimeConfig.serializationError(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
     )
 

@@ -49,7 +49,6 @@ import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.isStreaming
-import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 /**
  * Instantiator generates code to instantiate a given Shape given a `Node` representing the value
@@ -223,8 +222,7 @@ class Instantiator(
         val variant = data.members.iterator().next()
         val memberName = variant.key.value
         val member = shape.expectMember(memberName)
-        // TODO: refactor this detail into UnionGenerator
-        writer.write("#T::${memberName.toPascalCase()}", unionSymbol)
+        writer.write("#T::${symbolProvider.toMemberName(member)}", unionSymbol)
         // unions should specify exactly one member
         writer.withBlock("(", ")") {
             renderMember(this, member, variant.value, ctx)

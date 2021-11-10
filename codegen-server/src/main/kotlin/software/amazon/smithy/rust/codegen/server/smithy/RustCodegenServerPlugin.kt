@@ -27,7 +27,7 @@ import java.util.logging.Logger
  *  `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
  *  enables the smithy-build plugin to invoke `execute` with all of the Smithy plugin context + models.
  */
-class RustCodegenPlugin : SmithyBuildPlugin {
+class RustCodegenServerPlugin : SmithyBuildPlugin {
     private val logger = Logger.getLogger(javaClass.name)
 
     override fun getName(): String = "rust-server-codegen"
@@ -35,22 +35,22 @@ class RustCodegenPlugin : SmithyBuildPlugin {
     override fun execute(context: PluginContext) {
         // Suppress extremely noisy logs about reserved words
         Logger.getLogger(ReservedWordSymbolProvider::class.java.name).level = Level.OFF
-        // Discover `RustCodegenDecorators` on the classpath. `RustCodegenDectorator` return different types of
+        // Discover [RustCodegenDecorators] on the classpath. [RustCodegenDectorator] return different types of
         // customization. A customization is a function of:
         // - location (e.g. the mutate section of an operation)
         // - context (e.g. the of the operation)
         // - writer: The active RustWriter at the given location
         val codegenDecorator = CombinedCodegenDecorator.fromClasspath(context)
 
-        // CodegenVisitor is the main driver of code generation that traverses the model and generates code
-        CodegenVisitor(context, codegenDecorator).execute()
+        // ServerCodegenVisitor is the main driver of code generation that traverses the model and generates code
+        ServerCodegenVisitor(context, codegenDecorator).execute()
     }
 
     companion object {
         /** SymbolProvider
          * When generating code, smithy types need to be converted into Rust types—that is the core role of the symbol provider
          *
-         * The Symbol provider is composed of a base `SymbolVisitor` which handles the core functionality, then is layered
+         * The Symbol provider is composed of a base [SymbolVisitor] which handles the core functionality, then is layered
          * with other symbol providers, documented inline, to handle the full scope of Smithy types.
          */
         fun baseSymbolProvider(
@@ -63,7 +63,7 @@ class RustCodegenPlugin : SmithyBuildPlugin {
                 .let {
                     EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model)
                 }
-                // Generate `ByteStream` instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
+                // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
                 .let { StreamingShapeSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
                 .let { BaseSymbolMetadataProvider(it) }
@@ -71,6 +71,6 @@ class RustCodegenPlugin : SmithyBuildPlugin {
                 .let { StreamingShapeMetadataProvider(it, model) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
-                .let { RustReservedWordSymbolProvider(it) }
+                .let { RustReservedWordSymbolProvider(it, model) }
     }
 }

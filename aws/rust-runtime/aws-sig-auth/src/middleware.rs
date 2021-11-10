@@ -125,7 +125,7 @@ impl MapRequest for SigV4SigningStage {
 
             let signature = self
                 .signer
-                .sign(&operation_config, &request_config, &creds, &mut req)
+                .sign(operation_config, &request_config, &creds, &mut req)
                 .map_err(|err| SigningStageError::SigningFailure(err))?;
             config.insert(signature);
             Ok(req)

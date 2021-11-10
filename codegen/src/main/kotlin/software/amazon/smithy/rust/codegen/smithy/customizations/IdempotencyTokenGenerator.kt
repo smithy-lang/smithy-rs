@@ -30,10 +30,10 @@ class IdempotencyTokenGenerator(codegenContext: CodegenContext, private val oper
             is OperationSection.MutateInput -> writable {
                 rust(
                     """
-                if ${section.input}.$memberName.is_none() {
-                    ${section.input}.$memberName = Some(${section.config}.make_token.make_idempotency_token());
-                }
-                """
+                    if ${section.input}.$memberName.is_none() {
+                        ${section.input}.$memberName = Some(${section.config}.make_token.make_idempotency_token());
+                    }
+                    """
                 )
             }
             else -> emptySection

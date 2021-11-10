@@ -78,10 +78,10 @@ class EndpointTraitBindings(
                     }
                     rust(
                         """
-                    if $field.is_empty() {
-                        return Err($invalidFieldError)
-                    }
-                    """
+                        if $field.is_empty() {
+                            return Err($invalidFieldError)
+                        }
+                        """
                     )
                     "${label.content} = $field"
                 }

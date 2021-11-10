@@ -24,26 +24,26 @@ internal class ServiceConfigGeneratorTest {
     @Test
     fun `idempotency token when used`() {
         fun model(trait: String) = """
-        namespace com.example
+            namespace com.example
 
-        use aws.protocols#restJson1
-        use smithy.test#httpRequestTests
-        use smithy.test#httpResponseTests
+            use aws.protocols#restJson1
+            use smithy.test#httpRequestTests
+            use smithy.test#httpResponseTests
 
-        @restJson1
-        service HelloService {
-            operations: [SayHello],
-            version: "1"
-        }
+            @restJson1
+            service HelloService {
+                operations: [SayHello],
+                version: "1"
+            }
 
-        operation SayHello {
-            input: IdempotentInput
-        }
+            operation SayHello {
+                input: IdempotentInput
+            }
 
-        structure IdempotentInput {
-            $trait
-            tok: String
-        }
+            structure IdempotentInput {
+                $trait
+                tok: String
+            }
         """.asSmithyModel()
 
         val withToken = model("@idempotencyToken")
@@ -96,12 +96,13 @@ internal class ServiceConfigGeneratorTest {
         project.withModule(RustModule.Config) {
             sut.render(it)
             it.unitTest(
+                "set_config_fields",
                 """
                 let mut builder = Config::builder();
                 builder.config_field = Some(99);
                 let config = builder.build();
                 assert_eq!(config.config_field, 99);
-            """
+                """
             )
         }
         project.compileAndTest()

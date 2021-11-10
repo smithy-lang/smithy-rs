@@ -37,6 +37,8 @@ pre-commit install
      * `./gradlew :aws:sdk:assemble`: Generate (but do not test / compile etc.) a fresh SDK into `sdk/build/aws-sdk`
      * `./gradlew :aws:sdk:test`: Generate & run all tests for a fresh SDK
      * `./gradlew :aws:sdk:{cargoCheck, cargoTest, cargoDocs, cargoClippy}`: Generate & run specified cargo command.
-* `codegen`: Whitelabel Smithy code generation
-* `codegen-test`: Smithy protocol test generation & integration tests for Smithy whitelabel code
+* `codegen`: Whitelabel Smithy client code generation
+* `codegen-test`: Smithy protocol test generation & integration tests for Smithy client whitelabel code
 * [`design`](design): Design documentation. See the [design/README.md](design/README.md) for details about building / viewing.
+* `codegen-server`: Whitelabel Smithy server code generation
+* `codegen-server-test`: Smithy protocol test generation & integration tests for Smithy server whitelabel code

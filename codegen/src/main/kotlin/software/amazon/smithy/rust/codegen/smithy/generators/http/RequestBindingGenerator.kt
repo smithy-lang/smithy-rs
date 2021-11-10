@@ -197,7 +197,7 @@ class RequestBindingGenerator(
                     builder = builder.header(header_name, header_value);
                 }
 
-            """,
+                """,
                 "build_error" to runtimeConfig.operationBuildError()
             )
         }
@@ -232,7 +232,7 @@ class RequestBindingGenerator(
                         }, err)}
                         })?;
                         builder = builder.header(${httpBinding.locationName.dq()}, header_value);
-                    """,
+                        """,
                         "build_error" to runtimeConfig.operationBuildError()
                     )
                 }
@@ -365,7 +365,7 @@ class RequestBindingGenerator(
                     listForEach(outerTarget, field) { innerField, targetId ->
                         val target = model.expectShape(targetId)
                         rust(
-                            "query.push_kv(${param.locationName.dq()}, &${
+                            "query.push_kv(${param.locationName.dq()}, ${
                             paramFmtFun(writer, target, memberShape, innerField)
                             });"
                         )
@@ -383,14 +383,14 @@ class RequestBindingGenerator(
         return when {
             target.isStringShape -> {
                 val func = writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_string"))
-                "$func(&$targetName)"
+                "&$func(&$targetName)"
             }
             target.isTimestampShape -> {
                 val timestampFormat =
                     index.determineTimestampFormat(member, HttpBinding.Location.QUERY, defaultTimestampFormat)
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
                 val func = writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_timestamp"))
-                "$func($targetName, ${writer.format(timestampFormatType)})"
+                "&$func($targetName, ${writer.format(timestampFormatType)})"
             }
             target.isListShape || target.isMemberShape -> {
                 throw IllegalArgumentException("lists should be handled at a higher level")
@@ -426,7 +426,7 @@ class RequestBindingGenerator(
                     index.determineTimestampFormat(member, HttpBinding.Location.LABEL, defaultTimestampFormat)
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
                 val func = format(RuntimeType.LabelFormat(runtimeConfig, "fmt_timestamp"))
-                rust("let $outputVar = $func(&$input, ${format(timestampFormatType)});")
+                rust("let $outputVar = $func($input, ${format(timestampFormatType)});")
             }
             else -> {
                 rust(
@@ -437,9 +437,9 @@ class RequestBindingGenerator(
         }
         rust(
             """
-                if $outputVar.is_empty() {
-                    return Err(${buildError()})
-                }
+            if $outputVar.is_empty() {
+                return Err(${buildError()})
+            }
             """
         )
     }

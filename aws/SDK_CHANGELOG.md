@@ -1,15 +1,34 @@
 vNext (Month Day, Year)
 =======================
+- Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
+- - :tada: Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request.
+
+v0.0.24-alpha (November 9th, 2021)
+==================================
+**Breaking Changes**
+- Members named `builder` on model structs were renamed to `builder_value` so that their accessors don't conflict with the existing `builder()` methods (smithy-rs#842)
+
+**New this week**
+- Fix epoch seconds date-time parsing bug in `aws-smithy-types` (smithy-rs#834)
+- Omit trailing zeros from fraction when formatting HTTP dates in `aws-smithy-types` (smithy-rs#834)
+- Moved examples into repository root (aws-sdk-rust#181, smithy-rs#843)
+- Model structs now have accessor methods for their members. We recommend updating code to use accessors instead of public fields. A future release will deprecate the public fields before they are made private. (smithy-rs#842)
+- :bug: Fix bug that caused signing to fail for requests where the body length was <=9. (smithy-rs#845)
+
+v0.0.23-alpha (November 3rd, 2021)
+==================================
 **New this week**
 - :tada: Add support for AWS Glacier (smithy-rs#801)
+- :tada: Add support for AWS Panorama
 - :bug: Fix `native-tls` feature in `aws-config` (aws-sdk-rust#265, smithy-rs#803)
 - Add example to aws-sig-auth for generating an IAM Token for RDS (smithy-rs#811, aws-sdk-rust#147)
 - :bug: `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
-- :tada: Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request.
+- :bug: S3 request metadata signing now correctly trims headers fixing [problems like this](https://github.com/awslabs/aws-sdk-rust/issues/248) (smithy-rs#761)
+- All unions (eg. `dynamodb::model::AttributeValue`) now include an additional `Unknown` variant. These support cases where a new union variant has been added on the server but the client has not been updated.
+- :bug: Fix generated docs on unions like `dynamodb::AttributeValue`. (smithy-rs#826)
 
 **Breaking Changes**
 - `<operation>.make_operation(&config)` is now an `async` function for all operations. Code should be updated to call `.await`. This will only impact users using the low-level API. (smithy-rs#797)
-- :bug: S3 request metadata signing now correctly trims headers fixing [problems like this](https://github.com/awslabs/aws-sdk-rust/issues/248) (smithy-rs#761)
 
 v0.0.22-alpha (October 20th, 2021)
 ==================================

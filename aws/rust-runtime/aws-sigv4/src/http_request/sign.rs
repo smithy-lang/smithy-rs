@@ -153,6 +153,7 @@ pub fn sign<'a>(
     request: SignableRequest<'a>,
     params: &'a SigningParams<'a>,
 ) -> Result<SigningOutput<SigningInstructions>, Error> {
+    tracing::trace!(request = ?request, params = ?params, "signing request");
     match params.settings.signature_location {
         SignatureLocation::Headers => {
             let (signing_headers, signature) =
@@ -184,17 +185,17 @@ fn calculate_signing_params<'a>(
     let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
     let sts = StringToSign::new(
         params.date_time,
-        &params.region,
-        &params.service_name,
+        params.region,
+        params.service_name,
         encoded_creq,
     );
     let signing_key = generate_signing_key(
-        &params.secret_key,
+        params.secret_key,
         params.date_time.date(),
-        &params.region,
-        &params.service_name,
+        params.region,
+        params.service_name,
     );
-    let signature = calculate_signature(signing_key, &sts.to_string().as_bytes());
+    let signature = calculate_signature(signing_key, sts.to_string().as_bytes());
 
     let values = creq.values.into_query_params().expect("signing with query");
     let mut signing_params = vec![
@@ -247,7 +248,7 @@ fn calculate_signing_headers<'a>(
         params.region,
         params.service_name,
     );
-    let signature = calculate_signature(signing_key, &sts.to_string().as_bytes());
+    let signature = calculate_signature(signing_key, sts.to_string().as_bytes());
 
     // Step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
     let values = creq.values.as_headers().expect("signing with headers");

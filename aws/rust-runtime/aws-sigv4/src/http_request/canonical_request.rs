@@ -82,7 +82,7 @@ impl<'a> SignatureValues<'a> {
 
     pub(super) fn as_headers(&self) -> Option<&HeaderValues<'_>> {
         match self {
-            SignatureValues::Headers(values) => Some(&values),
+            SignatureValues::Headers(values) => Some(values),
             _ => None,
         }
     }
@@ -194,14 +194,14 @@ impl<'a> CanonicalRequest<'a> {
             // Using append instead of insert means this will not clobber headers that have the same lowercased name
             canonical_headers.append(
                 HeaderName::from_str(&name.as_str().to_lowercase())?,
-                normalize_header_value(&value),
+                normalize_header_value(value),
             );
         }
 
         Self::insert_host_header(&mut canonical_headers, req.uri());
 
         if params.settings.signature_location == SignatureLocation::Headers {
-            Self::insert_date_header(&mut canonical_headers, &date_time);
+            Self::insert_date_header(&mut canonical_headers, date_time);
 
             if let Some(security_token) = params.security_token {
                 let mut sec_header = HeaderValue::from_str(security_token)?;
@@ -210,7 +210,7 @@ impl<'a> CanonicalRequest<'a> {
             }
 
             if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
-                let header = HeaderValue::from_str(&payload_hash)?;
+                let header = HeaderValue::from_str(payload_hash)?;
                 canonical_headers.insert(header::X_AMZ_CONTENT_SHA_256, header);
             }
         }
@@ -363,41 +363,10 @@ fn trim_all(text: &[u8]) -> Cow<'_, [u8]> {
 /// Removes excess spaces before and after a given byte string by returning a subset of those bytes.
 /// Will return an empty slice if a string is composed entirely of whitespace.
 fn trim_spaces_from_byte_string(bytes: &[u8]) -> &[u8] {
-    if bytes.is_empty() {
-        return bytes;
-    }
-
-    let mut starting_index = 0;
-
-    for i in 0..bytes.len() {
-        // If we get to the end of the array without hitting a non-whitespace char, return empty slice
-        if i == bytes.len() - 1 {
-            // This range equates to an empty slice
-            return &bytes[0..0];
-        // otherwise, skip over each instance of whitespace
-        } else if bytes[i] == b' ' {
-            continue;
-        }
-
-        // return the index of the first non-whitespace character
-        starting_index = i;
-        break;
-    }
-
-    // Now we do the same but in reverse
-    let mut ending_index = 0;
-    for i in (0..bytes.len()).rev() {
-        // skip over each instance of whitespace
-        if bytes[i] == b' ' {
-            continue;
-        }
-
-        // return the index of the first non-whitespace character
-        ending_index = i;
-        break;
-    }
-
-    &bytes[starting_index..=ending_index]
+    let starting_index = bytes.iter().position(|b| *b != b' ').unwrap_or(0);
+    let ending_offset = bytes.iter().rev().position(|b| *b != b' ').unwrap_or(0);
+    let ending_index = bytes.len() - ending_offset;
+    &bytes[starting_index..ending_index]
 }
 
 /// Works just like [trim_all] but acts on HeaderValues instead of bytes
@@ -454,7 +423,7 @@ impl PartialOrd for CanonicalHeaderName {
 
 impl Ord for CanonicalHeaderName {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.0.as_str().cmp(&other.0.as_str())
+        self.0.as_str().cmp(other.0.as_str())
     }
 }
 
@@ -508,7 +477,7 @@ impl<'a> TryFrom<&'a str> for StringToSign<'a> {
     type Error = Error;
     fn try_from(s: &'a str) -> Result<Self, Self::Error> {
         let lines = s.lines().collect::<Vec<&str>>();
-        let date = parse_date_time(&lines[1])?;
+        let date = parse_date_time(lines[1])?;
         let scope: SigningScope<'_> = TryFrom::try_from(lines[2])?;
         let hashed_creq = &lines[3];
 
@@ -757,6 +726,11 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
+    #[test]
+    fn trim_spaces_works_on_single_characters() {
+        assert_eq!(trim_all(b"2").as_ref(), b"2");
+    }
+
     proptest! {
         #[test]
         fn test_trim_all_doesnt_elongate_strings(s in ".*") {
@@ -770,6 +744,11 @@ mod tests {
         #[test]
         fn test_normalize_header_value_doesnt_panic(v in (".*").prop_filter_map("Must be a valid HeaderValue", |v| http::HeaderValue::from_maybe_shared(v).ok())) {
             let _ = normalize_header_value(&v);
+        }
+
+        #[test]
+        fn test_trim_all_does_nothing_when_there_are_no_spaces(s in "[^ ]*") {
+            assert_eq!(trim_all(s.as_bytes()).as_ref(), s.as_bytes());
         }
     }
 }
