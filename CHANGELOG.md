@@ -1,5 +1,6 @@
 vNext (Month Day, Year)
 =======================
+- Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
 
 v0.27.0-alpha.2 (November 9th, 2021)
 =======================
@@ -9,7 +10,6 @@ v0.27.0-alpha.2 (November 9th, 2021)
 
 **New this week**
 
-- Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
 - Fix epoch seconds date-time parsing bug in `aws-smithy-types` (smithy-rs#834)
 - Omit trailing zeros from fraction when formatting HTTP dates in `aws-smithy-types` (smithy-rs#834)
 - Generated structs now have accessor methods for their members (smithy-rs#842)
