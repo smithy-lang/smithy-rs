@@ -3,7 +3,7 @@ vNext (Month Day, Year)
 
 **Breaking Changes**
 
-Several breaking changes around `aws_smithy_types::Instant` were introduced by smithy-rs#TODO:
+Several breaking changes around `aws_smithy_types::Instant` were introduced by smithy-rs#849:
 - `aws_smithy_types::Instant` from was renamed to `DateTime` to avoid confusion with the standard library's monotonically nondecreasing `Instant` type.
 - `DateParseError` in `aws_smithy_types` has been renamed to `DateTimeParseError` to match the type that's being parsed.
 - The `chrono-conversions` feature and associated functions have been moved to the `aws-smithy-types-convert` crate.
@@ -49,7 +49,7 @@ Several breaking changes around `aws_smithy_types::Instant` were introduced by s
 - The `DateTime::fmt` method is now fallible and fails when a `DateTime`'s value is outside what can be represented by the desired date format.
 
 **New this week**
-- Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#TODO)
+- Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#849)
 
 v0.27.0-alpha.2 (November 9th, 2021)
 =======================
