@@ -12,7 +12,7 @@ use aws_smithy_types::DateTime;
 use std::error::Error as StdError;
 use std::fmt;
 
-/// Conversion erro/Insta
+/// Conversion error
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum Error {
@@ -44,7 +44,7 @@ impl fmt::Display for Error {
     doc = r##"
 # Example with `time`
 
-Make sure your *Cargo.toml* enables the `convert-time` feature:
+Make sure your **Cargo.toml** enables the `convert-time` feature:
 ```toml
 [dependencies]
 aws-smithy-types-convert = { version = "VERSION", features = ["convert-time"] }
@@ -69,7 +69,7 @@ let date_time: DateTime  = DateTime::from_time(offset_date_time);
     doc = r##"
 # Example with `chrono`
 
-Make sure your *Cargo.toml* enables the `convert-chrono` feature:
+Make sure your **Cargo.toml** enables the `convert-chrono` feature:
 ```toml
 [dependencies]
 aws-smithy-types-convert = { version = "VERSION", features = ["convert-chrono"] }

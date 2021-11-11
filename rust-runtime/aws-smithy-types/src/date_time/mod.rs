@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-//! DateTime value for representing Smithy timestamps.
+//! DateTime type for representing Smithy timestamps.
 
 use num_integer::div_mod_floor;
 use num_integer::Integer;
