@@ -1,5 +1,7 @@
 vNext (Month Day, Year)
 =======================
+
+**TODO Next Release:**
 - Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
 
 **Breaking Changes**
@@ -52,6 +54,13 @@ Several breaking changes around `aws_smithy_types::Instant` were introduced by s
 
 **New this week**
 - Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#849)
+
+v0.28.0-alpha (November 11th, 2021)
+===================================
+
+No changes since last release except for version bumping since older versions
+of the AWS SDK were failing to compile with the `0.27.0-alpha.2` version chosen
+for the previous release.
 
 v0.27.0-alpha.2 (November 9th, 2021)
 =======================
