@@ -1,6 +1,7 @@
 vNext (Month Day, Year)
 =======================
 - Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
+- Fix a small typo in tenets
 
 v0.28.0-alpha (November 11th, 2021)
 ===================================
