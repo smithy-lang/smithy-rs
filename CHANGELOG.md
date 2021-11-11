@@ -47,6 +47,7 @@ Several breaking changes around `aws_smithy_types::Instant` were introduced by s
   - `Instant::epoch_subsecond_nanos` -> `DateTime::subsec_nanos`
   - `Instant::to_epoch_millis` -> `DateTime::to_millis`
 - The `DateTime::fmt` method is now fallible and fails when a `DateTime`'s value is outside what can be represented by the desired date format.
+- In `aws-sigv4`, the `SigningParams` builder's `date_time` setter was renamed to `time` and changed to take a `std::time::SystemTime` instead of a chrono's `DateTime<Utc>`.
 
 **New this week**
 - Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#849)

@@ -87,26 +87,26 @@ let date_time: DateTime = DateTime::from_chrono_utc(chrono_date_time);
 "##
 )]
 pub trait DateTimeExt {
-    /// Converts an [`DateTime`] to a [`chrono::DateTime`] with timezone UTC.
+    /// Converts a [`DateTime`] to a [`chrono::DateTime`] with timezone UTC.
     #[cfg(feature = "convert-chrono")]
     fn to_chrono_utc(&self) -> chrono::DateTime<chrono::Utc>;
 
-    /// Converts a [`chrono::DateTime`] with timezone UTC to an [`DateTime`].
+    /// Converts a [`chrono::DateTime`] with timezone UTC to a [`DateTime`].
     #[cfg(feature = "convert-chrono")]
     fn from_chrono_utc(time: chrono::DateTime<chrono::Utc>) -> DateTime;
 
-    /// Converts a [`chrono::DateTime`] with an offset timezone to an [`DateTime`].
+    /// Converts a [`chrono::DateTime`] with an offset timezone to a [`DateTime`].
     #[cfg(feature = "convert-chrono")]
     fn from_chrono_fixed(time: chrono::DateTime<chrono::FixedOffset>) -> DateTime;
 
-    /// Converts an [`DateTime`] to a [`time::OffsetDateTime`].
+    /// Converts a [`DateTime`] to a [`time::OffsetDateTime`].
     ///
     /// Returns an [`Error::OutOfRange`] if the time is after
     /// `9999-12-31T23:59:59.999Z` or before `-9999-01-01T00:00:00.000Z`.
     #[cfg(feature = "convert-time")]
     fn to_time(&self) -> Result<time::OffsetDateTime, Error>;
 
-    /// Converts a [`time::OffsetDateTime`] to an [`DateTime`].
+    /// Converts a [`time::OffsetDateTime`] to a [`DateTime`].
     #[cfg(feature = "convert-time")]
     fn from_time(time: time::OffsetDateTime) -> DateTime;
 }

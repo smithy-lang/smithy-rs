@@ -68,7 +68,7 @@ pub(crate) mod epoch_seconds {
     use crate::DateTime;
     use std::str::FromStr;
 
-    /// Formats an `DateTime` into the Smithy epoch seconds date-time format.
+    /// Formats a `DateTime` into the Smithy epoch seconds date-time format.
     pub(crate) fn format(date_time: &DateTime) -> String {
         if date_time.subsecond_nanos == 0 {
             format!("{}", date_time.seconds)
@@ -79,7 +79,7 @@ pub(crate) mod epoch_seconds {
         }
     }
 
-    /// Parses the Smithy epoch seconds date-time format into an `DateTime`.
+    /// Parses the Smithy epoch seconds date-time format into a `DateTime`.
     pub(crate) fn parse(value: &str) -> Result<DateTime, DateTimeParseError> {
         let mut parts = value.splitn(2, '.');
         let (mut whole, mut decimal) = (0i64, 0u32);
@@ -120,7 +120,7 @@ pub(crate) mod http_date {
     // - Removed use of unsafe
     // - Add serialization and deserialization of subsecond nanos
     //
-    /// Format an `DateTime` in the HTTP date format (imf-fixdate) with added support for subsecond precision
+    /// Format a `DateTime` in the HTTP date format (imf-fixdate) with added support for subsecond precision
     ///
     /// Example: "Mon, 16 Dec 2019 23:48:18 GMT"
     ///
@@ -232,7 +232,7 @@ pub(crate) mod http_date {
         Ok(out)
     }
 
-    /// Parse an IMF-fixdate formatted date into an DateTime
+    /// Parse an IMF-fixdate formatted date into a DateTime
     ///
     /// This function has a few caveats:
     /// 1. It DOES NOT support the "deprecated" formats supported by HTTP date
@@ -391,7 +391,7 @@ pub(crate) mod rfc3339 {
         Ok((parse(head)?, &rest))
     }
 
-    /// Format an [DateTime] in the RFC-3339 date format
+    /// Format a [DateTime] in the RFC-3339 date format
     pub(crate) fn format(date_time: &DateTime) -> Result<String, DateTimeFormatError> {
         use std::fmt::Write;
         fn out_of_range<E: std::fmt::Display>(cause: E) -> DateTimeFormatError {

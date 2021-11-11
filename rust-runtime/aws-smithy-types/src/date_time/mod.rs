@@ -55,7 +55,7 @@ pub struct DateTime {
 /* ANCHOR_END: date_time */
 
 impl DateTime {
-    /// Creates an `DateTime` from a number of seconds since the Unix epoch.
+    /// Creates a `DateTime` from a number of seconds since the Unix epoch.
     pub fn from_secs(epoch_seconds: i64) -> Self {
         DateTime {
             seconds: epoch_seconds,
@@ -63,17 +63,17 @@ impl DateTime {
         }
     }
 
-    /// Converts number of milliseconds since the Unix epoch into an `DateTime`.
+    /// Creates a `DateTime` from a number of milliseconds since the Unix epoch.
     pub fn from_millis(epoch_millis: i64) -> DateTime {
         let (seconds, millis) = div_mod_floor(epoch_millis, MILLIS_PER_SECOND);
         DateTime::from_secs_and_nanos(seconds, millis as u32 * NANOS_PER_MILLI)
     }
 
-    /// Creates an `DateTime` from a number of nanoseconds since the Unix epoch.
+    /// Creates a `DateTime` from a number of nanoseconds since the Unix epoch.
     pub fn from_nanos(epoch_nanos: i128) -> Result<Self, ConversionError> {
         let (seconds, subsecond_nanos) = epoch_nanos.div_mod_floor(&NANOS_PER_SECOND);
         let seconds = i64::try_from(seconds).map_err(|_| {
-            ConversionError("given epoch nanos are too large to fit into an DateTime")
+            ConversionError("given epoch nanos are too large to fit into a DateTime")
         })?;
         let subsecond_nanos = subsecond_nanos as u32; // safe cast because of the modulus
         Ok(DateTime {
@@ -93,7 +93,7 @@ impl DateTime {
         }
     }
 
-    /// Creates an `DateTime` from a number of seconds and a fractional second since the Unix epoch.
+    /// Creates a `DateTime` from a number of seconds and a fractional second since the Unix epoch.
     ///
     /// # Example
     /// ```
@@ -108,7 +108,7 @@ impl DateTime {
         DateTime::from_secs_and_nanos(epoch_seconds, subsecond_nanos)
     }
 
-    /// Creates an `DateTime` from a number of seconds and sub-second nanos since the Unix epoch.
+    /// Creates a `DateTime` from a number of seconds and sub-second nanos since the Unix epoch.
     ///
     /// # Example
     /// ```
@@ -135,7 +135,7 @@ impl DateTime {
         self.seconds as f64 + self.subsecond_nanos as f64 / 1_000_000_000_f64
     }
 
-    /// Creates an `DateTime` from an `f64` representing the number of seconds since the Unix epoch.
+    /// Creates a `DateTime` from an `f64` representing the number of seconds since the Unix epoch.
     ///
     /// # Example
     /// ```
@@ -151,7 +151,7 @@ impl DateTime {
         DateTime::from_fractional_secs(seconds, rem)
     }
 
-    /// Parses an `DateTime` from a string using the given `format`.
+    /// Parses a `DateTime` from a string using the given `format`.
     pub fn from_str(s: &str, format: Format) -> Result<Self, DateTimeParseError> {
         match format {
             Format::DateTime => format::rfc3339::parse(s),
@@ -299,7 +299,7 @@ impl From<SystemTime> for DateTime {
     }
 }
 
-/// Failure to convert an `DateTime` to or from another type.
+/// Failure to convert a `DateTime` to or from another type.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct ConversionError(&'static str);
@@ -312,7 +312,7 @@ impl fmt::Display for ConversionError {
     }
 }
 
-/// Formats for representing an `DateTime` in the Smithy protocols.
+/// Formats for representing a `DateTime` in the Smithy protocols.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Format {
     /// RFC-3339 Date Time.
