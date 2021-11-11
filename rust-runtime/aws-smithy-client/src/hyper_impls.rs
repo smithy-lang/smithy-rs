@@ -122,6 +122,24 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 
 #[derive(Default, Debug)]
 /// Builder for [`HyperAdapter`]
+///
+/// Unlike a Smithy client, the [`tower::Service`] inside a [`HyperAdapter`] is actually a service that
+/// accepts a `Uri` and returns a TCP stream. Two default implementations of this are provided, one
+/// that encrypts the stream with `rustls`, the other that encrypts the stream with `native-tls`.
+///
+/// # Examples
+/// Construct a HyperAdapter with the default HTTP implementation (rustls). This can be useful when you want to share a Hyper connector
+/// between multiple Smithy clients.
+///
+/// ```rust
+/// use tower::layer::util::Identity;
+/// use aws_smithy_client::{conns, hyper_ext};
+/// use aws_smithy_client::erase::DynConnector;
+/// let hyper_connector = hyper_ext::Adapter::builder().build(conns::https());
+/// // this client can then be used when constructing a Smithy Client
+/// // NOTE: in real usage, you will almost certainly want a real middleware implementation
+/// let client = aws_smithy_client::Client::<DynConnector, Identity>::new(DynConnector::new(hyper_connector));
+/// ```
 pub struct Builder {
     timeout: timeout::Settings,
     sleep: Option<Arc<dyn AsyncSleep>>,
