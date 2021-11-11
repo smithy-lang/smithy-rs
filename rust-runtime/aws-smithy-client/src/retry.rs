@@ -32,7 +32,10 @@ use tracing::Instrument;
 /// Implementors are essentially "policy factories" that can produce a new instance of a retry
 /// policy mechanism for each request, which allows both shared global state _and_ per-request
 /// local state.
-pub trait NewRequestPolicy {
+pub trait NewRequestPolicy
+where
+    Self::Policy: Send + Sync,
+{
     /// The type of the per-request policy mechanism.
     type Policy;
 
@@ -292,7 +295,7 @@ where
     Handler: Clone,
     R: ClassifyResponse<SdkSuccess<T>, SdkError<E>>,
 {
-    type Future = Pin<Box<dyn Future<Output = Self> + Send>>;
+    type Future = Pin<Box<dyn Future<Output = Self> + Send + Sync>>;
 
     fn retry(
         &self,
@@ -321,7 +324,7 @@ where
     }
 }
 
-fn check_send_sync<T: Send>(t: T) -> T {
+fn check_send_sync<T: Send + Sync>(t: T) -> T {
     t
 }
 

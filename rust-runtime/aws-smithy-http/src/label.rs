@@ -15,7 +15,7 @@ const GREEDY: &AsciiSet = &BASE_SET.remove(b'/');
 
 pub fn fmt_string<T: AsRef<str>>(t: T, greedy: bool) -> String {
     let uri_set = if greedy { GREEDY } else { BASE_SET };
-    percent_encoding::utf8_percent_encode(t.as_ref(), &uri_set).to_string()
+    percent_encoding::utf8_percent_encode(t.as_ref(), uri_set).to_string()
 }
 
 pub fn fmt_timestamp(t: &DateTime, format: Format) -> Result<String, DateTimeFormatError> {

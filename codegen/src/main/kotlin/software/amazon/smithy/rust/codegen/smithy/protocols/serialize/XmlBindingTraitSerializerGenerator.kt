@@ -127,7 +127,7 @@ class XmlBindingTraitSerializerGenerator(
                         """,
                         *codegenScope
                     )
-                    serializeStructure(inputShape, xmlMembers, Ctx.Element("root", "&input"))
+                    serializeStructure(inputShape, xmlMembers, Ctx.Element("root", "input"))
                 }
                 rustTemplate("Ok(#{SdkBody}::from(out))", *codegenScope)
             }
@@ -165,9 +165,9 @@ class XmlBindingTraitSerializerGenerator(
                         is StructureShape -> serializeStructure(
                             target,
                             XmlMemberIndex.fromMembers(target.members().toList()),
-                            Ctx.Element("root", "&input")
+                            Ctx.Element("root", "input")
                         )
-                        is UnionShape -> serializeUnion(target, Ctx.Element("root", "&input"))
+                        is UnionShape -> serializeUnion(target, Ctx.Element("root", "input"))
                         else -> throw IllegalStateException("xml payloadSerializer only supports structs and unions")
                     }
                 }
@@ -314,7 +314,7 @@ class XmlBindingTraitSerializerGenerator(
                 rust("Ok(())")
             }
         }
-        rust("#T(&${ctx.input}, ${ctx.elementWriter})?", structureSerializer)
+        rust("#T(${ctx.input}, ${ctx.elementWriter})?", structureSerializer)
     }
 
     private fun RustWriter.serializeUnion(unionShape: UnionShape, ctx: Ctx.Element) {
@@ -347,7 +347,7 @@ class XmlBindingTraitSerializerGenerator(
                 rust("Ok(())")
             }
         }
-        rust("#T(&${ctx.input}, ${ctx.elementWriter})?", structureSerializer)
+        rust("#T(${ctx.input}, ${ctx.elementWriter})?", structureSerializer)
     }
 
     private fun RustWriter.serializeList(listShape: CollectionShape, ctx: Ctx.Scope) {

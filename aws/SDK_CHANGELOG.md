@@ -1,5 +1,6 @@
 vNext (Month Day, Year)
 =======================
+- Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
 
 **Breaking Changes**
 

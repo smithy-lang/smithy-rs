@@ -230,9 +230,9 @@ impl DateTime {
     /// Returns an error if the given `DateTime` cannot be represented by the desired format.
     pub fn fmt(&self, format: Format) -> Result<String, DateTimeFormatError> {
         match format {
-            Format::DateTime => format::rfc3339::format(&self),
-            Format::EpochSeconds => Ok(format::epoch_seconds::format(&self)),
-            Format::HttpDate => format::http_date::format(&self),
+            Format::DateTime => format::rfc3339::format(self),
+            Format::EpochSeconds => Ok(format::epoch_seconds::format(self)),
+            Format::HttpDate => format::http_date::format(self),
         }
     }
 }
