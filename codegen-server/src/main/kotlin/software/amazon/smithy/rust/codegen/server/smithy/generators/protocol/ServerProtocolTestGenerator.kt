@@ -201,7 +201,7 @@ class ServerProtocolTestGenerator(
         if (protocolSupport.requestBodyDeserialization) {
             // "If no request body is defined, then no assertions are made about the body of the message."
             httpRequestTestCase.body.orNull()?.also { body ->
-                checkBody(this, body, operationSymbol.name, httpRequestTestCase)
+                checkBody(this, body, httpRequestTestCase)
             }
         }
 
