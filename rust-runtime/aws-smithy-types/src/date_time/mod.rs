@@ -328,7 +328,7 @@ mod test {
     use crate::date_time::Format;
     use crate::DateTime;
     use std::convert::TryFrom;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::SystemTime;
     use time::format_description::well_known::Rfc3339;
     use time::OffsetDateTime;
 
