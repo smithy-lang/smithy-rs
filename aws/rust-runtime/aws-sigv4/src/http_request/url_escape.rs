@@ -33,5 +33,5 @@ const BASE_SET: &AsciiSet = &CONTROLS
     .add(b'%');
 
 pub(super) fn percent_encode(value: &str) -> String {
-    percent_encoding::percent_encode(&value.as_bytes(), BASE_SET).to_string()
+    percent_encoding::percent_encode(value.as_bytes(), BASE_SET).to_string()
 }

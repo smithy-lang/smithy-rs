@@ -1,5 +1,6 @@
 vNext (Month Day, Year)
 =======================
+- Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
 
 v0.27.0-alpha.2 (November 9th, 2021)
 =======================

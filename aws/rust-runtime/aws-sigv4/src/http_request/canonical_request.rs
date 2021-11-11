@@ -82,7 +82,7 @@ impl<'a> SignatureValues<'a> {
 
     pub(super) fn as_headers(&self) -> Option<&HeaderValues<'_>> {
         match self {
-            SignatureValues::Headers(values) => Some(&values),
+            SignatureValues::Headers(values) => Some(values),
             _ => None,
         }
     }
@@ -194,14 +194,14 @@ impl<'a> CanonicalRequest<'a> {
             // Using append instead of insert means this will not clobber headers that have the same lowercased name
             canonical_headers.append(
                 HeaderName::from_str(&name.as_str().to_lowercase())?,
-                normalize_header_value(&value),
+                normalize_header_value(value),
             );
         }
 
         Self::insert_host_header(&mut canonical_headers, req.uri());
 
         if params.settings.signature_location == SignatureLocation::Headers {
-            Self::insert_date_header(&mut canonical_headers, &date_time);
+            Self::insert_date_header(&mut canonical_headers, date_time);
 
             if let Some(security_token) = params.security_token {
                 let mut sec_header = HeaderValue::from_str(security_token)?;
@@ -210,7 +210,7 @@ impl<'a> CanonicalRequest<'a> {
             }
 
             if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
-                let header = HeaderValue::from_str(&payload_hash)?;
+                let header = HeaderValue::from_str(payload_hash)?;
                 canonical_headers.insert(header::X_AMZ_CONTENT_SHA_256, header);
             }
         }
@@ -423,7 +423,7 @@ impl PartialOrd for CanonicalHeaderName {
 
 impl Ord for CanonicalHeaderName {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.0.as_str().cmp(&other.0.as_str())
+        self.0.as_str().cmp(other.0.as_str())
     }
 }
 
@@ -477,7 +477,7 @@ impl<'a> TryFrom<&'a str> for StringToSign<'a> {
     type Error = Error;
     fn try_from(s: &'a str) -> Result<Self, Self::Error> {
         let lines = s.lines().collect::<Vec<&str>>();
-        let date = parse_date_time(&lines[1])?;
+        let date = parse_date_time(lines[1])?;
         let scope: SigningScope<'_> = TryFrom::try_from(lines[2])?;
         let hashed_creq = &lines[3];
 

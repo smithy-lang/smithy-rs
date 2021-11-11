@@ -331,7 +331,7 @@ pub(crate) mod rfc3339 {
     pub(crate) fn read(s: &str) -> Result<(Instant, &str), DateParseError> {
         let delim = s.find('Z').map(|idx| idx + 1).unwrap_or_else(|| s.len());
         let (head, rest) = s.split_at(delim);
-        Ok((parse(head)?, &rest))
+        Ok((parse(head)?, rest))
     }
 
     /// Format an [Instant] in the RFC-3339 date format

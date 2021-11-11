@@ -114,7 +114,7 @@ fn read_many<T>(
     for header in values {
         let mut header = header.as_bytes();
         while !header.is_empty() {
-            let (v, next) = read_one(&header, &f)?;
+            let (v, next) = read_one(header, &f)?;
             out.push(v);
             header = next;
         }
@@ -183,7 +183,7 @@ fn split_at_delim(s: &[u8]) -> (&[u8], &[u8]) {
 
 fn then_delim(s: &[u8]) -> Result<&[u8], ParseError> {
     if s.is_empty() {
-        Ok(&s)
+        Ok(s)
     } else if s.starts_with(b",") {
         Ok(&s[1..])
     } else {
