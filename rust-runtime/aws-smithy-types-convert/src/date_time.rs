@@ -145,8 +145,11 @@ impl DateTimeExt for DateTime {
 
 #[cfg(all(test, any(feature = "convert-chrono", feature = "convert-time")))]
 mod test {
-    use super::{DateTimeExt, Error};
+    use super::DateTimeExt;
     use aws_smithy_types::date_time::{DateTime, Format};
+
+    #[cfg(feature = "convert-time")]
+    use super::Error;
 
     #[test]
     #[cfg(feature = "convert-chrono")]
