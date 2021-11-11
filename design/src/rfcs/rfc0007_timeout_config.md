@@ -5,29 +5,20 @@ RFC: Fine-grained timeout configuration
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
-It is not currently possible for users of the SDK to configure a client's maximum number of retry attempts. This RFC
-establishes a method for users to set the number of retries to attempt when calling a service and would allow users to
-disable retries entirely. This RFC would introduce breaking changes to the `retry` module of the `aws-smithy-client`
-crate.
+While it is currently possible for users to implement request timeouts by racing operation send futures against timeout futures, this RFC proposes a more ergonomic solution that would also enable users to set timeouts for things like TLS negotiation and "time to first byte".
 
 Terminology
 -----------
 
-There's a lot of terminology to define so I've broken it up into three sections.
+There's a lot of terminology to define, so I've broken it up into three sections.
 
 ### General terms
 
-- **Smithy Client**: A `aws_smithy_client::Client<C, M, R>` struct that is responsible for gluing together the
-  connector, middleware, and retry policy. This is not generated and lives in the `aws-smithy-client` crate.
-- **Fluent Client**: A code-generated `Client<C, M, R>` that has methods for each service operation on it. A fluent
-  builder is generated alongside it to make construction easier.
-- **AWS Client**: A specialized Fluent Client that defaults to using a `DynConnector`, `AwsMiddleware`, and `Standard`
-  retry policy.
-- **Shared Config**: An `aws_types::Config` struct that is responsible for storing shared configuration data that is
-  used across all services. This is not generated and lives in the `aws-types` crate.
-- **Service-specific Config**: A code-generated `Config` that has methods for setting service-specific configuration.
-  Each `Config` is defined in the `config` module of its parent service. For example, the S3-specific config struct
-  is `use`able from `aws_sdk_s3::config::Config` and re-exported as `aws_sdk_s3::Config`. In this case, "service" refers to an AWS offering like S3.
+- **Smithy Client**: A `aws_smithy_client::Client<C, M, R>` struct that is responsible for gluing together the connector, middleware, and retry policy. This is not generated and lives in the `aws-smithy-client` crate.
+- **Fluent Client**: A code-generated `Client<C, M, R>` that has methods for each service operation on it. A fluent builder is generated alongside it to make construction easier.
+- **AWS Client**: A specialized Fluent Client that defaults to using a `DynConnector`, `AwsMiddleware`, and `Standard` retry policy.
+- **Shared Config**: An `aws_types::Config` struct that is responsible for storing shared configuration data that is used across all services. This is not generated and lives in the `aws-types` crate.
+- **Service-specific Config**: A code-generated `Config` that has methods for setting service-specific configuration. Each `Config` is defined in the `config` module of its parent service. For example, the S3-specific config struct  is `use`able from `aws_sdk_s3::config::Config` and re-exported as `aws_sdk_s3::Config`. In this case, "service" refers to an AWS offering like S3.
 
 ### HTTP stack terms
 
@@ -36,12 +27,13 @@ There's a lot of terminology to define so I've broken it up into three sections.
 - **Middleware**: a term with several meanings,
   - Generically speaking, middleware are similar to Services and Layers in that they modify requests and responses.
   - In the SDK, "Middleware" refers to a layer that can be wrapped around a `DispatchService`. In practice, this means that the resulting `Service` (and the inner service) must meet the bound `T: where T: Service<operation::Request, Response=operation::Response, Error=SendOperationError>`.
+    - _Note: This doesn't apply to the middlewares we use when generating presigned request because those don't wrap a `DispatchService`._
   - The most notable example of a Middleware is the [AwsMiddleware]. Other notable examples include [MapRequest], [AsyncMapRequest], and [ParseResponse].
 - **DispatchService**: The innermost part of a group of nested services. The Service that actually makes an HTTP call on behalf of a request. Responsible for parsing success and error responses.
 - **Connector**: a term with several meanings,
   - DynConnectors (a struct that implements [DynConnect]) are Services with their specific type erased so that we can do dynamic dispatch.
   - A term from `hyper` for any object that implements the [Connect] trait. Really just an alias for [tower_service::Service]. Sometimes referred to as a `Connection`.
-- **Stage**: A form of middleware that's not related to `tower`. These currently function as a way of transforming requests. We don't want to implement Timeouts as stages because we don't want to give them the ability to handle responses. This is because it would introduce lots of new complexity that we aren't yet ready to take on but this may change in the future.
+- **Stage**: A form of middleware that's not related to `tower`. These currently function as a way of transforming requests and don't have the ability to transform responses.
 - **Stack**: higher order abstraction over Layers defined in the [tower crate][tower::layer::util::Stack] e.g. Layers wrap services in one another and Stacks wrap layers within one another.
 
 ### Timeout terms
@@ -52,10 +44,9 @@ There's a lot of terminology to define so I've broken it up into three sections.
       a fresh connection will be use for a given request._
 - **TLS Negotiation Timeout**: A limit on the amount of time a TLS handshake takes from when the CLIENT HELLO message is
   sent to the time the client and server have fully negotiated ciphers and exchanged keys.
-    - _Note: Our HTTP client supports multiple TLS implementations. We'll likely have to implement this feature once per library._
 - **Time to First Byte Timeout**: _Sometimes referred to as a "read timeout."_ A limit on the amount of time an application takes to attempt to read the first byte over
   an established, open connection after write request.
-- **HTTP Request Timeout For A Single Request**: A limit on the amount of time it takes for the first byte to be sent over
+- **HTTP Request Timeout For A Single Attempt**: A limit on the amount of time it takes for the first byte to be sent over
   an established, open connection and when the last byte is received from the service.
 - **HTTP Request Timeout For Multiple Attempts**: This timeout acts like the previous timeout but constrains the total time
   it takes to make a request plus any retries.
@@ -156,6 +147,7 @@ impl<C, M, R> Client<C, M, R>
             Service<Operation<O, Retry>, Response=SdkSuccess<T>, Error=SdkError<E>> + Clone,
   {
     let connector = self.connector.clone();
+
     let mut svc = ServiceBuilder::new()
             // Create a new request-scoped policy
             .retry(self.retry_policy.new_request_policy())
@@ -165,18 +157,71 @@ impl<C, M, R> Client<C, M, R>
             .layer(&self.middleware)
             .layer(DispatchLayer::new())
             .service(connector);
+
     svc.ready().await?.call(input).await
   }
 }
 ```
 
-The Smithy Client creates a new service to handle each request it sends. Each service is constructed with the following features:
+The Smithy Client creates a new `Stack` of services to handle each request it sends. Specifically:
 
-- A method `retry` is used to pass in retry-related configuration such as the maximum number of times to attempt the request.
-- A Layer for transforming responses into operation-specific outputs or errors. The `O` generic parameter of `input` is what decides exactly how the transformation is implemented.
-- The middleware stack that was included during Client creation. In the case of the AWS SDK, this would be `AwsMiddleware`.
-- The `DispatchLayer`, a layer for transforming an `http::Request` into an `operation::Request`. It's also responsible for re-attaching the property bag from the Operation that triggered the request.
-- The innermost Service is a `DynConnector` wrapping a `hyper` client (which one depends on the TLS implementation that was chosen.)
+- A method `retry` is used set the retry handler. The configuration for this was set during creation of the `Client`.
+- `ParseResponseLayer` inserts a service for transforming responses into operation-specific outputs or errors. The `O` generic parameter of `input` is what decides exactly how the transformation is implemented.
+- A middleware stack that was included during `Client` creation is inserted into the stack. In the case of the AWS SDK, this would be `AwsMiddleware`.
+- `DispatchLayer` inserts a service for transforming an `http::Request` into an `operation::Request`. It's also responsible for re-attaching the property bag from the Operation that triggered the request.
+- The innermost `Service` is a `DynConnector` wrapping a `hyper` client (which one depends on the TLS implementation was enabled by cargo features.)
+
+The **HTTP Request Timeout For A Single Attempt** and **HTTP Request Timeout For Multiple Attempts** can be implemented at this level. The same `Layer` can be used to create both `TimeoutService`s. The `TimeoutLayer` would require two inputs:
+- `sleep_fn`: A runtime-specific implementation of `sleep`. The SDK is currently `tokio`-based and would default to `tokio::time::sleep` (this default is set in the `aws_smithy_async::rt::sleep` module.)
+- The duration of the timeout as a `std::time::Duration`
+
+The resulting code would look like this:
+
+```rust
+impl<C, M, R> Client<C, M, R>
+  where
+          C: bounds::SmithyConnector,
+          M: bounds::SmithyMiddleware<C>,
+          R: retry::NewRequestPolicy,
+{
+  // ...other methods omitted
+  pub async fn call_raw<O, T, E, Retry>(
+    &self,
+    input: Operation<O, Retry>,
+  ) -> Result<SdkSuccess<T>, SdkError<E>>
+    where
+            R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
+            bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
+            Service<Operation<O, Retry>, Response=SdkSuccess<T>, Error=SdkError<E>> + Clone,
+  {
+    let connector = self.connector.clone();
+    let sleep_fn = aws_smithy_async::rt::sleep::default_async_sleep();
+
+    let mut svc = ServiceBuilder::new()
+            .layer(TimeoutLayer::new(
+              sleep_fn,
+              self.timeout_config.api_call_timeout(),
+            ))
+            // Create a new request-scoped policy
+            .retry(self.retry_policy.new_request_policy())
+            .layer(TimeoutLayer::new(
+              sleep_fn,
+              self.timeout_config.api_call_attempt_timeout(),
+            ))
+            .layer(ParseResponseLayer::<O, Retry>::new())
+            // These layers can be considered as occurring in order. That is, first invoke the
+            // customer-provided middleware, then dispatch dispatch over the wire.
+            .layer(&self.middleware)
+            .layer(DispatchLayer::new())
+            .service(connector);
+
+    svc.ready().await?.call(input).await
+  }
+}
+```
+
+<!-- TODO where should this note live? -->
+_Note: Our HTTP client supports multiple TLS implementations. We'll likely have to implement this feature once per library._
 
 Timeouts will be implemented in the following places:
 
@@ -200,8 +245,10 @@ Changes are broken into to sections:
   - [ ] Add provider that fetches config from profile
 - [ ] Add `timeout` method to `aws_types::Config` for setting timeout configuration
 - [ ] Add `timeout` method to generated `Config`s too
-- [ ] Add method `timeout` to `ServiceBuilder` to handle timeouts for multiple-attempt requests
-- [ ] Add configurable timeout to `SmithyRetryPolicy` to handle timeouts for single-attempt requests
+- [ ] Create a generic `TimeoutService` and accompanying `Layer`
+  - [ ] `TimeoutLayer` should accept a `sleep` function so that it doesn't have a hard dependency on `tokio`
+- [ ] insert a `TimeoutLayer` before the `RetryPolicy` to handle timeouts for multiple-attempt requests
+- [ ] insert a `TimeoutLayer` after the `RetryPolicy` to handle timeouts for single-attempt requests
 - [ ] Add tests for timeout behavior
   - [ ] test multi-request timeout triggers after 3 slow retries
   - [ ] test single-request timeout triggers correctly
