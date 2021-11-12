@@ -26,7 +26,7 @@ use tower::Layer;
 #[non_exhaustive]
 pub struct Settings {
     connect_timeout: Option<Duration>,
-    http_read_timeout: Option<Duration>,
+    read_timeout: Option<Duration>,
     tls_negotiation_timeout: Option<Duration>,
 }
 
@@ -43,7 +43,7 @@ impl Settings {
 
     /// The configured HTTP-read timeout
     pub fn read(&self) -> Option<Duration> {
-        self.http_read_timeout
+        self.read_timeout
     }
 
     /// The configured TLS negotiation timeout
@@ -60,9 +60,9 @@ impl Settings {
     }
 
     /// Sets the read timeout
-    pub fn with_read_timeout(self, http_read_timeout: Duration) -> Self {
+    pub fn with_read_timeout(self, read_timeout: Duration) -> Self {
         Self {
-            http_read_timeout: Some(http_read_timeout),
+            read_timeout: Some(read_timeout),
             ..self
         }
     }

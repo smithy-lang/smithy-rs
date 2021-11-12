@@ -266,15 +266,15 @@ pub mod timeout_config {
             let conf = builder_from_env.merge_with(builder_from_profile).build();
 
             if conf.tls_negotiation_timeout().is_some() {
-                warn!("A TLS negotiation timeout was set but that feature is currently unimplemented so the setting will be ignored")
+                tracing::warn!("A TLS negotiation timeout was set but that feature is currently unimplemented so the setting will be ignored")
             }
 
             if conf.connect_timeout().is_some() {
-                warn!("A connect timeout was set but that feature is currently unimplemented so the setting will be ignored")
+                tracing::warn!("A connect timeout was set but that feature is currently unimplemented so the setting will be ignored")
             }
 
             if conf.read_timeout().is_some() {
-                warn!("A read timeout was set but that feature is currently unimplemented so the setting will be ignored")
+                tracing::warn!("A read timeout was set but that feature is currently unimplemented so the setting will be ignored")
             }
 
             conf

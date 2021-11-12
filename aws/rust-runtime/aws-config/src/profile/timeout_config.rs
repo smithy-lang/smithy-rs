@@ -132,15 +132,15 @@ impl ProfileFileTimeoutConfigProvider {
         let api_call_timeout =
             construct_timeout_from_profile_var(selected_profile, PROFILE_VAR_API_CALL_TIMEOUT)?;
 
-        let mut timeout_config_builder = TimeoutConfigBuilder::default();
-        timeout_config_builder
+        let mut builder = TimeoutConfigBuilder::new();
+        builder
             .set_connect_timeout(connect_timeout)
             .set_tls_negotiation_timeout(tls_negotiation_timeout)
-            .set_http_read_timeout(http_read_timeout)
+            .set_read_timeout(read_timeout)
             .set_api_call_attempt_timeout(api_call_attempt_timeout)
             .set_api_call_timeout(api_call_timeout);
 
-        Ok(timeout_config_builder)
+        Ok(builder)
     }
 }
 

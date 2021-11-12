@@ -52,7 +52,7 @@ impl EnvironmentVariableTimeoutConfigProvider {
         let tls_negotiation_timeout =
             construct_timeout_from_env_var(&self.env, ENV_VAR_TLS_NEGOTIATION_TIMEOUT)?
                 .map(Duration::from_secs_f32);
-        let http_read_timeout = construct_timeout_from_env_var(&self.env, ENV_VAR_READ_TIMEOUT)?
+        let read_timeout = construct_timeout_from_env_var(&self.env, ENV_VAR_READ_TIMEOUT)?
             .map(Duration::from_secs_f32);
         let api_call_attempt_timeout =
             construct_timeout_from_env_var(&self.env, ENV_VAR_API_CALL_ATTEMPT_TIMEOUT)?
@@ -60,15 +60,15 @@ impl EnvironmentVariableTimeoutConfigProvider {
         let api_call_timeout = construct_timeout_from_env_var(&self.env, ENV_VAR_API_CALL_TIMEOUT)?
             .map(Duration::from_secs_f32);
 
-        let mut timeout_config_builder = TimeoutConfigBuilder::default();
-        timeout_config_builder
+        let mut builder = TimeoutConfigBuilder::new();
+        builder
             .set_connect_timeout(connect_timeout)
             .set_tls_negotiation_timeout(tls_negotiation_timeout)
-            .set_http_read_timeout(http_read_timeout)
+            .set_read_timeout(read_timeout)
             .set_api_call_attempt_timeout(api_call_attempt_timeout)
             .set_api_call_timeout(api_call_timeout);
 
-        Ok(timeout_config_builder)
+        Ok(builder)
     }
 }
 
@@ -111,7 +111,7 @@ mod test {
         ENV_VAR_API_CALL_TIMEOUT, ENV_VAR_CONNECT_TIMEOUT, ENV_VAR_READ_TIMEOUT,
         ENV_VAR_TLS_NEGOTIATION_TIMEOUT, SET_BY,
     };
-    use aws_smithy_types::timeout::{TimeoutConfig, TimeoutConfigError};
+    use aws_smithy_types::timeout::{TimeoutConfigBuilder, TimeoutConfigError};
     use aws_types::os_shim_internal::Env;
     use std::time::Duration;
 
@@ -137,7 +137,7 @@ mod test {
                 .timeout_config_builder()
                 .unwrap()
                 .build(),
-            TimeoutConfig::builder()
+            TimeoutConfigBuilder::new()
                 .connect_timeout(Duration::from_secs_f32(8.0))
                 .build()
         );
@@ -166,7 +166,7 @@ mod test {
             .timeout_config_builder()
             .unwrap()
             .build(),
-            TimeoutConfig::builder()
+            TimeoutConfigBuilder::new()
                 .read_timeout(Duration::from_secs_f32(1.0))
                 .connect_timeout(Duration::from_secs_f32(2.0))
                 .tls_negotiation_timeout(Duration::from_secs_f32(3.0))

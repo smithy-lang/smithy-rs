@@ -15,13 +15,10 @@ use std::time::Duration;
 pub struct TimeoutConfig {
     connect_timeout: Option<Duration>,
     tls_negotiation_timeout: Option<Duration>,
-    http_read_timeout: Option<Duration>,
+    read_timeout: Option<Duration>,
     api_call_attempt_timeout: Option<Duration>,
     api_call_timeout: Option<Duration>,
 }
-
-// TODO is having a builder for `TimeoutConfig` useful when you can just call methods like `with_read_timeout`?
-//     What's our convention for things like this?
 
 impl TimeoutConfig {
     /// Create a new `TimeoutConfig` with no timeouts set
@@ -43,8 +40,8 @@ impl TimeoutConfig {
 
     /// A limit on the amount of time an application takes to attempt to read the first byte over an
     /// established, open connection after write request. A.K.A. the "time to first byte" timeout.
-    pub fn http_read_timeout(&self) -> Option<Duration> {
-        self.http_read_timeout
+    pub fn read_timeout(&self) -> Option<Duration> {
+        self.read_timeout
     }
 
     // TODO review this doc and try to improve the wording
@@ -78,8 +75,8 @@ impl TimeoutConfig {
     }
 
     /// Consume a [TimeoutConfig] to creat a new one, setting the read timeout
-    pub fn with_http_read_timeout(mut self, timeout: Duration) -> Self {
-        self.http_read_timeout = Some(timeout);
+    pub fn with_read_timeout(mut self, timeout: Duration) -> Self {
+        self.read_timeout = Some(timeout);
         self
     }
 
@@ -101,7 +98,7 @@ impl TimeoutConfig {
 pub struct TimeoutConfigBuilder {
     connect_timeout: Option<Duration>,
     tls_negotiation_timeout: Option<Duration>,
-    http_read_timeout: Option<Duration>,
+    read_timeout: Option<Duration>,
     api_call_attempt_timeout: Option<Duration>,
     api_call_timeout: Option<Duration>,
 }
@@ -146,16 +143,16 @@ impl TimeoutConfigBuilder {
 
     /// Sets the read timeout if `Some(f32)` is passed. Unsets the timeout when `None` is passed.
     /// Timeout must be a non-negative number.
-    pub fn set_http_read_timeout(&mut self, http_read_timeout: Option<Duration>) -> &mut Self {
-        self.http_read_timeout = http_read_timeout;
+    pub fn set_read_timeout(&mut self, read_timeout: Option<Duration>) -> &mut Self {
+        self.read_timeout = read_timeout;
         self
     }
 
     /// Sets a limit on the amount of time an application takes to attempt to read the first byte
     /// over an established, open connection after write request. A.K.A. time to first byte timeout.
     /// Timeout must be a non-negative number.
-    pub fn http_read_timeout(mut self, http_read_timeout: Duration) -> Self {
-        self.set_http_read_timeout(Some(http_read_timeout));
+    pub fn read_timeout(mut self, read_timeout: Duration) -> Self {
+        self.set_read_timeout(Some(read_timeout));
         self
     }
 
@@ -199,11 +196,11 @@ impl TimeoutConfigBuilder {
     /// ```rust
     /// # use std::time::Duration;
     /// # use aws_smithy_types::timeout::TimeoutConfigBuilder;
-    /// let a = TimeoutConfigBuilder::new().http_read_timeout(Duration::from_secs(2));
-    /// let b = TimeoutConfigBuilder::new().http_read_timeout(Duration::from_secs(10)).connect_timeout(Duration::from_secs(3));
+    /// let a = TimeoutConfigBuilder::new().read_timeout(Duration::from_secs(2));
+    /// let b = TimeoutConfigBuilder::new().read_timeout(Duration::from_secs(10)).connect_timeout(Duration::from_secs(3));
     /// let timeout_config = a.merge_with(b).build();
     /// // A's value take precedence over B's value
-    /// assert_eq!(timeout_config.http_read_timeout(), Duration::from_secs(2));
+    /// assert_eq!(timeout_config.read_timeout(), Duration::from_secs(2));
     /// // A never set a connect timeout so B's value was used
     /// assert_eq!(timeout_config.connect_timeout(), Duration::from_secs(3));
     /// ```
@@ -213,7 +210,7 @@ impl TimeoutConfigBuilder {
             tls_negotiation_timeout: self
                 .tls_negotiation_timeout
                 .or(other.tls_negotiation_timeout),
-            http_read_timeout: self.http_read_timeout.or(other.http_read_timeout),
+            read_timeout: self.read_timeout.or(other.read_timeout),
             api_call_attempt_timeout: self
                 .api_call_attempt_timeout
                 .or(other.api_call_attempt_timeout),
@@ -226,40 +223,12 @@ impl TimeoutConfigBuilder {
         TimeoutConfig {
             connect_timeout: self.connect_timeout,
             tls_negotiation_timeout: self.tls_negotiation_timeout,
-            http_read_timeout: self.http_read_timeout,
+            read_timeout: self.read_timeout,
             api_call_attempt_timeout: self.api_call_attempt_timeout,
             api_call_timeout: self.api_call_timeout,
         }
     }
 }
-
-// pub fn parse_timeout_duration(timeout: Option<&str>) -> Result<Duration, TimeoutConfigError> {
-//     match timeout {
-//         Some(timeout) => match timeout.parse::<f32>() {
-//             Ok(timeout) if timeout < 0.0 => Err(TimeoutConfigError::InvalidTimeout {
-//                 set_by: SET_BY.into(),
-//                 name: var.into(),
-//                 reason: "timeout must not be negative".into(),
-//             }),
-//             Ok(timeout) if timeout.is_nan() => Err(TimeoutConfigError::InvalidTimeout {
-//                 set_by: SET_BY.into(),
-//                 name: var.into(),
-//                 reason: "timeout must not be NaN".into(),
-//             }),
-//             Ok(timeout) if timeout.is_infinite() => Err(TimeoutConfigError::InvalidTimeout {
-//                 set_by: SET_BY.into(),
-//                 name: var.into(),
-//                 reason: "timeout must not be infinite".into(),
-//             }),
-//             Ok(timeout) => Ok(Some(timeout)),
-//             Err(_) => Err(TimeoutConfigError::CouldntParseTimeout {
-//                 set_by: SET_BY.into(),
-//                 name: var.into(),
-//             }),
-//         },
-//         None => Ok(None),
-//     }
-// }
 
 #[non_exhaustive]
 #[derive(Debug)]
@@ -321,20 +290,20 @@ mod tests {
 
         let self_builder = TimeoutConfigBuilder::new()
             .connect_timeout(one_second)
-            .http_read_timeout(one_second)
+            .read_timeout(one_second)
             .tls_negotiation_timeout(one_second)
             .api_call_timeout(one_second)
             .api_call_attempt_timeout(one_second);
         let other_builder = TimeoutConfigBuilder::new()
             .connect_timeout(two_seconds)
-            .http_read_timeout(two_seconds)
+            .read_timeout(two_seconds)
             .tls_negotiation_timeout(two_seconds)
             .api_call_timeout(two_seconds)
             .api_call_attempt_timeout(two_seconds);
         let timeout_config = self_builder.merge_with(other_builder).build();
 
         assert_eq!(timeout_config.connect_timeout(), Some(one_second));
-        assert_eq!(timeout_config.http_read_timeout(), Some(one_second));
+        assert_eq!(timeout_config.read_timeout(), Some(one_second));
         assert_eq!(timeout_config.tls_negotiation_timeout(), Some(one_second));
         assert_eq!(timeout_config.api_call_timeout(), Some(one_second));
         assert_eq!(timeout_config.api_call_attempt_timeout(), Some(one_second));

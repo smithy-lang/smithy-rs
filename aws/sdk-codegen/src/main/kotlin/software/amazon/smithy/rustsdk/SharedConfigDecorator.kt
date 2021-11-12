@@ -47,6 +47,7 @@ class SharedConfigDecorator : RustCodegenDecorator {
                         let mut builder = Builder::default();
                         builder = builder.region(input.region().cloned());
                         builder.set_retry_config(input.retry_config().cloned());
+                        builder.set_timeout_config(input.timeout_config().cloned());
                         builder.set_credentials_provider(input.credentials_provider().cloned());
                         builder
                     }

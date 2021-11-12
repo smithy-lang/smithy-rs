@@ -101,7 +101,10 @@ private class AwsFluentClientExtensions(private val types: Types) {
                 /// Creates a client with the given service config and connector override.
                 pub fn from_conf_conn(conf: crate::Config, conn: C) -> Self {
                     let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
-                    let client = #{aws_hyper}::Client::new(conn).with_retry_config(retry_config.into());
+                    let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
+                    let client = #{aws_hyper}::Client::new(conn)
+                        .with_retry_config(retry_config.into())
+                        .with_timeout_config(timeout_config);
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
                 }
                 """,
@@ -121,7 +124,10 @@ private class AwsFluentClientExtensions(private val types: Types) {
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn from_conf(conf: crate::Config) -> Self {
                     let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
-                    let client = #{aws_hyper}::Client::https().with_retry_config(retry_config.into());
+                    let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
+                    let client = #{aws_hyper}::Client::https()
+                        .with_retry_config(retry_config.into())
+                        .with_timeout_config(timeout_config);
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
                 }
                 """,

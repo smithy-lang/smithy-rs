@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfi
 /* Example Generated Code */
 /*
 pub struct Config {
-    pub(crate) retry_config: Option<aws_smithy_types::retry::RetryConfig>,
+    pub(crate) timeout_config: Option<aws_smithy_types::timeout::TimeoutConfig>,
 }
 impl std::fmt::Debug for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -36,26 +36,26 @@ impl Config {
 }
 #[derive(Default)]
 pub struct Builder {
-    retry_config: Option<aws_smithy_types::retry::RetryConfig>,
+    timeout_config: Option<aws_smithy_types::timeout::TimeoutConfig>,
 }
 impl Builder {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn retry_config(mut self, retry_config: aws_smithy_types::retry::RetryConfig) -> Self {
-        self.set_retry_config(Some(retry_config));
+    pub fn timeout_config(mut self, timeout_config: aws_smithy_types::timeout::TimeoutConfig) -> Self {
+        self.set_timeout_config(Some(timeout_config));
         self
     }
-    pub fn set_retry_config(
+    pub fn set_timeout_config(
         &mut self,
-        retry_config: Option<aws_smithy_types::retry::RetryConfig>,
+        timeout_config: Option<aws_smithy_types::timeout::TimeoutConfig>,
     ) -> &mut Self {
-        self.retry_config = retry_config;
+        self.timeout_config = timeout_config;
         self
     }
     pub fn build(self) -> Config {
         Config {
-            retry_config: self.retry_config,
+            timeout_config: self.timeout_config,
         }
     }
 }
@@ -67,97 +67,97 @@ fn test_1() {
 
  */
 
-class RetryConfigDecorator : RustCodegenDecorator {
-    override val name: String = "RetryConfig"
+class TimeoutConfigDecorator : RustCodegenDecorator {
+    override val name: String = "TimeoutConfig"
     override val order: Byte = 0
 
     override fun configCustomizations(
         codegenContext: CodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + RetryConfigProviderConfig(codegenContext)
+        return baseCustomizations + TimeoutConfigProviderConfig(codegenContext)
     }
 
     override fun libRsCustomizations(
         codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
-        return baseCustomizations + PubUseRetryConfig(codegenContext.runtimeConfig)
+        return baseCustomizations + PubUseTimeoutConfig(codegenContext.runtimeConfig)
     }
 }
 
-class RetryConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
-    private val retryConfig = smithyTypesRetry(codegenContext.runtimeConfig)
+class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
+    private val timeoutConfig = smithyTypesTimeout(codegenContext.runtimeConfig)
     private val moduleName = codegenContext.moduleName
     private val moduleUseName = moduleName.replace("-", "_")
-    private val codegenScope = arrayOf("RetryConfig" to retryConfig.member("RetryConfig"))
+    private val codegenScope = arrayOf("TimeoutConfig" to timeoutConfig.member("TimeoutConfig"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
-                "pub(crate) retry_config: Option<#{RetryConfig}>,",
+                "pub(crate) timeout_config: Option<#{TimeoutConfig}>,",
                 *codegenScope
             )
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
-                rustTemplate("retry_config: Option<#{RetryConfig}>,", *codegenScope)
+                rustTemplate("timeout_config: Option<#{TimeoutConfig}>,", *codegenScope)
             ServiceConfig.BuilderImpl ->
                 rustTemplate(
                     """
-                    /// Set the retry_config for the builder
+                    /// Set the timeout_config for the builder
                     ///
                     /// ## Examples
                     /// ```rust
                     /// use $moduleUseName::config::Config;
-                    /// use #{RetryConfig};
+                    /// use #{TimeoutConfig};
                     ///
-                    /// let retry_config = RetryConfig::new().with_max_attempts(5);
-                    /// let config = Config::builder().retry_config(retry_config).build();
+                    /// let timeout_config = TimeoutConfig::new().with_max_attempts(5);
+                    /// let config = Config::builder().timeout_config(timeout_config).build();
                     /// ```
-                    pub fn retry_config(mut self, retry_config: #{RetryConfig}) -> Self {
-                        self.set_retry_config(Some(retry_config));
+                    pub fn timeout_config(mut self, timeout_config: #{TimeoutConfig}) -> Self {
+                        self.set_timeout_config(Some(timeout_config));
                         self
                     }
 
-                    /// Set the retry_config for the builder
+                    /// Set the timeout_config for the builder
                     ///
                     /// ## Examples
                     /// ```rust
                     /// use $moduleUseName::config::{Builder, Config};
-                    /// use #{RetryConfig};
+                    /// use #{TimeoutConfig};
                     ///
-                    /// fn disable_retries(builder: &mut Builder) {
-                    ///     let retry_config = RetryConfig::new().with_max_attempts(1);
-                    ///     builder.set_retry_config(Some(retry_config));
+                    /// fn set_request_timeout(builder: &mut Builder) {
+                    ///     let timeout_config = TimeoutConfig::new().with_api_call_timeout(Duration::from_secs(3));
+                    ///     builder.set_timeout_config(Some(timeout_config));
                     /// }
                     ///
                     /// let mut builder = Config::builder();
-                    /// disable_retries(&mut builder);
+                    /// set_request_timeout(&mut builder);
                     /// let config = builder.build();
                     /// ```
-                    pub fn set_retry_config(&mut self, retry_config: Option<#{RetryConfig}>) -> &mut Self {
-                        self.retry_config = retry_config;
+                    pub fn set_timeout_config(&mut self, timeout_config: Option<#{TimeoutConfig}>) -> &mut Self {
+                        self.timeout_config = timeout_config;
                         self
                     }
                     """,
                     *codegenScope
                 )
             ServiceConfig.BuilderBuild -> rustTemplate(
-                """retry_config: self.retry_config,""",
+                """timeout_config: self.timeout_config,""",
                 *codegenScope
             )
         }
     }
 }
 
-class PubUseRetryConfig(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
+class PubUseTimeoutConfig(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
         return when (section) {
-            is LibRsSection.Body -> writable { rust("pub use #T::RetryConfig;", smithyTypesRetry(runtimeConfig)) }
+            is LibRsSection.Body -> writable { rust("pub use #T::TimeoutConfig;", smithyTypesTimeout(runtimeConfig)) }
             else -> emptySection
         }
     }
 }
 
-// Generate path to the retry module in aws_smithy_types
-fun smithyTypesRetry(runtimeConfig: RuntimeConfig) =
-    RuntimeType("retry", runtimeConfig.runtimeCrate("types"), "aws_smithy_types")
+// Generate path to the timeout module in aws_smithy_types
+fun smithyTypesTimeout(runtimeConfig: RuntimeConfig) =
+    RuntimeType("timeout", runtimeConfig.runtimeCrate("types"), "aws_smithy_types")

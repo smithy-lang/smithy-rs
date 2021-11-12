@@ -106,7 +106,7 @@ impl Builder {
         let connect_timeout = self.connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT);
         let read_timeout = self.read_timeout.unwrap_or(DEFAULT_READ_TIMEOUT);
         let timeout_settings = timeout::Settings::default()
-            .with_read_timeout(http_read_timeout)
+            .with_read_timeout(read_timeout)
             .with_connect_timeout(connect_timeout);
         let http_settings = HttpSettings { timeout_settings };
         let connector = expect_connector(provider_config.connector(&http_settings));

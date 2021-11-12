@@ -175,10 +175,11 @@ mod loader {
         ///
         /// # Examples
         /// ```rust
+        /// # use std::time::Duration;
         /// # use aws_smithy_types::timeout::TimeoutConfig;
         /// # async fn create_config() {
         ///     let config = aws_config::from_env()
-        ///         .timeout_config(TimeoutConfig::new().with_api_call_attempt_timeout(1.0))
+        ///         .timeout_config(TimeoutConfig::new().with_api_call_attempt_timeout(Duration::from_secs(1)))
         ///         .load().await;
         /// # }
         /// ```
