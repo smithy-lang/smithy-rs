@@ -43,7 +43,7 @@ impl SigV4Signer {
             .secret_key(credentials.secret_access_key())
             .region(region.as_ref())
             .service_name(signing_service.as_ref())
-            .date_time(time.into())
+            .time(time)
             .settings(());
         builder.set_security_token(credentials.session_token());
         builder.build().unwrap()

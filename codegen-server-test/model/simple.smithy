@@ -50,6 +50,7 @@ resource Service {
         id: "RegisterServiceRequestTest",
         protocol: "aws.protocols#restJson1",
         uri: "/service/1",
+        bodyMediaType: "application/json",
         params: { id: "1", name: "TestService" },
         body: "{\"name\":\"TestService\"}",
         method: "PUT",
