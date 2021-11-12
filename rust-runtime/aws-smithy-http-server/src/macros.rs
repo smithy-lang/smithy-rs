@@ -5,7 +5,7 @@
 
 //! Macros implementation
 
-// This file is a copy of Axum macros.rs (https://github.com/tokio-rs/axum/blob/2507463706d0cea90007b5959c579a32d4b24cc4/axum/src/extract/rejection.rs#L1)
+// This file is a copy of Axum's  macros.rs (https://github.com/tokio-rs/axum/blob/2507463706d0cea90007b5959c579a32d4b24cc4/axum/src/macros.rs#L1)
 // with simple modification to allow public visibility and re-use of the generated structures.
 // Axum original license can be found inside the file named LICENSE.mit.
 
