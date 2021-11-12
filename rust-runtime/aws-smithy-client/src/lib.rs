@@ -211,14 +211,15 @@ where
             Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
     {
         let connector = self.connector.clone();
-        let sleep_fn = aws_smithy_async::rt::sleep::default_async_sleep();
 
-        let mut svc = ServiceBuilder::new()
+        let svc = ServiceBuilder::new()
             .layer(TimeoutLayer::new(
-                sleep_fn,
                 self.timeout_config.api_call_timeout().clone(),
             ))
             .retry(self.retry_policy.new_request_policy())
+            .layer(TimeoutLayer::new(
+                self.timeout_config.api_call_attempt_timeout().clone(),
+            ))
             .layer(ParseResponseLayer::<O, Retry>::new())
             // These layers can be considered as occurring in order. That is, first invoke the
             // customer-provided middleware, then dispatch dispatch over the wire.

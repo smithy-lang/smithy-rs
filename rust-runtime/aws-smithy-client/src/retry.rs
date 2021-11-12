@@ -341,7 +341,7 @@ mod test {
 
     #[test]
     fn retry_handler_send_sync() {
-        fn must_be_send_sync<T: Send + Sync>() {};
+        fn must_be_send_sync<T: Send + Sync>() {}
 
         must_be_send_sync::<RetryHandler>()
     }
