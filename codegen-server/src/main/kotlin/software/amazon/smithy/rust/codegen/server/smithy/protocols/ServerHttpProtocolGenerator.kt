@@ -61,7 +61,7 @@ class ServerHttpProtocolGenerator(
     MakeOperationGenerator(codegenContext, protocol, HttpBoundProtocolBodyGenerator(codegenContext, protocol)),
     ServerHttpProtocolImplGenerator(codegenContext, protocol),
 ) {
-    /* Define suffixes for operation input / output / error wrappers */
+    // Define suffixes for operation input / output / error wrappers
     companion object {
         const val OPERATION_INPUT_WRAPPER_SUFFIX = "OperationInputWrapper"
         const val OPERATION_OUTPUT_WRAPPER_SUFFIX = "OperationOutputWrapper"
@@ -141,7 +141,7 @@ private class ServerHttpProtocolImplGenerator(
         operationShape: OperationShape
     ) {
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
-        /* Implement Axum `FromRequest` trait for non streaming input types. */
+        // Implement Axum `FromRequest` trait for non streaming input types.
         val inputName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         rustTemplate(
             """
@@ -164,7 +164,7 @@ private class ServerHttpProtocolImplGenerator(
             "I" to inputSymbol,
             "parse_request" to serverParseRequest(operationShape)
         )
-        /* Implement Axum `IntoResponse` for non streaming output types. */
+        // Implement Axum `IntoResponse` for non streaming output types.
         val outputName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
         rustTemplate(
             """
@@ -186,7 +186,7 @@ private class ServerHttpProtocolImplGenerator(
             "serialize_response" to serverSerializeResponse(operationShape)
         )
         if (operationShape.errors.isNotEmpty()) {
-            /* Implement Axum `IntoResponse` for non streaming error types. */
+            // Implement Axum `IntoResponse` for non streaming error types.
             val errorName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_ERROR_WRAPPER_SUFFIX}"
             rustTemplate(
                 """
