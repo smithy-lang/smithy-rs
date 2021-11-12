@@ -27,7 +27,7 @@ fun Project.docsLandingPage(awsServices: List<AwsService>, outputDir: File) {
         /* generate a basic markdown table */
         writer.write("| Service | [docs.rs](https://docs.rs) | [crates.io](https://crates.io) | [Usage Examples](https://github.com/awslabs/aws-sdk-rust/tree/main/examples/) |")
         writer.write("| ------- | ------- | --------- | ------ |")
-        awsServices.forEach {
+        awsServices.sortedBy { it.humanName }.forEach {
             writer.write(
                 "| ${it.humanName} | ${docsRs(it)} | ${cratesIo(it)} | ${
                 examples(
