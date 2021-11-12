@@ -51,6 +51,7 @@ Several breaking changes around `aws_smithy_types::Instant` were introduced by s
 
 **New this week**
 - Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#849)
+- :bug: Fixed signing problem with S3 Control (smithy-rs#858, aws-sd-rust#291)
 
 v0.0.25-alpha (November 11th, 2021)
 ===================================
