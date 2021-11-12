@@ -170,7 +170,7 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 /// use aws_smithy_client::erase::DynConnector;
 /// let hyper_connector = hyper_ext::Adapter::builder().build(conns::https());
 /// // this client can then be used when constructing a Smithy Client
-/// // NOTE: in real usage, you will almost certainly want a real middleware implementation
+/// // TODO: replace `Identity` with your middleware implementation
 /// let client = aws_smithy_client::Client::<DynConnector, Identity>::new(DynConnector::new(hyper_connector));
 /// ```
 pub struct Builder {
