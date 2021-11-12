@@ -107,10 +107,11 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
+    /// # use std::time::Duration;
     /// use aws_types::config::Config;
     /// use aws_smithy_types::timeout::TimeoutConfig;
     ///
-    /// let timeout_config = TimeoutConfig::new().with_api_call_attempt_timeout(1.0);
+    /// let timeout_config = TimeoutConfig::new().with_api_call_attempt_timeout(Duration::from_secs(1));
     /// let config = Config::builder().timeout_config(timeout_config).build();
     /// ```
     pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
@@ -122,13 +123,14 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
+    /// # use std::time::Duration;
     /// use aws_types::config::{Config, Builder};
     /// use aws_smithy_types::timeout::TimeoutConfig;
     ///
     /// fn set_preferred_timeouts(builder: &mut Builder) {
     ///     let timeout_config = TimeoutConfig::new()
-    ///         .with_api_call_attempt_timeout(2.0)
-    ///         .with_api_call_timeout(5.0);
+    ///         .with_api_call_attempt_timeout(Duration::from_secs(2))
+    ///         .with_api_call_timeout(Duration::from_secs(5));
     ///     builder.set_timeout_config(Some(timeout_config));
     /// }
     ///

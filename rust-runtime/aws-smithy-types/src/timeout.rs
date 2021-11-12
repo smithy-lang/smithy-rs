@@ -9,8 +9,7 @@ use std::borrow::Cow;
 use std::fmt::Display;
 use std::time::Duration;
 
-// TODO links to external crate members don't work, can this be fixed without directly linking to doc.rs?
-/// Configuration for the various kinds of timeouts supported by [aws_smithy_client::Client].
+/// Configuration for the various kinds of timeouts supported by aws_smithy_client::Client.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct TimeoutConfig {
     connect_timeout: Option<Duration>,
@@ -200,9 +199,9 @@ impl TimeoutConfigBuilder {
     /// let b = TimeoutConfigBuilder::new().read_timeout(Duration::from_secs(10)).connect_timeout(Duration::from_secs(3));
     /// let timeout_config = a.merge_with(b).build();
     /// // A's value take precedence over B's value
-    /// assert_eq!(timeout_config.read_timeout(), Duration::from_secs(2));
+    /// assert_eq!(timeout_config.read_timeout(), Some(Duration::from_secs(2)));
     /// // A never set a connect timeout so B's value was used
-    /// assert_eq!(timeout_config.connect_timeout(), Duration::from_secs(3));
+    /// assert_eq!(timeout_config.connect_timeout(), Some(Duration::from_secs(3)));
     /// ```
     pub fn merge_with(self, other: Self) -> Self {
         Self {

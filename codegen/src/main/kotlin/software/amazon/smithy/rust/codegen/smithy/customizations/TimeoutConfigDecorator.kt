@@ -107,10 +107,11 @@ class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustom
                     ///
                     /// ## Examples
                     /// ```rust
+                    /// ## use std::time::Duration;
                     /// use $moduleUseName::config::Config;
                     /// use #{TimeoutConfig};
                     ///
-                    /// let timeout_config = TimeoutConfig::new().with_max_attempts(5);
+                    /// let timeout_config = TimeoutConfig::new().with_api_call_attempt_timeout(Duration::from_secs(1));
                     /// let config = Config::builder().timeout_config(timeout_config).build();
                     /// ```
                     pub fn timeout_config(mut self, timeout_config: #{TimeoutConfig}) -> Self {
@@ -122,6 +123,7 @@ class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustom
                     ///
                     /// ## Examples
                     /// ```rust
+                    /// ## use std::time::Duration;
                     /// use $moduleUseName::config::{Builder, Config};
                     /// use #{TimeoutConfig};
                     ///
