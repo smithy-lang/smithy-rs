@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 import org.gradle.api.Project
 import software.amazon.smithy.utils.CodeWriter
 import java.io.File
