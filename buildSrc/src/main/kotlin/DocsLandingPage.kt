@@ -19,7 +19,7 @@ fun Project.docsLandingPage(awsServices: List<AwsService>, outputDir: File) {
     with(writer) {
         write("# AWS SDK for Rust")
         write(
-            """The AWS SDK for Rust contains one crate for each AWS service, as well as ${docsRs("aws-config")},
+            """The AWS SDK for Rust contains one crate for each AWS service, as well as ${cratesIo("aws-config")} ${docsRs("aws-config")},
             |a crate implementing configuration loading such as credential providers.""".trimMargin()
         )
 
@@ -52,4 +52,5 @@ private fun examples(service: AwsService, project: Project) = if (with(service) 
  */
 private fun docsRs(service: AwsService) = docsRs(service.crate())
 private fun docsRs(crate: String) = "([docs](https://docs.rs/$crate))"
-private fun cratesIo(service: AwsService) = "[${service.crate()}](https://crates.io/crates/${service.crate()})"
+private fun cratesIo(service: AwsService) = cratesIo(service.crate())
+private fun cratesIo(crate: String) = "[$crate](https://crates.io/crates/$crate)"
