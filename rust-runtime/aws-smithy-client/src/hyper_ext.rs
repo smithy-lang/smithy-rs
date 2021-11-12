@@ -2,7 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-//! Implementation of SmithyConnector for Hyper
+//! Implementation of [`SmithyConnector`](crate::bounds::SmithyConnector) for Hyper
 //!
 //! The module provides [`Adapter`] which enables using a [`hyper::Client`] as the connector for a Smithy
 //! [`Client`](crate::Client).
