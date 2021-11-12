@@ -213,12 +213,10 @@ where
         let connector = self.connector.clone();
 
         let svc = ServiceBuilder::new()
-            .layer(TimeoutLayer::new(
-                self.timeout_config.api_call_timeout().clone(),
-            ))
+            .layer(TimeoutLayer::new(self.timeout_config.api_call_timeout()))
             .retry(self.retry_policy.new_request_policy())
             .layer(TimeoutLayer::new(
-                self.timeout_config.api_call_attempt_timeout().clone(),
+                self.timeout_config.api_call_attempt_timeout(),
             ))
             .layer(ParseResponseLayer::<O, Retry>::new())
             // These layers can be considered as occurring in order. That is, first invoke the
