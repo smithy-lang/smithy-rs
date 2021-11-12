@@ -24,35 +24,31 @@ fun Project.docsLandingPage(awsServices: List<AwsService>, outputDir: File) {
         )
 
         writer.write("## AWS Services")
+        writer.write("") // empty line between header and table
         /* generate a basic markdown table */
-        writer.write("| Service | [docs.rs](https://docs.rs) | [crates.io](https://crates.io) | [Usage Examples](https://github.com/awslabs/aws-sdk-rust/tree/main/examples/) |")
-        writer.write("| ------- | ------- | --------- | ------ |")
+        writer.write("| Service | Package |")
+        writer.write("| ------- | ------- |")
         awsServices.sortedBy { it.humanName }.forEach {
             writer.write(
-                "| ${it.humanName} | ${docsRs(it)} | ${cratesIo(it)} | ${
-                examples(
-                    it,
-                    project
-                )
-                }"
+                "| ${it.humanName} | ${cratesIo(it)} ${docsRs(it)} ${examples(it, project)} | "
             )
         }
     }
-    outputDir.resolve("docs.md").writeText(writer.toString())
+    outputDir.resolve("index.md").writeText(writer.toString())
 }
 
 /**
  * Generate a link to the examples for a given service
  */
 private fun examples(service: AwsService, project: Project) = if (with(service) { project.examples() }) {
-    "[Link](https://github.com/awslabs/aws-sdk-rust/tree/main/examples/${service.module})"
+    "([examples](https://github.com/awslabs/aws-sdk-rust/tree/main/examples/${service.module}))"
 } else {
-    "None yet!"
+    ""
 }
 
 /**
  * Generate a link to the docs
  */
 private fun docsRs(service: AwsService) = docsRs(service.crate())
-private fun docsRs(crate: String) = "[$crate](https://docs.rs/$crate)"
+private fun docsRs(crate: String) = "([docs](https://docs.rs/$crate))"
 private fun cratesIo(service: AwsService) = "[${service.crate()}](https://crates.io/crates/${service.crate()})"
