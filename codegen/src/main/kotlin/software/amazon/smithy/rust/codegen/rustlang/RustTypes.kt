@@ -151,9 +151,9 @@ fun RustType.render(fullyQualified: Boolean = true): String {
 }
 
 /**
- * Returns true if [this] contains [t] anywhere within it's tree. For example,
- * Option<Instant>.contains(Instant) would return true.
- * Option<Instant>.contains(Blob) would return false.
+ * Returns true if [this] contains [t] anywhere within its tree. For example,
+ * Option<DateTime>.contains(DateTime) would return true.
+ * Option<DateTime>.contains(Blob) would return false.
  */
 fun <T : RustType> RustType.contains(t: T): Boolean = when (this) {
     t -> true

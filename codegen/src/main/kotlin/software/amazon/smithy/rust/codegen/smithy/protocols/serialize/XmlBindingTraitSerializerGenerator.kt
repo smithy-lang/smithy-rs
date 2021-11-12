@@ -245,7 +245,7 @@ class XmlBindingTraitSerializerGenerator(
                         TimestampFormatTrait.Format.DATE_TIME
                     )
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                rust("$input.fmt(#T).as_ref()", timestampFormatType)
+                rust("$input.fmt(#T)?.as_ref()", timestampFormatType)
             }
             else -> TODO(member.toString())
         }

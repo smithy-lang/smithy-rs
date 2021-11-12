@@ -9,8 +9,10 @@ use aws_smithy_types::date_time::{DateTime, Format};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
-    if let Ok(value) = std::str::from_utf8(data) {
+    if let Ok(mut value) = std::str::from_utf8(data) {
         // Looking for panics. Don't care if the parsing fails.
-        let _ = DateTime::from_str(value, Format::EpochSeconds);
+        while let Ok((_, next)) = DateTime::read(value, Format::HttpDate, ',') {
+            value = next;
+        }
     }
 });
