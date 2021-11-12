@@ -27,7 +27,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.HttpServerTraits
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
@@ -58,7 +58,6 @@ class ServerProtocolTestGenerator(
     private val instantiator = with(codegenContext) {
         Instantiator(symbolProvider, model, runtimeConfig)
     }
-    private val httpServerTraits = HttpServerTraits()
 
     private val codegenScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
@@ -242,10 +241,14 @@ class ServerProtocolTestGenerator(
         writeInline("let output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        val operationName = operationSymbol.name
+        val operationName = if (expectedShape.hasTrait(ErrorTrait::class.java)) {
+            "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_ERROR_WRAPPER_SUFFIX}"
+        } else {
+            "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
+        }
         rustTemplate(
             """
-            let output = super::${operationName}OperationOutputWrapper(output);
+            let output = super::$operationName(output);
             use #{Axum}::response::IntoResponse;
             let http_response = output.into_response();
             """,
@@ -279,7 +282,7 @@ class ServerProtocolTestGenerator(
     }
 
     private fun checkBody(rustWriter: RustWriter, body: String, testCase: HttpRequestTestCase) {
-        val operationName = operationSymbol.name
+        val operationName = "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         rustWriter.rustTemplate(
             """
             let http_request = http::Request::builder()
@@ -289,15 +292,16 @@ class ServerProtocolTestGenerator(
                 .unwrap();
             use #{Axum}::extract::FromRequest;
             let mut http_request = #{Axum}::extract::RequestParts::new(http_request);
-            let body = super::${operationName}OperationInputWrapper::from_request(&mut http_request).await.expect("failed to parse request");
+            let input_wrapper = super::$operationName::from_request(&mut http_request).await.expect("failed to parse request");
+            let input = input_wrapper.0;
             """,
             *codegenScope,
         )
         if (body == "") {
             rustWriter.write("// No body")
-            rustWriter.write("assert_eq!(std::str::from_utf8(body.0).expect("`body` does not contain valid UTF-8"), ${"".dq()});")
+            rustWriter.write("assert_eq!(std::str::from_utf8(input).expect(\"`body` does not contain valid UTF-8\"), ${"".dq()});")
         } else {
-            rustWriter.write("assert_eq!(expected, body.0);")
+            rustWriter.write("assert_eq!(input, expected);")
         }
     }
 

@@ -60,17 +60,19 @@ class ServerHttpProtocolGenerator(
     protocol,
     MakeOperationGenerator(codegenContext, protocol, HttpBoundProtocolBodyGenerator(codegenContext, protocol)),
     ServerHttpProtocolImplGenerator(codegenContext, protocol),
-)
+) {
+    /* Define suffixes for operation input / output / error wrappers */
+    companion object {
+        const val OPERATION_INPUT_WRAPPER_SUFFIX = "OperationInputWrapper"
+        const val OPERATION_OUTPUT_WRAPPER_SUFFIX = "OperationOutputWrapper"
+        const val OPERATION_ERROR_WRAPPER_SUFFIX = "OperationErrorWrapper"
 
-/*
- * Class used to expose Rust server traits types. Is is used in [ServerHttpProtocolGenerator] and [ServerProtocolTestGenerator].
- */
-class HttpServerTraits {
-    fun smithyRejection(runtimeConfig: RuntimeConfig) = RuntimeType(
-        "SmithyRejection",
-        dependency = CargoDependency.SmithyHttpServer(runtimeConfig),
-        namespace = "aws_smithy_http_server::rejection"
-    )
+        fun smithyRejection(runtimeConfig: RuntimeConfig) = RuntimeType(
+            "SmithyRejection",
+            dependency = CargoDependency.SmithyHttpServer(runtimeConfig),
+            namespace = "aws_smithy_http_server::rejection"
+        )
+    }
 }
 
 /*
@@ -90,7 +92,6 @@ private class ServerHttpProtocolImplGenerator(
     private val operationDeserModule = RustModule.private("operation_deser")
     private val operationSerModule = RustModule.private("operation_ser")
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
-    private val httpServerTraits = HttpServerTraits()
 
     private val codegenScope = arrayOf(
         "JsonObjectWriter" to smithyJson.member("serialize::JsonObjectWriter"),
@@ -103,8 +104,9 @@ private class ServerHttpProtocolImplGenerator(
         "HttpBody" to CargoDependency.HttpBody.asType(),
         "Hyper" to CargoDependency.Hyper.asType(),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-        "SmithyRejection" to httpServerTraits.smithyRejection(runtimeConfig),
-        "SdkBody" to RuntimeType.sdkBody(runtimeConfig)
+        "SmithyRejection" to ServerHttpProtocolGenerator.smithyRejection(runtimeConfig),
+        "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+        "DateTime" to RuntimeType.DateTime(runtimeConfig)
     )
 
     override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
@@ -140,16 +142,16 @@ private class ServerHttpProtocolImplGenerator(
     ) {
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         /* Implement Axum `FromRequest` trait for non streaming input types. */
-        val inputName = "${operationName}OperationInputWrapper"
+        val inputName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         rustTemplate(
             """
             pub struct $inputName(#{I});
             ##[#{Axum}::async_trait]
             impl<B> #{Axum}::extract::FromRequest<B> for $inputName
             where
-                B: #{SmithyHttpServer}::HttpBody + Send + Sync,
+                B: #{SmithyHttpServer}::HttpBody + Send,
                 B::Data: Send,
-                B::Error: Into<#{SmithyHttpServer}::BoxError> + std::fmt::Debug,
+                B::Error: Into<#{SmithyHttpServer}::BoxError>,
                 #{SmithyRejection}: From<<B as #{SmithyHttpServer}::HttpBody>::Error>
             {
                 type Rejection = #{SmithyRejection};
@@ -163,7 +165,7 @@ private class ServerHttpProtocolImplGenerator(
             "parse_request" to serverParseRequest(operationShape)
         )
         /* Implement Axum `IntoResponse` for non streaming output types. */
-        val outputName = "${operationName}OperationOutputWrapper"
+        val outputName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
         rustTemplate(
             """
             pub struct $outputName(#{O});
@@ -175,7 +177,7 @@ private class ServerHttpProtocolImplGenerator(
                 fn into_response(self) -> #{http}::Response<Self::Body> {
                     match #{serialize_response}(&self.0) {
                         Ok(response) => response,
-                        Err(e) => #{http}::Response::builder().body(Self::Body::from(e.to_string())).unwrap()
+                        Err(e) => #{http}::Response::builder().body(Self::Body::from(e.to_string())).expect("unable to build response from error")
                     }
                 }
             }""",
@@ -184,7 +186,8 @@ private class ServerHttpProtocolImplGenerator(
             "serialize_response" to serverSerializeResponse(operationShape)
         )
         if (operationShape.errors.isNotEmpty()) {
-            val errorName = "${operationName}OperationErrorWrapper"
+            /* Implement Axum `IntoResponse` for non streaming error types. */
+            val errorName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_ERROR_WRAPPER_SUFFIX}"
             rustTemplate(
                 """
                 pub struct $errorName(#{E});
@@ -196,7 +199,7 @@ private class ServerHttpProtocolImplGenerator(
                     fn into_response(self) -> #{http}::Response<Self::Body> {
                         match #{serialize_error}(&self.0) {
                             Ok(response) => response,
-                            Err(e) => #{http}::Response::builder().body(Self::Body::from(e.to_string())).unwrap()
+                            Err(e) => #{http}::Response::builder().body(Self::Body::from(e.to_string())).expect("unable to build response from error")
                         }
                     }
                 }""",
@@ -233,9 +236,9 @@ private class ServerHttpProtocolImplGenerator(
                     #{SmithyRejection}
                 >
                 where
-                    B: #{SmithyHttpServer}::HttpBody + Send + Sync,
+                    B: #{SmithyHttpServer}::HttpBody + Send,
                     B::Data: Send,
-                    B::Error: Into<#{SmithyHttpServer}::BoxError> + std::fmt::Debug,
+                    B::Error: Into<#{SmithyHttpServer}::BoxError>,
                     #{SmithyRejection}: From<<B as #{SmithyHttpServer}::HttpBody>::Error>
                 """,
                 *codegenScope,
@@ -576,7 +579,7 @@ private class ServerHttpProtocolImplGenerator(
                 rustTemplate(
                     """
                     let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
-                    let value = #{Instant}::Instant::from_str(&value, #{format})?;
+                    let value = #{DateTime}::from_str(&value, #{format})?;
                     Ok(Some(value))
                     """.trimIndent(),
                     *codegenScope,

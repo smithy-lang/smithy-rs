@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2018"
 license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+keywords = ["smithy", "framework", "web", "api", "aws"]
+categories = ["asynchronous", "web-programming", "api-bindings"]
 description = """
 HTTP server runtime and utilities.
 

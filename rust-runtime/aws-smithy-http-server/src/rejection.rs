@@ -22,7 +22,6 @@ define_rejection! {
 }
 
 define_rejection! {
-    // Should this be INTERNAL_SERVER_ERROR ?
     #[status = BAD_REQUEST]
     #[body = "Request deserialize failed"]
     /// Rejection type used if the request deserialization encountered errors.
