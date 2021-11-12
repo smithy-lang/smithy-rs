@@ -16,11 +16,11 @@
 use std::collections::HashMap;
 
 pub mod base64;
-pub mod instant;
+pub mod date_time;
 pub mod primitive;
 pub mod retry;
 
-pub use crate::instant::Instant;
+pub use crate::date_time::DateTime;
 
 /// Binary Blob Type
 ///

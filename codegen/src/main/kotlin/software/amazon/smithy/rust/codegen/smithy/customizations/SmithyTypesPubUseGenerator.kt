@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 
 fun pubUseTypes(runtimeConfig: RuntimeConfig) = listOf(
     RuntimeType.Blob(runtimeConfig),
+    RuntimeType.DateTime(runtimeConfig),
     CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::SdkError"),
     CargoDependency.SmithyHttp(runtimeConfig).asType().member("byte_stream::ByteStream"),
 )
@@ -26,6 +27,7 @@ class SmithyTypesPubUseGenerator(private val runtimeConfig: RuntimeConfig) : Lib
             LibRsSection.Body -> pubUseTypes(runtimeConfig).forEach {
                 rust("pub use #T;", it)
             }
+            else -> { }
         }
     }
 }

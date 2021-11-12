@@ -286,7 +286,7 @@ class SymbolVisitor(
     }
 
     override fun timestampShape(shape: TimestampShape?): Symbol {
-        return RuntimeType.Instant(config.runtimeConfig).toSymbol()
+        return RuntimeType.DateTime(config.runtimeConfig).toSymbol()
     }
 
     private fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder {

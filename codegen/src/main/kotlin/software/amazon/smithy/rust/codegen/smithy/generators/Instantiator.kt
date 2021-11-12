@@ -90,8 +90,8 @@ class Instantiator(
 
             // Wrapped Shapes
             is TimestampShape -> writer.write(
-                "#T::from_epoch_seconds(${(arg as NumberNode).value})",
-                RuntimeType.Instant(runtimeConfig)
+                "#T::from_secs(${(arg as NumberNode).value})",
+                RuntimeType.DateTime(runtimeConfig)
             )
 
             /**

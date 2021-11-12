@@ -35,6 +35,7 @@ val runtimeModules = listOf(
     "aws-smithy-protocol-test",
     "aws-smithy-query",
     "aws-smithy-types",
+    "aws-smithy-types-convert",
     "aws-smithy-xml"
 )
 val awsModules = listOf(

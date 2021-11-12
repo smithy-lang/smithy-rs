@@ -187,12 +187,12 @@ private class ServerHttpProtocolImplGenerator(
         if (operationShape.errors.isNotEmpty()) {
             rustTemplate(
                 """
-            impl #{SerializeHttpError} for $operationName {
-                type Output = std::result::Result<#{http}::Response<#{Bytes}>, #{Error}>;
-                type Struct = #{E};
-                fn serialize(&self, error: &Self::Struct) -> Self::Output {
-                    #{serialize_error}(error)
-                }
+                impl #{SerializeHttpError} for $operationName {
+                    type Output = std::result::Result<#{http}::Response<#{Bytes}>, #{Error}>;
+                    type Struct = #{E};
+                    fn serialize(&self, error: &Self::Struct) -> Self::Output {
+                        #{serialize_error}(error)
+                    }
             }""",
                 *codegenScope,
                 "E" to errorSymbol,
@@ -569,7 +569,7 @@ private class ServerHttpProtocolImplGenerator(
                     let value = #{PercentEncoding}::percent_decode_str(value)
                         .decode_utf8()
                         .map_err(|err| #{Error}::DeserializeLabel(err.to_string()))?;
-                    let value = #{Instant}::Instant::from_str(&value, #{format})
+                    let value = #{DateTime}::DateTime::from_str(&value, #{format})
                         .map_err(|err| #{Error}::DeserializeLabel(err.to_string()))?;
                     Ok(Some(value))
                     """.trimIndent(),
