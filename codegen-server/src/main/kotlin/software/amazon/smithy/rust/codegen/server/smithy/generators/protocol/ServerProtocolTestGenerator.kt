@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -65,6 +66,7 @@ class ServerProtocolTestGenerator(
         "Http" to CargoDependency.Http.asType(),
         "Hyper" to CargoDependency.Hyper.asType(),
         "Axum" to CargoDependency.Axum.asType(),
+        "SmithyHttpServer" to CargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType(),
     )
 
     sealed class TestCase {
@@ -230,9 +232,7 @@ class ServerProtocolTestGenerator(
         expectedShape: StructureShape
     ) {
         if (!protocolSupport.responseSerialization || (
-            !protocolSupport.errorSerialization && expectedShape.hasTrait(
-                    ErrorTrait::class.java
-                )
+            !protocolSupport.errorSerialization && expectedShape.hasTrait<ErrorTrait>()
             )
         ) {
             rust("/* test case disabled for this protocol (not yet supported) */")
@@ -241,7 +241,7 @@ class ServerProtocolTestGenerator(
         writeInline("let output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        val operationName = if (expectedShape.hasTrait(ErrorTrait::class.java)) {
+        val operationName = if (expectedShape.hasTrait<ErrorTrait>()) {
             "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_ERROR_WRAPPER_SUFFIX}"
         } else {
             "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
@@ -288,7 +288,7 @@ class ServerProtocolTestGenerator(
             let http_request = http::Request::builder()
                 .uri(${testCase.uri.dq()})
                 .header("Content-Type", ${testCase.bodyMediaType.orNull()?.dq()})
-                .body(#{Hyper}::Body::from(#{Bytes}::from_static(b${body.dq()})))
+                .body(#{SmithyHttpServer}::Body::from(#{Bytes}::from_static(b${body.dq()})))
                 .unwrap();
             use #{Axum}::extract::FromRequest;
             let mut http_request = #{Axum}::extract::RequestParts::new(http_request);
