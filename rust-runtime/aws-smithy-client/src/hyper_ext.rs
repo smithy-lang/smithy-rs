@@ -15,7 +15,8 @@
 //! ```rust
 //! use aws_smithy_client::Client;
 //! use aws_smithy_client::erase::DynConnector;
-//! // for example purposes, use the identity middleware
+//!
+//! // TODO: replace this with your middleware
 //! type MyMiddleware = tower::layer::util::Identity;
 //! let client = Client::<DynConnector, MyMiddleware>::https();
 //! ```
@@ -28,6 +29,7 @@
 //! use aws_smithy_client::{Client, conns, hyper_ext};
 //! use aws_smithy_client::erase::DynConnector;
 //! use aws_smithy_client::timeout::Settings;
+//!
 //! let timeout = Settings::new().with_connect_timeout(Duration::from_secs(1));
 //! let connector = hyper_ext::Adapter::builder().timeout(&timeout).build(conns::https());
 //! // TODO: replace this with your middleware
@@ -168,6 +170,7 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 /// use tower::layer::util::Identity;
 /// use aws_smithy_client::{conns, hyper_ext};
 /// use aws_smithy_client::erase::DynConnector;
+///
 /// let hyper_connector = hyper_ext::Adapter::builder().build(conns::https());
 /// // this client can then be used when constructing a Smithy Client
 /// // TODO: replace `Identity` with your middleware implementation
