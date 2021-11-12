@@ -112,7 +112,7 @@ pub fn merge_in(base: &mut ProfileSet, raw_profile_set: RawProfileSet, kind: Fil
 
 fn merge_into_base<'a>(target: &mut Profile, profile: HashMap<&str, Cow<'a, str>>) {
     for (k, v) in profile {
-        match validate_identifier(&k) {
+        match validate_identifier(k) {
             Ok(k) => {
                 target
                     .properties

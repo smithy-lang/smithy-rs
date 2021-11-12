@@ -79,7 +79,7 @@ impl ProviderChain {
     }
 
     pub fn chain(&self) -> &[AssumeRoleProvider] {
-        &self.chain.as_slice()
+        self.chain.as_slice()
     }
 }
 

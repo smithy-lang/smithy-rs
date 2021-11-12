@@ -184,18 +184,18 @@ fn calculate_signing_params<'a>(
 
     let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
     let sts = StringToSign::new(
-        params.date_time,
-        &params.region,
-        &params.service_name,
+        params.time,
+        params.region,
+        params.service_name,
         encoded_creq,
     );
     let signing_key = generate_signing_key(
-        &params.secret_key,
-        params.date_time.date(),
-        &params.region,
-        &params.service_name,
+        params.secret_key,
+        params.time,
+        params.region,
+        params.service_name,
     );
-    let signature = calculate_signature(signing_key, &sts.to_string().as_bytes());
+    let signature = calculate_signature(signing_key, sts.to_string().as_bytes());
 
     let values = creq.values.into_query_params().expect("signing with query");
     let mut signing_params = vec![
@@ -235,7 +235,7 @@ fn calculate_signing_headers<'a>(
     // Step 2: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-string-to-sign.html.
     let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
     let sts = StringToSign::new(
-        params.date_time,
+        params.time,
         params.region,
         params.service_name,
         encoded_creq,
@@ -244,11 +244,11 @@ fn calculate_signing_headers<'a>(
     // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
     let signing_key = generate_signing_key(
         params.secret_key,
-        params.date_time.date(),
+        params.time,
         params.region,
         params.service_name,
     );
-    let signature = calculate_signature(signing_key, &sts.to_string().as_bytes());
+    let signature = calculate_signature(signing_key, sts.to_string().as_bytes());
 
     // Step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
     let values = creq.values.as_headers().expect("signing with headers");
@@ -299,7 +299,7 @@ fn build_authorization_header(
 #[cfg(test)]
 mod tests {
     use super::{sign, SigningInstructions};
-    use crate::date_fmt::parse_date_time;
+    use crate::date_time::test_parsers::parse_date_time;
     use crate::http_request::sign::SignableRequest;
     use crate::http_request::test::{
         make_headers_comparable, test_request, test_signed_request,
@@ -328,7 +328,7 @@ mod tests {
             security_token: None,
             region: "us-east-1",
             service_name: "service",
-            date_time: parse_date_time("20150830T123600Z").unwrap(),
+            time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
         };
 
@@ -358,7 +358,7 @@ mod tests {
             security_token: None,
             region: "us-east-1",
             service_name: "service",
-            date_time: parse_date_time("20150830T123600Z").unwrap(),
+            time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
         };
 
@@ -386,7 +386,7 @@ mod tests {
             security_token: None,
             region: "us-east-1",
             service_name: "service",
-            date_time: parse_date_time("20150830T123600Z").unwrap(),
+            time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
         };
 
@@ -436,7 +436,7 @@ mod tests {
             security_token: None,
             region: "us-east-1",
             service_name: "service",
-            date_time: parse_date_time("20150830T123600Z").unwrap(),
+            time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
         };
 

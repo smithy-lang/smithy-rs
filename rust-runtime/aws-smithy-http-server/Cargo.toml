@@ -3,8 +3,12 @@ name = "aws-smithy-http-server"
 version = "0.1.0"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2018"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+keywords = ["smithy", "framework", "web", "api", "aws"]
+categories = ["asynchronous", "web-programming", "api-bindings"]
 description = """
-Server traits and utilities used by the code generator.
+HTTP server runtime and utilities.
 
 NOTE: THIS IS HIGHLY EXPERIMENTAL AND SHOULD NOT BE USED YET.
 """
@@ -13,8 +17,14 @@ publish = false
 
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http" }
+aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-json = { path = "../aws-smithy-json" }
+axum = { version = "0.3", features = [ "http1", "http2", "headers", "mime", "tower-log" ], default-features = false }
 bytes = "1.1"
 http = "0.2"
+http-body = "0.4"
+hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp"] }
+mime = "0.3"
 
 [dev-dependencies]
 pretty_assertions = "1"

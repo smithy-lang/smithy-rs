@@ -189,33 +189,35 @@ data class CargoDependency(
     }
 
     companion object {
-        val Md5 = CargoDependency("md5", CratesIo("0.7"))
-        val FastRand = CargoDependency("fastrand", CratesIo("1"))
+        val Axum: CargoDependency = CargoDependency("axum", CratesIo("0.3"))
+        val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1"))
+        val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.1"))
+        val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("1"))
+        val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
+        val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2"))
         val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14"))
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
+        val LazyStatic: CargoDependency = CargoDependency("lazy_static", CratesIo("1.4"))
+        val Md5: CargoDependency = CargoDependency("md5", CratesIo("0.7"))
+        val PercentEncoding: CargoDependency = CargoDependency("percent-encoding", CratesIo("2"))
+        val Regex: CargoDependency = CargoDependency("regex", CratesIo("1"))
+        val Ring: CargoDependency = CargoDependency("ring", CratesIo("0.16"))
+        val TempFile: CargoDependency = CargoDependency("temp-file", CratesIo("0.1.6"), scope = DependencyScope.Dev)
+        val TokioStream: CargoDependency = CargoDependency("tokio-stream", CratesIo("0.1.7"))
         val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"), optional = true)
         val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
-        fun SmithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("types")
 
+        fun SmithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("types")
         fun SmithyClient(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("client")
         fun SmithyEventStream(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("eventstream")
         fun SmithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http")
         fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server")
         fun SmithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-tower")
-
         fun SmithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
             runtimeConfig.runtimeCrate("protocol-test").copy(scope = DependencyScope.Dev)
-
         fun smithyJson(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("json")
         fun smithyQuery(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("query")
         fun smithyXml(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("xml")
-
-        val Bytes: RustDependency = CargoDependency("bytes", CratesIo("1"))
-        val TokioStream = CargoDependency("tokio-stream", CratesIo("0.1.7"))
-        val BytesUtils = CargoDependency("bytes-utils", CratesIo("0.1.1"))
-        val Hex = CargoDependency("hex", CratesIo("0.4.3"))
-        val TempFile = CargoDependency("temp-file", CratesIo("0.1.6"), scope = DependencyScope.Dev)
-        val Ring = CargoDependency("ring", CratesIo("0.16"))
     }
 }

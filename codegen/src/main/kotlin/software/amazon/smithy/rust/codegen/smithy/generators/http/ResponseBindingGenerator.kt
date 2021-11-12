@@ -58,7 +58,7 @@ class ResponseBindingGenerator(
     private val index = HttpBindingIndex.of(model)
     private val headerUtil = CargoDependency.SmithyHttp(runtimeConfig).asType().member("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
-    private val instant = RuntimeType.Instant(runtimeConfig).toSymbol().rustType()
+    private val dateTime = RuntimeType.DateTime(runtimeConfig).toSymbol().rustType()
     private val httpSerdeModule = RustModule.private("http_serde")
 
     /**
@@ -116,7 +116,7 @@ class ResponseBindingGenerator(
             ) {
                 rust(
                     """
-                    let headers = #T::headers_for_prefix(&header_map, ${binding.locationName.dq()});
+                    let headers = #T::headers_for_prefix(header_map, ${binding.locationName.dq()});
                     let out: std::result::Result<_, _> = headers.map(|(key, header_name)| {
                         let values = header_map.get_all(header_name);
                         #T(values.iter()).map(|v| (key.to_string(), v.unwrap()))
@@ -224,7 +224,7 @@ class ResponseBindingGenerator(
                 is StructureShape, is UnionShape -> this.structuredHandler("body")
                 is StringShape -> {
                     rustTemplate(
-                        "let body_str = std::str::from_utf8(&body).map_err(#{error_symbol}::unhandled)?;",
+                        "let body_str = std::str::from_utf8(body).map_err(#{error_symbol}::unhandled)?;",
                         "error_symbol" to errorSymbol
                     )
                     if (targetShape.hasTrait<EnumTrait>()) {
@@ -264,7 +264,7 @@ class ResponseBindingGenerator(
             rustType to targetType
         }
         val parsedValue = safeName()
-        if (coreType == instant) {
+        if (coreType == dateTime) {
             val timestampFormat =
                 index.determineTimestampFormat(
                     memberShape,
