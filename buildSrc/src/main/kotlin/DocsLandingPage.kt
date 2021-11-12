@@ -30,7 +30,7 @@ fun Project.docsLandingPage(awsServices: List<AwsService>, outputDir: File) {
         writer.write("| ------- | ------- |")
         awsServices.sortedBy { it.humanName }.forEach {
             writer.write(
-                "| ${it.humanName} | ${cratesIo(it)} ${docsRs(it)} ${examples(it, project)} | "
+                "| ${it.humanName} | ${cratesIo(it)} ${docsRs(it)} ${examples(it, project)} |"
             )
         }
     }
