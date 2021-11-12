@@ -5,8 +5,8 @@
 
 //! HTTP body utilities.
 
-// This file is a copy of Axum body.rs (https://github.com/tokio-rs/axum/blob/2507463706d0cea90007b5959c579a32d4b24cc4/axum/src/body/mod.rs#L1)
-// Axum original license can be found inside the file named LICENSE.mit.
+// This file is a copy of Axum's `body.rs` (https://github.com/tokio-rs/axum/blob/2507463706d0cea90007b5959c579a32d4b24cc4/axum/src/body/mod.rs#L1)
+// Axum's original license can be found inside the file named `LICENSE.mit`.
 use crate::BoxError;
 use crate::Error;
 

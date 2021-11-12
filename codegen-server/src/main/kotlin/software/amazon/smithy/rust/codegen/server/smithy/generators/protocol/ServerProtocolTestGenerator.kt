@@ -295,7 +295,7 @@ class ServerProtocolTestGenerator(
         )
         if (body == "") {
             rustWriter.write("// No body")
-            rustWriter.write("assert_eq!(std::str::from_utf8(body.0).unwrap(), ${"".dq()});")
+            rustWriter.write("assert_eq!(std::str::from_utf8(body.0).expect("`body` does not contain valid UTF-8"), ${"".dq()});")
         } else {
             rustWriter.write("assert_eq!(expected, body.0);")
         }

@@ -5,8 +5,8 @@
 
 //! Error definition.
 
-// This file is a copy of Axum error.rs (https://github.com/tokio-rs/axum/blob/2507463706d0cea90007b5959c579a32d4b24cc4/axum/src/error.rs#L1)
-// Axum original license can be found inside the file named LICENSE.mit.
+// This file is a copy of Axum's `error.rs` (https://github.com/tokio-rs/axum/blob/2507463706d0cea90007b5959c579a32d4b24cc4/axum/src/error.rs#L1)
+// Axum's original license can be found inside the file named `LICENSE.mit`.
 use crate::BoxError;
 use std::{error::Error as StdError, fmt};
 
