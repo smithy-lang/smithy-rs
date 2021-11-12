@@ -29,8 +29,9 @@ fun Project.docsLandingPage(awsServices: List<AwsService>, outputDir: File) {
         writer.write("| Service | Package |")
         writer.write("| ------- | ------- |")
         awsServices.sortedBy { it.humanName }.forEach {
+            val items = listOfNotNull(cratesIo(it), docsRs(it), examples(it, project)).joinToString(" ")
             writer.write(
-                "| ${it.humanName} | ${cratesIo(it)} ${docsRs(it)} ${examples(it, project)} |"
+                "| ${it.humanName} | $items |"
             )
         }
     }
@@ -43,7 +44,7 @@ fun Project.docsLandingPage(awsServices: List<AwsService>, outputDir: File) {
 private fun examples(service: AwsService, project: Project) = if (with(service) { project.examples() }) {
     "([examples](https://github.com/awslabs/aws-sdk-rust/tree/main/examples/${service.module}))"
 } else {
-    ""
+    null
 }
 
 /**
