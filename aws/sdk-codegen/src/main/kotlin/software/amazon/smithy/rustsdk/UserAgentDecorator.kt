@@ -7,13 +7,14 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -59,17 +60,27 @@ class ApiVersion(private val runtimeConfig: RuntimeConfig, serviceTrait: Service
     }
 }
 
-fun RuntimeConfig.awsHttp(): CargoDependency = awsRuntimeDependency("aws-http")
-fun RuntimeConfig.userAgentModule() = awsHttp().asType().copy(name = "user_agent")
+private fun RuntimeConfig.userAgentModule() = awsHttp().asType().copy(name = "user_agent")
+private fun RuntimeConfig.env(): RuntimeType = RuntimeType("Env", awsTypes(), "aws_types::os_shim_internal")
 
 class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
         is OperationSection.MutateRequest -> writable {
-            rust(
+            rustTemplate(
                 """
-                ${section.request}.properties_mut().insert(#T::AwsUserAgent::new_from_environment(crate::API_METADATA.clone()));
+                ${section.request}.properties_mut().insert(
+                    #{ua_module}::AwsUserAgent::new_from_environment(
+                        #{Env}::real(),
+                        crate::API_METADATA.clone(),
+                        Vec::new(),
+                        Vec::new(),
+                        Vec::new(),
+                        None
+                    )
+                );
                 """,
-                runtimeConfig.userAgentModule()
+                "ua_module" to runtimeConfig.userAgentModule(),
+                "Env" to runtimeConfig.env(),
             )
         }
         else -> emptySection
