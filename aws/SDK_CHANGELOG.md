@@ -1,15 +1,13 @@
 vNext (Month Day, Year)
 =======================
-- [ ] Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
-
 **New this week**
 - Improve docs on `aws-smithy-client` (smithy-rs#855)
+- Fixed links to Usage Examples (smithy-rs#862, @floric)
+- Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#849)
 
 **Breaking Changes**
 - MSRV increased to 1.54.
 - (aws-smithy-client): Extraneous `pub use SdkSuccess` removed from `aws_smithy_client::hyper_ext`. (#smithy-rs#855)
-
-**Breaking Changes**
 
 Several breaking changes around `aws_smithy_types::Instant` were introduced by smithy-rs#849:
 - `aws_smithy_types::Instant` from was renamed to `DateTime` to avoid confusion with the standard library's monotonically nondecreasing `Instant` type.
@@ -55,9 +53,6 @@ Several breaking changes around `aws_smithy_types::Instant` were introduced by s
   - `Instant::epoch_subsecond_nanos` -> `DateTime::subsec_nanos`
   - `Instant::to_epoch_millis` -> `DateTime::to_millis`
 - The `DateTime::fmt` method is now fallible and fails when a `DateTime`'s value is outside what can be represented by the desired date format.
-
-**New this week**
-- Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#849)
 
 v0.0.25-alpha (November 11th, 2021)
 ===================================

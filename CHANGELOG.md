@@ -4,7 +4,7 @@ vNext (Month Day, Year)
 - [ ] Update README & aws-sdk-rust CI for MSRV upgrade to 1.54. Delete this when cutting the release.
 
 **Breaking Changes**
-- MSRV increased to 1.54.
+- MSRV increased to 1.54. The next MSRV increase will occur when 1.57 is released.
 - (aws-smithy-client): Extraneous `pub use SdkSuccess` removed from `aws_smithy_client::hyper_ext`. (#smithy-rs#855)
 
 Several breaking changes around `aws_smithy_types::Instant` were introduced by smithy-rs#849:
@@ -57,7 +57,8 @@ Several breaking changes around `aws_smithy_types::Instant` were introduced by s
 - Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#849)
 - Improve docs on `aws-smithy-client` (smithy-rs#855)
 - `pub use DateTime` in all generated SDK clients
-
+- Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
+- Fixed links to Usage Examples (smithy-rs#862, @floric)
 
 v0.28.0-alpha (November 11th, 2021)
 ===================================
