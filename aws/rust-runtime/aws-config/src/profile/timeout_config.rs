@@ -151,10 +151,8 @@ const SET_BY: &str = "aws profile";
 
 fn construct_timeout_from_profile_var(
     profile: &Profile,
-    var: &str,
+    var: &'static str,
 ) -> Result<Option<Duration>, TimeoutConfigError> {
-    // TODO do I really need to clone this?
-    let var = var.to_owned();
     match profile.get(&var) {
         Some(timeout) => match timeout.parse::<f32>() {
             Ok(timeout) if timeout < 0.0 => Err(TimeoutConfigError::InvalidTimeout {

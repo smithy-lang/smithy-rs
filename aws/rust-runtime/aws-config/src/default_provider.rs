@@ -110,10 +110,17 @@ pub mod retry_config {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn Error>> {
     /// use aws_config::default_provider::retry_config;
-    /// // Creating a RetryConfig from the default_provider already happens when loading a config from_env
-    /// // This is only for illustration purposes
-    /// let retry_config = retry_config::default_provider().retry_config().await;
-    /// let config = aws_config::from_env().retry_config(retry_config).load().await;
+    ///
+    /// // Load a retry config from a specific profile
+    /// let retry_config = retry_config::default_provider()
+    ///     .profile_name("other_profile")
+    ///     .retry_config()
+    ///     .await;
+    /// let config = aws_config::from_env()
+    ///     // Override the retry config set by the default profile
+    ///     .retry_config(retry_config)
+    ///     .load()
+    ///     .await;
     /// // instantiate a service client:
     /// // <my_aws_service>::Client::new(&config);
     /// #     Ok(())
@@ -202,10 +209,17 @@ pub mod timeout_config {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn Error>> {
     /// use aws_config::default_provider::timeout_config;
-    /// // Creating a TimeoutConfig from the default_provider already happens when loading a config from_env
-    /// // This is only for illustration purposes
-    /// let timeout_config = timeout_config::default_provider().timeout_config().await;
-    /// let config = aws_config::from_env().timeout_config(timeout_config).load().await;
+    ///
+    /// // Load a timeout config from a specific profile
+    /// let timeout_config = timeout_config::default_provider()
+    ///     .profile_name("other_profile")
+    ///     .timeout_config()
+    ///     .await;
+    /// let config = aws_config::from_env()
+    ///     // Override the timeout config set by the default profile
+    ///     .timeout_config(timeout_config)
+    ///     .load()
+    ///     .await;
     /// // instantiate a service client:
     /// // <my_aws_service>::Client::new(&config);
     /// #     Ok(())

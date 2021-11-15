@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use crate::SdkError;
 use aws_smithy_async::future::timeout::Timeout;
-use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, Sleep, TokioSleep};
+use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, Sleep};
 use aws_smithy_http::operation::Operation;
 use pin_project_lite::pin_project;
 use tower::Layer;
@@ -126,7 +126,10 @@ impl<InnerService> Layer<InnerService> for TimeoutLayer {
 pin_project! {
     #[non_exhaustive]
     #[must_use = "futures do nothing unless you `.await` or poll them"]
-    /// A future representing a timeout timer. Wraps a [Timeout] with extra context for error reporting
+    /// A wrapper type combining a [Timeout] future and some other future `<T>`.
+    /// If the wrapped future `<T>` doesn't complete before the `Timeout` future,
+    /// an `SdkError::ConstructionFailure` error is returned.
+    /// A `TimeoutLayerFuture<T>` must only wrap a future that returns a `Result<T, SdkError<E>>`.
     pub struct TimeoutLayerFuture<T> {
         #[pin]
         inner: Timeout<T, Sleep>
@@ -145,7 +148,7 @@ where
             Poll::Ready(Ok(t)) => Poll::Ready(t),
             Poll::Ready(Err(timeout)) => {
                 Poll::Ready(Err(SdkError::ConstructionFailure(timeout.into())))
-            } // TODO: need to put this in the right place
+            }
             Poll::Pending => Poll::Pending,
         }
     }
@@ -165,10 +168,12 @@ where
 
     fn call(&mut self, req: Operation<H, R>) -> Self::Future {
         let base_future = self.inner.call(req);
+        let sleep_impl = default_async_sleep()
+            .expect("No default sleep impl was found. This is unexpected. Please report this bug.");
         let timeout_future = self.duration.map_or_else(
             // If no timeout duration is provided, create a functionally infinite one
-            || default_async_sleep().expect("No default sleep impl was found. This is unexpected. Please report this bug.").sleep(Duration::MAX),
-            |duration| TokioSleep::new().sleep(duration),
+            || sleep_impl.sleep(Duration::MAX),
+            |duration| sleep_impl.sleep(duration),
         );
         let with_timeout = Timeout::new(base_future, timeout_future);
         TimeoutLayerFuture {
