@@ -10,9 +10,6 @@
     rust_2018_idioms
 )]
 
-use aws_smithy_types::timeout::TimeoutConfig;
-use tower::ServiceExt;
-
 pub mod bounds;
 pub mod erase;
 pub mod retry;
@@ -91,8 +88,9 @@ use aws_smithy_http::retry::ClassifyResponse;
 use aws_smithy_http_tower::dispatch::DispatchLayer;
 use aws_smithy_http_tower::parse_response::ParseResponseLayer;
 use aws_smithy_types::retry::ProvideErrorKind;
+use aws_smithy_types::timeout::TimeoutConfig;
 use std::error::Error;
-use tower::{Layer, Service, ServiceBuilder};
+use tower::{Layer, Service, ServiceBuilder, ServiceExt};
 
 /// Smithy service client.
 ///
