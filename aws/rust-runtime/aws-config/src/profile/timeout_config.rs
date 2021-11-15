@@ -30,11 +30,11 @@ const PROFILE_VAR_API_CALL_TIMEOUT: &str = "api_call_timeout";
 /// connect_timeout = 2
 /// ```
 ///
-/// **Sets the `connect_timeout` to 2 seconds _if and only if_ the `other` profile is selected.
+/// **Sets the `connect_timeout` to 0.5 seconds _if and only if_ the `other` profile is selected.
 ///
 /// ```ini
 /// [profile other]
-/// connect_timeout = 2
+/// connect_timeout = 0.5
 /// ```
 ///
 /// This provider is part of the [default timeout_config provider chain](crate::default_provider::timeout_config).
@@ -98,7 +98,7 @@ impl ProfileFileTimeoutConfigProvider {
         let profile = match super::parser::load(&self.fs, &self.env).await {
             Ok(profile) => profile,
             Err(err) => {
-                tracing::warn!(err = %err, "failed to parse profile");
+                tracing::warn!(err = %err, "failed to parse profile, skipping it");
                 // return an empty builder
                 return Ok(Default::default());
             }
@@ -111,7 +111,10 @@ impl ProfileFileTimeoutConfigProvider {
         let selected_profile = match profile.get_profile(selected_profile) {
             Some(profile) => profile,
             None => {
-                tracing::warn!("failed to get selected '{}' profile", selected_profile);
+                tracing::warn!(
+                    "failed to get selected '{}' profile, skipping it",
+                    selected_profile
+                );
                 // return an empty builder
                 return Ok(TimeoutConfigBuilder::default());
             }

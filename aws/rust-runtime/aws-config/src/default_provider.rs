@@ -248,7 +248,9 @@ pub mod timeout_config {
         ///
         /// # Panics
         ///
-        /// This will panic if a timeout is set to `NaN` or a negative number or if the timeout can't be parsed as an f32
+        /// This will panic if:
+        /// - a timeout is set to `NaN`, a negative number, or infinity
+        /// - a timeout can't be parsed as a floating point number
         pub async fn timeout_config(self) -> TimeoutConfig {
             // Both of these can return errors due to invalid config settings and we want to surface those as early as possible
             // hence, we'll panic if any config values are invalid (missing values are OK though)

@@ -209,4 +209,23 @@ mod test {
             .to_string()
         );
     }
+
+    #[test]
+    fn disallow_infinite_timeouts() {
+        let err = test_provider(&[
+            // Infinities can be negative but that case is covered by [disallow_negative_timeouts]
+            (ENV_VAR_API_CALL_ATTEMPT_TIMEOUT, "inf"),
+        ])
+        .timeout_config_builder()
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            TimeoutConfigError::InvalidTimeout {
+                set_by: SET_BY.into(),
+                name: ENV_VAR_API_CALL_ATTEMPT_TIMEOUT.into(),
+                reason: "timeout must not be infinite".into(),
+            }
+            .to_string()
+        );
+    }
 }

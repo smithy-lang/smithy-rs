@@ -43,20 +43,17 @@ impl TimeoutConfig {
         self.read_timeout
     }
 
-    // TODO review this doc and try to improve the wording
     /// A limit on the amount of time it takes for the first byte to be sent over an established,
-    /// open connection and when the last byte is received from the service for a single request
-    /// attempt. Multiple attempts may be made depending on an app's
-    /// [super::retry::RetryConfig].
+    /// open connection and when the last byte is received from the service for a single attempt.
+    /// If you want to set a timeout for an entire request including retry attempts,
+    /// use [TimeoutConfig::api_call_timeout] instead.
     pub fn api_call_attempt_timeout(&self) -> Option<Duration> {
         self.api_call_attempt_timeout
     }
 
-    // TODO review this doc and try to improve the wording
-    /// A limit on the amount of time it takes for the first byte to be sent over an established,
-    /// open connection and when the last byte is received from the service for all attempts made
-    /// for a single request. Multiple attempts may be made depending on an app's
-    /// [super::retry::RetryConfig].
+    /// A limit on the amount of time it takes for request to complete. A single request may be
+    /// comprised of several attemps depending on an app's [super::retry::RetryConfig]. If you want
+    /// to control timeouts for a single attempt, use [TimeoutConfig::api_call_attempt_timeout].
     pub fn api_call_timeout(&self) -> Option<Duration> {
         self.api_call_timeout
     }
@@ -108,7 +105,7 @@ impl TimeoutConfigBuilder {
         Default::default()
     }
 
-    /// Sets the connect timeout if `Some(f32)` is passed. Unsets the timeout when `None` is passed.
+    /// Sets the connect timeout if `Some(Duration)` is passed. Unsets the timeout when `None` is passed.
     /// Timeout must be a non-negative number.
     pub fn set_connect_timeout(&mut self, connect_timeout: Option<Duration>) -> &mut Self {
         self.connect_timeout = connect_timeout;
@@ -122,8 +119,8 @@ impl TimeoutConfigBuilder {
         self
     }
 
-    /// Sets the TLS negotiation timeout if `Some(f32)` is passed. Unsets the timeout when `None` is passed.
-    /// Timeout must be a non-negative number.
+    /// Sets the TLS negotiation timeout if `Some(Duration)` is passed.
+    /// Unsets the timeout when `None` is passed.
     pub fn set_tls_negotiation_timeout(
         &mut self,
         tls_negotiation_timeout: Option<Duration>,
@@ -140,8 +137,7 @@ impl TimeoutConfigBuilder {
         self
     }
 
-    /// Sets the read timeout if `Some(f32)` is passed. Unsets the timeout when `None` is passed.
-    /// Timeout must be a non-negative number.
+    /// Sets the read timeout if `Some(Duration)` is passed. Unsets the timeout when `None` is passed.
     pub fn set_read_timeout(&mut self, read_timeout: Option<Duration>) -> &mut Self {
         self.read_timeout = read_timeout;
         self
@@ -155,8 +151,8 @@ impl TimeoutConfigBuilder {
         self
     }
 
-    /// Sets the HTTP request single-attempt timeout if `Some(f32)` is passed. Unsets the timeout
-    /// when `None` is passed. Timeout must be a non-negative number.
+    /// Sets the HTTP request single-attempt timeout if `Some(Duration)` is passed.
+    /// Unsets the timeout when `None` is passed.
     pub fn set_api_call_attempt_timeout(
         &mut self,
         api_call_attempt_timeout: Option<Duration>,
@@ -172,8 +168,8 @@ impl TimeoutConfigBuilder {
         self
     }
 
-    /// Sets the HTTP request multiple-attempt timeout if `Some(f32)` is passed. Unsets the timeout
-    /// when `None` is passed. Timeout must be a non-negative number.
+    /// Sets the HTTP request multiple-attempt timeout if `Some(Duration)` is passed.
+    /// Unsets the timeout when `None` is passed.
     pub fn set_api_call_timeout(&mut self, api_call_timeout: Option<Duration>) -> &mut Self {
         self.api_call_timeout = api_call_timeout;
         self
@@ -233,7 +229,10 @@ impl TimeoutConfigBuilder {
 #[derive(Debug)]
 /// An error that occurs during construction of a `TimeoutConfig`
 pub enum TimeoutConfigError {
-    /// When any timeout is set, it must be a non-negative `f32` and cannot be `NaN` or `infinity`.
+    /// A timeout value was set to an invalid value:
+    /// - Any number less than 0
+    /// - Infinity or negative infinity
+    /// - `NaN`
     InvalidTimeout {
         /// The name of the invalid value
         name: Cow<'static, str>,

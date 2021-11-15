@@ -98,14 +98,6 @@ impl<InnerService> TimeoutService<InnerService> {
             duration: None,
         }
     }
-
-    // async fn response(
-    //     inner_service_future: MaybeTimeoutFuture<InnerService::Future>,
-    // ) -> Result<InnerService::Response, InnerService::Error> {
-    //     inner_service_future
-    //         .await
-    //         .map_err(SdkError::ConstructionFailure)
-    // }
 }
 
 /// A layer that wraps services in a timeout service
