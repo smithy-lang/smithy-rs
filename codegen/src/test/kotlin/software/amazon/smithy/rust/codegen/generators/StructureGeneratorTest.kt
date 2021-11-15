@@ -258,7 +258,7 @@ class StructureGeneratorTest {
                     """
                     let _: Option<&str> = one.field_string();
                     let _: Option<&aws_smithy_types::Blob> = one.field_blob();
-                    let _: Option<&aws_smithy_types::instant::Instant> = one.field_timestamp();
+                    let _: Option<&aws_smithy_types::DateTime> = one.field_timestamp();
                     let _: Option<&aws_smithy_types::Document> = one.field_document();
                     let _: Option<bool> = one.field_boolean();
                     let _: bool = one.field_primitive_boolean();

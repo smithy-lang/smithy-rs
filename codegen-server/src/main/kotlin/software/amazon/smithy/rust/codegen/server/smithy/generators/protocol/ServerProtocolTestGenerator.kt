@@ -27,13 +27,14 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.HttpServerTraits
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -58,15 +59,14 @@ class ServerProtocolTestGenerator(
     private val instantiator = with(codegenContext) {
         Instantiator(symbolProvider, model, runtimeConfig)
     }
-    private val httpServerTraits = HttpServerTraits()
 
     private val codegenScope = arrayOf(
-        "ParseStrictResponse" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
-        "SerializeHttpResponse" to httpServerTraits.serializeHttpResponse(codegenContext.runtimeConfig),
-        "ParseHttpRequest" to httpServerTraits.parseHttpRequest(codegenContext.runtimeConfig),
         "Bytes" to RuntimeType.Bytes,
         "SmithyHttp" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(),
         "Http" to CargoDependency.Http.asType(),
+        "Hyper" to CargoDependency.Hyper.asType(),
+        "Axum" to CargoDependency.Axum.asType(),
+        "SmithyHttpServer" to CargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType(),
     )
 
     sealed class TestCase {
@@ -177,7 +177,6 @@ class ServerProtocolTestGenerator(
         writeInline("let expected =")
         instantiator.render(this, inputShape, httpRequestTestCase.params)
         write(";")
-        rustTemplate("""let op = #{op}::new();""", "op" to operationSymbol)
         with(httpRequestTestCase) {
             host.orNull()?.also { host ->
                 val withScheme = "http://$host"
@@ -203,7 +202,7 @@ class ServerProtocolTestGenerator(
         if (protocolSupport.requestBodyDeserialization) {
             // "If no request body is defined, then no assertions are made about the body of the message."
             httpRequestTestCase.body.orNull()?.also { body ->
-                checkBody(this, body, httpRequestTestCase.uri)
+                checkBody(this, body, httpRequestTestCase)
             }
         }
 
@@ -233,9 +232,7 @@ class ServerProtocolTestGenerator(
         expectedShape: StructureShape
     ) {
         if (!protocolSupport.responseSerialization || (
-            !protocolSupport.errorSerialization && expectedShape.hasTrait(
-                    ErrorTrait::class.java
-                )
+            !protocolSupport.errorSerialization && expectedShape.hasTrait<ErrorTrait>()
             )
         ) {
             rust("/* test case disabled for this protocol (not yet supported) */")
@@ -244,27 +241,35 @@ class ServerProtocolTestGenerator(
         writeInline("let output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
+        val operationName = if (expectedShape.hasTrait<ErrorTrait>()) {
+            "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_ERROR_WRAPPER_SUFFIX}"
+        } else {
+            "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
+        }
         rustTemplate(
             """
-            use #{SerializeHttpResponse};
-            let op = #{op}::new();
-            let http_response = op.serialize(&output).expect("unable to serialize `#{op}` into HTTP response body");
+            let output = super::$operationName::Output(output);
+            use #{Axum}::response::IntoResponse;
+            let http_response = output.into_response();
             """,
             *codegenScope,
-            "op" to operationSymbol,
         )
-        rust("""
+        rust(
+            """
             assert_eq!(
                 http::StatusCode::from_u16(${testCase.code}).expect("invalid expected HTTP status code"),
                 http_response.status()
             );
-        """)
+            """
+        )
         if (testCase.body != null) {
-            rust("""
-                let body = std::str::from_utf8(http_response.body())
-                    .expect("serialized response body does not contain valid UTF-8");
+            rustTemplate(
+                """
+                let body = #{Hyper}::body::to_bytes(http_response.into_body()).await.expect("unable to extract body to bytes");
                 assert_eq!("${testCase.body.get().replace("\"", "\\\"")}", body);
-            """)
+                """,
+                *codegenScope
+            )
         }
     }
 
@@ -276,32 +281,27 @@ class ServerProtocolTestGenerator(
         basicCheck(forbidHeaders, rustWriter, "forbidden_headers", "forbid_headers")
     }
 
-    private fun checkBody(rustWriter: RustWriter, body: String, uri: String) {
+    private fun checkBody(rustWriter: RustWriter, body: String, testCase: HttpRequestTestCase) {
+        val operationName = "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         rustWriter.rustTemplate(
             """
             let http_request = http::Request::builder()
-                .uri(${uri.dq()})
-                .body(#{Bytes}::from_static(b${body.dq()}))
+                .uri(${testCase.uri.dq()})
+                .header("Content-Type", ${testCase.bodyMediaType.orNull()?.dq()})
+                .body(#{SmithyHttpServer}::Body::from(#{Bytes}::from_static(b${body.dq()})))
                 .unwrap();
+            use #{Axum}::extract::FromRequest;
+            let mut http_request = #{Axum}::extract::RequestParts::new(http_request);
+            let input_wrapper = super::$operationName::from_request(&mut http_request).await.expect("failed to parse request");
+            let input = input_wrapper.0;
             """,
-            "body" to body,
-            "uri" to uri,
-            *codegenScope,
-        )
-        rustWriter.rustTemplate(
-            """
-            use #{ParseHttpRequest};
-            let op = #{op}::new();
-            let body = op.parse_loaded(&http_request).expect("failed to parse request");
-            """,
-            "op" to operationSymbol,
             *codegenScope,
         )
         if (body == "") {
             rustWriter.write("// No body")
-            rustWriter.write("assert_eq!(std::str::from_utf8(body).unwrap(), ${"".dq()});")
+            rustWriter.write("assert_eq!(std::str::from_utf8(input).expect(\"`body` does not contain valid UTF-8\"), ${"".dq()});")
         } else {
-            rustWriter.write("assert_eq!(expected, body);")
+            rustWriter.write("assert_eq!(input, expected);")
         }
     }
 
