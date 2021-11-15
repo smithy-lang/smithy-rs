@@ -248,7 +248,7 @@ class ServerProtocolTestGenerator(
         }
         rustTemplate(
             """
-            let output = super::$operationName(output);
+            let output = super::$operationName::Output(output);
             use #{Axum}::response::IntoResponse;
             let http_response = output.into_response();
             """,
