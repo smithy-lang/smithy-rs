@@ -265,9 +265,11 @@ where
 #[cfg(test)]
 mod test {
     use crate::never::NeverService;
+    use crate::timeout::generate_timeout_service_params_from_timeout_config;
     use crate::{SdkError, TimeoutLayer};
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::operation::{Operation, Request};
+    use aws_smithy_types::timeout::TimeoutConfig;
     use std::time::Duration;
     use tower::{Service, ServiceBuilder, ServiceExt};
 
@@ -293,8 +295,12 @@ mod test {
         let req = Request::new(http::Request::new(SdkBody::empty()));
         let op = Operation::new(req, ());
         let never_service: NeverService<_, (), _> = NeverService::new();
+        let timeout_config =
+            TimeoutConfig::new().with_api_call_timeout(Duration::from_secs_f32(0.25));
+        let timeout_service_params =
+            generate_timeout_service_params_from_timeout_config(&timeout_config);
         let mut svc = ServiceBuilder::new()
-            .layer(TimeoutLayer::new(Some(Duration::from_secs_f32(0.25))))
+            .layer(TimeoutLayer::new(timeout_service_params.api_call))
             .service(never_service);
 
         let now = tokio::time::Instant::now();
