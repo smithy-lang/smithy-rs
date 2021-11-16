@@ -80,6 +80,10 @@ pub mod conns {
     >;
 }
 
+use std::error::Error;
+use tower::{Layer, Service, ServiceBuilder, ServiceExt};
+
+use crate::timeout::generate_timeout_service_params_from_timeout_config;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::response::ParseHttpResponse;
@@ -89,8 +93,6 @@ use aws_smithy_http_tower::dispatch::DispatchLayer;
 use aws_smithy_http_tower::parse_response::ParseResponseLayer;
 use aws_smithy_types::retry::ProvideErrorKind;
 use aws_smithy_types::timeout::TimeoutConfig;
-use std::error::Error;
-use tower::{Layer, Service, ServiceBuilder, ServiceExt};
 
 /// Smithy service client.
 ///
@@ -210,12 +212,13 @@ where
     {
         let connector = self.connector.clone();
 
+        let timeout_servic_params =
+            generate_timeout_service_params_from_timeout_config(&self.timeout_config);
+
         let svc = ServiceBuilder::new()
-            // .layer(TimeoutLayer::new(self.timeout_config.api_call_timeout()))
+            .layer(TimeoutLayer::new(timeout_servic_params.api_call))
             .retry(self.retry_policy.new_request_policy())
-            // .layer(TimeoutLayer::new(
-            //     self.timeout_config.api_call_attempt_timeout(),
-            // ))
+            .layer(TimeoutLayer::new(timeout_servic_params.api_call_attempt))
             .layer(ParseResponseLayer::<O, Retry>::new())
             // These layers can be considered as occurring in order. That is, first invoke the
             // customer-provided middleware, then dispatch dispatch over the wire.

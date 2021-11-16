@@ -59,6 +59,29 @@ impl TimeoutConfig {
         self.api_call_timeout
     }
 
+    /// Generate a human-readable list of the timeouts that are currently set. This is used for
+    /// logging and error reporting.
+    pub fn list_of_set_timeouts(&self) -> Vec<&'static str> {
+        let mut vec = Vec::new();
+        if self.api_call_timeout.is_some() {
+            vec.push("api call")
+        }
+        if self.api_call_attempt_timeout.is_some() {
+            vec.push("api call attempt")
+        }
+        if self.tls_negotiation_timeout.is_some() {
+            vec.push("TLS negotiation")
+        }
+        if self.connect_timeout.is_some() {
+            vec.push("connect")
+        }
+        if self.read_timeout.is_some() {
+            vec.push("read")
+        }
+
+        vec
+    }
+
     /// Consume a [`TimeoutConfig`] to createa new one, setting the connect timeout
     pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
         self.connect_timeout = Some(timeout);

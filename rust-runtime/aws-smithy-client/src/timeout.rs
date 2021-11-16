@@ -11,13 +11,15 @@
 //! HttpSettings.
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
 use crate::SdkError;
-use aws_smithy_async::future::timeout::Timeout;
+use aws_smithy_async::future::timeout::{TimedOutError, Timeout};
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, Sleep};
 use aws_smithy_http::operation::Operation;
+use aws_smithy_types::timeout::TimeoutConfig;
 use pin_project_lite::pin_project;
 use tower::Layer;
 
@@ -63,26 +65,81 @@ impl Settings {
     }
 }
 
+#[derive(Clone, Debug)]
+/// A struct containing everything needed to create a new [`TimeoutService`]
+pub struct TimeoutServiceParams {
+    /// The duration of timeouts created from these params
+    duration: Duration,
+    /// The kind of timeouts created from these params
+    kind: &'static str,
+    /// The AsyncSleep impl that will be used to create time-limited futures
+    async_sleep: Arc<dyn AsyncSleep>,
+}
+
+#[derive(Clone, Debug, Default)]
+/// A struct of structs containing everything needed to create new [`TimeoutService`]s
+pub struct AllTimeoutServiceParams {
+    /// Params used to create a new API call [`TimeoutService`]
+    pub api_call: Option<TimeoutServiceParams>,
+    /// Params used to create a new API call attempt [`TimeoutService`]
+    pub api_call_attempt: Option<TimeoutServiceParams>,
+}
+
+/// Convert a [`TimeoutConfig`] into an [`AllTimeoutServiceParams`] in order to create the set of
+/// [`TimeoutService`]s needed by a [`crate::Client`]
+pub fn generate_timeout_service_params_from_timeout_config(
+    timeout_config: &TimeoutConfig,
+) -> AllTimeoutServiceParams {
+    if let Some(async_sleep) = default_async_sleep() {
+        AllTimeoutServiceParams {
+            api_call: timeout_config
+                .api_call_timeout()
+                .map(|duration| TimeoutServiceParams {
+                    duration,
+                    kind: "API call (multiple attempts)",
+                    async_sleep: async_sleep.clone(),
+                }),
+            api_call_attempt: timeout_config.api_call_attempt_timeout().map(|duration| {
+                TimeoutServiceParams {
+                    duration,
+                    kind: "API call (single attempt)",
+                    async_sleep: async_sleep.clone(),
+                }
+            }),
+        }
+    } else {
+        let list_of_set_timeouts = timeout_config.list_of_set_timeouts();
+        let list_of_set_timeouts = list_of_set_timeouts.join(", ");
+
+        tracing::warn!(
+            "One or more timeouts were set ({}) but no default_async_sleep fn exists. \
+            Make sure the 'tokio-rt' feature is enabled if you want to set timeouts.",
+            list_of_set_timeouts
+        );
+
+        Default::default()
+    }
+}
+
 /// A service that wraps another service, adding the ability to set a timeout for requests
 /// handled by the inner service.
 #[derive(Clone, Debug)]
 pub struct TimeoutService<InnerService> {
     inner: InnerService,
-    duration: Option<Duration>,
+    params: Option<TimeoutServiceParams>,
 }
 
 impl<InnerService> TimeoutService<InnerService> {
-    /// Given a function that will sleep a thread and timeout duration, create a new HttpRequestTimeout
-    /// that will timeout if the inner service doesn't respond before the timeout elapses.
-    pub fn new(inner: InnerService, duration: Option<Duration>) -> Self {
-        Self { inner, duration }
+    /// Create a new TimeoutService that will timeout after the duration specified in `params` elapses
+    pub fn new(inner: InnerService, params: Option<TimeoutServiceParams>) -> Self {
+        Self { inner, params }
     }
 
-    /// Create a new HttpRequestTimeout that will never timeout
+    /// Create a new TimeoutService that will never timeout
     pub fn no_timeout(inner: InnerService) -> Self {
         Self {
             inner,
-            duration: None,
+            params: None,
         }
     }
 }
@@ -90,12 +147,12 @@ impl<InnerService> TimeoutService<InnerService> {
 /// A layer that wraps services in a timeout service
 #[non_exhaustive]
 #[derive(Debug)]
-pub struct TimeoutLayer(Option<Duration>);
+pub struct TimeoutLayer(Option<TimeoutServiceParams>);
 
 impl TimeoutLayer {
     /// Create a new HttpRequestTimeoutLayer
-    pub fn new(duration: Option<Duration>) -> Self {
-        TimeoutLayer(duration)
+    pub fn new(params: Option<TimeoutServiceParams>) -> Self {
+        TimeoutLayer(params)
     }
 }
 
@@ -105,37 +162,78 @@ impl<InnerService> Layer<InnerService> for TimeoutLayer {
     fn layer(&self, inner: InnerService) -> Self::Service {
         TimeoutService {
             inner,
-            duration: self.0,
+            params: self.0.clone(),
         }
     }
 }
 
 pin_project! {
-    #[non_exhaustive]
-    #[must_use = "futures do nothing unless you `.await` or poll them"]
-    /// A wrapper type combining a [Timeout] future and some other future `<T>`.
-    /// If the wrapped future `<T>` doesn't complete before the `Timeout` future,
-    /// an `SdkError::ConstructionFailure` error is returned.
-    /// A `TimeoutLayerFuture<T>` must only wrap a future that returns a `Result<T, SdkError<E>>`.
-    pub struct TimeoutLayerFuture<T> {
-        #[pin]
-        inner: Timeout<T, Sleep>
+#[non_exhaustive]
+#[must_use = "futures do nothing unless you `.await` or poll them"]
+    #[project = TimeoutServiceFutureProj]
+    /// A future generated by a [`TimeoutService`] that may or may not have a timeout depending on
+    /// whether or not one was set. Because `TimeoutService` can be used at multiple levels of the
+    /// service stack, a `kind` can be set so that when a timeout occurs, you can know which kind of
+    /// timeout it was.
+    pub enum TimeoutServiceFuture<F> {
+        /// A wrapper around an inner future that will output an [`SdkError`] if it runs longer than
+        /// the given duration
+        Timeout {
+            #[pin]
+            future: Timeout<F, Sleep>,
+            kind: &'static str,
+            duration: Duration,
+        },
+        /// A thin wrapper around an inner future that will never time out
+        NoTimeout {
+            #[pin]
+            future: F
+        }
     }
 }
 
-impl<InnerFuture, T, E> Future for TimeoutLayerFuture<InnerFuture>
+impl<F> TimeoutServiceFuture<F> {
+    /// Given a `future`, an implementor of `AsyncSleep`, a `kind` for this timeout, and a `duration`,
+    /// wrap the `future` inside a [`Timeout`] future and create a new [`TimeoutServiceFuture`] that
+    /// will output an [`SdkError`] if `future` doesn't complete before `duration` has elapsed.
+    pub fn new(future: F, params: &TimeoutServiceParams) -> Self {
+        Self::Timeout {
+            future: Timeout::new(future, params.async_sleep.sleep(params.duration)),
+            kind: params.kind,
+            duration: params.duration,
+        }
+    }
+
+    /// Create a [`TimeoutServiceFuture`] that will never time out.
+    pub fn no_timeout(future: F) -> Self {
+        Self::NoTimeout { future }
+    }
+}
+
+impl<InnerFuture, T, E> Future for TimeoutServiceFuture<InnerFuture>
 where
     InnerFuture: Future<Output = Result<T, SdkError<E>>>,
 {
     type Output = Result<T, SdkError<E>>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let me = self.project();
-        match me.inner.poll(cx) {
-            Poll::Ready(Ok(t)) => Poll::Ready(t),
-            Poll::Ready(Err(timeout)) => {
-                Poll::Ready(Err(SdkError::ConstructionFailure(timeout.into())))
+        // TODO duration will be used in the error message once a Timeout variant is added to SdkError
+        let (future, _kind, _duration) = match self.project() {
+            TimeoutServiceFutureProj::NoTimeout { future } => {
+                return future.poll(cx).map_err(|err| err.into())
             }
+            TimeoutServiceFutureProj::Timeout {
+                future,
+                kind,
+                duration,
+            } => (future, kind, duration),
+        };
+        match future.poll(cx) {
+            Poll::Ready(Ok(response)) => Poll::Ready(response.map_err(|err| err.into())),
+            Poll::Ready(Err(_timeout)) => Poll::Ready(Err(SdkError::ConstructionFailure(
+                Box::new(TimedOutError),
+            )
+            .into())),
             Poll::Pending => Poll::Pending,
         }
     }
@@ -147,24 +245,19 @@ where
 {
     type Response = InnerService::Response;
     type Error = aws_smithy_http::result::SdkError<E>;
-    type Future = TimeoutLayerFuture<InnerService::Future>;
+    type Future = TimeoutServiceFuture<InnerService::Future>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
     fn call(&mut self, req: Operation<H, R>) -> Self::Future {
-        let base_future = self.inner.call(req);
-        let sleep_impl = default_async_sleep()
-            .expect("No default sleep impl was found. This is unexpected. Please report this bug.");
-        let timeout_future = self.duration.map_or_else(
-            // If no timeout duration is provided, create a functionally infinite one
-            || sleep_impl.sleep(Duration::MAX),
-            |duration| sleep_impl.sleep(duration),
-        );
-        let with_timeout = Timeout::new(base_future, timeout_future);
-        TimeoutLayerFuture {
-            inner: with_timeout,
+        let future = self.inner.call(req);
+
+        if let Some(params) = &self.params {
+            Self::Future::new(future, params)
+        } else {
+            Self::Future::no_timeout(future)
         }
     }
 }
