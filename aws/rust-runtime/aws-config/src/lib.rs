@@ -178,9 +178,11 @@ mod loader {
         /// # use std::time::Duration;
         /// # use aws_smithy_types::timeout::TimeoutConfig;
         /// # async fn create_config() {
-        ///     let config = aws_config::from_env()
-        ///         .timeout_config(TimeoutConfig::new().with_api_call_attempt_timeout(Duration::from_secs(1)))
-        ///         .load().await;
+        ///  let timeout_config = TimeoutConfig::new().with_api_call_timeout(Duration::from_secs(1));
+        ///  let config = aws_config::from_env()
+        ///     .timeout_config(timeout_config)
+        ///     .load()
+        ///     .await;
         /// # }
         /// ```
         pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
