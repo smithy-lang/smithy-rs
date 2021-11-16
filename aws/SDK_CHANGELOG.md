@@ -1,7 +1,8 @@
 vNext (Month Day, Year)
 =======================
+
+**TODO Upon release**
 - Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
-- Fixed links to Usage Examples (smithy-rs#862, @floric)
 
 **Breaking Changes**
 
@@ -51,7 +52,17 @@ Several breaking changes around `aws_smithy_types::Instant` were introduced by s
 - The `DateTime::fmt` method is now fallible and fails when a `DateTime`'s value is outside what can be represented by the desired date format.
 
 **New this week**
+
 - Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#849)
+- Fixed links to Usage Examples (smithy-rs#862, @floric)
+- Added missing features to user agent formatting, and made it possible to configure an app name for the user agent via service config. (smithy-rs#865)
+
+**Contributions**
+
+Thank you for your contributions! :heart:
+
+- @floric (smithy-rs#862)
+
 
 v0.0.25-alpha (November 11th, 2021)
 ===================================
