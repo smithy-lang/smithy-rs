@@ -193,7 +193,7 @@ pub mod timeout_config {
     use crate::profile;
     use crate::provider_config::ProviderConfig;
 
-    /// Default TimeoutConfig Provider chain
+    /// Default [`TimeoutConfig`] Provider chain
     ///
     /// Unlike other "providers" `TimeoutConfig` has no related `TimeoutConfigProvider` trait. Instead,
     /// a builder struct is returned which has a similar API.
