@@ -200,7 +200,7 @@ pub mod timeout_config {
     ///
     /// This provider will check the following sources in order:
     /// 1. [Environment variables](EnvironmentVariableTimeoutConfigProvider)
-    /// 2. [Profile file](crate::profile::timeout_config::ProfileFileTimeoutConfigProvider)
+    /// 2. [Profile file](crate::profile::timeout_config::ProfileFileTimeoutConfigProvider) (`~/.aws/config`)
     ///
     /// # Example
     ///
