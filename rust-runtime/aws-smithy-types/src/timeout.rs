@@ -10,6 +10,29 @@ use std::fmt::Display;
 use std::time::Duration;
 
 /// Configuration for the various kinds of timeouts supported by aws_smithy_client::Client.
+///
+/// # Example
+///
+/// ```rust
+/// # use std::time::Duration;
+///
+/// # fn main() {
+/// use aws_smithy_types::timeout::TimeoutConfig;
+/// let timeout_config = TimeoutConfig::new()
+///     .with_api_call_timeout(Duration::from_secs(2))
+///     .with_api_call_attempt_timeout(Duration::from_secs_f32(0.5));
+///
+/// assert_eq!(
+///     timeout_config.api_call_timeout(),
+///     Some(Duration::from_secs(2))
+/// );
+///
+/// assert_eq!(
+///     timeout_config.api_call_attempt_timeout(),
+///     Some(Duration::from_secs_f32(0.5))
+/// );
+/// # }
+/// ```
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct TimeoutConfig {
     connect_timeout: Option<Duration>,
@@ -47,14 +70,14 @@ impl TimeoutConfig {
     /// A limit on the amount of time it takes for the first byte to be sent over an established,
     /// open connection and when the last byte is received from the service for a single attempt.
     /// If you want to set a timeout for an entire request including retry attempts,
-    /// use [TimeoutConfig::api_call_timeout] instead.
+    /// use [`TimeoutConfig::api_call_timeout`] instead.
     pub fn api_call_attempt_timeout(&self) -> Option<Duration> {
         self.api_call_attempt_timeout
     }
 
     /// A limit on the amount of time it takes for request to complete. A single request may be
-    /// comprised of several attemps depending on an app's [super::retry::RetryConfig]. If you want
-    /// to control timeouts for a single attempt, use [TimeoutConfig::api_call_attempt_timeout].
+    /// comprised of several attemps depending on an app's [`RetryConfig`](super::retry::RetryConfig). If you want
+    /// to control timeouts for a single attempt, use [`TimeoutConfig::api_call_attempt_timeout`].
     pub fn api_call_timeout(&self) -> Option<Duration> {
         self.api_call_timeout
     }
@@ -82,31 +105,31 @@ impl TimeoutConfig {
         vec
     }
 
-    /// Consume a [`TimeoutConfig`] to createa new one, setting the connect timeout
+    /// Consume a `TimeoutConfig` to create a new one, setting the connect timeout
     pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
         self.connect_timeout = Some(timeout);
         self
     }
 
-    /// Consume a [`TimeoutConfig`] to createa new one, setting the TLS negotiation timeout
+    /// Consume a `TimeoutConfig` to create a new one, setting the TLS negotiation timeout
     pub fn with_tls_negotiation_timeout(mut self, timeout: Duration) -> Self {
         self.tls_negotiation_timeout = Some(timeout);
         self
     }
 
-    /// Consume a [`TimeoutConfig`] to createa new one, setting the read timeout
+    /// Consume a `TimeoutConfig` to create a new one, setting the read timeout
     pub fn with_read_timeout(mut self, timeout: Duration) -> Self {
         self.read_timeout = Some(timeout);
         self
     }
 
-    /// Consume a [`TimeoutConfig`] to createa new one, setting the API call attempt timeout
+    /// Consume a `TimeoutConfig` to create a new one, setting the API call attempt timeout
     pub fn with_api_call_attempt_timeout(mut self, timeout: Duration) -> Self {
         self.api_call_attempt_timeout = Some(timeout);
         self
     }
 
-    /// Consume a [`TimeoutConfig`] to createa new one, setting the API call timeout
+    /// Consume a `TimeoutConfig` to create a new one, setting the API call timeout
     pub fn with_api_call_timeout(mut self, timeout: Duration) -> Self {
         self.api_call_timeout = Some(timeout);
         self
@@ -265,7 +288,7 @@ pub enum TimeoutConfigError {
         /// Where the invalid value originated from
         set_by: Cow<'static, str>,
     },
-    /// The timeout value couln't be parsed as an f32
+    /// The timeout value couln't be parsed as an `f32`
     CouldntParseTimeout {
         /// The name of the invalid value
         name: Cow<'static, str>,
