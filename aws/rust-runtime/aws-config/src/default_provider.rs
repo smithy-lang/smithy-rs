@@ -195,7 +195,7 @@ pub mod timeout_config {
 
     /// Default [`TimeoutConfig`] Provider chain
     ///
-    /// Unlike other "providers" `TimeoutConfig` has no related `TimeoutConfigProvider` trait. Instead,
+    /// Unlike other credentials and region, [`TimeoutConfig`] has no related `TimeoutConfigProvider` trait. Instead,
     /// a builder struct is returned which has a similar API.
     ///
     /// This provider will check the following sources in order:
