@@ -229,7 +229,7 @@ pub mod timeout_config {
         Builder::default()
     }
 
-    /// Builder for TimeoutConfig that checks the environment and aws profile for configuration
+    /// Builder for [`TimeoutConfig`] that checks the environment variables and AWS profile files for configuration
     #[derive(Default)]
     pub struct Builder {
         env_provider: EnvironmentVariableTimeoutConfigProvider,
