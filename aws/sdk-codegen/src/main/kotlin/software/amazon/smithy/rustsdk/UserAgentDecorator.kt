@@ -20,6 +20,8 @@ import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 
@@ -29,6 +31,13 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
 class UserAgentDecorator : RustCodegenDecorator {
     override val name: String = "UserAgent"
     override val order: Byte = 10
+
+    override fun configCustomizations(
+        codegenContext: CodegenContext,
+        baseCustomizations: List<ConfigCustomization>
+    ): List<ConfigCustomization> {
+        return baseCustomizations + AppNameCustomization()
+    }
 
     override fun libRsCustomizations(
         codegenContext: CodegenContext,
@@ -51,11 +60,16 @@ class UserAgentDecorator : RustCodegenDecorator {
 /**
  * Adds a static `API_METADATA` variable to the crate root containing the serviceId & the version of the crate for this individual service
  */
-class ApiVersion(private val runtimeConfig: RuntimeConfig, serviceTrait: ServiceTrait) : LibRsCustomization() {
+private class ApiVersion(private val runtimeConfig: RuntimeConfig, serviceTrait: ServiceTrait) : LibRsCustomization() {
     private val serviceId = serviceTrait.sdkId.toLowerCase().replace(" ", "")
     override fun section(section: LibRsSection): Writable = when (section) {
         // PKG_VERSION comes from CrateVersionGenerator
-        is LibRsSection.Body -> writable { rust("static API_METADATA: #1T::ApiMetadata = #1T::ApiMetadata::new(${serviceId.dq()}, PKG_VERSION);", runtimeConfig.userAgentModule()) }
+        is LibRsSection.Body -> writable {
+            rust(
+                "static API_METADATA: #1T::ApiMetadata = #1T::ApiMetadata::new(${serviceId.dq()}, PKG_VERSION);",
+                runtimeConfig.userAgentModule()
+            )
+        }
         else -> emptySection
     }
 }
@@ -63,7 +77,7 @@ class ApiVersion(private val runtimeConfig: RuntimeConfig, serviceTrait: Service
 private fun RuntimeConfig.userAgentModule() = awsHttp().asType().copy(name = "user_agent")
 private fun RuntimeConfig.env(): RuntimeType = RuntimeType("Env", awsTypes(), "aws_types::os_shim_internal")
 
-class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
+private class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
         is OperationSection.MutateRequest -> writable {
             rustTemplate(
@@ -75,7 +89,7 @@ class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : OperationCust
                         Vec::new(),
                         Vec::new(),
                         Vec::new(),
-                        None
+                        _config.app_name().cloned(),
                     )
                 );
                 """,
@@ -85,4 +99,72 @@ class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : OperationCust
         }
         else -> emptySection
     }
+}
+
+private class AppNameCustomization() : ConfigCustomization() {
+    override fun section(section: ServiceConfig): Writable =
+        when (section) {
+            is ServiceConfig.BuilderStruct -> writable {
+                rust("app_name: Option<std::borrow::Cow<'static, str>>,")
+            }
+            is ServiceConfig.BuilderImpl -> writable {
+                rust(
+                    """
+                    /// Sets the name of the app that is using the client.
+                    ///
+                    /// This _optional_ name is used to identify the application in the user agent that
+                    /// gets sent along with requests.
+                    ///
+                    /// The name may only have alphanumeric characters and any of these characters:
+                    /// ```text
+                    /// !##${'$'}%&'*+-.^_`|~
+                    /// ```
+                    /// Spaces are not allowed. If unsupported characters are given, this will lead to a panic.
+                    ///
+                    /// App names are recommended to be no more than 50 characters.
+                    pub fn app_name(mut self, app_name: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+                        self.set_app_name(Some(app_name.into()));
+                        self
+                    }
+
+                    /// Sets the name of the app that is using the client.
+                    ///
+                    /// This _optional_ name is used to identify the application in the user agent that
+                    /// gets sent along with requests.
+                    ///
+                    /// The name may only have alphanumeric characters and any of these characters:
+                    /// ```text
+                    /// !##${'$'}%&'*+-.^_`|~
+                    /// ```
+                    /// Spaces are not allowed. If unsupported characters are given, this will lead to a panic.
+                    ///
+                    /// App names are recommended to be no more than 50 characters.
+                    pub fn set_app_name(&mut self, app_name: Option<std::borrow::Cow<'static, str>>) -> &mut Self {
+                        self.app_name = app_name;
+                        self
+                    }
+                    """
+                )
+            }
+            is ServiceConfig.BuilderBuild -> writable {
+                rust("app_name: self.app_name,")
+            }
+            is ServiceConfig.ConfigStruct -> writable {
+                rust("app_name: Option<std::borrow::Cow<'static, str>>,")
+            }
+            is ServiceConfig.ConfigImpl -> writable {
+                rust(
+                    """
+                    /// Returns the name of the app that is using the client, if it was provided.
+                    ///
+                    /// This _optional_ name is used to identify the application in the user agent that
+                    /// gets sent along with requests.
+                    pub fn app_name(&self) -> Option<&std::borrow::Cow<'static, str>> {
+                        self.app_name.as_ref()
+                    }
+                    """
+                )
+            }
+            else -> emptySection
+        }
 }

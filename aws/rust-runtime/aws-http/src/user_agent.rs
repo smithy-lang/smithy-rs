@@ -30,7 +30,7 @@ pub struct AwsUserAgent {
     feature_metadata: Vec<FeatureMetadata>,
     config_metadata: Vec<ConfigMetadata>,
     framework_metadata: Vec<FrameworkMetadata>,
-    app_id: Option<Cow<'static, str>>,
+    app_name: Option<Cow<'static, str>>,
 }
 
 impl AwsUserAgent {
@@ -45,7 +45,7 @@ impl AwsUserAgent {
         feature_metadata: Vec<FeatureMetadata>,
         config_metadata: Vec<ConfigMetadata>,
         framework_metadata: Vec<FrameworkMetadata>,
-        app_id: Option<Cow<'static, str>>,
+        app_name: Option<Cow<'static, str>>,
     ) -> Self {
         let build_metadata = &BUILD_METADATA;
         let sdk_metadata = SdkMetadata {
@@ -73,8 +73,33 @@ impl AwsUserAgent {
             feature_metadata,
             config_metadata,
             framework_metadata,
-            app_id,
+            app_name: app_name.map(Self::validate_app_name),
         }
+    }
+
+    fn validate_app_name(app_name: Cow<'static, str>) -> Cow<'static, str> {
+        fn valid_character(c: char) -> bool {
+            match c {
+                _ if c.is_ascii_alphanumeric() => true,
+                '!' | '#' | '$' | '%' | '&' | '\'' | '*' | '+' | '-' | '.' | '^' | '_' | '`'
+                | '|' | '~' => true,
+                _ => false,
+            }
+        }
+        if !app_name.chars().all(valid_character) {
+            panic!(
+                "The app name can only have alphanumeric characters, or any of \
+                 '!' |  '#' |  '$' |  '%' |  '&' |  '\\'' |  '*' |  '+' |  '-' | \
+                 '.' |  '^' |  '_' |  '`' |  '|' |  '~'"
+            );
+        }
+        if app_name.len() > 50 {
+            tracing::warn!(
+                "The `app_name` set when configuring the SDK client is recommended \
+                 to have no more than 50 characters."
+            )
+        }
+        app_name
     }
 
     /// For test purposes, construct an environment-independent User Agent
@@ -103,7 +128,7 @@ impl AwsUserAgent {
             feature_metadata: Vec::new(),
             config_metadata: Vec::new(),
             framework_metadata: Vec::new(),
-            app_id: None,
+            app_name: None,
         }
     }
 
@@ -142,8 +167,8 @@ impl AwsUserAgent {
         for framework in &self.framework_metadata {
             write!(ua_value, "{} ", framework).unwrap();
         }
-        if let Some(app_id) = &self.app_id {
-            write!(ua_value, "app/{}", app_id).unwrap();
+        if let Some(app_name) = &self.app_name {
+            write!(ua_value, "app/{}", app_name).unwrap();
         }
         if ua_value.ends_with(' ') {
             ua_value.truncate(ua_value.len() - 1);
@@ -613,7 +638,7 @@ mod test {
     }
 
     #[test]
-    fn generate_a_valid_ua_with_app_id() {
+    fn generate_a_valid_ua_with_app_name() {
         let api_metadata = ApiMetadata {
             service_id: "dynamodb".into(),
             version: "123",
@@ -665,6 +690,44 @@ mod test {
         req.headers()
             .get(&*X_AMZ_USER_AGENT)
             .expect("UA header should be set");
+    }
+
+    #[test]
+    fn app_name_validation_success() {
+        let test_str = "asdf1234ASDF!#$%&'*+-.^_`|~";
+        let ua = AwsUserAgent::new_from_environment(
+            Env::from_slice(&[]),
+            ApiMetadata {
+                service_id: "dynamodb".into(),
+                version: "123",
+            },
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Some(Cow::Borrowed(test_str)),
+        )
+        .aws_ua_header();
+        assert!(
+            ua.ends_with(test_str),
+            "'{}' didn't end in the app name",
+            ua
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn app_name_validation_failure() {
+        AwsUserAgent::new_from_environment(
+            Env::from_slice(&[]),
+            ApiMetadata {
+                service_id: "dynamodb".into(),
+                version: "123",
+            },
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Some(Cow::Borrowed("foo bar")),
+        );
     }
 }
 
