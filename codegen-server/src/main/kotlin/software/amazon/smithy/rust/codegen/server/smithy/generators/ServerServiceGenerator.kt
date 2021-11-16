@@ -36,7 +36,7 @@ class ServerServiceGenerator(
      */
     fun render() {
         val operations = index.getContainedOperations(context.serviceShape).sortedBy { it.id }
-        operations.map { operation ->
+        for (operation in operations) {
             rustCrate.useShapeWriter(operation) { operationWriter ->
                 protocolGenerator.serverRenderOperation(
                     operationWriter,
@@ -53,6 +53,10 @@ class ServerServiceGenerator(
                         .render(writer)
                 }
             }
+        }
+        rustCrate.withModule(RustModule.public("operation_registry", "A registry of your service's operations.")) { writer ->
+            OperationRegistryGenerator(context, operations)
+                .render(writer)
         }
     }
 }
