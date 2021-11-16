@@ -258,7 +258,7 @@ pub mod timeout_config {
         /// 1. [Environment variables](crate::environment::timeout_config::EnvironmentVariableTimeoutConfigProvider)
         /// 2. [Profile file](crate::profile::timeout_config::ProfileFileTimeoutConfigProvider)
         ///
-        /// Precedence is considered on a per-field basis. There are no default timeouts.
+        /// Precedence is considered on a per-field basis. If no timeout is specified, requests will never time out.
         ///
         /// # Panics
         ///
