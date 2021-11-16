@@ -103,7 +103,7 @@ impl Builder {
         self
     }
 
-    /// Set the [TimeoutConfig] for the builder
+    /// Set the [`TimeoutConfig`] for the builder
     ///
     /// # Examples
     /// ```rust
@@ -119,7 +119,7 @@ impl Builder {
         self
     }
 
-    /// Set the [TimeoutConfig] for the builder
+    /// Set the [`TimeoutConfig`] for the builder
     ///
     /// # Examples
     /// ```rust

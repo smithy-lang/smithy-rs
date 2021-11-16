@@ -19,18 +19,24 @@ const PROFILE_VAR_API_CALL_TIMEOUT: &str = "api_call_timeout";
 
 /// Load timeout configuration properties from a profile file
 ///
-/// This provider will attempt to load AWS shared configuration, then read timeout configuration properties
-/// from the active profile.
+/// This provider will attempt to load AWS shared configuration, then read timeout configuration
+/// properties from the active profile. Timeout values represent the number of seconds before timing
+/// out and must be non-negative floats or integers. NaN and infinity are also invalid. If at least
+/// one of these vars is set to a valid value, construction will succeed.
 ///
 /// # Examples
 ///
-/// **Sets the `connect_timeout` to 2 seconds
+/// **Sets timeouts for the `default` profile**
 /// ```ini
 /// [default]
-/// connect_timeout = 2
+/// connect_timeout = 1.0
+/// read_timeout = 1.0
+/// tls_negotiation_timeout = 0.5
+/// api_call_attempt_timeout = 2
+/// api_call_timeout = 3
 /// ```
 ///
-/// **Sets the `connect_timeout` to 0.5 seconds _if and only if_ the `other` profile is selected.
+/// **Sets the `connect_timeout` to 0.5 seconds _if and only if_ the `other` profile is selected.**
 ///
 /// ```ini
 /// [profile other]
@@ -45,7 +51,7 @@ pub struct ProfileFileTimeoutConfigProvider {
     profile_override: Option<String>,
 }
 
-/// Builder for [ProfileFileTimeoutConfigProvider]
+/// Builder for [`ProfileFileTimeoutConfigProvider`]
 #[derive(Default)]
 pub struct Builder {
     config: Option<ProviderConfig>,
@@ -59,13 +65,13 @@ impl Builder {
         self
     }
 
-    /// Override the profile name used by the [ProfileFileTimeoutConfigProvider]
+    /// Override the profile name used by the [`ProfileFileTimeoutConfigProvider`]
     pub fn profile_name(mut self, profile_name: impl Into<String>) -> Self {
         self.profile_override = Some(profile_name.into());
         self
     }
 
-    /// Build a [ProfileFileTimeoutConfigProvider] from this builder
+    /// Build a [`ProfileFileTimeoutConfigProvider`] from this builder
     pub fn build(self) -> ProfileFileTimeoutConfigProvider {
         let conf = self.config.unwrap_or_default();
         ProfileFileTimeoutConfigProvider {
@@ -77,9 +83,9 @@ impl Builder {
 }
 
 impl ProfileFileTimeoutConfigProvider {
-    /// Create a new [ProfileFileTimeoutConfigProvider]
+    /// Create a new [`ProfileFileTimeoutConfigProvider`]
     ///
-    /// To override the selected profile, set the `AWS_PROFILE` environment variable or use the [Builder].
+    /// To override the selected profile, set the `AWS_PROFILE` environment variable or use the [`Builder`].
     pub fn new() -> Self {
         Self {
             fs: Fs::real(),
@@ -88,7 +94,7 @@ impl ProfileFileTimeoutConfigProvider {
         }
     }
 
-    /// [Builder] to construct a [ProfileFileTimeoutConfigProvider]
+    /// [`Builder`] to construct a [`ProfileFileTimeoutConfigProvider`]
     pub fn builder() -> Builder {
         Builder::default()
     }

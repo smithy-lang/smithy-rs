@@ -25,7 +25,9 @@ const ENV_VAR_API_CALL_TIMEOUT: &str = "AWS_API_CALL_TIMEOUT";
 /// - AWS_API_CALL_ATTEMPT_TIMEOUT
 /// - AWS_API_CALL_TIMEOUT
 ///
-/// If at least one of these is set to a valid value, construction will succeed.
+/// Timeout values represent the number of seconds before timing out and must be non-negative floats
+/// or integers. NaN and infinity are also invalid. If at least one of these vars is set to a valid
+/// value, construction will succeed.
 #[derive(Debug, Default)]
 pub struct EnvironmentVariableTimeoutConfigProvider {
     env: Env,

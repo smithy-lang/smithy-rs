@@ -38,7 +38,8 @@ impl TimeoutConfig {
     }
 
     /// A limit on the amount of time an application takes to attempt to read the first byte over an
-    /// established, open connection after write request. A.K.A. the "time to first byte" timeout.
+    /// established, open connection after write request. This is also known as the
+    /// "time to first byte" timeout.
     pub fn read_timeout(&self) -> Option<Duration> {
         self.read_timeout
     }
@@ -58,38 +59,38 @@ impl TimeoutConfig {
         self.api_call_timeout
     }
 
-    /// Consume a [TimeoutConfig] to creat a new one, setting the connect timeout
+    /// Consume a [`TimeoutConfig`] to createa new one, setting the connect timeout
     pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
         self.connect_timeout = Some(timeout);
         self
     }
 
-    /// Consume a [TimeoutConfig] to creat a new one, setting the TLS negotiation timeout
+    /// Consume a [`TimeoutConfig`] to createa new one, setting the TLS negotiation timeout
     pub fn with_tls_negotiation_timeout(mut self, timeout: Duration) -> Self {
         self.tls_negotiation_timeout = Some(timeout);
         self
     }
 
-    /// Consume a [TimeoutConfig] to creat a new one, setting the read timeout
+    /// Consume a [`TimeoutConfig`] to createa new one, setting the read timeout
     pub fn with_read_timeout(mut self, timeout: Duration) -> Self {
         self.read_timeout = Some(timeout);
         self
     }
 
-    /// Consume a [TimeoutConfig] to creat a new one, setting the api call attempt timeout
+    /// Consume a [`TimeoutConfig`] to createa new one, setting the API call attempt timeout
     pub fn with_api_call_attempt_timeout(mut self, timeout: Duration) -> Self {
         self.api_call_attempt_timeout = Some(timeout);
         self
     }
 
-    /// Consume a [TimeoutConfig] to creat a new one, setting the api call timeout
+    /// Consume a [`TimeoutConfig`] to createa new one, setting the API call timeout
     pub fn with_api_call_timeout(mut self, timeout: Duration) -> Self {
         self.api_call_timeout = Some(timeout);
         self
     }
 }
 
-/// A builder for [TimeoutConfig]s
+/// A builder for [`TimeoutConfig`]s
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct TimeoutConfigBuilder {
     connect_timeout: Option<Duration>,
@@ -183,7 +184,7 @@ impl TimeoutConfigBuilder {
     }
 
     /// Merge two builders together. Values from `other` will only be used as a fallback for values
-    /// from `self` Useful for merging configs from different sources together when you want to
+    /// from `self`. Useful for merging configs from different sources together when you want to
     /// handle "precedence" per value instead of at the config level
     ///
     /// # Example
@@ -213,7 +214,7 @@ impl TimeoutConfigBuilder {
         }
     }
 
-    /// Consume the builder to create a new [TimeoutConfig]
+    /// Consume the builder to create a new [`TimeoutConfig`]
     pub fn build(self) -> TimeoutConfig {
         TimeoutConfig {
             connect_timeout: self.connect_timeout,

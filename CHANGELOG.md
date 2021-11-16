@@ -3,13 +3,13 @@ vNext (Month Day, Year)
 
 **TODO Next Release:**
 - Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
-- Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request.
+- Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request. (smithy-rs#831)
 - Fixed links to Usage Examples (smithy-rs#862, @floric)
 
 **Breaking Changes**
 
 Several breaking changes around `aws_smithy_types::Instant` were introduced by smithy-rs#849:
-- `aws_smithy_types::Instant` from was renamed to `DateTime` to avoid confusion with the standard library's monotonically nondecreasing `Instant` type.
+- `aws_smithy_types::Instant` from was renamed to `DateTime` to avoid confusion with the standard library's monotonically non-decreasing `Instant` type.
 - `DateParseError` in `aws_smithy_types` has been renamed to `DateTimeParseError` to match the type that's being parsed.
 - The `chrono-conversions` feature and associated functions have been moved to the `aws-smithy-types-convert` crate.
   - Calls to `Instant::from_chrono` should be changed to:

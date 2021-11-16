@@ -254,7 +254,7 @@ pub mod timeout_config {
             self
         }
 
-        /// Attempt to create a [TimeoutConfig](aws_smithy_types::timeout::TimeoutConfig) from following sources in order:
+        /// Attempt to create a [`TimeoutConfig`](aws_smithy_types::timeout::TimeoutConfig) from following sources in order:
         /// 1. [Environment variables](crate::environment::timeout_config::EnvironmentVariableTimeoutConfigProvider)
         /// 2. [Profile file](crate::profile::timeout_config::ProfileFileTimeoutConfigProvider)
         ///

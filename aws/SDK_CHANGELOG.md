@@ -1,7 +1,7 @@
 vNext (Month Day, Year)
 =======================
 - Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
-- - :tada: Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request.
+- - :tada: Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request. (smithy-rs#831)
 - Fixed links to Usage Examples (smithy-rs#862, @floric)
 
 **Breaking Changes**
