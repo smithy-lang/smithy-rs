@@ -159,7 +159,7 @@ fn construct_timeout_from_profile_var(
     profile: &Profile,
     var: &'static str,
 ) -> Result<Option<Duration>, TimeoutConfigError> {
-    match profile.get(&var) {
+    match profile.get(var) {
         Some(timeout) => match timeout.parse::<f32>() {
             Ok(timeout) if timeout < 0.0 => Err(TimeoutConfigError::InvalidTimeout {
                 set_by: SET_BY.into(),

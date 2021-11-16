@@ -80,7 +80,7 @@ fn construct_timeout_from_env_var(
     env: &Env,
     var: &'static str,
 ) -> Result<Option<f32>, TimeoutConfigError> {
-    match env.get(&var).ok() {
+    match env.get(var).ok() {
         Some(timeout) => match timeout.parse::<f32>() {
             Ok(timeout) if timeout < 0.0 => Err(TimeoutConfigError::InvalidTimeout {
                 set_by: SET_BY.into(),
