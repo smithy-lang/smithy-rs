@@ -185,7 +185,7 @@ pub mod retry_config {
     }
 }
 
-/// Default retry behavior configuration provider chain
+/// Default timeout configuration provider chain
 pub mod timeout_config {
     use aws_smithy_types::timeout::TimeoutConfig;
 
