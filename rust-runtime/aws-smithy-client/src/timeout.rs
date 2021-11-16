@@ -46,11 +46,6 @@ impl Settings {
         self.read_timeout
     }
 
-    /// The configured TLS negotiation timeout
-    pub fn tls_negotiation_timeout(&self) -> Option<Duration> {
-        self.tls_negotiation_timeout
-    }
-
     /// Sets the connect timeout
     pub fn with_connect_timeout(self, connect_timeout: Duration) -> Self {
         Self {
@@ -63,14 +58,6 @@ impl Settings {
     pub fn with_read_timeout(self, read_timeout: Duration) -> Self {
         Self {
             read_timeout: Some(read_timeout),
-            ..self
-        }
-    }
-
-    /// The configured TLS negotiation timeout
-    pub fn with_tls_negotiation_timeout(self, tls_negotiation_timeout: Duration) -> Self {
-        Self {
-            tls_negotiation_timeout: Some(tls_negotiation_timeout),
             ..self
         }
     }
