@@ -32,35 +32,60 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-//! HTTP body utilities.
+use std::{
+    convert::Infallible,
+    future::ready,
+    task::{Context, Poll},
+};
+use tower::Service;
 
-use crate::BoxError;
-use crate::Error;
-
-#[doc(no_inline)]
-pub use http_body::{Body as HttpBody, Empty, Full};
-
-#[doc(no_inline)]
-pub use hyper::body::Body;
-
-#[doc(no_inline)]
-pub use bytes::Bytes;
-
-/// A boxed [`Body`] trait object.
+/// A [`MakeService`] that produces router services.
 ///
-/// This is used as the response body type for applications. Its
-/// necessary to unify multiple response bodies types into one.
-pub type BoxBody = http_body::combinators::UnsyncBoxBody<Bytes, Error>;
-
-/// Convert a [`http_body::Body`] into a [`BoxBody`].
-pub fn box_body<B>(body: B) -> BoxBody
-where
-    B: http_body::Body<Data = Bytes> + Send + 'static,
-    B::Error: Into<BoxError>,
-{
-    body.map_err(Error::new).boxed_unsync()
+/// [`MakeService`]: tower::make::MakeService
+#[derive(Debug, Clone)]
+pub struct IntoMakeService<S> {
+    service: S,
 }
 
-pub(crate) fn empty() -> BoxBody {
-    box_body(http_body::Empty::new())
+impl<S> IntoMakeService<S> {
+    pub(super) fn new(service: S) -> Self {
+        Self { service }
+    }
+}
+
+impl<S, T> Service<T> for IntoMakeService<S>
+where
+    S: Clone,
+{
+    type Response = S;
+    type Error = Infallible;
+    type Future = MakeRouteServiceFuture<S>;
+
+    #[inline]
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, _target: T) -> Self::Future {
+        MakeRouteServiceFuture::new(ready(Ok(self.service.clone())))
+    }
+}
+
+opaque_future! {
+    /// Response future for [`IntoMakeService`] services.
+    pub type MakeRouteServiceFuture<S> =
+        std::future::Ready<Result<S, Infallible>>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn traits() {
+        use crate::test_helpers::*;
+
+        assert_send::<IntoMakeService<()>>();
+        assert_sync::<IntoMakeService<()>>();
+    }
 }

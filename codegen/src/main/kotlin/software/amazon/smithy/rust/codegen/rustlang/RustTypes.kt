@@ -317,7 +317,6 @@ sealed class Attribute {
         val container: Boolean = false
     ) : Attribute() {
         override fun render(writer: RustWriter) {
-
             val bang = if (container) "!" else ""
             writer.raw("#$bang[$annotation]")
             symbols.forEach {
