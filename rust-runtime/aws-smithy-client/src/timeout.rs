@@ -127,12 +127,12 @@ pub struct TimeoutService<S> {
 }
 
 impl<S> TimeoutService<S> {
-    /// Create a new TimeoutService that will timeout after the duration specified in `params` elapses
+    /// Create a new `TimeoutService` that will timeout after the duration specified in `params` elapses
     pub fn new(inner: S, params: Option<TimeoutServiceParams>) -> Self {
         Self { inner, params }
     }
 
-    /// Create a new TimeoutService that will never timeout
+    /// Create a new `TimeoutService` that will never timeout
     pub fn no_timeout(inner: S) -> Self {
         Self {
             inner,
@@ -147,7 +147,7 @@ impl<S> TimeoutService<S> {
 pub struct TimeoutLayer(Option<TimeoutServiceParams>);
 
 impl TimeoutLayer {
-    /// Create a new HttpRequestTimeoutLayer
+    /// Create a new `TimeoutLayer`
     pub fn new(params: Option<TimeoutServiceParams>) -> Self {
         TimeoutLayer(params)
     }
