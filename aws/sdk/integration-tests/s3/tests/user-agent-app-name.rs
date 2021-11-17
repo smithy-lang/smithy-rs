@@ -5,7 +5,7 @@
 
 use aws_http::user_agent::AwsUserAgent;
 use aws_sdk_s3::operation::ListObjectsV2;
-use aws_sdk_s3::{Credentials, Region};
+use aws_sdk_s3::{AppName, Credentials, Region};
 
 #[tokio::test]
 async fn user_agent_app_name() -> Result<(), aws_sdk_s3::Error> {
@@ -17,7 +17,7 @@ async fn user_agent_app_name() -> Result<(), aws_sdk_s3::Error> {
     let conf = aws_sdk_s3::Config::builder()
         .credentials_provider(creds)
         .region(Region::new("us-east-1"))
-        .app_name("test-app-name") // set app name in config
+        .app_name(AppName::new("test-app-name").expect("valid app name")) // set app name in config
         .build();
 
     let op = ListObjectsV2::builder()

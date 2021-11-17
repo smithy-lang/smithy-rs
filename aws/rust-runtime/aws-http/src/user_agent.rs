@@ -5,6 +5,7 @@
 
 use aws_smithy_http::middleware::MapRequest;
 use aws_smithy_http::operation::Request;
+use aws_types::app_name::AppName;
 use aws_types::build_metadata::{OsFamily, BUILD_METADATA};
 use aws_types::os_shim_internal::Env;
 use http::header::{HeaderName, InvalidHeaderValue, USER_AGENT};
@@ -30,7 +31,7 @@ pub struct AwsUserAgent {
     feature_metadata: Vec<FeatureMetadata>,
     config_metadata: Vec<ConfigMetadata>,
     framework_metadata: Vec<FrameworkMetadata>,
-    app_name: Option<Cow<'static, str>>,
+    app_name: Option<AppName>,
 }
 
 impl AwsUserAgent {
@@ -45,7 +46,7 @@ impl AwsUserAgent {
         feature_metadata: Vec<FeatureMetadata>,
         config_metadata: Vec<ConfigMetadata>,
         framework_metadata: Vec<FrameworkMetadata>,
-        app_name: Option<Cow<'static, str>>,
+        app_name: Option<AppName>,
     ) -> Self {
         let build_metadata = &BUILD_METADATA;
         let sdk_metadata = SdkMetadata {
@@ -73,33 +74,8 @@ impl AwsUserAgent {
             feature_metadata,
             config_metadata,
             framework_metadata,
-            app_name: app_name.map(Self::validate_app_name),
+            app_name,
         }
-    }
-
-    fn validate_app_name(app_name: Cow<'static, str>) -> Cow<'static, str> {
-        fn valid_character(c: char) -> bool {
-            match c {
-                _ if c.is_ascii_alphanumeric() => true,
-                '!' | '#' | '$' | '%' | '&' | '\'' | '*' | '+' | '-' | '.' | '^' | '_' | '`'
-                | '|' | '~' => true,
-                _ => false,
-            }
-        }
-        if !app_name.chars().all(valid_character) {
-            panic!(
-                "The app name can only have alphanumeric characters, or any of \
-                 '!' |  '#' |  '$' |  '%' |  '&' |  '\\'' |  '*' |  '+' |  '-' | \
-                 '.' |  '^' |  '_' |  '`' |  '|' |  '~'"
-            );
-        }
-        if app_name.len() > 50 {
-            tracing::warn!(
-                "The `app_name` set when configuring the SDK client is recommended \
-                 to have no more than 50 characters."
-            )
-        }
-        app_name
     }
 
     /// For test purposes, construct an environment-independent User Agent
@@ -488,6 +464,7 @@ mod test {
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::middleware::MapRequest;
     use aws_smithy_http::operation;
+    use aws_types::app_name::AppName;
     use aws_types::build_metadata::OsFamily;
     use aws_types::os_shim_internal::Env;
     use http::header::USER_AGENT;
@@ -649,7 +626,7 @@ mod test {
             Vec::new(),
             Vec::new(),
             Vec::new(),
-            Some(Cow::Borrowed("my_app")),
+            Some(AppName::new("my_app").unwrap()),
         );
         make_deterministic(&mut ua);
         assert_eq!(
@@ -690,44 +667,6 @@ mod test {
         req.headers()
             .get(&*X_AMZ_USER_AGENT)
             .expect("UA header should be set");
-    }
-
-    #[test]
-    fn app_name_validation_success() {
-        let test_str = "asdf1234ASDF!#$%&'*+-.^_`|~";
-        let ua = AwsUserAgent::new_from_environment(
-            Env::from_slice(&[]),
-            ApiMetadata {
-                service_id: "dynamodb".into(),
-                version: "123",
-            },
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Some(Cow::Borrowed(test_str)),
-        )
-        .aws_ua_header();
-        assert!(
-            ua.ends_with(test_str),
-            "'{}' didn't end in the app name",
-            ua
-        );
-    }
-
-    #[test]
-    #[should_panic]
-    fn app_name_validation_failure() {
-        AwsUserAgent::new_from_environment(
-            Env::from_slice(&[]),
-            ApiMetadata {
-                service_id: "dynamodb".into(),
-                version: "123",
-            },
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Some(Cow::Borrowed("foo bar")),
-        );
     }
 }
 
