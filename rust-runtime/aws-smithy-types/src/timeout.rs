@@ -19,8 +19,8 @@ use std::time::Duration;
 /// # fn main() {
 /// use aws_smithy_types::timeout::TimeoutConfig;
 /// let timeout_config = TimeoutConfig::new()
-///     .with_api_call_timeout(Duration::from_secs(2))
-///     .with_api_call_attempt_timeout(Duration::from_secs_f32(0.5));
+///     .with_api_call_timeout(Some(Duration::from_secs(2)))
+///     .with_api_call_attempt_timeout(Some(Duration::from_secs_f32(0.5)));
 ///
 /// assert_eq!(
 ///     timeout_config.api_call_timeout(),
@@ -150,7 +150,7 @@ impl TimeoutConfig {
     /// let b = TimeoutConfig::new()
     ///     .with_read_timeout(Some(Duration::from_secs(10)))
     ///     .with_connect_timeout(Some(Duration::from_secs(3)));
-    /// let timeout_config = a.merge_with(b).build();
+    /// let timeout_config = a.merge_with(b);
     /// // A's value take precedence over B's value
     /// assert_eq!(timeout_config.read_timeout(), Some(Duration::from_secs(2)));
     /// // A never set a connect timeout so B's value was used
