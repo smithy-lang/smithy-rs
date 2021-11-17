@@ -110,6 +110,9 @@ def fix_lines(lines):
 
         # Format block quotes
         elif state == State.InsideBlockQuote:
+            if first_inner_indent == None and len(line.strip()) == 0:
+                continue
+
             current_indent = line_indent(line)
             # Track the first line's indentation inside of the block quote
             # so that relative indentation can be preserved.
@@ -252,6 +255,11 @@ class SelfTest(unittest.TestCase):
             expected = ['    """', '    asdf {', '        asdf', '    }', '    """'], \
             input = ['    """', '  asdf {', '      asdf', '  }', '"""'], \
             lines_changed = [2, 3, 4, 5] \
+        )
+        self.fix_lines_test_case( \
+            expected = ['    """', '', '    foo', '    bar', '    """'], \
+            input = ['    """', '', '    foo', '    bar', '    """'], \
+            lines_changed = [] \
         )
 
 def main():
