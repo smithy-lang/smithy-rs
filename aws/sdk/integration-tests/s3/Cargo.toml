@@ -11,6 +11,7 @@ edition = "2018"
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
+aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async" }
 tracing-subscriber = "0.2.18"
 
 [dev-dependencies]

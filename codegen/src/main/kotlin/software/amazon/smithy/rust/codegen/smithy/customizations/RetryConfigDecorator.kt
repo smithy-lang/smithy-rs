@@ -64,7 +64,6 @@ fn test_1() {
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<Config>();
 }
-
  */
 
 class RetryConfigDecorator : RustCodegenDecorator {

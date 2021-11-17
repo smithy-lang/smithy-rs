@@ -133,7 +133,7 @@ impl AssumeRoleProviderBuilder {
         let conn = self.connection.unwrap_or_else(|| {
             crate::connector::expect_connector(crate::connector::default_connector(
                 &HttpSettings::default(),
-                default_async_sleep(),
+                Some(default_async_sleep()),
             ))
         });
         let client = aws_hyper::Client::new(conn);

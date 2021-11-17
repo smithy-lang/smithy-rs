@@ -102,9 +102,11 @@ private class AwsFluentClientExtensions(private val types: Types) {
                 pub fn from_conf_conn(conf: crate::Config, conn: C) -> Self {
                     let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
                     let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
+                    let sleep_impl = conf.sleep_impl.clone();
                     let client = #{aws_hyper}::Client::new(conn)
                         .with_retry_config(retry_config.into())
-                        .with_timeout_config(timeout_config);
+                        .with_timeout_config(timeout_config)
+                        .with_sleep_impl(sleep_impl);
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
                 }
                 """,
@@ -125,9 +127,11 @@ private class AwsFluentClientExtensions(private val types: Types) {
                 pub fn from_conf(conf: crate::Config) -> Self {
                     let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
                     let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
+                    let sleep_impl = conf.sleep_impl.clone();
                     let client = #{aws_hyper}::Client::https()
                         .with_retry_config(retry_config.into())
-                        .with_timeout_config(timeout_config);
+                        .with_timeout_config(timeout_config)
+                        .with_sleep_impl(sleep_impl);
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
                 }
                 """,

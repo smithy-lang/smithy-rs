@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use crate::SdkError;
 use aws_smithy_async::future::timeout::{TimedOutError, Timeout};
-use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, Sleep};
+use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use aws_smithy_http::operation::Operation;
 use aws_smithy_types::timeout::TimeoutConfig;
 use pin_project_lite::pin_project;
@@ -80,23 +80,24 @@ pub struct TimeoutServiceParams {
 /// A struct of structs containing everything needed to create new [`TimeoutService`]s
 pub struct AllTimeoutServiceParams {
     /// Params used to create a new API call [`TimeoutService`]
-    pub api_call: Option<TimeoutServiceParams>,
+    pub(crate) api_call: Option<TimeoutServiceParams>,
     /// Params used to create a new API call attempt [`TimeoutService`]
-    pub api_call_attempt: Option<TimeoutServiceParams>,
+    pub(crate) api_call_attempt: Option<TimeoutServiceParams>,
 }
 
 /// Convert a [`TimeoutConfig`] into an [`AllTimeoutServiceParams`] in order to create the set of
 /// [`TimeoutService`]s needed by a [`crate::Client`]
 pub fn generate_timeout_service_params_from_timeout_config(
     timeout_config: &TimeoutConfig,
+    async_sleep: Option<Arc<dyn AsyncSleep>>,
 ) -> AllTimeoutServiceParams {
-    if let Some(async_sleep) = default_async_sleep() {
+    if let Some(async_sleep) = async_sleep {
         AllTimeoutServiceParams {
             api_call: timeout_config
                 .api_call_timeout()
                 .map(|duration| TimeoutServiceParams {
                     duration,
-                    kind: "API call (multiple attempts)",
+                    kind: "API call (all attempts including retries)",
                     async_sleep: async_sleep.clone(),
                 }),
             api_call_attempt: timeout_config.api_call_attempt_timeout().map(|duration| {
@@ -112,8 +113,8 @@ pub fn generate_timeout_service_params_from_timeout_config(
         let list_of_set_timeouts = list_of_set_timeouts.join(", ");
 
         tracing::warn!(
-            "One or more timeouts were set ({}) but no default_async_sleep fn exists. \
-            Make sure the 'tokio-rt' feature is enabled if you want to set timeouts.",
+            "One or more timeouts were set ({}) but no async_sleep fn was passed. \
+            No timeouts will occur.",
             list_of_set_timeouts
         );
 
@@ -124,19 +125,19 @@ pub fn generate_timeout_service_params_from_timeout_config(
 /// A service that wraps another service, adding the ability to set a timeout for requests
 /// handled by the inner service.
 #[derive(Clone, Debug)]
-pub struct TimeoutService<InnerService> {
-    inner: InnerService,
+pub struct TimeoutService<S> {
+    inner: S,
     params: Option<TimeoutServiceParams>,
 }
 
-impl<InnerService> TimeoutService<InnerService> {
+impl<S> TimeoutService<S> {
     /// Create a new TimeoutService that will timeout after the duration specified in `params` elapses
-    pub fn new(inner: InnerService, params: Option<TimeoutServiceParams>) -> Self {
+    pub fn new(inner: S, params: Option<TimeoutServiceParams>) -> Self {
         Self { inner, params }
     }
 
     /// Create a new TimeoutService that will never timeout
-    pub fn no_timeout(inner: InnerService) -> Self {
+    pub fn no_timeout(inner: S) -> Self {
         Self {
             inner,
             params: None,
@@ -156,10 +157,10 @@ impl TimeoutLayer {
     }
 }
 
-impl<InnerService> Layer<InnerService> for TimeoutLayer {
-    type Service = TimeoutService<InnerService>;
+impl<S> Layer<S> for TimeoutLayer {
+    type Service = TimeoutService<S>;
 
-    fn layer(&self, inner: InnerService) -> Self::Service {
+    fn layer(&self, inner: S) -> Self::Service {
         TimeoutService {
             inner,
             params: self.0.clone(),
@@ -232,6 +233,7 @@ where
         match future.poll(cx) {
             Poll::Ready(Ok(response)) => Poll::Ready(response),
             Poll::Ready(Err(_timeout)) => {
+                // TODO update SdkError to include a variant specifically for timeouts
                 Poll::Ready(Err(SdkError::ConstructionFailure(Box::new(TimedOutError))))
             }
             Poll::Pending => Poll::Pending,
@@ -264,31 +266,18 @@ where
 
 #[cfg(test)]
 mod test {
+    use std::sync::Arc;
+    use std::time::Duration;
+
     use crate::never::NeverService;
     use crate::timeout::generate_timeout_service_params_from_timeout_config;
     use crate::{SdkError, TimeoutLayer};
+    use aws_smithy_async::assert_elapsed;
+    use aws_smithy_async::rt::sleep::{AsyncSleep, TokioSleep};
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::operation::{Operation, Request};
     use aws_smithy_types::timeout::TimeoutConfig;
-    use std::time::Duration;
     use tower::{Service, ServiceBuilder, ServiceExt};
-
-    // Copied from aws-smithy-client/src/hyper_impls.rs
-    macro_rules! assert_elapsed {
-        ($start:expr, $dur:expr) => {{
-            let elapsed = $start.elapsed();
-            // type ascription improves compiler error when wrong type is passed
-            let lower: std::time::Duration = $dur;
-
-            // Handles ms rounding
-            assert!(
-                elapsed >= lower && elapsed <= lower + std::time::Duration::from_millis(5),
-                "actual = {:?}, expected = {:?}",
-                elapsed,
-                lower
-            );
-        }};
-    }
 
     #[tokio::test]
     async fn test_timeout_service_ends_request_that_never_completes() {
@@ -296,9 +285,10 @@ mod test {
         let op = Operation::new(req, ());
         let never_service: NeverService<_, (), _> = NeverService::new();
         let timeout_config =
-            TimeoutConfig::new().with_api_call_timeout(Duration::from_secs_f32(0.25));
+            TimeoutConfig::new().with_api_call_timeout(Some(Duration::from_secs_f32(0.25)));
+        let sleep_impl: Option<Arc<dyn AsyncSleep>> = Some(Arc::new(TokioSleep::new()));
         let timeout_service_params =
-            generate_timeout_service_params_from_timeout_config(&timeout_config);
+            generate_timeout_service_params_from_timeout_config(&timeout_config, sleep_impl);
         let mut svc = ServiceBuilder::new()
             .layer(TimeoutLayer::new(timeout_service_params.api_call))
             .service(never_service);

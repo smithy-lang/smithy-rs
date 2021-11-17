@@ -105,6 +105,10 @@ pub mod retry_config {
     ///
     /// # Example
     ///
+    /// When running [`aws_config::from_env()`], a [`ConfigLoader`](aws_config::ConfigLoader) is
+    /// created that will create a [`RetryConfig`] from the default_provider. There is no need to
+    /// call `default_provider` and the example below is only for illustration purposes.
+    ///
     /// ```no_run
     /// # use std::error::Error;
     /// # #[tokio::main]
@@ -138,7 +142,6 @@ pub mod retry_config {
     }
 
     impl Builder {
-        #[doc(hidden)]
         /// Configure the default chain
         ///
         /// Exposed for overriding the environment when unit-testing providers
@@ -207,7 +210,7 @@ pub mod timeout_config {
     /// ```no_run
     /// # use std::error::Error;
     /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn Error>> {
+    /// # async fn main() {
     /// use aws_config::default_provider::timeout_config;
     ///
     /// // Load a timeout config from a specific profile
@@ -222,7 +225,6 @@ pub mod timeout_config {
     ///     .await;
     /// // instantiate a service client:
     /// // <my_aws_service>::Client::new(&config);
-    /// #     Ok(())
     /// # }
     /// ```
     pub fn default_provider() -> Builder {
@@ -237,7 +239,6 @@ pub mod timeout_config {
     }
 
     impl Builder {
-        #[doc(hidden)]
         /// Configure the default chain
         ///
         /// Exposed for overriding the environment when unit-testing providers
@@ -269,28 +270,33 @@ pub mod timeout_config {
             // Both of these can return errors due to invalid config settings and we want to surface those as early as possible
             // hence, we'll panic if any config values are invalid (missing values are OK though)
             // We match this instead of unwrapping so we can print the error with the `Display` impl instead of the `Debug` impl that unwrap uses
-            let builder_from_env = match self.env_provider.timeout_config_builder() {
+            let builder_from_env = match self.env_provider.timeout_config() {
                 Ok(timeout_config_builder) => timeout_config_builder,
                 Err(err) => panic!("{}", err),
             };
-            let builder_from_profile =
-                match self.profile_file.build().timeout_config_builder().await {
-                    Ok(timeout_config_builder) => timeout_config_builder,
-                    Err(err) => panic!("{}", err),
-                };
+            let builder_from_profile = match self.profile_file.build().timeout_config().await {
+                Ok(timeout_config_builder) => timeout_config_builder,
+                Err(err) => panic!("{}", err),
+            };
 
-            let conf = builder_from_env.merge_with(builder_from_profile).build();
+            let conf = builder_from_env.merge_with(builder_from_profile);
 
             if conf.tls_negotiation_timeout().is_some() {
-                tracing::warn!("A TLS negotiation timeout was set but that feature is currently unimplemented so the setting will be ignored")
+                tracing::warn!(
+                    "A TLS negotiation timeout was set but that feature is currently unimplemented so the setting will be ignored. \
+                    To help us prioritize support for this feature, please upvote aws-sdk-rust#151 (https://github.com/awslabs/aws-sdk-rust/issues/151)")
             }
 
             if conf.connect_timeout().is_some() {
-                tracing::warn!("A connect timeout was set but that feature is currently unimplemented so the setting will be ignored")
+                tracing::warn!(
+                    "A connect timeout was set but that feature is currently unimplemented so the setting will be ignored. \
+                    To help us prioritize support for this feature, please upvote aws-sdk-rust#151 (https://github.com/awslabs/aws-sdk-rust/issues/151)")
             }
 
             if conf.read_timeout().is_some() {
-                tracing::warn!("A read timeout was set but that feature is currently unimplemented so the setting will be ignored")
+                tracing::warn!(
+                    "A read timeout was set but that feature is currently unimplemented so the setting will be ignored. \
+                    To help us prioritize support for this feature, please upvote aws-sdk-rust#151 (https://github.com/awslabs/aws-sdk-rust/issues/151)")
             }
 
             conf

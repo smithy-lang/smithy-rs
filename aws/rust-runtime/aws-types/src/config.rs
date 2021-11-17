@@ -9,6 +9,9 @@
 //!
 //! This module contains an shared configuration representation that is agnostic from a specific service.
 
+use std::sync::Arc;
+
+use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 
@@ -20,6 +23,7 @@ pub struct Config {
     region: Option<Region>,
     retry_config: Option<RetryConfig>,
     timeout_config: Option<TimeoutConfig>,
+    sleep_impl: Option<Arc<dyn AsyncSleep>>,
     credentials_provider: Option<SharedCredentialsProvider>,
 }
 
@@ -29,6 +33,7 @@ pub struct Builder {
     region: Option<Region>,
     retry_config: Option<RetryConfig>,
     timeout_config: Option<TimeoutConfig>,
+    sleep_impl: Option<Arc<dyn AsyncSleep>>,
     credentials_provider: Option<SharedCredentialsProvider>,
 }
 
@@ -106,12 +111,14 @@ impl Builder {
     /// Set the [`TimeoutConfig`] for the builder
     ///
     /// # Examples
+    ///
     /// ```rust
     /// # use std::time::Duration;
     /// use aws_types::config::Config;
     /// use aws_smithy_types::timeout::TimeoutConfig;
     ///
-    /// let timeout_config = TimeoutConfig::new().with_api_call_attempt_timeout(Duration::from_secs(1));
+    /// let timeout_config = TimeoutConfig::new()
+    ///     .with_api_call_attempt_timeout(Some(Duration::from_secs(1)));
     /// let config = Config::builder().timeout_config(timeout_config).build();
     /// ```
     pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
@@ -129,8 +136,8 @@ impl Builder {
     ///
     /// fn set_preferred_timeouts(builder: &mut Builder) {
     ///     let timeout_config = TimeoutConfig::new()
-    ///         .with_api_call_attempt_timeout(Duration::from_secs(2))
-    ///         .with_api_call_timeout(Duration::from_secs(5));
+    ///         .with_api_call_attempt_timeout(Some(Duration::from_secs(2)))
+    ///         .with_api_call_timeout(Some(Duration::from_secs(5)));
     ///     builder.set_timeout_config(Some(timeout_config));
     /// }
     ///
@@ -140,6 +147,45 @@ impl Builder {
     /// ```
     pub fn set_timeout_config(&mut self, timeout_config: Option<TimeoutConfig>) -> &mut Self {
         self.timeout_config = timeout_config;
+        self
+    }
+
+    /// Set the sleep implementation for the builder. The sleep implementation is used to create
+    /// timeout futures.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::sync::Arc;
+    /// use aws_types::config::Config;
+    ///
+    /// let sleep_impl = Arc::new(tokio::time::sleep);
+    /// let config = Config::builder().sleep_impl(sleep_impl).build();
+    /// ```
+    pub fn sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep>) -> Self {
+        self.set_sleep_impl(Some(sleep_impl));
+        self
+    }
+
+    /// Set the sleep implementation for the builder. The sleep implementation is used to create
+    /// timeout futures.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use std::sync::Arc;
+    /// use aws_types::config::{Config, Builder};
+    ///
+    /// fn set_preferred_sleep_impl(builder: &mut Builder) {
+    ///     let sleep_impl = Arc::new(tokio::time::sleep);
+    ///     builder.set_sleep_impl(Some(sleep_impl));
+    /// }
+    ///
+    /// let mut builder = Config::builder();
+    /// set_preferred_sleep_impl(&mut builder);
+    /// let config = builder.build();
+    /// ```
+    pub fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) -> &mut Self {
+        self.sleep_impl = sleep_impl;
         self
     }
 
@@ -201,6 +247,7 @@ impl Builder {
             region: self.region,
             retry_config: self.retry_config,
             timeout_config: self.timeout_config,
+            sleep_impl: self.sleep_impl,
             credentials_provider: self.credentials_provider,
         }
     }
@@ -220,6 +267,11 @@ impl Config {
     /// Configured timeout config
     pub fn timeout_config(&self) -> Option<&TimeoutConfig> {
         self.timeout_config.as_ref()
+    }
+
+    /// Configured sleep implementation
+    pub fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>> {
+        self.sleep_impl.clone()
     }
 
     /// Configured credentials provider

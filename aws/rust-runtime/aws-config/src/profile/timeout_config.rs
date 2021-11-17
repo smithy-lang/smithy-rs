@@ -7,7 +7,7 @@
 
 use crate::profile::Profile;
 use crate::provider_config::ProviderConfig;
-use aws_smithy_types::timeout::{TimeoutConfigBuilder, TimeoutConfigError};
+use aws_smithy_types::timeout::{TimeoutConfig, TimeoutConfigError};
 use aws_types::os_shim_internal::{Env, Fs};
 use std::time::Duration;
 
@@ -99,8 +99,8 @@ impl ProfileFileTimeoutConfigProvider {
         Builder::default()
     }
 
-    /// Attempt to create a new TimeoutConfigBuilder from a profile file.
-    pub async fn timeout_config_builder(&self) -> Result<TimeoutConfigBuilder, TimeoutConfigError> {
+    /// Attempt to create a new [`TimeoutConfig`] from a profile file.
+    pub async fn timeout_config(&self) -> Result<TimeoutConfig, TimeoutConfigError> {
         let profile = match super::parser::load(&self.fs, &self.env).await {
             Ok(profile) => profile,
             Err(err) => {
@@ -121,8 +121,8 @@ impl ProfileFileTimeoutConfigProvider {
                     "failed to get selected '{}' profile, skipping it",
                     selected_profile
                 );
-                // return an empty builder
-                return Ok(TimeoutConfigBuilder::default());
+                // return an empty config
+                return Ok(TimeoutConfig::new());
             }
         };
 
@@ -141,19 +141,14 @@ impl ProfileFileTimeoutConfigProvider {
         let api_call_timeout =
             construct_timeout_from_profile_var(selected_profile, PROFILE_VAR_API_CALL_TIMEOUT)?;
 
-        let mut builder = TimeoutConfigBuilder::new();
-        builder
-            .set_connect_timeout(connect_timeout)
-            .set_tls_negotiation_timeout(tls_negotiation_timeout)
-            .set_read_timeout(read_timeout)
-            .set_api_call_attempt_timeout(api_call_attempt_timeout)
-            .set_api_call_timeout(api_call_timeout);
-
-        Ok(builder)
+        Ok(TimeoutConfig::new()
+            .with_connect_timeout(connect_timeout)
+            .with_tls_negotiation_timeout(tls_negotiation_timeout)
+            .with_read_timeout(read_timeout)
+            .with_api_call_attempt_timeout(api_call_attempt_timeout)
+            .with_api_call_timeout(api_call_timeout))
     }
 }
-
-const SET_BY: &str = "aws profile";
 
 fn construct_timeout_from_profile_var(
     profile: &Profile,
@@ -162,24 +157,25 @@ fn construct_timeout_from_profile_var(
     match profile.get(var) {
         Some(timeout) => match timeout.parse::<f32>() {
             Ok(timeout) if timeout < 0.0 => Err(TimeoutConfigError::InvalidTimeout {
-                set_by: SET_BY.into(),
+                set_by: format!("aws profile [{}]", profile.name()).into(),
                 name: var.into(),
                 reason: "timeout must not be negative".into(),
             }),
             Ok(timeout) if timeout.is_nan() => Err(TimeoutConfigError::InvalidTimeout {
-                set_by: SET_BY.into(),
+                set_by: format!("aws profile [{}]", profile.name()).into(),
                 name: var.into(),
                 reason: "timeout must not be NaN".into(),
             }),
             Ok(timeout) if timeout.is_infinite() => Err(TimeoutConfigError::InvalidTimeout {
-                set_by: SET_BY.into(),
+                set_by: format!("aws profile [{}]", profile.name()).into(),
                 name: var.into(),
                 reason: "timeout must not be infinite".into(),
             }),
             Ok(timeout) => Ok(Some(Duration::from_secs_f32(timeout))),
-            Err(_) => Err(TimeoutConfigError::CouldntParseTimeout {
-                set_by: SET_BY.into(),
+            Err(err) => Err(TimeoutConfigError::ParseError {
+                set_by: format!("aws profile [{}]", profile.name()).into(),
                 name: var.into(),
+                source: Box::new(err),
             }),
         },
         None => Ok(None),

@@ -81,9 +81,11 @@ pub mod conns {
 }
 
 use std::error::Error;
+use std::sync::Arc;
 use tower::{Layer, Service, ServiceBuilder, ServiceExt};
 
 use crate::timeout::generate_timeout_service_params_from_timeout_config;
+use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::response::ParseHttpResponse;
@@ -123,6 +125,7 @@ pub struct Client<
     middleware: Middleware,
     retry_policy: RetryPolicy,
     timeout_config: TimeoutConfig,
+    sleep_impl: Option<Arc<dyn AsyncSleep>>,
 }
 
 // Quick-create for people who just want "the default".
@@ -130,13 +133,14 @@ impl<C, M> Client<C, M>
 where
     M: Default,
 {
-    /// Create a Smithy client that the given connector, a middleware default, and the [standard
-    /// retry policy](crate::retry::Standard).
+    /// Create a Smithy client that the given connector, a middleware default, the [standard
+    /// retry policy](crate::retry::Standard), and the [`default_async_sleep`] sleep implementation.
     pub fn new(connector: C) -> Self {
         Builder::new()
             .connector(connector)
             .middleware(M::default())
             .build()
+            .with_sleep_impl(Some(default_async_sleep()))
     }
 }
 
@@ -160,6 +164,17 @@ impl<C, M> Client<C, M> {
     /// Set the client's timeout configuration.
     pub fn with_timeout_config(mut self, config: TimeoutConfig) -> Self {
         self.set_timeout_config(config);
+        self
+    }
+
+    /// Set the [`AsyncSleep`] function that the client will use to create things like timeout futures.
+    pub fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) {
+        self.sleep_impl = sleep_impl;
+    }
+
+    /// Set the [`AsyncSleep`] function that the client will use to create things like timeout futures.
+    pub fn with_sleep_impl(mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) -> Self {
+        self.set_sleep_impl(sleep_impl);
         self
     }
 }
@@ -212,8 +227,10 @@ where
     {
         let connector = self.connector.clone();
 
-        let timeout_servic_params =
-            generate_timeout_service_params_from_timeout_config(&self.timeout_config);
+        let timeout_servic_params = generate_timeout_service_params_from_timeout_config(
+            &self.timeout_config,
+            self.sleep_impl.clone(),
+        );
 
         let svc = ServiceBuilder::new()
             .layer(TimeoutLayer::new(timeout_servic_params.api_call))

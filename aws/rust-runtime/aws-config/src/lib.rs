@@ -117,12 +117,14 @@ pub use loader::ConfigLoader;
 
 #[cfg(feature = "default-provider")]
 mod loader {
-    use crate::default_provider::{credentials, region, retry_config};
+    use crate::default_provider::{credentials, region, retry_config, timeout_config};
     use crate::meta::region::ProvideRegion;
+    use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::config::Config;
     use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
+    use std::sync::Arc;
 
     /// Load a cross-service [`Config`](aws_types::config::Config) from the environment
     ///
@@ -136,6 +138,7 @@ mod loader {
         retry_config: Option<RetryConfig>,
         timeout_config: Option<TimeoutConfig>,
         credentials_provider: Option<SharedCredentialsProvider>,
+        sleep: Option<Arc<dyn AsyncSleep>>,
     }
 
     impl ConfigLoader {
@@ -172,13 +175,15 @@ mod loader {
         }
 
         /// Override the timeout_config used to build [`Config`](aws_types::config::Config).
+        /// **Note: This only sets timeouts for calls to AWS services.** Timeouts for the credentials
+        /// provider chain are configured separately.
         ///
         /// # Examples
         /// ```rust
         /// # use std::time::Duration;
         /// # use aws_smithy_types::timeout::TimeoutConfig;
         /// # async fn create_config() {
-        ///  let timeout_config = TimeoutConfig::new().with_api_call_timeout(Duration::from_secs(1));
+        ///  let timeout_config = TimeoutConfig::new().with_api_call_timeout(Some(Duration::from_secs(1)));
         ///  let config = aws_config::from_env()
         ///     .timeout_config(timeout_config)
         ///     .load()
@@ -187,6 +192,15 @@ mod loader {
         /// ```
         pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
             self.timeout_config = Some(timeout_config);
+            self
+        }
+
+        /// Override the sleep implementation for this [`ConfigLoader`]. The sleep implementation
+        /// is used to create timeout futures.
+        pub fn sleep_impl(mut self, sleep: impl AsyncSleep + 'static) -> Self {
+            // TODO is it possible that we could be boxing another `Arc` here?
+            //   Is that something to be avoided?
+            self.sleep = Some(Arc::new(sleep));
             self
         }
 
@@ -231,6 +245,18 @@ mod loader {
                 retry_config::default_provider().retry_config().await
             };
 
+            let timeout_config = if let Some(timeout_config) = self.timeout_config {
+                timeout_config
+            } else {
+                timeout_config::default_provider().timeout_config().await
+            };
+
+            let sleep_impl = if let Some(sleep) = self.sleep {
+                sleep
+            } else {
+                default_async_sleep()
+            };
+
             let credentials_provider = if let Some(provider) = self.credentials_provider {
                 provider
             } else {
@@ -242,6 +268,8 @@ mod loader {
             Config::builder()
                 .region(region)
                 .retry_config(retry_config)
+                .timeout_config(timeout_config)
+                .sleep_impl(sleep_impl)
                 .credentials_provider(credentials_provider)
                 .build()
         }

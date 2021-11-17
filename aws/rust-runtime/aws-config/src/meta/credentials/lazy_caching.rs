@@ -220,9 +220,7 @@ mod builder {
             );
             LazyCachingCredentialsProvider::new(
                 self.time_source.unwrap_or_default(),
-                self.sleep.unwrap_or_else(|| {
-                    default_async_sleep().expect("no default sleep implementation available")
-                }),
+                self.sleep.unwrap_or_else(default_async_sleep),
                 self.load.expect("load implementation is required"),
                 self.load_timeout.unwrap_or(DEFAULT_LOAD_TIMEOUT),
                 self.buffer_time.unwrap_or(DEFAULT_BUFFER_TIME),

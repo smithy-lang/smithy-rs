@@ -3,23 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use std::sync::Arc;
-
 use http::Uri;
 use hyper::client::connect::Connection;
-
+use std::error::Error;
+use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tower::{BoxError, Service};
 
+use self::timeout_middleware::{ConnectTimeout, HttpReadTimeout, TimeoutError};
+use crate::{timeout, Builder as ClientBuilder};
+use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 pub use aws_smithy_http::result::{SdkError, SdkSuccess};
-use std::error::Error;
-
-use crate::hyper_impls::timeout_middleware::{ConnectTimeout, HttpReadTimeout, TimeoutError};
-use crate::{timeout, Builder as ClientBuilder};
-use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_types::retry::ErrorKind;
 
 /// Adapter from a [`hyper::Client`] to a connector usable by a [`Client`](crate::Client).
@@ -139,26 +136,14 @@ impl Builder {
         C::Error: Into<BoxError>,
     {
         // if we are using Hyper, Tokio must already be enabled so we can fallback to Tokio.
-        let sleep = self.sleep.or_else(default_async_sleep);
+        let sleep = self.sleep.unwrap_or_else(default_async_sleep);
         let connector = match self.timeout.connect() {
-            Some(duration) => ConnectTimeout::new(
-                connector,
-                sleep
-                    .clone()
-                    .expect("a sleep impl must be provided to use timeouts"),
-                duration,
-            ),
+            Some(duration) => ConnectTimeout::new(connector, sleep.clone(), duration),
             None => ConnectTimeout::no_timeout(connector),
         };
         let base = self.client_builder.build(connector);
         let http_timeout = match self.timeout.read() {
-            Some(duration) => HttpReadTimeout::new(
-                base,
-                sleep
-                    .clone()
-                    .expect("a sleep impl must be provided to use timeouts"),
-                duration,
-            ),
+            Some(duration) => HttpReadTimeout::new(base, sleep.clone(), duration),
             None => HttpReadTimeout::no_timeout(base),
         };
         HyperAdapter(http_timeout)
@@ -249,7 +234,7 @@ impl<M, R> ClientBuilder<(), M, R> {
     }
 }
 
-pub mod timeout_middleware {
+mod timeout_middleware {
     use std::error::Error;
     use std::fmt::Formatter;
     use std::future::Future;
@@ -455,26 +440,11 @@ pub mod timeout_middleware {
         use crate::hyper_impls::HyperAdapter;
         use crate::never::{NeverConnected, NeverReplies};
         use crate::timeout;
+        use aws_smithy_async::assert_elapsed;
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_http::body::SdkBody;
         use std::time::Duration;
         use tower::Service;
-
-        macro_rules! assert_elapsed {
-            ($start:expr, $dur:expr) => {{
-                let elapsed = $start.elapsed();
-                // type ascription improves compiler error when wrong type is passed
-                let lower: std::time::Duration = $dur;
-
-                // Handles ms rounding
-                assert!(
-                    elapsed >= lower && elapsed <= lower + std::time::Duration::from_millis(5),
-                    "actual = {:?}, expected = {:?}",
-                    elapsed,
-                    lower
-                );
-            }};
-        }
 
         #[allow(unused)]
         fn connect_timeout_is_correct<T: Send + Sync + Clone + 'static>() {

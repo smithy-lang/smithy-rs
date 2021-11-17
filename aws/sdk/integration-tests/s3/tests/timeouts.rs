@@ -8,27 +8,11 @@ use aws_sdk_s3::model::{
     OutputSerialization,
 };
 use aws_sdk_s3::{Client, Config, Credentials, Region, TimeoutConfig};
+use aws_smithy_async::assert_elapsed;
 use aws_smithy_client::never::NeverService;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use std::time::Duration;
-
-// Copied from aws-smithy-client/src/hyper_impls.rs
-macro_rules! assert_elapsed {
-    ($start:expr, $dur:expr) => {{
-        let elapsed = $start.elapsed();
-        // type ascription improves compiler error when wrong type is passed
-        let lower: std::time::Duration = $dur;
-
-        // Handles ms rounding
-        assert!(
-            elapsed >= lower && elapsed <= lower + std::time::Duration::from_millis(5),
-            "actual = {:?}, expected = {:?}",
-            elapsed,
-            lower
-        );
-    }};
-}
 
 #[tokio::test]
 async fn test_timeout_service_ends_request_that_never_completes() {
@@ -36,7 +20,8 @@ async fn test_timeout_service_ends_request_that_never_completes() {
         NeverService::new();
     let region = Region::from_static("us-east-2");
     let credentials = Credentials::from_keys("test", "test", None);
-    let timeout_config = TimeoutConfig::new().with_api_call_timeout(Duration::from_secs_f32(0.5));
+    let timeout_config =
+        TimeoutConfig::new().with_api_call_timeout(Some(Duration::from_secs_f32(0.5)));
     let config = Config::builder()
         .region(region)
         .credentials_provider(credentials)
