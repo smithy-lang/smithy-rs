@@ -78,7 +78,7 @@ pub struct TimeoutServiceParams {
 
 #[derive(Clone, Debug, Default)]
 /// A struct of structs containing everything needed to create new [`TimeoutService`]s
-pub struct AllTimeoutServiceParams {
+pub struct ClientTimeoutParams {
     /// Params used to create a new API call [`TimeoutService`]
     pub(crate) api_call: Option<TimeoutServiceParams>,
     /// Params used to create a new API call attempt [`TimeoutService`]
@@ -90,9 +90,9 @@ pub struct AllTimeoutServiceParams {
 pub fn generate_timeout_service_params_from_timeout_config(
     timeout_config: &TimeoutConfig,
     async_sleep: Option<Arc<dyn AsyncSleep>>,
-) -> AllTimeoutServiceParams {
+) -> ClientTimeoutParams {
     if let Some(async_sleep) = async_sleep {
-        AllTimeoutServiceParams {
+        ClientTimeoutParams {
             api_call: timeout_config
                 .api_call_timeout()
                 .map(|duration| TimeoutServiceParams {
@@ -109,13 +109,9 @@ pub fn generate_timeout_service_params_from_timeout_config(
             }),
         }
     } else {
-        let list_of_set_timeouts = timeout_config.list_of_set_timeouts();
-        let list_of_set_timeouts = list_of_set_timeouts.join(", ");
-
         tracing::warn!(
-            "One or more timeouts were set ({}) but no async_sleep fn was passed. \
-            No timeouts will occur.",
-            list_of_set_timeouts
+            "One or more timeouts were set but no async_sleep fn was passed. No timeouts will occur.\n{:?}",
+            timeout_config
         );
 
         Default::default()

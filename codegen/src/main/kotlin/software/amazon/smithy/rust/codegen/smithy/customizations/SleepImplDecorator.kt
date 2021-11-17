@@ -89,7 +89,9 @@ class SleepImplProviderConfig(codegenContext: CodegenContext) : ConfigCustomizat
     private val sleepModule = smithyAsyncRtSleep(codegenContext.runtimeConfig)
     private val moduleName = codegenContext.moduleName
     private val moduleUseName = moduleName.replace("-", "_")
-    private val codegenScope = arrayOf("AsyncSleep" to sleepModule.member("AsyncSleep"), "Sleep" to sleepModule.member("Sleep"))
+    private val codegenScope =
+        arrayOf("AsyncSleep" to sleepModule.member("AsyncSleep"), "Sleep" to sleepModule.member("Sleep"))
+
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
@@ -102,62 +104,61 @@ class SleepImplProviderConfig(codegenContext: CodegenContext) : ConfigCustomizat
             ServiceConfig.BuilderImpl ->
                 rustTemplate(
                     """
+                    /// Set the sleep_impl for the builder
+                    ///
+                    /// ## Examples
+                    /// ```rust,no_run
+                    /// use $moduleUseName::config::Config;
+                    /// use #{AsyncSleep};
+                    /// use #{Sleep};
+                    ///
+                    /// ##[derive(Debug)]
+                    /// pub struct ForeverSleep;
+                    ///
+                    /// impl AsyncSleep for ForeverSleep {
+                    ///     fn sleep(&self, duration: std::time::Duration) -> Sleep {
+                    ///         Sleep::new(std::future::pending())
+                    ///     }
+                    /// }
+                    ///
+                    /// let sleep_impl = std::sync::Arc::new(ForeverSleep);
+                    /// let config = Config::builder().sleep_impl(sleep_impl).build();
+                    /// ```
+                    pub fn sleep_impl(mut self, sleep_impl: std::sync::Arc<dyn #{AsyncSleep}>) -> Self {
+                        self.set_sleep_impl(Some(sleep_impl));
+                        self
+                    }
 
-                                                                                /// Set the sleep_impl for the builder
-                                                                                ///
-                                                                                /// ## Examples
-                                                                                /// ```rust,no_run
-                                                                                /// use $moduleUseName::config::Config;
-                                                                                /// use #{AsyncSleep};
-                                                                                /// use #{Sleep};
-                                                                                ///
-                                                                                /// ##[derive(Debug)]
-                                                                                /// pub struct ForeverSleep;
-                                                                                ///
-                                                                                /// impl AsyncSleep for ForeverSleep {
-                                                                                ///     fn sleep(&self, duration: std::time::Duration) -> Sleep {
-                                                                                ///         Sleep::new(std::future::pending())
-                                                                                ///     }
-                                                                                /// }
-                                                                                ///
-                                                                                /// let sleep_impl = std::sync::Arc::new(ForeverSleep);
-                                                                                /// let config = Config::builder().sleep_impl(sleep_impl).build();
-                                                                                /// ```
-                                                                                pub fn sleep_impl(mut self, sleep_impl: std::sync::Arc<dyn #{AsyncSleep}>) -> Self {
-                                                                                    self.set_sleep_impl(Some(sleep_impl));
-                                                                                    self
-                                                                                }
-
-                                                                                /// Set the sleep_impl for the builder
-                                                                                ///
-                                                                                /// ## Examples
-                                                                                /// ```rust,no_run
-                                                                                /// use $moduleUseName::config::{Builder, Config};
-                                                                                /// use #{AsyncSleep};
-                                                                                /// use #{Sleep};
-                                                                                ///
-                                                                                /// ##[derive(Debug)]
-                                                                                /// pub struct ForeverSleep;
-                                                                                ///
-                                                                                /// impl AsyncSleep for ForeverSleep {
-                                                                                ///     fn sleep(&self, duration: std::time::Duration) -> Sleep {
-                                                                                ///         Sleep::new(std::future::pending())
-                                                                                ///     }
-                                                                                /// }
-                                                                                ///
-                                                                                /// fn set_never_ending_sleep_impl(builder: &mut Builder) {
-                                                                                ///     let sleep_impl = std::sync::Arc::new(ForeverSleep);
-                                                                                ///     builder.set_sleep_impl(Some(sleep_impl));
-                                                                                /// }
-                                                                                ///
-                                                                                /// let mut builder = Config::builder();
-                                                                                /// set_never_ending_sleep_impl(&mut builder);
-                                                                                /// let config = builder.build();
-                                                                                /// ```
-                                                                                pub fn set_sleep_impl(&mut self, sleep_impl: Option<std::sync::Arc<dyn #{AsyncSleep}>>) -> &mut Self {
-                                                                                    self.sleep_impl = sleep_impl;
-                                                                                    self
-                                                                                }
+                    /// Set the sleep_impl for the builder
+                    ///
+                    /// ## Examples
+                    /// ```rust,no_run
+                    /// use $moduleUseName::config::{Builder, Config};
+                    /// use #{AsyncSleep};
+                    /// use #{Sleep};
+                    ///
+                    /// ##[derive(Debug)]
+                    /// pub struct ForeverSleep;
+                    ///
+                    /// impl AsyncSleep for ForeverSleep {
+                    ///     fn sleep(&self, duration: std::time::Duration) -> Sleep {
+                    ///         Sleep::new(std::future::pending())
+                    ///     }
+                    /// }
+                    ///
+                    /// fn set_never_ending_sleep_impl(builder: &mut Builder) {
+                    ///     let sleep_impl = std::sync::Arc::new(ForeverSleep);
+                    ///     builder.set_sleep_impl(Some(sleep_impl));
+                    /// }
+                    ///
+                    /// let mut builder = Config::builder();
+                    /// set_never_ending_sleep_impl(&mut builder);
+                    /// let config = builder.build();
+                    /// ```
+                    pub fn set_sleep_impl(&mut self, sleep_impl: Option<std::sync::Arc<dyn #{AsyncSleep}>>) -> &mut Self {
+                        self.sleep_impl = sleep_impl;
+                        self
+                    }
                     """,
                     *codegenScope
                 )

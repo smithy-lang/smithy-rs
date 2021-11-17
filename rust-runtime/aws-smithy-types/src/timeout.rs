@@ -6,10 +6,10 @@
 //! This module defines types that describe timeouts for the various stages of an HTTP request.
 
 use std::borrow::Cow;
-use std::fmt::Display;
+use std::fmt::{Debug, Display, Formatter};
 use std::time::Duration;
 
-/// Configuration for the various kinds of timeouts supported by aws_smithy_client::Client.
+/// A container of optional [`Duration`]s for all of the supported AWS timeouts.
 ///
 /// # Example
 ///
@@ -33,13 +33,39 @@ use std::time::Duration;
 /// );
 /// # }
 /// ```
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Clone, PartialEq, Default)]
 pub struct TimeoutConfig {
     connect_timeout: Option<Duration>,
     tls_negotiation_timeout: Option<Duration>,
     read_timeout: Option<Duration>,
     api_call_attempt_timeout: Option<Duration>,
     api_call_timeout: Option<Duration>,
+}
+
+impl Debug for TimeoutConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            r#"Timeouts:
+Connect (time to first byte):{}
+TLS negotiation:{}
+HTTP read:{}
+API requests:{}
+HTTP requests:{}
+"#,
+            format_timeout(self.connect_timeout),
+            format_timeout(self.tls_negotiation_timeout),
+            format_timeout(self.read_timeout),
+            format_timeout(self.api_call_timeout),
+            format_timeout(self.api_call_attempt_timeout),
+        )
+    }
+}
+
+fn format_timeout(timeout: Option<Duration>) -> String {
+    timeout
+        .map(|d| format!("\t{}s", d.as_secs_f32()))
+        .unwrap_or_else(|| "(unset)".to_owned())
 }
 
 impl TimeoutConfig {
@@ -79,29 +105,6 @@ impl TimeoutConfig {
     /// to control timeouts for a single attempt, use [`TimeoutConfig::api_call_attempt_timeout`].
     pub fn api_call_timeout(&self) -> Option<Duration> {
         self.api_call_timeout
-    }
-
-    /// Generate a human-readable list of the timeouts that are currently set. This is used for
-    /// logging and error reporting.
-    pub fn list_of_set_timeouts(&self) -> Vec<&'static str> {
-        let mut vec = Vec::new();
-        if self.api_call_timeout.is_some() {
-            vec.push("api call")
-        }
-        if self.api_call_attempt_timeout.is_some() {
-            vec.push("api call attempt")
-        }
-        if self.tls_negotiation_timeout.is_some() {
-            vec.push("TLS negotiation")
-        }
-        if self.connect_timeout.is_some() {
-            vec.push("connect")
-        }
-        if self.read_timeout.is_some() {
-            vec.push("read")
-        }
-
-        vec
     }
 
     /// Consume a `TimeoutConfig` to create a new one, setting the connect timeout
@@ -196,7 +199,7 @@ pub enum TimeoutConfigError {
 }
 
 impl Display for TimeoutConfigError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         use TimeoutConfigError::*;
         match self {
             InvalidTimeout {
