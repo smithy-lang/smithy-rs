@@ -56,13 +56,13 @@ Several breaking changes around `aws_smithy_types::Instant` were introduced by s
 - Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#849)
 - Fixed links to Usage Examples (smithy-rs#862, @floric)
 - Added missing features to user agent formatting, and made it possible to configure an app name for the user agent via service config. (smithy-rs#865)
+- :bug: Relaxed profile name validation to allow `@` and other characters (smithy-rs#861, aws-sdk-rust#270)
 
 **Contributions**
 
 Thank you for your contributions! :heart:
 
 - @floric (smithy-rs#862)
-
 
 v0.0.25-alpha (November 11th, 2021)
 ===================================
