@@ -17,7 +17,7 @@ use std::fmt;
 /// ```text
 /// !#$%&'*+-.^_`|~
 /// ```
-/// Spaces are not allowed. If unsupported characters are given, this will lead to a panic.
+/// Spaces are not allowed.
 ///
 /// App names are recommended to be no more than 50 characters.
 #[derive(Clone, Debug, PartialEq, Eq)]
