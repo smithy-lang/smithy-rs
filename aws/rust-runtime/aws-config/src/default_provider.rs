@@ -105,9 +105,9 @@ pub mod retry_config {
     ///
     /// # Example
     ///
-    /// When running [`aws_config::from_env()`], a [`ConfigLoader`](aws_config::ConfigLoader) is
-    /// created that will create a [`RetryConfig`] from the default_provider. There is no need to
-    /// call `default_provider` and the example below is only for illustration purposes.
+    /// When running [`aws_config::from_env()`](crate::from_env()), a [`ConfigLoader`](crate::ConfigLoader)
+    /// is created that will then create a [`RetryConfig`] from the default_provider. There is no
+    /// need to call `default_provider` and the example below is only for illustration purposes.
     ///
     /// ```no_run
     /// # use std::error::Error;
