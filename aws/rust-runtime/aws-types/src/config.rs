@@ -156,10 +156,19 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust
-    /// use std::sync::Arc;
+    /// use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
     /// use aws_types::config::Config;
     ///
-    /// let sleep_impl = Arc::new(tokio::time::sleep);
+    /// ##[derive(Debug)]
+    /// pub struct ForeverSleep;
+    ///
+    /// impl AsyncSleep for ForeverSleep {
+    ///     fn sleep(&self, duration: std::time::Duration) -> Sleep {
+    ///         Sleep::new(std::future::pending())
+    ///     }
+    /// }
+    ///
+    /// let sleep_impl = std::sync::Arc::new(ForeverSleep);
     /// let config = Config::builder().sleep_impl(sleep_impl).build();
     /// ```
     pub fn sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep>) -> Self {
@@ -172,16 +181,24 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// use std::sync::Arc;
-    /// use aws_types::config::{Config, Builder};
+    /// # use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
+    /// # use aws_types::config::{Builder, Config};
+    /// #[derive(Debug)]
+    /// pub struct ForeverSleep;
     ///
-    /// fn set_preferred_sleep_impl(builder: &mut Builder) {
-    ///     let sleep_impl = Arc::new(tokio::time::sleep);
+    /// impl AsyncSleep for ForeverSleep {
+    ///     fn sleep(&self, duration: std::time::Duration) -> Sleep {
+    ///         Sleep::new(std::future::pending())
+    ///     }
+    /// }
+    ///
+    /// fn set_never_ending_sleep_impl(builder: &mut Builder) {
+    ///     let sleep_impl = std::sync::Arc::new(ForeverSleep);
     ///     builder.set_sleep_impl(Some(sleep_impl));
     /// }
     ///
     /// let mut builder = Config::builder();
-    /// set_preferred_sleep_impl(&mut builder);
+    /// set_never_ending_sleep_impl(&mut builder);
     /// let config = builder.build();
     /// ```
     pub fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) -> &mut Self {
