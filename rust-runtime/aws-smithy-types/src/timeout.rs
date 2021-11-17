@@ -48,7 +48,6 @@ impl TimeoutConfig {
         Default::default()
     }
 
-    /// Create a new [TimeoutConfigBuilder]
     /// A limit on the amount of time after making an initial connect attempt on a socket to complete the connect-handshake.
     pub fn connect_timeout(&self) -> Option<Duration> {
         self.connect_timeout
