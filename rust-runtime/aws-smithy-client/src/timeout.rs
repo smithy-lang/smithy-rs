@@ -85,7 +85,7 @@ pub struct ClientTimeoutParams {
     pub(crate) api_call_attempt: Option<TimeoutServiceParams>,
 }
 
-/// Convert a [`TimeoutConfig`] into an [`AllTimeoutServiceParams`] in order to create the set of
+/// Convert a [`TimeoutConfig`] into an [`ClientTimeoutParams`] in order to create the set of
 /// [`TimeoutService`]s needed by a [`crate::Client`]
 pub fn generate_timeout_service_params_from_timeout_config(
     timeout_config: &TimeoutConfig,

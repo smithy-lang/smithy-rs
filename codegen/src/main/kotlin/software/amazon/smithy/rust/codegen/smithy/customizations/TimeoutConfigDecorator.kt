@@ -111,7 +111,8 @@ class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustom
                     /// use $moduleUseName::config::Config;
                     /// use #{TimeoutConfig};
                     ///
-                    /// let timeout_config = TimeoutConfig::new().with_api_call_attempt_timeout(Duration::from_secs(1));
+                    /// let timeout_config = TimeoutConfig::new()
+                    ///     .with_api_call_attempt_timeout(Some(Duration::from_secs(1)));
                     /// let config = Config::builder().timeout_config(timeout_config).build();
                     /// ```
                     pub fn timeout_config(mut self, timeout_config: #{TimeoutConfig}) -> Self {
@@ -128,7 +129,8 @@ class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustom
                     /// use #{TimeoutConfig};
                     ///
                     /// fn set_request_timeout(builder: &mut Builder) {
-                    ///     let timeout_config = TimeoutConfig::new().with_api_call_timeout(Duration::from_secs(3));
+                    ///     let timeout_config = TimeoutConfig::new()
+                    ///         .with_api_call_timeout(Some(Duration::from_secs(3)));
                     ///     builder.set_timeout_config(Some(timeout_config));
                     /// }
                     ///

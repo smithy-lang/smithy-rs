@@ -16,7 +16,7 @@ pub mod rt;
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// let now = std::time::Instant::now();
 /// let _ = some_function_that_always_takes_five_seconds_to_run().await;
 /// assert_elapsed!(now, std::time::Duration::from_secs(5));
