@@ -8,6 +8,7 @@ members = [
     "polly",
     "qldbsession",
     "s3",
+    "s3control",
     "sts",
     "transcribestreaming",
     "glacier"
