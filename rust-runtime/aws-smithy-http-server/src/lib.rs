@@ -13,6 +13,7 @@ mod clone_box_service;
 pub mod error;
 mod handler;
 
+// Only the code-generated operation registry should instantiate routers.
 // We therefore hide it in the documentation.
 #[doc(hidden)]
 pub mod routing;
