@@ -12,9 +12,8 @@ use http::header::{HeaderName, InvalidHeaderValue, USER_AGENT};
 use http::HeaderValue;
 use std::borrow::Cow;
 use std::convert::TryFrom;
+use std::error::Error;
 use std::fmt;
-use std::fmt::{Display, Formatter};
-use thiserror::Error;
 
 /// AWS User Agent
 ///
@@ -188,8 +187,8 @@ pub struct SdkMetadata {
     version: &'static str,
 }
 
-impl Display for SdkMetadata {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl fmt::Display for SdkMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "aws-sdk-{}/{}", self.name, self.version)
     }
 }
@@ -209,10 +208,49 @@ impl ApiMetadata {
     }
 }
 
-impl Display for ApiMetadata {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl fmt::Display for ApiMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "api/{}/{}", self.service_id, self.version)
     }
+}
+
+/// Error for when an user agent metadata doesn't meet character requirements.
+///
+/// Metadata may only have alphanumeric characters and any of these characters:
+/// ```text
+/// !#$%&'*+-.^_`|~
+/// ```
+/// Spaces are not allowed.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct InvalidMetadataValue;
+
+impl Error for InvalidMetadataValue {}
+
+impl fmt::Display for InvalidMetadataValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "User agent metadata can only have alphanumeric characters, or any of \
+             '!' |  '#' |  '$' |  '%' |  '&' |  '\\'' |  '*' |  '+' |  '-' | \
+             '.' |  '^' |  '_' |  '`' |  '|' |  '~'"
+        )
+    }
+}
+
+fn validate_metadata(value: Cow<'static, str>) -> Result<Cow<'static, str>, InvalidMetadataValue> {
+    fn valid_character(c: char) -> bool {
+        match c {
+            _ if c.is_ascii_alphanumeric() => true,
+            '!' | '#' | '$' | '%' | '&' | '\'' | '*' | '+' | '-' | '.' | '^' | '_' | '`' | '|'
+            | '~' => true,
+            _ => false,
+        }
+    }
+    if !value.chars().all(valid_character) {
+        return Err(InvalidMetadataValue);
+    }
+    Ok(value)
 }
 
 #[derive(Clone, Debug)]
@@ -222,21 +260,15 @@ pub struct AdditionalMetadata {
 }
 
 impl AdditionalMetadata {
-    pub const fn new_static(value: &'static str) -> Self {
-        Self {
-            value: Cow::Borrowed(value),
-        }
-    }
-
-    pub fn new(value: impl Into<Cow<'static, str>>) -> Self {
-        Self {
-            value: value.into(),
-        }
+    pub fn new(value: impl Into<Cow<'static, str>>) -> Result<Self, InvalidMetadataValue> {
+        Ok(Self {
+            value: validate_metadata(value.into())?,
+        })
     }
 }
 
-impl Display for AdditionalMetadata {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl fmt::Display for AdditionalMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // additional-metadata = "md/" ua-pair
         write!(f, "md/{}", self.value)
     }
@@ -246,17 +278,13 @@ impl Display for AdditionalMetadata {
 struct AdditionalMetadataList(Vec<AdditionalMetadata>);
 
 impl AdditionalMetadataList {
-    pub const fn new() -> AdditionalMetadataList {
-        AdditionalMetadataList(Vec::new())
-    }
-
     fn push(&mut self, metadata: AdditionalMetadata) {
         self.0.push(metadata);
     }
 }
 
-impl Display for AdditionalMetadataList {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl fmt::Display for AdditionalMetadataList {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for metadata in &self.0 {
             write!(f, " {}", metadata)?;
         }
@@ -273,20 +301,15 @@ pub struct FeatureMetadata {
 }
 
 impl FeatureMetadata {
-    pub const fn new_static(name: &'static str, version: Option<Cow<'static, str>>) -> Self {
-        Self {
-            name: Cow::Borrowed(name),
-            version,
-            additional: AdditionalMetadataList::new(),
-        }
-    }
-
-    pub fn new(name: impl Into<Cow<'static, str>>, version: Option<Cow<'static, str>>) -> Self {
-        Self {
-            name: name.into(),
+    pub fn new(
+        name: impl Into<Cow<'static, str>>,
+        version: Option<Cow<'static, str>>,
+    ) -> Result<Self, InvalidMetadataValue> {
+        Ok(Self {
+            name: validate_metadata(name.into())?,
             version,
             additional: Default::default(),
-        }
+        })
     }
 
     pub fn with_additional(mut self, metadata: AdditionalMetadata) -> Self {
@@ -295,8 +318,8 @@ impl FeatureMetadata {
     }
 }
 
-impl Display for FeatureMetadata {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl fmt::Display for FeatureMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // feat-metadata = "ft/" name ["/" version] *(RWS additional-metadata)
         if let Some(version) = &self.version {
             write!(f, "ft/{}/{}{}", self.name, version, self.additional)
@@ -314,23 +337,19 @@ pub struct ConfigMetadata {
 }
 
 impl ConfigMetadata {
-    pub const fn new_static(config: &'static str, value: Option<Cow<'static, str>>) -> Self {
-        Self {
-            config: Cow::Borrowed(config),
+    pub fn new(
+        config: impl Into<Cow<'static, str>>,
+        value: Option<Cow<'static, str>>,
+    ) -> Result<Self, InvalidMetadataValue> {
+        Ok(Self {
+            config: validate_metadata(config.into())?,
             value,
-        }
-    }
-
-    pub fn new(config: impl Into<Cow<'static, str>>, value: Option<Cow<'static, str>>) -> Self {
-        Self {
-            config: config.into(),
-            value,
-        }
+        })
     }
 }
 
-impl Display for ConfigMetadata {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl fmt::Display for ConfigMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // config-metadata = "cfg/" config ["/" name]
         if let Some(value) = &self.value {
             write!(f, "cfg/{}/{}", self.config, value)
@@ -349,20 +368,15 @@ pub struct FrameworkMetadata {
 }
 
 impl FrameworkMetadata {
-    pub const fn new_static(name: &'static str, version: Option<Cow<'static, str>>) -> Self {
-        Self {
-            name: Cow::Borrowed(name),
-            version,
-            additional: AdditionalMetadataList::new(),
-        }
-    }
-
-    pub fn new(name: impl Into<Cow<'static, str>>, version: Option<Cow<'static, str>>) -> Self {
-        Self {
-            name: name.into(),
+    pub fn new(
+        name: impl Into<Cow<'static, str>>,
+        version: Option<Cow<'static, str>>,
+    ) -> Result<Self, InvalidMetadataValue> {
+        Ok(Self {
+            name: validate_metadata(name.into())?,
             version,
             additional: Default::default(),
-        }
+        })
     }
 
     pub fn with_additional(mut self, metadata: AdditionalMetadata) -> Self {
@@ -371,8 +385,8 @@ impl FrameworkMetadata {
     }
 }
 
-impl Display for FrameworkMetadata {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl fmt::Display for FrameworkMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // framework-metadata = "lib/" name ["/" version] *(RWS additional-metadata)
         if let Some(version) = &self.version {
             write!(f, "lib/{}/{}{}", self.name, version, self.additional)
@@ -388,8 +402,8 @@ struct OsMetadata {
     version: Option<String>,
 }
 
-impl Display for OsMetadata {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl fmt::Display for OsMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let os_family = match self.os_family {
             OsFamily::Windows => "windows",
             OsFamily::Linux => "linux",
@@ -412,8 +426,8 @@ struct LanguageMetadata {
     version: &'static str,
     extras: AdditionalMetadataList,
 }
-impl Display for LanguageMetadata {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl fmt::Display for LanguageMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // language-metadata = "lang/" language "/" version *(RWS additional-metadata)
         write!(f, "lang/{}/{}{}", self.lang, self.version, self.extras)
     }
@@ -423,8 +437,8 @@ impl Display for LanguageMetadata {
 struct ExecEnvMetadata {
     name: String,
 }
-impl Display for ExecEnvMetadata {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl fmt::Display for ExecEnvMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "exec-env/{}", &self.name)
     }
 }
@@ -439,12 +453,27 @@ impl UserAgentStage {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum UserAgentStageError {
-    #[error("User agent missing from property bag")]
     UserAgentMissing,
-    #[error("Provided user agent header was invalid")]
-    InvalidHeader(#[from] InvalidHeaderValue),
+    InvalidHeader(InvalidHeaderValue),
+}
+
+impl Error for UserAgentStageError {}
+
+impl fmt::Display for UserAgentStageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UserAgentMissing => write!(f, "User agent missing from property bag"),
+            Self::InvalidHeader(_) => write!(f, "Provided user agent header was invalid"),
+        }
+    }
+}
+
+impl From<InvalidHeaderValue> for UserAgentStageError {
+    fn from(value: InvalidHeaderValue) -> Self {
+        UserAgentStageError::InvalidHeader(value)
+    }
 }
 
 lazy_static::lazy_static! {
@@ -541,13 +570,13 @@ mod test {
             version: "123",
         };
         let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata)
-            .with_feature_metadata(FeatureMetadata::new_static(
-                "test-feature",
-                Some(Cow::Borrowed("1.0")),
-            ))
             .with_feature_metadata(
-                FeatureMetadata::new_static("other-feature", None)
-                    .with_additional(AdditionalMetadata::new_static("asdf")),
+                FeatureMetadata::new("test-feature", Some(Cow::Borrowed("1.0"))).unwrap(),
+            )
+            .with_feature_metadata(
+                FeatureMetadata::new("other-feature", None)
+                    .unwrap()
+                    .with_additional(AdditionalMetadata::new("asdf").unwrap()),
             );
         make_deterministic(&mut ua);
         assert_eq!(
@@ -567,11 +596,10 @@ mod test {
             version: "123",
         };
         let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata)
-            .with_config_metadata(ConfigMetadata::new_static(
-                "some-config",
-                Some(Cow::Borrowed("5")),
-            ))
-            .with_config_metadata(ConfigMetadata::new_static("other-config", None));
+            .with_config_metadata(
+                ConfigMetadata::new("some-config", Some(Cow::Borrowed("5"))).unwrap(),
+            )
+            .with_config_metadata(ConfigMetadata::new("other-config", None).unwrap());
         make_deterministic(&mut ua);
         assert_eq!(
             ua.aws_ua_header(),
@@ -591,10 +619,11 @@ mod test {
         };
         let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata)
             .with_framework_metadata(
-                FrameworkMetadata::new_static("some-framework", Some(Cow::Borrowed("1.3")))
-                    .with_additional(AdditionalMetadata::new_static("something")),
+                FrameworkMetadata::new("some-framework", Some(Cow::Borrowed("1.3")))
+                    .unwrap()
+                    .with_additional(AdditionalMetadata::new("something").unwrap()),
             )
-            .with_framework_metadata(FrameworkMetadata::new_static("other", None));
+            .with_framework_metadata(FrameworkMetadata::new("other", None).unwrap());
         make_deterministic(&mut ua);
         assert_eq!(
             ua.aws_ua_header(),
