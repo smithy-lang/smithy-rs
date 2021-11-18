@@ -3,7 +3,9 @@ vNext (Month Day, Year)
 
 **TODO Next Release:**
 - Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
-- Fixed links to Usage Examples (smithy-rs#862, @floric)
+
+v0.29.0-alpha (November 11th, 2021)
+===================================
 
 **Breaking Changes**
 
@@ -54,7 +56,10 @@ Several breaking changes around `aws_smithy_types::Instant` were introduced by s
 - In `aws-sigv4`, the `SigningParams` builder's `date_time` setter was renamed to `time` and changed to take a `std::time::SystemTime` instead of a chrono's `DateTime<Utc>`.
 
 **New this week**
+
+- :warning: MSRV increased from 1.53.0 to 1.54.0 per our 3-behind MSRV policy.
 - Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#849)
+- Fixed links to Usage Examples (smithy-rs#862, @floric)
 
 v0.28.0-alpha (November 11th, 2021)
 ===================================
