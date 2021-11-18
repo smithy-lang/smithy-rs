@@ -27,12 +27,9 @@ use tower::layer::Layer;
 use tower::{Service, ServiceBuilder, ServiceExt};
 use tower_http::map_response_body::MapResponseBodyLayer;
 
-#[doc(hidden)]
 pub mod future;
 mod into_make_service;
-#[doc(hidden)]
 pub mod operation_handler;
-#[doc(hidden)]
 pub mod request_spec;
 mod route;
 
