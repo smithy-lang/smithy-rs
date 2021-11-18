@@ -9,7 +9,7 @@ use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 use std::time::Duration;
 
-/// A container of optional [`Duration`]s for all of the supported AWS timeouts.
+/// Configuration for timeouts
 ///
 /// # Example
 ///
