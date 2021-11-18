@@ -37,14 +37,14 @@
 use crate::BoxError;
 use std::{error::Error as StdError, fmt};
 
-/// Errors that can happen when using `aws-smithy-http-server`.
+/// Errors that can happen when using `aws-smithy-server`.
 #[derive(Debug)]
 pub struct Error {
-    pub inner: BoxError,
+    inner: BoxError,
 }
 
 impl Error {
-    pub fn new(error: impl Into<BoxError>) -> Self {
+    pub(crate) fn new(error: impl Into<BoxError>) -> Self {
         Self { inner: error.into() }
     }
 }

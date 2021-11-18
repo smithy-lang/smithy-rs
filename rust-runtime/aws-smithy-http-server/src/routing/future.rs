@@ -32,35 +32,30 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-//! HTTP body utilities.
+//! Future types.
+use crate::body::BoxBody;
+use futures_util::future::Either;
+use http::{Request, Response};
+use std::{convert::Infallible, future::ready};
+use tower::util::Oneshot;
 
-use crate::BoxError;
-use crate::Error;
+pub use super::{into_make_service::IntoMakeService, route::RouteFuture};
 
-#[doc(no_inline)]
-pub use http_body::{Body as HttpBody, Empty, Full};
+type OneshotRoute<B> = Oneshot<super::Route<B>, Request<B>>;
+type ReadyResponse = std::future::Ready<Result<Response<BoxBody>, Infallible>>;
 
-#[doc(no_inline)]
-pub use hyper::body::Body;
-
-#[doc(no_inline)]
-pub use bytes::Bytes;
-
-/// A boxed [`Body`] trait object.
-///
-/// This is used as the response body type for applications. Its
-/// necessary to unify multiple response bodies types into one.
-pub type BoxBody = http_body::combinators::UnsyncBoxBody<Bytes, Error>;
-
-/// Convert a [`http_body::Body`] into a [`BoxBody`].
-pub fn box_body<B>(body: B) -> BoxBody
-where
-    B: http_body::Body<Data = Bytes> + Send + 'static,
-    B::Error: Into<BoxError>,
-{
-    body.map_err(Error::new).boxed_unsync()
+opaque_future! {
+    /// Response future for [`Router`](super::Router).
+    pub type RouterFuture<B> =
+        futures_util::future::Either<OneshotRoute<B>, ReadyResponse>;
 }
 
-pub(crate) fn empty() -> BoxBody {
-    box_body(http_body::Empty::new())
+impl<B> RouterFuture<B> {
+    pub(super) fn from_oneshot(future: Oneshot<super::Route<B>, Request<B>>) -> Self {
+        Self::new(Either::Left(future))
+    }
+
+    pub(super) fn from_response(response: Response<BoxBody>) -> Self {
+        Self::new(Either::Right(ready(Ok(response))))
+    }
 }

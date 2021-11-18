@@ -38,13 +38,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescripto
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.expectTrait
-import software.amazon.smithy.rust.codegen.util.getTrait
-import software.amazon.smithy.rust.codegen.util.hasStreamingMember
-import software.amazon.smithy.rust.codegen.util.inputShape
-import software.amazon.smithy.rust.codegen.util.outputShape
-import software.amazon.smithy.rust.codegen.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.util.*
 import java.util.logging.Logger
 
 /*
@@ -77,7 +71,7 @@ class ServerHttpProtocolGenerator(
 
 /*
  * Generate all operation input parsers and output serializers for streaming and
- * non-straming types.
+ * non-streaming types.
  */
 private class ServerHttpProtocolImplGenerator(
     private val codegenContext: CodegenContext,
@@ -109,37 +103,48 @@ private class ServerHttpProtocolImplGenerator(
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
         val operationName = symbolProvider.toSymbol(operationShape).name
 
-        // For streaming response bodies, we need to generate a different implementation of the parse traits.
-        // These will first offer the streaming input to the parser & potentially read the body into memory
-        // if an error occurred or if the streaming parser indicates that it needs the full data to proceed.
-        if (operationShape.outputShape(model).hasStreamingMember(model)) {
-            with(operationWriter) {
-                renderStreamingTraits(operationName, outputSymbol, operationShape)
-            }
-        } else {
-            with(operationWriter) {
-                renderNonStreamingTraits(operationName, inputSymbol, outputSymbol, operationShape)
-            }
-        }
+        operationWriter.renderTraits(operationName, inputSymbol, outputSymbol, operationShape)
     }
 
     /*
-     * Generation of non-streaming traits. A non-streaming trait requires the HTTP body to be fully read in
-     * memory before parsing or deserialization. From a server perspective we need a way to parse an HTTP
-     * request from `Bytes` and serialize a HTTP response to `Bytes`. These traits are the public entrypoint
-     * of the ser/de logic of the smithy-rs server.
+     * Generation of `FromRequest` and `IntoResponse`. They are currently only implemented for non-streaming request
+     * and response bodies, that is, models without streaming traits
+     * (https://awslabs.github.io/smithy/1.0/spec/core/stream-traits.html).
+     * For non-streaming request bodies, we require the HTTP body to be fully read in memory before parsing or
+     * deserialization. From a server perspective we need a way to parse an HTTP request from `Bytes` and serialize
+     * an HTTP response to `Bytes`.
+     * TODO Add support for streaming.
+     * These traits are the public entrypoint of the ser/de logic of the `aws-smithy-http-server` server.
      */
-    private fun RustWriter.renderNonStreamingTraits(
+    private fun RustWriter.renderTraits(
         operationName: String?,
         inputSymbol: Symbol,
         outputSymbol: Symbol,
         operationShape: OperationShape
     ) {
-        // Implement Axum `FromRequest` trait for non streaming input types.
+        // Implement Axum `FromRequest` trait for input types.
         val inputName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
+
+        val fromRequest = if (operationShape.inputShape(model).hasStreamingMember(model)) {
+            // For streaming request bodies, we need to generate a different implementation of the `FromRequest` trait.
+            // It will first offer the streaming input to the parser and potentially read the body into memory
+            // if an error occurred or if the streaming parser indicates that it needs the full data to proceed.
+            """
+            async fn from_request(_req: &mut #{Axum}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
+                todo!("Streaming support for input shapes is not yet supported in `smithy-rs`")
+            }
+            """.trimIndent()
+        } else {
+            """
+            async fn from_request(req: &mut #{Axum}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
+                #{SmithyHttpServer}::protocols::check_json_content_type(req)?;
+                Ok($inputName(#{parse_request}(req).await?))
+            }
+            """.trimIndent()
+        }
         rustTemplate(
             """
-            struct $inputName(#{I});
+            pub(crate) struct $inputName(#{I});
             ##[#{Axum}::async_trait]
             impl<B> #{Axum}::extract::FromRequest<B> for $inputName
             where
@@ -149,30 +154,46 @@ private class ServerHttpProtocolImplGenerator(
                 #{SmithyRejection}: From<<B as #{SmithyHttpServer}::HttpBody>::Error>
             {
                 type Rejection = #{SmithyRejection};
-                async fn from_request(req: &mut #{Axum}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
-                    #{SmithyHttpServer}::protocols::check_json_content_type(req)?;
-                    Ok($inputName(#{parse_request}(req).await?))
-                }
+                $fromRequest
             }""".trimIndent(),
             *codegenScope,
             "I" to inputSymbol,
             "parse_request" to serverParseRequest(operationShape)
         )
 
-        // Implement Axum `IntoResponse` for non streaming output types.
+        // Implement Axum `IntoResponse` for output types.
         val outputName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
 
-        val handleSerializeOutput = """
-            Ok(response) => response,
-            Err(e) => #{http}::Response::builder().body(Self::Body::from(e.to_string())).expect("unable to build response from output")
-        """.trimIndent()
+        // For streaming response bodies, we need to generate a different implementation of the `IntoResponse` trait.
+        // The body type will have to be a `StreamBody`. The service implementer will return a `Stream` from their handler.
+        val intoResponseStreaming = "todo!(\"Streaming support for output shapes is not yet supported in `smithy-rs`\")"
         if (operationShape.errors.isNotEmpty()) {
+            val intoResponseImpl = if (operationShape.outputShape(model).hasStreamingMember(model)) {
+                intoResponseStreaming
+            } else {
+                """
+                match self {
+                    Self::Output(o) => {
+                        match #{serialize_response}(&o) {
+                            Ok(response) => response,
+                            Err(e) => #{http}::Response::builder().body(Self::Body::from(e.to_string())).expect("unable to build response from output")
+                        }
+                    },
+                    Self::Error(err) => {
+                        match #{serialize_error}(&err) {
+                            Ok(response) => response,
+                            Err(e) => #{http}::Response::builder().body(Self::Body::from(e.to_string())).expect("unable to build response from error")
+                        }
+                    }
+                }
+                """.trimIndent()
+            }
             // The output of fallible operations is a `Result` which we convert into an isomorphic `enum` type we control
             // that can in turn be converted into a response.
             rustTemplate(
                 """
-                enum $outputName {
+                pub(crate) enum $outputName {
                     Output(#{O}),
                     Error(#{E})
                 }
@@ -182,19 +203,7 @@ private class ServerHttpProtocolImplGenerator(
                     type BodyError = <Self::Body as #{SmithyHttpServer}::HttpBody>::Error;
 
                     fn into_response(self) -> #{http}::Response<Self::Body> {
-                        match self {
-                            Self::Output(o) => {
-                                match #{serialize_response}(&o) {
-                                    $handleSerializeOutput
-                                }
-                            },
-                            Self::Error(err) => {
-                                match #{serialize_error}(&err) {
-                                    Ok(response) => response,
-                                    Err(e) => #{http}::Response::builder().body(Self::Body::from(e.to_string())).expect("unable to build response from error")
-                                }
-                            }
-                        }
+                        $intoResponseImpl
                     }
                 }""".trimIndent(),
                 *codegenScope,
@@ -204,20 +213,28 @@ private class ServerHttpProtocolImplGenerator(
                 "serialize_error" to serverSerializeError(operationShape)
             )
         } else {
+            val handleSerializeOutput = if (operationShape.outputShape(model).hasStreamingMember(model)) {
+                intoResponseStreaming
+            } else {
+                """
+                match #{serialize_response}(&self.0) {
+                    Ok(response) => response,
+                    Err(e) => #{http}::Response::builder().body(Self::Body::from(e.to_string())).expect("unable to build response from output")
+                }
+                """.trimIndent()
+            }
             // The output of non-fallible operations is a model type which we convert into a "wrapper" unit `struct` type
             // we control that can in turn be converted into a response.
             rustTemplate(
                 """
-                struct $outputName(#{O});
+                pub(crate) struct $outputName(#{O});
                 ##[#{Axum}::async_trait]
                 impl #{Axum}::response::IntoResponse for $outputName {
                     type Body = #{SmithyHttpServer}::Body;
                     type BodyError = <Self::Body as #{SmithyHttpServer}::HttpBody>::Error;
 
                     fn into_response(self) -> #{http}::Response<Self::Body> {
-                        match #{serialize_response}(&self.0) {
-                            $handleSerializeOutput
-                        }
+                        $handleSerializeOutput
                     }
                 }""".trimIndent(),
                 *codegenScope,
@@ -266,17 +283,6 @@ private class ServerHttpProtocolImplGenerator(
             """.trimIndent(),
             "I" to inputSymbol
         )
-    }
-
-    /*
-     * TODO: implement streaming traits
-     */
-    private fun RustWriter.renderStreamingTraits(
-        operationName: String,
-        outputSymbol: Symbol,
-        operationShape: OperationShape
-    ) {
-        logger.warning("[rust-server-codegen] $operationName: streaming trait is not yet implemented")
     }
 
     private fun serverParseRequest(operationShape: OperationShape): RuntimeType {
