@@ -59,6 +59,7 @@ vNext (Month Day, Year)
 - Fixed links to Usage Examples (smithy-rs#862, @floric)
 - Added missing features to user agent formatting, and made it possible to configure an app name for the user agent via service config. (smithy-rs#865)
 - :bug: Relaxed profile name validation to allow `@` and other characters (smithy-rs#861, aws-sdk-rust#270)
+- :bug: Fixed signing problem with S3 Control (smithy-rs#858, aws-sd-rust#291)
 
 **Contributions**
 
