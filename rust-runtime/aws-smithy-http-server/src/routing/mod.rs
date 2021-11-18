@@ -90,6 +90,13 @@ where
         IntoMakeService::new(self)
     }
 
+    /// Apply a [`tower::Layer`] to the router.
+    ///
+    /// All requests to the router will be processed by the layer's
+    /// corresponding middleware.
+    ///
+    /// This can be used to add additional processing to a request for a group
+    /// of routes.
     pub fn layer<L, NewReqBody, NewResBody>(self, layer: L) -> Router<NewReqBody>
     where
         L: Layer<Route<B>>,
