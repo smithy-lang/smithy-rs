@@ -26,6 +26,8 @@ pub mod rejection;
 pub use self::body::{Body, BoxBody, HttpBody};
 #[doc(inline)]
 pub use self::error::Error;
+#[doc(inline)]
+pub use self::routing::Router;
 
 /// Alias for a type-erased error type.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
