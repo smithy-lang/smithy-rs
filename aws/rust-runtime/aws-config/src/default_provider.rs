@@ -6,7 +6,6 @@
 //! Default Provider chains for [`region`](default_provider::region) and [`credentials`](default_provider::credentials).
 //!
 //! Unless specific configuration is required, these should be constructed via [`ConfigLoader`](crate::ConfigLoader).
-//!
 
 /// Default region provider chain
 pub mod region {
