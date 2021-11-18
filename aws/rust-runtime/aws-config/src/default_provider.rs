@@ -6,7 +6,6 @@
 //! Default Provider chains for [`region`](default_provider::region) and [`credentials`](default_provider::credentials).
 //!
 //! Unless specific configuration is required, these should be constructed via [`ConfigLoader`](crate::ConfigLoader).
-//!
 
 /// Default region provider chain
 pub mod region {
@@ -422,6 +421,7 @@ pub mod credentials {
         make_test!(web_identity_token_invalid_jwt);
         make_test!(web_identity_token_source_profile);
         make_test!(web_identity_token_profile);
+        make_test!(profile_name);
         make_test!(profile_overrides_web_identity);
         make_test!(imds_token_fail);
 

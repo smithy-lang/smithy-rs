@@ -1,6 +1,7 @@
 vNext (Month Day, Year)
 =======================
 - Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
+- Fixed links to Usage Examples (smithy-rs#862, @floric)
 
 **Breaking Changes**
 
@@ -52,6 +53,7 @@ Several breaking changes around `aws_smithy_types::Instant` were introduced by s
 **New this week**
 - Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#849)
 - :bug: Fixed signing problem with S3 Control (smithy-rs#858, aws-sd-rust#291)
+- :bug: Relaxed profile name validation to allow `@` and other characters (smithy-rs#861, aws-sdk-rust#270)
 
 v0.0.25-alpha (November 11th, 2021)
 ===================================

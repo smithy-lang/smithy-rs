@@ -157,7 +157,7 @@ jobs:
       run: cargo test --all-features
       working-directory: ${{ matrix.runtime }}/rust-runtime/
     - name: generate docs
-      run: cargo doc --no-deps --document-private-items
+      run: cargo doc --no-deps --document-private-items --all-features
       working-directory: ${{ matrix.runtime }}/rust-runtime/
       env:
         RUSTDOCFLAGS: -D warnings

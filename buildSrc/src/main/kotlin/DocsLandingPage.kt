@@ -19,40 +19,38 @@ fun Project.docsLandingPage(awsServices: List<AwsService>, outputDir: File) {
     with(writer) {
         write("# AWS SDK for Rust")
         write(
-            """The AWS SDK for Rust contains one crate for each AWS service, as well as ${docsRs("aws-config")},
+            """The AWS SDK for Rust contains one crate for each AWS service, as well as ${cratesIo("aws-config")} ${docsRs("aws-config")},
             |a crate implementing configuration loading such as credential providers.""".trimMargin()
         )
 
         writer.write("## AWS Services")
+        writer.write("") // empty line between header and table
         /* generate a basic markdown table */
-        writer.write("| Service | [docs.rs](https://docs.rs) | [crates.io](https://crates.io) | [Usage Examples](https://github.com/awslabs/aws-sdk-rust/tree/main/examples/) |")
-        writer.write("| ------- | ------- | --------- | ------ |")
+        writer.write("| Service | Package |")
+        writer.write("| ------- | ------- |")
         awsServices.sortedBy { it.humanName }.forEach {
+            val items = listOfNotNull(cratesIo(it), docsRs(it), examples(it, project)).joinToString(" ")
             writer.write(
-                "| ${it.humanName} | ${docsRs(it)} | ${cratesIo(it)} | ${
-                examples(
-                    it,
-                    project
-                )
-                }"
+                "| ${it.humanName} | $items |"
             )
         }
     }
-    outputDir.resolve("docs.md").writeText(writer.toString())
+    outputDir.resolve("index.md").writeText(writer.toString())
 }
 
 /**
  * Generate a link to the examples for a given service
  */
 private fun examples(service: AwsService, project: Project) = if (with(service) { project.examples() }) {
-    "[Link](https://github.com/awslabs/aws-sdk-rust/tree/main/examples/${service.module})"
+    "([examples](https://github.com/awslabs/aws-sdk-rust/tree/main/examples/${service.module}))"
 } else {
-    "None yet!"
+    null
 }
 
 /**
  * Generate a link to the docs
  */
 private fun docsRs(service: AwsService) = docsRs(service.crate())
-private fun docsRs(crate: String) = "[$crate](https://docs.rs/$crate)"
-private fun cratesIo(service: AwsService) = "[${service.crate()}](https://crates.io/crates/${service.crate()})"
+private fun docsRs(crate: String) = "([docs](https://docs.rs/$crate))"
+private fun cratesIo(service: AwsService) = cratesIo(service.crate())
+private fun cratesIo(crate: String) = "[$crate](https://crates.io/crates/$crate)"
