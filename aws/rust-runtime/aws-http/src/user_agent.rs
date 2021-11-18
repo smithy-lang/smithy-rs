@@ -40,14 +40,7 @@ impl AwsUserAgent {
     /// This utilizes [`BUILD_METADATA`](const@aws_types::build_metadata::BUILD_METADATA) from `aws_types`
     /// to capture the Rust version & target platform. `ApiMetadata` provides
     /// the version & name of the specific service.
-    pub fn new_from_environment(
-        env: Env,
-        api_metadata: ApiMetadata,
-        feature_metadata: Vec<FeatureMetadata>,
-        config_metadata: Vec<ConfigMetadata>,
-        framework_metadata: Vec<FrameworkMetadata>,
-        app_name: Option<AppName>,
-    ) -> Self {
+    pub fn new_from_environment(env: Env, api_metadata: ApiMetadata) -> Self {
         let build_metadata = &BUILD_METADATA;
         let sdk_metadata = SdkMetadata {
             name: "rust",
@@ -57,10 +50,10 @@ impl AwsUserAgent {
             os_family: &build_metadata.os_family,
             version: None,
         };
-        let mut exec_env_metadata = None;
-        if let Ok(exec_env) = env.get("AWS_EXECUTION_ENV") {
-            exec_env_metadata = Some(ExecEnvMetadata { name: exec_env });
-        }
+        let exec_env_metadata = env
+            .get("AWS_EXECUTION_ENV")
+            .ok()
+            .map(|name| ExecEnvMetadata { name });
         AwsUserAgent {
             sdk_metadata,
             api_metadata,
@@ -71,10 +64,10 @@ impl AwsUserAgent {
                 extras: Default::default(),
             },
             exec_env_metadata,
-            feature_metadata,
-            config_metadata,
-            framework_metadata,
-            app_name,
+            feature_metadata: Default::default(),
+            config_metadata: Default::default(),
+            framework_metadata: Default::default(),
+            app_name: Default::default(),
         }
     }
 
@@ -106,6 +99,30 @@ impl AwsUserAgent {
             framework_metadata: Vec::new(),
             app_name: None,
         }
+    }
+
+    /// Adds feature metadata to the user agent.
+    pub fn with_feature_metadata(mut self, metadata: FeatureMetadata) -> Self {
+        self.feature_metadata.push(metadata);
+        self
+    }
+
+    /// Adds config metadata to the user agent.
+    pub fn with_config_metadata(mut self, metadata: ConfigMetadata) -> Self {
+        self.config_metadata.push(metadata);
+        self
+    }
+
+    /// Adds framework metadata to the user agent.
+    pub fn with_framework_metadata(mut self, metadata: FrameworkMetadata) -> Self {
+        self.framework_metadata.push(metadata);
+        self
+    }
+
+    /// Sets the app name for the user agent.
+    pub fn with_app_name(mut self, app_name: AppName) -> Self {
+        self.app_name = Some(app_name);
+        self
     }
 
     /// Generate a new-style user agent style header
@@ -484,14 +501,7 @@ mod test {
             service_id: "dynamodb".into(),
             version: "123",
         };
-        let mut ua = AwsUserAgent::new_from_environment(
-            Env::from_slice(&[]),
-            api_metadata,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            None,
-        );
+        let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata);
         make_deterministic(&mut ua);
         assert_eq!(
             ua.aws_ua_header(),
@@ -512,10 +522,6 @@ mod test {
         let mut ua = AwsUserAgent::new_from_environment(
             Env::from_slice(&[("AWS_EXECUTION_ENV", "lambda")]),
             api_metadata,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            None,
         );
         make_deterministic(&mut ua);
         assert_eq!(
@@ -534,18 +540,15 @@ mod test {
             service_id: "dynamodb".into(),
             version: "123",
         };
-        let mut ua = AwsUserAgent::new_from_environment(
-            Env::from_slice(&[]),
-            api_metadata,
-            vec![
-                FeatureMetadata::new_static("test-feature", Some(Cow::Borrowed("1.0"))),
+        let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata)
+            .with_feature_metadata(FeatureMetadata::new_static(
+                "test-feature",
+                Some(Cow::Borrowed("1.0")),
+            ))
+            .with_feature_metadata(
                 FeatureMetadata::new_static("other-feature", None)
                     .with_additional(AdditionalMetadata::new_static("asdf")),
-            ],
-            vec![],
-            vec![],
-            None,
-        );
+            );
         make_deterministic(&mut ua);
         assert_eq!(
             ua.aws_ua_header(),
@@ -563,17 +566,12 @@ mod test {
             service_id: "dynamodb".into(),
             version: "123",
         };
-        let mut ua = AwsUserAgent::new_from_environment(
-            Env::from_slice(&[]),
-            api_metadata,
-            vec![],
-            vec![
-                ConfigMetadata::new_static("some-config", Some(Cow::Borrowed("5"))),
-                ConfigMetadata::new_static("other-config", None),
-            ],
-            vec![],
-            None,
-        );
+        let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata)
+            .with_config_metadata(ConfigMetadata::new_static(
+                "some-config",
+                Some(Cow::Borrowed("5")),
+            ))
+            .with_config_metadata(ConfigMetadata::new_static("other-config", None));
         make_deterministic(&mut ua);
         assert_eq!(
             ua.aws_ua_header(),
@@ -591,18 +589,12 @@ mod test {
             service_id: "dynamodb".into(),
             version: "123",
         };
-        let mut ua = AwsUserAgent::new_from_environment(
-            Env::from_slice(&[]),
-            api_metadata,
-            vec![],
-            vec![],
-            vec![
+        let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata)
+            .with_framework_metadata(
                 FrameworkMetadata::new_static("some-framework", Some(Cow::Borrowed("1.3")))
                     .with_additional(AdditionalMetadata::new_static("something")),
-                FrameworkMetadata::new_static("other", None),
-            ],
-            None,
-        );
+            )
+            .with_framework_metadata(FrameworkMetadata::new_static("other", None));
         make_deterministic(&mut ua);
         assert_eq!(
             ua.aws_ua_header(),
@@ -620,14 +612,8 @@ mod test {
             service_id: "dynamodb".into(),
             version: "123",
         };
-        let mut ua = AwsUserAgent::new_from_environment(
-            Env::from_slice(&[]),
-            api_metadata,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Some(AppName::new("my_app").unwrap()),
-        );
+        let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata)
+            .with_app_name(AppName::new("my_app").unwrap());
         make_deterministic(&mut ua);
         assert_eq!(
             ua.aws_ua_header(),
@@ -654,10 +640,6 @@ mod test {
                     service_id: "dynamodb".into(),
                     version: "0.123",
                 },
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                None,
             ));
         let req = stage.apply(req).expect("setting user agent should succeed");
         let (req, _) = req.into_parts();

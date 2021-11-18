@@ -87,16 +87,14 @@ private class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : Opera
         is OperationSection.MutateRequest -> writable {
             rustTemplate(
                 """
-                ${section.request}.properties_mut().insert(
-                    #{ua_module}::AwsUserAgent::new_from_environment(
-                        #{Env}::real(),
-                        crate::API_METADATA.clone(),
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        _config.app_name().cloned(),
-                    )
+                let mut user_agent = #{ua_module}::AwsUserAgent::new_from_environment(
+                    #{Env}::real(),
+                    crate::API_METADATA.clone(),
                 );
+                if let Some(app_name) = _config.app_name() {
+                    user_agent = user_agent.with_app_name(app_name.clone());
+                }
+                ${section.request}.properties_mut().insert(user_agent);
                 """,
                 "ua_module" to runtimeConfig.userAgentModule(),
                 "Env" to runtimeConfig.env(),

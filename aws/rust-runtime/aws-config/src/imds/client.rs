@@ -48,14 +48,7 @@ const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
 const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(1);
 
 fn user_agent() -> AwsUserAgent {
-    AwsUserAgent::new_from_environment(
-        Env::real(),
-        ApiMetadata::new("imds", PKG_VERSION),
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-        None,
-    )
+    AwsUserAgent::new_from_environment(Env::real(), ApiMetadata::new("imds", PKG_VERSION))
 }
 
 /// IMDSv2 Client
