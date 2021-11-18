@@ -48,31 +48,24 @@ use std::{
 use tower::Service;
 use tower::{util::Oneshot, ServiceExt};
 
-use super::request_spec::{Match, RequestSpec};
-
 /// How routes are stored inside a [`Router`](super::Router).
 pub struct Route<B = Body> {
     service: CloneBoxService<Request<B>, Response<BoxBody>, Infallible>,
-    request_spec: RequestSpec,
 }
 
 impl<B> Route<B> {
-    pub(super) fn new<T>(svc: T, request_spec: RequestSpec) -> Self
+    pub(super) fn new<T>(svc: T) -> Self
     where
         T: Service<Request<B>, Response = Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
         T::Future: Send + 'static,
     {
-        Self { service: CloneBoxService::new(svc), request_spec }
-    }
-
-    pub(super) fn matches(&self, req: &Request<B>) -> Match {
-        self.request_spec.matches(req)
+        Self { service: CloneBoxService::new(svc) }
     }
 }
 
 impl<ReqBody> Clone for Route<ReqBody> {
     fn clone(&self) -> Self {
-        Self { service: self.service.clone(), request_spec: self.request_spec.clone() }
+        Self { service: self.service.clone() }
     }
 }
 

@@ -33,7 +33,6 @@
  */
 
 //! Future types.
-
 use crate::body::BoxBody;
 use futures_util::future::Either;
 use http::{Request, Response};
