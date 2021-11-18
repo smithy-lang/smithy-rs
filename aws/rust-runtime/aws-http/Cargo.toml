@@ -13,7 +13,6 @@ aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-types = { path = "../aws-types" }
 http = "0.2.3"
 lazy_static = "1"
-thiserror = "1"
 tracing = "0.1"
 
 [dev-dependencies]

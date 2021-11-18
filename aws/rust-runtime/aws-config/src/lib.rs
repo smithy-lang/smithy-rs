@@ -89,6 +89,10 @@ mod json_credentials;
 #[cfg(feature = "http-provider")]
 mod http_provider;
 
+// Re-export types from aws-types
+pub use aws_types::app_name::{AppName, InvalidAppName};
+pub use aws_types::config::Config;
+
 /// Create an environment loader for AWS Configuration
 ///
 /// # Examples
@@ -117,9 +121,10 @@ pub use loader::ConfigLoader;
 
 #[cfg(feature = "default-provider")]
 mod loader {
-    use crate::default_provider::{credentials, region, retry_config};
+    use crate::default_provider::{app_name, credentials, region, retry_config};
     use crate::meta::region::ProvideRegion;
     use aws_smithy_types::retry::RetryConfig;
+    use aws_types::app_name::AppName;
     use aws_types::config::Config;
     use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
 
@@ -133,6 +138,7 @@ mod loader {
     pub struct ConfigLoader {
         region: Option<Box<dyn ProvideRegion>>,
         retry_config: Option<RetryConfig>,
+        app_name: Option<AppName>,
         credentials_provider: Option<SharedCredentialsProvider>,
     }
 
@@ -210,6 +216,12 @@ mod loader {
                 retry_config::default_provider().retry_config().await
             };
 
+            let app_name = if self.app_name.is_some() {
+                self.app_name
+            } else {
+                app_name::default_provider().app_name().await
+            };
+
             let credentials_provider = if let Some(provider) = self.credentials_provider {
                 provider
             } else {
@@ -218,11 +230,12 @@ mod loader {
                 SharedCredentialsProvider::new(builder.build().await)
             };
 
-            Config::builder()
+            let mut builder = Config::builder()
                 .region(region)
                 .retry_config(retry_config)
-                .credentials_provider(credentials_provider)
-                .build()
+                .credentials_provider(credentials_provider);
+            builder.set_app_name(app_name);
+            builder.build()
         }
     }
 }
