@@ -1,0 +1,7 @@
+{
+  "name": "imds-config-with-no-creds",
+  "docs": "profile provider should hit IMDS if a profile contains config data but no credentials.",
+  "result": {
+    "ErrorContains": "The credential provider was not enabled"
+  }
+}
