@@ -236,9 +236,7 @@ mod tests {
             ),
         ];
 
-        println!("BEFORE SO");
         let mut router = Router::new();
-        println!("AFTER SO");
         for (spec, svc_name) in request_specs {
             let svc = NamedEchoUriService(String::from(svc_name));
             router = router.route(spec, svc.clone());
