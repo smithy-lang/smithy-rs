@@ -194,7 +194,7 @@ pub mod app_name {
         Builder::default()
     }
 
-    /// Builder for [DefaultRegionChain]
+    /// Default provider builder for [`AppName`]
     #[derive(Default)]
     pub struct Builder {
         env_provider: EnvironmentVariableAppNameProvider,
@@ -219,7 +219,7 @@ pub mod app_name {
             self
         }
 
-        /// Build a [DefaultRegionChain]
+        /// Build an [`AppName`] from the default chain
         pub async fn app_name(self) -> Option<AppName> {
             self.env_provider
                 .app_name()
@@ -243,7 +243,7 @@ pub mod app_name {
             ]);
             let app_name = Builder::default()
                 .configure(
-                    &ProviderConfig::empty()
+                    &ProviderConfig::no_configuration()
                         .with_fs(fs)
                         .with_env(env)
                         .with_http_connector(no_traffic_connector()),

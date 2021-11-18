@@ -89,6 +89,10 @@ mod json_credentials;
 #[cfg(feature = "http-provider")]
 mod http_provider;
 
+// Re-export types from aws-types
+pub use aws_types::app_name::{AppName, InvalidAppName};
+pub use aws_types::config::Config;
+
 /// Create an environment loader for AWS Configuration
 ///
 /// # Examples

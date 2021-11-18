@@ -6,7 +6,7 @@
 //! Load an app name from an AWS profile
 
 use crate::provider_config::ProviderConfig;
-use aws_sdk_sts::AppName;
+use aws_types::app_name::AppName;
 use aws_types::os_shim_internal::{Env, Fs};
 
 /// Loads an app name from a profile file
@@ -49,7 +49,7 @@ impl ProfileFileAppNameProvider {
         }
     }
 
-    /// [`Builder`] to construct a [`ProfileFileRegionProvider`]
+    /// [`Builder`] to construct a [`ProfileFileAppNameProvider`]
     pub fn builder() -> Builder {
         Builder::default()
     }
@@ -70,7 +70,7 @@ impl ProfileFileAppNameProvider {
             .map(|name| match AppName::new(name.to_owned()) {
                 Ok(app_name) => Some(app_name),
                 Err(err) => {
-                    tracing::warn!(err = %err, "`sdk-ua-app-id` property in profile {} was invalid", selected_profile_name);
+                    tracing::warn!(err = %err, "`sdk-ua-app-id` property in profile `{}` was invalid", selected_profile_name);
                     None
                 }
             })
@@ -178,7 +178,7 @@ mod tests {
                 .await
         );
         assert!(logs_contain(
-            "`sdk-ua-app-id` property in profile default was invalid"
+            "`sdk-ua-app-id` property in profile `default` was invalid"
         ));
     }
 }

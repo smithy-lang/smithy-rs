@@ -108,8 +108,22 @@ impl AwsUserAgent {
     }
 
     #[doc(hidden)]
+    /// Adds feature metadata to the user agent.
+    pub fn add_feature_metadata(&mut self, metadata: FeatureMetadata) -> &mut Self {
+        self.feature_metadata.push(metadata);
+        self
+    }
+
+    #[doc(hidden)]
     /// Adds config metadata to the user agent.
     pub fn with_config_metadata(mut self, metadata: ConfigMetadata) -> Self {
+        self.config_metadata.push(metadata);
+        self
+    }
+
+    #[doc(hidden)]
+    /// Adds config metadata to the user agent.
+    pub fn add_config_metadata(&mut self, metadata: ConfigMetadata) -> &mut Self {
         self.config_metadata.push(metadata);
         self
     }
@@ -121,8 +135,21 @@ impl AwsUserAgent {
         self
     }
 
+    #[doc(hidden)]
+    /// Adds framework metadata to the user agent.
+    pub fn add_framework_metadata(&mut self, metadata: FrameworkMetadata) -> &mut Self {
+        self.framework_metadata.push(metadata);
+        self
+    }
+
     /// Sets the app name for the user agent.
     pub fn with_app_name(mut self, app_name: AppName) -> Self {
+        self.app_name = Some(app_name);
+        self
+    }
+
+    /// Sets the app name for the user agent.
+    pub fn set_app_name(&mut self, app_name: AppName) -> &mut Self {
         self.app_name = Some(app_name);
         self
     }
@@ -330,7 +357,7 @@ impl FeatureMetadata {
     ) -> Result<Self, InvalidMetadataValue> {
         Ok(Self {
             name: validate_metadata(name.into())?,
-            version,
+            version: version.map(validate_metadata).transpose()?,
             additional: Default::default(),
         })
     }
@@ -376,14 +403,14 @@ impl ConfigMetadata {
     ) -> Result<Self, InvalidMetadataValue> {
         Ok(Self {
             config: validate_metadata(config.into())?,
-            value,
+            value: value.map(validate_metadata).transpose()?,
         })
     }
 }
 
 impl fmt::Display for ConfigMetadata {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // config-metadata = "cfg/" config ["/" name]
+        // config-metadata = "cfg/" config ["/" value]
         if let Some(value) = &self.value {
             write!(f, "cfg/{}/{}", self.config, value)
         } else {
@@ -416,7 +443,7 @@ impl FrameworkMetadata {
     ) -> Result<Self, InvalidMetadataValue> {
         Ok(Self {
             name: validate_metadata(name.into())?,
-            version,
+            version: version.map(validate_metadata).transpose()?,
             additional: Default::default(),
         })
     }
@@ -750,7 +777,7 @@ os-metadata          = "os/" os-family ["/" version]
 language-metadata    = "lang/" language "/" version *(RWS additional-metadata)
 env-metadata         = "exec-env/" name
 feat-metadata        = "ft/" name ["/" version] *(RWS additional-metadata)
-config-metadata      = "cfg/" config ["/" name]
+config-metadata      = "cfg/" config ["/" value]
 framework-metadata   = "lib/" name ["/" version] *(RWS additional-metadata)
 appId                = "app/" name
 ua-string            = sdk-metadata RWS

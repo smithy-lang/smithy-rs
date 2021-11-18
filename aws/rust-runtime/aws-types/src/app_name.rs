@@ -8,6 +8,9 @@
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static APP_NAME_LEN_RECOMMENDATION_WARN_EMITTED: AtomicBool = AtomicBool::new(false);
 
 /// App name that can be configured with an AWS SDK client to become part of the user agent string.
 ///
@@ -55,10 +58,17 @@ impl AppName {
             return Err(InvalidAppName);
         }
         if app_name.len() > 50 {
-            tracing::warn!(
-                "The `app_name` set when configuring the SDK client is recommended \
-                 to have no more than 50 characters."
-            )
+            if let Ok(false) = APP_NAME_LEN_RECOMMENDATION_WARN_EMITTED.compare_exchange(
+                false,
+                true,
+                Ordering::Acquire,
+                Ordering::Relaxed,
+            ) {
+                tracing::warn!(
+                    "The `app_name` set when configuring the SDK client is recommended \
+                     to have no more than 50 characters."
+                )
+            }
         }
         Ok(Self(app_name))
     }
@@ -87,11 +97,45 @@ impl fmt::Display for InvalidAppName {
 #[cfg(test)]
 mod tests {
     use super::AppName;
+    use crate::app_name::APP_NAME_LEN_RECOMMENDATION_WARN_EMITTED;
+    use std::sync::atomic::Ordering;
 
     #[test]
     fn validation() {
         assert!(AppName::new("asdf1234ASDF!#$%&'*+-.^_`|~").is_ok());
         assert!(AppName::new("foo bar").is_err());
         assert!(AppName::new("🚀").is_err());
+    }
+
+    #[tracing_test::traced_test]
+    #[test]
+    fn log_warn_once() {
+        // Pre-condition: make sure we start in the expected state of having never logged this
+        assert!(!APP_NAME_LEN_RECOMMENDATION_WARN_EMITTED.load(Ordering::Relaxed));
+
+        // Verify a short app name doesn't log
+        AppName::new("not-long").unwrap();
+        assert!(!logs_contain(
+            "is recommended to have no more than 50 characters"
+        ));
+        assert!(!APP_NAME_LEN_RECOMMENDATION_WARN_EMITTED.load(Ordering::Relaxed));
+
+        // Verify a long app name logs
+        AppName::new("greaterthanfiftycharactersgreaterthanfiftycharacters").unwrap();
+        assert!(logs_contain(
+            "is recommended to have no more than 50 characters"
+        ));
+        assert!(APP_NAME_LEN_RECOMMENDATION_WARN_EMITTED.load(Ordering::Relaxed));
+
+        // Now verify it only logs once ever
+
+        // HACK: there's no way to reset tracing-test, so just
+        // reach into its internals and clear it manually
+        tracing_test::internal::GLOBAL_BUF.lock().unwrap().clear();
+
+        AppName::new("greaterthanfiftycharactersgreaterthanfiftycharacters").unwrap();
+        assert!(!logs_contain(
+            "is recommended to have no more than 50 characters"
+        ));
     }
 }
