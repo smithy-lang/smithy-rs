@@ -16,13 +16,16 @@
 //! [endpoint trait]: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
 
 use self::{future::RouterFuture, request_spec::RequestSpec};
-use crate::body::{Body, BoxBody};
+use crate::body::{box_body, Body, BoxBody, HttpBody};
+use crate::BoxError;
 use http::{Request, Response, StatusCode};
 use std::{
     convert::Infallible,
     task::{Context, Poll},
 };
-use tower::{Service, ServiceExt};
+use tower::{Service, ServiceBuilder, ServiceExt};
+use tower_http::map_response_body::MapResponseBodyLayer;
+use tower_layer::Layer;
 
 pub mod future;
 mod into_make_service;
@@ -35,11 +38,12 @@ pub use self::{into_make_service::IntoMakeService, route::Route};
 #[derive(Debug)]
 pub struct Router<B = Body> {
     routes: Vec<Route<B>>,
+    request_specs: Vec<RequestSpec>,
 }
 
 impl<B> Clone for Router<B> {
     fn clone(&self) -> Self {
-        Self { routes: self.routes.clone() }
+        Self { routes: self.routes.clone(), request_specs: self.request_specs.clone() }
     }
 }
 
@@ -61,7 +65,7 @@ where
     /// Unless you add additional routes this will respond to `404 Not Found` to
     /// all requests.
     pub fn new() -> Self {
-        Self { routes: Default::default() }
+        Self { routes: Default::default(), request_specs: Default::default() }
     }
 
     /// Add a route to the router.
@@ -70,7 +74,8 @@ where
         T: Service<Request<B>, Response = Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
         T::Future: Send + 'static,
     {
-        self.routes.push(Route::new(svc, request_spec));
+        self.routes.push(Route::new(svc));
+        self.request_specs.push(request_spec);
         self
     }
 
@@ -83,6 +88,22 @@ where
     /// [`MakeService`]: tower::make::MakeService
     pub fn into_make_service(self) -> IntoMakeService<Self> {
         IntoMakeService::new(self)
+    }
+
+    pub fn layer<L, NewReqBody, NewResBody>(self, layer: L) -> Router<NewReqBody>
+    where
+        L: Layer<Route<B>>,
+        L::Service:
+            Service<Request<NewReqBody>, Response = Response<NewResBody>, Error = Infallible> + Clone + Send + 'static,
+        <L::Service as Service<Request<NewReqBody>>>::Future: Send + 'static,
+        NewResBody: HttpBody<Data = bytes::Bytes> + Send + 'static,
+        NewResBody::Error: Into<BoxError>,
+    {
+        let layer = ServiceBuilder::new().layer_fn(Route::new).layer(MapResponseBodyLayer::new(box_body)).layer(layer);
+
+        let routes = self.routes.into_iter().map(|route| Layer::layer(&layer, route)).collect();
+
+        Router { routes, request_specs: self.request_specs }
     }
 }
 
@@ -103,14 +124,19 @@ where
     fn call(&mut self, req: Request<B>) -> Self::Future {
         let mut method_not_allowed = false;
 
-        for route in &self.routes {
-            match route.matches(&req) {
-                request_spec::Match::Yes => {
-                    return RouterFuture::from_oneshot(route.clone().oneshot(req));
+        for (idx, route) in self.routes.iter().enumerate() {
+            match self.request_specs.get(idx) {
+                Some(spec) => {
+                    match spec.matches(&req) {
+                        request_spec::Match::Yes => {
+                            return RouterFuture::from_oneshot(route.clone().oneshot(req));
+                        }
+                        request_spec::Match::MethodNotAllowed => method_not_allowed = true,
+                        // Continue looping to see if another route matches.
+                        request_spec::Match::No => continue,
+                    }
                 }
-                request_spec::Match::MethodNotAllowed => method_not_allowed = true,
-                // Continue looping to see if another route matches.
-                request_spec::Match::No => continue,
+                None => continue,
             }
         }
 
@@ -148,7 +174,7 @@ mod tests {
 
         #[inline]
         fn call(&mut self, req: Request<B>) -> Self::Future {
-            let body = box_body(Body::from(format!("{} :: {}", self.0, String::from(req.uri().to_string()))));
+            let body = box_body(Body::from(format!("{} :: {}", self.0, req.uri().to_string())));
             let fut = async { Ok(Response::builder().status(&http::StatusCode::OK).body(body).unwrap()) };
             Box::pin(fut)
         }
