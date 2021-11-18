@@ -27,14 +27,18 @@ use tower::layer::Layer;
 use tower::{Service, ServiceBuilder, ServiceExt};
 use tower_http::map_response_body::MapResponseBodyLayer;
 
+#[doc(hidden)]
 pub mod future;
 mod into_make_service;
+#[doc(hidden)]
 pub mod operation_handler;
+#[doc(hidden)]
 pub mod request_spec;
 mod route;
 
 pub use self::{into_make_service::IntoMakeService, route::Route};
 
+/// The router type for composing handlers and services.
 #[derive(Debug)]
 pub struct Router<B = Body> {
     routes: Vec<(Route<B>, RequestSpec)>,
@@ -63,11 +67,13 @@ where
     ///
     /// Unless you add additional routes this will respond to `404 Not Found` to
     /// all requests.
+    #[doc(hidden)]
     pub fn new() -> Self {
         Self { routes: Default::default() }
     }
 
     /// Add a route to the router.
+    #[doc(hidden)]
     pub fn route<T>(mut self, request_spec: RequestSpec, svc: T) -> Self
     where
         T: Service<Request<B>, Response = Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
@@ -84,6 +90,7 @@ where
     /// [`Server`](hyper::server::Server).
     ///
     /// [`MakeService`]: tower::make::MakeService
+    #[doc(hidden)]
     pub fn into_make_service(self) -> IntoMakeService<Self> {
         IntoMakeService::new(self)
     }

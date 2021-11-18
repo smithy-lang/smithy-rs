@@ -13,7 +13,6 @@ mod clone_box_service;
 pub mod error;
 mod handler;
 
-// Only the code-generated operation registry should instantiate routers.
 // We therefore hide it in the documentation.
 #[doc(hidden)]
 pub mod routing;
@@ -26,6 +25,8 @@ pub mod rejection;
 pub use self::body::{Body, BoxBody, HttpBody};
 #[doc(inline)]
 pub use self::error::Error;
+#[doc(inline)]
+pub use self::routing::Router;
 
 /// Alias for a type-erased error type.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
