@@ -20,7 +20,7 @@ use std::fmt;
 /// Ths struct should be inserted into the [`PropertyBag`](aws_smithy_http::operation::Request::properties)
 /// during operation construction. [`UserAgentStage`](UserAgentStage) reads `AwsUserAgent`
 /// from the property bag and sets the `User-Agent` and `x-amz-user-agent` headers.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AwsUserAgent {
     sdk_metadata: SdkMetadata,
     api_metadata: ApiMetadata,
@@ -100,18 +100,21 @@ impl AwsUserAgent {
         }
     }
 
+    #[doc(hidden)]
     /// Adds feature metadata to the user agent.
     pub fn with_feature_metadata(mut self, metadata: FeatureMetadata) -> Self {
         self.feature_metadata.push(metadata);
         self
     }
 
+    #[doc(hidden)]
     /// Adds config metadata to the user agent.
     pub fn with_config_metadata(mut self, metadata: ConfigMetadata) -> Self {
         self.config_metadata.push(metadata);
         self
     }
 
+    #[doc(hidden)]
     /// Adds framework metadata to the user agent.
     pub fn with_framework_metadata(mut self, metadata: FrameworkMetadata) -> Self {
         self.framework_metadata.push(metadata);
@@ -181,8 +184,8 @@ impl AwsUserAgent {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct SdkMetadata {
+#[derive(Clone, Copy, Debug)]
+struct SdkMetadata {
     name: &'static str,
     version: &'static str,
 }
@@ -193,13 +196,15 @@ impl fmt::Display for SdkMetadata {
     }
 }
 
-#[derive(Clone)]
+/// Metadata about the client that's making the call.
+#[derive(Clone, Debug)]
 pub struct ApiMetadata {
     service_id: Cow<'static, str>,
     version: &'static str,
 }
 
 impl ApiMetadata {
+    /// Creates new `ApiMetadata`.
     pub const fn new(service_id: &'static str, version: &'static str) -> Self {
         Self {
             service_id: Cow::Borrowed(service_id),
@@ -253,6 +258,8 @@ fn validate_metadata(value: Cow<'static, str>) -> Result<Cow<'static, str>, Inva
     Ok(value)
 }
 
+#[doc(hidden)]
+/// Additional metadata that can be bundled with framework or feature metadata.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct AdditionalMetadata {
@@ -260,6 +267,13 @@ pub struct AdditionalMetadata {
 }
 
 impl AdditionalMetadata {
+    /// Creates `AdditionalMetadata`.
+    ///
+    /// This will result in `InvalidMetadataValue` if the given value isn't alphanumeric or
+    /// has characters other than the following:
+    /// ```text
+    /// !#$%&'*+-.^_`|~
+    /// ```
     pub fn new(value: impl Into<Cow<'static, str>>) -> Result<Self, InvalidMetadataValue> {
         Ok(Self {
             value: validate_metadata(value.into())?,
@@ -292,6 +306,8 @@ impl fmt::Display for AdditionalMetadataList {
     }
 }
 
+#[doc(hidden)]
+/// Metadata about a feature that is being used in the SDK.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct FeatureMetadata {
@@ -301,6 +317,13 @@ pub struct FeatureMetadata {
 }
 
 impl FeatureMetadata {
+    /// Creates `FeatureMetadata`.
+    ///
+    /// This will result in `InvalidMetadataValue` if the given value isn't alphanumeric or
+    /// has characters other than the following:
+    /// ```text
+    /// !#$%&'*+-.^_`|~
+    /// ```
     pub fn new(
         name: impl Into<Cow<'static, str>>,
         version: Option<Cow<'static, str>>,
@@ -312,6 +335,7 @@ impl FeatureMetadata {
         })
     }
 
+    /// Bundles additional arbitrary metadata with this feature metadata.
     pub fn with_additional(mut self, metadata: AdditionalMetadata) -> Self {
         self.additional.push(metadata);
         self
@@ -329,6 +353,8 @@ impl fmt::Display for FeatureMetadata {
     }
 }
 
+#[doc(hidden)]
+/// Metadata about a config value that is being used in the SDK.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct ConfigMetadata {
@@ -337,6 +363,13 @@ pub struct ConfigMetadata {
 }
 
 impl ConfigMetadata {
+    /// Creates `ConfigMetadata`.
+    ///
+    /// This will result in `InvalidMetadataValue` if the given value isn't alphanumeric or
+    /// has characters other than the following:
+    /// ```text
+    /// !#$%&'*+-.^_`|~
+    /// ```
     pub fn new(
         config: impl Into<Cow<'static, str>>,
         value: Option<Cow<'static, str>>,
@@ -359,6 +392,8 @@ impl fmt::Display for ConfigMetadata {
     }
 }
 
+#[doc(hidden)]
+/// Metadata about a software framework that is being used with the SDK.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct FrameworkMetadata {
@@ -368,6 +403,13 @@ pub struct FrameworkMetadata {
 }
 
 impl FrameworkMetadata {
+    /// Creates `FrameworkMetadata`.
+    ///
+    /// This will result in `InvalidMetadataValue` if the given value isn't alphanumeric or
+    /// has characters other than the following:
+    /// ```text
+    /// !#$%&'*+-.^_`|~
+    /// ```
     pub fn new(
         name: impl Into<Cow<'static, str>>,
         version: Option<Cow<'static, str>>,
@@ -379,6 +421,7 @@ impl FrameworkMetadata {
         })
     }
 
+    /// Bundles additional arbitrary metadata with this framework metadata.
     pub fn with_additional(mut self, metadata: AdditionalMetadata) -> Self {
         self.additional.push(metadata);
         self
@@ -396,7 +439,7 @@ impl fmt::Display for FrameworkMetadata {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct OsMetadata {
     os_family: &'static OsFamily,
     version: Option<String>,
@@ -420,7 +463,7 @@ impl fmt::Display for OsMetadata {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct LanguageMetadata {
     lang: &'static str,
     version: &'static str,
@@ -433,7 +476,7 @@ impl fmt::Display for LanguageMetadata {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct ExecEnvMetadata {
     name: String,
 }
@@ -443,19 +486,24 @@ impl fmt::Display for ExecEnvMetadata {
     }
 }
 
+/// User agent middleware
 #[non_exhaustive]
 #[derive(Default, Clone, Debug)]
 pub struct UserAgentStage;
 
 impl UserAgentStage {
+    /// Creates a new `UserAgentStage`
     pub fn new() -> Self {
         Self
     }
 }
 
+/// Failures that can arise from the user agent middleware
 #[derive(Debug)]
 pub enum UserAgentStageError {
+    /// There was no [`AwsUserAgent`] in the property bag.
     UserAgentMissing,
+    /// The formatted user agent string is not a valid HTTP header value. This indicates a bug.
     InvalidHeader(InvalidHeaderValue),
 }
 
@@ -465,7 +513,9 @@ impl fmt::Display for UserAgentStageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UserAgentMissing => write!(f, "User agent missing from property bag"),
-            Self::InvalidHeader(_) => write!(f, "Provided user agent header was invalid"),
+            Self::InvalidHeader(_) => {
+                write!(f, "Provided user agent header was invalid. This is a bug.")
+            }
         }
     }
 }
