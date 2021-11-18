@@ -23,9 +23,9 @@ use std::{
     convert::Infallible,
     task::{Context, Poll},
 };
+use tower::layer::Layer;
 use tower::{Service, ServiceBuilder, ServiceExt};
 use tower_http::map_response_body::MapResponseBodyLayer;
-use tower_layer::Layer;
 
 pub mod future;
 mod into_make_service;
@@ -37,13 +37,12 @@ pub use self::{into_make_service::IntoMakeService, route::Route};
 
 #[derive(Debug)]
 pub struct Router<B = Body> {
-    routes: Vec<Route<B>>,
-    request_specs: Vec<RequestSpec>,
+    routes: Vec<(Route<B>, RequestSpec)>,
 }
 
 impl<B> Clone for Router<B> {
     fn clone(&self) -> Self {
-        Self { routes: self.routes.clone(), request_specs: self.request_specs.clone() }
+        Self { routes: self.routes.clone() }
     }
 }
 
@@ -65,7 +64,7 @@ where
     /// Unless you add additional routes this will respond to `404 Not Found` to
     /// all requests.
     pub fn new() -> Self {
-        Self { routes: Default::default(), request_specs: Default::default() }
+        Self { routes: Default::default() }
     }
 
     /// Add a route to the router.
@@ -74,8 +73,7 @@ where
         T: Service<Request<B>, Response = Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
         T::Future: Send + 'static,
     {
-        self.routes.push(Route::new(svc));
-        self.request_specs.push(request_spec);
+        self.routes.push((Route::new(svc), request_spec));
         self
     }
 
@@ -107,8 +105,9 @@ where
         NewResBody::Error: Into<BoxError>,
     {
         let layer = ServiceBuilder::new().layer_fn(Route::new).layer(MapResponseBodyLayer::new(box_body)).layer(layer);
-        let routes = self.routes.into_iter().map(|route| Layer::layer(&layer, route)).collect();
-        Router { routes, request_specs: self.request_specs }
+        let routes =
+            self.routes.into_iter().map(|(route, request_spec)| (Layer::layer(&layer, route), request_spec)).collect();
+        Router { routes }
     }
 }
 
@@ -129,19 +128,14 @@ where
     fn call(&mut self, req: Request<B>) -> Self::Future {
         let mut method_not_allowed = false;
 
-        for (idx, route) in self.routes.iter().enumerate() {
-            match self.request_specs.get(idx) {
-                Some(spec) => {
-                    match spec.matches(&req) {
-                        request_spec::Match::Yes => {
-                            return RouterFuture::from_oneshot(route.clone().oneshot(req));
-                        }
-                        request_spec::Match::MethodNotAllowed => method_not_allowed = true,
-                        // Continue looping to see if another route matches.
-                        request_spec::Match::No => continue,
-                    }
+        for (route, request_spec) in &self.routes {
+            match request_spec.matches(&req) {
+                request_spec::Match::Yes => {
+                    return RouterFuture::from_oneshot(route.clone().oneshot(req));
                 }
-                None => continue,
+                request_spec::Match::MethodNotAllowed => method_not_allowed = true,
+                // Continue looping to see if another route matches.
+                request_spec::Match::No => continue,
             }
         }
 
@@ -242,7 +236,9 @@ mod tests {
             ),
         ];
 
+        println!("BEFORE SO");
         let mut router = Router::new();
+        println!("AFTER SO");
         for (spec, svc_name) in request_specs {
             let svc = NamedEchoUriService(String::from(svc_name));
             router = router.route(spec, svc.clone());
