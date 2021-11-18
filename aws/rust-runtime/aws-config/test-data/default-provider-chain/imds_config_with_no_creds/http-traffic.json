@@ -7,14 +7,14 @@
                     "request": {
                         "uri": "http://169.254.169.254/latest/api/token",
                         "headers": {
+                            "x-amz-user-agent": [
+                                "aws-sdk-rust/0.1.0 api/imds/0.1.0 os/linux lang/rust/1.52.1"
+                            ],
                             "user-agent": [
                                 "aws-sdk-rust/0.1.0 os/linux lang/rust/1.52.1"
                             ],
                             "x-aws-ec2-metadata-token-ttl-seconds": [
                                 "21600"
-                            ],
-                            "x-amz-user-agent": [
-                                "aws-sdk-rust/0.1.0 api/imds/0.1.0 os/linux lang/rust/1.52.1"
                             ]
                         },
                         "method": "PUT"
@@ -40,14 +40,11 @@
                             "status": 200,
                             "version": "HTTP/1.1",
                             "headers": {
-                                "content-type": [
-                                    "text/plain"
-                                ],
-                                "date": [
-                                    "Mon, 20 Sep 2021 20:51:52 GMT"
-                                ],
                                 "x-aws-ec2-metadata-token-ttl-seconds": [
                                     "21600"
+                                ],
+                                "content-type": [
+                                    "text/plain"
                                 ],
                                 "connection": [
                                     "close"
@@ -57,6 +54,9 @@
                                 ],
                                 "content-length": [
                                     "56"
+                                ],
+                                "date": [
+                                    "Mon, 20 Sep 2021 21:43:31 GMT"
                                 ]
                             }
                         }
@@ -69,7 +69,7 @@
             "action": {
                 "Data": {
                     "data": {
-                        "Utf8": "faketoken"
+                        "Utf8": "AQAEAKQRRHnsX8GCPgYTGMShrFJkMhru3n-8Ul5Gzvzj-bpWKYZuiw=="
                     },
                     "direction": "Response"
                 }
@@ -91,14 +91,14 @@
                     "request": {
                         "uri": "http://169.254.169.254/latest/meta-data/iam/security-credentials",
                         "headers": {
-                            "user-agent": [
-                                "aws-sdk-rust/0.1.0 os/linux lang/rust/1.52.1"
-                            ],
                             "x-amz-user-agent": [
                                 "aws-sdk-rust/0.1.0 api/imds/0.1.0 os/linux lang/rust/1.52.1"
                             ],
                             "x-aws-ec2-metadata-token": [
-                                "faketoken"
+                                "AQAEAKQRRHnsX8GCPgYTGMShrFJkMhru3n-8Ul5Gzvzj-bpWKYZuiw=="
+                            ],
+                            "user-agent": [
+                                "aws-sdk-rust/0.1.0 os/linux lang/rust/1.52.1"
                             ]
                         },
                         "method": "GET"
@@ -121,17 +121,14 @@
                 "Response": {
                     "response": {
                         "Ok": {
-                            "status": 404,
+                            "status": 200,
                             "version": "HTTP/1.1",
                             "headers": {
+                                "server": [
+                                    "EC2ws"
+                                ],
                                 "content-length": [
-                                    "339"
-                                ],
-                                "date": [
-                                    "Mon, 20 Sep 2021 20:51:52 GMT"
-                                ],
-                                "content-type": [
-                                    "text/html"
+                                    "21"
                                 ],
                                 "x-aws-ec2-metadata-token-ttl-seconds": [
                                     "21600"
@@ -139,8 +136,17 @@
                                 "connection": [
                                     "close"
                                 ],
-                                "server": [
-                                    "EC2ws"
+                                "last-modified": [
+                                    "Mon, 20 Sep 2021 21:41:54 GMT"
+                                ],
+                                "content-type": [
+                                    "text/plain"
+                                ],
+                                "date": [
+                                    "Mon, 20 Sep 2021 21:43:31 GMT"
+                                ],
+                                "accept-ranges": [
+                                    "none"
                                 ]
                             }
                         }
@@ -153,7 +159,7 @@
             "action": {
                 "Data": {
                     "data": {
-                        "Utf8": "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n\t\t \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">\n <head>\n  <title>404 - Not Found</title>\n </head>\n <body>\n  <h1>404 - Not Found</h1>\n </body>\n</html>\n"
+                        "Utf8": "imds-assume-role-test"
                     },
                     "direction": "Response"
                 }
@@ -167,8 +173,98 @@
                     "direction": "Response"
                 }
             }
+        },
+        {
+            "connection_id": 2,
+            "action": {
+                "Request": {
+                    "request": {
+                        "uri": "http://169.254.169.254/latest/meta-data/iam/security-credentials/imds-assume-role-test",
+                        "headers": {
+                            "x-aws-ec2-metadata-token": [
+                                "AQAEAKQRRHnsX8GCPgYTGMShrFJkMhru3n-8Ul5Gzvzj-bpWKYZuiw=="
+                            ],
+                            "user-agent": [
+                                "aws-sdk-rust/0.1.0 os/linux lang/rust/1.52.1"
+                            ],
+                            "x-amz-user-agent": [
+                                "aws-sdk-rust/0.1.0 api/imds/0.1.0 os/linux lang/rust/1.52.1"
+                            ]
+                        },
+                        "method": "GET"
+                    }
+                }
+            }
+        },
+        {
+            "connection_id": 2,
+            "action": {
+                "Eof": {
+                    "ok": true,
+                    "direction": "Request"
+                }
+            }
+        },
+        {
+            "connection_id": 2,
+            "action": {
+                "Response": {
+                    "response": {
+                        "Ok": {
+                            "status": 200,
+                            "version": "HTTP/1.1",
+                            "headers": {
+                                "content-type": [
+                                    "text/plain"
+                                ],
+                                "server": [
+                                    "EC2ws"
+                                ],
+                                "content-length": [
+                                    "1322"
+                                ],
+                                "accept-ranges": [
+                                    "none"
+                                ],
+                                "date": [
+                                    "Mon, 20 Sep 2021 21:43:31 GMT"
+                                ],
+                                "connection": [
+                                    "close"
+                                ],
+                                "last-modified": [
+                                    "Mon, 20 Sep 2021 21:41:54 GMT"
+                                ],
+                                "x-aws-ec2-metadata-token-ttl-seconds": [
+                                    "21600"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "connection_id": 2,
+            "action": {
+                "Data": {
+                    "data": {
+                        "Utf8": "{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"
+                    },
+                    "direction": "Response"
+                }
+            }
+        },
+        {
+            "connection_id": 2,
+            "action": {
+                "Eof": {
+                    "ok": true,
+                    "direction": "Response"
+                }
+            }
         }
     ],
-    "docs": "live IMDS token retrieval",
+    "docs": "profile provider should hit IMDS if a profile contains config data but no credentials.",
     "version": "V0"
 }
