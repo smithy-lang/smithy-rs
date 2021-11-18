@@ -107,9 +107,7 @@ where
         NewResBody::Error: Into<BoxError>,
     {
         let layer = ServiceBuilder::new().layer_fn(Route::new).layer(MapResponseBodyLayer::new(box_body)).layer(layer);
-
         let routes = self.routes.into_iter().map(|route| Layer::layer(&layer, route)).collect();
-
         Router { routes, request_specs: self.request_specs }
     }
 }
