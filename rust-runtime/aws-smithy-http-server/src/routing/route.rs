@@ -49,7 +49,6 @@ use tower::Service;
 use tower::{util::Oneshot, ServiceExt};
 
 /// How routes are stored inside a [`Router`](super::Router).
-#[doc(hidden)]
 pub struct Route<B = Body> {
     service: CloneBoxService<Request<B>, Response<BoxBody>, Infallible>,
 }
