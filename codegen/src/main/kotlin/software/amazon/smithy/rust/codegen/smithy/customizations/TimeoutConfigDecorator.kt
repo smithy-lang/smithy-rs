@@ -5,16 +5,12 @@
 
 package software.amazon.smithy.rust.codegen.smithy.customizations
 
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 
@@ -77,19 +73,11 @@ class TimeoutConfigDecorator : RustCodegenDecorator {
     ): List<ConfigCustomization> {
         return baseCustomizations + TimeoutConfigProviderConfig(codegenContext)
     }
-
-    override fun libRsCustomizations(
-        codegenContext: CodegenContext,
-        baseCustomizations: List<LibRsCustomization>
-    ): List<LibRsCustomization> {
-        return baseCustomizations + PubUseTimeoutConfig(codegenContext.runtimeConfig)
-    }
 }
 
 class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
     private val timeoutConfig = smithyTypesTimeout(codegenContext.runtimeConfig)
-    private val moduleName = codegenContext.moduleName
-    private val moduleUseName = moduleName.replace("-", "_")
+    private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf("TimeoutConfig" to timeoutConfig.member("TimeoutConfig"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
@@ -149,15 +137,6 @@ class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustom
                 """timeout_config: self.timeout_config,""",
                 *codegenScope
             )
-        }
-    }
-}
-
-class PubUseTimeoutConfig(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
-    override fun section(section: LibRsSection): Writable {
-        return when (section) {
-            is LibRsSection.Body -> writable { rust("pub use #T::TimeoutConfig;", smithyTypesTimeout(runtimeConfig)) }
-            else -> emptySection
         }
     }
 }

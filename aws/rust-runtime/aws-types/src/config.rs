@@ -156,6 +156,7 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust
+    /// use std::sync::Arc;
     /// use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
     /// use aws_types::config::Config;
     ///
@@ -168,11 +169,11 @@ impl Builder {
     ///     }
     /// }
     ///
-    /// let sleep_impl = std::sync::Arc::new(ForeverSleep);
-    /// let config = Config::builder().sleep_impl(sleep_impl).build();
+    /// let sleep_impl = Arc::new(ForeverSleep);
+    /// let config = Config::builder().sleep_impl(Some(sleep_impl)).build();
     /// ```
-    pub fn sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep>) -> Self {
-        self.set_sleep_impl(Some(sleep_impl));
+    pub fn sleep_impl(mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) -> Self {
+        self.set_sleep_impl(sleep_impl);
         self
     }
 

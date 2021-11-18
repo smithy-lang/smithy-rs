@@ -87,8 +87,7 @@ class RetryConfigDecorator : RustCodegenDecorator {
 
 class RetryConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
     private val retryConfig = smithyTypesRetry(codegenContext.runtimeConfig)
-    private val moduleName = codegenContext.moduleName
-    private val moduleUseName = moduleName.replace("-", "_")
+    private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf("RetryConfig" to retryConfig.member("RetryConfig"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {

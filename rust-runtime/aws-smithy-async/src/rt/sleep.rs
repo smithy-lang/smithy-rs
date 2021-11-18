@@ -40,14 +40,13 @@ where
 
 #[cfg(feature = "rt-tokio")]
 /// Returns a default sleep implementation based on the features enabled
-pub fn default_async_sleep() -> Arc<dyn AsyncSleep> {
-    sleep_tokio()
+pub fn default_async_sleep() -> Option<Arc<dyn AsyncSleep>> {
+    Some(sleep_tokio())
 }
 
 #[cfg(not(feature = "rt-tokio"))]
-/// Returns a default sleep implementation based on the features enabled
-pub fn default_async_sleep() -> Arc<dyn AsyncSleep> {
-    sleep_forever()
+pub fn default_async_sleep() -> Option<Arc<dyn AsyncSleep>> {
+    None
 }
 
 /// Future returned by [`AsyncSleep`].
@@ -91,28 +90,4 @@ impl AsyncSleep for TokioSleep {
 #[cfg(feature = "rt-tokio")]
 fn sleep_tokio() -> Arc<dyn AsyncSleep> {
     Arc::new(TokioSleep::new())
-}
-
-#[non_exhaustive]
-#[cfg(not(feature = "rt-tokio"))]
-#[derive(Debug, Default)]
-pub struct ForeverSleep;
-
-#[cfg(not(feature = "rt-tokio"))]
-impl ForeverSleep {
-    pub fn new() -> Self {
-        Default::default()
-    }
-}
-
-#[cfg(not(feature = "rt-tokio"))]
-impl AsyncSleep for ForeverSleep {
-    fn sleep(&self, duration: Duration) -> Sleep {
-        Sleep::new(std::future::pending())
-    }
-}
-
-#[cfg(not(feature = "rt-tokio"))]
-fn sleep_tokio() -> Arc<dyn AsyncSleep> {
-    Arc::new(ForeverSleep::new())
 }

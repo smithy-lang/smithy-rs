@@ -94,7 +94,7 @@ impl Default for ProviderConfig {
             fs: Fs::default(),
             time_source: TimeSource::default(),
             connector: HttpConnector::default(),
-            sleep: Some(default_async_sleep()),
+            sleep: default_async_sleep(),
             region: None,
         }
     }

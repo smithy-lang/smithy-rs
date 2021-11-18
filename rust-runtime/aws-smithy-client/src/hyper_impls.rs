@@ -136,14 +136,26 @@ impl Builder {
         C::Error: Into<BoxError>,
     {
         // if we are using Hyper, Tokio must already be enabled so we can fallback to Tokio.
-        let sleep = self.sleep.unwrap_or_else(default_async_sleep);
+        let sleep = self.sleep.or_else(default_async_sleep);
         let connector = match self.timeout.connect() {
-            Some(duration) => ConnectTimeout::new(connector, sleep.clone(), duration),
+            Some(duration) => ConnectTimeout::new(
+                connector,
+                sleep
+                    .clone()
+                    .expect("a sleep impl must be provided to use timeouts"),
+                duration,
+            ),
             None => ConnectTimeout::no_timeout(connector),
         };
         let base = self.client_builder.build(connector);
         let http_timeout = match self.timeout.read() {
-            Some(duration) => HttpReadTimeout::new(base, sleep.clone(), duration),
+            Some(duration) => HttpReadTimeout::new(
+                base,
+                sleep
+                    .clone()
+                    .expect("a sleep impl must be provided to use timeouts"),
+                duration,
+            ),
             None => HttpReadTimeout::no_timeout(base),
         };
         HyperAdapter(http_timeout)

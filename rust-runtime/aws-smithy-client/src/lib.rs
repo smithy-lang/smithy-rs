@@ -140,7 +140,7 @@ where
             .connector(connector)
             .middleware(M::default())
             .build()
-            .with_sleep_impl(Some(default_async_sleep()))
+            .with_sleep_impl(default_async_sleep())
     }
 }
 

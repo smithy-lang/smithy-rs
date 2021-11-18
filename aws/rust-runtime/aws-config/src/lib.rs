@@ -89,6 +89,9 @@ mod json_credentials;
 #[cfg(feature = "http-provider")]
 mod http_provider;
 
+pub use aws_smithy_types::retry::RetryConfig;
+pub use aws_smithy_types::timeout::TimeoutConfig;
+
 /// Create an environment loader for AWS Configuration
 ///
 /// # Examples
@@ -198,8 +201,7 @@ mod loader {
         /// Override the sleep implementation for this [`ConfigLoader`]. The sleep implementation
         /// is used to create timeout futures.
         pub fn sleep_impl(mut self, sleep: impl AsyncSleep + 'static) -> Self {
-            // TODO is it possible that we could be boxing another `Arc` here?
-            //   Is that something to be avoided?
+            // it's possible that we could wrapping an `Arc in an `Arc` and that's OK
             self.sleep = Some(Arc::new(sleep));
             self
         }
@@ -251,10 +253,17 @@ mod loader {
                 timeout_config::default_provider().timeout_config().await
             };
 
-            let sleep_impl = if let Some(sleep) = self.sleep {
-                sleep
-            } else {
+            let sleep_impl = if self.sleep.is_none() {
+                if default_async_sleep().is_none() {
+                    tracing::warn!(
+                        "An implementation of AsyncSleep was requested by calling default_async_sleep. \
+                         This happened when ConfigLoader::load was called during Config construction. \
+                         You can fix this by enabling the rt-tokio feature"
+                    );
+                }
                 default_async_sleep()
+            } else {
+                self.sleep
             };
 
             let credentials_provider = if let Some(provider) = self.credentials_provider {
