@@ -16,13 +16,16 @@
 //! [endpoint trait]: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
 
 use self::{future::RouterFuture, request_spec::RequestSpec};
-use crate::body::{Body, BoxBody};
+use crate::body::{box_body, Body, BoxBody, HttpBody};
+use crate::BoxError;
 use http::{Request, Response, StatusCode};
 use std::{
     convert::Infallible,
     task::{Context, Poll},
 };
-use tower::{Service, ServiceExt};
+use tower::layer::Layer;
+use tower::{Service, ServiceBuilder, ServiceExt};
+use tower_http::map_response_body::MapResponseBodyLayer;
 
 pub mod future;
 mod into_make_service;
@@ -34,7 +37,7 @@ pub use self::{into_make_service::IntoMakeService, route::Route};
 
 #[derive(Debug)]
 pub struct Router<B = Body> {
-    routes: Vec<Route<B>>,
+    routes: Vec<(Route<B>, RequestSpec)>,
 }
 
 impl<B> Clone for Router<B> {
@@ -70,7 +73,7 @@ where
         T: Service<Request<B>, Response = Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
         T::Future: Send + 'static,
     {
-        self.routes.push(Route::new(svc, request_spec));
+        self.routes.push((Route::new(svc), request_spec));
         self
     }
 
@@ -83,6 +86,28 @@ where
     /// [`MakeService`]: tower::make::MakeService
     pub fn into_make_service(self) -> IntoMakeService<Self> {
         IntoMakeService::new(self)
+    }
+
+    /// Apply a [`tower::Layer`] to the router.
+    ///
+    /// All requests to the router will be processed by the layer's
+    /// corresponding middleware.
+    ///
+    /// This can be used to add additional processing to a request for a group
+    /// of routes.
+    pub fn layer<L, NewReqBody, NewResBody>(self, layer: L) -> Router<NewReqBody>
+    where
+        L: Layer<Route<B>>,
+        L::Service:
+            Service<Request<NewReqBody>, Response = Response<NewResBody>, Error = Infallible> + Clone + Send + 'static,
+        <L::Service as Service<Request<NewReqBody>>>::Future: Send + 'static,
+        NewResBody: HttpBody<Data = bytes::Bytes> + Send + 'static,
+        NewResBody::Error: Into<BoxError>,
+    {
+        let layer = ServiceBuilder::new().layer_fn(Route::new).layer(MapResponseBodyLayer::new(box_body)).layer(layer);
+        let routes =
+            self.routes.into_iter().map(|(route, request_spec)| (Layer::layer(&layer, route), request_spec)).collect();
+        Router { routes }
     }
 }
 
@@ -103,8 +128,8 @@ where
     fn call(&mut self, req: Request<B>) -> Self::Future {
         let mut method_not_allowed = false;
 
-        for route in &self.routes {
-            match route.matches(&req) {
+        for (route, request_spec) in &self.routes {
+            match request_spec.matches(&req) {
                 request_spec::Match::Yes => {
                     return RouterFuture::from_oneshot(route.clone().oneshot(req));
                 }
@@ -148,7 +173,7 @@ mod tests {
 
         #[inline]
         fn call(&mut self, req: Request<B>) -> Self::Future {
-            let body = box_body(Body::from(format!("{} :: {}", self.0, String::from(req.uri().to_string()))));
+            let body = box_body(Body::from(format!("{} :: {}", self.0, req.uri().to_string())));
             let fut = async { Ok(Response::builder().status(&http::StatusCode::OK).body(body).unwrap()) };
             Box::pin(fut)
         }
