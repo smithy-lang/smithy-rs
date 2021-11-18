@@ -46,7 +46,7 @@ val DECORATORS = listOf(
     GlacierDecorator(),
 
     // Only build docs-rs for linux to reduce load on docs.rs
-    DocsRsMetadataDecorator(DocsRsMetadataSettings(targets = listOf("x86_64-unknown-linux-gnu")))
+    DocsRsMetadataDecorator(DocsRsMetadataSettings(targets = listOf("x86_64-unknown-linux-gnu"), allFeatures = true))
 )
 
 class AwsCodegenDecorator : CombinedCodegenDecorator(DECORATORS) {
