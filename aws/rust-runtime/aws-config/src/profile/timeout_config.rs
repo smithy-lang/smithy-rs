@@ -43,7 +43,7 @@ const PROFILE_VAR_API_CALL_TIMEOUT: &str = "api_call_timeout";
 /// connect_timeout = 0.5
 /// ```
 ///
-/// This provider is part of the [default timeout_config provider chain](crate::default_provider::timeout_config).
+/// This provider is part of the [default timeout config provider chain](crate::default_provider::timeout_config).
 #[derive(Debug, Default)]
 pub struct ProfileFileTimeoutConfigProvider {
     fs: Fs,

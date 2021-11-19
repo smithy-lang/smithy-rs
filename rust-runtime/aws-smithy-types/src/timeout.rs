@@ -137,7 +137,9 @@ impl TimeoutConfig {
         self
     }
 
-    /// Merge two builders together. Values from `other` will only be used as a fallback for values
+    /// Merges two builders together.
+    ///
+    /// Values from `other` will only be used as a fallback for values
     /// from `self`. Useful for merging configs from different sources together when you want to
     /// handle "precedence" per value instead of at the config level
     ///

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-//! Load timeout configuration properties from Environment variables
+//! Load timeout configuration properties from environment variables
 
 use aws_smithy_types::timeout::{TimeoutConfig, TimeoutConfigError};
 use aws_types::os_shim_internal::Env;
@@ -39,7 +39,7 @@ impl EnvironmentVariableTimeoutConfigProvider {
     }
 
     #[doc(hidden)]
-    /// Create an timeout_config provider from a given [`Env`]
+    /// Create a timeout config provider from a given [`Env`]
     ///
     /// This method is used for tests that need to override environment variables.
     pub fn new_with_env(env: Env) -> Self {

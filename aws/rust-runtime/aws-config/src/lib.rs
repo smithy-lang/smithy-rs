@@ -186,7 +186,7 @@ mod loader {
             self
         }
 
-        /// Override the timeout_config used to build [`Config`](aws_types::config::Config).
+        /// Override the timeout config used to build [`Config`](aws_types::config::Config).
         /// **Note: This only sets timeouts for calls to AWS services.** Timeouts for the credentials
         /// provider chain are configured separately.
         ///
