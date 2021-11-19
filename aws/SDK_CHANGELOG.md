@@ -1,6 +1,16 @@
 vNext (Month Day, Year)
 =======================
 
+**New this release**
+- Improve docs on `aws-smithy-client` (smithy-rs#855)
+
+**Breaking Changes**
+- (aws-smithy-client): Extraneous `pub use SdkSuccess` removed from `aws_smithy_client::hyper_ext`. (smithy-rs#855)
+
+
+v0.0.26-alpha (TBD)
+=======================
+
 **TODO Upon release**
 - Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
 
