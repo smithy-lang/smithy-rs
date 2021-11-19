@@ -7,12 +7,10 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
+[dev-dependencies]
+aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper"}
 aws-sdk-sts = { path = "../../build/aws-sdk/sdk/sts" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
+tokio  = { version = "1", features = ["full", "test-util"]}
 tracing-subscriber = "0.2"
-
-[dev-dependencies]
-tokio  = { version = "1", features = ["full"]}
-aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper"}
