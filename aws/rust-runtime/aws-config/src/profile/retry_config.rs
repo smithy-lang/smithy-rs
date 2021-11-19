@@ -19,13 +19,13 @@ use crate::provider_config::ProviderConfig;
 ///
 /// # Examples
 ///
-/// **Loads 2 as the `max_attempts` to make when sending a request
+/// **Loads 2 as the `max_attempts` to make when sending a request**
 /// ```ini
 /// [default]
 /// max_attempts = 2
 /// ```
 ///
-/// **Loads `standard` as the `retry_mode` _if and only if_ the `other` profile is selected.
+/// **Loads `standard` as the `retry_mode` _if and only if_ the `other` profile is selected.**
 ///
 /// ```ini
 /// [profile other]
