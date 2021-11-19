@@ -55,6 +55,7 @@ impl Debug for Credentials {
 const STATIC_CREDENTIALS: &str = "Static";
 
 impl Credentials {
+    /// Creates `Credentials`.
     pub fn new(
         access_key_id: impl Into<String>,
         secret_access_key: impl Into<String>,
@@ -71,6 +72,7 @@ impl Credentials {
         }))
     }
 
+    /// Creates `Credentials` from hardcoded access key, secret key, and session token.
     pub fn from_keys(
         access_key_id: impl Into<String>,
         secret_access_key: impl Into<String>,
@@ -85,22 +87,27 @@ impl Credentials {
         )
     }
 
+    /// Returns the access key ID.
     pub fn access_key_id(&self) -> &str {
         &self.0.access_key_id
     }
 
+    /// Returns the secret access key.
     pub fn secret_access_key(&self) -> &str {
         &self.0.secret_access_key
     }
 
+    /// Returns the time when the credentials will expire.
     pub fn expiry(&self) -> Option<SystemTime> {
         self.0.expires_after
     }
 
+    /// Returns a mutable reference to the time when the credentials will expire.
     pub fn expiry_mut(&mut self) -> &mut Option<SystemTime> {
         &mut Arc::make_mut(&mut self.0).expires_after
     }
 
+    /// Returns the session token.
     pub fn session_token(&self) -> Option<&str> {
         self.0.session_token.as_deref()
     }

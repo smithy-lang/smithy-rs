@@ -15,6 +15,7 @@ use crate::region::Region;
 use aws_smithy_types::retry::RetryConfig;
 
 /// AWS Shared Configuration
+#[derive(Debug)]
 pub struct Config {
     region: Option<Region>,
     retry_config: Option<RetryConfig>,
@@ -23,7 +24,7 @@ pub struct Config {
 }
 
 /// Builder for AWS Shared Configuration
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Builder {
     region: Option<Region>,
     retry_config: Option<RetryConfig>,
