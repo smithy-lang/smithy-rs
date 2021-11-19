@@ -4,7 +4,7 @@ AWS SDK config and credential provider implementations.
 
 **Please Note: The SDK is currently released as an alpha and is intended strictly for feedback purposes only. Do not use this SDK for production workloads.**
 
- The implementations can be used either via the default chain implementation [`from_env`]/[`ConfigLoader`] or ad-hoc individual credential and region providers.
+ The implementations can be used either via the default chain implementation `from_env`/`ConfigLoader` or ad-hoc individual credential and region providers.
 
 A `ConfigLoader` can combine different configuration sources into an AWS shared-config `Config`. The `Config` can then be used to configure one or more AWS service clients.
 
