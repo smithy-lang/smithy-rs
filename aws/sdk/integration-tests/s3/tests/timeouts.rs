@@ -35,7 +35,6 @@ async fn test_timeout_service_ends_request_that_never_completes() {
     let client = Client::from_conf_conn(config, conn.clone());
 
     let now = tokio::time::Instant::now();
-    // When I try to run this test it says there's no `pause` in `tokio::time`
     tokio::time::pause();
 
     let err = client

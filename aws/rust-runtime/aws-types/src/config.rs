@@ -309,6 +309,7 @@ impl Config {
         self.timeout_config.as_ref()
     }
 
+    #[doc(hidden)]
     /// Configured sleep implementation
     pub fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>> {
         self.sleep_impl.clone()
