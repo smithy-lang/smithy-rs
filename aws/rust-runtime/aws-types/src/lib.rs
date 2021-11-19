@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+pub mod app_name;
 pub mod build_metadata;
-// internal APIs, may be unstable
 pub mod config;
 pub mod credentials;
 #[doc(hidden)]

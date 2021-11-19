@@ -48,6 +48,7 @@ class SharedConfigDecorator : RustCodegenDecorator {
                         builder = builder.region(input.region().cloned());
                         builder.set_retry_config(input.retry_config().cloned());
                         builder.set_credentials_provider(input.credentials_provider().cloned());
+                        builder.set_app_name(input.app_name().cloned());
                         builder
                     }
                 }

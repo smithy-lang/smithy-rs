@@ -9,16 +9,17 @@
 //!
 //! This module contains an shared configuration representation that is agnostic from a specific service.
 
-use aws_smithy_types::retry::RetryConfig;
-
+use crate::app_name::AppName;
 use crate::credentials::SharedCredentialsProvider;
 use crate::region::Region;
+use aws_smithy_types::retry::RetryConfig;
 
 /// AWS Shared Configuration
 pub struct Config {
     region: Option<Region>,
     retry_config: Option<RetryConfig>,
     credentials_provider: Option<SharedCredentialsProvider>,
+    app_name: Option<AppName>,
 }
 
 /// Builder for AWS Shared Configuration
@@ -27,6 +28,7 @@ pub struct Builder {
     region: Option<Region>,
     retry_config: Option<RetryConfig>,
     credentials_provider: Option<SharedCredentialsProvider>,
+    app_name: Option<AppName>,
 }
 
 impl Builder {
@@ -152,12 +154,31 @@ impl Builder {
         self
     }
 
+    /// Sets the name of the app that is using the client.
+    ///
+    /// This _optional_ name is used to identify the application in the user agent that
+    /// gets sent along with requests.
+    pub fn app_name(mut self, app_name: AppName) -> Self {
+        self.set_app_name(Some(app_name));
+        self
+    }
+
+    /// Sets the name of the app that is using the client.
+    ///
+    /// This _optional_ name is used to identify the application in the user agent that
+    /// gets sent along with requests.
+    pub fn set_app_name(&mut self, app_name: Option<AppName>) -> &mut Self {
+        self.app_name = app_name;
+        self
+    }
+
     /// Build a [`Config`](Config) from this builder
     pub fn build(self) -> Config {
         Config {
             region: self.region,
             retry_config: self.retry_config,
             credentials_provider: self.credentials_provider,
+            app_name: self.app_name,
         }
     }
 }
@@ -176,6 +197,11 @@ impl Config {
     /// Configured credentials provider
     pub fn credentials_provider(&self) -> Option<&SharedCredentialsProvider> {
         self.credentials_provider.as_ref()
+    }
+
+    /// Configured app name
+    pub fn app_name(&self) -> Option<&AppName> {
+        self.app_name.as_ref()
     }
 
     /// Config builder

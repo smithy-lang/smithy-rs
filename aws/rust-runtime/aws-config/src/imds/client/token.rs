@@ -131,7 +131,7 @@ impl TokenMiddleware {
             .body(SdkBody::empty())
             .expect("valid HTTP request");
         let mut request = operation::Request::new(request);
-        request.properties_mut().insert(super::USER_AGENT);
+        request.properties_mut().insert(super::user_agent());
 
         let operation = Operation::new(request, self.token_parser.clone())
             .with_retry_policy(ImdsErrorPolicy)

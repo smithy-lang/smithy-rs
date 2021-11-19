@@ -1,58 +1,72 @@
 vNext (Month Day, Year)
 =======================
+
+**TODO Upon release**
 - Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
-- Fixed links to Usage Examples (smithy-rs#862, @floric)
 
 **Breaking Changes**
 
-Several breaking changes around `aws_smithy_types::Instant` were introduced by smithy-rs#849:
-- `aws_smithy_types::Instant` from was renamed to `DateTime` to avoid confusion with the standard library's monotonically nondecreasing `Instant` type.
-- `DateParseError` in `aws_smithy_types` has been renamed to `DateTimeParseError` to match the type that's being parsed.
-- The `chrono-conversions` feature and associated functions have been moved to the `aws-smithy-types-convert` crate.
-  - Calls to `Instant::from_chrono` should be changed to:
-    ```rust
-    use aws_smithy_types::DateTime;
-    use aws_smithy_types_convert::date_time::DateTimeExt;
+- The `add_metadata` function was removed from `AwsUserAgent` in `aws-http`.
+  Use `with_feature_metadata`, `with_config_metadata`, or `with_framework_metadata` now instead. (smithy-rs#865)
+- Several breaking changes around `aws_smithy_types::Instant` were introduced by smithy-rs#849:
+  - `aws_smithy_types::Instant` from was renamed to `DateTime` to avoid confusion with the standard library's monotonically nondecreasing `Instant` type.
+  - `DateParseError` in `aws_smithy_types` has been renamed to `DateTimeParseError` to match the type that's being parsed.
+  - The `chrono-conversions` feature and associated functions have been moved to the `aws-smithy-types-convert` crate.
+    - Calls to `Instant::from_chrono` should be changed to:
+      ```rust
+      use aws_smithy_types::DateTime;
+      use aws_smithy_types_convert::date_time::DateTimeExt;
 
-    // For chrono::DateTime<Utc>
-    let date_time = DateTime::from_chrono_utc(chrono_date_time);
-    // For chrono::DateTime<FixedOffset>
-    let date_time = DateTime::from_chrono_offset(chrono_date_time);
-    ```
-  - Calls to `instant.to_chrono()` should be changed to:
-    ```rust
-    use aws_smithy_types_convert::date_time::DateTimeExt;
+      // For chrono::DateTime<Utc>
+      let date_time = DateTime::from_chrono_utc(chrono_date_time);
+      // For chrono::DateTime<FixedOffset>
+      let date_time = DateTime::from_chrono_offset(chrono_date_time);
+      ```
+    - Calls to `instant.to_chrono()` should be changed to:
+      ```rust
+      use aws_smithy_types_convert::date_time::DateTimeExt;
 
-    date_time.to_chrono_utc();
-    ```
-- `Instant::from_system_time` and `Instant::to_system_time` have been changed to `From` trait implementations.
-  - Calls to `from_system_time` should be changed to:
-    ```rust
-    DateTime::from(system_time);
-    // or
-    let date_time: DateTime = system_time.into();
-    ```
-  - Calls to `to_system_time` should be changed to:
-    ```rust
-    SystemTime::from(date_time);
-    // or
-    let system_time: SystemTime = date_time.into();
-    ```
-- Several functions in `Instant`/`DateTime` were renamed:
-  - `Instant::from_f64` -> `DateTime::from_secs_f64`
-  - `Instant::from_fractional_seconds` -> `DateTime::from_fractional_secs`
-  - `Instant::from_epoch_seconds` -> `DateTime::from_secs`
-  - `Instant::from_epoch_millis` -> `DateTime::from_millis`
-  - `Instant::epoch_fractional_seconds` -> `DateTime::as_secs_f64`
-  - `Instant::has_nanos` -> `DateTime::has_subsec_nanos`
-  - `Instant::epoch_seconds` -> `DateTime::secs`
-  - `Instant::epoch_subsecond_nanos` -> `DateTime::subsec_nanos`
-  - `Instant::to_epoch_millis` -> `DateTime::to_millis`
-- The `DateTime::fmt` method is now fallible and fails when a `DateTime`'s value is outside what can be represented by the desired date format.
+      date_time.to_chrono_utc();
+      ```
+  - `Instant::from_system_time` and `Instant::to_system_time` have been changed to `From` trait implementations.
+    - Calls to `from_system_time` should be changed to:
+      ```rust
+      DateTime::from(system_time);
+      // or
+      let date_time: DateTime = system_time.into();
+      ```
+    - Calls to `to_system_time` should be changed to:
+      ```rust
+      SystemTime::from(date_time);
+      // or
+      let system_time: SystemTime = date_time.into();
+      ```
+  - Several functions in `Instant`/`DateTime` were renamed:
+    - `Instant::from_f64` -> `DateTime::from_secs_f64`
+    - `Instant::from_fractional_seconds` -> `DateTime::from_fractional_secs`
+    - `Instant::from_epoch_seconds` -> `DateTime::from_secs`
+    - `Instant::from_epoch_millis` -> `DateTime::from_millis`
+    - `Instant::epoch_fractional_seconds` -> `DateTime::as_secs_f64`
+    - `Instant::has_nanos` -> `DateTime::has_subsec_nanos`
+    - `Instant::epoch_seconds` -> `DateTime::secs`
+    - `Instant::epoch_subsecond_nanos` -> `DateTime::subsec_nanos`
+    - `Instant::to_epoch_millis` -> `DateTime::to_millis`
+  - The `DateTime::fmt` method is now fallible and fails when a `DateTime`'s value is outside what can be represented by the desired date format.
 
 **New this week**
+
+- :warning: MSRV increased from 1.53.0 to 1.54.0 per our 3-behind MSRV policy.
 - Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#849)
+- Fixed links to Usage Examples (smithy-rs#862, @floric)
+- Added missing features to user agent formatting, and made it possible to configure an app name for the user agent via service config. (smithy-rs#865)
 - :bug: Relaxed profile name validation to allow `@` and other characters (smithy-rs#861, aws-sdk-rust#270)
+- :bug: Fixed signing problem with S3 Control (smithy-rs#858, aws-sd-rust#291)
+
+**Contributions**
+
+Thank you for your contributions! :heart:
+
+- @floric (smithy-rs#862)
 
 v0.0.25-alpha (November 11th, 2021)
 ===================================
