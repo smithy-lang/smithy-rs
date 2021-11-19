@@ -27,7 +27,6 @@ import java.util.Optional
  *
  * This can be configured via the `runtimeConfig.version` field in smithy-build.json
  */
-
 data class RuntimeCrateLocation(val path: String?, val version: String?) {
     init {
         check(path != null || version != null) {
@@ -176,13 +175,6 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val PartialEq = std.member("cmp::PartialEq")
         val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
         val String = RuntimeType("String", dependency = null, namespace = "std::string")
-        val DeriveBuilder = RuntimeType("Builder", dependency = CargoDependency.DeriveBuilder, namespace = "derive_builder")
-
-        fun RequestSpecModule(runtimeConfig: RuntimeConfig) =
-            RuntimeType("request_spec", CargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing")
-
-        fun Router(runtimeConfig: RuntimeConfig) =
-            RuntimeType("Router", CargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing")
 
         fun DateTime(runtimeConfig: RuntimeConfig) =
             RuntimeType("DateTime", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
