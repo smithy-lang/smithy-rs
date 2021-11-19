@@ -6,6 +6,9 @@ vNext (Month Day, Year)
 
 **Breaking Changes**
 
+- `Credentials::from_keys` is now behind a feature flag named `hardcoded-credentials` in `aws-types`.
+  It is __NOT__ secure to hardcode credentials into your application, and the credentials
+  providers that come with the AWS SDK should be preferred. (smithy-rs#875, smithy-rs#317)
 - The `add_metadata` function was removed from `AwsUserAgent` in `aws-http`.
   Use `with_feature_metadata`, `with_config_metadata`, or `with_framework_metadata` now instead. (smithy-rs#865)
 - Several breaking changes around `aws_smithy_types::Instant` were introduced by smithy-rs#849:
