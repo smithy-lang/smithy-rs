@@ -38,23 +38,24 @@
 //! let client = Client::<DynConnector, MyMiddleware>::new(DynConnector::new(connector));
 //! ```
 
+use std::error::Error;
 use std::sync::Arc;
 
 use http::Uri;
 use hyper::client::connect::Connection;
-
 use tokio::io::{AsyncRead, AsyncWrite};
 use tower::{BoxError, Service};
 
+use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
-use std::error::Error;
-
-use crate::hyper_ext::timeout_middleware::{ConnectTimeout, HttpReadTimeout, TimeoutError};
-use crate::{timeout, Builder as ClientBuilder};
-use aws_smithy_async::future::timeout::TimedOutError;
+pub use aws_smithy_http::result::{SdkError, SdkSuccess};
 use aws_smithy_types::retry::ErrorKind;
+
+use crate::{timeout, Builder as ClientBuilder};
+
+use self::timeout_middleware::{ConnectTimeout, HttpReadTimeout, TimeoutError};
 
 /// Adapter from a [`hyper::Client`](hyper::Client) to a connector usable by a Smithy [`Client`](crate::Client).
 ///
@@ -303,6 +304,8 @@ impl<M, R> ClientBuilder<(), M, R> {
 }
 
 mod timeout_middleware {
+    use std::error::Error;
+    use std::fmt::Formatter;
     use std::future::Future;
     use std::pin::Pin;
     use std::sync::Arc;
@@ -310,16 +313,13 @@ mod timeout_middleware {
     use std::time::Duration;
 
     use http::Uri;
-
     use pin_project_lite::pin_project;
+    use tower::BoxError;
 
     use aws_smithy_async::future;
     use aws_smithy_async::future::timeout::{TimedOutError, Timeout};
     use aws_smithy_async::rt::sleep::AsyncSleep;
     use aws_smithy_async::rt::sleep::Sleep;
-    use std::error::Error;
-    use std::fmt::Formatter;
-    use tower::BoxError;
 
     #[derive(Debug)]
     pub(crate) struct TimeoutError {
@@ -507,29 +507,17 @@ mod timeout_middleware {
 
     #[cfg(test)]
     mod test {
+        use std::time::Duration;
+
+        use tower::Service;
+
+        use aws_smithy_async::assert_elapsed;
+        use aws_smithy_async::rt::sleep::TokioSleep;
+        use aws_smithy_http::body::SdkBody;
+
         use crate::hyper_ext::Adapter;
         use crate::never::{NeverConnected, NeverReplies};
         use crate::timeout;
-        use aws_smithy_async::rt::sleep::TokioSleep;
-        use aws_smithy_http::body::SdkBody;
-        use std::time::Duration;
-        use tower::Service;
-
-        macro_rules! assert_elapsed {
-            ($start:expr, $dur:expr) => {{
-                let elapsed = $start.elapsed();
-                // type ascription improves compiler error when wrong type is passed
-                let lower: std::time::Duration = $dur;
-
-                // Handles ms rounding
-                assert!(
-                    elapsed >= lower && elapsed <= lower + std::time::Duration::from_millis(5),
-                    "actual = {:?}, expected = {:?}",
-                    elapsed,
-                    lower
-                );
-            }};
-        }
 
         #[allow(unused)]
         fn connect_timeout_is_correct<T: Send + Sync + Clone + 'static>() {
@@ -595,17 +583,18 @@ mod timeout_middleware {
 
 #[cfg(test)]
 mod test {
-    use crate::hyper_ext::Adapter;
-    use http::Uri;
-    use hyper::client::connect::{Connected, Connection};
-
-    use aws_smithy_http::body::SdkBody;
     use std::io::{Error, ErrorKind};
     use std::pin::Pin;
     use std::task::{Context, Poll};
-    use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
+    use http::Uri;
+    use hyper::client::connect::{Connected, Connection};
+    use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
     use tower::BoxError;
+
+    use aws_smithy_http::body::SdkBody;
+
+    use crate::hyper_ext::Adapter;
 
     #[tokio::test]
     async fn hyper_io_error() {

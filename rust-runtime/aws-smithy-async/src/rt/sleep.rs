@@ -38,10 +38,15 @@ where
     }
 }
 
-/// Returns a default sleep implementation based on the features enabled, or `None` if
-/// there isn't one available from this crate.
+#[cfg(feature = "rt-tokio")]
+/// Returns a default sleep implementation based on the features enabled
 pub fn default_async_sleep() -> Option<Arc<dyn AsyncSleep>> {
-    sleep_tokio()
+    Some(sleep_tokio())
+}
+
+#[cfg(not(feature = "rt-tokio"))]
+pub fn default_async_sleep() -> Option<Arc<dyn AsyncSleep>> {
+    None
 }
 
 /// Future returned by [`AsyncSleep`].
@@ -83,11 +88,6 @@ impl AsyncSleep for TokioSleep {
 }
 
 #[cfg(feature = "rt-tokio")]
-fn sleep_tokio() -> Option<Arc<dyn AsyncSleep>> {
-    Some(Arc::new(TokioSleep::new()))
-}
-
-#[cfg(not(feature = "rt-tokio"))]
-fn sleep_tokio() -> Option<Arc<dyn AsyncSleep>> {
-    None
+fn sleep_tokio() -> Arc<dyn AsyncSleep> {
+    Arc::new(TokioSleep::new())
 }

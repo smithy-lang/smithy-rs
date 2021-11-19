@@ -27,6 +27,7 @@ use aws_smithy_http_tower::map_request::{
     AsyncMapRequestLayer, AsyncMapRequestService, MapRequestLayer, MapRequestService,
 };
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
+use aws_smithy_types::timeout::TimeoutConfig;
 use aws_types::os_shim_internal::{Env, Fs};
 use bytes::Bytes;
 use http::uri::InvalidUri;
@@ -543,19 +544,22 @@ impl Builder {
         let endpoint = Endpoint::immutable(endpoint);
         let retry_config = retry::Config::default()
             .with_max_attempts(self.max_attempts.unwrap_or(DEFAULT_ATTEMPTS));
+        let timeout_config = TimeoutConfig::default();
         let token_loader = token::TokenMiddleware::new(
             connector.clone(),
             config.time_source(),
             endpoint.clone(),
             self.token_ttl.unwrap_or(DEFAULT_TOKEN_TTL),
             retry_config.clone(),
+            timeout_config.clone(),
         );
         let middleware = ImdsMiddleware { token_loader };
         let inner_client = aws_smithy_client::Builder::new()
             .connector(connector.clone())
             .middleware(middleware)
             .build()
-            .with_retry_config(retry_config);
+            .with_retry_config(retry_config)
+            .with_timeout_config(timeout_config);
         let client = Client {
             endpoint,
             inner: inner_client,
