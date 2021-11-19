@@ -11,6 +11,7 @@
 <!--- see how your change affects other areas of the code, etc. -->
 
 ## Checklist
+<!--- If a checkbox below is not applicable, then please DELETE it rather than leaving it unchecked -->
 - [ ] I have updated `CHANGELOG.md` if I made changes to the smithy-rs codegen or runtime crates
 - [ ] I have updated `aws/SDK_CHANGELOG.md` if I made changes to the AWS SDK, generated SDK code, or SDK runtime crates
 
