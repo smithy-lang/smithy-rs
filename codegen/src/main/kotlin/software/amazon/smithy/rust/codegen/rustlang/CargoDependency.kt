@@ -10,7 +10,6 @@ import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
-import kotlin.io.path.Path
 
 sealed class DependencyScope {
     object Dev : DependencyScope()
