@@ -33,6 +33,9 @@ pub struct SdkSuccess<O> {
 /// Failed SDK Result
 #[derive(Debug)]
 pub enum SdkError<E, R = operation::Response> {
+    // TODO Request failures due to a timeout currently report this error type even though
+    // they're not really a construction failure. Add a new variant for timeouts or update
+    // DispatchFailure to accept more than just ConnectorErrors
     /// The request failed during construction. It was not dispatched over the network.
     ConstructionFailure(BoxError),
 

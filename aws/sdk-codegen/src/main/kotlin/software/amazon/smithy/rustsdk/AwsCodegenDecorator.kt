@@ -5,9 +5,11 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.rust.codegen.smithy.RetryConfigDecorator
 import software.amazon.smithy.rust.codegen.smithy.customizations.DocsRsMetadataDecorator
 import software.amazon.smithy.rust.codegen.smithy.customizations.DocsRsMetadataSettings
+import software.amazon.smithy.rust.codegen.smithy.customizations.RetryConfigDecorator
+import software.amazon.smithy.rust.codegen.smithy.customizations.SleepImplDecorator
+import software.amazon.smithy.rust.codegen.smithy.customizations.TimeoutConfigDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayDecorator
 import software.amazon.smithy.rustsdk.customize.auth.DisabledAuthDecorator
@@ -33,6 +35,8 @@ val DECORATORS = listOf(
 
     // Smithy specific decorators
     RetryConfigDecorator(),
+    SleepImplDecorator(),
+    TimeoutConfigDecorator(),
 
     // Service specific decorators
     DisabledAuthDecorator(),

@@ -36,6 +36,7 @@ pub mod static_tests;
 #[cfg(feature = "hyper")]
 pub mod never;
 pub mod timeout;
+pub use timeout::TimeoutLayer;
 
 /// Type aliases for standard connection types.
 #[cfg(feature = "hyper")]
@@ -72,6 +73,12 @@ pub mod conns {
         crate::hyper_ext::Adapter<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>;
 }
 
+use std::error::Error;
+use std::sync::Arc;
+use tower::{Layer, Service, ServiceBuilder, ServiceExt};
+
+use crate::timeout::generate_timeout_service_params_from_timeout_config;
+use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::response::ParseHttpResponse;
@@ -80,13 +87,11 @@ use aws_smithy_http::retry::ClassifyResponse;
 use aws_smithy_http_tower::dispatch::DispatchLayer;
 use aws_smithy_http_tower::parse_response::ParseResponseLayer;
 use aws_smithy_types::retry::ProvideErrorKind;
-use std::error::Error;
-
-use tower::{Layer, Service, ServiceBuilder, ServiceExt};
+use aws_smithy_types::timeout::TimeoutConfig;
 
 /// Smithy service client.
 ///
-/// The service client is customizeable in a number of ways (see [`Builder`]), but most customers
+/// The service client is customizable in a number of ways (see [`Builder`]), but most customers
 /// can stick with the standard constructor provided by [`Client::new`]. It takes only a single
 /// argument, which is the middleware that fills out the [`http::Request`] for each higher-level
 /// operation so that it can ultimately be sent to the remote host. The middleware is responsible
@@ -112,6 +117,8 @@ pub struct Client<
     connector: Connector,
     middleware: Middleware,
     retry_policy: RetryPolicy,
+    timeout_config: TimeoutConfig,
+    sleep_impl: Option<Arc<dyn AsyncSleep>>,
 }
 
 // Quick-create for people who just want "the default".
@@ -119,13 +126,17 @@ impl<C, M> Client<C, M>
 where
     M: Default,
 {
-    /// Create a Smithy client that the given connector, a middleware default, and the [standard
-    /// retry policy](crate::retry::Standard).
+    /// Create a Smithy client that the given connector, a middleware default, the [standard
+    /// retry policy](crate::retry::Standard), and the [`default_async_sleep`] sleep implementation.
     pub fn new(connector: C) -> Self {
-        Builder::new()
+        let mut client = Builder::new()
             .connector(connector)
             .middleware(M::default())
-            .build()
+            .build();
+
+        client.set_sleep_impl(default_async_sleep());
+
+        client
     }
 }
 
@@ -138,6 +149,28 @@ impl<C, M> Client<C, M> {
     /// Adjust a standard retry client with the given policy configuration.
     pub fn with_retry_config(mut self, config: retry::Config) -> Self {
         self.set_retry_config(config);
+        self
+    }
+
+    /// Set the client's timeout configuration.
+    pub fn set_timeout_config(&mut self, config: TimeoutConfig) {
+        self.timeout_config = config;
+    }
+
+    /// Set the client's timeout configuration.
+    pub fn with_timeout_config(mut self, config: TimeoutConfig) -> Self {
+        self.set_timeout_config(config);
+        self
+    }
+
+    /// Set the [`AsyncSleep`] function that the client will use to create things like timeout futures.
+    pub fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) {
+        self.sleep_impl = sleep_impl;
+    }
+
+    /// Set the [`AsyncSleep`] function that the client will use to create things like timeout futures.
+    pub fn with_sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep>) -> Self {
+        self.set_sleep_impl(Some(sleep_impl));
         self
     }
 }
@@ -189,9 +222,16 @@ where
             Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
     {
         let connector = self.connector.clone();
+
+        let timeout_servic_params = generate_timeout_service_params_from_timeout_config(
+            &self.timeout_config,
+            self.sleep_impl.clone(),
+        );
+
         let svc = ServiceBuilder::new()
-            // Create a new request-scoped policy
+            .layer(TimeoutLayer::new(timeout_servic_params.api_call))
             .retry(self.retry_policy.new_request_policy())
+            .layer(TimeoutLayer::new(timeout_servic_params.api_call_attempt))
             .layer(ParseResponseLayer::<O, Retry>::new())
             // These layers can be considered as occurring in order. That is, first invoke the
             // customer-provided middleware, then dispatch dispatch over the wire.
