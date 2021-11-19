@@ -7,10 +7,10 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.*
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.RequestSpecModule
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
@@ -33,13 +33,13 @@ class OperationRegistryGenerator(
     private val operationNames = operations.map { symbolProvider.toSymbol(it).name.toSnakeCase() }
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
-        "Router" to RuntimeType.Router(runtimeConfig),
+        "Router" to ServerRuntimeType.Router(runtimeConfig),
     )
     private val httpBindingResolver: HttpBindingResolver =
         HttpTraitHttpBindingResolver(codegenContext.model, ProtocolContentTypes.consistent("application/json"))
 
     fun render(writer: RustWriter) {
-        Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.DeriveBuilder)).render(writer)
+        Attribute.Derives(setOf(RuntimeType.Debug, ServerRuntimeType.DeriveBuilder)).render(writer)
         Attribute.Custom("builder(pattern = \"owned\")").render(writer)
         // Generic arguments of the `OperationRegistryBuilder<Fun0, Fut0, ..., FunN, FutN>`.
         val operationsGenericArguments = operations.mapIndexed { i, _ -> "Fun$i, Fut$i"}.joinToString()
@@ -98,7 +98,7 @@ class OperationRegistryGenerator(
 
     private fun OperationShape.requestSpec(): String {
         val httpTrait = httpBindingResolver.httpTrait(this)
-        val namespace = RequestSpecModule(runtimeConfig).fullyQualifiedName()
+        val namespace = ServerRuntimeType.RequestSpecModule(runtimeConfig).fullyQualifiedName()
 
         // TODO Support the `endpoint` trait: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
 
