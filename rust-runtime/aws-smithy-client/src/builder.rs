@@ -52,7 +52,7 @@ impl<M, R> Builder<(), M, R> {
     /// be able to use a custom connector instead, such as to mock the network for tests.
     ///
     /// If you just want to specify a function from request to response instead, use
-    /// [`Builder::map_connector`].
+    /// [`Builder::connector_fn`].
     pub fn connector<C>(self, connector: C) -> Builder<C, M, R> {
         Builder {
             connector,
