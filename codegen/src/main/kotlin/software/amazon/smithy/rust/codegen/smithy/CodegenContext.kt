@@ -64,4 +64,12 @@ data class CodegenContext(
         settings: RustSettings,
         mode: CodegenMode,
     ) : this(model, symbolProvider, settings.runtimeConfig, serviceShape, protocol, settings.moduleName, settings, mode)
+
+    /**
+     * A moduleName for a crate uses kebab-case. When you want to `use` a crate in Rust code,
+     * it must be in snake-case. Call this method to get this crate's name in snake-case.
+     */
+    fun moduleUseName(): String {
+        return this.moduleName.replace("-", "_")
+    }
 }

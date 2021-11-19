@@ -3,12 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy
+package software.amazon.smithy.rust.codegen.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
@@ -61,7 +64,6 @@ fn test_1() {
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<Config>();
 }
-
  */
 
 class RetryConfigDecorator : RustCodegenDecorator {
@@ -85,8 +87,7 @@ class RetryConfigDecorator : RustCodegenDecorator {
 
 class RetryConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
     private val retryConfig = smithyTypesRetry(codegenContext.runtimeConfig)
-    private val moduleName = codegenContext.moduleName
-    private val moduleUseName = moduleName.replace("-", "_")
+    private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf("RetryConfig" to retryConfig.member("RetryConfig"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
