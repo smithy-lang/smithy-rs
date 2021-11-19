@@ -650,6 +650,7 @@ pub mod credentials {
         make_test!(imds_default_chain_error);
         make_test!(imds_default_chain_success);
         make_test!(imds_assume_role);
+        make_test!(imds_config_with_no_creds);
         make_test!(imds_disabled);
         make_test!(imds_default_chain_retries);
 
