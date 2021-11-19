@@ -33,7 +33,7 @@ async fn example() {
 
 ## Getting Started
 
-_Examples are available for many services and operations, check out the [examples folder in GitHub]._
+_Examples are available for many services and operations, check out the [examples folder in GitHub][Usage examples]._
 
 The SDK provides one crate per AWS service. You must add [Tokio] as a dependency within your Rust project to execute asynchronous code. To add aws-sdk-config to your project, add the following to your Cargo.toml file where VERSION is the version of the SDK you want to use:
 
@@ -65,4 +65,4 @@ This project is licensed under the Apache-2.0 License.
 [GitHub discussions]: https://github.com/awslabs/aws-sdk-rust/discussions
 [GitHub issues]: https://github.com/awslabs/aws-sdk-rust/issues/new/choose
 [Generated Docs]: https://awslabs.github.io/aws-sdk-rust/
-[Usage examples]: https://github.com/awslabs/aws-sdk-rust/tree/main/sdk/examples
+[Usage examples]: https://github.com/awslabs/aws-sdk-rust/tree/main/examples
