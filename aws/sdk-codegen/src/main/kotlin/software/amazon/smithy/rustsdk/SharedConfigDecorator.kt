@@ -50,6 +50,7 @@ class SharedConfigDecorator : RustCodegenDecorator {
                         builder.set_timeout_config(input.timeout_config().cloned());
                         builder.set_sleep_impl(input.sleep_impl().clone());
                         builder.set_credentials_provider(input.credentials_provider().cloned());
+                        builder.set_app_name(input.app_name().cloned());
                         builder
                     }
                 }

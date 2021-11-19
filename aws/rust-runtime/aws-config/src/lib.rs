@@ -89,8 +89,13 @@ mod json_credentials;
 #[cfg(feature = "http-provider")]
 mod http_provider;
 
+// Re-export types from smithy-types
 pub use aws_smithy_types::retry::RetryConfig;
 pub use aws_smithy_types::timeout::TimeoutConfig;
+
+// Re-export types from aws-types
+pub use aws_types::app_name::{AppName, InvalidAppName};
+pub use aws_types::config::Config;
 
 /// Create an environment loader for AWS Configuration
 ///
@@ -120,14 +125,17 @@ pub use loader::ConfigLoader;
 
 #[cfg(feature = "default-provider")]
 mod loader {
-    use crate::default_provider::{credentials, region, retry_config, timeout_config};
-    use crate::meta::region::ProvideRegion;
+    use std::sync::Arc;
+
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
+    use aws_types::app_name::AppName;
     use aws_types::config::Config;
     use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
-    use std::sync::Arc;
+
+    use crate::default_provider::{app_name, credentials, region, retry_config, timeout_config};
+    use crate::meta::region::ProvideRegion;
 
     /// Load a cross-service [`Config`](aws_types::config::Config) from the environment
     ///
@@ -137,11 +145,12 @@ mod loader {
     /// chain will not be used.
     #[derive(Default, Debug)]
     pub struct ConfigLoader {
+        app_name: Option<AppName>,
+        credentials_provider: Option<SharedCredentialsProvider>,
         region: Option<Box<dyn ProvideRegion>>,
         retry_config: Option<RetryConfig>,
-        timeout_config: Option<TimeoutConfig>,
-        credentials_provider: Option<SharedCredentialsProvider>,
         sleep: Option<Arc<dyn AsyncSleep>>,
+        timeout_config: Option<TimeoutConfig>,
     }
 
     impl ConfigLoader {
@@ -247,6 +256,12 @@ mod loader {
                 retry_config::default_provider().retry_config().await
             };
 
+            let app_name = if self.app_name.is_some() {
+                self.app_name
+            } else {
+                app_name::default_provider().app_name().await
+            };
+
             let timeout_config = if let Some(timeout_config) = self.timeout_config {
                 timeout_config
             } else {
@@ -274,13 +289,15 @@ mod loader {
                 SharedCredentialsProvider::new(builder.build().await)
             };
 
-            Config::builder()
+            let mut builder = Config::builder()
                 .region(region)
                 .retry_config(retry_config)
                 .timeout_config(timeout_config)
                 .sleep_impl(sleep_impl)
-                .credentials_provider(credentials_provider)
-                .build()
+                .credentials_provider(credentials_provider);
+
+            builder.set_app_name(app_name);
+            builder.build()
         }
     }
 }

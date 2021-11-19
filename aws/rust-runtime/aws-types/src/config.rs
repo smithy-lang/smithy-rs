@@ -15,26 +15,29 @@ use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 
+use crate::app_name::AppName;
 use crate::credentials::SharedCredentialsProvider;
 use crate::region::Region;
 
 /// AWS Shared Configuration
 pub struct Config {
+    app_name: Option<AppName>,
+    credentials_provider: Option<SharedCredentialsProvider>,
     region: Option<Region>,
     retry_config: Option<RetryConfig>,
-    timeout_config: Option<TimeoutConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
-    credentials_provider: Option<SharedCredentialsProvider>,
+    timeout_config: Option<TimeoutConfig>,
 }
 
 /// Builder for AWS Shared Configuration
 #[derive(Default)]
 pub struct Builder {
+    app_name: Option<AppName>,
+    credentials_provider: Option<SharedCredentialsProvider>,
     region: Option<Region>,
     retry_config: Option<RetryConfig>,
-    timeout_config: Option<TimeoutConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
-    credentials_provider: Option<SharedCredentialsProvider>,
+    timeout_config: Option<TimeoutConfig>,
 }
 
 impl Builder {
@@ -259,14 +262,33 @@ impl Builder {
         self
     }
 
+    /// Sets the name of the app that is using the client.
+    ///
+    /// This _optional_ name is used to identify the application in the user agent that
+    /// gets sent along with requests.
+    pub fn app_name(mut self, app_name: AppName) -> Self {
+        self.set_app_name(Some(app_name));
+        self
+    }
+
+    /// Sets the name of the app that is using the client.
+    ///
+    /// This _optional_ name is used to identify the application in the user agent that
+    /// gets sent along with requests.
+    pub fn set_app_name(&mut self, app_name: Option<AppName>) -> &mut Self {
+        self.app_name = app_name;
+        self
+    }
+
     /// Build a [`Config`](Config) from this builder
     pub fn build(self) -> Config {
         Config {
+            app_name: self.app_name,
+            credentials_provider: self.credentials_provider,
             region: self.region,
             retry_config: self.retry_config,
-            timeout_config: self.timeout_config,
             sleep_impl: self.sleep_impl,
-            credentials_provider: self.credentials_provider,
+            timeout_config: self.timeout_config,
         }
     }
 }
@@ -295,6 +317,11 @@ impl Config {
     /// Configured credentials provider
     pub fn credentials_provider(&self) -> Option<&SharedCredentialsProvider> {
         self.credentials_provider.as_ref()
+    }
+
+    /// Configured app name
+    pub fn app_name(&self) -> Option<&AppName> {
+        self.app_name.as_ref()
     }
 
     /// Config builder
