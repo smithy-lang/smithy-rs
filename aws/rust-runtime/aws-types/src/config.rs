@@ -112,7 +112,7 @@ impl Builder {
     /// fn make_provider() -> impl ProvideCredentials {
     ///   // ...
     ///   # use aws_types::Credentials;
-    ///   # Credentials::from_keys("test", "test", None)
+    ///   # Credentials::new("test", "test", None, None, "example")
     /// }
     ///
     /// let config = Config::builder()
@@ -133,7 +133,7 @@ impl Builder {
     /// fn make_provider() -> impl ProvideCredentials {
     ///   // ...
     ///   # use aws_types::Credentials;
-    ///   # Credentials::from_keys("test", "test", None)
+    ///   # Credentials::new("test", "test", None, None, "example")
     /// }
     ///
     /// fn override_provider() -> bool {

@@ -186,7 +186,7 @@ mod tests {
         let mut req = operation::Request::new(http::Request::new(SdkBody::from("some body")));
         set_provider(
             &mut req.properties_mut(),
-            SharedCredentialsProvider::new(Credentials::from_keys("test", "test", None)),
+            SharedCredentialsProvider::new(Credentials::new("test", "test", None, None, "test")),
         );
         let req = CredentialsStage::new()
             .apply(req)

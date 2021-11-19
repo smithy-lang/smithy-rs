@@ -176,14 +176,20 @@ mod loader {
         }
 
         /// Override the credentials provider used to build [`Config`](aws_types::config::Config).
+        ///
         /// # Examples
+        ///
         /// Override the credentials provider but load the default value for region:
         /// ```rust
         /// # use aws_types::Credentials;
-        ///  async fn create_config() {
+        /// # fn create_my_credential_provider() -> Credentials {
+        /// #     Credentials::new("example", "example", None, None, "example")
+        /// # }
+        /// # async fn create_config() {
         /// let config = aws_config::from_env()
-        ///     .credentials_provider(Credentials::from_keys("accesskey", "secretkey", None))
-        ///     .load().await;
+        ///     .credentials_provider(create_my_credential_provider())
+        ///     .load()
+        ///     .await;
         /// # }
         /// ```
         pub fn credentials_provider(

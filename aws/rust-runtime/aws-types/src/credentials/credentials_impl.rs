@@ -52,10 +52,14 @@ impl Debug for Credentials {
     }
 }
 
+#[cfg(feature = "hardcoded-credentials")]
 const STATIC_CREDENTIALS: &str = "Static";
 
 impl Credentials {
     /// Creates `Credentials`.
+    ///
+    /// This is intended to be used from a custom credentials provider implementation.
+    /// It is __NOT__ secure to hardcode credentials into your application.
     pub fn new(
         access_key_id: impl Into<String>,
         secret_access_key: impl Into<String>,
@@ -73,6 +77,35 @@ impl Credentials {
     }
 
     /// Creates `Credentials` from hardcoded access key, secret key, and session token.
+    ///
+    /// _Note: In general, you should prefer to use the credential providers that come
+    /// with the AWS SDK to get credentials. It is __NOT__ secure to hardcode credentials
+    /// into your application. Only use this function if you really know what you're doing._
+    ///
+    /// This function requires the `hardcoded-credentials` feature to be enabled.
+    ///
+    /// [`Credentials`](crate::Credentials) implement
+    /// [`ProvideCredentials`](crate::credentials::ProvideCredentials) directly, so no custom provider
+    /// implementation is required when wiring these up to a client:
+    /// ```rust
+    /// use aws_types::Credentials;
+    /// # mod dynamodb {
+    /// # use aws_types::credentials::ProvideCredentials;
+    /// # pub struct Config;
+    /// # impl Config {
+    /// #    pub fn builder() -> Self {
+    /// #        Config
+    /// #    }
+    /// #    pub fn credentials_provider(self, provider: impl ProvideCredentials + 'static) -> Self {
+    /// #       self
+    /// #    }
+    /// # }
+    /// # }
+    ///
+    /// let my_creds = Credentials::from_keys("akid", "secret_key", None);
+    /// let conf = dynamodb::Config::builder().credentials_provider(my_creds);
+    /// ```
+    #[cfg(feature = "hardcoded-credentials")]
     pub fn from_keys(
         access_key_id: impl Into<String>,
         secret_access_key: impl Into<String>,
