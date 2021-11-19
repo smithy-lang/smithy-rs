@@ -1,14 +1,15 @@
 vNext (Month Day, Year)
 =======================
-**New this week**
+
+**New this release**
 - Improve docs on `aws-smithy-client` (smithy-rs#855)
 
 **Breaking Changes**
-- MSRV increased to 1.54.
-- (aws-smithy-client): Extraneous `pub use SdkSuccess` removed from `aws_smithy_client::hyper_ext`. (#smithy-rs#855)
+- (aws-smithy-client): Extraneous `pub use SdkSuccess` removed from `aws_smithy_client::hyper_ext`. (smithy-rs#855)
 
 v0.29.0-alpha (November 11th, 2021)
 ===================================
+
 **Breaking Changes**
 
 Several breaking changes around `aws_smithy_types::Instant` were introduced by smithy-rs#849:

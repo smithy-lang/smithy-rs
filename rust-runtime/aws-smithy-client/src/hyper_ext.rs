@@ -8,7 +8,7 @@
 //! [`Client`](crate::Client).
 //!
 //! # Examples
-//! ### Construct a Smithy Client with Hyper and RusTLS
+//! ### Construct a Smithy Client with Hyper and Rustls
 //! In the basic case, customers should not need to use this module. A default implementation of Hyper
 //! with `rustls` will be constructed during client creation. However, if you are creating a Smithy
 //! [`Client`](crate::Client), directly, use the `https()` method to match the default behavior:

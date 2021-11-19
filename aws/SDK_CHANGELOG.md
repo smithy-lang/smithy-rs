@@ -54,13 +54,13 @@ vNext (Month Day, Year)
   - The `DateTime::fmt` method is now fallible and fails when a `DateTime`'s value is outside what can be represented by the desired date format.
 
 **New this week**
-- Improve docs on `aws-smithy-client` (smithy-rs#855)
+
 - :warning: MSRV increased from 1.53.0 to 1.54.0 per our 3-behind MSRV policy.
 - Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#849)
 - Fixed links to Usage Examples (smithy-rs#862, @floric)
 - Added missing features to user agent formatting, and made it possible to configure an app name for the user agent via service config. (smithy-rs#865)
 - :bug: Relaxed profile name validation to allow `@` and other characters (smithy-rs#861, aws-sdk-rust#270)
-- :bug: Fixed signing problem with S3 Control (smithy-rs#858, aws-sdk-rust#291)
+- :bug: Fixed signing problem with S3 Control (smithy-rs#858, aws-sd-rust#291)
 
 **Contributions**
 
