@@ -25,14 +25,7 @@ pub mod dvr;
 pub mod test_connection;
 
 #[cfg(feature = "hyper")]
-mod hyper_impls;
-
-/// Re-export HyperAdapter
-#[cfg(feature = "hyper")]
-pub mod hyper_ext {
-    pub use crate::hyper_impls::Builder;
-    pub use crate::hyper_impls::HyperAdapter as Adapter;
-}
+pub mod hyper_ext;
 
 // The types in this module are only used to write the bounds in [`Client::check`]. Customers will
 // not need them. But the module and its types must be public so that we can call `check` from
@@ -40,6 +33,7 @@ pub mod hyper_ext {
 #[doc(hidden)]
 pub mod static_tests;
 
+#[cfg(feature = "hyper")]
 pub mod never;
 pub mod timeout;
 pub use timeout::TimeoutLayer;
@@ -75,9 +69,8 @@ pub mod conns {
     pub type NativeTls = hyper_tls::HttpsConnector<hyper::client::HttpConnector>;
 
     #[cfg(feature = "rustls")]
-    pub type Rustls = crate::hyper_impls::HyperAdapter<
-        hyper_rustls::HttpsConnector<hyper::client::HttpConnector>,
-    >;
+    pub type Rustls =
+        crate::hyper_ext::Adapter<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>;
 }
 
 use std::error::Error;

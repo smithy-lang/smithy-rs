@@ -1,6 +1,9 @@
 vNext (Month Day, Year)
 =======================
 
+**TODO Upon release**
+- Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
+
 **New this week**
 
 - :tada: Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request. (smithy-rs#831)
@@ -9,8 +12,13 @@ vNext (Month Day, Year)
 
 - `RetryConfigBuilder::merge_with` has been renamed to `RetryConfigBuilder::take_unset_from`
 
-v0.0.26-alpha (November 18th, 2021)
+v0.0.26-alpha (TBD)
 ===================================
+**New this release**
+- Improve docs on `aws-smithy-client` (smithy-rs#855)
+
+**Breaking Changes**
+- (aws-smithy-client): Extraneous `pub use SdkSuccess` removed from `aws_smithy_client::hyper_ext`. (smithy-rs#855)
 
 **Breaking Changes**
 
