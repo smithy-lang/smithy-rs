@@ -76,11 +76,13 @@ fn format_timeout(timeout: Option<Duration>) -> String {
 /// # Example
 ///
 /// ```should_panic
-/// let duration = parse_str_as_timeout("8", "timeout", "test_success").unwrap();
+/// # use std::time::Duration;
+/// # use aws_smithy_types::timeout::parse_str_as_timeout;
+/// let duration = parse_str_as_timeout("8", "timeout".into(), "test_success".into()).unwrap();
 /// assert_eq!(duration, Duration::from_secs_f32(8.0));
 ///
 /// // This line will panic with "InvalidTimeout { name: "timeout", reason: "timeout must not be less than or equal to zero", set_by: "test_error" }"
-/// let _ = parse_str_as_timeout("-1.0", "timeout", "test_error").unwrap();
+/// let _ = parse_str_as_timeout("-1.0", "timeout".into(), "test_error".into()).unwrap();
 /// ```
 pub fn parse_str_as_timeout(
     timeout: &str,
@@ -307,7 +309,7 @@ mod tests {
 
     #[test]
     fn test_integer_timeouts_are_parseable() {
-        let duration = parse_str_as_timeout("8", "timeout", "test").unwrap();
+        let duration = parse_str_as_timeout("8", "timeout".into(), "test".into()).unwrap();
         assert_eq!(duration, Duration::from_secs_f32(8.0));
     }
 
@@ -316,8 +318,8 @@ mod tests {
     fn test_unparseable_timeouts_produce_an_error() {
         let _ = parse_str_as_timeout(
             "this sentence cant be parsed as a number",
-            "timeout",
-            "test",
+            "timeout".into(),
+            "test".into(),
         )
         .unwrap();
     }
@@ -325,24 +327,24 @@ mod tests {
     #[test]
     #[should_panic = r#"InvalidTimeout { name: "timeout", reason: "timeout must not be less than or equal to zero", set_by: "test" }"#]
     fn test_negative_timeouts_are_invalid() {
-        let _ = parse_str_as_timeout("-1.0", "timeout", "test").unwrap();
+        let _ = parse_str_as_timeout("-1.0", "timeout".into(), "test".into()).unwrap();
     }
 
     #[test]
     #[should_panic = r#"InvalidTimeout { name: "timeout", reason: "timeout must not be less than or equal to zero", set_by: "test" }"#]
     fn test_setting_timeout_to_zero_is_invalid() {
-        let _ = parse_str_as_timeout("0", "timeout", "test").unwrap();
+        let _ = parse_str_as_timeout("0", "timeout".into(), "test".into()).unwrap();
     }
 
     #[test]
     #[should_panic = r#"InvalidTimeout { name: "timeout", reason: "timeout must not be NaN", set_by: "test" }"#]
     fn test_nan_timeouts_are_invalid() {
-        let _ = parse_str_as_timeout("NaN", "timeout", "test").unwrap();
+        let _ = parse_str_as_timeout("NaN", "timeout".into(), "test".into()).unwrap();
     }
 
     #[test]
     #[should_panic = r#"InvalidTimeout { name: "timeout", reason: "timeout must not be infinite", set_by: "test" }"#]
     fn test_infinite_timeouts_are_invalid() {
-        let _ = parse_str_as_timeout("inf", "timeout", "test").unwrap();
+        let _ = parse_str_as_timeout("inf", "timeout".into(), "test".into()).unwrap();
     }
 }

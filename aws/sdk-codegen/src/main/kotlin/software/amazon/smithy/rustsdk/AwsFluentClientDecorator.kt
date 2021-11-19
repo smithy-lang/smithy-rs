@@ -103,10 +103,11 @@ private class AwsFluentClientExtensions(private val types: Types) {
                     let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
                     let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
                     let sleep_impl = conf.sleep_impl.clone();
-                    let client = #{aws_hyper}::Client::new(conn)
+                    let mut client = #{aws_hyper}::Client::new(conn)
                         .with_retry_config(retry_config.into())
-                        .with_timeout_config(timeout_config)
-                        .with_sleep_impl(sleep_impl);
+                        .with_timeout_config(timeout_config);
+
+                    client.set_sleep_impl(sleep_impl);
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
                 }
                 """,
@@ -128,10 +129,11 @@ private class AwsFluentClientExtensions(private val types: Types) {
                     let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
                     let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
                     let sleep_impl = conf.sleep_impl.clone();
-                    let client = #{aws_hyper}::Client::https()
+                    let mut client = #{aws_hyper}::Client::https()
                         .with_retry_config(retry_config.into())
-                        .with_timeout_config(timeout_config)
-                        .with_sleep_impl(sleep_impl);
+                        .with_timeout_config(timeout_config);
+
+                    client.set_sleep_impl(sleep_impl);
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
                 }
                 """,

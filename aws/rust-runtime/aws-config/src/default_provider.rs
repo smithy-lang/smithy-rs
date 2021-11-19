@@ -182,7 +182,9 @@ pub mod retry_config {
                 Err(err) => panic!("{}", err),
             };
 
-            builder_from_env.merge_with(builder_from_profile).build()
+            builder_from_env
+                .take_unset_from(builder_from_profile)
+                .build()
         }
     }
 }
@@ -373,7 +375,7 @@ pub mod timeout_config {
                 Err(err) => panic!("{}", err),
             };
 
-            let conf = builder_from_env.merge_with(builder_from_profile);
+            let conf = builder_from_env.take_unset_from(builder_from_profile);
 
             if conf.tls_negotiation_timeout().is_some() {
                 tracing::warn!(

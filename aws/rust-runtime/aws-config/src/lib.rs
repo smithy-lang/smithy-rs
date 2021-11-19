@@ -295,10 +295,10 @@ mod loader {
                 .region(region)
                 .retry_config(retry_config)
                 .timeout_config(timeout_config)
-                .sleep_impl(sleep_impl)
                 .credentials_provider(credentials_provider);
 
             builder.set_app_name(app_name);
+            builder.set_sleep_impl(sleep_impl);
             builder.build()
         }
     }
