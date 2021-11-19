@@ -10,6 +10,7 @@ import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
+import java.nio.file.Path
 
 sealed class DependencyScope {
     object Dev : DependencyScope()
@@ -150,7 +151,7 @@ data class CargoDependency(
             when (this) {
                 is CratesIo -> attribs["version"] = version
                 is Local -> {
-                    val fullPath = java.nio.file.Path.of("$basePath/$name")
+                    val fullPath = Path.of("$basePath/$name")
                     attribs["path"] = fullPath.normalize().toString()
                     version?.also { attribs["version"] = version }
                 }
