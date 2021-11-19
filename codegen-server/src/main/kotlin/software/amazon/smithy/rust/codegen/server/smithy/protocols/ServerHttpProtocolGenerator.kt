@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -86,7 +87,7 @@ private class ServerHttpProtocolImplGenerator(
     private val operationSerModule = RustModule.private("operation_ser")
 
     private val codegenScope = arrayOf(
-        "Axum" to CargoDependency.Axum.asType(),
+        "Axum" to ServerCargoDependency.Axum.asType(),
         "DateTime" to RuntimeType.DateTime(runtimeConfig),
         "HttpBody" to CargoDependency.HttpBody.asType(),
         "Hyper" to CargoDependency.Hyper.asType(),
