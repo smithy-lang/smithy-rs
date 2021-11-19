@@ -7,7 +7,7 @@
 
 use crate::profile::Profile;
 use crate::provider_config::ProviderConfig;
-use aws_smithy_types::timeout::{TimeoutConfig, TimeoutConfigError};
+use aws_smithy_types::timeout::{parse_str_as_timeout, TimeoutConfig, TimeoutConfigError};
 use aws_types::os_shim_internal::{Env, Fs};
 use std::time::Duration;
 
@@ -154,30 +154,9 @@ fn construct_timeout_from_profile_var(
     profile: &Profile,
     var: &'static str,
 ) -> Result<Option<Duration>, TimeoutConfigError> {
+    let profile_name = format!("aws profile [{}]", profile.name());
     match profile.get(var) {
-        Some(timeout) => match timeout.parse::<f32>() {
-            Ok(timeout) if timeout < 0.0 => Err(TimeoutConfigError::InvalidTimeout {
-                set_by: format!("aws profile [{}]", profile.name()).into(),
-                name: var.into(),
-                reason: "timeout must not be negative".into(),
-            }),
-            Ok(timeout) if timeout.is_nan() => Err(TimeoutConfigError::InvalidTimeout {
-                set_by: format!("aws profile [{}]", profile.name()).into(),
-                name: var.into(),
-                reason: "timeout must not be NaN".into(),
-            }),
-            Ok(timeout) if timeout.is_infinite() => Err(TimeoutConfigError::InvalidTimeout {
-                set_by: format!("aws profile [{}]", profile.name()).into(),
-                name: var.into(),
-                reason: "timeout must not be infinite".into(),
-            }),
-            Ok(timeout) => Ok(Some(Duration::from_secs_f32(timeout))),
-            Err(err) => Err(TimeoutConfigError::ParseError {
-                set_by: format!("aws profile [{}]", profile.name()).into(),
-                name: var.into(),
-                source: Box::new(err),
-            }),
-        },
+        Some(timeout) => parse_str_as_timeout(timeout, var.into(), profile_name.into()).map(Some),
         None => Ok(None),
     }
 }

@@ -5,7 +5,7 @@
 
 //! Load timeout configuration properties from environment variables
 
-use aws_smithy_types::timeout::{TimeoutConfig, TimeoutConfigError};
+use aws_smithy_types::timeout::{parse_str_as_timeout, TimeoutConfig, TimeoutConfigError};
 use aws_types::os_shim_internal::Env;
 use std::time::Duration;
 
@@ -48,18 +48,13 @@ impl EnvironmentVariableTimeoutConfigProvider {
 
     /// Attempt to create a new [`TimeoutConfig`] from environment variables
     pub fn timeout_config(&self) -> Result<TimeoutConfig, TimeoutConfigError> {
-        let connect_timeout = construct_timeout_from_env_var(&self.env, ENV_VAR_CONNECT_TIMEOUT)?
-            .map(Duration::from_secs_f32);
+        let connect_timeout = construct_timeout_from_env_var(&self.env, ENV_VAR_CONNECT_TIMEOUT)?;
         let tls_negotiation_timeout =
-            construct_timeout_from_env_var(&self.env, ENV_VAR_TLS_NEGOTIATION_TIMEOUT)?
-                .map(Duration::from_secs_f32);
-        let read_timeout = construct_timeout_from_env_var(&self.env, ENV_VAR_READ_TIMEOUT)?
-            .map(Duration::from_secs_f32);
+            construct_timeout_from_env_var(&self.env, ENV_VAR_TLS_NEGOTIATION_TIMEOUT)?;
+        let read_timeout = construct_timeout_from_env_var(&self.env, ENV_VAR_READ_TIMEOUT)?;
         let api_call_attempt_timeout =
-            construct_timeout_from_env_var(&self.env, ENV_VAR_API_CALL_ATTEMPT_TIMEOUT)?
-                .map(Duration::from_secs_f32);
-        let api_call_timeout = construct_timeout_from_env_var(&self.env, ENV_VAR_API_CALL_TIMEOUT)?
-            .map(Duration::from_secs_f32);
+            construct_timeout_from_env_var(&self.env, ENV_VAR_API_CALL_ATTEMPT_TIMEOUT)?;
+        let api_call_timeout = construct_timeout_from_env_var(&self.env, ENV_VAR_API_CALL_TIMEOUT)?;
 
         Ok(TimeoutConfig::new()
             .with_connect_timeout(connect_timeout)
@@ -70,36 +65,14 @@ impl EnvironmentVariableTimeoutConfigProvider {
     }
 }
 
-const SET_BY: &str = "environment variable";
-
 fn construct_timeout_from_env_var(
     env: &Env,
     var: &'static str,
-) -> Result<Option<f32>, TimeoutConfigError> {
+) -> Result<Option<Duration>, TimeoutConfigError> {
     match env.get(var).ok() {
-        Some(timeout) => match timeout.parse::<f32>() {
-            Ok(timeout) if timeout < 0.0 => Err(TimeoutConfigError::InvalidTimeout {
-                set_by: SET_BY.into(),
-                name: var.into(),
-                reason: "timeout must not be negative".into(),
-            }),
-            Ok(timeout) if timeout.is_nan() => Err(TimeoutConfigError::InvalidTimeout {
-                set_by: SET_BY.into(),
-                name: var.into(),
-                reason: "timeout must not be NaN".into(),
-            }),
-            Ok(timeout) if timeout.is_infinite() => Err(TimeoutConfigError::InvalidTimeout {
-                set_by: SET_BY.into(),
-                name: var.into(),
-                reason: "timeout must not be infinite".into(),
-            }),
-            Ok(timeout) => Ok(Some(timeout)),
-            Err(err) => Err(TimeoutConfigError::ParseError {
-                set_by: SET_BY.into(),
-                name: var.into(),
-                source: Box::new(err),
-            }),
-        },
+        Some(timeout) => {
+            parse_str_as_timeout(&timeout, var.into(), "environment variable".into()).map(Some)
+        }
         None => Ok(None),
     }
 }
@@ -109,9 +82,9 @@ mod test {
     use super::{
         EnvironmentVariableTimeoutConfigProvider, ENV_VAR_API_CALL_ATTEMPT_TIMEOUT,
         ENV_VAR_API_CALL_TIMEOUT, ENV_VAR_CONNECT_TIMEOUT, ENV_VAR_READ_TIMEOUT,
-        ENV_VAR_TLS_NEGOTIATION_TIMEOUT, SET_BY,
+        ENV_VAR_TLS_NEGOTIATION_TIMEOUT,
     };
-    use aws_smithy_types::timeout::{TimeoutConfig, TimeoutConfigError};
+    use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::os_shim_internal::Env;
     use std::time::Duration;
 
@@ -128,26 +101,6 @@ mod test {
         assert_eq!(built.tls_negotiation_timeout(), None);
         assert_eq!(built.api_call_attempt_timeout(), None);
         assert_eq!(built.api_call_timeout(), None);
-    }
-
-    #[test]
-    fn integer_timeout_is_read_correctly() {
-        assert_eq!(
-            test_provider(&[(ENV_VAR_CONNECT_TIMEOUT, "8")])
-                .timeout_config()
-                .unwrap(),
-            TimeoutConfig::new().with_connect_timeout(Some(Duration::from_secs_f32(8.0)))
-        );
-    }
-
-    #[test]
-    fn timeout_errors_when_it_cant_be_parsed_as_a_float() {
-        assert!(matches!(
-            test_provider(&[(ENV_VAR_READ_TIMEOUT, "not a float")])
-                .timeout_config()
-                .unwrap_err(),
-            TimeoutConfigError::ParseError { .. }
-        ));
     }
 
     #[test]
@@ -170,57 +123,6 @@ mod test {
                 // Some floats can't be represented as f32 so this duration will be equal to the
                 // duration from the env.
                 .with_api_call_timeout(Some(Duration::from_secs_f32(900012350.0)))
-        );
-    }
-
-    #[test]
-    fn disallow_negative_timeouts() {
-        let err = test_provider(&[(ENV_VAR_TLS_NEGOTIATION_TIMEOUT, "-1.0")])
-            .timeout_config()
-            .unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            TimeoutConfigError::InvalidTimeout {
-                set_by: SET_BY.into(),
-                name: ENV_VAR_TLS_NEGOTIATION_TIMEOUT.into(),
-                reason: "timeout must not be negative".into(),
-            }
-            .to_string()
-        );
-    }
-
-    #[test]
-    fn disallow_nan_timeouts() {
-        let err = test_provider(&[(ENV_VAR_API_CALL_TIMEOUT, "NaN")])
-            .timeout_config()
-            .unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            TimeoutConfigError::InvalidTimeout {
-                set_by: SET_BY.into(),
-                name: ENV_VAR_API_CALL_TIMEOUT.into(),
-                reason: "timeout must not be NaN".into(),
-            }
-            .to_string()
-        );
-    }
-
-    #[test]
-    fn disallow_infinite_timeouts() {
-        let err = test_provider(&[
-            // Infinities can be negative but that case is covered by [disallow_negative_timeouts]
-            (ENV_VAR_API_CALL_ATTEMPT_TIMEOUT, "inf"),
-        ])
-        .timeout_config()
-        .unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            TimeoutConfigError::InvalidTimeout {
-                set_by: SET_BY.into(),
-                name: ENV_VAR_API_CALL_ATTEMPT_TIMEOUT.into(),
-                reason: "timeout must not be infinite".into(),
-            }
-            .to_string()
         );
     }
 }

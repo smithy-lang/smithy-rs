@@ -173,10 +173,10 @@ impl Builder {
     /// }
     ///
     /// let sleep_impl = Arc::new(ForeverSleep);
-    /// let config = Config::builder().sleep_impl(Some(sleep_impl)).build();
+    /// let config = Config::builder().sleep_impl(sleep_impl).build();
     /// ```
-    pub fn sleep_impl(mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) -> Self {
-        self.set_sleep_impl(sleep_impl);
+    pub fn sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep>) -> Self {
+        self.set_sleep_impl(Some(sleep_impl));
         self
     }
 

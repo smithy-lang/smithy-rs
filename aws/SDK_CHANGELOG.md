@@ -5,6 +5,10 @@ vNext (Month Day, Year)
 
 - :tada: Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request. (smithy-rs#831)
 
+**Breaking changes**
+
+- `RetryConfigBuilder::merge_with` has been renamed to `RetryConfigBuilder::take_unset_from`
+
 v0.0.26-alpha (November 18th, 2021)
 ===================================
 

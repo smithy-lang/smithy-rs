@@ -136,11 +136,14 @@ where
     /// Create a Smithy client that the given connector, a middleware default, the [standard
     /// retry policy](crate::retry::Standard), and the [`default_async_sleep`] sleep implementation.
     pub fn new(connector: C) -> Self {
-        Builder::new()
+        let mut client = Builder::new()
             .connector(connector)
             .middleware(M::default())
-            .build()
-            .with_sleep_impl(default_async_sleep())
+            .build();
+
+        client.set_sleep_impl(default_async_sleep());
+
+        client
     }
 }
 
@@ -173,8 +176,8 @@ impl<C, M> Client<C, M> {
     }
 
     /// Set the [`AsyncSleep`] function that the client will use to create things like timeout futures.
-    pub fn with_sleep_impl(mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) -> Self {
-        self.set_sleep_impl(sleep_impl);
+    pub fn with_sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep>) -> Self {
+        self.set_sleep_impl(Some(sleep_impl));
         self
     }
 }

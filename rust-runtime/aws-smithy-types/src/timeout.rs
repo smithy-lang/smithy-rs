@@ -68,6 +68,50 @@ fn format_timeout(timeout: Option<Duration>) -> String {
         .unwrap_or_else(|| "(unset)".to_owned())
 }
 
+/// Parse a given string as a [`Duration`] that will be used to set a timeout. This will return an
+/// error result if the given string is negative, infinite, equal to zero, NaN, or if the string
+/// can't be parsed as an `f32`. The `name` and `set_by` fields are used to provide context when an
+/// error occurs
+///
+/// # Example
+///
+/// ```should_panic
+/// let duration = parse_str_as_timeout("8", "timeout", "test_success").unwrap();
+/// assert_eq!(duration, Duration::from_secs_f32(8.0));
+///
+/// // This line will panic with "InvalidTimeout { name: "timeout", reason: "timeout must not be less than or equal to zero", set_by: "test_error" }"
+/// let _ = parse_str_as_timeout("-1.0", "timeout", "test_error").unwrap();
+/// ```
+pub fn parse_str_as_timeout(
+    timeout: &str,
+    name: Cow<'static, str>,
+    set_by: Cow<'static, str>,
+) -> Result<Duration, TimeoutConfigError> {
+    match timeout.parse::<f32>() {
+        Ok(timeout) if timeout <= 0.0 => Err(TimeoutConfigError::InvalidTimeout {
+            set_by,
+            name,
+            reason: "timeout must not be less than or equal to zero".into(),
+        }),
+        Ok(timeout) if timeout.is_nan() => Err(TimeoutConfigError::InvalidTimeout {
+            set_by,
+            name,
+            reason: "timeout must not be NaN".into(),
+        }),
+        Ok(timeout) if timeout.is_infinite() => Err(TimeoutConfigError::InvalidTimeout {
+            set_by,
+            name,
+            reason: "timeout must not be infinite".into(),
+        }),
+        Ok(timeout) => Ok(Duration::from_secs_f32(timeout)),
+        Err(err) => Err(TimeoutConfigError::ParseError {
+            set_by,
+            name,
+            source: Box::new(err),
+        }),
+    }
+}
+
 impl TimeoutConfig {
     /// Create a new `TimeoutConfig` with no timeouts set
     pub fn new() -> Self {
@@ -152,13 +196,13 @@ impl TimeoutConfig {
     /// let b = TimeoutConfig::new()
     ///     .with_read_timeout(Some(Duration::from_secs(10)))
     ///     .with_connect_timeout(Some(Duration::from_secs(3)));
-    /// let timeout_config = a.merge_with(b);
+    /// let timeout_config = a.take_unset_from(b);
     /// // A's value take precedence over B's value
     /// assert_eq!(timeout_config.read_timeout(), Some(Duration::from_secs(2)));
     /// // A never set a connect timeout so B's value was used
     /// assert_eq!(timeout_config.connect_timeout(), Some(Duration::from_secs(3)));
     /// ```
-    pub fn merge_with(self, other: Self) -> Self {
+    pub fn take_unset_from(self, other: Self) -> Self {
         Self {
             connect_timeout: self.connect_timeout.or(other.connect_timeout),
             tls_negotiation_timeout: self
@@ -232,7 +276,7 @@ impl Display for TimeoutConfigError {
 
 #[cfg(test)]
 mod tests {
-    use super::TimeoutConfig;
+    use super::{parse_str_as_timeout, TimeoutConfig};
     use std::time::Duration;
 
     #[test]
@@ -252,12 +296,53 @@ mod tests {
             .with_tls_negotiation_timeout(two_seconds)
             .with_api_call_timeout(two_seconds)
             .with_api_call_attempt_timeout(two_seconds);
-        let timeout_config = self_config.merge_with(other_config);
+        let timeout_config = self_config.take_unset_from(other_config);
 
         assert_eq!(timeout_config.connect_timeout(), one_second);
         assert_eq!(timeout_config.read_timeout(), one_second);
         assert_eq!(timeout_config.tls_negotiation_timeout(), one_second);
         assert_eq!(timeout_config.api_call_timeout(), one_second);
         assert_eq!(timeout_config.api_call_attempt_timeout(), one_second);
+    }
+
+    #[test]
+    fn test_integer_timeouts_are_parseable() {
+        let duration = parse_str_as_timeout("8", "timeout", "test").unwrap();
+        assert_eq!(duration, Duration::from_secs_f32(8.0));
+    }
+
+    #[test]
+    #[should_panic = r#"ParseError { name: "timeout", set_by: "test", source: ParseFloatError { kind: Invalid } }"#]
+    fn test_unparseable_timeouts_produce_an_error() {
+        let _ = parse_str_as_timeout(
+            "this sentence cant be parsed as a number",
+            "timeout",
+            "test",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    #[should_panic = r#"InvalidTimeout { name: "timeout", reason: "timeout must not be less than or equal to zero", set_by: "test" }"#]
+    fn test_negative_timeouts_are_invalid() {
+        let _ = parse_str_as_timeout("-1.0", "timeout", "test").unwrap();
+    }
+
+    #[test]
+    #[should_panic = r#"InvalidTimeout { name: "timeout", reason: "timeout must not be less than or equal to zero", set_by: "test" }"#]
+    fn test_setting_timeout_to_zero_is_invalid() {
+        let _ = parse_str_as_timeout("0", "timeout", "test").unwrap();
+    }
+
+    #[test]
+    #[should_panic = r#"InvalidTimeout { name: "timeout", reason: "timeout must not be NaN", set_by: "test" }"#]
+    fn test_nan_timeouts_are_invalid() {
+        let _ = parse_str_as_timeout("NaN", "timeout", "test").unwrap();
+    }
+
+    #[test]
+    #[should_panic = r#"InvalidTimeout { name: "timeout", reason: "timeout must not be infinite", set_by: "test" }"#]
+    fn test_infinite_timeouts_are_invalid() {
+        let _ = parse_str_as_timeout("inf", "timeout", "test").unwrap();
     }
 }

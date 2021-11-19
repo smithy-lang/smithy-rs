@@ -271,9 +271,11 @@ mod loader {
             let sleep_impl = if self.sleep.is_none() {
                 if default_async_sleep().is_none() {
                     tracing::warn!(
-                        "An implementation of AsyncSleep was requested by calling default_async_sleep. \
+                        "An implementation of AsyncSleep was requested by calling default_async_sleep \
+                         but no default was set.
                          This happened when ConfigLoader::load was called during Config construction. \
-                         You can fix this by enabling the rt-tokio feature"
+                         You can fix this by setting a sleep_impl on the ConfigLoader before calling \
+                         load or by enabling the rt-tokio feature"
                     );
                 }
                 default_async_sleep()
