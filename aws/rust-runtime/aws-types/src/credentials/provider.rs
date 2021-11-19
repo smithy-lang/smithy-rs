@@ -155,7 +155,7 @@ pub mod future {
 
     type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-    /// Convenience `ProvideCredentials` struct that implements the `ProvideCredentials` trait.
+    /// Future new-type that the `ProvideCredentials` trait must return.
     #[derive(Debug)]
     pub struct ProvideCredentials<'a>(NowOrLater<super::Result, BoxFuture<'a, super::Result>>);
 

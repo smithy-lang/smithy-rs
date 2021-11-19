@@ -80,7 +80,8 @@ impl Credentials {
     ///
     /// _Note: In general, you should prefer to use the credential providers that come
     /// with the AWS SDK to get credentials. It is __NOT__ secure to hardcode credentials
-    /// into your application. Only use this function if you really know what you're doing._
+    /// into your application. If you're writing a custom credentials provider, then
+    /// use [`Credentials::new`] instead of this._
     ///
     /// This function requires the `hardcoded-credentials` feature to be enabled.
     ///
