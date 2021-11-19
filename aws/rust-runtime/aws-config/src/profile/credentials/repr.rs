@@ -147,6 +147,9 @@ pub fn resolve_chain<'a>(
         }
 
         let next_profile = {
+            // The existence of a `role_arn` is the only signal that multiple profiles will be chained.
+            // We check for one here and then process the profile accordingly as either a "chain provider"
+            // or a "base provider"
             if let Some(role_provider) = role_arn_from_profile(profile) {
                 let next = chain_provider(profile)?;
                 chain.push(role_provider);
