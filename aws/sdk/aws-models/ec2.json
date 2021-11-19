@@ -9256,6 +9256,9 @@
                 }
             }
         },
+        "com.amazonaws.ec2#CoreNetworkArn": {
+            "type": "string"
+        },
         "com.amazonaws.ec2#CpuManufacturer": {
             "type": "string",
             "traits": {
@@ -12227,6 +12230,9 @@
                         "smithy.api#documentation": "<p>The ID of a VPC peering connection.</p>",
                         "smithy.api#xmlName": "vpcPeeringConnectionId"
                     }
+                },
+                "CoreNetworkArn": {
+                    "target": "com.amazonaws.ec2#CoreNetworkArn"
                 }
             }
         },
@@ -33661,6 +33667,10 @@
                     {
                         "value": "launch",
                         "name": "LAUNCH"
+                    },
+                    {
+                        "value": "launch-before-terminate",
+                        "name": "LAUNCH_BEFORE_TERMINATE"
                     }
                 ]
             }
@@ -33681,8 +33691,16 @@
                     "target": "com.amazonaws.ec2#FleetReplacementStrategy",
                     "traits": {
                         "aws.protocols#ec2QueryName": "ReplacementStrategy",
-                        "smithy.api#documentation": "<p>To allow EC2 Fleet to launch a replacement Spot Instance when an instance rebalance\n         notification is emitted for an existing Spot Instance in the fleet, specify\n            <code>launch</code>. Only available for fleets of type <code>maintain</code>.</p>\n         <note>\n            <p>When a replacement instance is launched, the instance marked for rebalance is not\n            automatically terminated. You can terminate it, or you can leave it running. You are charged for both instances while they are running.</p>\n         </note>",
+                        "smithy.api#documentation": "<p>The replacement strategy to use. Only available for fleets of type\n         <code>maintain</code>.</p>\n         <p>\n            <code>launch</code> - EC2 Fleet launches a new replacement Spot Instance when a\n         rebalance notification is emitted for an existing Spot Instance in the fleet. EC2 Fleet\n         does not terminate the instances that receive a rebalance notification. You can terminate\n         the old instances, or you can leave them running. You are charged for all instances while\n         they are running. </p>\n         <p>\n            <code>launch-before-terminate</code> - EC2 Fleet launches a new replacement Spot\n         Instance when a rebalance notification is emitted for an existing Spot Instance in the\n         fleet, and then, after a delay that you specify (in <code>TerminationDelay</code>),\n         terminates the instances that received a rebalance notification.</p>",
                         "smithy.api#xmlName": "replacementStrategy"
+                    }
+                },
+                "TerminationDelay": {
+                    "target": "com.amazonaws.ec2#Integer",
+                    "traits": {
+                        "aws.protocols#ec2QueryName": "TerminationDelay",
+                        "smithy.api#documentation": "<p>The amount of time (in seconds) that Amazon EC2 waits before terminating the old Spot\n         Instance after launching a new replacement Spot Instance.</p>",
+                        "smithy.api#xmlName": "terminationDelay"
                     }
                 }
             },
@@ -33696,12 +33714,18 @@
                 "ReplacementStrategy": {
                     "target": "com.amazonaws.ec2#FleetReplacementStrategy",
                     "traits": {
-                        "smithy.api#documentation": "<p>The replacement strategy to use. Only available for fleets of type\n         <code>maintain</code>.</p>\n         <p>To allow EC2 Fleet to launch a replacement Spot Instance when an instance rebalance\n         notification is emitted for an existing Spot Instance in the fleet, specify\n         <code>launch</code>. You must specify a value, otherwise you get an error.</p>\n         <note>\n            <p>When a replacement instance is launched, the instance marked for rebalance is not\n            automatically terminated. You can terminate it, or you can leave it running. You are charged for all instances while they are running.</p>\n         </note>"
+                        "smithy.api#documentation": "<p>The replacement strategy to use. Only available for fleets of type\n         <code>maintain</code>.</p>\n         <p>\n            <code>launch</code> - EC2 Fleet launches a replacement Spot Instance when a rebalance\n         notification is emitted for an existing Spot Instance in the fleet. EC2 Fleet does not\n         terminate the instances that receive a rebalance notification. You can terminate the old\n         instances, or you can leave them running. You are charged for all instances while they are\n         running. </p>\n         <p>\n            <code>launch-before-terminate</code> - EC2 Fleet launches a replacement Spot Instance\n         when a rebalance notification is emitted for an existing Spot Instance in the fleet, and\n         then, after a delay that you specify (in <code>TerminationDelay</code>), terminates the\n         instances that received a rebalance notification.</p>"
+                    }
+                },
+                "TerminationDelay": {
+                    "target": "com.amazonaws.ec2#Integer",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The amount of time (in seconds) that Amazon EC2 waits before terminating the old Spot\n         Instance after launching a new replacement Spot Instance.</p>"
                     }
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>The Spot Instance replacement strategy to use when Amazon EC2 emits a signal that your\n         Spot Instance is at an elevated risk of being interrupted. For more information, see\n         <a href=\"https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-fleet-configuration-strategies.html#ec2-fleet-capacity-rebalance\">Capacity rebalancing</a> in the <i>Amazon EC2 User Guide</i>.</p>"
+                "smithy.api#documentation": "<p>The Spot Instance replacement strategy to use when Amazon EC2 emits a rebalance\n         notification signal that your Spot Instance is at an elevated risk of being interrupted.\n         For more information, see <a href=\"https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-fleet-configuration-strategies.html#ec2-fleet-capacity-rebalance\">Capacity rebalancing</a> in the <i>Amazon EC2 User Guide</i>.</p>"
             }
         },
         "com.amazonaws.ec2#FleetSpotMaintenanceStrategies": {
@@ -34356,6 +34380,29 @@
                     "min": 200,
                     "max": 1000
                 }
+            }
+        },
+        "com.amazonaws.ec2#GatewayAssociationState": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "associated",
+                        "name": "associated"
+                    },
+                    {
+                        "value": "not-associated",
+                        "name": "not_associated"
+                    },
+                    {
+                        "value": "associating",
+                        "name": "associating"
+                    },
+                    {
+                        "value": "disassociating",
+                        "name": "disassociating"
+                    }
+                ]
             }
         },
         "com.amazonaws.ec2#GatewayType": {
@@ -40913,6 +40960,14 @@
                         "smithy.api#xmlName": "carrierIp"
                     }
                 },
+                "CustomerOwnedIp": {
+                    "target": "com.amazonaws.ec2#String",
+                    "traits": {
+                        "aws.protocols#ec2QueryName": "CustomerOwnedIp",
+                        "smithy.api#documentation": "<p>The customer-owned IP address associated with the network interface.</p>",
+                        "smithy.api#xmlName": "customerOwnedIp"
+                    }
+                },
                 "IpOwnerId": {
                     "target": "com.amazonaws.ec2#String",
                     "traits": {
@@ -42885,6 +42940,42 @@
                         "name": "c6gn_16xlarge"
                     },
                     {
+                        "value": "c6i.large",
+                        "name": "c6i_large"
+                    },
+                    {
+                        "value": "c6i.xlarge",
+                        "name": "c6i_xlarge"
+                    },
+                    {
+                        "value": "c6i.2xlarge",
+                        "name": "c6i_2xlarge"
+                    },
+                    {
+                        "value": "c6i.4xlarge",
+                        "name": "c6i_4xlarge"
+                    },
+                    {
+                        "value": "c6i.8xlarge",
+                        "name": "c6i_8xlarge"
+                    },
+                    {
+                        "value": "c6i.12xlarge",
+                        "name": "c6i_12xlarge"
+                    },
+                    {
+                        "value": "c6i.16xlarge",
+                        "name": "c6i_16xlarge"
+                    },
+                    {
+                        "value": "c6i.24xlarge",
+                        "name": "c6i_24xlarge"
+                    },
+                    {
+                        "value": "c6i.32xlarge",
+                        "name": "c6i_32xlarge"
+                    },
+                    {
                         "value": "cc1.4xlarge",
                         "name": "cc1_4xlarge"
                     },
@@ -43659,6 +43750,38 @@
                     {
                         "value": "vt1.24xlarge",
                         "name": "vt1_24xlarge"
+                    },
+                    {
+                        "value": "g5.xlarge",
+                        "name": "g5_xlarge"
+                    },
+                    {
+                        "value": "g5.2xlarge",
+                        "name": "g5_2xlarge"
+                    },
+                    {
+                        "value": "g5.4xlarge",
+                        "name": "g5_4xlarge"
+                    },
+                    {
+                        "value": "g5.8xlarge",
+                        "name": "g5_8xlarge"
+                    },
+                    {
+                        "value": "g5.12xlarge",
+                        "name": "g5_12xlarge"
+                    },
+                    {
+                        "value": "g5.16xlarge",
+                        "name": "g5_16xlarge"
+                    },
+                    {
+                        "value": "g5.24xlarge",
+                        "name": "g5_24xlarge"
+                    },
+                    {
+                        "value": "g5.48xlarge",
+                        "name": "g5_48xlarge"
                     }
                 ]
             }
@@ -49788,6 +49911,12 @@
                     "traits": {
                         "smithy.api#documentation": "<p>The customer-owned IPv4 address pool associated with the subnet.</p>\n        <p>You must set this value when you specify <code>true</code> for <code>MapCustomerOwnedIpOnLaunch</code>.</p>"
                     }
+                },
+                "EnableDns64": {
+                    "target": "com.amazonaws.ec2#AttributeBooleanValue",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Indicates whether DNS queries made to the Amazon-provided DNS Resolver in this subnet \n            should return synthetic IPv6 addresses for IPv4-only destinations.</p>"
+                    }
                 }
             }
         },
@@ -54884,7 +55013,7 @@
                 "MultiRegion": {
                     "target": "com.amazonaws.ec2#Boolean",
                     "traits": {
-                        "smithy.api#documentation": "<para>Reserved.</para>"
+                        "smithy.api#documentation": "<p>Reserved.</p>"
                     }
                 }
             }
@@ -56795,6 +56924,9 @@
                         "smithy.api#documentation": "<p>The ID of a VPC peering connection.</p>",
                         "smithy.api#xmlName": "vpcPeeringConnectionId"
                     }
+                },
+                "CoreNetworkArn": {
+                    "target": "com.amazonaws.ec2#CoreNetworkArn"
                 }
             }
         },
@@ -56931,6 +57063,10 @@
                     {
                         "value": "launch",
                         "name": "LAUNCH"
+                    },
+                    {
+                        "value": "launch-before-terminate",
+                        "name": "LAUNCH_BEFORE_TERMINATE"
                     }
                 ]
             }
@@ -59945,6 +60081,13 @@
                         "aws.protocols#ec2QueryName": "VpcPeeringConnectionId",
                         "smithy.api#documentation": "<p>The ID of a VPC peering connection.</p>",
                         "smithy.api#xmlName": "vpcPeeringConnectionId"
+                    }
+                },
+                "CoreNetworkArn": {
+                    "target": "com.amazonaws.ec2#CoreNetworkArn",
+                    "traits": {
+                        "aws.protocols#ec2QueryName": "CoreNetworkArn",
+                        "smithy.api#xmlName": "coreNetworkArn"
                     }
                 }
             },
@@ -62975,8 +63118,16 @@
                     "target": "com.amazonaws.ec2#ReplacementStrategy",
                     "traits": {
                         "aws.protocols#ec2QueryName": "ReplacementStrategy",
-                        "smithy.api#documentation": "<p>The replacement strategy to use. Only available for fleets of type\n                <code>maintain</code>. You must specify a value, otherwise you get an error.</p>\n        <p>To allow Spot Fleet to launch a replacement Spot Instance when an instance rebalance\n            notification is emitted for a Spot Instance in the fleet, specify\n            <code>launch</code>.</p>\n        <note>\n            <p>When a replacement instance is launched, the instance marked for rebalance is not\n                automatically terminated. You can terminate it, or you can leave it running. You are\n                charged for all instances while they are running.</p>\n        </note>",
+                        "smithy.api#documentation": "<p>The replacement strategy to use. Only available for fleets of type\n            <code>maintain</code>.</p>\n        <p>\n            <code>launch</code> - Spot Fleet launches a new replacement Spot Instance when a\n            rebalance notification is emitted for an existing Spot Instance in the fleet. Spot Fleet\n            does not terminate the instances that receive a rebalance notification. You can\n            terminate the old instances, or you can leave them running. You are charged for all\n            instances while they are running. </p>\n        <p>\n            <code>launch-before-terminate</code> - Spot Fleet launches a new replacement Spot\n            Instance when a rebalance notification is emitted for an existing Spot Instance in the\n            fleet, and then, after a delay that you specify (in <code>TerminationDelay</code>),\n            terminates the instances that received a rebalance notification.</p>",
                         "smithy.api#xmlName": "replacementStrategy"
+                    }
+                },
+                "TerminationDelay": {
+                    "target": "com.amazonaws.ec2#Integer",
+                    "traits": {
+                        "aws.protocols#ec2QueryName": "TerminationDelay",
+                        "smithy.api#documentation": "<p>The amount of time (in seconds) that Amazon EC2 waits before terminating the old Spot\n            Instance after launching a new replacement Spot Instance.</p>",
+                        "smithy.api#xmlName": "terminationDelay"
                     }
                 }
             },
@@ -64903,6 +65054,14 @@
                         "aws.protocols#ec2QueryName": "OutpostArn",
                         "smithy.api#documentation": "<p>The Amazon Resource Name (ARN) of the Outpost.</p>",
                         "smithy.api#xmlName": "outpostArn"
+                    }
+                },
+                "EnableDns64": {
+                    "target": "com.amazonaws.ec2#Boolean",
+                    "traits": {
+                        "aws.protocols#ec2QueryName": "EnableDns64",
+                        "smithy.api#documentation": "<p>Indicates whether DNS queries made to the Amazon-provided DNS Resolver in this subnet \n            should return synthetic IPv6 addresses for IPv4-only destinations.</p>",
+                        "smithy.api#xmlName": "enableDns64"
                     }
                 }
             },
@@ -71717,7 +71876,7 @@
                     }
                 },
                 "GatewayAssociationState": {
-                    "target": "com.amazonaws.ec2#String",
+                    "target": "com.amazonaws.ec2#GatewayAssociationState",
                     "traits": {
                         "aws.protocols#ec2QueryName": "GatewayAssociationState",
                         "smithy.api#documentation": "<p>The current state of the gateway association.</p>",

@@ -7,19 +7,14 @@ edition = "2018"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
-[features]
-chrono-conversions = []
-default = ["chrono-conversions"]
-
 [dependencies]
-chrono = { version = "0.4", default-features = false, features = [] }
 itoa = "0.4.0"
 num-integer = "0.1"
 ryu = "1.0.5"
+time = { version = "0.3.4", features = ["parsing"] }
 
 [dev-dependencies]
 base64 = "0.13.0"
-chrono = { version = "0.4", default-features = false, features = ["alloc"] }
 lazy_static = "1.4"
 proptest = "1"
 serde = { version = "1", features = ["derive"] }

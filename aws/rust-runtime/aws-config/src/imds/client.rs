@@ -39,9 +39,6 @@ use crate::provider_config::{HttpSettings, ProviderConfig};
 use crate::{profile, PKG_VERSION};
 use tokio::sync::OnceCell;
 
-const USER_AGENT: AwsUserAgent =
-    AwsUserAgent::new_from_environment(ApiMetadata::new("imds", PKG_VERSION));
-
 mod token;
 
 // 6 hours
@@ -49,6 +46,10 @@ const DEFAULT_TOKEN_TTL: Duration = Duration::from_secs(21_600);
 const DEFAULT_ATTEMPTS: u32 = 4;
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
 const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(1);
+
+fn user_agent() -> AwsUserAgent {
+    AwsUserAgent::new_from_environment(Env::real(), ApiMetadata::new("imds", PKG_VERSION))
+}
 
 /// IMDSv2 Client
 ///
@@ -215,7 +216,7 @@ impl Client {
             .body(SdkBody::empty())
             .expect("valid request");
         let mut request = operation::Request::new(request);
-        request.properties_mut().insert(USER_AGENT);
+        request.properties_mut().insert(user_agent());
         Ok(Operation::new(request, ImdsGetResponseHandler)
             .with_metadata(Metadata::new("get", "imds"))
             .with_retry_policy(ImdsErrorPolicy))

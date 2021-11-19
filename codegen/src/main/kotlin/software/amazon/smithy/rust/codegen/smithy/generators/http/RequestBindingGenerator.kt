@@ -120,7 +120,7 @@ class RequestBindingGenerator(
             write("let mut uri = String::new();")
             write("uri_base(input, &mut uri)?;")
             if (hasQuery) {
-                write("uri_query(input, &mut uri);")
+                write("uri_query(input, &mut uri)?;")
             }
             if (hasHeaders) {
                 write("let builder = add_headers(input, builder)?;")
@@ -257,7 +257,7 @@ class RequestBindingGenerator(
                 val timestampFormat =
                     index.determineTimestampFormat(member, HttpBinding.Location.HEADER, defaultTimestampFormat)
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                "$targetName.fmt(${writer.format(timestampFormatType)})"
+                "$targetName.fmt(${writer.format(timestampFormatType)})?"
             }
             target.isListShape || target.isMemberShape -> {
                 throw IllegalArgumentException("lists should be handled at a higher level")
@@ -322,7 +322,10 @@ class RequestBindingGenerator(
             return false
         }
         val preloadedParams = literalParams.keys + dynamicParams.map { it.locationName }
-        writer.rustBlockTemplate("fn uri_query(_input: &#{Input}, mut output: &mut String)", *codegenScope) {
+        writer.rustBlockTemplate(
+            "fn uri_query(_input: &#{Input}, mut output: &mut String) -> Result<(), #{BuildError}>",
+            *codegenScope
+        ) {
             write("let mut query = #T::new(&mut output);", RuntimeType.QueryFormat(runtimeConfig, "Writer"))
             literalParams.forEach { (k, v) ->
                 // When `v` is an empty string, no value should be set.
@@ -372,6 +375,7 @@ class RequestBindingGenerator(
                     }
                 }
             }
+            writer.rust("Ok(())")
         }
         return true
     }
@@ -390,7 +394,7 @@ class RequestBindingGenerator(
                     index.determineTimestampFormat(member, HttpBinding.Location.QUERY, defaultTimestampFormat)
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
                 val func = writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_timestamp"))
-                "&$func($targetName, ${writer.format(timestampFormatType)})"
+                "&$func($targetName, ${writer.format(timestampFormatType)})?"
             }
             target.isListShape || target.isMemberShape -> {
                 throw IllegalArgumentException("lists should be handled at a higher level")
@@ -426,7 +430,7 @@ class RequestBindingGenerator(
                     index.determineTimestampFormat(member, HttpBinding.Location.LABEL, defaultTimestampFormat)
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
                 val func = format(RuntimeType.LabelFormat(runtimeConfig, "fmt_timestamp"))
-                rust("let $outputVar = $func($input, ${format(timestampFormatType)});")
+                rust("let $outputVar = $func($input, ${format(timestampFormatType)})?;")
             }
             else -> {
                 rust(

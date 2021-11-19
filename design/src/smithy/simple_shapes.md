@@ -12,7 +12,7 @@
 | double | `f64` |
 | [bigInteger](#big-numbers) | `BigInteger` (Not implemented yet) |
 | [bigDecimal](#big-numbers) | `BigDecimal` (Not implemented yet) |
-| [timestamp](#timestamps)  | [`Instant`](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-types/src/instant/mod.rs) |
+| [timestamp](#timestamps)  | [`DateTime`](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-types/src/date_time/mod.rs) |
 | [document](#documents) | [`Document`](https://github.com/awslabs/smithy-rs/blob/v0.14/rust-runtime/aws-smithy-types/src/lib.rs#L38-L52) |
 
 ### Big Numbers
@@ -27,13 +27,13 @@ This will enable us to add helpers over time as requested. Users will also be ab
 
 As of 5/23/2021 BigInteger / BigDecimal are not included in AWS models. Implementation is tracked [here](https://github.com/awslabs/smithy-rs/issues/312).
 ### Timestamps
-[chrono](https://github.com/chronotope/chrono) is the current de facto library for datetime in Rust, but it is pre-1.0. Instants are represented by an SDK defined structure modeled on `std::time::Duration` from the Rust standard library.
+[chrono](https://github.com/chronotope/chrono) is the current de facto library for datetime in Rust, but it is pre-1.0. DateTimes are represented by an SDK defined structure modeled on `std::time::Duration` from the Rust standard library.
 
 ```rust
-{{#include ../../../rust-runtime/aws-smithy-types/src/instant/mod.rs:instant}}
+{{#include ../../../rust-runtime/aws-smithy-types/src/date_time/mod.rs:date_time}}
 ```
 
-A `to_chrono()` method on `Instant` enables conversion from SDK instants to `chrono` dates.
+Functions in the `aws-smithy-types-convert` crate provide conversions to other crates, such as `time` or `chrono`.
 
 ### Strings
 Rust has two different String representations:

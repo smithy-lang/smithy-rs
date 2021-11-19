@@ -5,11 +5,10 @@
 
 use super::query_writer::QueryWriter;
 use super::{Error, PayloadChecksumKind, SignableBody, SignatureLocation, SigningParams};
-use crate::date_fmt::{format_date, format_date_time, parse_date, parse_date_time};
+use crate::date_time::{format_date, format_date_time};
 use crate::http_request::sign::SignableRequest;
 use crate::http_request::PercentEncodingMode;
 use crate::sign::sha256_hex_string;
-use chrono::{Date, DateTime, Utc};
 use http::header::{HeaderName, CONTENT_LENGTH, CONTENT_TYPE, HOST, USER_AGENT};
 use http::{HeaderMap, HeaderValue, Method, Uri};
 use std::borrow::Cow;
@@ -18,6 +17,7 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::Formatter;
 use std::str::FromStr;
+use std::time::SystemTime;
 
 pub(crate) mod header {
     pub(crate) const X_AMZ_CONTENT_SHA_256: &str = "x-amz-content-sha256";
@@ -133,7 +133,7 @@ impl<'a> CanonicalRequest<'a> {
         };
         let payload_hash = Self::payload_hash(req.body());
 
-        let date_time = format_date_time(&params.date_time);
+        let date_time = format_date_time(params.time);
         let (signed_headers, canonical_headers) =
             Self::headers(req, params, &payload_hash, &date_time)?;
         let signed_headers = SignedHeaders::new(signed_headers);
@@ -150,7 +150,7 @@ impl<'a> CanonicalRequest<'a> {
                 credential: format!(
                     "{}/{}/{}/{}/aws4_request",
                     params.access_key,
-                    format_date(&params.date_time.date()),
+                    format_date(params.time),
                     params.region,
                     params.service_name,
                 ),
@@ -429,7 +429,7 @@ impl Ord for CanonicalHeaderName {
 
 #[derive(PartialEq, Debug, Clone)]
 pub(super) struct SigningScope<'a> {
-    pub(super) date: Date<Utc>,
+    pub(super) time: SystemTime,
     pub(super) region: &'a str,
     pub(super) service: &'a str,
 }
@@ -439,75 +439,37 @@ impl<'a> fmt::Display for SigningScope<'a> {
         write!(
             f,
             "{}/{}/{}/aws4_request",
-            format_date(&self.date),
+            format_date(self.time),
             self.region,
             self.service
         )
     }
 }
 
-impl<'a> TryFrom<&'a str> for SigningScope<'a> {
-    type Error = Error;
-    fn try_from(s: &'a str) -> Result<SigningScope<'a>, Self::Error> {
-        let mut scopes = s.split('/');
-        let date = parse_date(scopes.next().expect("missing date"))?;
-        let region = scopes.next().expect("missing region");
-        let service = scopes.next().expect("missing service");
-
-        let scope = SigningScope {
-            date,
-            region,
-            service,
-        };
-
-        Ok(scope)
-    }
-}
-
 #[derive(PartialEq, Debug)]
 pub(super) struct StringToSign<'a> {
     pub(super) scope: SigningScope<'a>,
-    pub(super) date: DateTime<Utc>,
+    pub(super) time: SystemTime,
     pub(super) region: &'a str,
     pub(super) service: &'a str,
     pub(super) hashed_creq: &'a str,
 }
 
-impl<'a> TryFrom<&'a str> for StringToSign<'a> {
-    type Error = Error;
-    fn try_from(s: &'a str) -> Result<Self, Self::Error> {
-        let lines = s.lines().collect::<Vec<&str>>();
-        let date = parse_date_time(lines[1])?;
-        let scope: SigningScope<'_> = TryFrom::try_from(lines[2])?;
-        let hashed_creq = &lines[3];
-
-        let sts = StringToSign {
-            date,
-            region: scope.region,
-            service: scope.service,
-            scope,
-            hashed_creq,
-        };
-
-        Ok(sts)
-    }
-}
-
 impl<'a> StringToSign<'a> {
     pub(crate) fn new(
-        date: DateTime<Utc>,
+        time: SystemTime,
         region: &'a str,
         service: &'a str,
         hashed_creq: &'a str,
     ) -> Self {
         let scope = SigningScope {
-            date: date.date(),
+            time,
             region,
             service,
         };
         Self {
             scope,
-            date,
+            time,
             region,
             service,
             hashed_creq,
@@ -521,7 +483,7 @@ impl<'a> fmt::Display for StringToSign<'a> {
             f,
             "{}\n{}\n{}\n{}",
             HMAC_256,
-            format_date_time(&self.date),
+            format_date_time(self.time),
             self.scope.to_string(),
             self.hashed_creq
         )
@@ -530,7 +492,7 @@ impl<'a> fmt::Display for StringToSign<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::date_fmt::parse_date_time;
+    use crate::date_time::test_parsers::parse_date_time;
     use crate::http_request::canonical_request::{
         normalize_header_value, trim_all, CanonicalRequest, SigningScope, StringToSign,
     };
@@ -542,7 +504,6 @@ mod tests {
     use crate::sign::sha256_hex_string;
     use pretty_assertions::assert_eq;
     use proptest::{proptest, strategy::Strategy};
-    use std::convert::TryFrom;
     use std::time::Duration;
 
     fn signing_params(settings: SigningSettings) -> SigningParams<'static> {
@@ -552,7 +513,7 @@ mod tests {
             security_token: None,
             region: "test-region",
             service_name: "testservicename",
-            date_time: parse_date_time("20210511T154045Z").unwrap(),
+            time: parse_date_time("20210511T154045Z").unwrap(),
             settings,
         }
     }
@@ -624,9 +585,8 @@ mod tests {
     #[test]
     fn test_generate_scope() {
         let expected = "20150830/us-east-1/iam/aws4_request\n";
-        let date = parse_date_time("20150830T123600Z").unwrap();
         let scope = SigningScope {
-            date: date.date(),
+            time: parse_date_time("20150830T123600Z").unwrap(),
             region: "us-east-1",
             service: "iam",
         };
@@ -635,19 +595,13 @@ mod tests {
 
     #[test]
     fn test_string_to_sign() {
-        let date = parse_date_time("20150830T123600Z").unwrap();
+        let time = parse_date_time("20150830T123600Z").unwrap();
         let creq = test_canonical_request("get-vanilla-query-order-key-case");
         let expected_sts = test_sts("get-vanilla-query-order-key-case");
         let encoded = sha256_hex_string(creq.as_bytes());
 
-        let actual = StringToSign::new(date, "us-east-1", "service", &encoded);
+        let actual = StringToSign::new(time, "us-east-1", "service", &encoded);
         assert_eq!(expected_sts, actual.to_string());
-    }
-
-    #[test]
-    fn read_sts() {
-        let sts = test_sts("get-vanilla-query-order-key-case");
-        StringToSign::try_from(sts.as_ref()).unwrap();
     }
 
     #[test]
