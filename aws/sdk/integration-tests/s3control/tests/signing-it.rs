@@ -13,10 +13,12 @@ use std::time::{Duration, UNIX_EPOCH};
 
 #[tokio::test]
 async fn test_signer() -> Result<(), s3control::Error> {
-    let creds = Credentials::from_keys(
+    let creds = Credentials::new(
         "ANOTREAL",
         "notrealrnrELgWzOk3IfjzDKtFBhDby",
         Some("notarealsessiontoken".to_string()),
+        None,
+        "test",
     );
     let conf = s3control::Config::builder()
         .credentials_provider(creds)
