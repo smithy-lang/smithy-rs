@@ -73,12 +73,39 @@ define_rejection! {
     pub struct MimeParsingFailed;
 }
 
+define_rejection! {
+    #[status = INTERNAL_SERVER_ERROR]
+    #[body = "Missing request extension"]
+    /// Rejection type for [`Extension`](super::Extension) if an expected
+    /// request extension was not found.
+    pub struct MissingExtension(Error);
+}
+
+define_rejection! {
+    #[status = INTERNAL_SERVER_ERROR]
+    #[body = "Extensions taken by other extractor"]
+    /// Rejection used if the request extension has been taken by another
+    /// extractor.
+    pub struct ExtensionsAlreadyExtracted;
+}
+
 composite_rejection! {
     /// Rejection used for Content-Type errors such as missing Content-Type
     /// header, MIME parse issues, etc.
     pub enum ContentTypeRejection {
         MissingJsonContentType,
         MimeParsingFailed,
+    }
+}
+
+composite_rejection! {
+    /// Rejection used for [`Extension`](super::Extension).
+    ///
+    /// Contains one variant for each way the [`Extension`](super::Extension) extractor
+    /// can fail.
+    pub enum ExtensionRejection {
+        MissingExtension,
+        ExtensionsAlreadyExtracted,
     }
 }
 

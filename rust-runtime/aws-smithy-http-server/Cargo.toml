@@ -35,5 +35,9 @@ tokio = { version = "1.0", features = ["full"] }
 tower = "0.4"
 tower-http = { version = "0.1", features = ["add-extension", "map-response-body"] }
 
+# Here just because I'm using innards of the crate after `cargo expand`, but
+# this would go away with our Kotlin-generated builder.
+derive_builder = "0.10"
+
 [dev-dependencies]
 pretty_assertions = "1"

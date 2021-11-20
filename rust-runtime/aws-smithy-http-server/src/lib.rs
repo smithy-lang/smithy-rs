@@ -34,3 +34,12 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[cfg(test)]
 mod test_helpers;
+
+pub mod add_extension;
+pub mod extension;
+
+// Code-generated.
+mod extractors;
+pub mod model;
+pub mod operation_registry;
+mod responders;

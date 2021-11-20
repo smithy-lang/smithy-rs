@@ -13,13 +13,13 @@ use tower::Service;
 
 /// Struct that holds a handler, that is, a function provided by the user that implements the
 /// Smithy operation.
-pub struct OperationHandler<H, B, T, I, Res> {
+pub struct OperationHandler<H, B, Ri, I> {
     handler: H,
     #[allow(clippy::type_complexity)]
-    _marker: PhantomData<fn() -> (B, T, I, Res)>,
+    _marker: PhantomData<fn() -> (B, Ri, I)>,
 }
 
-impl<H, B, T, I, Res> Clone for OperationHandler<H, B, T, I, Res>
+impl<H, B, Ri, I> Clone for OperationHandler<H, B, Ri, I>
 where
     H: Clone,
 {
@@ -29,13 +29,13 @@ where
 }
 
 /// Construct an [`OperationHandler`] out of a function implementing the operation.
-pub fn operation<H, B, T, I, Res>(handler: H) -> OperationHandler<H, B, T, I, Res> {
+pub fn operation<H, B, Ri, I>(handler: H) -> OperationHandler<H, B, Ri, I> {
     OperationHandler { handler, _marker: PhantomData }
 }
 
-impl<H, B, T, I, Res> Service<Request<B>> for OperationHandler<H, B, T, I, Res>
+impl<H, B, Ri, I> Service<Request<B>> for OperationHandler<H, B, Ri, I>
 where
-    H: Handler<B, T, I, Res>,
+    H: Handler<B, Ri, I>,
     B: Send + 'static,
 {
     type Response = Response<BoxBody>;
