@@ -33,7 +33,7 @@ pub mod hyper_ext;
 #[doc(hidden)]
 pub mod static_tests;
 
-#[cfg(feature = "hyper")]
+#[cfg(feature = "test-util")]
 pub mod never;
 pub mod timeout;
 pub use timeout::TimeoutLayer;

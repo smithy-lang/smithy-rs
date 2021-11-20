@@ -75,6 +75,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
         rustCrate.mergeFeature(Feature("client", default = true, listOf(awsHyper, "aws-smithy-client")))
         rustCrate.mergeFeature(Feature("rustls", default = true, listOf("$awsHyper/rustls")))
         rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("$awsHyper/native-tls")))
+        rustCrate.mergeFeature(Feature("rt-tokio", default = true, listOf("$awsHyper/rt-tokio", "aws-smithy-async/rt-tokio")))
     }
 
     override fun libRsCustomizations(

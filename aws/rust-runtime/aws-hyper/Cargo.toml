@@ -9,6 +9,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 default = []
+rt-tokio = ["hyper/runtime", "hyper/tcp"]
 native-tls = ["hyper-tls", "aws-smithy-client/native-tls"]
 rustls = ["hyper-rustls", "aws-smithy-client/rustls"]
 
@@ -24,10 +25,9 @@ bytes = "1"
 fastrand = "1.4.0"
 http = "0.2.3"
 http-body = "0.4.0"
-hyper = { version = "0.14.2", features = ["client", "http1", "http2", "tcp", "runtime"] }
-hyper-rustls = { version = "0.22.1", optional = true, features = ["rustls-native-certs"] }
+hyper = { version = "0.14.2", features = ["client", "http1", "http2"] }
+hyper-rustls = { version = "0.22.1", optional = true, features = ["native-tokio"] }
 hyper-tls = { version ="0.5.0", optional = true }
-tokio = { version = "1", features = ["time"] }
 tower = { version = "0.4.6", features = ["util", "retry"] }
 
 pin-project = "1"

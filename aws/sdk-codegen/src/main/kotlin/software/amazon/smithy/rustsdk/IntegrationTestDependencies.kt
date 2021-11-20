@@ -93,5 +93,5 @@ private val Criterion = CargoDependency("criterion", CratesIo("0.3"), scope = De
 private val FuturesCore = CargoDependency("futures-core", CratesIo("0.3"), DependencyScope.Dev)
 private val Hound = CargoDependency("hound", CratesIo("3.4"), DependencyScope.Dev)
 private val SerdeJson = CargoDependency("serde_json", CratesIo("1"), features = emptySet(), scope = DependencyScope.Dev)
-private val Tokio = CargoDependency("tokio", CratesIo("1"), features = setOf("macros", "test-util"), scope = DependencyScope.Dev)
+private val Tokio = CargoDependency("tokio", CratesIo("1"), features = setOf("macros", "time", "test-util"), scope = DependencyScope.Dev)
 private val FuturesUtil = CargoDependency("futures-util", CratesIo("0.3"), scope = DependencyScope.Dev)
