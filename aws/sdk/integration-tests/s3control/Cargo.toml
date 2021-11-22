@@ -8,7 +8,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-aws-aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
+aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
 aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper"}
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
