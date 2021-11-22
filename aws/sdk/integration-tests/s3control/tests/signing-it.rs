@@ -16,6 +16,8 @@ async fn test_signer() -> Result<(), aws_sdk_s3control::Error> {
         "ANOTREAL",
         "notrealrnrELgWzOk3IfjzDKtFBhDby",
         Some("notarealsessiontoken".to_string()),
+        None,
+        "test",
     );
     let conf = aws_sdk_s3control::Config::builder()
         .credentials_provider(creds)

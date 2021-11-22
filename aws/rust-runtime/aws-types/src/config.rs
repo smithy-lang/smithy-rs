@@ -20,6 +20,7 @@ use crate::credentials::SharedCredentialsProvider;
 use crate::region::Region;
 
 /// AWS Shared Configuration
+#[derive(Debug)]
 pub struct Config {
     app_name: Option<AppName>,
     credentials_provider: Option<SharedCredentialsProvider>,
@@ -30,7 +31,7 @@ pub struct Config {
 }
 
 /// Builder for AWS Shared Configuration
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Builder {
     app_name: Option<AppName>,
     credentials_provider: Option<SharedCredentialsProvider>,
@@ -221,7 +222,7 @@ impl Builder {
     /// fn make_provider() -> impl ProvideCredentials {
     ///   // ...
     ///   # use aws_types::Credentials;
-    ///   # Credentials::from_keys("test", "test", None)
+    ///   # Credentials::new("test", "test", None, None, "example")
     /// }
     ///
     /// let config = Config::builder()
@@ -242,7 +243,7 @@ impl Builder {
     /// fn make_provider() -> impl ProvideCredentials {
     ///   // ...
     ///   # use aws_types::Credentials;
-    ///   # Credentials::from_keys("test", "test", None)
+    ///   # Credentials::new("test", "test", None, None, "example")
     /// }
     ///
     /// fn override_provider() -> bool {

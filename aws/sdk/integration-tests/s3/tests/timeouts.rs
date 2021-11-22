@@ -22,7 +22,7 @@ async fn test_timeout_service_ends_request_that_never_completes() {
     let conn: NeverService<http::Request<SdkBody>, http::Response<SdkBody>, ConnectorError> =
         NeverService::new();
     let region = Region::from_static("us-east-2");
-    let credentials = Credentials::from_keys("test", "test", None);
+    let credentials = Credentials::new("test", "test", None, None, "test");
     let timeout_config =
         TimeoutConfig::new().with_api_call_timeout(Some(Duration::from_secs_f32(0.5)));
     let sleep_impl: Arc<dyn AsyncSleep> = Arc::new(TokioSleep::new());

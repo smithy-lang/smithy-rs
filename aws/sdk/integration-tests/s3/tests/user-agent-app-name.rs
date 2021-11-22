@@ -9,10 +9,12 @@ use aws_smithy_client::test_connection::capture_request;
 #[tokio::test]
 async fn user_agent_app_name() -> Result<(), aws_sdk_s3::Error> {
     let (conn, handler) = capture_request(None);
-    let creds = Credentials::from_keys(
+    let creds = Credentials::new(
         "ANOTREAL",
         "notrealrnrELgWzOk3IfjzDKtFBhDby",
         Some("notarealsessiontoken".to_string()),
+        None,
+        "test",
     );
     let conf = aws_sdk_s3::Config::builder()
         .credentials_provider(creds)
