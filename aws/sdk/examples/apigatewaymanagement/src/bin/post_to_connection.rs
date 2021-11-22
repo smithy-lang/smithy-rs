@@ -70,7 +70,7 @@ async fn main() -> Result<(), Error> {
         .or_else(Region::new("us-west-2"));
     println!();
 
-    let region = region_provider.region().await.unwrap();
+    let region = region_provider.region().await.expect("region must be set");
     if verbose {
         println!("APIGatewayManagement client version: {}", PKG_VERSION);
         println!("Region:                    {}", region.as_ref());
