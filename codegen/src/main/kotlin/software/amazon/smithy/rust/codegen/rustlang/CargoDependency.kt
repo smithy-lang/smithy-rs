@@ -194,7 +194,7 @@ data class CargoDependency(
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.1"))
         val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("1"))
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
-        val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4"))
+        val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2"))
         val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14"))
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
