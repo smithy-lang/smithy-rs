@@ -11,6 +11,7 @@ pub(crate) mod macros;
 pub mod body;
 mod clone_box_service;
 pub mod error;
+mod extension;
 mod handler;
 
 // Only the code-generated operation registry should instantiate routers.
@@ -26,6 +27,8 @@ pub mod rejection;
 pub use self::body::{Body, BoxBody, HttpBody};
 #[doc(inline)]
 pub use self::error::Error;
+#[doc(inline)]
+pub use self::extension::Extension;
 #[doc(inline)]
 pub use self::routing::Router;
 
