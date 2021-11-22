@@ -8,7 +8,7 @@ vNext (Month Day, Year)
 
 - :tada: Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request. (smithy-rs#831)
 - Improve docs on `aws-smithy-client` (smithy-rs#855)
-- Fix http-body dependency version (smithy-rs#TODO, aws-sdk-rust#305)
+- Fix http-body dependency version (smithy-rs#883, aws-sdk-rust#305)
 
 **Breaking changes**
 
