@@ -18,5 +18,5 @@ aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 bytes = "1"
 http = "0.2.3"
 serde_json = "1"
-tokio  = { version = "1", features = ["full", "test-util"]}
+tokio = { version = "1", features = ["full", "test-util"]}
 tracing-subscriber = "0.2.18"

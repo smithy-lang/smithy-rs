@@ -12,5 +12,5 @@ aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper"}
 aws-sdk-sts = { path = "../../build/aws-sdk/sdk/sts" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
-tokio  = { version = "1", features = ["full", "test-util"]}
+tokio = { version = "1", features = ["full", "test-util"]}
 tracing-subscriber = "0.2"
