@@ -187,6 +187,7 @@ impl Client {
                 Ok(token_failure) => *token_failure,
                 Err(other) => ImdsError::Unexpected(other),
             },
+            SdkError::TimeoutError(err) => ImdsError::TimeoutError(err),
             SdkError::DispatchFailure(err) => ImdsError::IoError(err.into()),
             SdkError::ResponseError { err, .. } => ImdsError::IoError(err),
             SdkError::ServiceError {
@@ -251,6 +252,9 @@ pub enum ImdsError {
     /// An error occurred communication with IMDS
     IoError(Box<dyn Error + Send + Sync + 'static>),
 
+    /// A request to IMDS failed due to a timeout
+    TimeoutError(Box<dyn Error + Send + Sync + 'static>),
+
     /// An unexpected error occurred communicating with IMDS
     Unexpected(Box<dyn Error + Send + Sync + 'static>),
 }
@@ -259,7 +263,7 @@ impl Display for ImdsError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ImdsError::FailedToLoadToken(inner) => {
-                write!(f, "failed to load session token: {}", inner)
+                write!(f, "Failed to load session token: {}", inner)
             }
             ImdsError::InvalidPath => write!(
                 f,
@@ -273,6 +277,9 @@ impl Display for ImdsError {
             ),
             ImdsError::IoError(err) => {
                 write!(f, "An IO error occurred communicating with IMDS: {}", err)
+            }
+            ImdsError::TimeoutError(err) => {
+                write!(f, "An IMDS request timed out: {}", err)
             }
             ImdsError::Unexpected(err) => write!(
                 f,

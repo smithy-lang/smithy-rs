@@ -130,6 +130,9 @@ where
                 Err(SdkError::ConstructionFailure(err)) => inner_span
                     .record("status", &"construction_failure")
                     .record("message", &display(err)),
+                Err(SdkError::TimeoutError(err)) => inner_span
+                    .record("status", &"timeout_error")
+                    .record("message", &display(err)),
             };
             resp
         }
