@@ -252,7 +252,7 @@ where
         match future.poll(cx) {
             Poll::Ready(Ok(response)) => Poll::Ready(response),
             Poll::Ready(Err(_timeout)) => Poll::Ready(Err(SdkError::TimeoutError(
-                RequestTimeoutError::new_boxed(kind, duration.clone()),
+                RequestTimeoutError::new_boxed(kind, *duration),
             ))),
             Poll::Pending => Poll::Pending,
         }
