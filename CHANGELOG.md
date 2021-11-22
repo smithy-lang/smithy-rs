@@ -3,6 +3,7 @@ vNext (Month Day, Year)
 
 **New this release**
 - Improve docs on `aws-smithy-client` (smithy-rs#855)
+- Fix http-body dependency version (smithy-rs#TODO, aws-sdk-rust#305)
 
 **Breaking Changes**
 - (aws-smithy-client): Extraneous `pub use SdkSuccess` removed from `aws_smithy_client::hyper_ext`. (smithy-rs#855)
