@@ -145,7 +145,7 @@ private class ServerHttpProtocolImplGenerator(
         }
         rustTemplate(
             """
-            pub(crate) struct $inputName(#{I});
+            pub struct $inputName(pub #{I});
             ##[#{Axum}::async_trait]
             impl<B> #{Axum}::extract::FromRequest<B> for $inputName
             where
@@ -194,7 +194,7 @@ private class ServerHttpProtocolImplGenerator(
             // that can in turn be converted into a response.
             rustTemplate(
                 """
-                pub(crate) enum $outputName {
+                pub enum $outputName {
                     Output(#{O}),
                     Error(#{E})
                 }
@@ -228,7 +228,7 @@ private class ServerHttpProtocolImplGenerator(
             // we control that can in turn be converted into a response.
             rustTemplate(
                 """
-                pub(crate) struct $outputName(#{O});
+                pub struct $outputName(pub #{O});
                 ##[#{Axum}::async_trait]
                 impl #{Axum}::response::IntoResponse for $outputName {
                     type Body = #{SmithyHttpServer}::Body;
