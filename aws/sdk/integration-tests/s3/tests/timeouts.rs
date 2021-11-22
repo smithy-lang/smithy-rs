@@ -62,6 +62,6 @@ async fn test_timeout_service_ends_request_that_never_completes() {
         .await
         .unwrap_err();
 
-    assert_eq!(format!("{:?}", err), "TimeoutError(TimedOutError)");
+    assert_eq!(format!("{:?}", err), "TimeoutError(RequestTimeoutError { kind: \"API call (all attempts including retries)\", duration: 500ms })");
     assert_elapsed!(now, std::time::Duration::from_secs_f32(0.5));
 }

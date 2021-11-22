@@ -55,7 +55,7 @@ use aws_smithy_types::retry::ErrorKind;
 
 use crate::{timeout, Builder as ClientBuilder};
 
-use self::timeout_middleware::{ConnectTimeout, HttpReadTimeout, TimeoutError};
+use self::timeout_middleware::{ConnectTimeout, HttpReadTimeout, HttpTimeoutError};
 
 /// Adapter from a [`hyper::Client`](hyper::Client) to a connector usable by a Smithy [`Client`](crate::Client).
 ///
@@ -128,7 +128,7 @@ fn downcast_error(err: BoxError) -> ConnectorError {
 
 /// Convert a [`hyper::Error`] into a [`ConnectorError`]
 fn to_connector_error(err: hyper::Error) -> ConnectorError {
-    if err.is_timeout() || find_source::<TimeoutError>(&err).is_some() {
+    if err.is_timeout() || find_source::<HttpTimeoutError>(&err).is_some() {
         ConnectorError::timeout(err.into())
     } else if err.is_user() {
         ConnectorError::user(err.into())
@@ -317,28 +317,27 @@ mod timeout_middleware {
     use tower::BoxError;
 
     use aws_smithy_async::future;
-    use aws_smithy_async::future::timeout::{TimedOutError, Timeout};
+    use aws_smithy_async::future::timeout::Timeout;
     use aws_smithy_async::rt::sleep::AsyncSleep;
     use aws_smithy_async::rt::sleep::Sleep;
 
     #[derive(Debug)]
-    pub(crate) struct TimeoutError {
+    pub(crate) struct HttpTimeoutError {
         operation: &'static str,
         duration: Duration,
-        cause: TimedOutError,
     }
 
-    impl std::fmt::Display for TimeoutError {
+    impl std::fmt::Display for HttpTimeoutError {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            write!(f, "timed out after {:?}", self.duration)
+            write!(
+                f,
+                "{} operation timed out after {:?}",
+                self.operation, self.duration
+            )
         }
     }
 
-    impl Error for TimeoutError {
-        fn source(&self) -> Option<&(dyn Error + 'static)> {
-            Some(&self.cause)
-        }
-    }
+    impl Error for HttpTimeoutError {}
 
     /// Timeout wrapper that will timeout on the initial TCP connection
     ///
@@ -434,10 +433,9 @@ mod timeout_middleware {
             };
             match timeout_future.poll(cx) {
                 Poll::Ready(Ok(response)) => Poll::Ready(response.map_err(|err| err.into())),
-                Poll::Ready(Err(_timeout)) => Poll::Ready(Err(TimeoutError {
+                Poll::Ready(Err(_timeout)) => Poll::Ready(Err(HttpTimeoutError {
                     operation: timeout_type,
                     duration: *dur,
-                    cause: TimedOutError,
                 }
                 .into())),
                 Poll::Pending => Poll::Pending,
