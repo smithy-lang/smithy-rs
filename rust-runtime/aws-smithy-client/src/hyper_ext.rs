@@ -317,7 +317,7 @@ mod timeout_middleware {
     use tower::BoxError;
 
     use aws_smithy_async::future;
-    use aws_smithy_async::future::timeout::Timeout;
+    use aws_smithy_async::future::timeout::{TimedOutError, Timeout};
     use aws_smithy_async::rt::sleep::AsyncSleep;
     use aws_smithy_async::rt::sleep::Sleep;
 
@@ -337,7 +337,14 @@ mod timeout_middleware {
         }
     }
 
-    impl Error for HttpTimeoutError {}
+    impl Error for HttpTimeoutError {
+        // We implement the `source` function as returning a `TimedOutError` because when `downcast_error`
+        // or `find_source` is called with an `HttpTimeoutError` (or another error wrapping an `HttpTimeoutError`)
+        // this method will be checked to determine if it's a timeout-related error.
+        fn source(&self) -> Option<&(dyn Error + 'static)> {
+            Some(&TimedOutError)
+        }
+    }
 
     /// Timeout wrapper that will timeout on the initial TCP connection
     ///
@@ -574,7 +581,6 @@ mod timeout_middleware {
                 )
                 .await
                 .unwrap_err();
-            // TODO this failing surprises me. Why isn't this considered a timeout?
             assert!(
                 resp.is_timeout(),
                 "expected resp.is_timeout() to be true but it was false, resp == {:?}",
@@ -582,7 +588,7 @@ mod timeout_middleware {
             );
             assert_eq!(
                 format!("{}", resp),
-                "timeout: error trying to connect: HTTP read timeout occurred after 2s"
+                "timeout: HTTP read timeout occurred after 2s"
             );
             assert_elapsed!(now, Duration::from_secs(2));
         }
