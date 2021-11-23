@@ -59,7 +59,7 @@ Until the SDK is released, we will be adding information about using the SDK to 
 
 This project is licensed under the Apache-2.0 License.
 
-[examples folder in GitHub]: https://github.com/awslabs/aws-sdk-rust/tree/main/sdk/examples
+[examples folder in GitHub]: https://github.com/awslabs/aws-sdk-rust/tree/main/examples
 [Tokio]: https://crates.io/crates/tokio
 [Guide]: https://github.com/awslabs/aws-sdk-rust/blob/main/Guide.md
 [GitHub discussions]: https://github.com/awslabs/aws-sdk-rust/discussions

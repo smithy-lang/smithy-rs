@@ -7,6 +7,7 @@ vNext (Month Day, Year)
 **New this release**
 
 - :tada: Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request. (smithy-rs#831)
+  - `SdkError` now includes a variant `TimeoutError` for when a request times out  (smithy-rs#885)
 - Improve docs on `aws-smithy-client` (smithy-rs#855)
 - Fix http-body dependency version (smithy-rs#883, aws-sdk-rust#305)
 
