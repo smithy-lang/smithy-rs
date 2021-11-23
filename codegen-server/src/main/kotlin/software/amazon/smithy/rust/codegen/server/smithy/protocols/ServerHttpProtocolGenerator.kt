@@ -138,7 +138,6 @@ private class ServerHttpProtocolImplGenerator(
         } else {
             """
             async fn from_request(req: &mut #{Axum}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
-                #{SmithyHttpServer}::protocols::check_json_content_type(req)?;
                 Ok($inputName(#{parse_request}(req).await?))
             }
             """.trimIndent()
@@ -481,7 +480,10 @@ private class ServerHttpProtocolImplGenerator(
                 """
                 let body = request.take_body().ok_or(#{SmithyHttpServer}::rejection::BodyAlreadyExtracted)?;
                 let bytes = #{Hyper}::body::to_bytes(body).await?;
-                input = #{parser}(bytes.as_ref(), input)?;
+                if !bytes.is_empty() {
+                    #{SmithyHttpServer}::protocols::check_json_content_type(request)?;
+                    input = #{parser}(bytes.as_ref(), input)?;
+                }
                 """,
                 *codegenScope,
                 "parser" to parser,
