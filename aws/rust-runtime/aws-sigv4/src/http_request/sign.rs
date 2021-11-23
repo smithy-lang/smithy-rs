@@ -348,6 +348,35 @@ mod tests {
     }
 
     #[test]
+    fn test_sign_url_escape() {
+        let test = "double-encode-path";
+        let settings = SigningSettings::default();
+        let params = SigningParams {
+            access_key: "AKIDEXAMPLE",
+            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+            security_token: None,
+            region: "us-east-1",
+            service_name: "service",
+            time: parse_date_time("20150830T123600Z").unwrap(),
+            settings,
+        };
+
+        let original = test_request(test);
+        let signable = SignableRequest::from(&original);
+        let out = sign(signable, &params).unwrap();
+        assert_eq!(
+            "6f871eb157f326fa5f7439eb88ca200048635950ce7d6037deda56f0c95d4364",
+            out.signature
+        );
+
+        let mut signed = original;
+        out.output.apply_to_request(&mut signed);
+
+        let mut expected = test_signed_request(test);
+        assert_req_eq!(expected, signed);
+    }
+
+    #[test]
     fn test_sign_vanilla_with_query_params() {
         let mut settings = SigningSettings::default();
         settings.signature_location = SignatureLocation::QueryParams;
