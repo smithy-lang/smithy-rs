@@ -4,9 +4,7 @@
  */
 
 use aws_config::meta::region::RegionProviderChain;
-use aws_sdk_apigatewaymanagement::{
-    config, Blob, Client, Config, Endpoint, Error, Region, PKG_VERSION,
-};
+use aws_sdk_apigatewaymanagement::{config, Blob, Client, Endpoint, Error, Region, PKG_VERSION};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -99,6 +97,6 @@ async fn main() -> Result<(), Error> {
         .connection_id(connection_id)
         .data(Blob::new(data))
         .send()
-        .await;
+        .await?;
     Ok(())
 }
