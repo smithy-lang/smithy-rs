@@ -7,6 +7,7 @@ use super::query_writer::QueryWriter;
 use super::{Error, PayloadChecksumKind, SignableBody, SignatureLocation, SigningParams};
 use crate::date_time::{format_date, format_date_time};
 use crate::http_request::sign::SignableRequest;
+use crate::http_request::url_escape::percent_encode_path;
 use crate::http_request::PercentEncodingMode;
 use crate::sign::sha256_hex_string;
 use http::header::{HeaderName, CONTENT_LENGTH, CONTENT_TYPE, HOST, USER_AGENT};
@@ -128,7 +129,7 @@ impl<'a> CanonicalRequest<'a> {
         let path = req.uri().path();
         let path = match params.settings.percent_encoding_mode {
             // The string is already URI encoded, we don't need to encode everything again, just `%`
-            PercentEncodingMode::Double => Cow::Owned(path.replace('%', "%25")),
+            PercentEncodingMode::Double => Cow::Owned(percent_encode_path(path)),
             PercentEncodingMode::Single => Cow::Borrowed(path),
         };
         let payload_hash = Self::payload_hash(req.body());
@@ -610,6 +611,18 @@ mod tests {
         let expected = "816cd5b414d056048ba4f7c5386d6e0533120fb1fcfa93762cf0fc39e2cf19e0";
         let actual = sha256_hex_string(creq.as_bytes());
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_double_url_encode_path() {
+        let req = test_request("double-encode-path");
+        let req = SignableRequest::from(&req);
+        let signing_params = signing_params(SigningSettings::default());
+        let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
+
+        let expected = test_canonical_request("double-encode-path");
+        let actual = format!("{}", creq);
+        assert_eq!(actual, expected);
     }
 
     #[test]
