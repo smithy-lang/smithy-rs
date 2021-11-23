@@ -55,7 +55,7 @@ use aws_smithy_types::retry::ErrorKind;
 
 use crate::{timeout, Builder as ClientBuilder};
 
-use self::timeout_middleware::{ConnectTimeout, HttpReadTimeout, TimeoutError};
+use self::timeout_middleware::{ConnectTimeout, HttpReadTimeout, HttpTimeoutError};
 
 /// Adapter from a [`hyper::Client`](hyper::Client) to a connector usable by a Smithy [`Client`](crate::Client).
 ///
@@ -128,7 +128,7 @@ fn downcast_error(err: BoxError) -> ConnectorError {
 
 /// Convert a [`hyper::Error`] into a [`ConnectorError`]
 fn to_connector_error(err: hyper::Error) -> ConnectorError {
-    if err.is_timeout() || find_source::<TimeoutError>(&err).is_some() {
+    if err.is_timeout() || find_source::<HttpTimeoutError>(&err).is_some() {
         ConnectorError::timeout(err.into())
     } else if err.is_user() {
         ConnectorError::user(err.into())
@@ -322,21 +322,27 @@ mod timeout_middleware {
     use aws_smithy_async::rt::sleep::Sleep;
 
     #[derive(Debug)]
-    pub(crate) struct TimeoutError {
-        operation: &'static str,
+    pub(crate) struct HttpTimeoutError {
+        kind: &'static str,
         duration: Duration,
-        cause: TimedOutError,
     }
 
-    impl std::fmt::Display for TimeoutError {
+    impl std::fmt::Display for HttpTimeoutError {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            write!(f, "timed out after {:?}", self.duration)
+            write!(
+                f,
+                "{} timeout occurred after {:?}",
+                self.kind, self.duration
+            )
         }
     }
 
-    impl Error for TimeoutError {
+    impl Error for HttpTimeoutError {
+        // We implement the `source` function as returning a `TimedOutError` because when `downcast_error`
+        // or `find_source` is called with an `HttpTimeoutError` (or another error wrapping an `HttpTimeoutError`)
+        // this method will be checked to determine if it's a timeout-related error.
         fn source(&self) -> Option<&(dyn Error + 'static)> {
-            Some(&self.cause)
+            Some(&TimedOutError)
         }
     }
 
@@ -422,7 +428,7 @@ mod timeout_middleware {
         type Output = Result<T, BoxError>;
 
         fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-            let (timeout_future, timeout_type, dur) = match self.project() {
+            let (timeout_future, kind, &mut duration) = match self.project() {
                 MaybeTimeoutFutureProj::NoTimeout { future } => {
                     return future.poll(cx).map_err(|err| err.into())
                 }
@@ -434,12 +440,9 @@ mod timeout_middleware {
             };
             match timeout_future.poll(cx) {
                 Poll::Ready(Ok(response)) => Poll::Ready(response.map_err(|err| err.into())),
-                Poll::Ready(Err(_timeout)) => Poll::Ready(Err(TimeoutError {
-                    operation: timeout_type,
-                    duration: *dur,
-                    cause: TimedOutError,
+                Poll::Ready(Err(_timeout)) => {
+                    Poll::Ready(Err(HttpTimeoutError { kind, duration }.into()))
                 }
-                .into())),
                 Poll::Pending => Poll::Pending,
             }
         }
@@ -464,7 +467,7 @@ mod timeout_middleware {
                     let sleep = sleep.sleep(*duration);
                     MaybeTimeoutFuture::Timeout {
                         timeout: future::timeout::Timeout::new(self.inner.call(req), sleep),
-                        error_type: "connect",
+                        error_type: "HTTP connect",
                         duration: *duration,
                     }
                 }
@@ -493,7 +496,6 @@ mod timeout_middleware {
                     let sleep = sleep.sleep(*duration);
                     MaybeTimeoutFuture::Timeout {
                         timeout: future::timeout::Timeout::new(self.inner.call(req), sleep),
-
                         error_type: "HTTP read",
                         duration: *duration,
                     }
@@ -528,7 +530,7 @@ mod timeout_middleware {
         fn is_send_sync<T: Send + Sync>() {}
 
         #[tokio::test]
-        async fn connect_timeout_works() {
+        async fn http_connect_timeout_works() {
             let inner = NeverConnected::new();
             let timeout = timeout::Settings::new().with_connect_timeout(Duration::from_secs(1));
             let mut hyper = Adapter::builder()
@@ -545,17 +547,21 @@ mod timeout_middleware {
                         .unwrap(),
                 )
                 .await
-                .expect_err("timeout");
-            assert!(resp.is_timeout(), "{:?}", resp);
+                .unwrap_err();
+            assert!(
+                resp.is_timeout(),
+                "expected resp.is_timeout() to be true but it was false, resp == {:?}",
+                resp
+            );
             assert_eq!(
                 format!("{}", resp),
-                "timeout: error trying to connect: timed out after 1s"
+                "timeout: error trying to connect: HTTP connect timeout occurred after 1s"
             );
             assert_elapsed!(now, Duration::from_secs(1));
         }
 
         #[tokio::test]
-        async fn http_timeout_works() {
+        async fn http_read_timeout_works() {
             let inner = NeverReplies::new();
             let timeout = timeout::Settings::new()
                 .with_connect_timeout(Duration::from_secs(1))
@@ -574,8 +580,16 @@ mod timeout_middleware {
                         .unwrap(),
                 )
                 .await
-                .expect_err("timeout");
-            assert!(resp.is_timeout(), "{:?}", resp);
+                .unwrap_err();
+            assert!(
+                resp.is_timeout(),
+                "expected resp.is_timeout() to be true but it was false, resp == {:?}",
+                resp
+            );
+            assert_eq!(
+                format!("{}", resp),
+                "timeout: HTTP read timeout occurred after 2s"
+            );
             assert_elapsed!(now, Duration::from_secs(2));
         }
     }

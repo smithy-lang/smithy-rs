@@ -16,7 +16,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use crate::SdkError;
-use aws_smithy_async::future::timeout::{TimedOutError, Timeout};
+use aws_smithy_async::future::timeout::Timeout;
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use aws_smithy_http::operation::Operation;
 use aws_smithy_types::timeout::TimeoutConfig;
@@ -64,6 +64,30 @@ impl Settings {
         }
     }
 }
+
+#[derive(Debug)]
+struct RequestTimeoutError {
+    kind: &'static str,
+    duration: Duration,
+}
+
+impl RequestTimeoutError {
+    pub fn new_boxed(kind: &'static str, duration: Duration) -> Box<Self> {
+        Box::new(Self { kind, duration })
+    }
+}
+
+impl std::fmt::Display for RequestTimeoutError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} timeout occurred after {:?}",
+            self.kind, self.duration
+        )
+    }
+}
+
+impl std::error::Error for RequestTimeoutError {}
 
 #[derive(Clone, Debug)]
 /// A struct containing everything needed to create a new [`TimeoutService`]
@@ -217,8 +241,7 @@ where
     type Output = Result<T, SdkError<E>>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        // TODO duration will be used in the error message once a Timeout variant is added to SdkError
-        let (future, _kind, _duration) = match self.project() {
+        let (future, kind, duration) = match self.project() {
             TimeoutServiceFutureProj::NoTimeout { future } => return future.poll(cx),
             TimeoutServiceFutureProj::Timeout {
                 future,
@@ -228,10 +251,9 @@ where
         };
         match future.poll(cx) {
             Poll::Ready(Ok(response)) => Poll::Ready(response),
-            Poll::Ready(Err(_timeout)) => {
-                // TODO update SdkError to include a variant specifically for timeouts
-                Poll::Ready(Err(SdkError::ConstructionFailure(Box::new(TimedOutError))))
-            }
+            Poll::Ready(Err(_timeout)) => Poll::Ready(Err(SdkError::TimeoutError(
+                RequestTimeoutError::new_boxed(kind, *duration),
+            ))),
             Poll::Pending => Poll::Pending,
         }
     }
@@ -295,7 +317,7 @@ mod test {
         let err: SdkError<Box<dyn std::error::Error + 'static>> =
             svc.ready().await.unwrap().call(op).await.unwrap_err();
 
-        assert_eq!(format!("{:?}", err), "ConstructionFailure(TimedOutError)");
+        assert_eq!(format!("{:?}", err), "TimeoutError(RequestTimeoutError { kind: \"API call (all attempts including retries)\", duration: 250ms })");
         assert_elapsed!(now, Duration::from_secs_f32(0.25));
     }
 }

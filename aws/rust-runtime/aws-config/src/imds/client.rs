@@ -187,6 +187,7 @@ impl Client {
                 Ok(token_failure) => *token_failure,
                 Err(other) => ImdsError::Unexpected(other),
             },
+            SdkError::TimeoutError(err) => ImdsError::IoError(err),
             SdkError::DispatchFailure(err) => ImdsError::IoError(err.into()),
             SdkError::ResponseError { err, .. } => ImdsError::IoError(err),
             SdkError::ServiceError {
@@ -259,7 +260,7 @@ impl Display for ImdsError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ImdsError::FailedToLoadToken(inner) => {
-                write!(f, "failed to load session token: {}", inner)
+                write!(f, "Failed to load session token: {}", inner)
             }
             ImdsError::InvalidPath => write!(
                 f,
