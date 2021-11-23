@@ -43,6 +43,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlMemberIndex
@@ -123,7 +124,7 @@ class XmlBindingTraitSerializerGenerator(
                         """
                         let mut writer = #{XmlWriter}::new(&mut out);
                         ##[allow(unused_mut)]
-                        let mut root = writer.start_el(${operationXmlName.dq()})${inputShape.xmlNamespace().apply()};
+                        let mut root = writer.start_el(${operationXmlName.dq()})${inputShape.xmlNamespace(root = true).apply()};
                         """,
                         *codegenScope
                     )
@@ -156,7 +157,7 @@ class XmlBindingTraitSerializerGenerator(
                         let mut writer = #{XmlWriter}::new(&mut out);
                         ##[allow(unused_mut)]
                         let mut root = writer.start_el(${xmlIndex.payloadShapeName(member).dq()})${
-                        target.xmlNamespace().apply()
+                        target.xmlNamespace(root = true).apply()
                         };
                         """,
                         *codegenScope
@@ -255,7 +256,7 @@ class XmlBindingTraitSerializerGenerator(
     private fun RustWriter.serializeMember(memberShape: MemberShape, ctx: Ctx.Scope, rootNameOverride: String? = null) {
         val target = model.expectShape(memberShape.target)
         val xmlName = rootNameOverride ?: xmlIndex.memberName(memberShape)
-        val ns = memberShape.xmlNamespace().apply()
+        val ns = memberShape.xmlNamespace(root = false).apply()
         handleOptional(memberShape, ctx) { ctx ->
             when (target) {
                 is StringShape, is BooleanShape, is NumberShape, is TimestampShape, is BlobShape -> {
@@ -411,7 +412,7 @@ class XmlBindingTraitSerializerGenerator(
     private fun OperationShape.operationXmlMembers(): XmlMemberIndex =
         XmlMemberIndex.fromMembers(httpBindingResolver.requestMembers(this, HttpLocation.DOCUMENT))
 
-    private fun Shape.xmlNamespace(): XmlNamespaceTrait? {
-        return this.getTrait() ?: rootNamespace
+    private fun Shape.xmlNamespace(root: Boolean): XmlNamespaceTrait? {
+        return this.getTrait<XmlNamespaceTrait>().letIf(root) { it ?: rootNamespace }
     }
 }
