@@ -10,6 +10,7 @@ vNext (Month Day, Year)
   - `SdkError` now includes a variant `TimeoutError` for when a request times out  (smithy-rs#885)
 - Improve docs on `aws-smithy-client` (smithy-rs#855)
 - Fix http-body dependency version (smithy-rs#883, aws-sdk-rust#305)
+- [Added a new example showing how to set all currently supported timeouts](./sdk/examples/setting_timeouts/src/main.rs)
 
 **Breaking changes**
 
