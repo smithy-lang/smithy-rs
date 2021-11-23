@@ -145,9 +145,15 @@ fn expand_home(path: impl AsRef<Path>, home_dir: &Option<String>) -> PathBuf {
                     dir.clone()
                 }
                 None => {
-                    tracing::warn!(
-                        "could not determine home directory but home expansion was requested"
-                    );
+                    // Lambdas don't have home directories and emitting this warning is not helpful
+                    // to users running the SDK from within a Lambda. This warning will be silenced
+                    // if we determine that that is the case.
+                    let is_likely_running_on_a_lambda = check_is_likely_running_on_a_lambda();
+                    if !is_likely_running_on_a_lambda {
+                        tracing::warn!(
+                            "could not determine home directory but home expansion was requested"
+                        );
+                    }
                     // if we can't determine the home directory, just leave it as `~`
                     "~".into()
                 }
@@ -165,6 +171,17 @@ fn expand_home(path: impl AsRef<Path>, home_dir: &Option<String>) -> PathBuf {
         // platform, so in that case, the separators should already be correct.
         _other => path.into(),
     }
+}
+
+// Returns true or false based on whether or not this code is likely running inside an AWS Lambda.
+// [Lambdas set many environment variables](https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars.html#configuration-envvars-runtime)
+// that we can check.
+fn check_is_likely_running_on_a_lambda() -> bool {
+    // AWS_EXECUTION_ENV – The runtime identifier, prefixed by AWS_Lambda_—for example, AWS_Lambda_java8.
+    std::env::var("AWS_EXECUTION_ENV")
+        .ok()
+        .map(|value| value.starts_with("AWS_Lambda_"))
+        .unwrap_or_default()
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
