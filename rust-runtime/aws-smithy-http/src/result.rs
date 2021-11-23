@@ -33,11 +33,11 @@ pub struct SdkSuccess<O> {
 /// Failed SDK Result
 #[derive(Debug)]
 pub enum SdkError<E, R = operation::Response> {
-    // TODO Request failures due to a timeout currently report this error type even though
-    // they're not really a construction failure. Add a new variant for timeouts or update
-    // DispatchFailure to accept more than just ConnectorErrors
     /// The request failed during construction. It was not dispatched over the network.
     ConstructionFailure(BoxError),
+
+    /// The request failed due to a timeout. The request MAY have been sent and received.
+    TimeoutError(BoxError),
 
     /// The request failed during dispatch. An HTTP response was not received. The request MAY
     /// have been sent.
@@ -180,6 +180,7 @@ where
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             SdkError::ConstructionFailure(err) => write!(f, "failed to construct request: {}", err),
+            SdkError::TimeoutError(err) => write!(f, "request has timed out: {}", err),
             SdkError::DispatchFailure(err) => Display::fmt(&err, f),
             SdkError::ResponseError { err, .. } => Display::fmt(&err, f),
             SdkError::ServiceError { err, .. } => Display::fmt(&err, f),
@@ -193,12 +194,13 @@ where
     R: Debug,
 {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
+        use SdkError::*;
         match self {
-            SdkError::ConstructionFailure(err) | SdkError::ResponseError { err, .. } => {
+            ConstructionFailure(err) | TimeoutError(err) | ResponseError { err, .. } => {
                 Some(err.as_ref())
             }
-            SdkError::DispatchFailure(err) => Some(err),
-            SdkError::ServiceError { err, .. } => Some(err),
+            DispatchFailure(err) => Some(err),
+            ServiceError { err, .. } => Some(err),
         }
     }
 }
