@@ -1,29 +1,18 @@
 vNext (Month Day, Year)
 =======================
 
-**TODO Upon release**
+v0.0.26-alpha (November 23rd, 2021)
+===================================
+
+**TODO upon release**
 - Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
 
-**New this release**
-
-- :tada: Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request. (smithy-rs#831)
-  - `SdkError` now includes a variant `TimeoutError` for when a request times out  (smithy-rs#885)
-- Improve docs on `aws-smithy-client` (smithy-rs#855)
-- Fix http-body dependency version (smithy-rs#883, aws-sdk-rust#305)
-
-**Breaking changes**
-
+**Breaking Changes**
 - `RetryConfigBuilder::merge_with` has been renamed to `RetryConfigBuilder::take_unset_from`
 - `Credentials::from_keys` is now behind a feature flag named `hardcoded-credentials` in `aws-types`.
   It is __NOT__ secure to hardcode credentials into your application, and the credentials
   providers that come with the AWS SDK should be preferred. (smithy-rs#875, smithy-rs#317)
 - (aws-smithy-client): Extraneous `pub use SdkSuccess` removed from `aws_smithy_client::hyper_ext`. (smithy-rs#855)
-
-v0.0.26-alpha (TBD)
-===================================
-
-**Breaking Changes**
-
 - The `add_metadata` function was removed from `AwsUserAgent` in `aws-http`.
   Use `with_feature_metadata`, `with_config_metadata`, or `with_framework_metadata` now instead. (smithy-rs#865)
 - Several breaking changes around `aws_smithy_types::Instant` were introduced by smithy-rs#849:
@@ -79,6 +68,10 @@ v0.0.26-alpha (TBD)
 - Added missing features to user agent formatting, and made it possible to configure an app name for the user agent via service config. (smithy-rs#865)
 - :bug: Relaxed profile name validation to allow `@` and other characters (smithy-rs#861, aws-sdk-rust#270)
 - :bug: Fixed signing problem with S3 Control (smithy-rs#858, aws-sd-rust#291)
+- :tada: Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request. (smithy-rs#831)
+  - `SdkError` now includes a variant `TimeoutError` for when a request times out  (smithy-rs#885)
+- Improve docs on `aws-smithy-client` (smithy-rs#855)
+- Fix http-body dependency version (smithy-rs#883, aws-sdk-rust#305)
 
 **Contributions**
 
