@@ -178,16 +178,12 @@ fn expand_home(
     }
 }
 
-// Returns true or false based on whether or not this code is likely running inside an AWS Lambda.
-// [Lambdas set many environment variables](https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars.html#configuration-envvars-runtime)
-// that we can check.
+/// Returns true or false based on whether or not this code is likely running inside an AWS Lambda.
+/// [Lambdas set many environment variables](https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars.html#configuration-envvars-runtime)
+/// that we can check.
 fn check_is_likely_running_on_a_lambda(environment: &os_shim_internal::Env) -> bool {
-    // AWS_EXECUTION_ENV – The runtime identifier, prefixed by AWS_Lambda_—for example, AWS_Lambda_java8.
-    environment
-        .get("AWS_EXECUTION_ENV")
-        .ok()
-        .map(|value| value.starts_with("AWS_Lambda_"))
-        .unwrap_or_default()
+    // LAMBDA_TASK_ROOT – The path to your Lambda function code.
+    environment.get("LAMBDA_TASK_ROOT").is_ok()
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -305,7 +301,7 @@ mod tests {
     #[traced_test]
     #[test]
     fn load_config_file_should_not_emit_warning_on_lambda() {
-        let env = Env::from_slice(&[("AWS_EXECUTION_ENV", "AWS_Lambda_rust")]);
+        let env = Env::from_slice(&[("LAMBDA_TASK_ROOT", "/")]);
         let fs = Fs::from_slice(&[]);
 
         let _src = load_config_file(FileKind::Config, &None, &fs, &env).now_or_never();
