@@ -9,9 +9,10 @@ use std::time::Duration;
 
 /// The SDK divides timeouts into two groups:
 ///
-/// - Timeouts that occur in the service stack but outside of a `Connector`, hereafter referred to
+/// - Timeouts that occur at the client level _(outside of a `Connector`)_, hereafter referred to
 ///   as "first group" timeouts
-/// - Timeouts that occur inside a `Connector`, hereafter referred to as "second group" timeouts
+/// - Timeouts that occur at the connector level _(inside a `Connector`)_, hereafter referred to
+///   as "second group" timeouts
 ///
 /// In the future, all timeouts will be set in the same way. In the present, these two groups of
 /// timeouts must be set separately. This app provides an example of how to set both groups of
@@ -24,6 +25,9 @@ use std::time::Duration;
 /// trigger them based on your connection speeds. If you want to ensure a timeout gets triggered
 /// so you can see what the resulting error looks like, change the durations from
 /// `Duration::from_secs(2)` to `Duration::from_millis(2)`.
+///
+/// You could _also_ trigger the timeouts by replacing the HTTPS connector _(`conns::https()`)_
+/// with a `NeverConnector`. That's how we manually trigger timeouts when writing tests.
 #[tokio::main]
 async fn main() -> Result<(), aws_sdk_s3::Error> {
     tracing_subscriber::fmt::init();
