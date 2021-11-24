@@ -43,33 +43,6 @@ use std::ops::Deref;
 ///
 /// This is commonly used to share state across handlers.
 ///
-/// # Example
-///
-/// ```rust,no_run
-/// use axum::AddExtensionLayer;
-/// use aws_smithy_http_server::{Extension, Router};
-/// use std::sync::Arc;
-///
-/// // Some shared state used throughout our application
-/// struct State {
-///     // ...
-/// }
-///
-/// async fn handler(state: Extension<Arc<State>>) {
-///     // ...
-/// }
-///
-/// let state = Arc::new(State { /* ... */ });
-///
-/// let app = Router::new().route("/", get(handler))
-///     // Add middleware that inserts the state into all incoming request's
-///     // extensions.
-///     .layer(AddExtensionLayer::new(state));
-/// # async {
-/// # axum::Server::bind(&"".parse().unwrap()).serve(app.into_make_service()).await.unwrap();
-/// # };
-/// ```
-///
 /// If the extension is missing it will reject the request with a `500 Internal
 /// Server Error` response.
 #[derive(Debug, Clone, Copy)]
