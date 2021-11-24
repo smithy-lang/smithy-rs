@@ -24,7 +24,8 @@ data class CodegenTest(val service: String, val module: String, val extraConfig:
 
 val CodegenTests = listOf(
     CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
-    CodegenTest("com.amazonaws.ebs#Ebs", "ebs")
+    CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
+    CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json")
 )
 
 /**

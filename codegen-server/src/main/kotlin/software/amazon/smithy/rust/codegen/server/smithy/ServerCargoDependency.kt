@@ -17,4 +17,5 @@ object ServerCargoDependency {
     val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3"))
     val PinProject: CargoDependency = CargoDependency("pin-project", CratesIo("1"))
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
+    val PrettyAssertions: CargoDependency = CargoDependency("pretty_assertions", CratesIo("1"))
 }

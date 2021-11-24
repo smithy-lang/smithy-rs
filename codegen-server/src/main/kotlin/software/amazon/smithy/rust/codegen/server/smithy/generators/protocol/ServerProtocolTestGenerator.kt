@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
@@ -53,9 +54,11 @@ class ServerProtocolTestGenerator(
 ) {
     private val logger = Logger.getLogger(javaClass.name)
 
+    private val model = codegenContext.model
     private val inputShape = operationShape.inputShape(codegenContext.model)
     private val outputShape = operationShape.outputShape(codegenContext.model)
-    private val operationSymbol = codegenContext.symbolProvider.toSymbol(operationShape)
+    private val symbolProvider = codegenContext.symbolProvider
+    private val operationSymbol = symbolProvider.toSymbol(operationShape)
     private val operationIndex = OperationIndex.of(codegenContext.model)
     private val instantiator = with(codegenContext) {
         Instantiator(symbolProvider, model, runtimeConfig)
@@ -178,21 +181,25 @@ class ServerProtocolTestGenerator(
         writeInline("let expected =")
         instantiator.render(this, inputShape, httpRequestTestCase.params)
         write(";")
-        with(httpRequestTestCase) {
-            host.orNull()?.also { host ->
-                val withScheme = "http://$host"
-                rustTemplate(
-                    """
-                    let mut http_request = http_request;
-                    let ep = #{SmithyHttp}::endpoint::Endpoint::mutable(#{Http}::Uri::from_static(${withScheme.dq()}));
-                    ep.set_endpoint(http_request.uri_mut(), parts.acquire().get());
-                    """,
-                    *codegenScope,
-                )
+        httpRequestTestCase.body.orNull()?.also { body ->
+            rustTemplate(
+                """
+                let http_request = http::Request::builder()
+                    .uri(${httpRequestTestCase.uri.dq()})
+                    .body(#{SmithyHttpServer}::Body::from(#{Bytes}::from_static(b${body.dq()}))).unwrap();
+                """,
+                *codegenScope
+            )
+            if (!httpRequestTestCase.bodyMediaType.isEmpty()) {
+                rust("""http_request.headers_mut().insert("Content-Type", http::header::HeaderValue::from_static(${httpRequestTestCase.bodyMediaType.get().dq()}));""")
             }
-            resolvedHost.orNull()?.also { host ->
-                rust("""assert_eq!(http_request.uri().host().expect("host should be set"), ${host.dq()});""")
-            }
+        }
+        if (!httpRequestTestCase.queryParams.isEmpty()) {
+            val queryParams = httpRequestTestCase.queryParams.joinToString(separator = "&")
+            rust("""*http_request.uri_mut() = "${httpRequestTestCase.uri}?$queryParams".parse().unwrap();""")
+        }
+        httpRequestTestCase.host.orNull()?.also {
+            rust("// TODO: support endpoint trait")
         }
         checkQueryParams(this, httpRequestTestCase.queryParams)
         checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
@@ -242,14 +249,19 @@ class ServerProtocolTestGenerator(
         writeInline("let output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        val operationName = if (expectedShape.hasTrait<ErrorTrait>()) {
-            "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_ERROR_WRAPPER_SUFFIX}"
+        val operationImpl = if (operationShape.errors.isNotEmpty()) {
+            if (expectedShape.hasTrait<ErrorTrait>()) {
+                val symbol = symbolProvider.toSymbol(expectedShape).name
+                "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}::Error(crate::error::${operationSymbol.name}Error::$symbol(output))"
+            } else {
+                "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}::Output(output)"
+            }
         } else {
-            "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
+            "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}(output)"
         }
         rustTemplate(
             """
-            let output = super::$operationName::Output(output);
+            let output = super::$operationImpl;
             use #{Axum}::response::IntoResponse;
             let http_response = output.into_response();
             """,
@@ -263,11 +275,11 @@ class ServerProtocolTestGenerator(
             );
             """
         )
-        if (testCase.body != null) {
+        if (!testCase.body.isEmpty()) {
             rustTemplate(
                 """
                 let body = #{Hyper}::body::to_bytes(http_response.into_body()).await.expect("unable to extract body to bytes");
-                assert_eq!("${testCase.body.get().replace("\"", "\\\"")}", body);
+                assert_eq!(${testCase.body.get().dq().replace("#", "##")}, body);
                 """,
                 *codegenScope
             )
@@ -286,11 +298,6 @@ class ServerProtocolTestGenerator(
         val operationName = "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         rustWriter.rustTemplate(
             """
-            let http_request = http::Request::builder()
-                .uri(${testCase.uri.dq()})
-                .header("Content-Type", ${testCase.bodyMediaType.orNull()?.dq()})
-                .body(#{SmithyHttpServer}::Body::from(#{Bytes}::from_static(b${body.dq()})))
-                .unwrap();
             use #{Axum}::extract::FromRequest;
             let mut http_request = #{Axum}::extract::RequestParts::new(http_request);
             let input_wrapper = super::$operationName::from_request(&mut http_request).await.expect("failed to parse request");
@@ -298,11 +305,13 @@ class ServerProtocolTestGenerator(
             """,
             *codegenScope,
         )
-        if (body == "") {
-            rustWriter.write("// No body")
-            rustWriter.write("assert_eq!(std::str::from_utf8(input).expect(\"`body` does not contain valid UTF-8\"), ${"".dq()});")
+        if (operationShape.outputShape(model).hasStreamingMember(model)) {
+            rustWriter.rust(
+                """// TODO: add support for streaming types
+            assert!(false);"""
+            )
         } else {
-            rustWriter.write("assert_eq!(input, expected);")
+            rustWriter.rust("assert_eq!(input, expected);")
         }
     }
 

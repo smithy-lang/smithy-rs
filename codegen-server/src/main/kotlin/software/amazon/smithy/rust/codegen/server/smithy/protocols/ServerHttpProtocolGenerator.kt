@@ -462,9 +462,9 @@ private class ServerHttpProtocolImplGenerator(
                 rustTemplate(
                     """
                     let status = output.$memberName
-                        .ok_or(#{Error}::generic(${(memberName + " missing or empty").dq()}))?;
-                    let http_status: u16 = #{Convert}::TryFrom::<i32>::try_from(status)
-                        .map_err(|_| #{Error}::generic(${("invalid status code").dq()}))?;
+                        .ok_or(#{SmithyHttpServer}::rejection::Serialize::from(${(memberName + " missing or empty").dq()}))?;
+                    let http_status: u16 = std::convert::TryFrom::<i32>::try_from(status)
+                        .map_err(|_| #{SmithyHttpServer}::rejection::Serialize::from(${("invalid status code").dq()}))?;
                     """.trimIndent(),
                     *codegenScope,
                 )
