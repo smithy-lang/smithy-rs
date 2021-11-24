@@ -411,7 +411,7 @@ class FluentClientGenerator(
                 /// [SigV4-signed requests], the middleware looks like this:
                 ///
                 // Ignored as otherwise we'd need to pull in all these dev-dependencies.
-                /// ```rust,ignore
+                /// ```ignore
                 /// use aws_endpoint::AwsEndpointStage;
                 /// use aws_http::user_agent::UserAgentStage;
                 /// use aws_sig_auth::middleware::SigV4SigningStage;
@@ -434,7 +434,7 @@ class FluentClientGenerator(
                 ///         let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new())); _signer: MapRequestLaye
                 ///         let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage); _endpoint_resolver: MapRequestLayer<Aw
                 ///         let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new()); _user_agent: MapRequestLayer<UserAgentSt
-                ///         // These layers can be considered as occuring in order, that is:
+                ///         // These layers can be considered as occurring in order, that is:
                 ///         // 1. Resolve an endpoint
                 ///         // 2. Add a user agent
                 ///         // 3. Sign
