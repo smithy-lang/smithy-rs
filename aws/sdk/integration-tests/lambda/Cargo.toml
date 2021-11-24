@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
 edition = "2018"
 
-[dependencies]
+[dev-dependencies]
 async-stream = "0.3"
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
 aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper"}
@@ -14,8 +14,8 @@ bytes = "1"
 futures-core = "0.3"
 http = "0.2.3"
 serde_json = "1"
-smithy-client = { path = "../../build/aws-sdk/sdk/smithy-client", features = ["test-util"] }
-smithy-eventstream = { path = "../../build/aws-sdk/sdk/smithy-eventstream" }
-smithy-http = { path = "../../build/aws-sdk/sdk/smithy-http" }
-tokio  = { version = "1", features = ["full"]}
+aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"] }
+aws-smithy-eventstream = { path = "../../build/aws-sdk/sdk/aws-smithy-eventstream" }
+aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
+tokio = { version = "1", features = ["full", "test-util"]}
 tracing-subscriber = "0.2.18"

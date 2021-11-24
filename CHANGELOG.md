@@ -1,8 +1,17 @@
 vNext (Month Day, Year)
 =======================
 
-**TODO Next Release:**
-- Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
+**New this release**
+- Improve docs on `aws-smithy-client` (smithy-rs#855)
+- Fix http-body dependency version (smithy-rs#883, aws-sdk-rust#305)
+- `SdkError` now includes a variant `TimeoutError` for when a request times out (smithy-rs#885)
+
+**Breaking Changes**
+- (aws-smithy-client): Extraneous `pub use SdkSuccess` removed from `aws_smithy_client::hyper_ext`. (smithy-rs#855)
+
+**New this week**
+
+- Timeouts for requests are now configurable. You can set separate timeouts for each individual request attempt and all attempts made for a request. (smithy-rs#831)
 
 v0.29.0-alpha (November 11th, 2021)
 ===================================
@@ -10,7 +19,7 @@ v0.29.0-alpha (November 11th, 2021)
 **Breaking Changes**
 
 Several breaking changes around `aws_smithy_types::Instant` were introduced by smithy-rs#849:
-- `aws_smithy_types::Instant` from was renamed to `DateTime` to avoid confusion with the standard library's monotonically nondecreasing `Instant` type.
+- `aws_smithy_types::Instant` from was renamed to `DateTime` to avoid confusion with the standard library's monotonically non-decreasing `Instant` type.
 - `DateParseError` in `aws_smithy_types` has been renamed to `DateTimeParseError` to match the type that's being parsed.
 - The `chrono-conversions` feature and associated functions have been moved to the `aws-smithy-types-convert` crate.
   - Calls to `Instant::from_chrono` should be changed to:

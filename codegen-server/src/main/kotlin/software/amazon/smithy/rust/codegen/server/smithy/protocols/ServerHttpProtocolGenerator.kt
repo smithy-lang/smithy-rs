@@ -138,14 +138,13 @@ private class ServerHttpProtocolImplGenerator(
         } else {
             """
             async fn from_request(req: &mut #{Axum}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
-                #{SmithyHttpServer}::protocols::check_json_content_type(req)?;
                 Ok($inputName(#{parse_request}(req).await?))
             }
             """.trimIndent()
         }
         rustTemplate(
             """
-            pub(crate) struct $inputName(#{I});
+            pub struct $inputName(pub #{I});
             ##[#{Axum}::async_trait]
             impl<B> #{Axum}::extract::FromRequest<B> for $inputName
             where
@@ -194,7 +193,7 @@ private class ServerHttpProtocolImplGenerator(
             // that can in turn be converted into a response.
             rustTemplate(
                 """
-                pub(crate) enum $outputName {
+                pub enum $outputName {
                     Output(#{O}),
                     Error(#{E})
                 }
@@ -228,7 +227,7 @@ private class ServerHttpProtocolImplGenerator(
             // we control that can in turn be converted into a response.
             rustTemplate(
                 """
-                pub(crate) struct $outputName(#{O});
+                pub struct $outputName(pub #{O});
                 ##[#{Axum}::async_trait]
                 impl #{Axum}::response::IntoResponse for $outputName {
                     type Body = #{SmithyHttpServer}::Body;
@@ -481,7 +480,10 @@ private class ServerHttpProtocolImplGenerator(
                 """
                 let body = request.take_body().ok_or(#{SmithyHttpServer}::rejection::BodyAlreadyExtracted)?;
                 let bytes = #{Hyper}::body::to_bytes(body).await?;
-                input = #{parser}(bytes.as_ref(), input)?;
+                if !bytes.is_empty() {
+                    #{SmithyHttpServer}::protocols::check_json_content_type(request)?;
+                    input = #{parser}(bytes.as_ref(), input)?;
+                }
                 """,
                 *codegenScope,
                 "parser" to parser,

@@ -148,8 +148,7 @@ class FluentClientGenerator(
     private val model = codegenContext.model
     private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig).copy(optional = true)
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val moduleName = codegenContext.moduleName
-    private val moduleUseName = moduleName.replace("-", "_")
+    private val moduleUseName = codegenContext.moduleUseName()
     private val humanName = serviceShape.id.name
     private val core = FluentClientCore(model)
 

@@ -4,6 +4,24 @@ vNext (Month Day, Year)
 **TODO Upon release**
 - Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
 
+**New this release**
+
+- :tada: Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request. (smithy-rs#831)
+  - `SdkError` now includes a variant `TimeoutError` for when a request times out  (smithy-rs#885)
+- Improve docs on `aws-smithy-client` (smithy-rs#855)
+- Fix http-body dependency version (smithy-rs#883, aws-sdk-rust#305)
+
+**Breaking changes**
+
+- `RetryConfigBuilder::merge_with` has been renamed to `RetryConfigBuilder::take_unset_from`
+- `Credentials::from_keys` is now behind a feature flag named `hardcoded-credentials` in `aws-types`.
+  It is __NOT__ secure to hardcode credentials into your application, and the credentials
+  providers that come with the AWS SDK should be preferred. (smithy-rs#875, smithy-rs#317)
+- (aws-smithy-client): Extraneous `pub use SdkSuccess` removed from `aws_smithy_client::hyper_ext`. (smithy-rs#855)
+
+v0.0.26-alpha (TBD)
+===================================
+
 **Breaking Changes**
 
 - The `add_metadata` function was removed from `AwsUserAgent` in `aws-http`.

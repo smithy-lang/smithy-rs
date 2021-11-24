@@ -16,6 +16,7 @@ pub mod app_name;
 pub mod credentials;
 pub mod region;
 pub mod retry_config;
+pub mod timeout_config;
 
 #[doc(inline)]
 pub use credentials::ProfileFileCredentialsProvider;

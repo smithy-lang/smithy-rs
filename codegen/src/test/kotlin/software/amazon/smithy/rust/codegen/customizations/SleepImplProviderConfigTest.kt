@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust
+package software.amazon.smithy.rust.codegen.customizations
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.smithy.RetryConfigProviderConfig
+import software.amazon.smithy.rust.codegen.smithy.customizations.SleepImplProviderConfig
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.testutil.rustSettings
 import software.amazon.smithy.rust.codegen.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.testutil.validateConfigCustomizations
 
-internal class RetryConfigProviderConfigTest {
+internal class SleepImplProviderConfigTest {
     private val baseModel = """
         namespace test
         use aws.protocols#awsQuery
@@ -38,6 +38,6 @@ internal class RetryConfigProviderConfigTest {
         val project = TestWorkspace.testProject()
         val codegenContext = testCodegenContext(model, settings = project.rustSettings(model))
 
-        validateConfigCustomizations(RetryConfigProviderConfig(codegenContext), project)
+        validateConfigCustomizations(SleepImplProviderConfig(codegenContext), project)
     }
 }

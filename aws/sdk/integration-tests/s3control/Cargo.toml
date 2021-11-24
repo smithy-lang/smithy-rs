@@ -1,22 +1,20 @@
 # This Cargo.toml is unused in generated code. It exists solely to enable these tests to compile in-situ
 [package]
-name = "s3control-tests"
+name = "s3control"
 version = "0.1.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
-aws-sdk-s3control = { path = "../../build/aws-sdk/sdk/s3control" }
-aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"] }
-aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
-tracing-subscriber = "0.2.18"
-
 [dev-dependencies]
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
 aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper"}
+aws-sdk-s3control = { path = "../../build/aws-sdk/sdk/s3control" }
+aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"] }
+aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
 bytes = "1"
 http = "0.2.3"
 serde_json = "1"
-tokio  = { version = "1", features = ["full"]}
+tokio = { version = "1", features = ["full", "test-util"]}
+tracing-subscriber = "0.2.18"

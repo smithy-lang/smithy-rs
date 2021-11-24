@@ -10,6 +10,7 @@ import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
+import java.nio.file.Path
 
 sealed class DependencyScope {
     object Dev : DependencyScope()
@@ -150,8 +151,8 @@ data class CargoDependency(
             when (this) {
                 is CratesIo -> attribs["version"] = version
                 is Local -> {
-                    val fullPath = "$basePath/$name"
-                    attribs["path"] = fullPath
+                    val fullPath = Path.of("$basePath/$name")
+                    attribs["path"] = fullPath.normalize().toString()
                     version?.also { attribs["version"] = version }
                 }
             }
@@ -193,7 +194,7 @@ data class CargoDependency(
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.1"))
         val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("1"))
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
-        val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4"))
+        val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2"))
         val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14"))
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
