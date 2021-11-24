@@ -104,7 +104,7 @@ class RetryConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomiz
                     /// Set the retry_config for the builder
                     ///
                     /// ## Examples
-                    /// ```rust
+                    /// ```no_run
                     /// use $moduleUseName::config::Config;
                     /// use #{RetryConfig};
                     ///
@@ -119,7 +119,7 @@ class RetryConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomiz
                     /// Set the retry_config for the builder
                     ///
                     /// ## Examples
-                    /// ```rust
+                    /// ```no_run
                     /// use $moduleUseName::config::{Builder, Config};
                     /// use #{RetryConfig};
                     ///
