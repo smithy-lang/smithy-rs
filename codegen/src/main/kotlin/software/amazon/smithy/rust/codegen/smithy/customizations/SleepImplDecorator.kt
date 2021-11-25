@@ -95,7 +95,8 @@ class SleepImplProviderConfig(codegenContext: CodegenContext) : ConfigCustomizat
                     /// Set the sleep_impl for the builder
                     ///
                     /// ## Examples
-                    /// ```rust
+                    ///
+                    /// ```no_run
                     /// use $moduleUseName::config::Config;
                     /// use #{AsyncSleep};
                     /// use #{Sleep};
@@ -120,7 +121,8 @@ class SleepImplProviderConfig(codegenContext: CodegenContext) : ConfigCustomizat
                     /// Set the sleep_impl for the builder
                     ///
                     /// ## Examples
-                    /// ```rust
+                    ///
+                    /// ```no_run
                     /// use $moduleUseName::config::{Builder, Config};
                     /// use #{AsyncSleep};
                     /// use #{Sleep};

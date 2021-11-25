@@ -7,7 +7,9 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -20,6 +22,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
+import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -39,19 +42,23 @@ class ServerOperationRegistryGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
+        "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "Phantom" to ServerRuntimeType.Phantom,
+        "Display" to RuntimeType.Display,
+        "StdError" to RuntimeType.StdError
     )
     private val httpBindingResolver: HttpBindingResolver =
         HttpTraitHttpBindingResolver(codegenContext.model, ProtocolContentTypes.consistent("application/json"))
 
     fun render(writer: RustWriter) {
-        Attribute.Derives(setOf(RuntimeType.Debug, ServerRuntimeType.DeriveBuilder)).render(writer)
-        Attribute.Custom("builder(pattern = \"owned\")").render(writer)
-        // Generic arguments of the `OperationRegistryBuilder<Fun0, Fut0, ..., FunN, FutN>`.
+        // Registry
+        Attribute.Derives(setOf(RuntimeType.Debug)).render(writer)
         val operationsGenericArguments = operations.mapIndexed { i, _ -> "Fun$i, Fut$i" }.joinToString()
-        val operationRegistryName = "${service.getContextualName(service)}OperationRegistry<$operationsGenericArguments>"
+        val operationRegistryName = "${service.getContextualName(service)}OperationRegistry"
+        val operationRegistryNameWithArguments = "$operationRegistryName<$operationsGenericArguments>"
         writer.rustBlock(
             """
-            pub struct $operationRegistryName
+            pub struct $operationRegistryNameWithArguments
             where
                 ${operationsTraitBounds()}
             """.trimIndent()
@@ -61,16 +68,102 @@ class ServerOperationRegistryGenerator(
                 .joinToString(separator = ",\n")
             rust(members)
         }
-
+        // Builder error
+        val operationRegistryBuilderName = "${operationRegistryName}Builder"
+        val operationRegistryBuilderNameWithArguments = "$operationRegistryBuilderName<$operationsGenericArguments>"
+        Attribute.Derives(setOf(RuntimeType.Debug)).render(writer)
+        writer.rustTemplate(
+            """
+            pub enum ${operationRegistryBuilderName}Error {
+                UninitializedField(&'static str)
+            }
+            impl #{Display} for ${operationRegistryBuilderName}Error {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    match self {
+                        Self::UninitializedField(v) => write!(f, "{}", v),
+                    }
+                }
+            }
+            impl #{StdError} for ${operationRegistryBuilderName}Error {}
+            """.trimIndent(),
+            *codegenScope
+        )
+        // Builder
+        writer.rustBlock(
+            """
+            pub struct $operationRegistryBuilderNameWithArguments
+            where
+                ${operationsTraitBounds()}
+            """.trimIndent()
+        ) {
+            val members = operationNames
+                .mapIndexed { i, operationName -> "$operationName: Option<Fun$i>" }
+                .joinToString(separator = ",\n")
+            rust(members)
+        }
+        // Builder default
         writer.rustBlockTemplate(
             """
-            impl<$operationsGenericArguments> From<$operationRegistryName> for #{Router}
+            impl<$operationsGenericArguments> Default for $operationRegistryBuilderNameWithArguments
+            where
+                ${operationsTraitBounds()}
+            """.trimIndent()
+        ) {
+            val defaultOperations = operationNames.map { operationName ->
+                "$operationName: Default::default()"
+            }.joinToString(separator = "\n,")
+            rustTemplate(
+                """
+                fn default() -> Self {
+                    Self { $defaultOperations }
+                }
+                """.trimIndent()
+            )
+        }
+        // Builder impl
+        writer.rustBlockTemplate(
+            """
+            impl<$operationsGenericArguments> $operationRegistryBuilderNameWithArguments
             where
                 ${operationsTraitBounds()}
             """.trimIndent(),
             *codegenScope
         ) {
-            rustBlock("fn from(registry: $operationRegistryName) -> Self") {
+            val registerOperations = operationNames.mapIndexed { i, operationName ->
+                """pub fn $operationName(self, value: Fun$i) -> Self {
+                let mut new = self;
+                new.$operationName = Some(value);
+                new
+                }"""
+            }.joinToString(separator = "\n")
+            val registerOperationsBuilder = operationNames.map { operationName ->
+                """
+                $operationName: match self.$operationName {
+                    Some(v) => v,
+                    None => return Err(${operationRegistryBuilderName}Error::UninitializedField(${operationName.dq()})),
+                }
+                """
+            }.joinToString(separator = "\n,")
+            rustTemplate(
+                """
+                $registerOperations
+                pub fn build(self) -> Result<$operationRegistryNameWithArguments, ${operationRegistryBuilderName}Error> {
+                    Ok($operationRegistryName { $registerOperationsBuilder })
+                }
+                """.trimIndent(),
+                *codegenScope
+            )
+        }
+
+        writer.rustBlockTemplate(
+            """
+            impl<$operationsGenericArguments> From<$operationRegistryNameWithArguments> for #{Router}
+            where
+                ${operationsTraitBounds()}
+            """.trimIndent(),
+            *codegenScope
+        ) {
+            rustBlock("fn from(registry: $operationRegistryNameWithArguments) -> Self") {
                 val operationInOutWrappers = operations.map {
                     val operationName = symbolProvider.toSymbol(it).name
                     Pair(
