@@ -1,4 +1,4 @@
-use crate::{body::BoxBody, handler::Handler};
+use crate::{body::BoxBody, handler::HandlerMarker};
 use futures_util::{
     future::{BoxFuture, Map},
     FutureExt,
@@ -13,13 +13,13 @@ use tower::Service;
 
 /// Struct that holds a handler, that is, a function provided by the user that implements the
 /// Smithy operation.
-pub struct OperationHandler<H, B, T, I, Res> {
+pub struct OperationHandler<H, B, R, I> {
     handler: H,
     #[allow(clippy::type_complexity)]
-    _marker: PhantomData<fn() -> (B, T, I, Res)>,
+    _marker: PhantomData<fn() -> (B, R, I)>,
 }
 
-impl<H, B, T, I, Res> Clone for OperationHandler<H, B, T, I, Res>
+impl<H, B, R, I> Clone for OperationHandler<H, B, R, I>
 where
     H: Clone,
 {
@@ -29,13 +29,13 @@ where
 }
 
 /// Construct an [`OperationHandler`] out of a function implementing the operation.
-pub fn operation<H, B, T, I, Res>(handler: H) -> OperationHandler<H, B, T, I, Res> {
+pub fn operation<H, B, R, I>(handler: H) -> OperationHandler<H, B, R, I> {
     OperationHandler { handler, _marker: PhantomData }
 }
 
-impl<H, B, T, I, Res> Service<Request<B>> for OperationHandler<H, B, T, I, Res>
+impl<H, B, R, I> Service<Request<B>> for OperationHandler<H, B, R, I>
 where
-    H: Handler<B, T, I, Res>,
+    H: HandlerMarker<B, R, I>,
     B: Send + 'static,
 {
     type Response = Response<BoxBody>;
@@ -48,7 +48,7 @@ where
     }
 
     fn call(&mut self, req: Request<B>) -> Self::Future {
-        let future = Handler::call(self.handler.clone(), req).map(Ok::<_, Infallible> as _);
+        let future = HandlerMarker::call(self.handler.clone(), req).map(Ok::<_, Infallible> as _);
         OperationHandlerFuture::new(future)
     }
 }

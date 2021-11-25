@@ -34,7 +34,7 @@
 
 //! Extension extraction to share state across handlers.
 
-use super::rejection::*;
+use super::rejection::{ExtensionRejection, ExtensionsAlreadyExtracted, MissingExtension};
 use async_trait::async_trait;
 use axum::extract::{FromRequest, RequestParts};
 use std::ops::Deref;

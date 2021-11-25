@@ -29,8 +29,11 @@ pub use self::body::{Body, BoxBody, HttpBody};
 pub use self::error::Error;
 #[doc(inline)]
 pub use self::extension::Extension;
+pub use self::handler::HandlerMarker;
 #[doc(inline)]
 pub use self::routing::Router;
+#[doc(inline)]
+pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 /// Alias for a type-erased error type.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;

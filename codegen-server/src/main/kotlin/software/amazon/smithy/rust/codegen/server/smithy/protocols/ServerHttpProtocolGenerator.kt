@@ -39,7 +39,13 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescripto
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.util.*
+import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.expectTrait
+import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.outputShape
+import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import java.util.logging.Logger
 
 /*
@@ -155,7 +161,8 @@ private class ServerHttpProtocolImplGenerator(
             {
                 type Rejection = #{SmithyRejection};
                 $fromRequest
-            }""".trimIndent(),
+            }
+            """.trimIndent(),
             *codegenScope,
             "I" to inputSymbol,
             "parse_request" to serverParseRequest(operationShape)
@@ -205,7 +212,8 @@ private class ServerHttpProtocolImplGenerator(
                     fn into_response(self) -> #{http}::Response<Self::Body> {
                         $intoResponseImpl
                     }
-                }""".trimIndent(),
+                }
+                """.trimIndent(),
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,
@@ -236,7 +244,8 @@ private class ServerHttpProtocolImplGenerator(
                     fn into_response(self) -> #{http}::Response<Self::Body> {
                         $handleSerializeOutput
                     }
-                }""".trimIndent(),
+                }
+                """.trimIndent(),
                 *codegenScope,
                 "O" to outputSymbol,
                 "serialize_response" to serverSerializeResponse(operationShape)

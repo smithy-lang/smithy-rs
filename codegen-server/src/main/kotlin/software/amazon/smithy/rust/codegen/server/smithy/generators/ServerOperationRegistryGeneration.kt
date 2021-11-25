@@ -6,7 +6,12 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.*
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.rust
+import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
@@ -22,7 +27,7 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 /**
  * OperationRegistryGenerator
  */
-class OperationRegistryGenerator(
+class ServerOperationRegistryGenerator(
     codegenContext: CodegenContext,
     private val operations: List<OperationShape>,
 ) {
@@ -42,29 +47,36 @@ class OperationRegistryGenerator(
         Attribute.Derives(setOf(RuntimeType.Debug, ServerRuntimeType.DeriveBuilder)).render(writer)
         Attribute.Custom("builder(pattern = \"owned\")").render(writer)
         // Generic arguments of the `OperationRegistryBuilder<Fun0, Fut0, ..., FunN, FutN>`.
-        val operationsGenericArguments = operations.mapIndexed { i, _ -> "Fun$i, Fut$i"}.joinToString()
-        val operationRegistryName = "${service.getContextualName(service)}OperationRegistry<${operationsGenericArguments}>"
-        writer.rustBlock("""
+        val operationsGenericArguments = operations.mapIndexed { i, _ -> "Fun$i, Fut$i" }.joinToString()
+        val operationRegistryName = "${service.getContextualName(service)}OperationRegistry<$operationsGenericArguments>"
+        writer.rustBlock(
+            """
             pub struct $operationRegistryName
             where
                 ${operationsTraitBounds()}
-            """.trimIndent()) {
+            """.trimIndent()
+        ) {
             val members = operationNames
                 .mapIndexed { i, operationName -> "$operationName: Fun$i" }
                 .joinToString(separator = ",\n")
             rust(members)
         }
 
-        writer.rustBlockTemplate("""
-            impl<${operationsGenericArguments}> From<$operationRegistryName> for #{Router}
+        writer.rustBlockTemplate(
+            """
+            impl<$operationsGenericArguments> From<$operationRegistryName> for #{Router}
             where
                 ${operationsTraitBounds()}
-            """.trimIndent(), *codegenScope) {
-            rustBlock("fn from(registry: ${operationRegistryName}) -> Self") {
+            """.trimIndent(),
+            *codegenScope
+        ) {
+            rustBlock("fn from(registry: $operationRegistryName) -> Self") {
                 val operationInOutWrappers = operations.map {
                     val operationName = symbolProvider.toSymbol(it).name
-                    Pair("crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}",
-                    "crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}")
+                    Pair(
+                        "crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}",
+                        "crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
+                    )
                 }
                 val requestSpecsVarNames = operationNames.map { "${it}_request_spec" }
                 val routes = requestSpecsVarNames.zip(operationNames).zip(operationInOutWrappers) { (requestSpecVarName, operationName), (inputWrapper, outputWrapper) ->
@@ -74,11 +86,14 @@ class OperationRegistryGenerator(
                 val requestSpecs = requestSpecsVarNames.zip(operations) { requestSpecVarName, operation ->
                     "let $requestSpecVarName = ${operation.requestSpec()};"
                 }.joinToString(separator = "\n")
-                rustTemplate("""
+                rustTemplate(
+                    """
                     $requestSpecs
                     #{Router}::new()
                         $routes
-                    """.trimIndent(), *codegenScope)
+                    """.trimIndent(),
+                    *codegenScope
+                )
             }
         }
     }
@@ -124,6 +139,7 @@ class OperationRegistryGenerator(
                         query_segments: $namespace::QuerySpec::from_vector_unchecked(vec![${querySegments.joinToString()}])
                     }
                 }
-            )""".trimIndent()
+            )
+        """.trimIndent()
     }
 }
