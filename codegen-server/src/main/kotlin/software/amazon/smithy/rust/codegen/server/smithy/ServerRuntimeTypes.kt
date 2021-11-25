@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
  */
 object ServerRuntimeType {
     val DeriveBuilder = RuntimeType("Builder", dependency = ServerCargoDependency.DeriveBuilder, namespace = "derive_builder")
+    val Phantom = RuntimeType("PhantomData", dependency = null, namespace = "std::marker")
 
     fun Router(runtimeConfig: RuntimeConfig) =
         RuntimeType("Router", CargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing")
