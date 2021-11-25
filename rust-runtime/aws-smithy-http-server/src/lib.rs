@@ -12,7 +12,6 @@ pub mod body;
 mod clone_box_service;
 pub mod error;
 mod extension;
-mod handler;
 
 // Only the code-generated operation registry should instantiate routers.
 // We therefore hide it in the documentation.
@@ -29,7 +28,6 @@ pub use self::body::{Body, BoxBody, HttpBody};
 pub use self::error::Error;
 #[doc(inline)]
 pub use self::extension::Extension;
-pub use self::handler::HandlerMarker;
 #[doc(inline)]
 pub use self::routing::Router;
 #[doc(inline)]
