@@ -18,13 +18,10 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.inputShape
-import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
@@ -53,20 +50,27 @@ class ServerOperationRegistryGenerator(
     fun render(writer: RustWriter) {
         // Registry
         Attribute.Derives(setOf(RuntimeType.Debug)).render(writer)
-        val operationsGenericArguments = operations.mapIndexed { i, _ -> "Fun$i, Fut$i" }.joinToString()
+        val genericArguments = operations.mapIndexed { i, _ -> "Op$i, In$i" }.joinToString()
+        val operationsGenericArguments = "B, $genericArguments"
         val operationRegistryName = "${service.getContextualName(service)}OperationRegistry"
         val operationRegistryNameWithArguments = "$operationRegistryName<$operationsGenericArguments>"
         writer.rustBlock(
             """
             pub struct $operationRegistryNameWithArguments
-            where
-                ${operationsTraitBounds()}
             """.trimIndent()
         ) {
             val members = operationNames
-                .mapIndexed { i, operationName -> "$operationName: Fun$i" }
+                .mapIndexed { i, operationName -> "$operationName: Op$i" }
                 .joinToString(separator = ",\n")
-            rust(members)
+            val phantomMembers = operationNames
+                .mapIndexed { i, _ -> "In$i" }
+                .joinToString(separator = ",\n")
+            rust(
+                """
+                $members,
+                _phantom: std::marker::PhantomData<(B, $phantomMembers)>,
+                """
+            )
         }
         // Builder error
         val operationRegistryBuilderName = "${operationRegistryName}Builder"
@@ -92,21 +96,25 @@ class ServerOperationRegistryGenerator(
         writer.rustBlock(
             """
             pub struct $operationRegistryBuilderNameWithArguments
-            where
-                ${operationsTraitBounds()}
             """.trimIndent()
         ) {
             val members = operationNames
-                .mapIndexed { i, operationName -> "$operationName: Option<Fun$i>" }
+                .mapIndexed { i, operationName -> "$operationName: Option<Op$i>" }
                 .joinToString(separator = ",\n")
-            rust(members)
+            val phantomMembers = operationNames
+                .mapIndexed { i, _ -> "In$i" }
+                .joinToString(separator = ",\n")
+            rust(
+                """
+                $members,
+                _phantom: std::marker::PhantomData<(B, $phantomMembers)>,
+                """
+            )
         }
         // Builder default
         writer.rustBlockTemplate(
             """
             impl<$operationsGenericArguments> Default for $operationRegistryBuilderNameWithArguments
-            where
-                ${operationsTraitBounds()}
             """.trimIndent()
         ) {
             val defaultOperations = operationNames.map { operationName ->
@@ -115,7 +123,7 @@ class ServerOperationRegistryGenerator(
             rustTemplate(
                 """
                 fn default() -> Self {
-                    Self { $defaultOperations }
+                    Self { $defaultOperations, _phantom: std::marker::PhantomData }
                 }
                 """.trimIndent()
             )
@@ -124,13 +132,11 @@ class ServerOperationRegistryGenerator(
         writer.rustBlockTemplate(
             """
             impl<$operationsGenericArguments> $operationRegistryBuilderNameWithArguments
-            where
-                ${operationsTraitBounds()}
             """.trimIndent(),
             *codegenScope
         ) {
             val registerOperations = operationNames.mapIndexed { i, operationName ->
-                """pub fn $operationName(self, value: Fun$i) -> Self {
+                """pub fn $operationName(self, value: Op$i) -> Self {
                 let mut new = self;
                 new.$operationName = Some(value);
                 new
@@ -148,7 +154,7 @@ class ServerOperationRegistryGenerator(
                 """
                 $registerOperations
                 pub fn build(self) -> Result<$operationRegistryNameWithArguments, ${operationRegistryBuilderName}Error> {
-                    Ok($operationRegistryName { $registerOperationsBuilder })
+                    Ok($operationRegistryName { $registerOperationsBuilder, _phantom: std::marker::PhantomData })
                 }
                 """.trimIndent(),
                 *codegenScope
@@ -157,8 +163,9 @@ class ServerOperationRegistryGenerator(
 
         writer.rustBlockTemplate(
             """
-            impl<$operationsGenericArguments> From<$operationRegistryNameWithArguments> for #{Router}
+            impl<$operationsGenericArguments> From<$operationRegistryNameWithArguments> for #{Router}<B>
             where
+                B: Send + 'static,
                 ${operationsTraitBounds()}
             """.trimIndent(),
             *codegenScope
@@ -173,7 +180,7 @@ class ServerOperationRegistryGenerator(
                 }
                 val requestSpecsVarNames = operationNames.map { "${it}_request_spec" }
                 val routes = requestSpecsVarNames.zip(operationNames).zip(operationInOutWrappers) { (requestSpecVarName, operationName), (inputWrapper, outputWrapper) ->
-                    ".route($requestSpecVarName, $serverCrate::routing::operation_handler::operation::<_, _, $inputWrapper, _, $outputWrapper>(registry.$operationName))"
+                    ".route($requestSpecVarName, crate::operation_handler::operation(registry.$operationName))"
                 }.joinToString(separator = "\n")
 
                 val requestSpecs = requestSpecsVarNames.zip(operations) { requestSpecVarName, operation ->
@@ -193,15 +200,10 @@ class ServerOperationRegistryGenerator(
 
     private fun operationsTraitBounds(): String = operations
         .mapIndexed { i, operation ->
-            val outputType = if (operation.errors.isNotEmpty()) {
-                "Result<${symbolProvider.toSymbol(operation.outputShape(model)).fullName}, ${operation.errorSymbol(symbolProvider).fullyQualifiedName()}>"
-            } else {
-                symbolProvider.toSymbol(operation.outputShape(model)).fullName
-            }
-            """
-            Fun$i: FnOnce(${symbolProvider.toSymbol(operation.inputShape(model))}) -> Fut$i + Clone + Send + Sync + 'static,
-            Fut$i: std::future::Future<Output = $outputType> + Send
-            """.trimIndent()
+            val operationName = symbolProvider.toSymbol(operation).name
+            val inputName = "crate::input::${operationName}Input"
+            """Op$i: crate::operation_handler::Handler<B, In$i, $inputName>,
+            In$i: 'static"""
         }.joinToString(separator = ",\n")
 
     private fun OperationShape.requestSpec(): String {
