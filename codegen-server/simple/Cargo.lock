@@ -697,12 +697,15 @@ dependencies = [
  "aws-smithy-types",
  "axum",
  "bytes",
+ "futures-util",
  "http",
  "hyper",
  "lazy_static",
  "percent-encoding",
+ "pin-project",
  "regex",
  "tokio",
+ "tower",
 ]
 
 [[package]]

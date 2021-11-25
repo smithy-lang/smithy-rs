@@ -25,7 +25,7 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
- * OperationRegistryGenerator
+ * ServerOperationRegistryGenerator
  */
 class ServerOperationRegistryGenerator(
     codegenContext: CodegenContext,

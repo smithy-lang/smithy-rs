@@ -14,6 +14,9 @@ import software.amazon.smithy.rust.codegen.rustlang.CratesIo
  */
 object ServerCargoDependency {
     val Axum: CargoDependency = CargoDependency("axum", CratesIo("0.3"))
+    val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3"))
+    val PinProject: CargoDependency = CargoDependency("pin-project", CratesIo("1"))
+    val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
     // TODO Remove this dependency https://github.com/awslabs/smithy-rs/issues/864
     val DeriveBuilder = CargoDependency("derive_builder", CratesIo("0.10"))
 }

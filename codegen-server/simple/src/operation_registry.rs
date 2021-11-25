@@ -5,17 +5,82 @@ use crate::input::*;
 use crate::operation::*;
 use crate::output::*;
 use aws_smithy_http_server::body::{box_body, BoxBody};
+use aws_smithy_http_server::opaque_future;
 use aws_smithy_http_server::routing::request_spec::{
     PathAndQuerySpec, PathSegment, PathSpec, QuerySegment, QuerySpec, UriSpec,
 };
-use aws_smithy_http_server::routing::{operation_handler, request_spec::RequestSpec, Router};
+use aws_smithy_http_server::routing::{request_spec::RequestSpec, Router};
 use aws_smithy_http_server::Extension;
-use aws_smithy_http_server::HandlerMarker;
 use axum::extract::FromRequest;
 use axum::extract::RequestParts;
 use axum::response::IntoResponse;
+use futures_util::{
+    future::{BoxFuture, Map},
+    FutureExt,
+};
 use http::{Request, Response};
 use std::marker::PhantomData;
+use std::{
+    convert::Infallible,
+    task::{Context, Poll},
+};
+use tower::Service;
+
+/// Struct that holds a handler, that is, a function provided by the user that implements the
+/// Smithy operation.
+pub struct OperationHandler<H, B, R, I> {
+    handler: H,
+    #[allow(clippy::type_complexity)]
+    _marker: PhantomData<fn() -> (B, R, I)>,
+}
+
+impl<H, B, R, I> Clone for OperationHandler<H, B, R, I>
+where
+    H: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            handler: self.handler.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+/// Construct an [`OperationHandler`] out of a function implementing the operation.
+pub fn operation<H, B, R, I>(handler: H) -> OperationHandler<H, B, R, I> {
+    OperationHandler {
+        handler,
+        _marker: PhantomData,
+    }
+}
+
+impl<H, B, R, I> Service<Request<B>> for OperationHandler<H, B, R, I>
+where
+    H: Handler<B, R, I>,
+    B: Send + 'static,
+{
+    type Response = Response<BoxBody>;
+    type Error = Infallible;
+    type Future = OperationHandlerFuture;
+
+    #[inline]
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: Request<B>) -> Self::Future {
+        let future = Handler::call(self.handler.clone(), req).map(Ok::<_, Infallible> as _);
+        OperationHandlerFuture::new(future)
+    }
+}
+
+type WrapResultInResponseFn = fn(Response<BoxBody>) -> Result<Response<BoxBody>, Infallible>;
+
+opaque_future! {
+    /// Response future for [`OperationHandler`].
+    pub type OperationHandlerFuture =
+        Map<BoxFuture<'static, Response<BoxBody>>, WrapResultInResponseFn>;
+}
 
 pub(crate) mod sealed {
     #![allow(unreachable_pub, missing_docs, missing_debug_implementations)]
@@ -25,7 +90,7 @@ pub(crate) mod sealed {
 }
 
 #[axum::async_trait]
-pub trait Handler<B, I, Fut>: HandlerMarker<B, I, Fut> {
+pub trait Handler<B, T, Fut>: Clone + Send + Sized + 'static {
     #[doc(hidden)]
     type Sealed: sealed::HiddenTrait;
 
@@ -37,11 +102,7 @@ pub trait Handler<B, I, Fut>: HandlerMarker<B, I, Fut> {
 #[axum::async_trait]
 impl<B, Fun, Fut> Handler<B, (), HealthcheckInput> for Fun
 where
-    Fun: FnOnce(HealthcheckInput) -> Fut
-        + Clone
-        + Send
-        + 'static
-        + aws_smithy_http_server::HandlerMarker<B, (), crate::input::HealthcheckInput>,
+    Fun: FnOnce(HealthcheckInput) -> Fut + Clone + Send + 'static,
     Fut: Future<Output = HealthcheckOutput> + Send,
     B: Send + 'static + aws_smithy_http_server::HttpBody,
     B::Data: Send,
@@ -59,15 +120,7 @@ where
 #[axum::async_trait]
 impl<B, Fun, Fut, S> Handler<B, Extension<S>, HealthcheckInput> for Fun
 where
-    Fun: FnOnce(HealthcheckInput, Extension<S>) -> Fut
-        + Clone
-        + Send
-        + 'static
-        + aws_smithy_http_server::HandlerMarker<
-            B,
-            aws_smithy_http_server::Extension<S>,
-            crate::input::HealthcheckInput,
-        >,
+    Fun: FnOnce(HealthcheckInput, Extension<S>) -> Fut + Clone + Send + 'static,
     Fut: Future<Output = HealthcheckOutput> + Send,
     S: Send + Sync + Clone + 'static,
     B: Send + 'static + aws_smithy_http_server::HttpBody,
@@ -102,11 +155,7 @@ where
 #[axum::async_trait]
 impl<B, Fun, Fut> Handler<B, (), RegisterServiceInput> for Fun
 where
-    Fun: FnOnce(RegisterServiceInput) -> Fut
-        + Clone
-        + Send
-        + 'static
-        + aws_smithy_http_server::HandlerMarker<B, (), crate::input::RegisterServiceInput>,
+    Fun: FnOnce(RegisterServiceInput) -> Fut + Clone + Send + 'static,
     Fut: Future<Output = Result<RegisterServiceOutput, RegisterServiceError>> + Send,
     B: Send + 'static + aws_smithy_http_server::HttpBody,
     B::Data: Send,
@@ -135,15 +184,7 @@ where
 #[axum::async_trait]
 impl<B, Fun, Fut, S> Handler<B, Extension<S>, RegisterServiceInput> for Fun
 where
-    Fun: FnOnce(RegisterServiceInput, Extension<S>) -> Fut
-        + Clone
-        + Send
-        + 'static
-        + aws_smithy_http_server::HandlerMarker<
-            B,
-            aws_smithy_http_server::Extension<S>,
-            crate::input::RegisterServiceInput,
-        >,
+    Fun: FnOnce(RegisterServiceInput, Extension<S>) -> Fut + Clone + Send + 'static,
     Fut: Future<Output = RegisterServiceOutput> + Send,
     S: Send + Clone + Sync + 'static,
     B: Send + 'static + aws_smithy_http_server::HttpBody,
@@ -258,9 +299,9 @@ impl<B, Op1, In1, Op2, In2> From<SimpleServiceOperationRegistry<B, Op1, In1, Op2
     for Router<B>
 where
     B: Send + 'static,
-    Op1: HandlerMarker<B, In1, HealthcheckInput>,
+    Op1: Handler<B, In1, HealthcheckInput>,
     In1: 'static,
-    Op2: HandlerMarker<B, In2, RegisterServiceInput>,
+    Op2: Handler<B, In2, RegisterServiceInput>,
     In2: 'static,
 {
     fn from(registry: SimpleServiceOperationRegistry<B, Op1, In1, Op2, In2>) -> Self {
@@ -300,8 +341,8 @@ where
             },
         );
 
-        let op1 = operation_handler::operation(registry.health_check);
-        let op2 = operation_handler::operation(registry.register_service);
+        let op1 = operation(registry.health_check);
+        let op2 = operation(registry.register_service);
         Router::new()
             .route(health_check_request_spec, op1)
             .route(register_service_request_spec, op2)

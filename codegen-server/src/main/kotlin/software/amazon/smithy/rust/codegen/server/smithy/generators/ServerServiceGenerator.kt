@@ -53,6 +53,10 @@ class ServerServiceGenerator(
                 }
             }
         }
+        rustCrate.withModule(RustModule.public("operation_handler", "Operations handlers definition and implementation.")) { writer ->
+            ServerOperationHandlerGenerator(context, operations)
+                .render(writer)
+        }
         rustCrate.withModule(RustModule.public("operation_registry", "A registry of your service's operations.")) { writer ->
             ServerOperationRegistryGenerator(context, operations)
                 .render(writer)

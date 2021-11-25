@@ -175,6 +175,7 @@ macro_rules! composite_rejection {
 }
 
 /// Define a type that implements [`std::future::Future`].
+#[macro_export]
 macro_rules! opaque_future {
     ($(#[$m:meta])* pub type $name:ident = $actual:ty;) => {
         opaque_future! {
@@ -219,3 +220,5 @@ macro_rules! opaque_future {
         }
     };
 }
+
+pub use opaque_future;

@@ -58,7 +58,6 @@ async fn main() {
 
     let server =
         axum::Server::bind(&"0.0.0.0:8080".parse().unwrap()).serve(app.into_make_service());
-    axum::Server::bind(&"0.0.0.0:8080".parse().unwrap()).serve(app.into_make_service());
 
     if let Err(err) = server.await {
         eprintln!("server error: {}", err);

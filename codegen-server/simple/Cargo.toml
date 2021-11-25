@@ -30,3 +30,10 @@ version = "1"
 [dependencies.tokio]
 version = "1"
 features = ["macros", "test-util", "rt"]
+[dependencies.futures-util]
+version = "0.3"
+default-features = false
+[dependencies.tower]
+version = "0.4"
+[dependencies.pin-project]
+version = "1.0"
