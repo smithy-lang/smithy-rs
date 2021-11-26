@@ -9,9 +9,9 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.containerDocs
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.superDocs
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
@@ -41,9 +41,9 @@ class LibRsGenerator(
             }
 
             val libraryDocs = settings.getService(model).getTrait<DocumentationTrait>()?.value ?: settings.moduleName
-            superDocs(escape(libraryDocs))
+            containerDocs(escape(libraryDocs))
             // TODO: replace "service" below with the title trait
-            superDocs(
+            containerDocs(
                 """
                 ## Crate Organization
 
@@ -61,12 +61,12 @@ class LibRsGenerator(
             val examples = customizations.map { it.section(LibRsSection.ModuleDocumentation("Examples")) }
                 .filter { it != writable { } }
             if (examples.isNotEmpty() || settings.examplesUri != null) {
-                superDocs("## Examples")
+                containerDocs("## Examples")
                 examples.forEach { it(this) }
 
                 // TODO: Render a basic example for all crates (eg. select first operation and render an example of usage)
                 settings.examplesUri?.also { uri ->
-                    superDocs("Examples can be found [here]($uri).")
+                    containerDocs("Examples can be found [here]($uri).")
                 }
             }
 

@@ -230,7 +230,10 @@ fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model, autoSuppressMis
     return this
 }
 
-fun RustWriter.superDocs(text: String, vararg args: Any): RustWriter {
+/** Document the containing entity (eg. module, crate, etc.)
+ * Instead of prefixing lines with `///` lines are prefixed with `//!`
+ */
+fun RustWriter.containerDocs(text: String, vararg args: Any): RustWriter {
     return docs(text, newlinePrefix = "//! ", args = args)
 }
 
